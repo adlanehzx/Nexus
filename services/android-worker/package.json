@@ -1,0 +1,50 @@
+﻿{
+  "name": "@nexus/android-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Executant Android : capacites locales controlees, connexion sortante vers le coeur NEXUS",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@babel/runtime": "7.28.4",
+    "@nexus/protocol": "workspace:*",
+    "@nexus/shared": "workspace:*",
+    "@nexus/tools": "workspace:*",
+    "@nexus/worker-core": "workspace:*",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@nexus/devices": "workspace:*",
+    "@babel/plugin-transform-export-namespace-from": "7.27.1",
+    "@react-native-community/cli": "20.0.2",
+    "@react-native-community/cli-platform-android": "20.0.2",
+    "@react-native/babel-preset": "0.81.5",
+    "@react-native/gradle-plugin": "0.81.5",
+    "@react-native/metro-config": "0.81.5",
+    "@types/node": "24.13.3",
+    "@types/react": "~19.1.0",
+    "@types/ws": "8.18.1",
+    "vitest": "4.1.11",
+    "ws": "8.21.3"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_lisez_moi": "Reglages du worker Android. AUCUN SECRET ICI : la cle de l'appareil est designee par un ALIAS dans le magasin de cles d'Android et ne quitte jamais le telephone. Editer ce fichier avant de construire l'APK — voir README, section Installation.",
+
+  "NEXUS_BACKEND_URL": "http://10.0.2.2:3000",
+  "DEVICE_ID": "00000000-0000-0000-0000-000000000000",
+  "DEVICE_KEY_ALIAS": "nexus.device.key",
+
+  "WORKER_CAPABILITIES": "",
+  "ANDROID_ALLOWED_PACKAGES": "",
+  "ANDROID_DENIED_PACKAGES": "",
+  "ANDROID_ALLOW_COORDINATE_CLICKS": "false",
+
+  "ANDROID_SCREENSHOT_MAX_DIMENSION": "1280",
+  "ANDROID_SCREENSHOT_MIN_INTERVAL_MS": "1000",
+
+  "ANDROID_LOW_BATTERY_PERCENT": "20",
+  "ANDROID_CRITICAL_BATTERY_PERCENT": "10",
+
+  "WORKER_HEARTBEAT_INTERVAL_MS": "30000",
+  "WORKER_TASK_TIMEOUT_MS": "120000",
+  "WORKER_MAX_CONCURRENT_TASKS": "1",
+
+  "WORKER_RECONNECT_MIN_MS": "2000",
+  "WORKER_RECONNECT_MAX_MS": "120000",
+
+  "ANDROID_AVAILABILITY_INTERVAL_MS": "30000",
+
+  "LOG_LEVEL": "info"
+}

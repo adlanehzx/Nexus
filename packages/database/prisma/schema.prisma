@@ -1,0 +1,417 @@
+// NEXUS — schéma de données
+// Référence complète : docs/architecture/07-data-model.md
+//
+// Ce fichier contient le sous-ensemble de la phase 0/1 : identité et conversation.
+// Les entités agent (AgentRun, AgentStep, ToolExecution, Confirmation,
+// PermissionGrant) arrivent en phase 2, la mémoire vectorielle en phase 6.
+//
+// Convention : les identifiants sont des UUID v7 générés côté application
+// (`uuidv7()` de @nexus/shared) — triables par le temps, donc sans fragmentation
+// d'index, et non devinables. Aucun défaut SQL n'est déclaré : un identifiant
+// est une décision de l'application, pas un effet de bord de la base.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Depuis Prisma 7, l'URL de connexion ne vit plus dans le schéma : les migrations
+// la lisent dans `prisma.config.ts`, et le client la reçoit via un driver adapter
+// (cf. src/client.ts). Le schéma ne décrit plus que la forme des données.
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identité
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model User {
+  id          String     @id @db.Uuid
+  email       String     @unique
+  displayName String
+  locale      String     @default("fr")
+  timezone    String     @default("Europe/Paris")
+  status      UserStatus @default(ACTIVE)
+  role        String     @default("USER")
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  authCredential AuthCredential?
+  sessions       Session[]
+  devices        Device[]
+  conversations  Conversation[]
+
+  @@map("users")
+}
+
+/// Séparée de User pour que charger un utilisateur ne charge jamais son hash.
+model AuthCredential {
+  id           String   @id @db.Uuid
+  userId       String   @unique @db.Uuid
+  passwordHash String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_credentials")
+}
+
+/// Session d'authentification — distincte d'une conversation.
+/// Le refresh token est stocké haché ; sa réutilisation après rotation vaut vol
+/// présumé et révoque toute la famille de sessions.
+model Session {
+  id               String    @id @db.Uuid
+  userId           String    @db.Uuid
+  deviceId         String?   @db.Uuid
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime  @db.Timestamptz(3)
+  lastUsedAt       DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt        DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+enum DevicePlatform {
+  WINDOWS
+  MACOS
+  LINUX
+  IOS
+  ANDROID
+  WEB
+}
+
+/// Nature de l'appareil. `BROWSER_WORKER` y figure parce que Browser Use est un
+/// exécutant à part entière du point de vue du sélecteur, sans être un appareil
+/// physique de l'utilisateur.
+enum DeviceType {
+  IPHONE
+  ANDROID
+  WINDOWS_PC
+  MAC
+  LINUX
+  BROWSER_WORKER
+}
+
+/// Ce qu'un appareil a le droit d'être. `BOTH` n'est pas une commodité : le
+/// portable est réellement les deux, et un client ne doit jamais être choisi
+/// comme exécutant sans ce rôle explicite.
+enum DeviceRole {
+  CLIENT
+  WORKER
+  BOTH
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+  REVOKED
+}
+
+/// Distincte du statut : un appareil peut être en ligne et non fiable. Un
+/// appareil fraîchement appairé est PENDING et n'exécute rien.
+enum TrustState {
+  PENDING
+  TRUSTED
+  REVOKED
+}
+
+/// Machine enregistrée : client, exécutant, ou les deux.
+///
+/// Le cœur ne connaît aucun appareil par son nom — il ne connaît que des rôles,
+/// des types et des capacités. Ajouter un appareil est une écriture ici, jamais
+/// une condition dans le code.
+model Device {
+  id                 String         @id @db.Uuid
+  userId             String         @db.Uuid
+  name               String
+  type               DeviceType
+  platform           DevicePlatform
+  role               DeviceRole
+  status             DeviceStatus   @default(OFFLINE)
+  trust              TrustState     @default(PENDING)
+  agentVersion       String?
+  /// Santé rapportée au dernier battement de cœur : charge, batterie, latence,
+  /// tâches en cours. Alimente le score de sélection.
+  health             Json           @default("{\"activeTasks\":0,\"maxConcurrentTasks\":1}")
+  /// Permissions accordées À CET APPAREIL, en plus de celles de l'utilisateur.
+  /// Autoriser `terminal.execute` sur le poste fixe et le refuser sur le
+  /// portable est un cas d'usage, pas une exception.
+  grantedPermissions String[]       @default([])
+  metadata           Json           @default("{}")
+  lastSeenAt         DateTime?      @db.Timestamptz(3)
+  pairedAt           DateTime       @default(now()) @db.Timestamptz(3)
+  revokedAt          DateTime?      @db.Timestamptz(3)
+
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions        Session[]
+  capabilities    DeviceCapability[]
+  credentials     DeviceCredential[]
+  deviceSessions  DeviceSession[]
+  executions      TaskExecution[]
+  originatedTasks TaskPlan[]         @relation("TaskOrigin")
+
+  @@index([userId, role, status])
+  @@index([userId, trust])
+  @@map("devices")
+}
+
+/// Capacité déclarée par un worker.
+///
+/// Une ligne par capacité plutôt qu'un tableau JSON : c'est ce qui rend la
+/// recherche par capacité indexable, et ce qui permet d'activer ou désactiver
+/// une capacité sans réécrire la déclaration entière.
+model DeviceCapability {
+  id          String   @id @db.Uuid
+  deviceId    String   @db.Uuid
+  name        String
+  version     String   @default("1")
+  description String   @default("")
+  /// Schéma JSON des arguments, tel que le worker le déclare.
+  inputSchema Json?
+  enabled     Boolean  @default(true)
+  metadata    Json     @default("{}")
+  declaredAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, name])
+  @@index([name, enabled])
+  @@map("device_capabilities")
+}
+
+enum DeviceCredentialKind {
+  ED25519_PUBLIC_KEY
+  // Android ne sait pas stocker de cle Ed25519 dans son magasin materiel.
+  ECDSA_P256_PUBLIC_KEY
+  SERVICE_TOKEN_HASH
+}
+
+/// Secret d'authentification d'un appareil.
+///
+/// Jamais la valeur : une clé publique, ou l'empreinte d'un jeton. `rotatedAt`
+/// rend la rotation observable.
+model DeviceCredential {
+  id        String               @id @db.Uuid
+  deviceId  String               @db.Uuid
+  kind      DeviceCredentialKind
+  material  String
+  createdAt DateTime             @default(now()) @db.Timestamptz(3)
+  rotatedAt DateTime?            @db.Timestamptz(3)
+  expiresAt DateTime?            @db.Timestamptz(3)
+  revokedAt DateTime?            @db.Timestamptz(3)
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, revokedAt])
+  @@map("device_credentials")
+}
+
+/// Session authentifiée d'un appareil connecté.
+///
+/// Distincte de `Session`, qui est la session d'authentification d'un HUMAIN.
+/// Les deux surfaces restent séparées pour éviter toute confusion de privilèges.
+model DeviceSession {
+  id              String    @id @db.Uuid
+  deviceId        String    @db.Uuid
+  userId          String    @db.Uuid
+  /// Empreinte du jeton. La valeur n'est rendue qu'une fois, à l'émission.
+  tokenHash       String    @unique
+  issuedAt        DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  lastHeartbeatAt DateTime  @default(now()) @db.Timestamptz(3)
+  rotatedFromId   String?   @db.Uuid
+  revokedAt       DateTime? @db.Timestamptz(3)
+  /// Capacités négociées à l'ouverture, bornées par celles de l'appareil.
+  capabilities    String[]  @default([])
+  remoteAddress   String?
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, revokedAt])
+  @@index([expiresAt])
+  @@map("device_sessions")
+}
+
+enum TaskPlanStatus {
+  PENDING
+  RUNNING
+  WAITING_FOR_CONFIRMATION
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  PARTIAL
+}
+
+enum TaskStepStatus {
+  PENDING
+  READY
+  ASSIGNED
+  RUNNING
+  WAITING_FOR_CONFIRMATION
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+/// Plan d'exécution réparti sur plusieurs appareils.
+///
+/// À ne pas confondre avec le run agent : celui-là décrit un raisonnement,
+/// celui-ci une exécution. Un run peut produire un plan ; un plan peut
+/// s'exécuter sans agent.
+model TaskPlan {
+  id                   String         @id @db.Uuid
+  userId               String         @db.Uuid
+  title                String
+  /// Appareil d'où part la demande. Conservé pendant toute la vie de la tâche,
+  /// quels que soient les appareils qui l'exécutent : c'est le fil qui ramène
+  /// événements et confirmations au bon client.
+  originClientDeviceId String         @db.Uuid
+  runId                String?        @db.Uuid
+  conversationId       String?        @db.Uuid
+  correlationId        String
+  status               TaskPlanStatus @default(PENDING)
+  metadata             Json           @default("{}")
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  startedAt            DateTime?      @db.Timestamptz(3)
+  completedAt          DateTime?      @db.Timestamptz(3)
+
+  originClient Device     @relation("TaskOrigin", fields: [originClientDeviceId], references: [id], onDelete: Cascade)
+  steps        TaskStep[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([originClientDeviceId])
+  @@map("task_plans")
+}
+
+/// Une étape du plan. `requiredCapabilities` — jamais un appareil — décide de
+/// l'exécutant ; `selectedDeviceId` n'est renseigné qu'à l'exécution.
+model TaskStep {
+  id                   String         @id @db.Uuid
+  taskId               String         @db.Uuid
+  /// Identifiant lisible au sein du plan (`clone`, `test`…).
+  key                  String
+  description          String
+  requiredCapabilities String[]
+  tool                 String
+  arguments            Json           @default("{}")
+  dependsOn            String[]       @default([])
+  selectedDeviceId     String?        @db.Uuid
+  preferredDeviceId    String?        @db.Uuid
+  constraints          Json?
+  riskLevel            String         @default("MEDIUM")
+  retryPolicy          Json           @default("{\"attempts\":1,\"backoffMs\":1000,\"failoverToAnotherDevice\":false}")
+  timeoutMs            Int            @default(300000)
+  status               TaskStepStatus @default(PENDING)
+  attempt              Int            @default(0)
+  result               Json?
+  error                Json?
+  startedAt            DateTime?      @db.Timestamptz(3)
+  completedAt          DateTime?      @db.Timestamptz(3)
+
+  plan       TaskPlan        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  executions TaskExecution[]
+
+  @@unique([taskId, key])
+  @@index([taskId, status])
+  @@map("task_steps")
+}
+
+/// Une tentative d'exécution d'une étape sur un appareil donné.
+///
+/// Journal d'audit des actions réelles : rétention longue, arguments rédigés.
+model TaskExecution {
+  id          String         @id @db.Uuid
+  taskId      String         @db.Uuid
+  stepId      String         @db.Uuid
+  deviceId    String         @db.Uuid
+  attempt     Int
+  status      TaskStepStatus
+  startedAt   DateTime       @default(now()) @db.Timestamptz(3)
+  completedAt DateTime?      @db.Timestamptz(3)
+  durationMs  Int?
+  /// Arguments rédigés : aucun secret dans un journal d'audit.
+  input       Json?
+  result      Json?
+  error       Json?
+
+  step   TaskStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  device Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, startedAt])
+  @@index([deviceId, startedAt(sort: Desc)])
+  @@map("task_executions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conversation
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Conversation {
+  id            String             @id @db.Uuid
+  userId        String             @db.Uuid
+  title         String?
+  status        ConversationStatus @default(ACTIVE)
+  pinnedAt      DateTime?          @db.Timestamptz(3)
+  lastMessageAt DateTime?          @db.Timestamptz(3)
+  tokenCount    Int                @default(0)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+/// `content` est un tableau de blocs typés (text, tool_call, tool_result, image,
+/// audio), pas une chaîne : c'est ce qui permet un rendu riche côté client et une
+/// recomposition fidèle du contexte pour n'importe quel fournisseur LLM.
+/// `contentText` en est la projection plate, pour la recherche plein texte.
+model Message {
+  id             String      @id @db.Uuid
+  conversationId String      @db.Uuid
+  role           MessageRole
+  content        Json
+  contentText    String      @default("")
+  runId          String?     @db.Uuid
+  tokensIn       Int         @default(0)
+  tokensOut      Int         @default(0)
+  model          String?
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  editedAt       DateTime?   @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}

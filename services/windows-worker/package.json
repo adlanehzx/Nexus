@@ -1,0 +1,43 @@
+﻿{
+  "name": "@nexus/windows-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Executant Windows : capacites locales controlees, connexion sortante vers le coeur NEXUS",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@nexus/devices": "workspace:*",
+    "@nexus/protocol": "workspace:*",
+    "@nexus/shared": "workspace:*",
+    "@nexus/tools": "workspace:*",
+    "@nexus/worker-core": "workspace:*",
+    "ws": "8.21.3",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/ws": "8.18.1",
+    "tsx": "4.23.13",
+    "vitest": "4.1.11"
+  }
+}

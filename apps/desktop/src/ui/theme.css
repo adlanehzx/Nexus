@@ -1,0 +1,384 @@
+/*
+ * Feuille de style de la fenêtre Windows.
+ *
+ * Une interface de bureau n'est pas une application mobile agrandie. Trois
+ * conséquences, visibles partout dans ce fichier :
+ *
+ *  - **densité.** L'écran est grand et l'utilisateur est assis : on affiche la
+ *    barre latérale, la conversation et le contexte en même temps, au lieu de
+ *    les empiler derrière des onglets.
+ *  - **clavier.** Les cibles ne sont pas dimensionnées pour un pouce, mais le
+ *    focus est visible partout — c'est ce qui rend l'application utilisable
+ *    sans souris.
+ *  - **thème du système.** Windows a un mode sombre ; une fenêtre qui l'ignore
+ *    éblouit à 23 h.
+ */
+
+:root {
+  --fond: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef0f4;
+  --bordure: #d9dde5;
+  --texte: #14181f;
+  --texte-faible: #5b6472;
+  --accent: #2f5bd7;
+  --accent-texte: #ffffff;
+  --succes: #1f7a45;
+  --avertissement: #a86a00;
+  --erreur: #b4282e;
+  --rayon: 8px;
+  --barre: 264px;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #14171c;
+    --surface: #1b1f26;
+    --surface-2: #232833;
+    --bordure: #333a47;
+    --texte: #e8ebf0;
+    --texte-faible: #98a2b3;
+    --accent: #6b93ff;
+    --accent-texte: #0d1016;
+    --succes: #4cc38a;
+    --avertissement: #e0a244;
+    --erreur: #f0666d;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font:
+    14px/1.5 "Segoe UI Variable Text",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Le focus reste visible partout : c'est ce qui rend la fenêtre pilotable au
+   clavier, et l'accessibilité n'est pas une option sur un poste de travail. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Ossature ──────────────────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--barre) 1fr;
+  height: 100%;
+}
+
+.laterale {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--bordure);
+  overflow-y: auto;
+}
+
+.laterale h1 {
+  margin: 4px 8px 12px;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texte-faible);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--rayon);
+  background: transparent;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background: var(--surface-2);
+}
+
+.nav-item[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-texte);
+}
+
+.pastille {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--erreur);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface);
+}
+
+.entete h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.contenu {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+/* ── Éléments communs ──────────────────────────────────────────────────── */
+
+.carte {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+}
+
+.carte header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.faible {
+  color: var(--texte-faible);
+  font-size: 12px;
+}
+
+.rangee {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bouton {
+  padding: 6px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface-2);
+}
+
+.bouton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bouton.primaire {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-texte);
+}
+
+.bouton.danger {
+  border-color: var(--erreur);
+  color: var(--erreur);
+}
+
+.champ {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.etiquette {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.etiquette.ok {
+  color: var(--succes);
+}
+.etiquette.attention {
+  color: var(--avertissement);
+}
+.etiquette.ko {
+  color: var(--erreur);
+}
+
+.jauge {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.jauge > div {
+  height: 100%;
+  background: var(--accent);
+}
+
+.banniere {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.banniere.erreur {
+  color: var(--erreur);
+}
+
+.vide {
+  padding: 48px 12px;
+  color: var(--texte-faible);
+  text-align: center;
+}
+
+/* ── Conversation ──────────────────────────────────────────────────────── */
+
+.conversation {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 0;
+  flex: 1;
+}
+
+.fil {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.bulle {
+  max-width: 68ch;
+  padding: 9px 13px;
+  margin-bottom: 10px;
+  border-radius: var(--rayon);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bulle.user {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-texte);
+}
+
+.bulle.assistant {
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+}
+
+.compositeur {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bordure);
+  background: var(--surface);
+}
+
+.compositeur textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 160px;
+  resize: vertical;
+}
+
+.liste-conversations {
+  border-right: 1px solid var(--bordure);
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--surface);
+}
+
+.liste-conversations button {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--rayon);
+  background: transparent;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liste-conversations button[aria-current="true"] {
+  background: var(--surface-2);
+  border-color: var(--bordure);
+}
+
+/* ── Confirmations ─────────────────────────────────────────────────────── */
+
+.confirmation {
+  border-left: 3px solid var(--avertissement);
+}
+
+.confirmation.critique {
+  border-left-color: var(--erreur);
+}
+
+/* Refuser à gauche, approuver à droite : le geste par défaut ne doit pas être
+   l'accord. */
+.confirmation .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.confirmation .actions .approuver {
+  margin-left: auto;
+}

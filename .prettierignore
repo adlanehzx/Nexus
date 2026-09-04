@@ -1,0 +1,15 @@
+dist
+coverage
+.turbo
+node_modules
+pnpm-lock.yaml
+src/generated
+.venv
+.venv-*
+__pycache__
+.pytest_cache
+
+# Artefacts de construction Android : cache Gradle, binaires, APK.
+services/android-worker/android/.gradle
+services/android-worker/android/build
+services/android-worker/android/app/build

@@ -1,0 +1,122 @@
+name: nexus
+
+# Pile de développement local : PostgreSQL, Redis et l'API.
+#
+# Lancement depuis la racine du dépôt :
+#   pnpm docker:up          (équivaut à docker compose -f infrastructure/docker/docker-compose.yml up -d)
+#
+# Les chemins sont relatifs à CE fichier ; la racine du monorepo est donc ../..
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nexus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus}
+      # Le classement C rend les tris déterministes entre machines et versions.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=fr-FR --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` seul répond « prêt » avant la fin de l'initialisation :
+      # on interroge donc réellement la base cible.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus} -d ${POSTGRES_DB:-nexus}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [nexus]
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-redis
+    restart: unless-stopped
+    # AOF `everysec` : les files de jobs survivent à un redémarrage sans payer
+    # le prix d'un fsync par écriture.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [nexus]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/api.Dockerfile
+    container_name: nexus-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      API_VERSION: ${API_VERSION:-1.0.0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
+      # Noms de services Docker, pas localhost : à l'intérieur du réseau, chaque
+      # conteneur est joignable par son nom.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
+      REDIS_URL: redis://redis:6379
+      BROWSER_WORKER_URL: http://browser-worker:8100
+      BROWSER_WORKER_TOKEN: ${BROWSER_WORKER_TOKEN:-}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    # L'arrêt gracieux dispose du délai qu'il annonce, plus une marge.
+    stop_grace_period: 15s
+    networks: [nexus]
+
+  browser-worker:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/browser-worker.Dockerfile
+    container_name: nexus-browser-worker
+    restart: unless-stopped
+    # Profil optionnel : l'image embarque Chromium (~1,5 Go) et n'a pas à
+    # démarrer pour travailler sur l'API. Lancement : pnpm docker:browser
+    profiles: [browser]
+    environment:
+      # Le worker refuse de démarrer sans un vrai jeton (validation au boot) :
+      # inutile de dupliquer le garde ici, il bloquerait toute la pile.
+      BROWSER_WORKER_AUTH_TOKEN: ${BROWSER_WORKER_TOKEN:-}
+      BROWSER_WORKER_LLM_API_KEY: ${LLM_API_KEY:-}
+      BROWSER_WORKER_LLM_MODEL: ${BROWSER_WORKER_LLM_MODEL:-claude-sonnet-4-5}
+      BROWSER_WORKER_HEADLESS: "true"
+      BROWSER_WORKER_MAX_SESSIONS: ${BROWSER_WORKER_MAX_SESSIONS:-3}
+      BROWSER_WORKER_LOG_LEVEL: ${LOG_LEVEL:-info}
+    # AUCUN port publié : le worker n'est joignable que depuis le réseau interne.
+    # Il visite du contenu hostile par définition et ne doit jamais être exposé.
+    expose:
+      - "8100"
+    # Chromium a besoin de mémoire partagée ; 64 Mo par défaut le font planter.
+    shm_size: 1gb
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    networks: [nexus]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  nexus:
+    driver: bridge

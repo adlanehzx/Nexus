@@ -1,0 +1,34 @@
+﻿{
+  "name": "@nexus/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "description": "Client iPhone NEXUS â€” centre de controle principal (Expo + Expo Router)",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rimraf .expo .turbo"
+  },
+  "dependencies": {
+    "@nexus/client-core": "workspace:*",
+    "@nexus/protocol": "workspace:*",
+    "expo": "~54.0.0",
+    "expo-crypto": "~15.0.0",
+    "expo-router": "~6.0.0",
+    "expo-secure-store": "~15.0.0",
+    "expo-speech": "~14.0.0",
+    "expo-status-bar": "~3.0.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "typescript": "6.0.3"
+  }
+}

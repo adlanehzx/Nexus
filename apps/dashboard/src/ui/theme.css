@@ -1,0 +1,317 @@
+/*
+ * Feuille de style du tableau de bord.
+ *
+ * Un écran de supervision se regarde de loin et souvent dans l'urgence. Trois
+ * conséquences :
+ *
+ *  - **densité**. Des tableaux, pas des cartes. On compare des lignes.
+ *  - **la couleur porte un sens unique**. Rouge = hors service, orange =
+ *    dégradé, gris = non configuré. Un gris n'est jamais un vert pâle : ne rien
+ *    savoir et aller bien ne se ressemblent pas.
+ *  - **sombre par défaut**. Il tourne sur un second écran, allumé en continu.
+ */
+
+:root {
+  --fond: #0e1116;
+  --surface: #161b22;
+  --surface-2: #1d242e;
+  --bordure: #2a3441;
+  --texte: #e6edf3;
+  --texte-faible: #8b949e;
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --degrade: #d29922;
+  --hs: #f85149;
+  --inconnu: #6e7681;
+  --rayon: 6px;
+  --barre: 220px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font:
+    13px/1.5 "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: var(--barre) 1fr;
+  height: 100%;
+}
+
+.laterale {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  background: var(--surface);
+  border-right: 1px solid var(--bordure);
+  overflow-y: auto;
+}
+
+.laterale h1 {
+  margin: 4px 10px 14px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--texte-faible);
+}
+
+.nav-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--rayon);
+  background: transparent;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background: var(--surface-2);
+}
+
+.nav-item[aria-current="page"] {
+  background: var(--surface-2);
+  border-color: var(--bordure);
+  color: var(--accent);
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface);
+}
+
+.entete h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.contenu {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+/* ── Cartes de mesure ──────────────────────────────────────────────────── */
+
+.mesures {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.mesure {
+  padding: 12px 14px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+}
+
+.mesure .valeur {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.mesure .libelle {
+  color: var(--texte-faible);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.mesure.alerte .valeur {
+  color: var(--hs);
+}
+
+/* ── Tableaux ──────────────────────────────────────────────────────────── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+th,
+td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--bordure);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--texte-faible);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+tbody tr:hover {
+  background: var(--surface);
+}
+
+.scroll-x {
+  overflow-x: auto;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+}
+
+/* ── Pastilles d'état ──────────────────────────────────────────────────── */
+
+.etat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.puce {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--inconnu);
+  flex: none;
+}
+
+.puce.ok {
+  background: var(--ok);
+}
+.puce.degraded,
+.puce.saturated,
+.puce.degrade {
+  background: var(--degrade);
+}
+.puce.down,
+.puce.revoked,
+.puce.disconnected,
+.puce.error {
+  background: var(--hs);
+}
+.puce.unconfigured,
+.puce.unknown {
+  background: var(--inconnu);
+}
+.puce.accepting {
+  background: var(--ok);
+}
+
+.mono {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.faible {
+  color: var(--texte-faible);
+}
+
+.jauge {
+  height: 4px;
+  min-width: 70px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.jauge > div {
+  height: 100%;
+  background: var(--accent);
+}
+
+.bouton {
+  padding: 5px 11px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface-2);
+}
+
+.champ {
+  padding: 5px 9px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+h3 {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--texte-faible);
+}
+
+h3:first-child {
+  margin-top: 0;
+}
+
+.vide {
+  padding: 40px 12px;
+  color: var(--texte-faible);
+  text-align: center;
+}
+
+.banniere {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface-2);
+}
+
+.banniere.erreur {
+  color: var(--hs);
+}
+
+.connexion {
+  max-width: 340px;
+  margin: 14vh auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

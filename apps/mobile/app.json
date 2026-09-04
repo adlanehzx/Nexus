@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "NEXUS",
+    "slug": "nexus",
+    "scheme": "nexus",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "fr.nexus.client",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "NEXUS utilise le micro uniquement quand vous appuyez sur le bouton micro, pour transcrire ce que vous dictez. Il n'ecoute jamais en continu.",
+        "NSSpeechRecognitionUsageDescription": "NEXUS transcrit ce que vous dictez pour l'envoyer a l'assistant. La transcription n'a lieu que pendant que vous maintenez le bouton micro.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": true }
+  }
+}

@@ -1,0 +1,65 @@
+# Dépendances
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# Prisma — client généré (recréé par `pnpm db:generate`)
+packages/database/src/generated/
+
+# Tests
+coverage/
+*.lcov
+
+# Secrets et configuration locale — JAMAIS commités
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+logs/
+
+# Données locales (volumes Docker montés en bind, le cas échéant)
+.data/
+postgres-data/
+redis-data/
+
+# Éditeurs
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Mobile / Expo (phase 1)
+.expo/
+*.jks
+*.mobileprovision
+
+# Desktop / Tauri (phase 8)
+apps/desktop/src-tauri/target/
+
+# Python — browser worker
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+.pytest_cache/
+.ruff_cache/

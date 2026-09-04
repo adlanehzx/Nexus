@@ -1,0 +1,20 @@
+# Tout ce qui n'a rien à faire dans le contexte de build.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/src/generated
+.git
+.github
+docs
+apps
+mcp
+services/agent
+services/browser-worker
+services/desktop-worker
+**/*.md
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/.DS_Store

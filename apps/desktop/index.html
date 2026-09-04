@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Aucune ressource distante : ni police, ni script, ni feuille de style.
+      Tout est empaqueté. Une coquille de bureau qui charge du code depuis
+      Internet donne à quiconque contrôle ce domaine la main sur la machine.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https: wss:"
+    />
+    <title>NEXUS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

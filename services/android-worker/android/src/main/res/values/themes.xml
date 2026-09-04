@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Theme de l'application.
+
+  Volontairement minimal : le worker n'a qu'un ecran d'etat, et son apparence
+  n'a aucune importance fonctionnelle. `DayNight` suit le reglage du telephone.
+-->
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/nexus_background</item>
+    </style>
+</resources>

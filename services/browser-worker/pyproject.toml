@@ -1,0 +1,45 @@
+[project]
+name = "nexus-browser-worker"
+version = "0.1.0"
+description = "Worker Browser Use isolé pour NEXUS"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.120",
+  "uvicorn[standard]>=0.40",
+  "pydantic>=2.12",
+  "pydantic-settings>=2.12",
+  "browser-use==0.13.8",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4",
+  "pytest-asyncio>=1.2",
+  "httpx>=0.28",
+  "ruff>=0.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# Les tests marqués `browser` lancent un vrai navigateur : hors CI par défaut.
+markers = ["browser: nécessite browser-use et un Chromium installés"]
+addopts = "-m 'not browser' -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
+ignore = ["S101", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S311"]

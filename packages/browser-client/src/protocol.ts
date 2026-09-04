@@ -1,0 +1,210 @@
+import { z } from "zod";
+
+/**
+ * Contrat entre le backend TypeScript et le Browser Worker Python.
+ *
+ * C'est la **seule** frontière entre les deux mondes : le backend n'importe
+ * jamais de code Python, il parle à un service par HTTP (ADR-006). Ces schémas
+ * sont exportés en JSON Schema (`scripts/emit-contract.ts`) et vérifiés côté
+ * Python par un test de contrat — une divergence casse le build, pas la
+ * production.
+ */
+
+export const BROWSER_PROTOCOL_VERSION = 1;
+
+/**
+ * Intention déclarée d'une tâche.
+ *
+ * Elle porte deux choses à la fois : le niveau de risque côté agent, et la
+ * **restriction réellement appliquée** côté worker. Une tâche `read` ne peut pas
+ * cliquer, même si le modèle le demande — l'intention n'est pas une étiquette,
+ * c'est une contrainte d'exécution.
+ */
+export const browserIntentSchema = z.enum(["read", "interact", "login", "purchase"]);
+export type BrowserIntent = z.infer<typeof browserIntentSchema>;
+
+/** Permissions exigées par intention. Cumulatives : `purchase` implique tout. */
+export const INTENT_PERMISSIONS: Record<BrowserIntent, readonly string[]> = {
+  read: ["browser.navigate", "browser.read"],
+  interact: ["browser.navigate", "browser.read", "browser.interact"],
+  login: ["browser.navigate", "browser.read", "browser.interact", "browser.login"],
+  purchase: [
+    "browser.navigate",
+    "browser.read",
+    "browser.interact",
+    "browser.login",
+    "browser.purchase",
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sessions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const createSessionRequestSchema = z.object({
+  /** Sépare les navigateurs par utilisateur : aucun état ne fuit entre comptes. */
+  ownerId: z.string().min(1),
+  /** Restreint la navigation. Vide = pas de restriction côté worker. */
+  allowedDomains: z.array(z.string()).default([]),
+  prohibitedDomains: z.array(z.string()).default([]),
+  /** Réutilise un profil persistant (cookies de connexion), chiffré au repos. */
+  profileId: z.string().optional(),
+  headless: z.boolean().default(true),
+  ttlSeconds: z.number().int().positive().max(3600).default(600),
+  metadata: z.record(z.string(), z.string()).default({}),
+});
+export type CreateSessionRequest = z.input<typeof createSessionRequestSchema>;
+
+export const sessionStatusSchema = z.enum(["open", "closing", "closed", "expired"]);
+export type SessionStatus = z.infer<typeof sessionStatusSchema>;
+
+export const sessionSchema = z.object({
+  sessionId: z.string().min(1),
+  ownerId: z.string().min(1),
+  status: sessionStatusSchema,
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  currentUrl: z.string().nullable(),
+  activeTaskId: z.string().nullable(),
+});
+export type BrowserSession = z.infer<typeof sessionSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tâches
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const runTaskRequestSchema = z.object({
+  /** Fourni par le backend : il rattache la tâche au run agent. */
+  taskId: z.string().min(1),
+  sessionId: z.string().min(1),
+  instructions: z.string().min(1).max(4_000),
+  intent: browserIntentSchema,
+  maxSteps: z.number().int().positive().max(50).default(15),
+  timeoutSeconds: z.number().int().positive().max(900).default(180),
+  /**
+   * Identifiants de site.
+   *
+   * Le worker les remet à browser-use en `sensitive_data` : le modèle voit un
+   * marqueur, jamais la valeur. Ils ne sont ni journalisés, ni renvoyés.
+   */
+  secrets: z.record(z.string(), z.string()).default({}),
+  metadata: z.record(z.string(), z.string()).default({}),
+});
+export type RunTaskRequest = z.input<typeof runTaskRequestSchema>;
+
+export const taskStatusSchema = z.enum([
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "timeout",
+  /** Le site exige une action humaine (CAPTCHA, MFA). Jamais contournée. */
+  "needs_human",
+]);
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Événements
+// ─────────────────────────────────────────────────────────────────────────────
+
+const eventBase = {
+  taskId: z.string().min(1),
+  sessionId: z.string().min(1),
+  seq: z.number().int().nonnegative(),
+  ts: z.string(),
+};
+
+export const browserEventSchema = z.discriminatedUnion("type", [
+  z.object({ ...eventBase, type: z.literal("started"), intent: browserIntentSchema }),
+  z.object({
+    ...eventBase,
+    type: z.literal("navigation"),
+    url: z.string(),
+    title: z.string().nullable(),
+  }),
+  z.object({ ...eventBase, type: z.literal("thinking"), text: z.string() }),
+  z.object({
+    ...eventBase,
+    type: z.literal("action"),
+    action: z.string(),
+    target: z.string().nullable(),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("progress"),
+    step: z.number().int().nonnegative(),
+    maxSteps: z.number().int().positive(),
+    note: z.string().nullable(),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("result"),
+    output: z.string(),
+    screenshotRef: z.string().nullable(),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("error"),
+    code: z.string(),
+    message: z.string(),
+    retryable: z.boolean(),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal("finished"),
+    status: taskStatusSchema,
+    steps: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+  }),
+]);
+export type BrowserEvent = z.infer<typeof browserEventSchema>;
+export type BrowserEventType = BrowserEvent["type"];
+
+export const taskSchema = z.object({
+  taskId: z.string().min(1),
+  sessionId: z.string().min(1),
+  status: taskStatusSchema,
+  intent: browserIntentSchema,
+  steps: z.number().int().nonnegative(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  durationMs: z.number().nonnegative().nullable(),
+  output: z.string().nullable(),
+  error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).nullable(),
+  events: z.array(browserEventSchema).default([]),
+});
+export type BrowserTask = z.infer<typeof taskSchema>;
+
+export const healthSchema = z.object({
+  status: z.enum(["ok", "degraded"]),
+  version: z.string(),
+  protocolVersion: z.number().int(),
+  browserUseVersion: z.string().nullable(),
+  openSessions: z.number().int().nonnegative(),
+  runningTasks: z.number().int().nonnegative(),
+});
+export type BrowserWorkerHealth = z.infer<typeof healthSchema>;
+
+export const workerErrorSchema = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    retryable: z.boolean(),
+  }),
+});
+
+/** Codes d'erreur du worker. Contrat public : ils ne changent pas. */
+export const BrowserErrorCode = {
+  INVALID_REQUEST: "BROWSER_INVALID_REQUEST",
+  SESSION_NOT_FOUND: "BROWSER_SESSION_NOT_FOUND",
+  SESSION_EXPIRED: "BROWSER_SESSION_EXPIRED",
+  TASK_NOT_FOUND: "BROWSER_TASK_NOT_FOUND",
+  SESSION_BUSY: "BROWSER_SESSION_BUSY",
+  DOMAIN_BLOCKED: "BROWSER_DOMAIN_BLOCKED",
+  INTENT_FORBIDDEN: "BROWSER_INTENT_FORBIDDEN",
+  HUMAN_REQUIRED: "BROWSER_HUMAN_INTERVENTION_REQUIRED",
+  TIMEOUT: "BROWSER_TASK_TIMEOUT",
+  CANCELLED: "BROWSER_TASK_CANCELLED",
+  UNAVAILABLE: "BROWSER_WORKER_UNAVAILABLE",
+} as const;

@@ -1,0 +1,447 @@
+import { z } from "zod";
+import type { FastifyPluginCallback } from "fastify";
+import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { CAPABILITIES, SUGGESTED_CAPABILITIES, deviceCapabilitySchema } from "@nexus/devices";
+import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
+import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
+import { NotFoundError, paginate } from "../../services/stores.js";
+
+/**
+ * Appareils, sessions d'appareil, capacités.
+ *
+ * Toutes ces routes exigent un **utilisateur**, jamais un appareil. Un appareil
+ * ne s'enregistre pas lui-même, ne s'approuve pas lui-même, et ne se donne pas
+ * de permissions : il demande un challenge et exécute ce qu'on lui confie.
+ *
+ * Le seul point d'entrée où un appareil parle est le canal WebSocket worker, et
+ * il n'y fait que ce que le protocole permet.
+ */
+
+const deviceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  platform: z.string(),
+  role: z.string(),
+  status: z.string(),
+  trust: z.string(),
+  capabilities: z.array(z.string()),
+  grantedPermissions: z.array(z.string()),
+  health: z.object({
+    activeTasks: z.number(),
+    maxConcurrentTasks: z.number(),
+    batteryPercent: z.number().optional(),
+    onBattery: z.boolean().optional(),
+  }),
+  lastSeenAt: z.date().nullable(),
+  authenticated: z.boolean(),
+});
+
+/** Ce qu'un appareil expose au client. Le secret d'appairage n'y figure pas. */
+function present(device: {
+  id: string;
+  name: string;
+  type: string;
+  platform: string;
+  role: string;
+  status: string;
+  trust: string;
+  capabilities: { name: string; enabled: boolean }[];
+  grantedPermissions: string[];
+  health: Record<string, unknown>;
+  lastSeenAt: Date | null;
+  authenticated: boolean;
+}) {
+  return {
+    id: device.id,
+    name: device.name,
+    type: device.type,
+    platform: device.platform,
+    role: device.role,
+    status: device.status,
+    trust: device.trust,
+    capabilities: device.capabilities.filter((c) => c.enabled).map((c) => c.name),
+    grantedPermissions: device.grantedPermissions,
+    health: device.health as never,
+    lastSeenAt: device.lastSeenAt,
+    authenticated: device.authenticated,
+  };
+}
+
+export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => {
+  const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/devices",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Appareils de l'utilisateur",
+        querystring: paginationQuerySchema.extend({
+          role: z.enum(["CLIENT", "WORKER", "BOTH"]).optional(),
+        }),
+        response: { 200: listSchema(deviceSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const all = await app.services.deviceRegistry.listDevices(userId);
+      const filtered =
+        request.query.role === undefined
+          ? all
+          : all.filter((device) => device.role === request.query.role);
+
+      const page = paginate(filtered.map(present), request.query, (device) => device.id);
+      return {
+        data: page.items,
+        meta: { requestId: request.id, nextCursor: page.nextCursor, total: page.total },
+      };
+    },
+  );
+
+  app.post(
+    "/devices",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Enregistre un appareil — il arrive hors ligne et non approuvé",
+        body: z.object({
+          name: z.string().min(1).max(120),
+          type: z.enum(["IPHONE", "ANDROID", "WINDOWS_PC", "MAC", "LINUX", "BROWSER_WORKER"]),
+          platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
+          role: z.enum(["CLIENT", "WORKER", "BOTH"]),
+          /** Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android. */
+          publicKeyPem: z.string().min(1).max(4_096),
+          grantedPermissions: z.array(z.string()).max(64).default([]),
+        }),
+        response: { 201: okSchema(deviceSchema) },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = currentUser(request);
+
+      const device = await app.services.deviceRegistry.registerDevice({
+        userId,
+        name: request.body.name,
+        type: request.body.type,
+        platform: request.body.platform,
+        role: request.body.role,
+        grantedPermissions: request.body.grantedPermissions,
+      });
+
+      // La clé publique est enregistrée séparément : elle a un cycle de vie
+      // propre — rotation, révocation — distinct de celui de l'appareil.
+      if ("set" in app.services.deviceCredentials) {
+        (
+          app.services.deviceCredentials as unknown as {
+            set: (id: string, pem: string) => void;
+          }
+        ).set(device.id, request.body.publicKeyPem);
+      }
+
+      app.services.securityLog.record({
+        kind: "device.registered",
+        userId,
+        summary: `Appareil « ${device.name} » enregistré (${device.role}, non approuvé)`,
+        context: { deviceId: device.id, type: device.type, platform: device.platform },
+      });
+
+      return reply.code(201).send(ok(present(device), request.id));
+    },
+  );
+
+  app.get(
+    "/devices/:deviceId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: { 200: okSchema(deviceSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.getDevice(request.params.deviceId);
+
+      if (device === undefined) throw new NotFoundError("Appareil", request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      return ok(present(device), request.id);
+    },
+  );
+
+  app.post(
+    "/devices/:deviceId/trust",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Approuve un appareil — il devient sélectionnable",
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: { 200: okSchema(deviceSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      const trusted = await app.services.deviceRegistry.trustDevice(device.id);
+      app.services.securityLog.record({
+        kind: "device.trusted",
+        userId,
+        summary: `Appareil « ${trusted.name} » approuvé`,
+        context: { deviceId: trusted.id },
+      });
+
+      return ok(present(trusted), request.id);
+    },
+  );
+
+  app.post(
+    "/devices/:deviceId/revoke",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Révoque un appareil — définitif, et ses sessions sont fermées",
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: { 200: okSchema(deviceSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      const revoked = await app.services.deviceRegistry.revokeDevice(device.id);
+      app.services.securityLog.record({
+        kind: "device.revoked",
+        userId,
+        summary: `Appareil « ${revoked.name} » révoqué`,
+        context: { deviceId: revoked.id },
+      });
+      // Une révocation qui laisserait les sessions ouvertes ne révoquerait rien
+      // avant leur expiration.
+      await app.services.deviceSessions.revokeAllForDevice(device.id);
+      await app.services.gateway.detach(device.id, "appareil révoqué");
+
+      return ok(present(revoked), request.id);
+    },
+  );
+
+  app.patch(
+    "/devices/:deviceId/permissions",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Modifie les permissions accordées à cet appareil",
+        params: z.object({ deviceId: z.string().min(1) }),
+        body: z.object({ grantedPermissions: z.array(z.string()).max(64) }),
+        response: { 200: okSchema(deviceSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      const updated = await app.services.deviceRegistry.updateDevice(device.id, {
+        grantedPermissions: request.body.grantedPermissions,
+      });
+      return ok(present(updated), request.id);
+    },
+  );
+
+  // ── Sessions d'appareil ───────────────────────────────────────────────────
+
+  app.post(
+    "/devices/:deviceId/challenge",
+    {
+      // Pas de garde : c'est le point d'entrée d'un appareil qui n'a pas encore
+      // de session. Il n'accorde rien — un challenge est un nonce public, et le
+      // service refuse d'en émettre pour un appareil révoqué.
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["device-sessions"],
+        summary: "Émet un challenge à signer",
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: {
+          200: okSchema(z.object({ nonce: z.string(), expiresAt: z.date() })),
+        },
+      },
+    },
+    async (request) => {
+      const challenge = await app.services.deviceSessions.createChallenge(request.params.deviceId);
+      return ok({ nonce: challenge.nonce, expiresAt: challenge.expiresAt }, request.id);
+    },
+  );
+
+  app.post(
+    "/devices/:deviceId/sessions",
+    {
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["device-sessions"],
+        summary: "Ouvre une session d'appareil sur un challenge signé",
+        params: z.object({ deviceId: z.string().min(1) }),
+        body: z.object({
+          nonce: z.string().min(1),
+          signature: z.string().min(1).max(2_048),
+          capabilities: z.array(z.string()).max(64).default([]),
+        }),
+        response: {
+          201: okSchema(
+            z.object({
+              sessionId: z.string(),
+              token: z.string(),
+              expiresAt: z.date(),
+              capabilities: z.array(z.string()),
+            }),
+          ),
+        },
+      },
+    },
+    async (request, reply) => {
+      const publicKey = await app.services.deviceCredentials.publicKeyFor(request.params.deviceId);
+      if (publicKey === undefined) {
+        throw new NotFoundError("Clé d'appareil", request.params.deviceId);
+      }
+
+      const { session, token } = await app.services.deviceSessions.authenticate(
+        {
+          deviceId: request.params.deviceId,
+          nonce: request.body.nonce,
+          signature: request.body.signature,
+          capabilities: request.body.capabilities,
+        },
+        publicKey,
+      );
+
+      return reply.code(201).send(
+        ok(
+          {
+            sessionId: session.id,
+            // Le jeton n'est rendu qu'ici, une fois. Seule son empreinte est
+            // conservée côté serveur.
+            token,
+            expiresAt: session.expiresAt,
+            capabilities: session.capabilities,
+          },
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.delete(
+    "/devices/:deviceId/sessions",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["device-sessions"],
+        summary: "Ferme toutes les sessions d'un appareil",
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: { 200: okSchema(z.object({ closed: z.number().int().nonnegative() })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      const closed = await app.services.deviceSessions.revokeAllForDevice(device.id);
+      await app.services.gateway.detach(device.id, "sessions fermées");
+
+      return ok({ closed }, request.id);
+    },
+  );
+  done();
+};
+
+export const capabilityRoutes: FastifyPluginCallback = (fastify, _options, done) => {
+  const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/capabilities",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["capabilities"],
+        summary: "Capacités connues du catalogue, et qui les fournit",
+        response: {
+          200: okSchema(
+            z.object({
+              catalogue: z.array(z.string()),
+              suggested: z.record(z.string(), z.array(z.string())),
+              available: z.array(
+                z.object({
+                  name: z.string(),
+                  devices: z.array(z.object({ id: z.string(), name: z.string() })),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const devices = await app.services.deviceRegistry.listDevices(userId);
+
+      // Ce que la flotte sait réellement faire, à cet instant. Distinct du
+      // catalogue, qui documente ce qui existe.
+      const byCapability = new Map<string, { id: string; name: string }[]>();
+      for (const device of devices) {
+        for (const capability of device.capabilities) {
+          if (!capability.enabled) continue;
+          const holders = byCapability.get(capability.name) ?? [];
+          holders.push({ id: device.id, name: device.name });
+          byCapability.set(capability.name, holders);
+        }
+      }
+
+      return ok(
+        {
+          catalogue: Object.values(CAPABILITIES).sort(),
+          suggested: SUGGESTED_CAPABILITIES as unknown as Record<string, string[]>,
+          available: [...byCapability.entries()]
+            .map(([name, holders]) => ({ name, devices: holders }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.put(
+    "/devices/:deviceId/capabilities",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["capabilities"],
+        summary: "Remplace les capacités déclarées d'un appareil",
+        params: z.object({ deviceId: z.string().min(1) }),
+        body: z.object({ capabilities: z.array(deviceCapabilitySchema).max(128) }),
+        response: { 200: okSchema(z.object({ capabilities: z.array(z.string()) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Appareil");
+
+      const updated = await app.services.deviceRegistry.updateCapabilities(
+        device.id,
+        request.body.capabilities,
+      );
+
+      return ok({ capabilities: updated.capabilities.map((c) => c.name) }, request.id);
+    },
+  );
+  done();
+};

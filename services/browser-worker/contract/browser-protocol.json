@@ -1,0 +1,890 @@
+{
+  "protocolVersion": 1,
+  "generatedFrom": "@nexus/browser-client/src/protocol.ts",
+  "schemas": {
+    "CreateSessionRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowedDomains": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prohibitedDomains": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "headless": {
+          "default": true,
+          "type": "boolean"
+        },
+        "ttlSeconds": {
+          "default": 600,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 3600
+        },
+        "metadata": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["ownerId"]
+    },
+    "Session": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "closing", "closed", "expired"]
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "currentUrl": {
+          "type": ["string", "null"]
+        },
+        "activeTaskId": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "sessionId",
+        "ownerId",
+        "status",
+        "createdAt",
+        "expiresAt",
+        "currentUrl",
+        "activeTaskId"
+      ],
+      "additionalProperties": false
+    },
+    "RunTaskRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "intent": {
+          "type": "string",
+          "enum": ["read", "interact", "login", "purchase"]
+        },
+        "maxSteps": {
+          "default": 15,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 50
+        },
+        "timeoutSeconds": {
+          "default": 180,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 900
+        },
+        "secrets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "metadata": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["taskId", "sessionId", "instructions", "intent"]
+    },
+    "Task": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timeout",
+            "needs_human"
+          ]
+        },
+        "intent": {
+          "type": "string",
+          "enum": ["read", "interact", "login", "purchase"]
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "startedAt": {
+          "type": ["string", "null"]
+        },
+        "finishedAt": {
+          "type": ["string", "null"]
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "type": ["string", "null"]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["code", "message", "retryable"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "events": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "started"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": ["read", "interact", "login", "purchase"]
+                  }
+                },
+                "required": ["taskId", "sessionId", "seq", "ts", "type", "intent"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "navigation"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": ["taskId", "sessionId", "seq", "ts", "type", "url", "title"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "thinking"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["taskId", "sessionId", "seq", "ts", "type", "text"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "action"
+                  },
+                  "action": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": ["taskId", "sessionId", "seq", "ts", "type", "action", "target"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "progress"
+                  },
+                  "step": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "maxSteps": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "note": {
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": [
+                  "taskId",
+                  "sessionId",
+                  "seq",
+                  "ts",
+                  "type",
+                  "step",
+                  "maxSteps",
+                  "note"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "result"
+                  },
+                  "output": {
+                    "type": "string"
+                  },
+                  "screenshotRef": {
+                    "type": ["string", "null"]
+                  }
+                },
+                "required": ["taskId", "sessionId", "seq", "ts", "type", "output", "screenshotRef"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "error"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "taskId",
+                  "sessionId",
+                  "seq",
+                  "ts",
+                  "type",
+                  "code",
+                  "message",
+                  "retryable"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "ts": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "finished"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "succeeded",
+                      "failed",
+                      "cancelled",
+                      "timeout",
+                      "needs_human"
+                    ]
+                  },
+                  "steps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "durationMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "taskId",
+                  "sessionId",
+                  "seq",
+                  "ts",
+                  "type",
+                  "status",
+                  "steps",
+                  "durationMs"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "taskId",
+        "sessionId",
+        "status",
+        "intent",
+        "steps",
+        "startedAt",
+        "finishedAt",
+        "durationMs",
+        "output",
+        "error",
+        "events"
+      ],
+      "additionalProperties": false
+    },
+    "BrowserEvent": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "started"
+            },
+            "intent": {
+              "type": "string",
+              "enum": ["read", "interact", "login", "purchase"]
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "intent"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "navigation"
+            },
+            "url": {
+              "type": "string"
+            },
+            "title": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "url", "title"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "thinking"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "text"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "action"
+            },
+            "action": {
+              "type": "string"
+            },
+            "target": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "action", "target"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "progress"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "maxSteps": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "note": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "step", "maxSteps", "note"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "result"
+            },
+            "output": {
+              "type": "string"
+            },
+            "screenshotRef": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "output", "screenshotRef"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "error"
+            },
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "code", "message", "retryable"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sessionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "finished"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "timeout",
+                "needs_human"
+              ]
+            },
+            "steps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": ["taskId", "sessionId", "seq", "ts", "type", "status", "steps", "durationMs"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Health": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "degraded"]
+        },
+        "version": {
+          "type": "string"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "browserUseVersion": {
+          "type": ["string", "null"]
+        },
+        "openSessions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "runningTasks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "status",
+        "version",
+        "protocolVersion",
+        "browserUseVersion",
+        "openSessions",
+        "runningTasks"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NEXUS Worker</string>
+
+    <!--
+      Ce texte s'affiche dans l'ecran Reglages > Accessibilite du telephone,
+      au moment ou l'utilisateur decide d'activer le service. Il doit donc
+      dire la verite, simplement, et sans minimiser ce qui est accorde.
+    -->
+    <string name="accessibility_service_description">
+        Permet a NEXUS d\'appuyer sur des elements, de saisir du texte, de faire defiler
+        l\'ecran et de prendre une capture, uniquement lorsque vous lui demandez une tache.
+        NEXUS n\'observe pas votre telephone en continu et n\'enregistre pas votre ecran.
+    </string>
+
+    <string name="accessibility_service_summary">
+        Requis pour les taches d\'automatisation NEXUS
+    </string>
+
+    <string name="foreground_service_channel">Connexion NEXUS</string>
+    <string name="foreground_service_text">NEXUS Worker est connecte</string>
+</resources>
