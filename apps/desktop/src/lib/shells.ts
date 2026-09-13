@@ -39,6 +39,18 @@ type TauriCommand =
   | "machine_name"
   | "open_external";
 
+/**
+ * Le pont exposé par la coquille native, s'il y en a une.
+ *
+ * `__TAURI__` n'existe que parce que `tauri.conf.json` déclare
+ * `app.withGlobalTauri: true`. C'est délibéré : le frontend passe par cette
+ * globale plutôt que par le paquet `@tauri-apps/api` — une dépendance de moins,
+ * et la surface atteignable reste celle des sept commandes énumérées ci-dessus.
+ *
+ * Le drapeau se supprime sans rien casser au build : `detectShell()` retomberait
+ * simplement sur `WebShell`, et l'application empaquetée perdrait en silence le
+ * trousseau Windows et les notifications natives. D'où ce rappel ici.
+ */
 function tauriBridge(): TauriBridge | undefined {
   const scope = globalThis as unknown as { __TAURI__?: { core?: TauriBridge } };
   return scope.__TAURI__?.core;

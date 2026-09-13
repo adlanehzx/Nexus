@@ -1,89 +1,41 @@
 import { useState } from "react";
 import { useNexus } from "../lib/nexus.js";
+import { NexusOrb } from "./NexusOrb.js";
 
-/**
- * Écran de connexion.
- *
- * Le mot de passe n'est jamais conservé : `SessionManager` l'échange contre des
- * jetons, qui vont dans le coffre de la coquille. Le champ est vidé dès l'envoi,
- * réussite ou échec — un mot de passe qui reste affiché dans une fenêtre ouverte
- * sur un bureau partagé est un mot de passe compromis.
- */
+/** The password is cleared before the async session exchange starts. */
 export function Login() {
   const nexus = useNexus();
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-
   const soumettre = () => {
-    setOccupe(true);
-    setErreur(null);
-
-    const secret = motDePasse;
-    setMotDePasse("");
-
-    void nexus
-      .signIn(email.trim(), secret)
-      .catch((cause: unknown) => {
-        setErreur(cause instanceof Error ? cause.message : "Connexion impossible.");
-      })
-      .finally(() => {
-        setOccupe(false);
-      });
+    setOccupe(true); setErreur(null);
+    const secret = motDePasse; setMotDePasse("");
+    void nexus.signIn(email.trim(), secret).catch((cause: unknown) => {
+      setErreur(cause instanceof Error ? cause.message : "Connexion impossible.");
+    }).finally(() => { setOccupe(false); });
   };
-
   return (
-    <div className="vide" style={{ maxWidth: 380, margin: "12vh auto", textAlign: "left" }}>
-      <h1 style={{ marginBottom: 4 }}>NEXUS</h1>
-      <p className="faible" style={{ marginTop: 0 }}>
-        Poste Windows — client et exécutant.
-      </p>
-
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          soumettre();
-        }}
-      >
-        <input
-          className="champ"
-          style={{ marginBottom: 8 }}
-          type="email"
-          autoComplete="username"
-          placeholder="Adresse e-mail"
-          value={email}
-          onChange={(event) => {
-            setEmail(event.target.value);
-          }}
-        />
-        <input
-          className="champ"
-          style={{ marginBottom: 12 }}
-          type="password"
-          autoComplete="current-password"
-          placeholder="Mot de passe"
-          value={motDePasse}
-          onChange={(event) => {
-            setMotDePasse(event.target.value);
-          }}
-        />
-
-        <button
-          type="submit"
-          className="bouton primaire"
-          style={{ width: "100%" }}
-          disabled={occupe || email.trim().length === 0 || motDePasse.length === 0}
-        >
-          {occupe ? "Connexion…" : "Se connecter"}
-        </button>
-      </form>
-
-      {erreur === null ? null : (
-        <p className="faible" style={{ color: "var(--erreur)" }}>
-          {erreur}
-        </p>
-      )}
-    </div>
+    <main className="login-shell nexus-background">
+      <section className="login-intro" aria-hidden="true">
+        <NexusOrb state={occupe ? "planning" : "idle"} />
+        <span className="eyebrow">Personal intelligence operating system</span>
+        <h1>Votre système<br />vous attend.</h1>
+        <p>Une présence unifiée pour vos appareils, vos tâches et vos décisions sensibles.</p>
+      </section>
+      <section className="login-panel" aria-label="Connexion à NEXUS">
+        <span className="eyebrow">Connexion sécurisée</span><h2>Entrer dans NEXUS</h2>
+        <p className="faible">Poste Windows — client et exécutant local.</p>
+        <form onSubmit={(event) => { event.preventDefault(); soumettre(); }}>
+          <label className="field-label" htmlFor="nexus-email">Identité</label>
+          <input id="nexus-email" className="champ" type="email" autoComplete="username" placeholder="Adresse e-mail" value={email} onChange={(event) => { setEmail(event.target.value); }} />
+          <label className="field-label" htmlFor="nexus-password">Clé d’accès</label>
+          <input id="nexus-password" className="champ" type="password" autoComplete="current-password" placeholder="Mot de passe" value={motDePasse} onChange={(event) => { setMotDePasse(event.target.value); }} />
+          <button type="submit" className="bouton primaire" disabled={occupe || email.trim().length === 0 || motDePasse.length === 0}>{occupe ? "Établissement de la session…" : "Établir la connexion"}</button>
+        </form>
+        {erreur === null ? null : <p className="login-error" role="alert">{erreur}</p>}
+      </section>
+    </main>
   );
 }

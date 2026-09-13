@@ -63,7 +63,16 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>NEXUS Worker</Text>
+      <View style={styles.hero}>
+        <View style={[styles.orbHalo, snapshot.state === "ready" ? styles.orbHaloReady : styles.orbHaloIdle]}>
+          <View style={[styles.orbCore, snapshot.state === "ready" ? styles.orbCoreReady : styles.orbCoreIdle]} />
+        </View>
+        <View style={styles.heroText}>
+          <Text style={styles.kicker}>NEXUS CONNECTION</Text>
+          <Text style={styles.title}>{snapshot.state === "ready" ? "CONNECTED" : frenchState(snapshot.state).toUpperCase()}</Text>
+          <Text style={styles.subtitle}>Agent système de cet appareil</Text>
+        </View>
+      </View>
       <Text style={styles.subtitle}>
         Cet appareil exécute des tâches pour NEXUS. Il n'affiche pas vos conversations : elles
         restent sur l'iPhone et l'ordinateur.
@@ -220,11 +229,20 @@ function frenchState(state: string): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0f1115" },
+  screen: { flex: 1, backgroundColor: "#070a10" },
   content: { padding: 20, gap: 20 },
-  title: { color: "#f2f4f8", fontSize: 26, fontWeight: "700" },
-  subtitle: { color: "#98a2b3", fontSize: 14, lineHeight: 20 },
-  section: { gap: 8 },
+  hero: { flexDirection: "row", alignItems: "center", gap: 16, paddingTop: 8 },
+  heroText: { flex: 1, gap: 2 },
+  kicker: { color: "#64758a", fontSize: 11, letterSpacing: 1.2, fontWeight: "700" },
+  title: { color: "#edf5ff", fontSize: 23, fontWeight: "800", letterSpacing: -0.4 },
+  subtitle: { color: "#91a1b6", fontSize: 13, lineHeight: 20 },
+  orbHalo: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  orbHaloReady: { borderColor: "#7de8ff", backgroundColor: "#102837" },
+  orbHaloIdle: { borderColor: "#64758a", backgroundColor: "#121b28" },
+  orbCore: { width: 25, height: 25, borderRadius: 13 },
+  orbCoreReady: { backgroundColor: "#7de8ff", shadowColor: "#7de8ff", shadowOpacity: 0.8, shadowRadius: 12, elevation: 6 },
+  orbCoreIdle: { backgroundColor: "#91a1b6" },
+  section: { gap: 8, padding: 14, borderWidth: 1, borderColor: "#26364a", borderRadius: 16, backgroundColor: "#0d131d" },
   sectionTitle: {
     color: "#7c869b",
     fontSize: 13,

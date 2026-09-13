@@ -21,7 +21,19 @@ react {
     // `nexus.config.json`, `metro.config.js` et le code TypeScript.
     root = file("../..")
     reactNativeDir = file("../../node_modules/react-native")
-    hermesCommand = "../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
+    // Chemin **absolu**, et c'est tout l'enjeu.
+    //
+    // Ecrit en relatif, il etait passe tel quel a `cmd`, qui le resolvait depuis
+    // son propre repertoire de travail et non depuis celui du projet. Le binaire
+    // existe pourtant : pnpm place `react-native` en lien symbolique sous
+    // `services/android-worker/node_modules`, et non a la racine du depot ou
+    // Gradle finissait par le chercher. Le build echouait alors juste apres avoir
+    // ecrit le bundle, sur un « chemin d'acces introuvable » qui ne nommait rien.
+    //
+    // `%OS-BIN%` reste litteral : c'est le greffon React Native qui le remplace
+    // par `win64-bin`, `osx-bin` ou `linux64-bin` selon la machine.
+    hermesCommand = file("../../node_modules/react-native/sdks/hermesc")
+        .absolutePath.replace("\\", "/") + "/%OS-BIN%/hermesc"
     codegenDir = file("../../node_modules/@react-native/codegen")
 
     entryFile = file("../../index.js")

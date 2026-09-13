@@ -23,10 +23,12 @@ import {
 import { InMemoryAgentRunStore } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
 import type { BrowserWorkerClient } from "@nexus/browser-client";
+import type { PrismaClient } from "@nexus/database";
 import {
   ContextAssembler,
   InMemoryMemoryProvider,
   MemoryService,
+  PostgresMemoryProvider,
   ShortTermContext,
   type MemoryProvider,
 } from "@nexus/memory";
@@ -66,6 +68,7 @@ export interface ServiceContainerOptions {
   /** Clé de signature des jetons. Générée au déploiement, jamais commitée. */
   tokenPrivateKeyPem: string;
   now?: () => Date;
+  prisma?: PrismaClient;
 
   /** Remplaçables : la persistance Prisma se branche ici sans toucher aux routes. */
   users?: UserStore;
@@ -177,7 +180,11 @@ export class ServiceContainer {
     this.userSessions = options.sessions ?? new InMemorySessionStore();
     this.conversations = options.conversations ?? new InMemoryConversationStore(now);
     this.notificationStore = options.notifications ?? new InMemoryNotificationStore(now);
-    this.memory = options.memory ?? new InMemoryMemoryProvider();
+    this.memory =
+      options.memory ??
+      (options.prisma === undefined
+        ? new InMemoryMemoryProvider()
+        : new PostgresMemoryProvider({ prisma: options.prisma, now }));
     this.shortTerm = new ShortTermContext({ now });
 
     this.auth = new AuthService({
@@ -189,9 +196,9 @@ export class ServiceContainer {
     });
 
     // ── Appareils ─────────────────────────────────────────────────────────
-    this.deviceRegistry = new DeviceRegistry({ 
-      now, 
-      ...(options.deviceStore ? { store: options.deviceStore } : {}) 
+    this.deviceRegistry = new DeviceRegistry({
+      now,
+      ...(options.deviceStore ? { store: options.deviceStore } : {}),
     });
     this.deviceCredentials = options.credentials ?? new InMemoryCredentialProvider();
     this.deviceSessions = new DeviceSessionService({

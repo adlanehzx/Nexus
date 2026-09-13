@@ -227,6 +227,24 @@ export class RealtimeClient {
       return;
     }
 
+    // La poignée de main annonce **d'où** l'on parle : sans appareil rattaché,
+    // il n'y a rien à annoncer. On s'arrête donc avant même d'ouvrir la socket,
+    // et surtout **sans programmer de reconnexion** : aucun retour de réseau ne
+    // fera apparaître un appareil, et boucler dessus masquerait la vraie cause
+    // derrière un « connexion perdue » indéfiniment répété. C'est à l'appelant
+    // d'enregistrer ou de rattacher l'appareil — `SessionManager.ensureDevice`
+    // — puis de rappeler `start`.
+    if (this.#session.deviceId === null) {
+      this.#setState("offline");
+      this.#dispatch({
+        kind: "error",
+        code: "CLIENT_NO_DEVICE",
+        message: "Cet appareil n'est pas encore rattaché à NEXUS.",
+        at: this.#now().toISOString(),
+      });
+      return;
+    }
+
     this.#setState("connecting");
 
     try {
@@ -252,12 +270,12 @@ export class RealtimeClient {
     } catch {
       // Pas de jeton : inutile de reconnecter en boucle, il faut se reconnecter
       // au sens de l'utilisateur.
+      this.#stopped = true;
       this.#setState("offline");
       this.#socket.close("session absente");
       return;
     }
 
-    this.#attempt = 0;
     this.#setState("connected");
   }
 
@@ -273,6 +291,13 @@ export class RealtimeClient {
 
     const envelope = envelopeSchema.safeParse(parsed);
     if (!envelope.success) return;
+
+    // Une trame lisible venue du cœur est la seule preuve que la poignée de
+    // main a été acceptée. Remettre le compteur d'attente à zéro à l'ouverture
+    // de la socket, comme on le faisait, transformait un cœur qui accepte la
+    // connexion puis refuse la session en boucle de reconnexion à une seconde
+    // d'intervalle. Ici, l'attente continue de croître tant que rien n'arrive.
+    this.#attempt = 0;
 
     const type = envelope.data.type as ServerToClientType;
     const payload = (envelope.data.payload ?? {}) as Record<string, unknown>;

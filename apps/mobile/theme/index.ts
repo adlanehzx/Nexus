@@ -8,17 +8,17 @@
  */
 export const theme = {
   color: {
-    background: "#0b0d12",
-    surface: "#151922",
-    surfaceRaised: "#1e2430",
-    border: "#262d3a",
-    text: "#f2f4f8",
-    textMuted: "#98a2b3",
-    textFaint: "#6b7280",
-    accent: "#5b8cff",
-    success: "#4ade80",
-    warning: "#fbbf24",
-    danger: "#f87171",
+    background: "#070a10",
+    surface: "#0d131d",
+    surfaceRaised: "#121b28",
+    border: "#26364a",
+    text: "#edf5ff",
+    textMuted: "#91a1b6",
+    textFaint: "#64758a",
+    accent: "#7de8ff",
+    success: "#75e3ad",
+    warning: "#ffcb6b",
+    danger: "#ff7f8f",
   },
   risk: {
     SAFE: "#4ade80",
@@ -28,7 +28,7 @@ export const theme = {
     CRITICAL: "#f87171",
   } as Record<string, string>,
   space: (n: number) => n * 4,
-  radius: { sm: 8, md: 12, lg: 18, pill: 999 },
+  radius: { sm: 10, md: 16, lg: 24, pill: 999 },
 } as const;
 
 /** Couleur d'un niveau de risque, avec un repli lisible. */

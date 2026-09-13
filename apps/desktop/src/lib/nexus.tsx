@@ -62,8 +62,8 @@ import { taskRequestBody, type TaskDraft } from "./tasks.js";
  * qu'une application mobile.
  */
 function backendUrl(): string {
-  const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string } }).env;
-  return injected?.VITE_NEXUS_URL ?? "https://nexus.local";
+  
+  return import.meta.env.VITE_NEXUS_URL ?? "https://nexus.local";
 }
 
 export type Screen =
@@ -278,15 +278,36 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       await session.login(email, password);
       setAuthenticated(true);
 
-      if (session.deviceId === null && localWorkerId !== null) {
-        await session.bindDevice(localWorkerId);
-        setBoundDeviceId(localWorkerId);
+      if (session.deviceId === null) {
+        if (localWorkerId !== null) {
+          // Le démon exécutant tourne sur cette machine : sa ligne d'appareil
+          // existe déjà, et elle détient la clé privée du poste. On la reprend
+          // — en créer une seconde ferait apparaître deux fois la même machine.
+          await session.bindDevice(localWorkerId);
+          setBoundDeviceId(localWorkerId);
+        } else {
+          // Pas de démon : cette fenêtre est un client pur. `WINDOWS_PC` est le
+          // type que le cœur connaît pour un poste — « DESKTOP » n'existe dans
+          // aucun des deux énumérés et faisait échouer la compilation.
+          //
+          // `ensureDevice` plutôt que `registerDevice` : une réinstallation de
+          // la coquille reprend le poste déjà enregistré au lieu d'en empiler
+          // un nouveau à chaque fois.
+          const machineName = await shell.machineName();
+          const device = await session.ensureDevice({
+            name: `${machineName} (client)`,
+            type: "WINDOWS_PC",
+            platform: "WINDOWS",
+            role: "CLIENT",
+          });
+          setBoundDeviceId(device.deviceId);
+        }
       }
 
       await realtime.start();
       await Promise.all([refreshDevices(), loadConversations()]);
     },
-    [session, realtime, localWorkerId, refreshDevices, loadConversations],
+    [session, realtime, localWorkerId, refreshDevices, loadConversations, shell],
   );
 
   const signOut = useCallback(async () => {

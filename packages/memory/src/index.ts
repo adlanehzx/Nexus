@@ -1,6 +1,7 @@
 export * from "./types.js";
 export * from "./provider.js";
 export * from "./in-memory.js";
+export * from "./postgres.js";
 export * from "./sensitivity.js";
 export * from "./commands.js";
 export * from "./short-term.js";

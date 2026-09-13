@@ -7,6 +7,9 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://localhost:3000"
     />
+    <!-- Servi depuis le paquet, jamais depuis un domaine tiers : la CSP
+         ci-dessus n'autorise que « self ». -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>NEXUS — supervision</title>
   </head>
   <body>

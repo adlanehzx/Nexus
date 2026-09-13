@@ -78,8 +78,15 @@ function translate(error: FastifyError): AppError {
 
   if (isResponseSerializationError(error)) {
     // Une réponse qui ne respecte pas son propre schéma est un bug serveur,
-    // jamais une erreur du client.
-    return toAppError(new Error(`Réponse non conforme au schéma sur ${error.method} ${error.url}`));
+    // jamais une erreur du client. Le détail du schéma violé accompagne le
+    // message : sans lui, le diagnostic se réduisait à « quelque part dans
+    // cette route », et c'est exactement ce qui a coûté une soirée sur
+    // `lastSeenAt`.
+    return toAppError(
+      new Error(
+        `Réponse non conforme au schéma sur ${error.method} ${error.url} : ${error.message}`,
+      ),
+    );
   }
 
   if (error.statusCode === 429) {

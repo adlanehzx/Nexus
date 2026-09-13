@@ -18,12 +18,27 @@ const schema = z.object({
   result: z.string(),
 });
 
-function createMockProcess(): ChildProcess & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn> } {
-  const proc = new EventEmitter() as unknown as ChildProcess & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn> };
-  proc.stdout = new EventEmitter();
-  proc.stderr = new EventEmitter();
-  proc.kill = vi.fn();
-  return proc;
+type MockProcess = ChildProcess & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  kill: ReturnType<typeof vi.fn>;
+};
+
+/**
+ * Un faux processus enfant.
+ *
+ * Les flux sont de simples `EventEmitter` : les adaptateurs n'écoutent que
+ * `data` et `close`, et rien ici n'a besoin d'un vrai `Readable`. La conversion
+ * a lieu **une seule fois, sur l'objet fini** — l'affecter propriété par
+ * propriété obligeait chaque flux à satisfaire `Readable` en entier, ce qui
+ * n'apportait aucune garantie et refusait de compiler.
+ */
+function createMockProcess(): MockProcess {
+  return Object.assign(new EventEmitter(), {
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    kill: vi.fn(),
+  }) as unknown as MockProcess;
 }
 
 describe("LLM Providers Phase 2", () => {

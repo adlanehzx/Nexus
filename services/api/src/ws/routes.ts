@@ -162,7 +162,9 @@ async function openClientSession(
     return context;
   } catch (cause) {
     log.warn({ err: cause, deviceId: hello.deviceId }, "poignée de main client refusée");
-    socket.close(WsCloseCode.UNAUTHENTICATED, "authentification refusée");
+    const isDeviceError = cause instanceof Error && cause.message.includes("Appareil");
+    const code = isDeviceError ? WsCloseCode.FORBIDDEN_CHANNEL : WsCloseCode.UNAUTHENTICATED;
+    socket.close(code, "authentification refusée");
     return undefined;
   }
 }

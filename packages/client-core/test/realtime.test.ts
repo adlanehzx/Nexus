@@ -34,7 +34,7 @@ interface Harness {
   actions: ClientAction[];
 }
 
-async function makeClient(): Promise<Harness> {
+async function makeClient(options?: { withDevice?: boolean }): Promise<Harness> {
   const http = new FakeHttpClient();
   http.on("POST", "/api/v1/auth/login", loginResponse());
   http.on("POST", "/api/v1/auth/refresh", {
@@ -46,6 +46,12 @@ async function makeClient(): Promise<Harness> {
 
   const session = new SessionManager({ http, storage: new FakeSecureStorage() });
   await session.login("adlan@exemple.fr", "un mot de passe suffisant");
+
+  // Le canal client annonce **d'où** l'on parle : sans appareil rattaché, il n'y
+  // a rien à annoncer et `RealtimeClient` refuse d'ouvrir la socket. Un iPhone
+  // qui arrive ici a donc forcément déjà été rattaché — c'est ce que garantit
+  // `ensureDevice` à la connexion. Le cas contraire est éprouvé plus bas.
+  if (options?.withDevice !== false) await session.bindDevice("device-iphone");
 
   const socket = new FakeSocket();
   const network = new FakeNetwork();

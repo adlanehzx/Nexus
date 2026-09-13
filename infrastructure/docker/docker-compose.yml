@@ -19,7 +19,18 @@ services:
       # Le classement C rend les tris déterministes entre machines et versions.
       POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=fr-FR --encoding=UTF8"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Boucle locale uniquement. Publié sur toutes les interfaces, l'entrepôt
+      # devenait joignable depuis le tailnet — vérifié : un `Test-NetConnection`
+      # sur l'IP Tailscale du poste ouvrait la connexion. Aucun client, aucun
+      # worker ne parle à la base : ils passent par le Core, qui la joint par le
+      # réseau Docker sous le nom `postgres`. Seuls les outils locaux —
+      # migrations Prisma, Studio — ont l'usage du port publié.
+      #
+      # 15432 et non 5432 : sur ce poste, `127.0.0.1:5432` est déjà pris par le
+      # relais WSL, qui publie le PostgreSQL d'une distribution. Réclamer le
+      # même port échoue au démarrage, et le partager rendrait indéterminée la
+      # base que joint `DATABASE_URL`.
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -40,7 +51,10 @@ services:
     # le prix d'un fsync par écriture.
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      # Même raison que pour Postgres, et le motif est pire ici : Redis n'a pas
+      # de mot de passe dans cette configuration. Un port ouvert sur le tailnet
+      # donnait la file de jobs à qui la demandait.
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -78,7 +92,9 @@ services:
       BROWSER_WORKER_URL: http://browser-worker:8100
       BROWSER_WORKER_TOKEN: ${BROWSER_WORKER_TOKEN:-}
     ports:
-      - "${API_PORT:-3000}:3000"
+      # Le Core n'est pas un service LAN : l'accès distant passe uniquement par
+      # Tailscale Serve, qui reverse-proxyifie ensuite vers cette boucle locale.
+      - "127.0.0.1:${API_PORT:-3000}:3000"
     # L'arrêt gracieux dispose du délai qu'il annonce, plus une marge.
     stop_grace_period: 15s
     networks: [nexus]

@@ -299,6 +299,84 @@ describe("appareils", () => {
     expect(device.trust).toBe("PENDING");
   });
 
+  it("enregistre un CLIENT sans clé publique", async () => {
+    // L'iPhone s'authentifie par jeton, et la route vérifie déjà que l'appareil
+    // appartient au porteur du jeton. Exiger de lui une clé matérielle
+    // n'ajouterait aucune garantie et l'empêchait simplement de s'enregistrer.
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/devices",
+      headers: account.authorization,
+      payload: {
+        name: "iPhone d'Adlan",
+        type: "IPHONE",
+        platform: "IOS",
+        role: "CLIENT",
+        grantedPermissions: [],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const created = response.json<{ data: { role: string; trust: string } }>().data;
+    // Sans clé, mais sans privilège non plus : l'appareil arrive non approuvé.
+    expect(created.role).toBe("CLIENT");
+    expect(created.trust).toBe("PENDING");
+  });
+
+  it("refuse un WORKER sans clé publique", async () => {
+    // C'est la clé qui rend vérifiable la signature du challenge : un exécutant
+    // sans clé enregistrée serait un exécutant dont plus rien n'atteste
+    // l'identité. L'ouverture faite pour l'iPhone ne doit pas déborder ici.
+    for (const role of ["WORKER", "BOTH"]) {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/devices",
+        headers: account.authorization,
+        payload: {
+          name: `Poste ${role}`,
+          type: "WINDOWS_PC",
+          platform: "WINDOWS",
+          role,
+          grantedPermissions: [],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    }
+  });
+
+  it("un CLIENT sans clé n'ouvre aucune session d'appareil", async () => {
+    // La contrepartie du chemin sans clé : elle ne donne accès à rien de plus.
+    // Le canal worker exige une signature, et il n'y a pas de clé à vérifier.
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/devices",
+      headers: account.authorization,
+      payload: {
+        name: "iPhone nu",
+        type: "IPHONE",
+        platform: "IOS",
+        role: "CLIENT",
+        grantedPermissions: [],
+      },
+    });
+    const deviceId = created.json<{ data: { id: string } }>().data.id;
+
+    const challenge = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${deviceId}/challenge`,
+    });
+    const nonce = challenge.json<{ data: { nonce: string } }>().data.nonce;
+
+    const session = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${deviceId}/sessions`,
+      payload: { nonce, signature: "c2lnbmF0dXJlLWJpZG9u", capabilities: [] },
+    });
+
+    expect(session.statusCode).toBe(404);
+  });
+
   it("approuve un appareil", async () => {
     const { device } = await registerDevice(harness, account, {
       name: "Poste fixe",
@@ -548,5 +626,21 @@ describe("mémoire", () => {
     });
 
     expect(response.json<{ data: { hits: unknown[] } }>().data.hits).toHaveLength(0);
+  });
+});
+
+describe('CORS et CSP', () => {
+  it('doit accepter un preflight valide', async () => {
+    const response = await harness.app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/auth/login',
+      headers: {
+        Origin: 'http://localhost:5273',
+        'Access-Control-Request-Method': 'POST',
+      },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5273');
+    expect(response.headers['access-control-allow-methods']).toMatch(/POST/);
   });
 });

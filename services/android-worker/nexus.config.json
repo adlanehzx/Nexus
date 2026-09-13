@@ -1,8 +1,8 @@
 {
   "_lisez_moi": "Reglages du worker Android. AUCUN SECRET ICI : la cle de l'appareil est designee par un ALIAS dans le magasin de cles d'Android et ne quitte jamais le telephone. Editer ce fichier avant de construire l'APK — voir README, section Installation.",
 
-  "NEXUS_BACKEND_URL": "http://10.0.2.2:3000",
-  "DEVICE_ID": "00000000-0000-0000-0000-000000000000",
+  "NEXUS_BACKEND_URL": "https://adlane.tail9a479d.ts.net",
+  "DEVICE_ID": "01a07045-f975-75da-8a90-f97c3079f524",
   "DEVICE_KEY_ALIAS": "nexus.device.key",
 
   "WORKER_CAPABILITIES": "",

@@ -47,6 +47,7 @@ model User {
   sessions       Session[]
   devices        Device[]
   conversations  Conversation[]
+  memories       Memory[]
 
   @@map("users")
 }
@@ -414,4 +415,57 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+enum MemoryLayer {
+  LONG_TERM
+  PREFERENCE
+}
+
+enum MemoryKind {
+  SEMANTIC
+  EPISODIC
+  PROCEDURAL
+}
+
+enum MemoryOrigin {
+  USER
+  AGENT
+  SYSTEM
+}
+
+enum MemorySensitivity {
+  ORDINARY
+  PERSONAL
+}
+
+model Memory {
+  id                 String            @id @db.Uuid
+  userId             String            @db.Uuid
+  layer              MemoryLayer      @default(LONG_TERM)
+  kind               MemoryKind
+  content            String
+  importance         Float
+  confidence         Float
+  tags               String[]          @default([])
+  origin             MemoryOrigin      @default(USER)
+  sensitivity        MemorySensitivity @default(ORDINARY)
+  sensitiveCategories String[]         @default([])
+  validFrom          DateTime          @db.Timestamptz(3)
+  validUntil         DateTime?         @db.Timestamptz(3)
+  supersededById     String?           @db.Uuid
+  supersedesId       String?           @db.Uuid
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supersededBy      Memory? @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededRecords Memory[] @relation("MemorySupersededBy")
+  supersedes        Memory? @relation("MemorySupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersedingRecords Memory[] @relation("MemorySupersedes")
+
+  @@index([userId, layer, validUntil])
+  @@index([userId, kind, validUntil])
+  @@index([userId, validFrom(sort: Desc)])
+  @@map("memories")
 }

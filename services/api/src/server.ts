@@ -28,7 +28,12 @@ const config = getConfig();
  * logger en premier laisserait le tampon vide, et la section « Journaux »
  * afficherait un ecran blanc sans que rien n'echoue.
  */
-import { FallbackProvider, ClaudeCliProvider, GeminiCliProvider, LocalLLMProvider } from "@nexus/llm";
+import {
+  FallbackProvider,
+  ClaudeCliProvider,
+  GeminiCliProvider,
+  LocalLLMProvider,
+} from "@nexus/llm";
 import { createDatabaseClient } from "@nexus/database";
 import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
@@ -38,6 +43,7 @@ import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 
 const services = new ServiceContainer({
+  prisma,
   users: new PrismaUserStore(prisma),
   sessions: new PrismaSessionStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),

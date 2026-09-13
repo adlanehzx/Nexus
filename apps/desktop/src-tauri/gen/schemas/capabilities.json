@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Permissions de la fenetre principale. Volontairement minimales : ce qui n'est pas ici n'est pas atteignable depuis le moteur de rendu.","local":true,"windows":["main"],"permissions":["core:default","notification:default","opener:allow-open-url"]}}

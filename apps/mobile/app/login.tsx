@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { router } from "expo-router";
 import { useNexus } from "../lib/nexus.js";
 import { theme } from "../theme/index.js";
+import { NexusOrb } from "../components/nexus-orb.js";
 
 /**
  * Écran de connexion.
@@ -35,8 +36,10 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.orb}><NexusOrb state={busy ? "executing" : "idle"} size={132} /></View>
+      <Text style={styles.eyebrow}>PERSONAL INTELLIGENCE OS</Text>
       <Text style={styles.title}>NEXUS</Text>
-      <Text style={styles.subtitle}>Votre assistant, sur tous vos appareils.</Text>
+      <Text style={styles.subtitle}>Votre console personnelle, sur tous vos appareils.</Text>
 
       <TextInput
         style={styles.input}
@@ -72,7 +75,7 @@ export default function LoginScreen() {
         {busy ? (
           <ActivityIndicator color={theme.color.text} />
         ) : (
-          <Text style={styles.buttonText}>Se connecter</Text>
+          <Text style={styles.buttonText}>Établir la connexion</Text>
         )}
       </Pressable>
     </View>
@@ -87,7 +90,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: theme.space(3),
   },
-  title: { color: theme.color.text, fontSize: 34, fontWeight: "700" },
+  orb: { alignItems: "center", marginBottom: theme.space(2) },
+  eyebrow: { color: theme.color.textFaint, fontSize: 11, letterSpacing: 1.4, fontWeight: "700" },
+  title: { color: theme.color.text, fontSize: 42, fontWeight: "700", letterSpacing: -1.5 },
   subtitle: { color: theme.color.textMuted, fontSize: 15, marginBottom: theme.space(4) },
   input: {
     backgroundColor: theme.color.surface,
@@ -107,6 +112,6 @@ const styles = StyleSheet.create({
     marginTop: theme.space(2),
   },
   buttonBusy: { opacity: 0.7 },
-  buttonText: { color: theme.color.text, fontSize: 16, fontWeight: "600" },
+  buttonText: { color: theme.color.background, fontSize: 16, fontWeight: "700" },
   error: { color: theme.color.danger, fontSize: 14 },
 });

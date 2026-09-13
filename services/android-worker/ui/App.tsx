@@ -35,7 +35,29 @@ export function App() {
       return;
     }
 
-    void startAndroidWorker({ native: natif, env: reglages as Record<string, string> })
+    const env = { ...(reglages as Record<string, string>) };
+
+    // En développement, on réutilise l'hôte de Metro (10.0.2.2 sur émulateur,
+    // localhost sur téléphone via adb reverse). En production, la valeur
+    // dans nexus.config.json est conservée telle quelle.
+    if (__DEV__) {
+      const scriptURL = NativeModules.SourceCode?.scriptURL as string | undefined;
+      if (scriptURL) {
+        try {
+          const hostMatch = scriptURL.match(/:\/\/([^:/]+)/);
+          if (hostMatch && hostMatch[1]) {
+            const metroHost = hostMatch[1];
+            env.NEXUS_BACKEND_URL = env.NEXUS_BACKEND_URL.replace(/:\/\/([^:/]+)/, `://${metroHost}`);
+          }
+        } catch (e) {
+          console.error("NEXUS_BACKEND_URL: Erreur lors de la résolution dynamique de l'hôte", e);
+        }
+      } else {
+        console.warn("NEXUS_BACKEND_URL: Impossible de trouver l'URL Metro (scriptURL vide)");
+      }
+    }
+
+    void startAndroidWorker({ native: natif, env })
       .then(({ worker: demarre }) => {
         setWorker(demarre);
       })

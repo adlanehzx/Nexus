@@ -203,6 +203,29 @@ describe("canal client sur le fil", () => {
     expect(socket.readyState).toBe(WebSocket.OPEN);
     socket.close();
   });
+
+  it("accepte la coquille de bureau Tauri", async () => {
+    // Le défaut constaté sur la machine : le client Windows empaqueté recevait
+    // un 403 à la poignée de main parce que son origine n'était déclarée nulle
+    // part. Ces deux origines désignent l'application installée, pas un serveur.
+    for (const origin of ["http://tauri.localhost", "tauri://localhost"]) {
+      const socket = await open(`${api.wsUrl}/ws/client`, { origin });
+      expect(socket.readyState).toBe(WebSocket.OPEN);
+      socket.close();
+    }
+  });
+
+  it("l'ouverture à Tauri n'élargit rien d'autre", async () => {
+    // Une origine qui ressemble à celle de Tauri sans en être une doit rester
+    // refusée : la comparaison est exacte, pas un préfixe.
+    for (const origin of [
+      "https://tauri.localhost.attaquant.test",
+      "http://tauri.localhost.evil.test",
+      "tauri://autre-hote",
+    ]) {
+      await expect(open(`${api.wsUrl}/ws/client`, { origin })).rejects.toThrow();
+    }
+  });
 });
 
 describe("canal worker sur le fil", () => {

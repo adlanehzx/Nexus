@@ -32,8 +32,8 @@ const deviceSchema = z.object({
     maxConcurrentTasks: z.number(),
     batteryPercent: z.number().optional(),
     onBattery: z.boolean().optional(),
-  }),
-  lastSeenAt: z.date().nullable(),
+  }).passthrough(),
+  lastSeenAt: z.string().datetime().nullable(),
   authenticated: z.boolean(),
 });
 
@@ -63,8 +63,8 @@ function present(device: {
     capabilities: device.capabilities.filter((c) => c.enabled).map((c) => c.name),
     grantedPermissions: device.grantedPermissions,
     health: device.health as never,
-    lastSeenAt: device.lastSeenAt,
-    authenticated: device.authenticated,
+    lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    authenticated: device.authenticated ?? false,
   };
 }
 
@@ -112,10 +112,40 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
           type: z.enum(["IPHONE", "ANDROID", "WINDOWS_PC", "MAC", "LINUX", "BROWSER_WORKER"]),
           platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
           role: z.enum(["CLIENT", "WORKER", "BOTH"]),
-          /** Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android. */
-          publicKeyPem: z.string().min(1).max(4_096),
+          /**
+           * Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android.
+           *
+           * Facultative **dans la forme seulement** : le raffinement ci-dessous
+           * la rend obligatoire dès que l'appareil demande à exécuter. Un rôle
+           * `WORKER` ou `BOTH` sans clé serait un exécutant dont on ne peut
+           * vérifier aucune signature — l'ouvrir reviendrait à supprimer la
+           * poignée de main worker.
+           */
+          publicKeyPem: z.string().min(1).max(4_096).optional(),
           grantedPermissions: z.array(z.string()).max(64).default([]),
-        }),
+        })
+          /**
+           * Un exécutant signe ; un client ne signe pas.
+           *
+           * L'iPhone est un `CLIENT` pur : il s'authentifie par JWT, et le cœur
+           * vérifie déjà que l'appareil appartient au porteur du jeton. Lui
+           * réclamer une clé matérielle n'ajouterait aucune garantie et
+           * l'empêchait simplement de s'enregistrer.
+           *
+           * `WORKER` et `BOTH`, eux, reçoivent des commandes et ouvrent le canal
+           * `/ws/worker` en signant un challenge. Sans clé publique enregistrée,
+           * ce challenge est invérifiable : l'exigence reste entière, et elle est
+           * posée ici plutôt que dans le code métier pour qu'aucun appelant ne
+           * puisse l'oublier.
+           */
+          .refine(
+            (body) => body.role === "CLIENT" || body.publicKeyPem !== undefined,
+            {
+              path: ["publicKeyPem"],
+              message:
+                "Une clé publique est obligatoire pour un appareil exécutant (WORKER ou BOTH).",
+            },
+          ),
         response: { 201: okSchema(deviceSchema) },
       },
     },
@@ -133,7 +163,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
 
       // La clé publique est enregistrée séparément : elle a un cycle de vie
       // propre — rotation, révocation — distinct de celui de l'appareil.
-      if ("set" in app.services.deviceCredentials) {
+      // Les CLIENT purs (iPhone) n'en envoient pas : ils s'authentifient par JWT.
+      if (request.body.publicKeyPem !== undefined && "set" in app.services.deviceCredentials) {
         (
           app.services.deviceCredentials as unknown as {
             set: (id: string, pem: string) => void;

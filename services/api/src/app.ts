@@ -133,6 +133,7 @@ export async function buildApp(options: BuildAppOptions) {
     options.services ??
     new ServiceContainer({
       tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
+      prisma,
       onTaskError: (error, taskId) => {
         logger.error({ err: error, taskId }, "exécution de plan interrompue");
       },

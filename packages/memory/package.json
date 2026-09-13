@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@nexus/memory",
   "version": "1.0.0",
   "private": true,
@@ -24,6 +24,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@nexus/database": "workspace:*",
     "@nexus/shared": "workspace:*",
     "zod": "4.5.4"
   },

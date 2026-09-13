@@ -16,7 +16,41 @@ describe("parseConfig", () => {
     expect(config.API_PORT).toBe(3000);
     expect(config.API_HOST).toBe("0.0.0.0");
     expect(config.SHUTDOWN_TIMEOUT_MS).toBe(10_000);
-    expect(config.CORS_ORIGINS).toEqual(["http://localhost:3000"]);
+    // Hors production, les trois coquilles locales sont ouvertes d'office —
+    // l'API, la fenêtre Vite du client de bureau, le serveur Expo du mobile —
+    // et les origines Tauri s'y ajoutent : sans elles, le client de bureau
+    // empaqueté est refusé à la poignée de main WebSocket.
+    expect(config.CORS_ORIGINS).toEqual([
+      "http://localhost:3000",
+      "http://localhost:5273",
+      "http://localhost:8081",
+      "http://tauri.localhost",
+      "tauri://localhost",
+    ]);
+  });
+
+  it("n'ouvre aucune origine de développement en production", () => {
+    // Le défaut permissif est une commodité de développement, et il ne doit pas
+    // suivre en production : les origines réellement servies s'y déclarent au
+    // déploiement. Seules les origines Tauri subsistent — elles ne désignent
+    // aucun serveur joignable, mais l'application installée elle-même.
+    const config = parseConfig({ ...minimalEnv, NODE_ENV: "production" });
+
+    expect(config.CORS_ORIGINS).toEqual(["http://tauri.localhost", "tauri://localhost"]);
+  });
+
+  it("ne dépend pas de l'environnement du processus qui appelle", () => {
+    // Une même entrée doit produire une même sortie. Le défaut se décidait sur
+    // `process.env.NODE_ENV` et non sur la valeur lue, ce qui rendait le
+    // résultat différent selon le processus appelant.
+    const avant = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      expect(parseConfig(minimalEnv).CORS_ORIGINS).toContain("http://localhost:3000");
+    } finally {
+      if (avant === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = avant;
+    }
   });
 
   it("convertit les nombres transmis en chaînes par l'environnement", () => {
@@ -32,7 +66,13 @@ describe("parseConfig", () => {
       CORS_ORIGINS: "http://a.test , http://b.test,, http://c.test",
     });
 
-    expect(config.CORS_ORIGINS).toEqual(["http://a.test", "http://b.test", "http://c.test"]);
+    expect(config.CORS_ORIGINS).toEqual([
+      "http://a.test",
+      "http://b.test",
+      "http://c.test",
+      "http://tauri.localhost",
+      "tauri://localhost",
+    ]);
   });
 
   it("refuse une DATABASE_URL qui n'est pas du PostgreSQL", () => {
@@ -56,7 +96,11 @@ describe("parseConfig", () => {
   });
 
   it("tolère le joker CORS en développement", () => {
-    expect(parseConfig({ ...minimalEnv, CORS_ORIGINS: "*" }).CORS_ORIGINS).toEqual(["*"]);
+    expect(parseConfig({ ...minimalEnv, CORS_ORIGINS: "*" }).CORS_ORIGINS).toEqual([
+      "*",
+      "http://tauri.localhost",
+      "tauri://localhost",
+    ]);
   });
 
   it("nomme la variable fautive dans le message d'erreur", () => {
@@ -69,5 +113,34 @@ describe("parseConfig", () => {
       expect(error).toBeInstanceOf(ConfigurationError);
       expect((error as ConfigurationError).message).toContain("LOG_LEVEL");
     }
+  });
+
+  it("accepte toujours les origines de la coquille Tauri", () => {
+    // Le défaut de la phase précédente : le client Windows empaqueté recevait un
+    // 403 sur `/ws/client` parce que son origine n'était déclarée nulle part, et
+    // qu'aucun déploiement ne pouvait la deviner.
+    for (const cors of ["http://localhost:3000", "https://nexus.exemple.fr"]) {
+      const config = parseConfig({ ...minimalEnv, CORS_ORIGINS: cors });
+      expect(config.CORS_ORIGINS).toContain("http://tauri.localhost");
+      expect(config.CORS_ORIGINS).toContain("tauri://localhost");
+    }
+  });
+
+  it("n'ajoute pas deux fois une origine Tauri déjà déclarée", () => {
+    const config = parseConfig({
+      ...minimalEnv,
+      CORS_ORIGINS: "tauri://localhost,http://localhost:3000",
+    });
+
+    expect(config.CORS_ORIGINS.filter((o) => o === "tauri://localhost")).toHaveLength(1);
+  });
+
+  it("n'élargit rien d'autre : une origine arbitraire reste absente", () => {
+    // La vérification d'origine doit rester entière. Ajouter Tauri ne doit pas
+    // ouvrir la porte à un site tiers.
+    const config = parseConfig({ ...minimalEnv, CORS_ORIGINS: "http://localhost:3000" });
+
+    expect(config.CORS_ORIGINS).not.toContain("https://attaquant.test");
+    expect(config.CORS_ORIGINS).not.toContain("*");
   });
 });

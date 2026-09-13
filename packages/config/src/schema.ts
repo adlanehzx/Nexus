@@ -36,6 +36,26 @@ const csv = z
   )
   .pipe(z.array(z.string()));
 
+/**
+ * Origines de la coquille de bureau Tauri.
+ *
+ * **Toujours acceptées, et non configurables.** Ce ne sont pas des adresses
+ * réseau : ce sont les origines que la WebView attribue à l'application
+ * installée sur la machine — `http://tauri.localhost` sous Windows,
+ * `tauri://localhost` sous macOS et Linux. Elles ne désignent aucun serveur
+ * joignable, et un site web ne peut pas les usurper : c'est le navigateur qui
+ * pose l'en-tête `Origin`, jamais la page.
+ *
+ * Les inscrire ici plutôt que dans `.env` répare un piège réel : le client
+ * Windows empaqueté était refusé par la validation d'origine du canal
+ * `/ws/client` — 403 à la poignée de main — parce qu'aucun déploiement ne
+ * pensait à les ajouter. Une valeur que tout le monde doit fournir et que
+ * personne ne connaît n'est pas une configuration, c'est un défaut.
+ *
+ * La vérification d'origine, elle, reste entière : rien d'autre n'est élargi.
+ */
+export const TAURI_ORIGINS = ["http://tauri.localhost", "tauri://localhost"] as const;
+
 export const configSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -46,7 +66,14 @@ export const configSchema = z
     API_VERSION: z.string().min(1).default("0.1.0"),
     API_HOST: z.string().min(1).default("0.0.0.0"),
     API_PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
-    CORS_ORIGINS: csv.default(["http://localhost:3000"]),
+    /**
+     * Origines acceptées, pour CORS **et** pour la poignée de main WebSocket.
+     *
+     * Les origines Tauri y sont ajoutées d'office (voir `TAURI_ORIGINS`) : le
+     * client de bureau ne peut pas se connecter sans elles, et les demander à
+     * chaque déploiement revenait à casser l'application par défaut.
+     */
+    CORS_ORIGINS: csv.optional(),
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(0).max(120_000).default(10_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),
@@ -67,6 +94,31 @@ export const configSchema = z
 
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
   })
+  /**
+   * Les origines par défaut dépendent de l'environnement, et cet
+   * environnement est celui qu'on vient de lire — pas celui du processus.
+   *
+   * La différence n'est pas théorique : `parseConfig` reçoit un objet
+   * d'environnement explicite, et faire dépendre un défaut de `process.env`
+   * rendait le résultat différent selon le processus qui appelle. Une même
+   * entrée doit produire une même sortie, sous vitest comme en production.
+   */
+  .transform((config) => ({
+    ...config,
+    CORS_ORIGINS: [
+      ...new Set([
+        ...(config.CORS_ORIGINS ??
+          (config.NODE_ENV === "production"
+            ? // En production, rien n'est ouvert par défaut : les origines
+              // réellement servies sont déclarées au déploiement.
+              []
+            : // En développement, les trois coquilles locales — l'API elle-même,
+              // la fenêtre Vite du client de bureau, le serveur Expo du mobile.
+              ["http://localhost:3000", "http://localhost:5273", "http://localhost:8081"])),
+        ...TAURI_ORIGINS,
+      ]),
+    ],
+  }))
   .superRefine((config, ctx) => {
     // Un joker CORS en production annule l'intérêt de la liste d'origines.
     if (config.NODE_ENV === "production" && config.CORS_ORIGINS.includes("*")) {
