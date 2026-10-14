@@ -39,6 +39,7 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
+import { MissionControlClient } from "@nexus/mission-control-client";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 
@@ -55,6 +56,9 @@ const services = new ServiceContainer({
     new GeminiCliProvider(),
     new LocalLLMProvider(),
   ]),
+  ...(config.MISSION_CONTROL_URL === undefined
+    ? {}
+    : { missionControl: new MissionControlClient({ baseUrl: config.MISSION_CONTROL_URL }) }),
 });
 
 const logger = createLogger(config, [services.logs]);

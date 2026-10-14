@@ -189,6 +189,50 @@ export interface BrowserSection {
   health: unknown;
 }
 
+export interface MissionControlSection {
+  configured: boolean;
+  reachable: boolean;
+  detail: string;
+  health: null | {
+    status: "ready";
+    worker_enabled: boolean;
+    worker_concurrency: number;
+    profiles: string[];
+  };
+  audit: null | {
+    valid: boolean;
+    checked: number;
+    head?: string;
+    failed_sequence?: number;
+  };
+  accounts: {
+    id: string;
+    name: string;
+    currency: "EUR";
+    initial_balance_cents: number;
+    cash_balance_cents: number;
+    realized_pnl_cents: number;
+    open_exposure_cents: number;
+    live_trading: 0;
+  }[];
+  markets: {
+    id: string;
+    question: string;
+    close_at: string;
+    state: "open" | "settled" | "cancelled";
+  }[];
+  recent_runs: {
+    id: string;
+    mission_id: string;
+    account_id: string;
+    market_id: string;
+    state: "running" | "waiting_market_data" | "executed" | "abstained" | "failed";
+    error_code: string | null;
+    created_at: string;
+    updated_at: string;
+  }[];
+}
+
 export interface MemorySection {
   total: number;
   byLayer: Record<string, number>;
@@ -278,6 +322,10 @@ export class DashboardApi {
 
   browser(): Promise<BrowserSection> {
     return this.#get("/api/v1/dashboard/browser");
+  }
+
+  missionControl(): Promise<MissionControlSection> {
+    return this.#get("/api/v1/dashboard/mission-control");
   }
 
   memory(): Promise<MemorySection> {

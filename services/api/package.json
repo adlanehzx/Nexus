@@ -30,6 +30,7 @@
     "@nexus/llm": "workspace:*",
     "@nexus/mcp": "workspace:*",
     "@nexus/memory": "workspace:*",
+    "@nexus/mission-control-client": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",

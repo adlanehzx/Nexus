@@ -23,6 +23,7 @@ import {
 import { InMemoryAgentRunStore } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
 import type { BrowserWorkerClient } from "@nexus/browser-client";
+import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { PrismaClient } from "@nexus/database";
 import {
   ContextAssembler,
@@ -113,6 +114,8 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
+  /** Client du moteur OpenHands ACP/paper-trading. */
+  missionControl?: MissionControlPort;
   /** Version affichee par le tableau de bord. */
   apiVersion?: string;
   /** Provider LLM pour le TaskPlanner. */
@@ -164,6 +167,8 @@ export class ServiceContainer {
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
   readonly browser: BrowserWorkerClient | undefined;
+  /** Moteur OpenHands ACP/paper-trading, quand il est configuré. */
+  readonly missionControl: MissionControlPort | undefined;
   /** Provider LLM pour planifier des tâches (optionnel). */
   readonly llmProvider: LLMProvider | undefined;
 
@@ -363,6 +368,7 @@ export class ServiceContainer {
     this.runStore = new InMemoryAgentRunStore();
     this.mcp = options.mcp;
     this.browser = options.browser;
+    this.missionControl = options.missionControl;
 
     this.dashboard = new DashboardService({
       services: this,

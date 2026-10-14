@@ -15,7 +15,7 @@ import {
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.js";
 
 /**
- * Les douze sections.
+ * Les sections de supervision.
  *
  * Chacune charge la sienne : une section qui échoue n'emporte pas les autres, et
  * un serveur MCP injoignable ne doit pas vider l'écran des exécutants.
@@ -690,6 +690,124 @@ export function Browser({ api }: { api: DashboardApi }) {
             )}
           </>
         )}
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OpenHands Mission Control
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function MissionControl({ api }: { api: DashboardApi }) {
+  const state = useSection(() => api.missionControl());
+
+  return (
+    <div className="contenu">
+      <Section state={state}>
+        {(data) => {
+          const cash = data.accounts.reduce(
+            (total, account) => total + account.cash_balance_cents,
+            0,
+          );
+          const exposure = data.accounts.reduce(
+            (total, account) => total + account.open_exposure_cents,
+            0,
+          );
+          const activeRuns = data.recent_runs.filter(
+            (run) => run.state === "running" || run.state === "waiting_market_data",
+          ).length;
+
+          return (
+            <>
+              <div className="mesures">
+                <Metric value={data.configured ? "oui" : "non"} label="configuré" />
+                <Metric
+                  value={data.reachable ? "joignable" : "injoignable"}
+                  label="moteur ACP"
+                  alert={data.configured && !data.reachable}
+                />
+                <Metric
+                  value={data.health?.worker_enabled === true ? "actifs" : "arrêtés"}
+                  label="workers"
+                  alert={data.configured && data.health?.worker_enabled !== true}
+                />
+                <Metric value={String(data.health?.worker_concurrency ?? 0)} label="concurrence" />
+                <Metric
+                  value={data.audit?.valid === true ? "valide" : "invalide"}
+                  label="chaîne d'audit"
+                  alert={data.configured && data.audit?.valid !== true}
+                />
+                <Metric value={formatCount(data.audit?.checked ?? 0)} label="événements audités" />
+                <Metric value={`${(cash / 100).toFixed(2)} €`} label="cash fictif" />
+                <Metric value={`${(exposure / 100).toFixed(2)} €`} label="exposition fictive" />
+                <Metric value={formatCount(activeRuns)} label="missions actives" />
+              </div>
+
+              <p className="faible">{data.detail}</p>
+
+              <h3>NEXUS · profils ACP</h3>
+              <p className="mono faible">
+                {data.health === null || data.health.profiles.length === 0
+                  ? "aucun"
+                  : data.health.profiles.join(", ")}
+              </p>
+
+              <h3>Portefeuilles fictifs</h3>
+              {data.accounts.length === 0 ? (
+                <Empty>Aucun portefeuille de recherche.</Empty>
+              ) : (
+                <Table head={["Nom", "Cash", "Exposition", "P&L réalisé", "Mode"]}>
+                  {data.accounts.map((account) => (
+                    <tr key={account.id}>
+                      <td>{account.name}</td>
+                      <td>{(account.cash_balance_cents / 100).toFixed(2)} €</td>
+                      <td>{(account.open_exposure_cents / 100).toFixed(2)} €</td>
+                      <td>{(account.realized_pnl_cents / 100).toFixed(2)} €</td>
+                      <td>
+                        <State tone="ok" label="paper-only" />
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+
+              <h3>Missions récentes</h3>
+              {data.recent_runs.length === 0 ? (
+                <Empty>Aucune mission ACP exécutée.</Empty>
+              ) : (
+                <Table head={["Créée", "État", "Mission", "Erreur"]}>
+                  {data.recent_runs.map((run) => (
+                    <tr key={run.id}>
+                      <td className="faible">{formatAge(run.created_at)}</td>
+                      <td>
+                        <State
+                          tone={
+                            run.state === "executed"
+                              ? "ok"
+                              : run.state === "failed"
+                                ? "down"
+                                : run.state === "abstained"
+                                  ? "degraded"
+                                  : "info"
+                          }
+                          label={run.state}
+                        />
+                      </td>
+                      <td className="mono faible">{run.mission_id.slice(0, 8)}</td>
+                      <td className="faible">{run.error_code ?? "—"}</td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+
+              <p className="faible">
+                La création des missions et des portefeuilles fictifs passe par l’API administrateur
+                NEXUS. Aucun chemin de trading réel n’est exposé.
+              </p>
+            </>
+          );
+        }}
       </Section>
     </div>
   );

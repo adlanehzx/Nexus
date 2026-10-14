@@ -49,6 +49,7 @@ const SECTIONS = [
   "/api/v1/dashboard/tools",
   "/api/v1/dashboard/mcp",
   "/api/v1/dashboard/browser",
+  "/api/v1/dashboard/mission-control",
   "/api/v1/dashboard/memory",
   "/api/v1/dashboard/notifications",
   "/api/v1/dashboard/security",
@@ -68,13 +69,13 @@ function get(url: string, account?: Account) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("garde d'administration", () => {
-  it("refuse les douze sections sans jeton", async () => {
+  it("refuse toutes les sections sans jeton", async () => {
     for (const url of SECTIONS) {
       expect((await get(url)).statusCode, url).toBe(401);
     }
   });
 
-  it("refuse les douze sections à un compte ordinaire", async () => {
+  it("refuse toutes les sections à un compte ordinaire", async () => {
     // Il n'existe pas de sous-ensemble « moins sensible » ouvert au client :
     // une vue partielle du système est encore une vue du système.
     for (const url of SECTIONS) {

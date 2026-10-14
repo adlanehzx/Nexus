@@ -37,6 +37,7 @@ import {
   toolRoutes,
 } from "./routes/v1/conversations.js";
 import { dashboardRoutes } from "./routes/v1/dashboard.js";
+import { missionControlRoutes } from "./routes/v1/mission-control.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -230,6 +231,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(memoryRoutes);
       await v1.register(toolRoutes);
       await v1.register(dashboardRoutes);
+      await v1.register(missionControlRoutes);
     },
     { prefix: "/api/v1" },
   );

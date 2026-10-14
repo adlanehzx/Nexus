@@ -60,6 +60,26 @@ describe("parseConfig", () => {
     expect(typeof config.API_PORT).toBe("number");
   });
 
+  it("accepte Mission Control en boucle locale et refuse HTTP distant", () => {
+    expect(
+      parseConfig({ ...minimalEnv, MISSION_CONTROL_URL: "http://127.0.0.1:18100" })
+        .MISSION_CONTROL_URL,
+    ).toBe("http://127.0.0.1:18100");
+    expect(() =>
+      parseConfig({ ...minimalEnv, MISSION_CONTROL_URL: "http://example.org:18100" }),
+    ).toThrow(ConfigurationError);
+    expect(
+      parseConfig({ ...minimalEnv, MISSION_CONTROL_URL: "https://mission.example.org" })
+        .MISSION_CONTROL_URL,
+    ).toBe("https://mission.example.org");
+  });
+
+  it("traite une URL Mission Control vide comme une intégration désactivée", () => {
+    expect(
+      parseConfig({ ...minimalEnv, MISSION_CONTROL_URL: "" }).MISSION_CONTROL_URL,
+    ).toBeUndefined();
+  });
+
   it("découpe CORS_ORIGINS et supprime les espaces", () => {
     const config = parseConfig({
       ...minimalEnv,
