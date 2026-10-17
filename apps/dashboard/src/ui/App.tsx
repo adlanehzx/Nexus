@@ -16,6 +16,7 @@ import {
   Workers,
 } from "./Sections.js";
 import { NexusChat } from "./NexusChat.js";
+import { Agents } from "./Agents.js";
 
 /**
  * L'ossature du tableau de bord.
@@ -50,7 +51,7 @@ const SECTIONS = [
   ["logs", "Journaux"],
 ] as const;
 
-type SectionId = (typeof SECTIONS)[number][0] | "chat";
+type SectionId = (typeof SECTIONS)[number][0] | "chat" | "agents";
 
 export function App() {
   const session = useMemo(() => createSession(backendUrl()), []);
@@ -70,14 +71,26 @@ export function App() {
     );
   }
 
-  const title = section === "chat" ? "NEXUS" : (SECTIONS.find(([id]) => id === section)?.[1] ?? "");
+  const title =
+    section === "chat"
+      ? "NEXUS"
+      : section === "agents"
+        ? "Agents"
+        : (SECTIONS.find(([id]) => id === section)?.[1] ?? "");
 
-  if (section === "chat") {
+  if (section === "chat" || section === "agents") {
     return (
       <div className="chat-shell">
         <header className="chat-header">
           <strong>NEXUS</strong>
           <div>
+            <button
+              className="header-link"
+              type="button"
+              onClick={() => setSection(section === "agents" ? "chat" : "agents")}
+            >
+              {section === "agents" ? "Conversation" : "Agents"}
+            </button>
             <button className="header-link" type="button" onClick={() => setSection("overview")}>
               Supervision
             </button>
@@ -90,7 +103,7 @@ export function App() {
             </button>
           </div>
         </header>
-        <NexusChat api={api} />
+        {section === "chat" ? <NexusChat api={api} /> : <Agents api={api} />}
       </div>
     );
   }
@@ -100,6 +113,9 @@ export function App() {
       <nav className="laterale">
         <button className="nexus-home" type="button" onClick={() => setSection("chat")}>
           NEXUS
+        </button>
+        <button className="nav-item" type="button" onClick={() => setSection("agents")}>
+          Agents
         </button>
         <h1>Supervision</h1>
         {SECTIONS.map(([id, label]) => (

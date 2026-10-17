@@ -17,6 +17,28 @@ const missionViewSchema = z.object({
   error: z.string().nullable(),
 });
 
+const agentRegistryViewSchema = z.object({
+  worker_enabled: z.boolean(),
+  configured: z.array(
+    z.object({
+      key: z.string(),
+      agent_profile_id: z.string(),
+      running_tasks: z.number().int().nonnegative(),
+      queued_tasks: z.number().int().nonnegative(),
+      last_task_state: z.string().nullable(),
+    }),
+  ),
+  available: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      agent_kind: z.string(),
+      revision: z.number().int().nullable().optional(),
+      registered_as: z.string().nullable().optional(),
+    }),
+  ),
+});
+
 export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
@@ -63,6 +85,41 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       const mission = await orchestrator.status(userId, request.params.missionId);
       if (mission === undefined) throw new NotFoundError("Mission", request.params.missionId);
       return ok(mission, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/agents",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: { 200: okSchema(agentRegistryViewSchema) },
+      },
+    },
+    async (request) => {
+      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      return ok(await missionControl.agents(), request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/agents",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: z.object({
+          key: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+          agent_profile_id: z.string().min(1).max(128),
+        }),
+        response: { 201: okSchema(agentRegistryViewSchema) },
+      },
+    },
+    async (request, reply) => {
+      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const registry = await missionControl.registerAgent(request.body);
+      return reply.code(201).send(ok(registry, request.id));
     },
   );
 

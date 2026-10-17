@@ -56,6 +56,33 @@ export const missionSnapshotSchema = z
   })
   .passthrough();
 
+export const configuredAgentSchema = z.object({
+  key: z.string(),
+  agent_profile_id: z.string(),
+  running_tasks: z.number().int().nonnegative(),
+  queued_tasks: z.number().int().nonnegative(),
+  last_task_state: z.string().nullable(),
+});
+
+export const availableAgentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  agent_kind: z.string(),
+  revision: z.number().int().nullable().optional(),
+  registered_as: z.string().nullable().optional(),
+});
+
+export const agentRegistrySchema = z.object({
+  worker_enabled: z.boolean(),
+  configured: z.array(configuredAgentSchema),
+  available: z.array(availableAgentSchema),
+});
+
+export const registerAgentSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  agent_profile_id: z.string().min(1).max(128),
+});
+
 export const auditVerificationSchema = z.object({
   valid: z.boolean(),
   checked: z.number().int().nonnegative(),
@@ -160,6 +187,10 @@ export type SubmitMission = z.infer<typeof submitMissionSchema>;
 export type MissionSubmission = z.infer<typeof missionSubmissionSchema>;
 export type MissionTask = z.infer<typeof missionTaskSchema>;
 export type MissionSnapshot = z.infer<typeof missionSnapshotSchema>;
+export type ConfiguredAgent = z.infer<typeof configuredAgentSchema>;
+export type AvailableAgent = z.infer<typeof availableAgentSchema>;
+export type AgentRegistry = z.infer<typeof agentRegistrySchema>;
+export type RegisterAgent = z.infer<typeof registerAgentSchema>;
 export type AuditVerification = z.infer<typeof auditVerificationSchema>;
 export type PaperAccount = z.infer<typeof paperAccountSchema>;
 export type PaperMarket = z.infer<typeof paperMarketSchema>;

@@ -63,6 +63,20 @@ de santé. Il peut être remplacé sans changer le moteur. En cas de sortie inva
 ou d'indisponibilité, un plan déterministe prend le relais. Mission Control reste
 responsable de la persistance, des leases, des délais et des nouvelles tentatives.
 
+## Registre d’agents
+
+La page « Agents », réservée à l’administrateur, présente les profils réellement
+enregistrés dans Mission Control : disponibilité, tâches actives, file d’attente
+et dernier état observé. Elle découvre aussi les profils existants dans
+OpenHands via sa projection sans secrets `/api/agent-profiles`.
+
+L’ajout ne transmet jamais l’authentification ACP au navigateur. L’utilisateur
+sélectionne un profil OpenHands existant et lui attribue une clé NEXUS. Mission
+Control vérifie l’existence du profil, sauvegarde le fichier de registre sous
+`profiles.production.json.bak-<UTC>`, remplace la configuration atomiquement,
+puis synchronise son registre SQLite à chaud. Les missions en cours ne sont pas
+interrompues.
+
 ## Surface exposée
 
 - santé, profils ACP et vérification du journal d'audit ;

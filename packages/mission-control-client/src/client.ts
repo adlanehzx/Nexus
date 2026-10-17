@@ -2,6 +2,7 @@ import { AppError, type AppErrorOptions } from "@nexus/shared";
 import type { z } from "zod";
 import {
   addPaperQuoteSchema,
+  agentRegistrySchema,
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
@@ -16,9 +17,11 @@ import {
   researchMissionResponseSchema,
   researchRunSchema,
   researchRunsSchema,
+  registerAgentSchema,
   submitResearchMissionSchema,
   submitMissionSchema,
   type AddPaperQuote,
+  type AgentRegistry,
   type AuditVerification,
   type CreatePaperAccount,
   type CreatePaperMarket,
@@ -30,6 +33,7 @@ import {
   type PaperQuote,
   type ResearchMissionResponse,
   type ResearchRun,
+  type RegisterAgent,
   type SubmitResearchMission,
   type SubmitMission,
 } from "./schemas.js";
@@ -58,6 +62,8 @@ export interface MissionControlPort {
     signal?: AbortSignal,
   ): Promise<MissionSubmission>;
   getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
+  agents(signal?: AbortSignal): Promise<AgentRegistry>;
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification>;
   createPaperAccount(input: CreatePaperAccount, signal?: AbortSignal): Promise<PaperAccount>;
   getPaperAccount(id: string, signal?: AbortSignal): Promise<PaperAccount>;
@@ -115,6 +121,20 @@ export class MissionControlClient implements MissionControlPort {
       `/v1/missions/${encodeURIComponent(id)}`,
       missionSnapshotSchema,
       undefined,
+      signal,
+    );
+  }
+
+  agents(signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request("GET", "/v1/agents", agentRegistrySchema, undefined, signal);
+  }
+
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "POST",
+      "/v1/agents",
+      agentRegistrySchema,
+      registerAgentSchema.parse(input),
       signal,
     );
   }

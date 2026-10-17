@@ -244,6 +244,24 @@ export interface OrchestratedMission {
   error: string | null;
 }
 
+export interface AgentRegistry {
+  worker_enabled: boolean;
+  configured: {
+    key: string;
+    agent_profile_id: string;
+    running_tasks: number;
+    queued_tasks: number;
+    last_task_state: string | null;
+  }[];
+  available: {
+    id: string;
+    name: string;
+    agent_kind: string;
+    revision?: number | null;
+    registered_as?: string | null;
+  }[];
+}
+
 export interface MemorySection {
   total: number;
   byLayer: Record<string, number>;
@@ -345,6 +363,14 @@ export class DashboardApi {
 
   nexusMission(missionId: string): Promise<OrchestratedMission> {
     return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`);
+  }
+
+  agents(): Promise<AgentRegistry> {
+    return this.#get("/api/v1/orchestrator/agents");
+  }
+
+  registerAgent(input: { key: string; agent_profile_id: string }): Promise<AgentRegistry> {
+    return this.#request("POST", "/api/v1/orchestrator/agents", input);
   }
 
   memory(): Promise<MemorySection> {

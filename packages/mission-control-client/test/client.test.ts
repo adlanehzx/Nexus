@@ -104,6 +104,37 @@ describe("MissionControlClient", () => {
     expect(fetchImpl.mock.calls[1]?.[0]).toBe(`http://localhost:18100/v1/missions/${missionId}`);
   });
 
+  it("valide le registre d'agents avant de l'exposer", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          worker_enabled: true,
+          configured: [
+            {
+              key: "claude",
+              agent_profile_id: "profile-claude",
+              running_tasks: 0,
+              queued_tasks: 0,
+              last_task_state: "succeeded",
+            },
+          ],
+          available: [
+            {
+              id: "profile-claude",
+              name: "CLAUDE",
+              agent_kind: "acp",
+              registered_as: "claude",
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const client = new MissionControlClient({ baseUrl: "http://localhost:18100", fetchImpl });
+    const registry = await client.agents();
+    expect(registry.configured[0]?.key).toBe("claude");
+  });
+
   it("rejette une réponse qui tenterait d'activer le trading réel", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
