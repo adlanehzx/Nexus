@@ -111,7 +111,9 @@ export function Agents({ api }: { api: DashboardApi }) {
           const state =
             agent.running_tasks > 0
               ? "active"
-              : agent.last_task_state === "failed"
+              : ["auth_required", "quota_exhausted", "cooldown", "degraded"].includes(
+                    agent.status,
+                  ) || agent.last_task_state === "failed"
                 ? "attention"
                 : "idle";
           return (
@@ -125,11 +127,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </div>
                 </div>
                 <span className={`agent-status ${state}`}>
-                  {state === "active"
-                    ? "En mission"
-                    : state === "attention"
-                      ? "À vérifier"
-                      : "Disponible"}
+                  {state === "active" ? "En mission" : healthLabel(agent.status)}
                 </span>
               </div>
               <div className="agent-stats">
@@ -141,6 +139,12 @@ export function Agents({ api }: { api: DashboardApi }) {
                 </span>
                 <span>
                   <strong>{agent.last_task_state ?? "—"}</strong> dernier état
+                </span>
+                <span>
+                  <strong>{percent(agent.remaining_5h_percent)}</strong> fenêtre 5 h
+                </span>
+                <span>
+                  <strong>{percent(agent.remaining_week_percent)}</strong> semaine
                 </span>
               </div>
             </article>
@@ -262,4 +266,25 @@ function normalizeProfileName(value: string): string {
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^[^A-Za-z0-9]+/, "")
     .slice(0, 64);
+}
+
+function percent(value: number | null): string {
+  return value === null ? "inconnu" : `${value} %`;
+}
+
+function healthLabel(status: AgentRegistry["configured"][number]["status"]): string {
+  switch (status) {
+    case "available":
+      return "Disponible";
+    case "degraded":
+      return "Dégradé";
+    case "cooldown":
+      return "En pause";
+    case "quota_exhausted":
+      return "Quota atteint";
+    case "auth_required":
+      return "Connexion requise";
+    default:
+      return "Non mesuré";
+  }
 }

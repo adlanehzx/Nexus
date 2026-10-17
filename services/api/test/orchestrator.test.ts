@@ -48,6 +48,11 @@ const engine = {
     configured: [],
     available: [],
   }),
+  updateAgentHealth: vi.fn().mockResolvedValue({
+    worker_enabled: true,
+    configured: [],
+    available: [],
+  }),
   verifyAudit: vi.fn(),
   createPaperAccount: vi.fn(),
   getPaperAccount: vi.fn(),
@@ -85,8 +90,10 @@ describe("façade orchestrateur NEXUS", () => {
     expect(submitted?.tasks.at(-1)).toMatchObject({
       key: "nexus_final_synthesis",
       profile: "claude",
+      fallback_profiles: ["antigravity", "codex"],
+      context_budget_chars: 80_000,
     });
-    expect(submitted?.tasks.at(-1)?.depends_on.length).toBeGreaterThan(0);
+    expect((submitted?.tasks.at(-1)?.depends_on ?? []).length).toBeGreaterThan(0);
 
     const status = await harness.app.inject({
       method: "GET",

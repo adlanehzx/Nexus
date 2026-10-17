@@ -252,6 +252,15 @@ export interface AgentRegistry {
     running_tasks: number;
     queued_tasks: number;
     last_task_state: string | null;
+    status: "available" | "degraded" | "cooldown" | "quota_exhausted" | "auth_required" | "unknown";
+    cooldown_until: string | null;
+    remaining_5h_percent: number | null;
+    remaining_week_percent: number | null;
+    resets_5h_at: string | null;
+    resets_week_at: string | null;
+    usage_source: string;
+    consecutive_failures: number;
+    last_error_category: string | null;
   }[];
   available: {
     id: string;

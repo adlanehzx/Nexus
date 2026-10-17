@@ -26,6 +26,22 @@ const agentRegistryViewSchema = z.object({
       running_tasks: z.number().int().nonnegative(),
       queued_tasks: z.number().int().nonnegative(),
       last_task_state: z.string().nullable(),
+      status: z.enum([
+        "available",
+        "degraded",
+        "cooldown",
+        "quota_exhausted",
+        "auth_required",
+        "unknown",
+      ]),
+      cooldown_until: z.string().nullable(),
+      remaining_5h_percent: z.number().int().min(0).max(100).nullable(),
+      remaining_week_percent: z.number().int().min(0).max(100).nullable(),
+      resets_5h_at: z.string().nullable(),
+      resets_week_at: z.string().nullable(),
+      usage_source: z.string(),
+      consecutive_failures: z.number().int().nonnegative(),
+      last_error_category: z.string().nullable(),
     }),
   ),
   available: z.array(
@@ -142,6 +158,39 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
       const registry = await missionControl.createAgent(request.body);
       return reply.code(201).send(ok(registry, request.id));
+    },
+  );
+
+  app.patch(
+    "/orchestrator/agents/:key/health",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ key: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        body: z.object({
+          status: z.enum([
+            "available",
+            "degraded",
+            "cooldown",
+            "quota_exhausted",
+            "auth_required",
+            "unknown",
+          ]),
+          cooldown_until: z.string().datetime({ offset: true }).nullable().optional(),
+          remaining_5h_percent: z.number().int().min(0).max(100).nullable().optional(),
+          remaining_week_percent: z.number().int().min(0).max(100).nullable().optional(),
+          resets_5h_at: z.string().datetime({ offset: true }).nullable().optional(),
+          resets_week_at: z.string().datetime({ offset: true }).nullable().optional(),
+          usage_source: z.string().max(64).optional(),
+        }),
+        response: { 200: okSchema(agentRegistryViewSchema) },
+      },
+    },
+    async (request) => {
+      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const registry = await missionControl.updateAgentHealth(request.params.key, request.body);
+      return ok(registry, request.id);
     },
   );
 

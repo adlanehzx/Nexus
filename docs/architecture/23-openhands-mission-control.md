@@ -63,6 +63,19 @@ de santé. Il peut être remplacé sans changer le moteur. En cas de sortie inva
 ou d'indisponibilité, un plan déterministe prend le relais. Mission Control reste
 responsable de la persistance, des leases, des délais et des nouvelles tentatives.
 
+Chaque tâche conserve désormais une liste ordonnée de profils de secours. Une
+erreur ACP est classée à partir de la classification structurée d’OpenHands
+(`auth`, `quota`, `rate_limit`, etc.) sans recopier le détail fournisseur. Le
+profil est placé dans l’état correspondant et la tentative suivante bascule sur
+le premier profil de secours disponible. Les résultats amont sont compactés de
+façon déterministe avant injection selon le budget de contexte de la tâche.
+
+Le registre conserve les pourcentages 5 h et hebdomadaires ainsi que les dates
+de réinitialisation lorsqu’une source autorisée les fournit. Pour les
+abonnements personnels qui n’exposent pas d’API de quota stable, ces valeurs
+restent explicitement `null` : NEXUS s’appuie alors sur les erreurs structurées,
+les cooldowns et les échecs observés, sans inventer un pourcentage.
+
 ## Registre d’agents
 
 La page « Agents », réservée à l’administrateur, présente les profils réellement

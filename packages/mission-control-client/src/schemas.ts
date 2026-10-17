@@ -13,11 +13,13 @@ export const missionControlHealthSchema = z.object({
 export const missionTaskInputSchema = z.object({
   key: z.string().trim().min(1).max(128),
   profile: z.string().trim().min(1).max(128),
+  fallback_profiles: z.array(z.string().trim().min(1).max(128)).max(20).default([]),
   instruction: z.string().trim().min(1).max(100_000),
   depends_on: z.array(z.string().trim().min(1).max(128)).max(100).default([]),
   timeout_seconds: z.number().int().min(10).max(86_400).default(1_800),
   max_attempts: z.number().int().min(1).max(10).default(2),
   retry_delay_seconds: z.number().int().min(1).max(3_600).default(10),
+  context_budget_chars: z.number().int().min(4_000).max(400_000).default(60_000),
 });
 
 export const submitMissionSchema = z.object({
@@ -62,6 +64,32 @@ export const configuredAgentSchema = z.object({
   running_tasks: z.number().int().nonnegative(),
   queued_tasks: z.number().int().nonnegative(),
   last_task_state: z.string().nullable(),
+  status: z.enum([
+    "available",
+    "degraded",
+    "cooldown",
+    "quota_exhausted",
+    "auth_required",
+    "unknown",
+  ]),
+  cooldown_until: z.string().nullable(),
+  remaining_5h_percent: z.number().int().min(0).max(100).nullable(),
+  remaining_week_percent: z.number().int().min(0).max(100).nullable(),
+  resets_5h_at: z.string().nullable(),
+  resets_week_at: z.string().nullable(),
+  usage_source: z.string(),
+  consecutive_failures: z.number().int().nonnegative(),
+  last_error_category: z.string().nullable(),
+});
+
+export const updateAgentHealthSchema = z.object({
+  status: configuredAgentSchema.shape.status,
+  cooldown_until: z.string().datetime({ offset: true }).nullable().optional(),
+  remaining_5h_percent: z.number().int().min(0).max(100).nullable().optional(),
+  remaining_week_percent: z.number().int().min(0).max(100).nullable().optional(),
+  resets_5h_at: z.string().datetime({ offset: true }).nullable().optional(),
+  resets_week_at: z.string().datetime({ offset: true }).nullable().optional(),
+  usage_source: z.string().max(64).optional(),
 });
 
 export const availableAgentSchema = z.object({
@@ -189,8 +217,8 @@ export const submitResearchMissionSchema = z.object({
 });
 
 export type MissionControlHealth = z.infer<typeof missionControlHealthSchema>;
-export type MissionTaskInput = z.infer<typeof missionTaskInputSchema>;
-export type SubmitMission = z.infer<typeof submitMissionSchema>;
+export type MissionTaskInput = z.input<typeof missionTaskInputSchema>;
+export type SubmitMission = z.input<typeof submitMissionSchema>;
 export type MissionSubmission = z.infer<typeof missionSubmissionSchema>;
 export type MissionTask = z.infer<typeof missionTaskSchema>;
 export type MissionSnapshot = z.infer<typeof missionSnapshotSchema>;
@@ -199,6 +227,7 @@ export type AvailableAgent = z.infer<typeof availableAgentSchema>;
 export type AgentRegistry = z.infer<typeof agentRegistrySchema>;
 export type RegisterAgent = z.infer<typeof registerAgentSchema>;
 export type CreateAgent = z.infer<typeof createAgentSchema>;
+export type UpdateAgentHealth = z.infer<typeof updateAgentHealthSchema>;
 export type AuditVerification = z.infer<typeof auditVerificationSchema>;
 export type PaperAccount = z.infer<typeof paperAccountSchema>;
 export type PaperMarket = z.infer<typeof paperMarketSchema>;

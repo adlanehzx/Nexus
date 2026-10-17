@@ -94,7 +94,10 @@ export class AcpOrchestrator {
     return presentMission(mission);
   }
 
-  async #plan(objective: string, profiles: string[]): Promise<z.infer<typeof plannedMissionSchema>> {
+  async #plan(
+    objective: string,
+    profiles: string[],
+  ): Promise<z.infer<typeof plannedMissionSchema>> {
     if (this.#llm === undefined) return fallbackPlan(objective, profiles);
 
     const system = `Tu es l'orchestrateur central de NEXUS. Décompose une mission utilisateur en tâches ACP spécialisées, parallèles lorsque possible.
@@ -108,9 +111,7 @@ Règles absolues :
 - antigravity est privilégié pour recherche/exploration, claude pour analyse et critique, codex pour code/intégration ;
 - ne crée PAS de tâche de synthèse finale : NEXUS l'ajoute après validation ;
 - pour une demande simple, une seule tâche suffit.`;
-    const messages: LlmMessage[] = [
-      { role: "user", content: [{ type: "text", text: objective }] },
-    ];
+    const messages: LlmMessage[] = [{ role: "user", content: [{ type: "text", text: objective }] }];
 
     try {
       const planned = await this.#llm.structuredOutput({ system, messages }, plannedMissionSchema);
@@ -162,28 +163,32 @@ function ensureFinalSynthesis(
   // planificateur, sans devenir un point unique de panne pour chaque mission.
   const finalProfile = preferred(profiles, ["claude", "antigravity", "codex"]);
   return [
-    ...planned.map((task) => ({
-      ...task,
-      timeout_seconds: 1_800,
-      max_attempts: 2,
-      retry_delay_seconds: 10,
-    })),
+    ...planned.map((task) => {
+      const fallbacks = fallbackOrder(task.profile, profiles);
+      return {
+        ...task,
+        fallback_profiles: fallbacks,
+        timeout_seconds: 1_800,
+        max_attempts: Math.min(3, 1 + fallbacks.length),
+        retry_delay_seconds: 10,
+        context_budget_chars: 60_000,
+      };
+    }),
     {
       key: "nexus_final_synthesis",
       profile: finalProfile,
+      fallback_profiles: fallbackOrder(finalProfile, profiles),
       depends_on: leaves,
       timeout_seconds: 1_800,
-      max_attempts: 2,
+      max_attempts: Math.min(3, profiles.length),
       retry_delay_seconds: 10,
+      context_budget_chars: 80_000,
       instruction: `Tu es le synthétiseur final de NEXUS. Réponds directement à la mission initiale ci-dessous en français. Les résultats vérifiés des autres agents sont injectés après cette instruction. Confronte-les, corrige leurs contradictions, n'invente pas de réussite non démontrée et livre une réponse claire et exploitable.\n\nMISSION INITIALE :\n${objective}`,
     },
   ];
 }
 
-function fallbackPlan(
-  objective: string,
-  profiles: string[],
-): z.infer<typeof plannedMissionSchema> {
+function fallbackPlan(objective: string, profiles: string[]): z.infer<typeof plannedMissionSchema> {
   const researcher = preferred(profiles, ["antigravity", "claude", "codex"]);
   const critic = preferred(profiles, ["claude", "codex", "antigravity"]);
   const tasks: z.infer<typeof plannedTaskSchema>[] = [
@@ -207,6 +212,14 @@ function fallbackPlan(
 
 function preferred(profiles: string[], order: string[]): string {
   return order.find((candidate) => profiles.includes(candidate)) ?? profiles[0] ?? "";
+}
+
+function fallbackOrder(primary: string, profiles: string[]): string[] {
+  const preferredOrder = ["claude", "antigravity", "codex"];
+  return [...preferredOrder, ...profiles].filter(
+    (candidate, index, values) =>
+      candidate !== primary && profiles.includes(candidate) && values.indexOf(candidate) === index,
+  );
 }
 
 function ownerPrefix(userId: string): string {
