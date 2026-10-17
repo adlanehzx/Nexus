@@ -315,3 +315,74 @@ h3:first-child {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ── Façade utilisateur NEXUS ────────────────────────────────────────── */
+
+.chat-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% -20%, rgb(88 166 255 / 14%), transparent 42%),
+    var(--fond);
+}
+
+.chat-header {
+  height: 56px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--bordure);
+  letter-spacing: 0.14em;
+}
+
+.header-link,
+.nexus-home {
+  border: 0;
+  background: transparent;
+  color: var(--texte-faible);
+}
+
+.header-link { margin-left: 16px; font-size: 12px; letter-spacing: normal; }
+.header-link:hover, .nexus-home:hover { color: var(--texte); }
+.nexus-home { padding: 8px 10px; text-align: left; font-weight: 700; letter-spacing: .12em; }
+
+.nexus-chat {
+  width: min(860px, 100%);
+  min-height: 0;
+  flex: 1;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 24px;
+}
+
+.chat-feed { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 4px 20px; }
+.chat-welcome { max-width: 560px; margin: 14vh auto 0; text-align: center; color: var(--texte-faible); }
+.chat-welcome h2 { margin: 16px 0 8px; color: var(--texte); font-size: 27px; }
+.chat-welcome p { font-size: 15px; }
+.nexus-mark { width: 56px; height: 56px; margin: auto; display: grid; place-items: center; border: 1px solid var(--accent); border-radius: 16px; color: var(--accent); font-size: 24px; font-weight: 700; box-shadow: 0 0 30px rgb(88 166 255 / 16%); }
+
+.chat-message { max-width: 760px; margin: 0 auto 28px; }
+.chat-message.user { max-width: 640px; margin-right: 0; padding: 14px 18px; border: 1px solid var(--bordure); border-radius: 16px 16px 4px 16px; background: var(--surface-2); }
+.chat-role { margin-bottom: 7px; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.chat-text { white-space: pre-wrap; font-size: 14.5px; line-height: 1.7; }
+.chat-error { color: var(--hs); padding: 10px 0; }
+
+.agent-line { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+.agent-line span { padding: 3px 9px; border: 1px solid var(--bordure); border-radius: 999px; color: var(--texte-faible); font-size: 11px; }
+.progress-track { height: 5px; margin-bottom: 9px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
+.progress-track div { height: 100%; border-radius: inherit; background: var(--accent); transition: width .3s ease; }
+
+.chat-composer { display: flex; align-items: flex-end; gap: 10px; padding: 12px; border: 1px solid var(--bordure); border-radius: 16px; background: var(--surface); box-shadow: 0 14px 40px rgb(0 0 0 / 28%); }
+.chat-composer textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--texte); font: inherit; line-height: 1.5; }
+.chat-composer button { padding: 8px 14px; border: 0; border-radius: 9px; background: var(--accent); color: #07111e; font-weight: 700; }
+.chat-composer button:disabled { opacity: .4; cursor: default; }
+
+@media (max-width: 700px) {
+  .chat-header { padding: 0 14px; }
+  .nexus-chat { padding-inline: 10px; }
+  .header-link:first-child { display: none; }
+}

@@ -38,6 +38,7 @@ import {
 } from "./routes/v1/conversations.js";
 import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { missionControlRoutes } from "./routes/v1/mission-control.js";
+import { orchestratorRoutes } from "./routes/v1/orchestrator.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -232,6 +233,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(toolRoutes);
       await v1.register(dashboardRoutes);
       await v1.register(missionControlRoutes);
+      await v1.register(orchestratorRoutes);
     },
     { prefix: "/api/v1" },
   );
