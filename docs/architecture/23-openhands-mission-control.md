@@ -16,7 +16,7 @@ client web/mobile/desktop
           │                              ├─ Codex ACP
           │                              └─ ledger paper-only
           ▼
-dashboard administrateur
+chat NEXUS + supervision administrateur
 ```
 
 Cette séparation évite deux autorités concurrentes :
@@ -36,6 +36,47 @@ Le statut apparaît dans le tableau de bord sous « Mission Control ». Les
 mutations paper-only vivent sous `/api/v1/mission-control/*` et exigent un
 compte administrateur NEXUS.
 
+## Conversation NEXUS unique
+
+Le dashboard ouvre désormais sur une seule façade de conversation. Un message
+adressé à NEXUS suit ce chemin :
+
+```text
+message utilisateur
+  → planificateur LLM remplaçable (DAG validé, plan conservateur de secours)
+  → POST /v1/missions dans Mission Control
+  → agents ACP exécutés en parallèle selon les dépendances
+  → résultats amont injectés automatiquement dans les instructions aval
+  → tâche nexus_final_synthesis
+  → une réponse unique dans le chat
+```
+
+La route publique `POST /api/v1/orchestrator/messages` exige une session NEXUS.
+Le client n'accède jamais directement au port 18100. L'identifiant externe de
+chaque mission contient une empreinte irréversible du propriétaire ; la lecture
+refuse donc un utilisateur différent, même s'il connaît l'UUID. L'URL du chat
+conserve uniquement l'UUID de la mission active afin qu'un rechargement reprenne
+le suivi, sans stocker de jeton ou de contenu sensible dans le navigateur.
+
+Le planificateur choisit exclusivement parmi les profils annoncés par la sonde
+de santé. Il peut être remplacé sans changer le moteur. En cas de sortie invalide
+ou d'indisponibilité, un plan déterministe prend le relais. Mission Control reste
+responsable de la persistance, des leases, des délais et des nouvelles tentatives.
+
+## Registre d’agents
+
+La page « Agents », réservée à l’administrateur, présente les profils réellement
+enregistrés dans Mission Control : disponibilité, tâches actives, file d’attente
+et dernier état observé. Elle découvre aussi les profils existants dans
+OpenHands via sa projection sans secrets `/api/agent-profiles`.
+
+L’ajout ne transmet jamais l’authentification ACP au navigateur. L’utilisateur
+sélectionne un profil OpenHands existant et lui attribue une clé NEXUS. Mission
+Control vérifie l’existence du profil, sauvegarde le fichier de registre sous
+`profiles.production.json.bak-<UTC>`, remplace la configuration atomiquement,
+puis synchronise son registre SQLite à chaud. Les missions en cours ne sont pas
+interrompues.
+
 ## Surface exposée
 
 - santé, profils ACP et vérification du journal d'audit ;
@@ -44,6 +85,7 @@ compte administrateur NEXUS.
 - ajout de cotations fictives ;
 - soumission idempotente d'une recherche multi-agents ;
 - lecture du résultat d'une recherche.
+- soumission et suivi d'un DAG ACP générique depuis la conversation NEXUS.
 
 Il n'existe aucune route de trading réel, aucun wallet, aucune signature de
 transaction et aucun proxy générique vers Mission Control.

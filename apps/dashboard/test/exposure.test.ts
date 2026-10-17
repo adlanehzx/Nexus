@@ -78,18 +78,20 @@ describe("le raisonnement n'est jamais demandé", () => {
   });
 });
 
-describe("le tableau de bord ne fait que lire", () => {
-  it("aucune requête d'écriture", () => {
+describe("la supervision reste en lecture seule", () => {
+  it("la seule écriture est l'envoi explicite d'une mission au chat", () => {
     // Superviser et administrer sont deux surfaces. Les réunir mettrait une
     // action destructrice à un clic d'un écran qu'on consulte machinalement.
-    const client = codeSeul(readFileSync(join(racine, "src/lib/api.ts"), "utf8"));
+    const source = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+    const client = codeSeul(source);
 
-    for (const verbe of ["POST", "PATCH", "DELETE", "PUT"]) {
+    for (const verbe of ["PATCH", "DELETE", "PUT"]) {
       expect(client).not.toContain(verbe);
     }
+    expect(source.match(/this\.#request\("POST"/g)).toHaveLength(2);
   });
 
-  it("n'appelle que les routes du tableau de bord", () => {
+  it("n'appelle que la supervision et la façade orchestrateur", () => {
     // Une route voisine ouverte « pour déboguer » n'aurait pas la même garde ni
     // la même projection.
     const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
@@ -97,7 +99,7 @@ describe("le tableau de bord ne fait que lire", () => {
     const gabarits = [...api.matchAll(/`(\/api\/v1\/[^`]*)`/g)].map((match) => match[1] ?? "");
 
     for (const chemin of [...chemins, ...gabarits]) {
-      expect(chemin, chemin).toMatch(/^\/api\/v1\/dashboard\//);
+      expect(chemin, chemin).toMatch(/^\/api\/v1\/(dashboard|orchestrator)\//);
     }
   });
 

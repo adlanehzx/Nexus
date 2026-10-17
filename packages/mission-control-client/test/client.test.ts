@@ -57,6 +57,84 @@ describe("MissionControlClient", () => {
     expect((init?.headers as Record<string, string>)["idempotency-key"]).toBe("research-1");
   });
 
+  it("soumet et relit une mission ACP générique", async () => {
+    const missionId = "33333333-3333-4333-8333-333333333333";
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ mission_id: missionId, replayed: false }), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: missionId,
+            external_key: "nexus-test",
+            title: "Test",
+            workspace: "/tmp/nexus",
+            state: "succeeded",
+            tasks: [
+              {
+                id: "44444444-4444-4444-8444-444444444444",
+                mission_id: missionId,
+                task_key: "final",
+                ordinal: 0,
+                profile_key: "codex",
+                state: "succeeded",
+                result_json: '{"response":"ok"}',
+                error_json: null,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+    const client = new MissionControlClient({ baseUrl: "http://localhost:18100", fetchImpl });
+    await client.submitMission(
+      {
+        external_key: "nexus-test",
+        title: "Test",
+        workspace: "/tmp/nexus",
+        tasks: [{ key: "final", profile: "codex", instruction: "Réponds.", depends_on: [] }],
+      },
+      "generic-1",
+    );
+    const mission = await client.getMission(missionId);
+    expect(mission.state).toBe("succeeded");
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:18100/v1/missions");
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe(`http://localhost:18100/v1/missions/${missionId}`);
+  });
+
+  it("valide le registre d'agents avant de l'exposer", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          worker_enabled: true,
+          configured: [
+            {
+              key: "claude",
+              agent_profile_id: "profile-claude",
+              running_tasks: 0,
+              queued_tasks: 0,
+              last_task_state: "succeeded",
+            },
+          ],
+          available: [
+            {
+              id: "profile-claude",
+              name: "CLAUDE",
+              agent_kind: "acp",
+              registered_as: "claude",
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const client = new MissionControlClient({ baseUrl: "http://localhost:18100", fetchImpl });
+    const registry = await client.agents();
+    expect(registry.configured[0]?.key).toBe("claude");
+  });
+
   it("rejette une réponse qui tenterait d'activer le trading réel", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()

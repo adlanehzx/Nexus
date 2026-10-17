@@ -233,6 +233,35 @@ export interface MissionControlSection {
   }[];
 }
 
+export interface OrchestratedMission {
+  missionId: string;
+  title: string;
+  state: string;
+  profiles: string[];
+  completedTasks: number;
+  totalTasks: number;
+  response: string | null;
+  error: string | null;
+}
+
+export interface AgentRegistry {
+  worker_enabled: boolean;
+  configured: {
+    key: string;
+    agent_profile_id: string;
+    running_tasks: number;
+    queued_tasks: number;
+    last_task_state: string | null;
+  }[];
+  available: {
+    id: string;
+    name: string;
+    agent_kind: string;
+    revision?: number | null;
+    registered_as?: string | null;
+  }[];
+}
+
 export interface MemorySection {
   total: number;
   byLayer: Record<string, number>;
@@ -328,6 +357,22 @@ export class DashboardApi {
     return this.#get("/api/v1/dashboard/mission-control");
   }
 
+  sendToNexus(message: string): Promise<OrchestratedMission> {
+    return this.#request("POST", "/api/v1/orchestrator/messages", { message });
+  }
+
+  nexusMission(missionId: string): Promise<OrchestratedMission> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`);
+  }
+
+  agents(): Promise<AgentRegistry> {
+    return this.#get("/api/v1/orchestrator/agents");
+  }
+
+  registerAgent(input: { key: string; agent_profile_id: string }): Promise<AgentRegistry> {
+    return this.#request("POST", "/api/v1/orchestrator/agents", input);
+  }
+
   memory(): Promise<MemorySection> {
     return this.#get("/api/v1/dashboard/memory");
   }
@@ -350,7 +395,11 @@ export class DashboardApi {
   }
 
   async #get<T>(path: string): Promise<T> {
-    const response = await this.#session.authorizedRequest({ method: "GET", path });
+    return this.#request("GET", path);
+  }
+
+  async #request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+    const response = await this.#session.authorizedRequest({ method, path, body });
 
     if (response.status === 403 || response.status === 404) {
       // Le serveur ne distingue pas « pas administrateur » de « n'existe pas » —

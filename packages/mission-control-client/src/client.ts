@@ -2,10 +2,13 @@ import { AppError, type AppErrorOptions } from "@nexus/shared";
 import type { z } from "zod";
 import {
   addPaperQuoteSchema,
+  agentRegistrySchema,
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
   missionControlHealthSchema,
+  missionSnapshotSchema,
+  missionSubmissionSchema,
   paperAccountSchema,
   paperAccountsSchema,
   paperMarketSchema,
@@ -14,18 +17,25 @@ import {
   researchMissionResponseSchema,
   researchRunSchema,
   researchRunsSchema,
+  registerAgentSchema,
   submitResearchMissionSchema,
+  submitMissionSchema,
   type AddPaperQuote,
+  type AgentRegistry,
   type AuditVerification,
   type CreatePaperAccount,
   type CreatePaperMarket,
   type MissionControlHealth,
+  type MissionSnapshot,
+  type MissionSubmission,
   type PaperAccount,
   type PaperMarket,
   type PaperQuote,
   type ResearchMissionResponse,
   type ResearchRun,
+  type RegisterAgent,
   type SubmitResearchMission,
+  type SubmitMission,
 } from "./schemas.js";
 
 export class MissionControlClientError extends AppError {
@@ -46,6 +56,14 @@ export interface MissionControlClientOptions {
 
 export interface MissionControlPort {
   health(signal?: AbortSignal): Promise<MissionControlHealth>;
+  submitMission(
+    input: SubmitMission,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSubmission>;
+  getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
+  agents(signal?: AbortSignal): Promise<AgentRegistry>;
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification>;
   createPaperAccount(input: CreatePaperAccount, signal?: AbortSignal): Promise<PaperAccount>;
   getPaperAccount(id: string, signal?: AbortSignal): Promise<PaperAccount>;
@@ -77,6 +95,48 @@ export class MissionControlClient implements MissionControlPort {
 
   health(signal?: AbortSignal): Promise<MissionControlHealth> {
     return this.#request("GET", "/v1/health/ready", missionControlHealthSchema, undefined, signal);
+  }
+
+  submitMission(
+    input: SubmitMission,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSubmission> {
+    if (idempotencyKey.length < 1 || idempotencyKey.length > 128) {
+      throw new TypeError("idempotencyKey must contain 1 to 128 characters");
+    }
+    return this.#request(
+      "POST",
+      "/v1/missions",
+      missionSubmissionSchema,
+      submitMissionSchema.parse(input),
+      signal,
+      { "idempotency-key": idempotencyKey },
+    );
+  }
+
+  getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot> {
+    return this.#request(
+      "GET",
+      `/v1/missions/${encodeURIComponent(id)}`,
+      missionSnapshotSchema,
+      undefined,
+      signal,
+    );
+  }
+
+  agents(signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request("GET", "/v1/agents", agentRegistrySchema, undefined, signal);
+  }
+
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "POST",
+      "/v1/agents",
+      agentRegistrySchema,
+      registerAgentSchema.parse(input),
+      signal,
+    );
   }
 
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification> {
