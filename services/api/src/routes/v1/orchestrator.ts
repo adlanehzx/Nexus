@@ -123,5 +123,27 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
   );
 
+  app.post(
+    "/orchestrator/agents/create",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: z.object({
+          key: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+          name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+          template_profile_id: z.string().min(1).max(128),
+          model: z.string().max(200).nullable().optional(),
+        }),
+        response: { 201: okSchema(agentRegistryViewSchema) },
+      },
+    },
+    async (request, reply) => {
+      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const registry = await missionControl.createAgent(request.body);
+      return reply.code(201).send(ok(registry, request.id));
+    },
+  );
+
   done();
 };

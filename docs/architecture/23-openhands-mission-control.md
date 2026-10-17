@@ -77,6 +77,14 @@ Control vérifie l’existence du profil, sauvegarde le fichier de registre sous
 puis synchronise son registre SQLite à chaud. Les missions en cours ne sont pas
 interrompues.
 
+La même page peut aussi créer directement un profil ACP en clonant un adaptateur
+local déjà approuvé (Antigravity, Claude ou Codex), avec un nom et éventuellement
+un modèle différents. Cette opération passe par la clé de service conservée côté
+Mission Control : la clé OpenHands n’est jamais renvoyée au navigateur. Le profil
+créé est immédiatement ajouté au registre NEXUS. Un fournisseur entièrement
+nouveau exige toujours l’installation préalable de son adaptateur ACP local ; il
+peut ensuite être importé depuis la même page.
+
 ## Surface exposée
 
 - santé, profils ACP et vérification du journal d'audit ;

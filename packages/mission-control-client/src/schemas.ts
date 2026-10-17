@@ -83,6 +83,13 @@ export const registerAgentSchema = z.object({
   agent_profile_id: z.string().min(1).max(128),
 });
 
+export const createAgentSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+  template_profile_id: z.string().min(1).max(128),
+  model: z.string().max(200).nullable().optional(),
+});
+
 export const auditVerificationSchema = z.object({
   valid: z.boolean(),
   checked: z.number().int().nonnegative(),
@@ -191,6 +198,7 @@ export type ConfiguredAgent = z.infer<typeof configuredAgentSchema>;
 export type AvailableAgent = z.infer<typeof availableAgentSchema>;
 export type AgentRegistry = z.infer<typeof agentRegistrySchema>;
 export type RegisterAgent = z.infer<typeof registerAgentSchema>;
+export type CreateAgent = z.infer<typeof createAgentSchema>;
 export type AuditVerification = z.infer<typeof auditVerificationSchema>;
 export type PaperAccount = z.infer<typeof paperAccountSchema>;
 export type PaperMarket = z.infer<typeof paperMarketSchema>;

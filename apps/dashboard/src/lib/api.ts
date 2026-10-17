@@ -373,6 +373,15 @@ export class DashboardApi {
     return this.#request("POST", "/api/v1/orchestrator/agents", input);
   }
 
+  createAgent(input: {
+    key: string;
+    name: string;
+    template_profile_id: string;
+    model?: string | null;
+  }): Promise<AgentRegistry> {
+    return this.#request("POST", "/api/v1/orchestrator/agents/create", input);
+  }
+
   memory(): Promise<MemorySection> {
     return this.#get("/api/v1/dashboard/memory");
   }

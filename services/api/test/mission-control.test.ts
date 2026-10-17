@@ -15,6 +15,7 @@ const fake = {
   getMission: vi.fn(),
   agents: vi.fn(),
   registerAgent: vi.fn(),
+  createAgent: vi.fn(),
   verifyAudit: vi.fn().mockResolvedValue({ valid: true, checked: 21, head: "a".repeat(64) }),
   createPaperAccount: vi.fn(),
   getPaperAccount: vi.fn(),

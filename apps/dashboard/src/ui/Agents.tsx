@@ -6,6 +6,10 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [selected, setSelected] = useState("");
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
+  const [template, setTemplate] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [model, setModel] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const refresh = (): void => {
@@ -32,6 +36,10 @@ export function Agents({ api }: { api: DashboardApi }) {
     () => registry?.available.filter((agent) => !agent.registered_as) ?? [],
     [registry],
   );
+  const templates = useMemo(
+    () => registry?.available.filter((agent) => agent.agent_kind === "acp") ?? [],
+    [registry],
+  );
 
   const choose = (profileId: string): void => {
     setSelected(profileId);
@@ -52,6 +60,30 @@ export function Agents({ api }: { api: DashboardApi }) {
       })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Ajout impossible.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const create = (): void => {
+    if (template.length === 0 || newName.length === 0 || newKey.length === 0) return;
+    setBusy(true);
+    setError(null);
+    void api
+      .createAgent({
+        key: newKey,
+        name: newName,
+        template_profile_id: template,
+        ...(model.trim().length === 0 ? {} : { model: model.trim() }),
+      })
+      .then((next) => {
+        setRegistry(next);
+        setTemplate("");
+        setNewName("");
+        setNewKey("");
+        setModel("");
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Création impossible.");
       })
       .finally(() => setBusy(false));
   };
@@ -118,11 +150,62 @@ export function Agents({ api }: { api: DashboardApi }) {
 
       <div className="agent-add">
         <div>
-          <h3>Ajouter un agent</h3>
+          <h3>Créer un agent ACP dans NEXUS</h3>
           <p className="faible">
-            Crée d’abord son profil ACP dans OpenHands. Il apparaîtra ensuite ici, sans exposer ses
-            identifiants à NEXUS.
+            Pars d’un adaptateur déjà sécurisé. NEXUS crée le profil OpenHands et l’ajoute
+            directement à l’orchestrateur, sans demander ta clé OpenHands.
           </p>
+        </div>
+        <div className="agent-create-form">
+          <select
+            className="champ"
+            value={template}
+            onChange={(event) => setTemplate(event.target.value)}
+          >
+            <option value="">Type d’agent…</option>
+            {templates.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="champ"
+            value={newName}
+            placeholder="Nom du profil"
+            onChange={(event) => {
+              const value = normalizeProfileName(event.target.value);
+              setNewName(value);
+              setNewKey(normalizeKey(value));
+            }}
+          />
+          <input
+            className="champ"
+            value={newKey}
+            placeholder="nom-nexus"
+            onChange={(event) => setNewKey(normalizeKey(event.target.value))}
+          />
+          <input
+            className="champ"
+            value={model}
+            placeholder="Modèle optionnel"
+            onChange={(event) => setModel(event.target.value.slice(0, 200))}
+          />
+          <button
+            className="bouton primary"
+            type="button"
+            disabled={busy || template.length === 0 || newName.length === 0 || newKey.length === 0}
+            onClick={create}
+          >
+            {busy ? "Création…" : "Créer et ajouter"}
+          </button>
+        </div>
+      </div>
+
+      <div className="agent-add secondary">
+        <div>
+          <h3>Importer un profil OpenHands existant</h3>
+          <p className="faible">Pour un adaptateur personnalisé déjà configuré dans OpenHands.</p>
         </div>
         {candidates.length === 0 ? (
           <div className="faible">
@@ -171,5 +254,12 @@ function normalizeKey(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^[^a-z]+/, "")
+    .slice(0, 64);
+}
+
+function normalizeProfileName(value: string): string {
+  return value
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[^A-Za-z0-9]+/, "")
     .slice(0, 64);
 }

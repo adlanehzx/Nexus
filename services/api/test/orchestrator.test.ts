@@ -43,6 +43,11 @@ const engine = {
     configured: [],
     available: [],
   }),
+  createAgent: vi.fn().mockResolvedValue({
+    worker_enabled: true,
+    configured: [],
+    available: [],
+  }),
   verifyAudit: vi.fn(),
   createPaperAccount: vi.fn(),
   getPaperAccount: vi.fn(),
@@ -134,5 +139,27 @@ describe("façade orchestrateur NEXUS", () => {
       headers: member.authorization,
     });
     expect(response.statusCode).toBe(403);
+  });
+
+  it("crée un profil ACP depuis NEXUS sans recevoir de secret", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/agents/create",
+      headers: account.authorization,
+      payload: {
+        key: "claude-review",
+        name: "Claude-Review",
+        template_profile_id: "profile-claude",
+        model: "claude-opus",
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(engine.createAgent).toHaveBeenCalledWith({
+      key: "claude-review",
+      name: "Claude-Review",
+      template_profile_id: "profile-claude",
+      model: "claude-opus",
+    });
+    expect(JSON.stringify(engine.createAgent.mock.calls)).not.toMatch(/token|secret|password/i);
   });
 });

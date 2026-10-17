@@ -617,6 +617,14 @@ h3:first-child {
   grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.5fr) auto;
   gap: 10px;
 }
+.agent-create-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  gap: 10px;
+}
+.agent-add.secondary {
+  margin-top: 14px;
+}
 .bouton.primary {
   border-color: var(--accent);
   background: var(--accent);
@@ -630,6 +638,9 @@ h3:first-child {
 
 @media (max-width: 700px) {
   .agent-add-form {
+    grid-template-columns: 1fr;
+  }
+  .agent-create-form {
     grid-template-columns: 1fr;
   }
   .agent-stats {

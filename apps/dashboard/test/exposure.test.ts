@@ -88,7 +88,7 @@ describe("la supervision reste en lecture seule", () => {
     for (const verbe of ["PATCH", "DELETE", "PUT"]) {
       expect(client).not.toContain(verbe);
     }
-    expect(source.match(/this\.#request\("POST"/g)).toHaveLength(2);
+    expect(source.match(/this\.#request\("POST"/g)).toHaveLength(3);
   });
 
   it("n'appelle que la supervision et la façade orchestrateur", () => {

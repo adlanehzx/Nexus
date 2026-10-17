@@ -6,6 +6,7 @@ import {
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
+  createAgentSchema,
   missionControlHealthSchema,
   missionSnapshotSchema,
   missionSubmissionSchema,
@@ -25,6 +26,7 @@ import {
   type AuditVerification,
   type CreatePaperAccount,
   type CreatePaperMarket,
+  type CreateAgent,
   type MissionControlHealth,
   type MissionSnapshot,
   type MissionSubmission,
@@ -64,6 +66,7 @@ export interface MissionControlPort {
   getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
   agents(signal?: AbortSignal): Promise<AgentRegistry>;
   registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
+  createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification>;
   createPaperAccount(input: CreatePaperAccount, signal?: AbortSignal): Promise<PaperAccount>;
   getPaperAccount(id: string, signal?: AbortSignal): Promise<PaperAccount>;
@@ -135,6 +138,16 @@ export class MissionControlClient implements MissionControlPort {
       "/v1/agents",
       agentRegistrySchema,
       registerAgentSchema.parse(input),
+      signal,
+    );
+  }
+
+  createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "POST",
+      "/v1/agents/create",
+      agentRegistrySchema,
+      createAgentSchema.parse(input),
       signal,
     );
   }
