@@ -5,6 +5,7 @@ import {
   Devices,
   Logs,
   Mcp,
+  MissionControl,
   Memory,
   Notifications,
   Overview,
@@ -41,6 +42,7 @@ const SECTIONS = [
   ["tools", "Outils"],
   ["mcp", "MCP"],
   ["browser", "Browser Use"],
+  ["mission-control", "Missions ACP"],
   ["memory", "Mémoire"],
   ["notifications", "Notifications"],
   ["security", "Sécurité"],
@@ -112,6 +114,7 @@ export function App() {
         {section === "tools" ? <Tools api={api} /> : null}
         {section === "mcp" ? <Mcp api={api} /> : null}
         {section === "browser" ? <Browser api={api} /> : null}
+        {section === "mission-control" ? <MissionControl api={api} /> : null}
         {section === "memory" ? <Memory api={api} /> : null}
         {section === "notifications" ? <Notifications api={api} /> : null}
         {section === "security" ? <Security api={api} /> : null}

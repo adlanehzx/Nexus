@@ -93,6 +93,20 @@ export const configSchema = z
     AUTH_SIGNING_KEY: z.string().min(1).default(ephemeralSigningKey),
 
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
+
+    /** Moteur OpenHands ACP/paper-trading, optionnel. */
+    MISSION_CONTROL_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .refine((value) => {
+          if (!URL.canParse(value)) return false;
+          const url = new URL(value);
+          const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+          return url.protocol === "https:" || (url.protocol === "http:" && loopback);
+        }, "doit être une URL HTTPS ou une URL HTTP de boucle locale")
+        .optional(),
+    ),
   })
   /**
    * Les origines par défaut dépendent de l'environnement, et cet
