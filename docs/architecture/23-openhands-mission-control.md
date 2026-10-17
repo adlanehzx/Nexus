@@ -47,6 +47,8 @@ message utilisateur
   → POST /v1/missions dans Mission Control
   → agents ACP exécutés en parallèle selon les dépendances
   → résultats amont injectés automatiquement dans les instructions aval
+  → contrôle qualité structuré pour les missions multi-tâches
+  → correction par un autre profil et revalidation si nécessaire (2 cycles max.)
   → tâche nexus_final_synthesis
   → une réponse unique dans le chat
 ```
@@ -75,6 +77,15 @@ de réinitialisation lorsqu’une source autorisée les fournit. Pour les
 abonnements personnels qui n’exposent pas d’API de quota stable, ces valeurs
 restent explicitement `null` : NEXUS s’appuie alors sur les erreurs structurées,
 les cooldowns et les échecs observés, sans inventer un pourcentage.
+
+Pour une mission multi-tâches, NEXUS ajoute un contrôleur qualité qui doit
+produire un verdict JSON strict. Un verdict `revise` étend atomiquement le DAG
+persisté avec une tâche de correction, confiée de préférence à un autre profil,
+puis une nouvelle revue. La synthèse finale reste bloquée jusqu'à cette revue.
+Le nombre de corrections est borné à deux ; une réponse de contrôle malformée
+n'étend jamais le graphe et la synthèse finale conserve la responsabilité de
+signaler les réserves. Le redémarrage du service ne perd ni les nouvelles tâches
+ni leurs dépendances.
 
 ## Registre d’agents
 

@@ -94,6 +94,14 @@ describe("façade orchestrateur NEXUS", () => {
       context_budget_chars: 80_000,
     });
     expect((submitted?.tasks.at(-1)?.depends_on ?? []).length).toBeGreaterThan(0);
+    expect(submitted?.tasks).toContainEqual(
+      expect.objectContaining({
+        key: "nexus_quality_review_1",
+        profile: "claude",
+        context_budget_chars: 80_000,
+      }),
+    );
+    expect(submitted?.tasks.at(-1)?.depends_on).toContain("nexus_quality_review_1");
 
     const status = await harness.app.inject({
       method: "GET",

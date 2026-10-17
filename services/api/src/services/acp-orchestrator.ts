@@ -162,23 +162,41 @@ function ensureFinalSynthesis(
   // locale. Codex reste sélectionnable pour les tâches de code/revue par le
   // planificateur, sans devenir un point unique de panne pour chaque mission.
   const finalProfile = preferred(profiles, ["claude", "antigravity", "codex"]);
+  const executionTasks: MissionTaskInput[] = planned.map((task) => {
+    const fallbacks = fallbackOrder(task.profile, profiles);
+    return {
+      ...task,
+      fallback_profiles: fallbacks,
+      timeout_seconds: 1_800,
+      max_attempts: Math.min(3, 1 + fallbacks.length),
+      retry_delay_seconds: 10,
+      context_budget_chars: 60_000,
+    };
+  });
+  const reviewProfile = preferred(profiles, ["claude", "codex", "antigravity"]);
+  const qualityReview: MissionTaskInput | undefined =
+    planned.length > 1
+      ? {
+          key: "nexus_quality_review_1",
+          profile: reviewProfile,
+          fallback_profiles: fallbackOrder(reviewProfile, profiles),
+          depends_on: leaves,
+          timeout_seconds: 1_800,
+          max_attempts: Math.min(3, profiles.length),
+          retry_delay_seconds: 10,
+          context_budget_chars: 80_000,
+          instruction: qualityReviewInstruction(objective, 1),
+        }
+      : undefined;
+  const finalDependencies = qualityReview === undefined ? leaves : [...leaves, qualityReview.key];
   return [
-    ...planned.map((task) => {
-      const fallbacks = fallbackOrder(task.profile, profiles);
-      return {
-        ...task,
-        fallback_profiles: fallbacks,
-        timeout_seconds: 1_800,
-        max_attempts: Math.min(3, 1 + fallbacks.length),
-        retry_delay_seconds: 10,
-        context_budget_chars: 60_000,
-      };
-    }),
+    ...executionTasks,
+    ...(qualityReview === undefined ? [] : [qualityReview]),
     {
       key: "nexus_final_synthesis",
       profile: finalProfile,
       fallback_profiles: fallbackOrder(finalProfile, profiles),
-      depends_on: leaves,
+      depends_on: finalDependencies,
       timeout_seconds: 1_800,
       max_attempts: Math.min(3, profiles.length),
       retry_delay_seconds: 10,
@@ -186,6 +204,10 @@ function ensureFinalSynthesis(
       instruction: `Tu es le synthétiseur final de NEXUS. Réponds directement à la mission initiale ci-dessous en français. Les résultats vérifiés des autres agents sont injectés après cette instruction. Confronte-les, corrige leurs contradictions, n'invente pas de réussite non démontrée et livre une réponse claire et exploitable.\n\nMISSION INITIALE :\n${objective}`,
     },
   ];
+}
+
+function qualityReviewInstruction(objective: string, cycle: number): string {
+  return `Tu es le contrôleur qualité de NEXUS, cycle ${cycle}. Évalue uniquement si les résultats amont permettent de répondre correctement à la mission. Vérifie les contradictions, preuves, tests et critères de réussite. Réponds avec un objet JSON strict, sans markdown ni texte autour : {"verdict":"pass"|"revise","summary":"résumé factuel","corrective_instruction":"instruction précise ou chaîne vide"}. Choisis "revise" seulement si une correction concrète peut améliorer le résultat. N'inclus aucun secret.\n\nMISSION INITIALE :\n${objective}`;
 }
 
 function fallbackPlan(objective: string, profiles: string[]): z.infer<typeof plannedMissionSchema> {
