@@ -696,7 +696,7 @@ export function Browser({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OpenHands Mission Control
+// NEXUS Mission Engine
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function MissionControl({ api }: { api: DashboardApi }) {

@@ -124,7 +124,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("permet à l'administrateur de consulter et enregistrer les profils OpenHands", async () => {
+  it("permet à l'administrateur de consulter et enregistrer les profils ACP NEXUS", async () => {
     const listed = await harness.app.inject({
       method: "GET",
       url: "/api/v1/orchestrator/agents",

@@ -123,7 +123,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                 <div>
                   <h3>{agent.key}</h3>
                   <div className="faible">
-                    {profile?.name ?? "Profil OpenHands"} · {profile?.agent_kind ?? "ACP"}
+                    {profile?.name ?? "Profil NEXUS"} · {profile?.agent_kind ?? "ACP"}
                   </div>
                 </div>
                 <span className={`agent-status ${state}`}>
@@ -156,8 +156,8 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div>
           <h3>Créer un agent ACP dans NEXUS</h3>
           <p className="faible">
-            Pars d’un adaptateur déjà sécurisé. NEXUS crée le profil OpenHands et l’ajoute
-            directement à l’orchestrateur, sans demander ta clé OpenHands.
+            Pars d’un adaptateur ACP déjà sécurisé. NEXUS crée le profil et l’ajoute directement à
+            l’orchestrateur, sans demander tes identifiants fournisseur.
           </p>
         </div>
         <div className="agent-create-form">
@@ -208,13 +208,11 @@ export function Agents({ api }: { api: DashboardApi }) {
 
       <div className="agent-add secondary">
         <div>
-          <h3>Importer un profil OpenHands existant</h3>
-          <p className="faible">Pour un adaptateur personnalisé déjà configuré dans OpenHands.</p>
+          <h3>Importer un profil ACP existant</h3>
+          <p className="faible">Pour un adaptateur personnalisé déjà configuré dans NEXUS.</p>
         </div>
         {candidates.length === 0 ? (
-          <div className="faible">
-            Tous les profils OpenHands disponibles sont déjà enregistrés.
-          </div>
+          <div className="faible">Tous les profils ACP disponibles sont déjà enregistrés.</div>
         ) : (
           <div className="agent-add-form">
             <select
@@ -222,7 +220,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               value={selected}
               onChange={(event) => choose(event.target.value)}
             >
-              <option value="">Choisir un profil OpenHands…</option>
+              <option value="">Choisir un profil ACP…</option>
               {candidates.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name} · {agent.agent_kind}

@@ -1,15 +1,15 @@
-# 23 — OpenHands Mission Control
+# 23 — NEXUS Mission Engine
 
 ## Décision
 
-NEXUS conserve OpenHands Mission Control comme service local durable distinct.
-Il ne réimplémente ni ACP, ni les leases SQLite, ni le ledger paper-only.
+NEXUS possède son propre service local durable. Le runtime ACP, les leases
+SQLite et le ledger paper-only vivent tous dans le dépôt NEXUS.
 
 ```text
 client web/mobile/desktop
           │ JWT NEXUS
           ▼
-      NEXUS API ── contrat typé ──▶ Mission Control :18100
+      NEXUS API ── contrat typé ──▶ NEXUS Mission Engine :18100
           │                              │
           │                              ├─ Antigravity ACP
           │                              ├─ Claude ACP
@@ -22,7 +22,7 @@ chat NEXUS + supervision administrateur
 Cette séparation évite deux autorités concurrentes :
 
 - NEXUS authentifie les utilisateurs et contrôle la surface publique ;
-- Mission Control possède l'état des missions ACP et des simulations ;
+- NEXUS Mission Engine possède l'état des missions ACP et des simulations ;
 - les clients ne joignent jamais directement le port 18100 ;
 - le client `@nexus/mission-control-client` valide chaque réponse distante.
 
@@ -32,7 +32,7 @@ Cette séparation évite deux autorités concurrentes :
 l'API NEXUS tourne sur le même hôte. Une chaîne vide la désactive. HTTP est
 refusé hors boucle locale ; une instance distante doit utiliser HTTPS.
 
-Le statut apparaît dans le tableau de bord sous « Mission Control ». Les
+Le statut apparaît dans le tableau de bord sous « Mission Engine ». Les
 mutations paper-only vivent sous `/api/v1/mission-control/*` et exigent un
 compte administrateur NEXUS.
 
@@ -44,7 +44,7 @@ adressé à NEXUS suit ce chemin :
 ```text
 message utilisateur
   → planificateur LLM remplaçable (DAG validé, plan conservateur de secours)
-  → POST /v1/missions dans Mission Control
+  → POST /v1/missions dans NEXUS Mission Engine
   → agents ACP exécutés en parallèle selon les dépendances
   → résultats amont injectés automatiquement dans les instructions aval
   → contrôle qualité structuré pour les missions multi-tâches
@@ -62,11 +62,11 @@ le suivi, sans stocker de jeton ou de contenu sensible dans le navigateur.
 
 Le planificateur choisit exclusivement parmi les profils annoncés par la sonde
 de santé. Il peut être remplacé sans changer le moteur. En cas de sortie invalide
-ou d'indisponibilité, un plan déterministe prend le relais. Mission Control reste
+ou d'indisponibilité, un plan déterministe prend le relais. Mission Engine reste
 responsable de la persistance, des leases, des délais et des nouvelles tentatives.
 
 Chaque tâche conserve désormais une liste ordonnée de profils de secours. Une
-erreur ACP est classée à partir de la classification structurée d’OpenHands
+erreur ACP est classée localement par le runtime NEXUS
 (`auth`, `quota`, `rate_limit`, etc.) sans recopier le détail fournisseur. Le
 profil est placé dans l’état correspondant et la tentative suivante bascule sur
 le premier profil de secours disponible. Les résultats amont sont compactés de
@@ -90,22 +90,21 @@ ni leurs dépendances.
 ## Registre d’agents
 
 La page « Agents », réservée à l’administrateur, présente les profils réellement
-enregistrés dans Mission Control : disponibilité, tâches actives, file d’attente
-et dernier état observé. Elle découvre aussi les profils existants dans
-OpenHands via sa projection sans secrets `/api/agent-profiles`.
+enregistrés dans Mission Engine : disponibilité, tâches actives, file d’attente
+et dernier état observé. Elle découvre les adaptateurs déclarés dans le registre
+ACP natif de NEXUS.
 
 L’ajout ne transmet jamais l’authentification ACP au navigateur. L’utilisateur
-sélectionne un profil OpenHands existant et lui attribue une clé NEXUS. Mission
-Control vérifie l’existence du profil, sauvegarde le fichier de registre sous
+sélectionne un profil ACP existant et lui attribue une clé NEXUS. Mission Engine
+vérifie l’existence du profil, sauvegarde le fichier de registre sous
 `profiles.production.json.bak-<UTC>`, remplace la configuration atomiquement,
 puis synchronise son registre SQLite à chaud. Les missions en cours ne sont pas
 interrompues.
 
 La même page peut aussi créer directement un profil ACP en clonant un adaptateur
 local déjà approuvé (Antigravity, Claude ou Codex), avec un nom et éventuellement
-un modèle différents. Cette opération passe par la clé de service conservée côté
-Mission Control : la clé OpenHands n’est jamais renvoyée au navigateur. Le profil
-créé est immédiatement ajouté au registre NEXUS. Un fournisseur entièrement
+un modèle différents. Aucun identifiant fournisseur n’est renvoyé au navigateur.
+Le profil créé est immédiatement ajouté au registre NEXUS. Un fournisseur entièrement
 nouveau exige toujours l’installation préalable de son adaptateur ACP local ; il
 peut ensuite être importé depuis la même page.
 
@@ -120,7 +119,7 @@ peut ensuite être importé depuis la même page.
 - soumission et suivi d'un DAG ACP générique depuis la conversation NEXUS.
 
 Il n'existe aucune route de trading réel, aucun wallet, aucune signature de
-transaction et aucun proxy générique vers Mission Control.
+transaction et aucun proxy générique vers Mission Engine.
 
 ## Limites de confiance
 
@@ -128,7 +127,7 @@ Le service distant est traité comme non fiable : timeout indépendant, schémas
 Zod sur toutes les réponses, corps d'erreur jamais propagé, et refus explicite
 d'un compte qui annoncerait `live_trading != 0`.
 
-Mission Control reste lié à la boucle locale. Si NEXUS est conteneurisé, il ne
-faut pas élargir l'écoute de Mission Control à `0.0.0.0` pour le rendre
+Mission Engine reste lié à la boucle locale. Si NEXUS est conteneurisé, il ne
+faut pas élargir son écoute à `0.0.0.0` pour le rendre
 joignable. Utiliser un réseau privé authentifié ou exécuter l'API NEXUS sur le
 même hôte.

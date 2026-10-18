@@ -94,7 +94,7 @@ export const configSchema = z
 
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
 
-    /** Moteur OpenHands ACP/paper-trading, optionnel. */
+    /** Moteur NEXUS ACP/paper-trading, optionnel. */
     MISSION_CONTROL_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z

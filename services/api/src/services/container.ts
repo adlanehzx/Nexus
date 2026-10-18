@@ -114,7 +114,7 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
-  /** Client du moteur OpenHands ACP/paper-trading. */
+  /** Client du moteur NEXUS ACP/paper-trading. */
   missionControl?: MissionControlPort;
   /** Version affichee par le tableau de bord. */
   apiVersion?: string;
@@ -167,7 +167,7 @@ export class ServiceContainer {
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
   readonly browser: BrowserWorkerClient | undefined;
-  /** Moteur OpenHands ACP/paper-trading, quand il est configuré. */
+  /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
   /** Provider LLM pour planifier des tâches (optionnel). */
   readonly llmProvider: LLMProvider | undefined;

@@ -35,7 +35,7 @@ const statusSchema = z.object({
 });
 
 /**
- * Pont administrateur vers OpenHands Mission Control.
+ * Pont administrateur vers NEXUS Mission Engine.
  *
  * Le navigateur ne joint jamais le port 18100. Nexus authentifie l'utilisateur,
  * valide les contrats puis parle au service local. Les mutations exposées sont

@@ -130,7 +130,7 @@ packages/
   memory/                port + implémentation mémoire ✅
   mcp/                   clients MCP → ToolRegistry   ✅
   browser-client/        client du Browser Worker     ✅
-  mission-control-client/contrat OpenHands ACP/paper  ✅
+  mission-control-client/contrat NEXUS ACP/paper      ✅
   worker-core/           runtime commun aux exécutants ✅
   client-core/           cœur client — session, temps  ✅
                          réel, état, voix
@@ -140,7 +140,7 @@ mcp/
 infrastructure/docker/   Dockerfiles + compose        ✅
 ```
 
-### OpenHands Mission Control
+### NEXUS Mission Engine
 
 NEXUS peut superviser et piloter le service local Mission Control qui orchestre
 Antigravity, Claude et Codex et porte le simulateur paper-only. Configurez
@@ -149,7 +149,7 @@ sur le même hôte. Le tableau de bord affiche alors la santé des workers, les
 profils ACP et l'intégrité du journal d'audit.
 
 Architecture et limites de sécurité :
-[`docs/architecture/23-openhands-mission-control.md`](docs/architecture/23-openhands-mission-control.md).
+[`docs/architecture/23-nexus-mission-engine.md`](docs/architecture/23-nexus-mission-engine.md).
 
 Les paquets marqués « contrats seuls » ne contiennent **que** des types et des schémas — aucune
 implémentation fictive. Ils fixent la forme sur laquelle les phases suivantes s'accorderont.

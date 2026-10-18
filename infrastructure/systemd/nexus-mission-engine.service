@@ -1,0 +1,32 @@
+[Unit]
+Description=NEXUS Mission Engine - durable native ACP orchestration
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine
+Environment=NEXUS_ENGINE_DATABASE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/var/nexus-engine-production.db
+Environment=NEXUS_ENGINE_ACP_RUNNER=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/agent/dist/cli.js
+Environment=NEXUS_ENGINE_ACP_REGISTRY=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/agent/config/profiles.production.json
+Environment=NEXUS_ENGINE_PROFILES_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/profiles.production.json
+Environment=NEXUS_ENGINE_WORKER_ENABLED=true
+Environment=NEXUS_ENGINE_WORKER_CONCURRENCY=2
+Environment=PATH=/home/adlane/.local/bin:/home/adlane/.local/share/mise/shims:/usr/local/bin:/usr/bin
+ExecStartPre=/home/adlane/.local/share/mise/shims/pnpm --dir /home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit --filter @nexus/agent build
+ExecStart=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/.venv/bin/nexus-mission-engine
+Restart=on-failure
+RestartSec=3
+KillMode=control-group
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=default.target
