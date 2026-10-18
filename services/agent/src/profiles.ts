@@ -3,9 +3,16 @@ import { homedir } from "node:os";
 import { z } from "zod";
 
 const profileSchema = z.object({
+  name: z.string().min(1).optional(),
   command: z.string().min(1),
   args: z.array(z.string()).default([]),
   model: z.string().min(1).optional(),
+  system_prompt: z.string().max(32_000).optional(),
+  reasoning_effort: z
+    .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+    .optional(),
+  additional_dirs: z.array(z.string()).max(32).default([]),
+  config_options: z.record(z.string(), z.string()).default({}),
 });
 
 const registrySchema = z.object({
@@ -26,5 +33,6 @@ export async function loadProfile(path: string, key: string): Promise<AcpProfile
     ...profile,
     command: expand(profile.command),
     args: profile.args.map(expand),
+    additional_dirs: profile.additional_dirs.map(expand),
   };
 }

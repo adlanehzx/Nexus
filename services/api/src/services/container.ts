@@ -22,7 +22,7 @@ import {
 } from "@nexus/tools";
 import { InMemoryAgentRunStore } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
-import type { BrowserWorkerClient } from "@nexus/browser-client";
+import { createBrowserTools, type BrowserWorkerClient } from "@nexus/browser-client";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { PrismaClient } from "@nexus/database";
 import {
@@ -49,6 +49,7 @@ import { ConfirmationBroker } from "./confirmation-broker.js";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
+import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 
 /**
  * Assemblage des services de l'API.
@@ -114,6 +115,10 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
+  /** Configuration administrable, stockée localement sans secret en clair. */
+  runtimeConfiguration?: RuntimeConfigurationStore;
+  /** Coffre adossé au trousseau de session Linux. */
+  vault?: KeyringVault;
   /** Client du moteur NEXUS ACP/paper-trading. */
   missionControl?: MissionControlPort;
   /** Version affichee par le tableau de bord. */
@@ -166,13 +171,16 @@ export class ServiceContainer {
   /** Gestionnaire MCP, quand il y en a un. `undefined` = non configure. */
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
-  readonly browser: BrowserWorkerClient | undefined;
+  browser: BrowserWorkerClient | undefined;
+  readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
+  readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
   /** Provider LLM pour planifier des tâches (optionnel). */
   readonly llmProvider: LLMProvider | undefined;
 
   readonly #now: () => Date;
+  readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
@@ -367,7 +375,10 @@ export class ServiceContainer {
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.runStore = new InMemoryAgentRunStore();
     this.mcp = options.mcp;
-    this.browser = options.browser;
+    this.browser = undefined;
+    this.setBrowser(options.browser);
+    this.runtimeConfiguration = options.runtimeConfiguration;
+    this.vault = options.vault;
     this.missionControl = options.missionControl;
 
     this.dashboard = new DashboardService({
@@ -379,6 +390,17 @@ export class ServiceContainer {
 
   get now(): Date {
     return this.#now();
+  }
+
+  setBrowser(browser: BrowserWorkerClient | undefined): void {
+    for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
+    this.#browserToolNames.clear();
+    this.browser = browser;
+    if (browser === undefined) return;
+    for (const tool of createBrowserTools({ client: browser })) {
+      this.toolRegistry.register(tool, { replace: true });
+      this.#browserToolNames.add(tool.name);
+    }
   }
 
   /**

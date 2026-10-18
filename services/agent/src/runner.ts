@@ -26,9 +26,8 @@ function cleanEnvironment(): NodeJS.ProcessEnv {
   );
 }
 
-async function insideWorkspace(path: string, workspace: string): Promise<boolean> {
+async function insideWorkspace(path: string, roots: string[]): Promise<boolean> {
   if (!isAbsolute(path)) return false;
-  const root = await realpath(workspace);
   let candidate = resolve(path);
   for (;;) {
     try {
@@ -40,17 +39,19 @@ async function insideWorkspace(path: string, workspace: string): Promise<boolean
       candidate = parent;
     }
   }
-  const distance = relative(root, candidate);
-  return distance === "" || (!distance.startsWith("..") && !isAbsolute(distance));
+  return roots.some((root) => {
+    const distance = relative(root, candidate);
+    return distance === "" || (!distance.startsWith("..") && !isAbsolute(distance));
+  });
 }
 
 async function permission(
   request: RequestPermissionRequest,
-  workspace: string,
+  roots: string[],
 ): Promise<{ outcome: { outcome: "selected"; optionId: string } | { outcome: "cancelled" } }> {
   const locations = request.toolCall.locations ?? [];
   const locationsAllowed = (
-    await Promise.all(locations.map((location) => insideWorkspace(location.path, workspace)))
+    await Promise.all(locations.map((location) => insideWorkspace(location.path, roots)))
   ).every(Boolean);
   const destructiveWithoutLocation = request.toolCall.kind === "delete" && locations.length === 0;
   if (locationsAllowed && !destructiveWithoutLocation) {
@@ -76,6 +77,13 @@ function terminate(child: ChildProcessWithoutNullStreams): void {
 export async function runAcp(request: RunRequest): Promise<RunResult> {
   const workspace = await realpath(request.cwd);
   const profile = await loadProfile(request.registryPath, request.profile);
+  if (profile.additional_dirs.some((path) => !isAbsolute(path))) {
+    throw new Error("additional_directory_must_be_absolute");
+  }
+  const roots = [
+    workspace,
+    ...(await Promise.all(profile.additional_dirs.map((path) => realpath(path)))),
+  ];
   const child = spawn(profile.command, profile.args, {
     cwd: workspace,
     env: cleanEnvironment(),
@@ -90,7 +98,7 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
   const client = acp
     .client({ name: "nexus-acp-runtime" })
     .onRequest(acp.methods.client.session.requestPermission, async (context) =>
-      permission(context.params, workspace),
+      permission(context.params, roots),
     );
   try {
     return await client.connectWith(stream, async (context) => {
@@ -100,9 +108,10 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
         clientInfo: { name: "nexus-acp-runtime", version: "1.0.0" },
       });
       return context.buildSession(workspace).withSession(async (session) => {
-        const supportsModel = session.newSessionResponse.configOptions?.some(
-          (option) => option.id === "model",
+        const supportedOptions = new Set(
+          session.newSessionResponse.configOptions?.map((option) => option.id) ?? [],
         );
+        const supportsModel = supportedOptions.has("model");
         if (profile.model !== undefined && supportsModel === true) {
           await context.request(acp.methods.agent.session.setConfigOption, {
             sessionId: session.sessionId,
@@ -110,7 +119,26 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
             value: profile.model,
           });
         }
-        void session.prompt(request.prompt);
+        const configuredOptions = { ...profile.config_options };
+        if (profile.reasoning_effort !== undefined) {
+          const reasoningId = ["reasoning_effort", "reasoning", "thought_level"].find((id) =>
+            supportedOptions.has(id),
+          );
+          if (reasoningId !== undefined) configuredOptions[reasoningId] = profile.reasoning_effort;
+        }
+        for (const [configId, value] of Object.entries(configuredOptions)) {
+          if (!supportedOptions.has(configId)) continue;
+          await context.request(acp.methods.agent.session.setConfigOption, {
+            sessionId: session.sessionId,
+            configId,
+            value,
+          });
+        }
+        const prompt =
+          profile.system_prompt === undefined
+            ? request.prompt
+            : `${profile.system_prompt.trim()}\n\nMission utilisateur :\n${request.prompt}`;
+        void session.prompt(prompt);
         let response = "";
         for (;;) {
           const message = await session.nextUpdate();

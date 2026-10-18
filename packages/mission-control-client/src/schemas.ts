@@ -112,6 +112,13 @@ export const availableAgentSchema = z.object({
   command: z.string(),
   args: z.array(z.string()),
   model: z.string().nullable(),
+  system_prompt: z.string().default(""),
+  reasoning_effort: z
+    .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+    .nullable()
+    .default(null),
+  additional_dirs: z.array(z.string()).default([]),
+  config_options: z.record(z.string(), z.string()).default({}),
   permission_policy: z.literal("workspace"),
 });
 
@@ -138,6 +145,13 @@ export const updateAgentProfileSchema = z.object({
   command: z.string().trim().min(1).max(4_096),
   args: z.array(z.string().max(4_096)).max(64),
   model: z.string().max(200).nullable().optional(),
+  system_prompt: z.string().max(32_000).optional(),
+  reasoning_effort: z
+    .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+    .nullable()
+    .optional(),
+  additional_dirs: z.array(z.string().max(4_096)).max(32).optional(),
+  config_options: z.record(z.string(), z.string()).optional(),
 });
 
 export const testAgentProfileSchema = z.object({

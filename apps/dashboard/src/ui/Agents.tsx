@@ -15,6 +15,10 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [editCommand, setEditCommand] = useState("");
   const [editArgs, setEditArgs] = useState("");
   const [editModel, setEditModel] = useState("");
+  const [editSystemPrompt, setEditSystemPrompt] = useState("");
+  const [editReasoning, setEditReasoning] = useState("");
+  const [editAdditionalDirs, setEditAdditionalDirs] = useState("");
+  const [editConfigOptions, setEditConfigOptions] = useState("{}");
   const [testWorkspace, setTestWorkspace] = useState(
     "/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit",
   );
@@ -106,11 +110,22 @@ export function Agents({ api }: { api: DashboardApi }) {
     setEditCommand(profile.command);
     setEditArgs(profile.args.join("\n"));
     setEditModel(profile.model ?? "");
+    setEditSystemPrompt(profile.system_prompt);
+    setEditReasoning(profile.reasoning_effort ?? "");
+    setEditAdditionalDirs(profile.additional_dirs.join("\n"));
+    setEditConfigOptions(JSON.stringify(profile.config_options, null, 2));
     setTestResult(null);
   };
 
   const saveProfile = (): void => {
     if (editing === null || editName.trim().length === 0 || editCommand.trim().length === 0) return;
+    let configOptions: Record<string, string>;
+    try {
+      configOptions = JSON.parse(editConfigOptions) as Record<string, string>;
+    } catch {
+      setError("Les options ACP doivent être un objet JSON.");
+      return;
+    }
     setBusy(true);
     setError(null);
     void api
@@ -119,6 +134,16 @@ export function Agents({ api }: { api: DashboardApi }) {
         command: editCommand.trim(),
         args: editArgs.split("\n").filter((value) => value.length > 0),
         model: editModel.trim().length === 0 ? null : editModel.trim(),
+        system_prompt: editSystemPrompt,
+        reasoning_effort:
+          editReasoning === ""
+            ? null
+            : (editReasoning as "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"),
+        additional_dirs: editAdditionalDirs
+          .split("\n")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        config_options: configOptions,
       })
       .then((next) => {
         setRegistry(next);
@@ -226,7 +251,11 @@ export function Agents({ api }: { api: DashboardApi }) {
                 </span>
               </div>
               <div className="agent-card-actions">
-                <button className="bouton" type="button" onClick={() => edit(agent.agent_profile_id)}>
+                <button
+                  className="bouton"
+                  type="button"
+                  onClick={() => edit(agent.agent_profile_id)}
+                >
                   Configurer
                 </button>
                 <button
@@ -261,7 +290,11 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div className="settings-grid">
             <label>
               Nom visible
-              <input className="champ" value={editName} onChange={(event) => setEditName(event.target.value)} />
+              <input
+                className="champ"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+              />
             </label>
             <label>
               Modèle ACP
@@ -288,8 +321,51 @@ export function Agents({ api }: { api: DashboardApi }) {
                 onChange={(event) => setEditArgs(event.target.value)}
               />
             </label>
+            <label>
+              Effort de raisonnement
+              <select
+                className="champ"
+                value={editReasoning}
+                onChange={(event) => setEditReasoning(event.target.value)}
+              >
+                <option value="">Valeur par défaut</option>
+                <option value="minimal">minimal</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="xhigh">xhigh</option>
+                <option value="max">max</option>
+                <option value="ultra">ultra</option>
+              </select>
+            </label>
+            <label className="settings-wide">
+              Prompt système propre à cet agent
+              <textarea
+                className="champ settings-textarea"
+                value={editSystemPrompt}
+                onChange={(event) => setEditSystemPrompt(event.target.value.slice(0, 32_000))}
+              />
+            </label>
+            <label className="settings-wide">
+              Dossiers supplémentaires autorisés · chemins absolus, un par ligne
+              <textarea
+                className="champ mono"
+                rows={3}
+                value={editAdditionalDirs}
+                onChange={(event) => setEditAdditionalDirs(event.target.value)}
+              />
+            </label>
+            <label className="settings-wide">
+              Options ACP avancées · JSON, appliquées seulement si l’adaptateur les annonce
+              <textarea
+                className="champ mono"
+                rows={4}
+                value={editConfigOptions}
+                onChange={(event) => setEditConfigOptions(event.target.value)}
+              />
+            </label>
             <div className="settings-wide policy-box">
-              <strong>Permissions : espace de travail uniquement</strong>
+              <strong>Permissions : workspace + dossiers explicitement autorisés</strong>
               <span className="faible">
                 Écriture autorisée dans le workspace de la mission. Les suppressions sans chemin et
                 les accès extérieurs sont refusés. Cette protection n’est pas désactivable.
@@ -315,7 +391,11 @@ export function Agents({ api }: { api: DashboardApi }) {
             </label>
             <label className="settings-wide">
               Message de test
-              <input className="champ" value={testPrompt} onChange={(event) => setTestPrompt(event.target.value)} />
+              <input
+                className="champ"
+                value={testPrompt}
+                onChange={(event) => setTestPrompt(event.target.value)}
+              />
             </label>
           </div>
           <div className="settings-actions">

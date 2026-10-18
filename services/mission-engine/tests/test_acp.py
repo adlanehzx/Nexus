@@ -32,6 +32,10 @@ def test_lists_configurable_native_profiles_without_credentials(tmp_path) -> Non
             "command": "/safe/claude",
             "args": [],
             "model": None,
+            "system_prompt": "",
+            "reasoning_effort": None,
+            "additional_dirs": [],
+            "config_options": {},
             "permission_policy": "workspace",
         }
     ]
@@ -71,6 +75,10 @@ def test_update_profile_is_atomic_and_preserves_no_secret_fields(tmp_path) -> No
         command="/safe/claude",
         args=["--mode", "review"],
         model="opus",
+        system_prompt="Toujours vérifier les faits.",
+        reasoning_effort="high",
+        additional_dirs=["/srv/nexus-shared"],
+        config_options={"approval_mode": "strict"},
     )
 
     stored = json.loads(registry.read_text(encoding="utf-8"))["profiles"]["claude"]
@@ -79,5 +87,9 @@ def test_update_profile_is_atomic_and_preserves_no_secret_fields(tmp_path) -> No
         "command": "/safe/claude",
         "args": ["--mode", "review"],
         "model": "opus",
+        "system_prompt": "Toujours vérifier les faits.",
+        "reasoning_effort": "high",
+        "additional_dirs": ["/srv/nexus-shared"],
+        "config_options": {"approval_mode": "strict"},
     }
     assert list(tmp_path.glob("profiles.json.bak-*"))

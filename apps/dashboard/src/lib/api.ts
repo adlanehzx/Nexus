@@ -168,6 +168,7 @@ export interface ToolRow {
 
 export interface McpSection {
   configured: boolean;
+  configurations: McpConfiguration[];
   servers: {
     name: string;
     status: string;
@@ -180,11 +181,46 @@ export interface McpSection {
   }[];
 }
 
+export type McpConfiguration = {
+  name: string;
+  enabled: boolean;
+  transport: "stdio" | "http" | "sse";
+  defaultPermissions: string[];
+  defaultRisk: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  toolPolicies: Record<string, unknown>;
+  connectTimeoutMs: number;
+  requestTimeoutMs: number;
+  autoReconnect: boolean;
+  maxReconnectAttempts: number;
+  reconnectInitialDelayMs: number;
+  reconnectMaxDelayMs: number;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+  exposeResources: boolean;
+} & (
+  | {
+      transport: "stdio";
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      envRefs: Record<string, string>;
+      cwd?: string;
+    }
+  | {
+      transport: "http" | "sse";
+      url: string;
+      headers: Record<string, string>;
+      headerRefs: Record<string, string>;
+    }
+);
+
 export interface BrowserSection {
   configured: boolean;
   reachable: boolean;
   detail: string;
   health: unknown;
+  configuration: { enabled: boolean; baseUrl: string; tokenRef: string } | null;
+  tokenConfigured: boolean;
 }
 
 export interface MissionControlSection {
@@ -269,6 +305,10 @@ export interface AgentRegistry {
     command: string;
     args: string[];
     model: string | null;
+    system_prompt: string;
+    reasoning_effort: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | null;
+    additional_dirs: string[];
+    config_options: Record<string, string>;
     permission_policy: "workspace";
   }[];
 }
@@ -374,11 +414,9 @@ export class DashboardApi {
   }
 
   updateDevicePermissions(deviceId: string, grantedPermissions: string[]): Promise<unknown> {
-    return this.#request(
-      "PATCH",
-      `/api/v1/devices/${encodeURIComponent(deviceId)}/permissions`,
-      { grantedPermissions },
-    );
+    return this.#request("PATCH", `/api/v1/devices/${encodeURIComponent(deviceId)}/permissions`, {
+      grantedPermissions,
+    });
   }
 
   runs(): Promise<{ runs: AgentRunRow[] }> {
@@ -393,8 +431,53 @@ export class DashboardApi {
     return this.#get("/api/v1/dashboard/mcp");
   }
 
+  saveMcp(config: McpConfiguration): Promise<unknown> {
+    return this.#request(
+      "PUT",
+      `/api/v1/dashboard/mcp/servers/${encodeURIComponent(config.name)}`,
+      config,
+    );
+  }
+
+  removeMcp(name: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/dashboard/mcp/servers/${encodeURIComponent(name)}`);
+  }
+
+  reconnectMcp(name: string): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/mcp/servers/${encodeURIComponent(name)}/reconnect`,
+    );
+  }
+
   browser(): Promise<BrowserSection> {
     return this.#get("/api/v1/dashboard/browser");
+  }
+
+  configureBrowser(input: {
+    enabled: boolean;
+    baseUrl: string;
+    tokenRef: string;
+  }): Promise<unknown> {
+    return this.#request("PUT", "/api/v1/dashboard/browser/configuration", input);
+  }
+
+  testBrowser(): Promise<unknown> {
+    return this.#request("POST", "/api/v1/dashboard/browser/test");
+  }
+
+  secrets(): Promise<{ names: string[] }> {
+    return this.#get("/api/v1/dashboard/secrets");
+  }
+
+  saveSecret(name: string, secret: string): Promise<unknown> {
+    return this.#request("PUT", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`, {
+      secret,
+    });
+  }
+
+  removeSecret(name: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`);
   }
 
   missionControl(): Promise<MissionControlSection> {
@@ -436,7 +519,16 @@ export class DashboardApi {
 
   updateAgentProfile(
     id: string,
-    input: { name: string; command: string; args: string[]; model?: string | null },
+    input: {
+      name: string;
+      command: string;
+      args: string[];
+      model?: string | null;
+      system_prompt: string;
+      reasoning_effort: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | null;
+      additional_dirs: string[];
+      config_options: Record<string, string>;
+    },
   ): Promise<AgentRegistry> {
     return this.#request(
       "PUT",
@@ -446,10 +538,7 @@ export class DashboardApi {
   }
 
   disableAgent(key: string): Promise<AgentRegistry> {
-    return this.#request(
-      "DELETE",
-      `/api/v1/orchestrator/agents/${encodeURIComponent(key)}`,
-    );
+    return this.#request("DELETE", `/api/v1/orchestrator/agents/${encodeURIComponent(key)}`);
   }
 
   testAgentProfile(

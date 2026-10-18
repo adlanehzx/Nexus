@@ -12,7 +12,14 @@ describe("registre ACP NEXUS", () => {
       registry,
       JSON.stringify({
         profiles: {
-          claude: { command: "${HOME}/bin/claude", args: ["--cwd", "${HOME}/work"] },
+          claude: {
+            command: "${HOME}/bin/claude",
+            args: ["--cwd", "${HOME}/work"],
+            system_prompt: "Relis avant de répondre.",
+            reasoning_effort: "high",
+            additional_dirs: ["${HOME}/shared"],
+            config_options: { mode: "review" },
+          },
         },
       }),
       { mode: 0o600 },
@@ -22,6 +29,10 @@ describe("registre ACP NEXUS", () => {
 
     expect(profile.command).toMatch(/\/bin\/claude$/);
     expect(profile.args[1]).toMatch(/\/work$/);
+    expect(profile.additional_dirs[0]).toMatch(/\/shared$/);
+    expect(profile.system_prompt).toBe("Relis avant de répondre.");
+    expect(profile.reasoning_effort).toBe("high");
+    expect(profile.config_options).toEqual({ mode: "review" });
   });
 
   it("refuse une clé de profil inconnue", async () => {

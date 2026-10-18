@@ -4,6 +4,16 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { NotFoundError } from "../../services/stores.js";
+import { BrowserWorkerClient } from "@nexus/browser-client";
+import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
+
+const secretNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
+const vaultReferenceSchema = z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/);
+const browserConfigurationSchema = z.object({
+  enabled: z.boolean(),
+  baseUrl: z.string().url(),
+  tokenRef: vaultReferenceSchema,
+});
 
 /**
  * Le tableau de bord de supervision.
@@ -14,11 +24,10 @@ import { NotFoundError } from "../../services/stores.js";
  * découper la garde par section reviendrait à créer douze occasions de se
  * tromper au lieu d'une.
  *
- * **Lecture seule.** Aucune route de ce fichier n'écrit quoi que ce soit.
- * Superviser et administrer sont deux surfaces ; les réunir mettrait une action
- * destructrice à un clic d'un écran qu'on consulte machinalement. Approuver un
- * appareil, révoquer, annuler une tâche restent sur les routes existantes, avec
- * leurs propres contrôles.
+ * Les lectures restent séparées des mutations. Les réglages MCP, Browser Use et
+ * coffre local vivent ici car ils n'ont pas d'autre surface métier ; les autres
+ * actions (appareils, tâches, mémoire) continuent de passer par leurs routes
+ * dédiées. Chaque mutation exige la garde administrateur.
  *
  * **Le raisonnement du modèle ne sort pas.** La section « runs d'agent » passe
  * par `projectAgentRun`, qui ne lit que l'enregistrement d'observabilité — pas
@@ -417,6 +426,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
           200: okSchema(
             z.object({
               configured: z.boolean(),
+              configurations: z.array(z.unknown()),
               servers: z.array(
                 z.object({
                   name: z.string(),
@@ -434,18 +444,22 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
         },
       },
     },
-    (request) => {
+    async (request) => {
       const manager = app.services.mcp;
+      const configurations = ((await app.services.runtimeConfiguration?.loadMcp()) ?? []).map(
+        withoutInlineSecretValues,
+      );
 
       // Non configuré n'est pas en panne. Le dire évite d'envoyer chercher un
       // incident qui n'existe pas.
       if (manager === undefined) {
-        return ok({ configured: false, servers: [] }, request.id);
+        return ok({ configured: false, configurations, servers: [] }, request.id);
       }
 
       return ok(
         {
           configured: true,
+          configurations,
           servers: manager.health().map((server) => ({
             name: server.name,
             status: server.status,
@@ -465,6 +479,63 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
+  app.put(
+    "/dashboard/mcp/servers/:name",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        params: z.object({ name: z.string().min(1).max(40) }),
+        body: mcpServerConfigSchema,
+        response: { 200: okSchema(z.object({ health: z.unknown() })) },
+      },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const manager = app.services.mcp;
+      if (store === undefined || manager === undefined) throw new Error("MCP non administrable.");
+      if (request.params.name !== request.body.name) throw new Error("Nom MCP incohérent.");
+
+      const config = withoutInlineSecrets(request.body);
+      const current = await store.loadMcp();
+      const next = [...current.filter((item) => item.name !== config.name), config];
+      await store.saveMcp(next);
+      const health = await manager.addServer(config);
+      return ok({ health }, request.id);
+    },
+  );
+
+  app.delete(
+    "/dashboard/mcp/servers/:name",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ name: z.string().min(1).max(40) }) },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const manager = app.services.mcp;
+      if (store === undefined || manager === undefined) throw new Error("MCP non administrable.");
+      await manager.removeServer(request.params.name);
+      await store.saveMcp(
+        (await store.loadMcp()).filter((item) => item.name !== request.params.name),
+      );
+      return ok({ removed: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/mcp/servers/:name/reconnect",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ name: z.string().min(1).max(40) }) },
+    },
+    async (request) => {
+      const health = await app.services.mcp?.reconnect(request.params.name);
+      if (health === undefined) throw new NotFoundError("Serveur MCP", request.params.name);
+      return ok({ health }, request.id);
+    },
+  );
+
   // ── 8. Browser Use ────────────────────────────────────────────────────
 
   app.get(
@@ -481,6 +552,8 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
               reachable: z.boolean(),
               detail: z.string(),
               health: z.unknown().nullable(),
+              configuration: browserConfigurationSchema.nullable(),
+              tokenConfigured: z.boolean(),
             }),
           ),
         },
@@ -488,6 +561,11 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
     async (request) => {
       const browser = app.services.browser;
+      const configuration = (await app.services.runtimeConfiguration?.loadBrowser()) ?? null;
+      const tokenConfigured =
+        configuration === null
+          ? false
+          : (await app.services.vault?.get(configuration.tokenRef)) !== undefined;
       if (browser === undefined) {
         return ok(
           {
@@ -495,6 +573,8 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
             reachable: false,
             detail: "worker navigateur non configuré",
             health: null,
+            configuration,
+            tokenConfigured,
           },
           request.id,
         );
@@ -502,7 +582,17 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
       try {
         const health = await browser.health();
-        return ok({ configured: true, reachable: true, detail: "joignable", health }, request.id);
+        return ok(
+          {
+            configured: true,
+            reachable: true,
+            detail: "joignable",
+            health,
+            configuration,
+            tokenConfigured,
+          },
+          request.id,
+        );
       } catch (cause) {
         // Un worker injoignable est une information, pas une erreur de la
         // requête : le tableau de bord doit s'afficher quand même.
@@ -512,10 +602,93 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
             reachable: false,
             detail: cause instanceof Error ? cause.message : "injoignable",
             health: null,
+            configuration,
+            tokenConfigured,
           },
           request.id,
         );
       }
+    },
+  );
+
+  app.put(
+    "/dashboard/browser/configuration",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], body: browserConfigurationSchema },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const vault = app.services.vault;
+      if (store === undefined || vault === undefined)
+        throw new Error("Configuration indisponible.");
+      const parsed = browserConfigurationSchema.parse(request.body);
+      const url = new URL(parsed.baseUrl);
+      if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+        throw new Error("HTTP est réservé à la boucle locale.");
+      }
+      const token = parsed.enabled ? await vault.get(parsed.tokenRef) : undefined;
+      if (parsed.enabled && token === undefined)
+        throw new Error("Le secret du worker est absent du coffre.");
+      await store.saveBrowser(parsed);
+      app.services.setBrowser(
+        parsed.enabled && token !== undefined
+          ? new BrowserWorkerClient({ baseUrl: parsed.baseUrl, token })
+          : undefined,
+      );
+      return ok({ saved: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/browser/test",
+    { preHandler: app.requireAdmin, schema: { tags: ["dashboard"] } },
+    async (request) => {
+      const browser = app.services.browser;
+      if (browser === undefined) throw new Error("Worker navigateur non configuré.");
+      return ok({ health: await browser.health() }, request.id);
+    },
+  );
+
+  app.get(
+    "/dashboard/secrets",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        response: { 200: okSchema(z.object({ names: z.array(z.string()) })) },
+      },
+    },
+    async (request) => ok({ names: (await app.services.vault?.list()) ?? [] }, request.id),
+  );
+
+  app.put(
+    "/dashboard/secrets/:name",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        params: z.object({ name: secretNameSchema }),
+        body: z.object({ secret: z.string().min(4).max(16_384) }),
+      },
+    },
+    async (request) => {
+      if (app.services.vault === undefined) throw new Error("Coffre local indisponible.");
+      await app.services.vault.set(request.params.name, request.body.secret);
+      return ok({ name: request.params.name, configured: true }, request.id);
+    },
+  );
+
+  app.delete(
+    "/dashboard/secrets/:name",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ name: secretNameSchema }) },
+    },
+    async (request) => {
+      if (app.services.vault === undefined) throw new Error("Coffre local indisponible.");
+      await app.services.vault.delete(request.params.name);
+      return ok({ removed: true }, request.id);
     },
   );
 
@@ -710,3 +883,24 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
   done();
 };
+
+/** Les secrets sont exclusivement des références de trousseau, jamais du JSON persistant. */
+function withoutInlineSecrets(config: McpServerConfig): McpServerConfig {
+  if (config.transport === "stdio") {
+    if (Object.keys(config.env).length > 0) {
+      throw new Error("Utilisez envRefs et le coffre NEXUS pour les variables sensibles.");
+    }
+    for (const reference of Object.values(config.envRefs)) vaultReferenceSchema.parse(reference);
+    return { ...config, env: {} };
+  }
+
+  if (Object.keys(config.headers).length > 0) {
+    throw new Error("Utilisez headerRefs et le coffre NEXUS pour les en-têtes sensibles.");
+  }
+  for (const reference of Object.values(config.headerRefs)) vaultReferenceSchema.parse(reference);
+  return { ...config, headers: {} };
+}
+
+function withoutInlineSecretValues(config: McpServerConfig): McpServerConfig {
+  return config.transport === "stdio" ? { ...config, env: {} } : { ...config, headers: {} };
+}

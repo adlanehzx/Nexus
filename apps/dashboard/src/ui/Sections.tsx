@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { DashboardApi, TaskDetail } from "../lib/api.js";
+import { useEffect, useState } from "react";
+import type { DashboardApi, McpConfiguration, TaskDetail } from "../lib/api.js";
 import {
   HEALTH_LABELS,
   WORKER_LABELS,
@@ -201,7 +201,11 @@ export function Devices({ api }: { api: DashboardApi }) {
                   <td>
                     <div className="table-actions">
                       {device.trust === "PENDING" ? (
-                        <button className="bouton" type="button" onClick={() => act(() => api.trustDevice(device.id))}>
+                        <button
+                          className="bouton"
+                          type="button"
+                          onClick={() => act(() => api.trustDevice(device.id))}
+                        >
                           Approuver
                         </button>
                       ) : null}
@@ -219,7 +223,10 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 act(() =>
                                   api.updateDevicePermissions(
                                     device.id,
-                                    value.split(",").map((item) => item.trim()).filter(Boolean),
+                                    value
+                                      .split(",")
+                                      .map((item) => item.trim())
+                                      .filter(Boolean),
                                   ),
                                 );
                             }}
@@ -329,7 +336,9 @@ export function Tasks({ api }: { api: DashboardApi }) {
             <Empty>Aucune tâche.</Empty>
           ) : (
             <>
-              <Table head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée", "Actions"]}>
+              <Table
+                head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée", "Actions"]}
+              >
                 {data.tasks.map((task) => (
                   <tr
                     key={task.id}
@@ -359,21 +368,30 @@ export function Tasks({ api }: { api: DashboardApi }) {
                       )}
                     </td>
                     <td>
-                      {new Set(["running", "pending", "waiting_for_confirmation"]).has(task.status) ? (
+                      {new Set(["running", "pending", "waiting_for_confirmation"]).has(
+                        task.status,
+                      ) ? (
                         <button
                           className="bouton danger"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
                             if (!window.confirm(`Annuler « ${task.title} » ?`)) return;
-                            void api.cancelTask(task.id).then(() => state.reload()).catch((cause: unknown) =>
-                              setActionError(cause instanceof Error ? cause.message : "Annulation impossible."),
-                            );
+                            void api
+                              .cancelTask(task.id)
+                              .then(() => state.reload())
+                              .catch((cause: unknown) =>
+                                setActionError(
+                                  cause instanceof Error ? cause.message : "Annulation impossible.",
+                                ),
+                              );
                           }}
                         >
                           Annuler
                         </button>
-                      ) : "—"}
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -673,12 +691,141 @@ export function Tools({ api }: { api: DashboardApi }) {
 
 export function Mcp({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.mcp());
+  const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"stdio" | "http" | "sse">("stdio");
+  const [target, setTarget] = useState("");
+  const [args, setArgs] = useState("");
+  const [secretRefs, setSecretRefs] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>, success: string): void => {
+    setActionError(null);
+    setMessage(null);
+    void operation()
+      .then(() => {
+        setMessage(success);
+        state.reload();
+      })
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
+
+  const save = (): void => {
+    let refs: Record<string, string>;
+    try {
+      refs = secretRefs.trim() === "" ? {} : (JSON.parse(secretRefs) as Record<string, string>);
+    } catch {
+      setActionError("Les références de secrets doivent être un objet JSON.");
+      return;
+    }
+    const common = {
+      name,
+      enabled: true,
+      defaultPermissions: [],
+      defaultRisk: "MEDIUM" as const,
+      toolPolicies: {},
+      connectTimeoutMs: 15_000,
+      requestTimeoutMs: 60_000,
+      autoReconnect: true,
+      maxReconnectAttempts: 5,
+      reconnectInitialDelayMs: 500,
+      reconnectMaxDelayMs: 30_000,
+      circuitBreakerThreshold: 5,
+      circuitBreakerResetMs: 60_000,
+      exposeResources: true,
+    };
+    const config: McpConfiguration =
+      transport === "stdio"
+        ? {
+            ...common,
+            transport,
+            command: target,
+            args: args
+              .split("\n")
+              .map((item) => item.trim())
+              .filter(Boolean),
+            env: {},
+            envRefs: refs,
+          }
+        : { ...common, transport, url: target, headers: {}, headerRefs: refs };
+    act(() => api.saveMcp(config), `Serveur ${name} enregistré et connecté.`);
+  };
 
   return (
     <div className="contenu">
+      {message === null ? null : <p className="banniere succes">{message}</p>}
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      <section className="settings-panel">
+        <h3>Ajouter ou remplacer un serveur MCP</h3>
+        <div className="settings-grid">
+          <label>
+            Nom
+            <input
+              className="champ mono"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="filesystem"
+            />
+          </label>
+          <label>
+            Transport
+            <select
+              className="champ"
+              value={transport}
+              onChange={(event) => setTransport(event.target.value as "stdio" | "http" | "sse")}
+            >
+              <option value="stdio">stdio</option>
+              <option value="http">HTTP</option>
+              <option value="sse">SSE</option>
+            </select>
+          </label>
+          <label className="settings-wide">
+            {transport === "stdio" ? "Commande" : "URL"}
+            <input
+              className="champ mono"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+              placeholder={transport === "stdio" ? "npx" : "https://…"}
+            />
+          </label>
+          {transport === "stdio" ? (
+            <label className="settings-wide">
+              Arguments · un par ligne
+              <textarea
+                className="champ mono"
+                rows={3}
+                value={args}
+                onChange={(event) => setArgs(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <label className="settings-wide">
+            {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON vers vault://nexus/…
+            <textarea
+              className="champ mono"
+              rows={3}
+              value={secretRefs}
+              onChange={(event) => setSecretRefs(event.target.value)}
+              placeholder={'{"TOKEN":"vault://nexus/mcp-token"}'}
+            />
+          </label>
+        </div>
+        <div className="settings-actions">
+          <button
+            className="bouton primary"
+            type="button"
+            disabled={name === "" || target === ""}
+            onClick={save}
+          >
+            Enregistrer et connecter
+          </button>
+        </div>
+      </section>
       <Section state={state}>
         {(data) =>
-          !data.configured ? (
+          data.configurations.length === 0 ? (
             // Non configuré n'est pas en panne. Le dire évite d'envoyer chercher
             // un incident qui n'existe pas.
             <Empty>Aucun serveur MCP configuré.</Empty>
@@ -692,6 +839,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                 "Reconnexions",
                 "Circuit",
                 "Dernière erreur",
+                "Actions",
               ]}
             >
               {data.servers.map((server) => (
@@ -719,6 +867,27 @@ export function Mcp({ api }: { api: DashboardApi }) {
                       : `ouvert jusqu'à ${server.circuitOpenUntil}`}
                   </td>
                   <td className="faible">{server.lastError ?? "—"}</td>
+                  <td>
+                    <button
+                      className="bouton compact"
+                      type="button"
+                      onClick={() =>
+                        act(() => api.reconnectMcp(server.name), `${server.name} reconnecté.`)
+                      }
+                    >
+                      Reconnecter
+                    </button>{" "}
+                    <button
+                      className="bouton compact danger"
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Supprimer le serveur ${server.name} ?`))
+                          act(() => api.removeMcp(server.name), `${server.name} supprimé.`);
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </td>
                 </tr>
               ))}
             </Table>
@@ -735,9 +904,87 @@ export function Mcp({ api }: { api: DashboardApi }) {
 
 export function Browser({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.browser());
+  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8100");
+  const [tokenRef, setTokenRef] = useState("vault://nexus/browser-worker-token");
+  const [enabled, setEnabled] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const configuration = state.data?.configuration;
+    if (configuration === null || configuration === undefined) return;
+    setBaseUrl(configuration.baseUrl);
+    setTokenRef(configuration.tokenRef);
+    setEnabled(configuration.enabled);
+  }, [state.data]);
+
+  const act = (operation: () => Promise<unknown>, success: string): void => {
+    setActionError(null);
+    setMessage(null);
+    void operation()
+      .then(() => {
+        setMessage(success);
+        state.reload();
+      })
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {message === null ? null : <p className="banniere succes">{message}</p>}
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      <section className="settings-panel">
+        <h3>Configurer le worker navigateur</h3>
+        <div className="settings-grid">
+          <label className="settings-wide">
+            URL du worker
+            <input
+              className="champ mono"
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.target.value)}
+            />
+          </label>
+          <label className="settings-wide">
+            Référence du jeton
+            <input
+              className="champ mono"
+              value={tokenRef}
+              onChange={(event) => setTokenRef(event.target.value)}
+            />
+          </label>
+          <label className="settings-wide check-label">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+            />
+            Activer Browser Use
+          </label>
+        </div>
+        <div className="settings-actions">
+          <button
+            className="bouton primary"
+            type="button"
+            onClick={() =>
+              act(
+                () => api.configureBrowser({ enabled, baseUrl, tokenRef }),
+                "Configuration navigateur enregistrée.",
+              )
+            }
+          >
+            Enregistrer
+          </button>
+          <button
+            className="bouton"
+            type="button"
+            onClick={() => act(() => api.testBrowser(), "Worker navigateur joignable.")}
+          >
+            Tester
+          </button>
+        </div>
+      </section>
       <Section state={state}>
         {(data) => (
           <>
@@ -751,6 +998,9 @@ export function Browser({ api }: { api: DashboardApi }) {
             </div>
 
             <p className="faible">{data.detail}</p>
+            <p className="faible">
+              Secret : {data.tokenConfigured ? "présent dans le trousseau" : "absent"}
+            </p>
 
             {data.health === null ? null : (
               <>
@@ -842,9 +1092,28 @@ export function MissionControl({ api }: { api: DashboardApi }) {
 
               <h3>Portefeuilles fictifs</h3>
               <div className="inline-admin-form">
-                <input className="champ" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Nom du portefeuille" />
-                <input className="champ" value={bankroll} onChange={(event) => setBankroll(event.target.value)} inputMode="decimal" placeholder="Capital EUR" />
-                <button className="bouton" type="button" onClick={() => act(() => api.createPaperAccount({ name: accountName.trim(), bankroll_eur: bankroll }))}>
+                <input
+                  className="champ"
+                  value={accountName}
+                  onChange={(event) => setAccountName(event.target.value)}
+                  placeholder="Nom du portefeuille"
+                />
+                <input
+                  className="champ"
+                  value={bankroll}
+                  onChange={(event) => setBankroll(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="Capital EUR"
+                />
+                <button
+                  className="bouton"
+                  type="button"
+                  onClick={() =>
+                    act(() =>
+                      api.createPaperAccount({ name: accountName.trim(), bankroll_eur: bankroll }),
+                    )
+                  }
+                >
                   Créer
                 </button>
               </div>
@@ -897,14 +1166,29 @@ export function MissionControl({ api }: { api: DashboardApi }) {
 
               <h3>Marché de recherche fictif</h3>
               <div className="inline-admin-form market-form">
-                <input className="champ" value={marketQuestion} onChange={(event) => setMarketQuestion(event.target.value)} placeholder="Question du marché" />
-                <input className="champ" type="datetime-local" value={marketClose} onChange={(event) => setMarketClose(event.target.value)} />
+                <input
+                  className="champ"
+                  value={marketQuestion}
+                  onChange={(event) => setMarketQuestion(event.target.value)}
+                  placeholder="Question du marché"
+                />
+                <input
+                  className="champ"
+                  type="datetime-local"
+                  value={marketClose}
+                  onChange={(event) => setMarketClose(event.target.value)}
+                />
                 <button
                   className="bouton"
                   type="button"
                   disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
                   onClick={() => {
-                    act(() => api.createPaperMarket({ question: marketQuestion.trim(), close_at: new Date(marketClose).toISOString() }));
+                    act(() =>
+                      api.createPaperMarket({
+                        question: marketQuestion.trim(),
+                        close_at: new Date(marketClose).toISOString(),
+                      }),
+                    );
                     setMarketQuestion("");
                   }}
                 >
@@ -941,14 +1225,32 @@ export function Memory({ api }: { api: DashboardApi }) {
       <div className="admin-form-card">
         <h3>Ajouter un souvenir</h3>
         <div className="inline-admin-form memory-form">
-          <input className="champ" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Ce que NEXUS doit retenir" />
-          <select className="champ" value={layer} onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}>
+          <input
+            className="champ"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Ce que NEXUS doit retenir"
+          />
+          <select
+            className="champ"
+            value={layer}
+            onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
+          >
             <option value="LONG_TERM">Long terme</option>
             <option value="PREFERENCE">Préférence</option>
           </select>
-          <input className="champ" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="tags, séparés, par virgule" />
+          <input
+            className="champ"
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="tags, séparés, par virgule"
+          />
           <label className="check-label">
-            <input type="checkbox" checked={acknowledgedSensitive} onChange={(event) => setAcknowledgedSensitive(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={acknowledgedSensitive}
+              onChange={(event) => setAcknowledgedSensitive(event.target.checked)}
+            />
             contenu sensible vérifié
           </label>
           <button
@@ -957,16 +1259,26 @@ export function Memory({ api }: { api: DashboardApi }) {
             disabled={content.trim().length === 0}
             onClick={() => {
               setActionError(null);
-              void api.remember({
-                content: content.trim(),
-                layer,
-                tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-                acknowledgedSensitive,
-              }).then(() => {
-                setContent("");
-                setTags("");
-                state.reload();
-              }).catch((cause: unknown) => setActionError(cause instanceof Error ? cause.message : "Enregistrement impossible."));
+              void api
+                .remember({
+                  content: content.trim(),
+                  layer,
+                  tags: tags
+                    .split(",")
+                    .map((tag) => tag.trim())
+                    .filter(Boolean),
+                  acknowledgedSensitive,
+                })
+                .then(() => {
+                  setContent("");
+                  setTags("");
+                  state.reload();
+                })
+                .catch((cause: unknown) =>
+                  setActionError(
+                    cause instanceof Error ? cause.message : "Enregistrement impossible.",
+                  ),
+                );
             }}
           >
             Mémoriser
@@ -1004,9 +1316,14 @@ export function Memory({ api }: { api: DashboardApi }) {
                         type="button"
                         onClick={() => {
                           if (!window.confirm("Oublier définitivement ce souvenir ?")) return;
-                          void api.forget(record.id).then(() => state.reload()).catch((cause: unknown) =>
-                            setActionError(cause instanceof Error ? cause.message : "Suppression impossible."),
-                          );
+                          void api
+                            .forget(record.id)
+                            .then(() => state.reload())
+                            .catch((cause: unknown) =>
+                              setActionError(
+                                cause instanceof Error ? cause.message : "Suppression impossible.",
+                              ),
+                            );
                         }}
                       >
                         Oublier
@@ -1064,10 +1381,20 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     <td className="faible">{notification.readAt === null ? "non" : "oui"}</td>
                     <td>
                       {notification.readAt === null ? (
-                        <button className="bouton" type="button" onClick={() => void api.markNotificationRead(notification.id).then(() => state.reload())}>
+                        <button
+                          className="bouton"
+                          type="button"
+                          onClick={() =>
+                            void api
+                              .markNotificationRead(notification.id)
+                              .then(() => state.reload())
+                          }
+                        >
                           Marquer lue
                         </button>
-                      ) : "—"}
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -23,6 +23,7 @@ coverage/
 *.key
 *.p12
 secrets/
+/services/api/config/*.json
 
 # Logs
 *.log

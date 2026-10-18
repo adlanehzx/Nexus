@@ -102,9 +102,17 @@ bloqué alors qu'il avance. Les événements du worker (`navigation`, `action`,
 | Outils exposés      | `browser.act` + bas niveau | Un outil par intention                      | Le risque doit être gradué ; « chercher un prix » et « acheter » ne peuvent pas partager une confirmation |
 | Progression         | Redis Stream               | Scrutation HTTP avec `seq`                  | Les événements numérotés rendent la reprise sûre sans connexion longue, pour un service interne           |
 | Captures d'écran    | Par étape, stockage objet  | Champ `screenshotRef` réservé, non alimenté | Le stockage objet arrive avec la phase 5 d'infrastructure                                                 |
-| Profils persistants | Cookies chiffrés au repos  | Sessions éphémères uniquement               | Le coffre à credentials (ADR-013) n'existe pas encore                                                     |
+| Profils persistants | Cookies chiffrés au repos  | Sessions éphémères uniquement               | Le trousseau local protège le jeton de service ; les cookies persistants par site restent hors périmètre  |
 
-## 8. Vérification croisée TypeScript ↔ Python
+## 8. Administration locale
+
+L'onglet Browser Use configure l'URL interne, l'activation et une référence
+`vault://nexus/...`. Le jeton est résolu dans le trousseau Linux par l'API et
+n'est jamais renvoyé au navigateur. HTTP n'est accepté que pour `localhost`,
+`127.0.0.1` ou `::1`; toute URL distante doit utiliser HTTPS. Le bouton de test
+appelle la vraie sonde `/v1/health` du worker.
+
+## 9. Vérification croisée TypeScript ↔ Python
 
 Deux mécanismes, complémentaires :
 

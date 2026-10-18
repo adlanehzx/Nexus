@@ -109,6 +109,19 @@ class AcpGateway:
                     if isinstance(profiles[key].get("model"), str)
                     else None
                 ),
+                "system_prompt": str(profiles[key].get("system_prompt", "")),
+                "reasoning_effort": (
+                    str(profiles[key]["reasoning_effort"])
+                    if isinstance(profiles[key].get("reasoning_effort"), str)
+                    else None
+                ),
+                "additional_dirs": [
+                    str(value) for value in profiles[key].get("additional_dirs", [])
+                ],
+                "config_options": {
+                    str(option): str(value)
+                    for option, value in profiles[key].get("config_options", {}).items()
+                },
                 "permission_policy": "workspace",
             }
             for key in sorted(profiles)
@@ -143,6 +156,10 @@ class AcpGateway:
         command: str,
         args: list[str],
         model: str | None,
+        system_prompt: str = "",
+        reasoning_effort: str | None = None,
+        additional_dirs: list[str] | None = None,
+        config_options: dict[str, str] | None = None,
     ) -> None:
         profiles = self._profiles()
         if profile_key not in profiles:
@@ -159,6 +176,14 @@ class AcpGateway:
         }
         if model is not None and model.strip():
             profile["model"] = model.strip()
+        if system_prompt.strip():
+            profile["system_prompt"] = system_prompt.strip()
+        if reasoning_effort is not None:
+            profile["reasoning_effort"] = reasoning_effort
+        if additional_dirs:
+            profile["additional_dirs"] = list(additional_dirs)
+        if config_options:
+            profile["config_options"] = dict(config_options)
         profiles[profile_key] = profile
         self._save_profiles(profiles)
 

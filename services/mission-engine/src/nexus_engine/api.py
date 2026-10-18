@@ -97,6 +97,12 @@ class AgentProfileUpdateRequest(BaseModel):
     command: str = Field(min_length=1, max_length=4096)
     args: list[str] = Field(default_factory=list, max_length=64)
     model: str | None = Field(default=None, max_length=200)
+    system_prompt: str = Field(default="", max_length=32000)
+    reasoning_effort: str | None = Field(
+        default=None, pattern=r"^(minimal|low|medium|high|xhigh|max|ultra)$"
+    )
+    additional_dirs: list[str] = Field(default_factory=list, max_length=32)
+    config_options: dict[str, str] = Field(default_factory=dict)
 
 
 class AgentTestRequest(BaseModel):
@@ -253,6 +259,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         if isinstance(item.get("model"), str)
                         else None
                     ),
+                    "system_prompt": str(item.get("system_prompt", "")),
+                    "reasoning_effort": item.get("reasoning_effort"),
+                    "additional_dirs": [str(value) for value in item.get("additional_dirs", [])],
+                    "config_options": {
+                        str(key): str(value)
+                        for key, value in item.get("config_options", {}).items()
+                    },
                     "permission_policy": "workspace",
                 }
                 for item in profile_gateway.agent_profiles()
@@ -389,6 +402,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     command=request.command,
                     args=request.args,
                     model=request.model,
+                    system_prompt=request.system_prompt,
+                    reasoning_effort=request.reasoning_effort,
+                    additional_dirs=request.additional_dirs,
+                    config_options=request.config_options,
                 )
             except AcpError as exc:
                 if str(exc) == "unknown ACP profile":

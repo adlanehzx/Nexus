@@ -115,7 +115,9 @@ nouveau exige toujours l’installation préalable de son adaptateur ACP local ;
 peut ensuite être importé depuis la même page.
 
 Chaque profil peut être ouvert depuis le dashboard pour modifier son nom, son
-modèle, sa commande et ses arguments, puis exécuter un vrai message de test ACP.
+modèle, sa commande, ses arguments, son prompt système, son effort de
+raisonnement, ses options ACP annoncées par l'adaptateur et une liste explicite
+de dossiers supplémentaires, puis exécuter un vrai message de test ACP.
 La désactivation le retire des nouvelles missions sans supprimer sa définition
 ni interrompre une mission en cours. Les permissions restent limitées au
 workspace et ne sont pas désactivables depuis l'interface. Les sessions et
@@ -134,13 +136,17 @@ contrôles serveur :
 - lecture des notifications ;
 - création de portefeuilles et marchés de simulation ;
 - configuration, test et désactivation des agents ACP ;
-- réglages persistants de l'orchestrateur.
+- réglages persistants de l'orchestrateur ;
+- coffre local de références secrètes, serveurs MCP ajoutés à chaud et
+  configuration du worker Browser Use.
 
 Les vues d'historique — runs, sécurité et journaux — restent naturellement des
 vues de consultation. Les opérations irréversibles demandent une confirmation
-dans l'interface. Les onglets MCP et Browser Use n'inventent pas de service :
-ils affichent l'état réel des composants lorsqu'ils sont effectivement raccordés
-au cœur NEXUS.
+dans l'interface. MCP est raccordé au `ToolRegistry` de l'API et se reconnecte à
+chaud. Browser Use instancie le vrai client HTTP seulement quand sa configuration
+est activée et que son jeton existe dans le trousseau Linux. Les fichiers
+`services/api/config/*.json` ne contiennent que des références
+`vault://nexus/...`, jamais les valeurs.
 
 ## Surface exposée
 
