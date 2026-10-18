@@ -10,6 +10,16 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [newName, setNewName] = useState("");
   const [newKey, setNewKey] = useState("");
   const [model, setModel] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCommand, setEditCommand] = useState("");
+  const [editArgs, setEditArgs] = useState("");
+  const [editModel, setEditModel] = useState("");
+  const [testWorkspace, setTestWorkspace] = useState(
+    "/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit",
+  );
+  const [testPrompt, setTestPrompt] = useState("Réponds uniquement NEXUS_ACP_OK");
+  const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = (): void => {
@@ -88,6 +98,74 @@ export function Agents({ api }: { api: DashboardApi }) {
       .finally(() => setBusy(false));
   };
 
+  const edit = (profileId: string): void => {
+    const profile = registry?.available.find((item) => item.id === profileId);
+    if (profile === undefined) return;
+    setEditing(profileId);
+    setEditName(profile.name);
+    setEditCommand(profile.command);
+    setEditArgs(profile.args.join("\n"));
+    setEditModel(profile.model ?? "");
+    setTestResult(null);
+  };
+
+  const saveProfile = (): void => {
+    if (editing === null || editName.trim().length === 0 || editCommand.trim().length === 0) return;
+    setBusy(true);
+    setError(null);
+    void api
+      .updateAgentProfile(editing, {
+        name: editName.trim(),
+        command: editCommand.trim(),
+        args: editArgs.split("\n").filter((value) => value.length > 0),
+        model: editModel.trim().length === 0 ? null : editModel.trim(),
+      })
+      .then((next) => {
+        setRegistry(next);
+        setTestResult("Configuration enregistrée. Une sauvegarde locale a été créée.");
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Enregistrement impossible.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const testProfile = (): void => {
+    if (editing === null || testWorkspace.trim().length === 0 || testPrompt.trim().length === 0)
+      return;
+    setBusy(true);
+    setError(null);
+    setTestResult("Test ACP en cours…");
+    void api
+      .testAgentProfile(editing, {
+        workspace: testWorkspace.trim(),
+        prompt: testPrompt.trim(),
+        timeout_seconds: 120,
+      })
+      .then((result) => setTestResult(result.response))
+      .catch((cause: unknown) => {
+        setTestResult(null);
+        setError(cause instanceof Error ? cause.message : "Test ACP impossible.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const disable = (keyToDisable: string): void => {
+    if (!window.confirm(`Désactiver ${keyToDisable} pour les nouvelles missions ?`)) return;
+    setBusy(true);
+    setError(null);
+    void api
+      .disableAgent(keyToDisable)
+      .then((next) => {
+        setRegistry(next);
+        setEditing(null);
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Désactivation impossible.");
+      })
+      .finally(() => setBusy(false));
+  };
+
   return (
     <section className="agents-page contenu">
       <div className="agents-heading">
@@ -147,10 +225,107 @@ export function Agents({ api }: { api: DashboardApi }) {
                   <strong>{percent(agent.remaining_week_percent)}</strong> semaine
                 </span>
               </div>
+              <div className="agent-card-actions">
+                <button className="bouton" type="button" onClick={() => edit(agent.agent_profile_id)}>
+                  Configurer
+                </button>
+                <button
+                  className="bouton danger"
+                  type="button"
+                  disabled={busy || agent.running_tasks > 0}
+                  onClick={() => disable(agent.key)}
+                >
+                  Désactiver
+                </button>
+              </div>
             </article>
           );
         })}
       </div>
+
+      {editing === null ? null : (
+        <section className="settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <h3>Configuration ACP · {editing}</h3>
+              <p className="faible">
+                Les modifications sont persistantes et sauvegardées. Les identifiants restent dans
+                les trousseaux des CLI et ne sont jamais affichés ici.
+              </p>
+            </div>
+            <button className="bouton" type="button" onClick={() => setEditing(null)}>
+              Fermer
+            </button>
+          </div>
+
+          <div className="settings-grid">
+            <label>
+              Nom visible
+              <input className="champ" value={editName} onChange={(event) => setEditName(event.target.value)} />
+            </label>
+            <label>
+              Modèle ACP
+              <input
+                className="champ"
+                value={editModel}
+                placeholder="Modèle par défaut de l’adaptateur"
+                onChange={(event) => setEditModel(event.target.value.slice(0, 200))}
+              />
+            </label>
+            <label className="settings-wide">
+              Commande
+              <input
+                className="champ mono"
+                value={editCommand}
+                onChange={(event) => setEditCommand(event.target.value)}
+              />
+            </label>
+            <label className="settings-wide">
+              Arguments · un argument par ligne
+              <textarea
+                className="champ mono settings-textarea"
+                value={editArgs}
+                onChange={(event) => setEditArgs(event.target.value)}
+              />
+            </label>
+            <div className="settings-wide policy-box">
+              <strong>Permissions : espace de travail uniquement</strong>
+              <span className="faible">
+                Écriture autorisée dans le workspace de la mission. Les suppressions sans chemin et
+                les accès extérieurs sont refusés. Cette protection n’est pas désactivable.
+              </span>
+            </div>
+          </div>
+
+          <div className="settings-actions">
+            <button className="bouton primary" type="button" disabled={busy} onClick={saveProfile}>
+              Enregistrer
+            </button>
+          </div>
+
+          <h3>Test de connexion réel</h3>
+          <div className="settings-grid">
+            <label className="settings-wide">
+              Workspace du test
+              <input
+                className="champ mono"
+                value={testWorkspace}
+                onChange={(event) => setTestWorkspace(event.target.value)}
+              />
+            </label>
+            <label className="settings-wide">
+              Message de test
+              <input className="champ" value={testPrompt} onChange={(event) => setTestPrompt(event.target.value)} />
+            </label>
+          </div>
+          <div className="settings-actions">
+            <button className="bouton" type="button" disabled={busy} onClick={testProfile}>
+              Tester l’agent
+            </button>
+          </div>
+          {testResult === null ? null : <pre className="test-result">{testResult}</pre>}
+        </section>
+      )}
 
       <div className="agent-add">
         <div>

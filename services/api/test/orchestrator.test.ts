@@ -12,6 +12,17 @@ const engine = {
     worker_concurrency: 2,
     profiles: ["antigravity", "claude", "codex"],
   }),
+  settings: vi.fn().mockResolvedValue({
+    task_timeout_seconds: 1800,
+    max_attempts: 3,
+    retry_delay_seconds: 10,
+    context_budget_chars: 60000,
+    quality_review: true,
+    research_priority: ["antigravity", "claude", "codex"],
+    review_priority: ["claude", "codex", "antigravity"],
+    synthesis_priority: ["claude", "antigravity", "codex"],
+  }),
+  updateSettings: vi.fn(),
   submitMission: vi.fn((input: SubmitMission) => {
     submitted = input;
     return Promise.resolve({ mission_id: missionId, replayed: false });
@@ -48,6 +59,17 @@ const engine = {
     configured: [],
     available: [],
   }),
+  updateAgentProfile: vi.fn().mockResolvedValue({
+    worker_enabled: true,
+    configured: [],
+    available: [],
+  }),
+  disableAgent: vi.fn().mockResolvedValue({
+    worker_enabled: true,
+    configured: [],
+    available: [],
+  }),
+  testAgentProfile: vi.fn().mockResolvedValue({ ok: true as const, response: "NEXUS_ACP_OK" }),
   updateAgentHealth: vi.fn().mockResolvedValue({
     worker_enabled: true,
     configured: [],
@@ -176,5 +198,52 @@ describe("façade orchestrateur NEXUS", () => {
       model: "claude-opus",
     });
     expect(JSON.stringify(engine.createAgent.mock.calls)).not.toMatch(/token|secret|password/i);
+  });
+
+  it("configure, teste et désactive un profil ACP depuis le dashboard", async () => {
+    const profile = {
+      name: "Claude Review",
+      command: "/usr/bin/npx",
+      args: ["-y", "claude-agent-acp"],
+      model: "opus",
+    };
+    const updated = await harness.app.inject({
+      method: "PUT",
+      url: "/api/v1/orchestrator/agents/profiles/claude",
+      headers: account.authorization,
+      payload: profile,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(engine.updateAgentProfile).toHaveBeenCalledWith("claude", profile);
+
+    const tested = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/agents/profiles/claude/test",
+      headers: account.authorization,
+      payload: { workspace: "/tmp/nexus", prompt: "ping", timeout_seconds: 30 },
+    });
+    expect(tested.statusCode).toBe(200);
+    expect(tested.json().data.response).toBe("NEXUS_ACP_OK");
+
+    const disabled = await harness.app.inject({
+      method: "DELETE",
+      url: "/api/v1/orchestrator/agents/claude",
+      headers: account.authorization,
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect(engine.disableAgent).toHaveBeenCalledWith("claude");
+  });
+
+  it("lit et enregistre les paramètres d'orchestration", async () => {
+    const settings = await engine.settings();
+    engine.updateSettings.mockResolvedValueOnce(settings);
+    const response = await harness.app.inject({
+      method: "PUT",
+      url: "/api/v1/orchestrator/settings",
+      headers: account.authorization,
+      payload: settings,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(engine.updateSettings).toHaveBeenCalledWith(settings);
   });
 });

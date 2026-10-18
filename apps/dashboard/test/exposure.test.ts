@@ -78,28 +78,23 @@ describe("le raisonnement n'est jamais demandé", () => {
   });
 });
 
-describe("la supervision reste en lecture seule", () => {
-  it("la seule écriture est l'envoi explicite d'une mission au chat", () => {
-    // Superviser et administrer sont deux surfaces. Les réunir mettrait une
-    // action destructrice à un clic d'un écran qu'on consulte machinalement.
+describe("l'administration reste bornée", () => {
+  it("les mutations passent toutes par le client authentifié", () => {
     const source = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
-    const client = codeSeul(source);
-
-    for (const verbe of ["PATCH", "DELETE", "PUT"]) {
-      expect(client).not.toContain(verbe);
-    }
-    expect(source.match(/this\.#request\("POST"/g)).toHaveLength(3);
+    expect(source).not.toContain("fetch(");
+    expect(source).not.toContain("XMLHttpRequest");
+    expect(source).toContain("authorizedRequest");
   });
 
-  it("n'appelle que la supervision et la façade orchestrateur", () => {
-    // Une route voisine ouverte « pour déboguer » n'aurait pas la même garde ni
-    // la même projection.
+  it("n'appelle que les surfaces d'administration explicitement autorisées", () => {
     const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
     const chemins = [...api.matchAll(/"(\/api\/v1\/[^"`]*)"/g)].map((match) => match[1] ?? "");
     const gabarits = [...api.matchAll(/`(\/api\/v1\/[^`]*)`/g)].map((match) => match[1] ?? "");
 
     for (const chemin of [...chemins, ...gabarits]) {
-      expect(chemin, chemin).toMatch(/^\/api\/v1\/(dashboard|orchestrator)\//);
+      expect(chemin, chemin).toMatch(
+        /^\/api\/v1\/(dashboard|orchestrator|devices|tasks|memory|notifications|mission-control)(\/|$)/,
+      );
     }
   });
 

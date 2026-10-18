@@ -7,6 +7,7 @@ import type {
   MissionControlPort,
   MissionSnapshot,
   MissionTaskInput,
+  RuntimeSettings,
   SubmitMission,
 } from "@nexus/mission-control-client";
 
@@ -58,7 +59,10 @@ export class AcpOrchestrator {
   }
 
   async submit(userId: string, objective: string): Promise<OrchestratedMission> {
-    const health = await this.#missionControl.health();
+    const [health, settings] = await Promise.all([
+      this.#missionControl.health(),
+      this.#missionControl.settings(),
+    ]);
     if (!health.worker_enabled || health.profiles.length === 0) {
       throw new Error("Le moteur ACP n'a aucun profil actif.");
     }
@@ -67,8 +71,8 @@ export class AcpOrchestrator {
     const workspace = resolve(this.#workspaceRoot, missionKey);
     await mkdir(workspace, { recursive: true, mode: 0o700 });
 
-    const planned = await this.#plan(objective, health.profiles);
-    const tasks = ensureFinalSynthesis(planned.tasks, objective, health.profiles);
+    const planned = await this.#plan(objective, health.profiles, settings);
+    const tasks = ensureFinalSynthesis(planned.tasks, objective, health.profiles, settings);
     const input: SubmitMission = {
       external_key: `${ownerPrefix(userId)}-${missionKey}`,
       title: planned.title,
@@ -97,12 +101,15 @@ export class AcpOrchestrator {
   async #plan(
     objective: string,
     profiles: string[],
+    settings: RuntimeSettings,
   ): Promise<z.infer<typeof plannedMissionSchema>> {
-    if (this.#llm === undefined) return fallbackPlan(objective, profiles);
+    if (this.#llm === undefined) return fallbackPlan(objective, profiles, settings);
 
     const system = `Tu es l'orchestrateur central de NEXUS. Décompose une mission utilisateur en tâches ACP spécialisées, parallèles lorsque possible.
 
 Profils réellement disponibles : ${profiles.join(", ")}.
+Priorité recherche : ${settings.research_priority.join(", ")}.
+Priorité critique : ${settings.review_priority.join(", ")}.
 
 Règles absolues :
 - utilise exclusivement ces profils ;
@@ -121,7 +128,7 @@ Règles absolues :
       // La disponibilité du planificateur ne doit jamais être un point unique
       // de panne. Le plan conservateur utilise les mêmes agents et le même
       // moteur durable, sans inventer de capacité.
-      return fallbackPlan(objective, profiles);
+      return fallbackPlan(objective, profiles, settings);
     }
   }
 }
@@ -154,6 +161,7 @@ function ensureFinalSynthesis(
   planned: z.infer<typeof plannedTaskSchema>[],
   objective: string,
   profiles: string[],
+  settings: RuntimeSettings,
 ): MissionTaskInput[] {
   validatePlan(planned, profiles);
   const dependencies = new Set(planned.flatMap((task) => task.depends_on));
@@ -161,30 +169,30 @@ function ensureFinalSynthesis(
   // Claude est actuellement le synthétiseur le plus stable dans l'installation
   // locale. Codex reste sélectionnable pour les tâches de code/revue par le
   // planificateur, sans devenir un point unique de panne pour chaque mission.
-  const finalProfile = preferred(profiles, ["claude", "antigravity", "codex"]);
+  const finalProfile = preferred(profiles, settings.synthesis_priority);
   const executionTasks: MissionTaskInput[] = planned.map((task) => {
     const fallbacks = fallbackOrder(task.profile, profiles);
     return {
       ...task,
       fallback_profiles: fallbacks,
-      timeout_seconds: 1_800,
-      max_attempts: Math.min(3, 1 + fallbacks.length),
-      retry_delay_seconds: 10,
-      context_budget_chars: 60_000,
+      timeout_seconds: settings.task_timeout_seconds,
+      max_attempts: Math.min(settings.max_attempts, 1 + fallbacks.length),
+      retry_delay_seconds: settings.retry_delay_seconds,
+      context_budget_chars: settings.context_budget_chars,
     };
   });
-  const reviewProfile = preferred(profiles, ["claude", "codex", "antigravity"]);
+  const reviewProfile = preferred(profiles, settings.review_priority);
   const qualityReview: MissionTaskInput | undefined =
-    planned.length > 1
+    settings.quality_review && planned.length > 1
       ? {
           key: "nexus_quality_review_1",
           profile: reviewProfile,
           fallback_profiles: fallbackOrder(reviewProfile, profiles),
           depends_on: leaves,
-          timeout_seconds: 1_800,
-          max_attempts: Math.min(3, profiles.length),
-          retry_delay_seconds: 10,
-          context_budget_chars: 80_000,
+          timeout_seconds: settings.task_timeout_seconds,
+          max_attempts: Math.min(settings.max_attempts, profiles.length),
+          retry_delay_seconds: settings.retry_delay_seconds,
+          context_budget_chars: Math.max(settings.context_budget_chars, 80_000),
           instruction: qualityReviewInstruction(objective, 1),
         }
       : undefined;
@@ -197,10 +205,10 @@ function ensureFinalSynthesis(
       profile: finalProfile,
       fallback_profiles: fallbackOrder(finalProfile, profiles),
       depends_on: finalDependencies,
-      timeout_seconds: 1_800,
-      max_attempts: Math.min(3, profiles.length),
-      retry_delay_seconds: 10,
-      context_budget_chars: 80_000,
+      timeout_seconds: settings.task_timeout_seconds,
+      max_attempts: Math.min(settings.max_attempts, profiles.length),
+      retry_delay_seconds: settings.retry_delay_seconds,
+      context_budget_chars: Math.max(settings.context_budget_chars, 80_000),
       instruction: `Tu es le synthétiseur final de NEXUS. Réponds directement à la mission initiale ci-dessous en français. Les résultats vérifiés des autres agents sont injectés après cette instruction. Confronte-les, corrige leurs contradictions, n'invente pas de réussite non démontrée et livre une réponse claire et exploitable.\n\nMISSION INITIALE :\n${objective}`,
     },
   ];
@@ -210,9 +218,13 @@ function qualityReviewInstruction(objective: string, cycle: number): string {
   return `Tu es le contrôleur qualité de NEXUS, cycle ${cycle}. Évalue uniquement si les résultats amont permettent de répondre correctement à la mission. Vérifie les contradictions, preuves, tests et critères de réussite. Réponds avec un objet JSON strict, sans markdown ni texte autour : {"verdict":"pass"|"revise","summary":"résumé factuel","corrective_instruction":"instruction précise ou chaîne vide"}. Choisis "revise" seulement si une correction concrète peut améliorer le résultat. N'inclus aucun secret.\n\nMISSION INITIALE :\n${objective}`;
 }
 
-function fallbackPlan(objective: string, profiles: string[]): z.infer<typeof plannedMissionSchema> {
-  const researcher = preferred(profiles, ["antigravity", "claude", "codex"]);
-  const critic = preferred(profiles, ["claude", "codex", "antigravity"]);
+function fallbackPlan(
+  objective: string,
+  profiles: string[],
+  settings: RuntimeSettings,
+): z.infer<typeof plannedMissionSchema> {
+  const researcher = preferred(profiles, settings.research_priority);
+  const critic = preferred(profiles, settings.review_priority);
   const tasks: z.infer<typeof plannedTaskSchema>[] = [
     {
       key: "investigate",

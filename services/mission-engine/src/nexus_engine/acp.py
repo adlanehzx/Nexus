@@ -102,6 +102,14 @@ class AcpGateway:
                 "name": str(profiles[key].get("name", key)),
                 "agent_kind": "acp",
                 "revision": None,
+                "command": str(profiles[key].get("command", "")),
+                "args": [str(value) for value in profiles[key].get("args", [])],
+                "model": (
+                    str(profiles[key]["model"])
+                    if isinstance(profiles[key].get("model"), str)
+                    else None
+                ),
+                "permission_policy": "workspace",
             }
             for key in sorted(profiles)
             if isinstance(key, str) and isinstance(profiles[key], dict)
@@ -125,6 +133,36 @@ class AcpGateway:
         if model is not None and model.strip():
             clone["model"] = model.strip()
         profiles[new_key] = clone
+        self._save_profiles(profiles)
+
+    def update_agent_profile(
+        self,
+        profile_key: str,
+        *,
+        name: str,
+        command: str,
+        args: list[str],
+        model: str | None,
+    ) -> None:
+        profiles = self._profiles()
+        if profile_key not in profiles:
+            raise AcpError("unknown ACP profile", category="config")
+        clean_command = command.strip()
+        if not clean_command or "\x00" in clean_command:
+            raise AcpError("invalid ACP command", category="config")
+        if any("\x00" in value for value in args):
+            raise AcpError("invalid ACP argument", category="config")
+        profile: dict[str, Any] = {
+            "name": name.strip(),
+            "command": clean_command,
+            "args": list(args),
+        }
+        if model is not None and model.strip():
+            profile["model"] = model.strip()
+        profiles[profile_key] = profile
+        self._save_profiles(profiles)
+
+    def _save_profiles(self, profiles: dict[str, dict[str, Any]]) -> None:
         payload = {"profiles": profiles}
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         backup = self.registry.with_name(f"{self.registry.name}.bak-{stamp}")

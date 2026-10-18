@@ -11,11 +11,16 @@ const health = {
 
 const fake = {
   health: vi.fn().mockResolvedValue(health),
+  settings: vi.fn(),
+  updateSettings: vi.fn(),
   submitMission: vi.fn(),
   getMission: vi.fn(),
   agents: vi.fn(),
   registerAgent: vi.fn(),
   createAgent: vi.fn(),
+  updateAgentProfile: vi.fn(),
+  disableAgent: vi.fn(),
+  testAgentProfile: vi.fn(),
   updateAgentHealth: vi.fn(),
   verifyAudit: vi.fn().mockResolvedValue({ valid: true, checked: 21, head: "a".repeat(64) }),
   createPaperAccount: vi.fn(),

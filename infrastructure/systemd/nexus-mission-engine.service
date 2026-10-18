@@ -10,6 +10,7 @@ Environment=NEXUS_ENGINE_DATABASE=/home/adlane/Documents/Codex/2026-10-11/tu-es-
 Environment=NEXUS_ENGINE_ACP_RUNNER=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/agent/dist/cli.js
 Environment=NEXUS_ENGINE_ACP_REGISTRY=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/agent/config/profiles.production.json
 Environment=NEXUS_ENGINE_PROFILES_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/profiles.production.json
+Environment=NEXUS_ENGINE_RUNTIME_SETTINGS_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/runtime-settings.json
 Environment=NEXUS_ENGINE_WORKER_ENABLED=true
 Environment=NEXUS_ENGINE_WORKER_CONCURRENCY=2
 Environment=PATH=/home/adlane/.local/bin:/home/adlane/.local/share/mise/shims:/usr/local/bin:/usr/bin

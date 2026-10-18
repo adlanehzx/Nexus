@@ -34,6 +34,9 @@ logs/
 .data/
 postgres-data/
 redis-data/
+/var/
+/backups/
+*.bak-*
 
 # Éditeurs
 .vscode/*

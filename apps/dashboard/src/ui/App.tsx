@@ -17,6 +17,7 @@ import {
 } from "./Sections.js";
 import { NexusChat } from "./NexusChat.js";
 import { Agents } from "./Agents.js";
+import { Settings } from "./Settings.js";
 
 /**
  * L'ossature du tableau de bord.
@@ -51,7 +52,7 @@ const SECTIONS = [
   ["logs", "Journaux"],
 ] as const;
 
-type SectionId = (typeof SECTIONS)[number][0] | "chat" | "agents";
+type SectionId = (typeof SECTIONS)[number][0] | "chat" | "agents" | "settings";
 
 export function App() {
   const session = useMemo(() => createSession(backendUrl()), []);
@@ -76,6 +77,8 @@ export function App() {
       ? "NEXUS"
       : section === "agents"
         ? "Agents"
+        : section === "settings"
+          ? "Configuration"
         : (SECTIONS.find(([id]) => id === section)?.[1] ?? "");
 
   if (section === "chat" || section === "agents") {
@@ -116,6 +119,9 @@ export function App() {
         </button>
         <button className="nav-item" type="button" onClick={() => setSection("agents")}>
           Agents
+        </button>
+        <button className="nav-item" type="button" aria-current={section === "settings" ? "page" : undefined} onClick={() => setSection("settings")}>
+          Configuration
         </button>
         <h1>Supervision</h1>
         {SECTIONS.map(([id, label]) => (
@@ -162,6 +168,7 @@ export function App() {
         {section === "notifications" ? <Notifications api={api} /> : null}
         {section === "security" ? <Security api={api} /> : null}
         {section === "logs" ? <Logs api={api} /> : null}
+        {section === "settings" ? <Settings api={api} /> : null}
       </main>
     </div>
   );

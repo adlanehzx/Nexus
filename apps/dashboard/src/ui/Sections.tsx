@@ -20,10 +20,9 @@ import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.j
  * Chacune charge la sienne : une section qui échoue n'emporte pas les autres, et
  * un serveur MCP injoignable ne doit pas vider l'écran des exécutants.
  *
- * Aucune ne propose d'action. Approuver un appareil, révoquer, annuler une tâche
- * restent sur les surfaces qui portent leurs propres contrôles — mettre une
- * action destructrice dans un écran qu'on consulte machinalement est une
- * mauvaise idée qui ne se remarque qu'une fois.
+ * Les actions d'administration réutilisent les routes métier existantes. Les
+ * opérations irréversibles restent confirmées explicitement ; aucune section
+ * ne contourne les permissions ni les validations du cœur.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,9 +110,20 @@ function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH
 
 export function Devices({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.devices());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>): void => {
+    setActionError(null);
+    void operation()
+      .then(() => state.reload())
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) =>
           data.devices.length === 0 ? (
@@ -130,6 +140,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                 "Dernier battement",
                 "Santé",
                 "Permissions",
+                "Actions",
               ]}
             >
               {data.devices.map((device) => (
@@ -186,6 +197,48 @@ export function Devices({ api }: { api: DashboardApi }) {
                     {device.grantedPermissions.length === 0
                       ? "—"
                       : device.grantedPermissions.join(", ")}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {device.trust === "PENDING" ? (
+                        <button className="bouton" type="button" onClick={() => act(() => api.trustDevice(device.id))}>
+                          Approuver
+                        </button>
+                      ) : null}
+                      {device.trust !== "REVOKED" ? (
+                        <>
+                          <button
+                            className="bouton"
+                            type="button"
+                            onClick={() => {
+                              const value = window.prompt(
+                                "Permissions séparées par des virgules",
+                                device.grantedPermissions.join(", "),
+                              );
+                              if (value !== null)
+                                act(() =>
+                                  api.updateDevicePermissions(
+                                    device.id,
+                                    value.split(",").map((item) => item.trim()).filter(Boolean),
+                                  ),
+                                );
+                            }}
+                          >
+                            Permissions
+                          </button>
+                          <button
+                            className="bouton danger"
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Révoquer définitivement ${device.name} ?`))
+                                act(() => api.revokeDevice(device.id));
+                            }}
+                          >
+                            Révoquer
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -265,16 +318,18 @@ export function Workers({ api }: { api: DashboardApi }) {
 export function Tasks({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.tasks());
   const [selected, setSelected] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) =>
           data.tasks.length === 0 ? (
             <Empty>Aucune tâche.</Empty>
           ) : (
             <>
-              <Table head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée"]}>
+              <Table head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée", "Actions"]}>
                 {data.tasks.map((task) => (
                   <tr
                     key={task.id}
@@ -302,6 +357,23 @@ export function Tasks({ api }: { api: DashboardApi }) {
                           : new Date(task.completedAt).getTime() -
                               new Date(task.startedAt).getTime(),
                       )}
+                    </td>
+                    <td>
+                      {new Set(["running", "pending", "waiting_for_confirmation"]).has(task.status) ? (
+                        <button
+                          className="bouton danger"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!window.confirm(`Annuler « ${task.title} » ?`)) return;
+                            void api.cancelTask(task.id).then(() => state.reload()).catch((cause: unknown) =>
+                              setActionError(cause instanceof Error ? cause.message : "Annulation impossible."),
+                            );
+                          }}
+                        >
+                          Annuler
+                        </button>
+                      ) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -701,9 +773,24 @@ export function Browser({ api }: { api: DashboardApi }) {
 
 export function MissionControl({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.missionControl());
+  const [accountName, setAccountName] = useState("Portefeuille NEXUS");
+  const [bankroll, setBankroll] = useState("50.00");
+  const [marketQuestion, setMarketQuestion] = useState("");
+  const [marketClose, setMarketClose] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>): void => {
+    setActionError(null);
+    void operation()
+      .then(() => state.reload())
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) => {
           const cash = data.accounts.reduce(
@@ -754,6 +841,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
               </p>
 
               <h3>Portefeuilles fictifs</h3>
+              <div className="inline-admin-form">
+                <input className="champ" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="Nom du portefeuille" />
+                <input className="champ" value={bankroll} onChange={(event) => setBankroll(event.target.value)} inputMode="decimal" placeholder="Capital EUR" />
+                <button className="bouton" type="button" onClick={() => act(() => api.createPaperAccount({ name: accountName.trim(), bankroll_eur: bankroll }))}>
+                  Créer
+                </button>
+              </div>
               {data.accounts.length === 0 ? (
                 <Empty>Aucun portefeuille de recherche.</Empty>
               ) : (
@@ -801,6 +895,23 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </Table>
               )}
 
+              <h3>Marché de recherche fictif</h3>
+              <div className="inline-admin-form market-form">
+                <input className="champ" value={marketQuestion} onChange={(event) => setMarketQuestion(event.target.value)} placeholder="Question du marché" />
+                <input className="champ" type="datetime-local" value={marketClose} onChange={(event) => setMarketClose(event.target.value)} />
+                <button
+                  className="bouton"
+                  type="button"
+                  disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
+                  onClick={() => {
+                    act(() => api.createPaperMarket({ question: marketQuestion.trim(), close_at: new Date(marketClose).toISOString() }));
+                    setMarketQuestion("");
+                  }}
+                >
+                  Créer
+                </button>
+              </div>
+
               <p className="faible">
                 La création des missions et des portefeuilles fictifs passe par l’API administrateur
                 NEXUS. Aucun chemin de trading réel n’est exposé.
@@ -819,9 +930,50 @@ export function MissionControl({ api }: { api: DashboardApi }) {
 
 export function Memory({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.memory());
+  const [content, setContent] = useState("");
+  const [layer, setLayer] = useState<"LONG_TERM" | "PREFERENCE">("LONG_TERM");
+  const [tags, setTags] = useState("");
+  const [acknowledgedSensitive, setAcknowledgedSensitive] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   return (
     <div className="contenu">
+      <div className="admin-form-card">
+        <h3>Ajouter un souvenir</h3>
+        <div className="inline-admin-form memory-form">
+          <input className="champ" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Ce que NEXUS doit retenir" />
+          <select className="champ" value={layer} onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}>
+            <option value="LONG_TERM">Long terme</option>
+            <option value="PREFERENCE">Préférence</option>
+          </select>
+          <input className="champ" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="tags, séparés, par virgule" />
+          <label className="check-label">
+            <input type="checkbox" checked={acknowledgedSensitive} onChange={(event) => setAcknowledgedSensitive(event.target.checked)} />
+            contenu sensible vérifié
+          </label>
+          <button
+            className="bouton primary"
+            type="button"
+            disabled={content.trim().length === 0}
+            onClick={() => {
+              setActionError(null);
+              void api.remember({
+                content: content.trim(),
+                layer,
+                tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+                acknowledgedSensitive,
+              }).then(() => {
+                setContent("");
+                setTags("");
+                state.reload();
+              }).catch((cause: unknown) => setActionError(cause instanceof Error ? cause.message : "Enregistrement impossible."));
+            }}
+          >
+            Mémoriser
+          </button>
+        </div>
+      </div>
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) => (
           <>
@@ -839,13 +991,27 @@ export function Memory({ api }: { api: DashboardApi }) {
             {data.recent.length === 0 ? (
               <Empty>NEXUS ne retient rien.</Empty>
             ) : (
-              <Table head={["Contenu", "Couche", "Origine", "Créé"]}>
+              <Table head={["Contenu", "Couche", "Origine", "Créé", "Actions"]}>
                 {data.recent.map((record) => (
                   <tr key={record.id}>
                     <td>{record.content}</td>
                     <td className="faible">{record.layer}</td>
                     <td className="faible">{record.origin}</td>
                     <td className="faible">{formatAge(record.createdAt)}</td>
+                    <td>
+                      <button
+                        className="bouton danger"
+                        type="button"
+                        onClick={() => {
+                          if (!window.confirm("Oublier définitivement ce souvenir ?")) return;
+                          void api.forget(record.id).then(() => state.reload()).catch((cause: unknown) =>
+                            setActionError(cause instanceof Error ? cause.message : "Suppression impossible."),
+                          );
+                        }}
+                      >
+                        Oublier
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </Table>
@@ -877,7 +1043,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
             {data.notifications.length === 0 ? (
               <Empty>Aucune notification.</Empty>
             ) : (
-              <Table head={["Quand", "Gravité", "Titre", "Corps", "Lue"]}>
+              <Table head={["Quand", "Gravité", "Titre", "Corps", "Lue", "Actions"]}>
                 {data.notifications.map((notification) => (
                   <tr key={notification.id}>
                     <td className="faible">{formatAge(notification.createdAt)}</td>
@@ -896,6 +1062,13 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     <td>{notification.title}</td>
                     <td className="faible">{notification.body}</td>
                     <td className="faible">{notification.readAt === null ? "non" : "oui"}</td>
+                    <td>
+                      {notification.readAt === null ? (
+                        <button className="bouton" type="button" onClick={() => void api.markNotificationRead(notification.id).then(() => state.reload())}>
+                          Marquer lue
+                        </button>
+                      ) : "—"}
+                    </td>
                   </tr>
                 ))}
               </Table>

@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from nexus_engine.acp import AcpGateway
+from nexus_engine.acp import AcpError, AcpGateway
 from nexus_engine.config import Settings
 from nexus_engine.database import Database
 from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
@@ -90,6 +90,23 @@ class AgentCreationRequest(BaseModel):
     model: str | None = Field(default=None, max_length=200)
 
 
+class AgentProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$")
+    command: str = Field(min_length=1, max_length=4096)
+    args: list[str] = Field(default_factory=list, max_length=64)
+    model: str | None = Field(default=None, max_length=200)
+
+
+class AgentTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace: str = Field(min_length=1, max_length=4096)
+    prompt: str = Field(default="Réponds uniquement NEXUS_ACP_OK", min_length=1, max_length=8000)
+    timeout_seconds: int = Field(default=120, ge=10, le=600)
+
+
 class AgentHealthRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: str = Field(
@@ -101,6 +118,19 @@ class AgentHealthRequest(BaseModel):
     resets_5h_at: datetime | None = None
     resets_week_at: datetime | None = None
     usage_source: str = Field(default="manual", max_length=64)
+
+
+class RuntimeSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_timeout_seconds: int = Field(ge=10, le=86400)
+    max_attempts: int = Field(ge=1, le=10)
+    retry_delay_seconds: int = Field(ge=1, le=3600)
+    context_budget_chars: int = Field(ge=4000, le=400000)
+    quality_review: bool
+    research_priority: list[str] = Field(min_length=1, max_length=20)
+    review_priority: list[str] = Field(min_length=1, max_length=20)
+    synthesis_priority: list[str] = Field(min_length=1, max_length=20)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -194,6 +224,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def profiles() -> dict[str, list[str]]:
         return {"profiles": sorted(repository.enabled_profiles())}
 
+    @app.get("/v1/settings")
+    def runtime_settings() -> dict[str, Any]:
+        return configured.load_runtime_settings()
+
+    @app.put("/v1/settings")
+    def update_runtime_settings(request: RuntimeSettingsRequest) -> dict[str, Any]:
+        values = request.model_dump()
+        for field in ("research_priority", "review_priority", "synthesis_priority"):
+            values[field] = list(dict.fromkeys(values[field]))
+        configured.save_runtime_settings(values)
+        return values
+
     def agent_registry() -> dict[str, Any]:
         if profile_gateway is None:
             raise HTTPException(503, "NEXUS ACP profile discovery is not configured")
@@ -204,6 +246,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "name": str(item.get("name", "")),
                     "agent_kind": str(item.get("agent_kind", "acp")),
                     "revision": item.get("revision"),
+                    "command": str(item.get("command", "")),
+                    "args": [str(value) for value in item.get("args", [])],
+                    "model": (
+                        str(item["model"])
+                        if isinstance(item.get("model"), str)
+                        else None
+                    ),
+                    "permission_policy": "workspace",
                 }
                 for item in profile_gateway.agent_profiles()
                 if item.get("id") and item.get("name")
@@ -324,6 +374,54 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             configured.save_profiles(profiles)
             repository.sync_profiles(profiles)
             return agent_registry()
+
+    @app.put("/v1/agents/profiles/{profile_id}")
+    def update_agent_profile(
+        profile_id: str, request: AgentProfileUpdateRequest
+    ) -> dict[str, Any]:
+        if profile_gateway is None:
+            raise HTTPException(503, "NEXUS ACP profile discovery is not configured")
+        with profile_lock:
+            try:
+                profile_gateway.update_agent_profile(
+                    profile_id,
+                    name=request.name,
+                    command=request.command,
+                    args=request.args,
+                    model=request.model,
+                )
+            except AcpError as exc:
+                if str(exc) == "unknown ACP profile":
+                    raise HTTPException(404, "unknown NEXUS ACP profile") from exc
+                raise HTTPException(422, str(exc)) from exc
+            return agent_registry()
+
+    @app.delete("/v1/agents/{profile_key}")
+    def disable_agent(profile_key: str) -> dict[str, Any]:
+        with profile_lock:
+            profiles = configured.load_profiles()
+            if profile_key not in profiles:
+                raise HTTPException(404, "unknown registered agent")
+            del profiles[profile_key]
+            configured.save_profiles(profiles)
+            repository.sync_profiles(profiles)
+            return agent_registry()
+
+    @app.post("/v1/agents/profiles/{profile_id}/test")
+    def test_agent_profile(profile_id: str, request: AgentTestRequest) -> dict[str, Any]:
+        if profile_gateway is None:
+            raise HTTPException(503, "NEXUS ACP runtime is not configured")
+        try:
+            response = profile_gateway.execute(
+                profile_key=profile_id,
+                workspace=request.workspace,
+                prompt=request.prompt,
+                timeout_seconds=request.timeout_seconds,
+                heartbeat=lambda: None,
+            )
+        except AcpError as exc:
+            raise HTTPException(502, f"ACP test failed: {exc.category}") from exc
+        return {"ok": True, "response": response[:20_000]}
 
     @app.post("/v1/missions")
     def submit_mission(

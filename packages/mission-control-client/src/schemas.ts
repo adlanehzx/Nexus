@@ -10,6 +10,17 @@ export const missionControlHealthSchema = z.object({
   profiles: z.array(z.string()),
 });
 
+export const runtimeSettingsSchema = z.object({
+  task_timeout_seconds: z.number().int().min(10).max(86_400),
+  max_attempts: z.number().int().min(1).max(10),
+  retry_delay_seconds: z.number().int().min(1).max(3_600),
+  context_budget_chars: z.number().int().min(4_000).max(400_000),
+  quality_review: z.boolean(),
+  research_priority: z.array(z.string().min(1)).min(1).max(20),
+  review_priority: z.array(z.string().min(1)).min(1).max(20),
+  synthesis_priority: z.array(z.string().min(1)).min(1).max(20),
+});
+
 export const missionTaskInputSchema = z.object({
   key: z.string().trim().min(1).max(128),
   profile: z.string().trim().min(1).max(128),
@@ -98,6 +109,10 @@ export const availableAgentSchema = z.object({
   agent_kind: z.string(),
   revision: z.number().int().nullable().optional(),
   registered_as: z.string().nullable().optional(),
+  command: z.string(),
+  args: z.array(z.string()),
+  model: z.string().nullable(),
+  permission_policy: z.literal("workspace"),
 });
 
 export const agentRegistrySchema = z.object({
@@ -116,6 +131,24 @@ export const createAgentSchema = z.object({
   name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
   template_profile_id: z.string().min(1).max(128),
   model: z.string().max(200).nullable().optional(),
+});
+
+export const updateAgentProfileSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  command: z.string().trim().min(1).max(4_096),
+  args: z.array(z.string().max(4_096)).max(64),
+  model: z.string().max(200).nullable().optional(),
+});
+
+export const testAgentProfileSchema = z.object({
+  workspace: z.string().trim().min(1).max(4_096),
+  prompt: z.string().trim().min(1).max(8_000),
+  timeout_seconds: z.number().int().min(10).max(600),
+});
+
+export const agentTestResultSchema = z.object({
+  ok: z.literal(true),
+  response: z.string(),
 });
 
 export const auditVerificationSchema = z.object({
@@ -217,6 +250,7 @@ export const submitResearchMissionSchema = z.object({
 });
 
 export type MissionControlHealth = z.infer<typeof missionControlHealthSchema>;
+export type RuntimeSettings = z.infer<typeof runtimeSettingsSchema>;
 export type MissionTaskInput = z.input<typeof missionTaskInputSchema>;
 export type SubmitMission = z.input<typeof submitMissionSchema>;
 export type MissionSubmission = z.infer<typeof missionSubmissionSchema>;
@@ -227,6 +261,9 @@ export type AvailableAgent = z.infer<typeof availableAgentSchema>;
 export type AgentRegistry = z.infer<typeof agentRegistrySchema>;
 export type RegisterAgent = z.infer<typeof registerAgentSchema>;
 export type CreateAgent = z.infer<typeof createAgentSchema>;
+export type UpdateAgentProfile = z.infer<typeof updateAgentProfileSchema>;
+export type TestAgentProfile = z.infer<typeof testAgentProfileSchema>;
+export type AgentTestResult = z.infer<typeof agentTestResultSchema>;
 export type UpdateAgentHealth = z.infer<typeof updateAgentHealthSchema>;
 export type AuditVerification = z.infer<typeof auditVerificationSchema>;
 export type PaperAccount = z.infer<typeof paperAccountSchema>;

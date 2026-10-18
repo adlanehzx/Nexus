@@ -7,6 +7,7 @@ import tempfile
 from datetime import UTC, datetime
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class Settings:
     worker_enabled: bool
     worker_concurrency: int
     profiles_file: Path | None
+    runtime_settings_file: Path | None = None
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -38,7 +40,36 @@ class Settings:
                 if (value := os.getenv("NEXUS_ENGINE_PROFILES_FILE"))
                 else Path("config/profiles.local.json")
             ),
+            runtime_settings_file=(
+                Path(value)
+                if (value := os.getenv("NEXUS_ENGINE_RUNTIME_SETTINGS_FILE"))
+                else Path("config/runtime-settings.json")
+            ),
         )
+
+    def load_runtime_settings(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "task_timeout_seconds": 1800,
+            "max_attempts": 3,
+            "retry_delay_seconds": 10,
+            "context_budget_chars": 60000,
+            "quality_review": True,
+            "research_priority": ["antigravity", "claude", "codex"],
+            "review_priority": ["claude", "codex", "antigravity"],
+            "synthesis_priority": ["claude", "antigravity", "codex"],
+        }
+        path = self.runtime_settings_file
+        if path is None or not path.exists():
+            return defaults
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("runtime settings file must be a JSON object")
+        return {**defaults, **payload}
+
+    def save_runtime_settings(self, values: dict[str, Any]) -> Path:
+        if self.runtime_settings_file is None:
+            raise ValueError("runtime settings file is not configured")
+        return self._save_json(self.runtime_settings_file, values)
 
     def load_profiles(self) -> dict[str, str]:
         if self.profiles_file is None or not self.profiles_file.exists():
@@ -55,13 +86,16 @@ class Settings:
         """Persist the registry atomically and keep a dated recovery copy."""
         if self.profiles_file is None:
             raise ValueError("profiles file is not configured")
-        path = self.profiles_file
+        return self._save_json(self.profiles_file, profiles)
+
+    @staticmethod
+    def _save_json(path: Path, values: dict[str, Any]) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
             backup = path.with_name(f"{path.name}.bak-{stamp}")
             shutil.copy2(path, backup)
-        payload = json.dumps(profiles, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        payload = json.dumps(values, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         descriptor, temporary = tempfile.mkstemp(
             prefix=f".{path.name}.", dir=path.parent, text=True
         )

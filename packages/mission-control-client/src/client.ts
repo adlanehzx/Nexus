@@ -7,8 +7,12 @@ import {
   createPaperAccountSchema,
   createPaperMarketSchema,
   createAgentSchema,
+  updateAgentProfileSchema,
+  testAgentProfileSchema,
+  agentTestResultSchema,
   updateAgentHealthSchema,
   missionControlHealthSchema,
+  runtimeSettingsSchema,
   missionSnapshotSchema,
   missionSubmissionSchema,
   paperAccountSchema,
@@ -28,8 +32,12 @@ import {
   type CreatePaperAccount,
   type CreatePaperMarket,
   type CreateAgent,
+  type UpdateAgentProfile,
+  type TestAgentProfile,
+  type AgentTestResult,
   type UpdateAgentHealth,
   type MissionControlHealth,
+  type RuntimeSettings,
   type MissionSnapshot,
   type MissionSubmission,
   type PaperAccount,
@@ -60,6 +68,8 @@ export interface MissionControlClientOptions {
 
 export interface MissionControlPort {
   health(signal?: AbortSignal): Promise<MissionControlHealth>;
+  settings(signal?: AbortSignal): Promise<RuntimeSettings>;
+  updateSettings(input: RuntimeSettings, signal?: AbortSignal): Promise<RuntimeSettings>;
   submitMission(
     input: SubmitMission,
     idempotencyKey: string,
@@ -69,6 +79,17 @@ export interface MissionControlPort {
   agents(signal?: AbortSignal): Promise<AgentRegistry>;
   registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry>;
+  updateAgentProfile(
+    id: string,
+    input: UpdateAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry>;
+  disableAgent(key: string, signal?: AbortSignal): Promise<AgentRegistry>;
+  testAgentProfile(
+    id: string,
+    input: TestAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentTestResult>;
   updateAgentHealth(
     key: string,
     input: UpdateAgentHealth,
@@ -105,6 +126,20 @@ export class MissionControlClient implements MissionControlPort {
 
   health(signal?: AbortSignal): Promise<MissionControlHealth> {
     return this.#request("GET", "/v1/health/ready", missionControlHealthSchema, undefined, signal);
+  }
+
+  settings(signal?: AbortSignal): Promise<RuntimeSettings> {
+    return this.#request("GET", "/v1/settings", runtimeSettingsSchema, undefined, signal);
+  }
+
+  updateSettings(input: RuntimeSettings, signal?: AbortSignal): Promise<RuntimeSettings> {
+    return this.#request(
+      "PUT",
+      "/v1/settings",
+      runtimeSettingsSchema,
+      runtimeSettingsSchema.parse(input),
+      signal,
+    );
   }
 
   submitMission(
@@ -156,6 +191,46 @@ export class MissionControlClient implements MissionControlPort {
       agentRegistrySchema,
       createAgentSchema.parse(input),
       signal,
+    );
+  }
+
+  updateAgentProfile(
+    id: string,
+    input: UpdateAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry> {
+    return this.#request(
+      "PUT",
+      `/v1/agents/profiles/${encodeURIComponent(id)}`,
+      agentRegistrySchema,
+      updateAgentProfileSchema.parse(input),
+      signal,
+    );
+  }
+
+  disableAgent(key: string, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "DELETE",
+      `/v1/agents/${encodeURIComponent(key)}`,
+      agentRegistrySchema,
+      undefined,
+      signal,
+    );
+  }
+
+  testAgentProfile(
+    id: string,
+    input: TestAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentTestResult> {
+    return this.#request(
+      "POST",
+      `/v1/agents/profiles/${encodeURIComponent(id)}/test`,
+      agentTestResultSchema,
+      testAgentProfileSchema.parse(input),
+      signal,
+      {},
+      input.timeout_seconds * 1_000 + 5_000,
     );
   }
 
@@ -293,8 +368,9 @@ export class MissionControlClient implements MissionControlPort {
     body?: unknown,
     signal?: AbortSignal,
     extraHeaders: Record<string, string> = {},
+    timeoutMs = this.#timeoutMs,
   ): Promise<T> {
-    const timeout = AbortSignal.timeout(this.#timeoutMs);
+    const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
     let response: Response;
     try {

@@ -20,6 +20,7 @@ def client(tmp_path: Path) -> TestClient:
             worker_enabled=False,
             worker_concurrency=2,
             profiles_file=profile_file,
+            runtime_settings_file=tmp_path / "runtime-settings.json",
         )
     )
     return TestClient(app)
@@ -39,6 +40,19 @@ def test_health_and_profiles(tmp_path: Path) -> None:
     with client(tmp_path) as api:
         assert api.get("/v1/health/live").json() == {"status": "ok"}
         assert api.get("/v1/profiles").json() == {"profiles": ["codex"]}
+
+
+def test_runtime_settings_are_validated_and_persisted(tmp_path: Path) -> None:
+    with client(tmp_path) as api:
+        settings = api.get("/v1/settings").json()
+        settings["max_attempts"] = 5
+        settings["quality_review"] = False
+        updated = api.put("/v1/settings", json=settings)
+        assert updated.status_code == 200
+        assert updated.json()["max_attempts"] == 5
+        assert api.get("/v1/settings").json()["quality_review"] is False
+    stored = json.loads((tmp_path / "runtime-settings.json").read_text(encoding="utf-8"))
+    assert stored["max_attempts"] == 5
 
 
 def test_submit_and_replay(tmp_path: Path) -> None:

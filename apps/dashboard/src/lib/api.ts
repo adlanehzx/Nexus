@@ -8,11 +8,9 @@ import type { HttpClient } from "@nexus/client-core";
  * rafraîchissement transparent, même trousseau — parce qu'un second mécanisme de
  * session serait un second endroit où se tromper sur l'expiration d'un jeton.
  *
- * Ce qui change tient en une phrase : **toutes les routes sont en lecture**. Il
- * n'existe aucune méthode d'écriture dans ce fichier, et ce n'est pas un oubli.
- * Superviser et administrer sont deux surfaces ; mettre une action destructrice
- * dans un écran qu'on consulte machinalement est une mauvaise idée qui ne se
- * remarque qu'une fois.
+ * Les mutations sont volontairement centralisées ici. Elles passent toutes par
+ * la session administrateur, les validations du cœur et, pour les opérations
+ * irréversibles, une confirmation explicite dans l'interface.
  *
  * Les types décrivent ce que le serveur envoie **réellement** — c'est-à-dire ce
  * qu'il a le droit d'envoyer. On n'y trouvera ni transcript, ni bloc de
@@ -268,7 +266,22 @@ export interface AgentRegistry {
     agent_kind: string;
     revision?: number | null;
     registered_as?: string | null;
+    command: string;
+    args: string[];
+    model: string | null;
+    permission_policy: "workspace";
   }[];
+}
+
+export interface RuntimeSettings {
+  task_timeout_seconds: number;
+  max_attempts: number;
+  retry_delay_seconds: number;
+  context_budget_chars: number;
+  quality_review: boolean;
+  research_priority: string[];
+  review_priority: string[];
+  synthesis_priority: string[];
 }
 
 export interface MemorySection {
@@ -346,6 +359,28 @@ export class DashboardApi {
     return this.#get(`/api/v1/dashboard/tasks/${taskId}`);
   }
 
+  cancelTask(taskId: string): Promise<{ cancelled: boolean }> {
+    return this.#request("POST", `/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
+      reason: "annulé depuis la supervision NEXUS",
+    });
+  }
+
+  trustDevice(deviceId: string): Promise<unknown> {
+    return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/trust`);
+  }
+
+  revokeDevice(deviceId: string): Promise<unknown> {
+    return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/revoke`);
+  }
+
+  updateDevicePermissions(deviceId: string, grantedPermissions: string[]): Promise<unknown> {
+    return this.#request(
+      "PATCH",
+      `/api/v1/devices/${encodeURIComponent(deviceId)}/permissions`,
+      { grantedPermissions },
+    );
+  }
+
   runs(): Promise<{ runs: AgentRunRow[] }> {
     return this.#get("/api/v1/dashboard/runs?limit=100");
   }
@@ -378,6 +413,14 @@ export class DashboardApi {
     return this.#get("/api/v1/orchestrator/agents");
   }
 
+  runtimeSettings(): Promise<RuntimeSettings> {
+    return this.#get("/api/v1/orchestrator/settings");
+  }
+
+  updateRuntimeSettings(input: RuntimeSettings): Promise<RuntimeSettings> {
+    return this.#request("PUT", "/api/v1/orchestrator/settings", input);
+  }
+
   registerAgent(input: { key: string; agent_profile_id: string }): Promise<AgentRegistry> {
     return this.#request("POST", "/api/v1/orchestrator/agents", input);
   }
@@ -391,12 +434,69 @@ export class DashboardApi {
     return this.#request("POST", "/api/v1/orchestrator/agents/create", input);
   }
 
+  updateAgentProfile(
+    id: string,
+    input: { name: string; command: string; args: string[]; model?: string | null },
+  ): Promise<AgentRegistry> {
+    return this.#request(
+      "PUT",
+      `/api/v1/orchestrator/agents/profiles/${encodeURIComponent(id)}`,
+      input,
+    );
+  }
+
+  disableAgent(key: string): Promise<AgentRegistry> {
+    return this.#request(
+      "DELETE",
+      `/api/v1/orchestrator/agents/${encodeURIComponent(key)}`,
+    );
+  }
+
+  testAgentProfile(
+    id: string,
+    input: { workspace: string; prompt: string; timeout_seconds: number },
+  ): Promise<{ ok: true; response: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/agents/profiles/${encodeURIComponent(id)}/test`,
+      input,
+    );
+  }
+
   memory(): Promise<MemorySection> {
     return this.#get("/api/v1/dashboard/memory");
   }
 
+  remember(input: {
+    content: string;
+    layer: "LONG_TERM" | "PREFERENCE";
+    tags: string[];
+    acknowledgedSensitive: boolean;
+  }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/memory", input);
+  }
+
+  forget(memoryId: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/memory/${encodeURIComponent(memoryId)}`);
+  }
+
   notifications(): Promise<NotificationSection> {
     return this.#get("/api/v1/dashboard/notifications?limit=100");
+  }
+
+  markNotificationRead(notificationId: string): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+    );
+  }
+
+  createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/mission-control/paper/accounts", input);
+  }
+
+  createPaperMarket(input: { question: string; close_at: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/mission-control/paper/markets", input);
   }
 
   security(): Promise<SecuritySection> {
@@ -416,7 +516,11 @@ export class DashboardApi {
     return this.#request("GET", path);
   }
 
-  async #request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  async #request<T>(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
     const response = await this.#session.authorizedRequest({ method, path, body });
 
     if (response.status === 403 || response.status === 404) {
