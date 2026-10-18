@@ -138,9 +138,14 @@ export class InMemoryTaskStore implements TaskStore {
     return Promise.resolve(mine.slice(0, limit).map((plan) => structuredClone(plan)));
   }
 
-  async listActive(): Promise<TaskPlan[]> {
-    return [...this.#plans.values()].filter(
-      (p) => p.status === "pending" || p.status === "running" || p.status === "waiting_for_confirmation"
+  listActive(): Promise<TaskPlan[]> {
+    return Promise.resolve(
+      [...this.#plans.values()].filter(
+        (plan) =>
+          plan.status === "pending" ||
+          plan.status === "running" ||
+          plan.status === "waiting_for_confirmation",
+      ),
     );
   }
 }
@@ -200,10 +205,10 @@ export class TaskCoordinator {
    */
   async recover(): Promise<void> {
     const activePlans = await this.#store.listActive();
-    
+
     for (const plan of activePlans) {
       let requiresSave = false;
-      
+
       // We process the steps to fail any that were "running" (security rule).
       for (const step of plan.steps) {
         if (step.status === "running") {
@@ -223,7 +228,7 @@ export class TaskCoordinator {
         // Evaluate the overall plan status.
         // A running plan with a failed step becomes partial/failed.
         if (plan.status === "running") {
-          const hasPending = plan.steps.some(s => s.status === "pending" || s.status === "ready");
+          const hasPending = plan.steps.some((s) => s.status === "pending" || s.status === "ready");
           plan.status = hasPending ? "partial" : "failed";
           plan.completedAt = this.#now().toISOString();
         }
@@ -231,22 +236,26 @@ export class TaskCoordinator {
       } else if (plan.status === "waiting_for_confirmation") {
         // We need to re-register the confirmation requirement.
         // Currently ConfirmationBroker handles runtime requests, but how to rehydrate?
-        // If the ConfirmationBroker is memory-only, we might just leave the task in "waiting_for_confirmation" 
+        // If the ConfirmationBroker is memory-only, we might just leave the task in "waiting_for_confirmation"
         // and let the client re-fetch it and confirm it. But if the client is not aware...
         // Actually, for simplicity, we just keep it waiting.
       }
-      
-      // Tasks that are pending or running (with no currently active/running steps) 
-      // will be naturally re-evaluated if we just let the event router or the next heartbeat 
+
+      // Tasks that are pending or running (with no currently active/running steps)
+      // will be naturally re-evaluated if we just let the event router or the next heartbeat
       // trigger them. But wait, `TaskCoordinator` uses EventRouter to listen for device events.
       // Do we need to actively push them to a queue here?
       // In a real system, the Coordinator would loop over `ready` steps and assign them.
       // We can emit a synthetic event or just call an internal evaluation loop if one exists.
-      // Wait, how does TaskCoordinator execute a plan? 
+      // Wait, how does TaskCoordinator execute a plan?
       // It calls `this.#evaluate(plan)`! We can just call it for active plans.
-      
+
       if (plan.status === "pending" || plan.status === "running") {
-        this.execute(plan).catch(() => {});
+        void this.execute(plan).catch((error: unknown) => {
+          process.emitWarning(
+            `Recovered task execution failed: ${error instanceof Error ? error.name : "unknown"}`,
+          );
+        });
       }
     }
   }
@@ -259,7 +268,11 @@ export class TaskCoordinator {
    * seule contrainte d'ordre.
    */
   async execute(plan: TaskPlan, options: ExecuteOptions = {}): Promise<TaskPlan> {
-    let current: TaskPlan = { ...plan, status: "running", startedAt: plan.startedAt ?? this.#now().toISOString() };
+    let current: TaskPlan = {
+      ...plan,
+      status: "running",
+      startedAt: plan.startedAt ?? this.#now().toISOString(),
+    };
     await this.#store.save(current);
 
     await this.#emit(current, "task.created", {

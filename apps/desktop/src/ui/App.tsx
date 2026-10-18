@@ -12,7 +12,7 @@ const TITRES: Record<Screen, string> = {
   chat: "Conversation", tasks: "Tâches", devices: "Appareils", notifications: "Notifications",
   memory: "Mémoire", worker: "Exécutant local", settings: "Réglages",
 };
-const NAVIGATION: Array<{ screen: Screen; icon: string }> = [
+const NAVIGATION: { screen: Screen; icon: string }[] = [
   { screen: "chat", icon: "◌" }, { screen: "tasks", icon: "↗" }, { screen: "devices", icon: "◇" },
   { screen: "notifications", icon: "◉" }, { screen: "memory", icon: "◫" }, { screen: "worker", icon: "⌁" }, { screen: "settings", icon: "⚙" },
 ];

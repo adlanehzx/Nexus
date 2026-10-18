@@ -1,3 +1,5 @@
+// Metro charge ce fichier de configuration en CommonJS.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getDefaultConfig } = require("expo/metro-config");
 
 /**

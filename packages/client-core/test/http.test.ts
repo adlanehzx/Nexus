@@ -157,6 +157,6 @@ describe("en-tête de contenu", () => {
       headers: { authorization: "Bearer jeton" },
     });
 
-    expect((vues[0]?.headers as Record<string, string>)["authorization"]).toBe("Bearer jeton");
+    expect((vues[0]?.headers as Record<string, string>).authorization).toBe("Bearer jeton");
   });
 });
