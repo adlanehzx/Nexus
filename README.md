@@ -108,11 +108,11 @@ Documentation complète : **[docs/README.md](docs/README.md)** — 16 documents 
 apps/                    clients
   mobile/                iPhone — Expo / React Native ✅
   desktop/               Windows — Vite + Tauri v2    ✅ (coquille Rust non compilée)
-  dashboard/             Supervision — Vite + React   ✅ lecture seule, rôle ADMIN
+  dashboard/             Administration — Vite/React ✅ rôle ADMIN, réglages persistants
   web/                   Vite + React                 → phase 8
 services/
   api/                   Fastify — REST v1, WS, auth  ✅
-  agent/                 Agent Runtime (BullMQ)       → phase 2
+  agent/                 Runtime ACP natif NEXUS      ✅
   browser-worker/        Python — browser-use         ✅
   windows-worker/        Exécutant Windows            ✅
   android-worker/        Exécutant Redmi Note 10S     ✅ (Kotlin non compilé)

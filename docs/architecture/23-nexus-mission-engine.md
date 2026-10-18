@@ -36,6 +36,12 @@ Le statut apparaît dans le tableau de bord sous « Mission Engine ». Les
 mutations paper-only vivent sous `/api/v1/mission-control/*` et exigent un
 compte administrateur NEXUS.
 
+Les réglages appliqués aux nouvelles missions sont conservés dans
+`services/mission-engine/config/runtime-settings.json`. L'onglet
+« Configuration » permet de modifier à chaud les délais, tentatives, délais de
+reprise, budgets de contexte, revue qualité et ordres de priorité. Chaque
+écriture est validée, atomique et précédée d'une copie `.bak-<UTC>`.
+
 ## Conversation NEXUS unique
 
 Le dashboard ouvre désormais sur une seule façade de conversation. Un message
@@ -107,6 +113,34 @@ un modèle différents. Aucun identifiant fournisseur n’est renvoyé au naviga
 Le profil créé est immédiatement ajouté au registre NEXUS. Un fournisseur entièrement
 nouveau exige toujours l’installation préalable de son adaptateur ACP local ; il
 peut ensuite être importé depuis la même page.
+
+Chaque profil peut être ouvert depuis le dashboard pour modifier son nom, son
+modèle, sa commande et ses arguments, puis exécuter un vrai message de test ACP.
+La désactivation le retire des nouvelles missions sans supprimer sa définition
+ni interrompre une mission en cours. Les permissions restent limitées au
+workspace et ne sont pas désactivables depuis l'interface. Les sessions et
+identifiants des fournisseurs restent dans leurs CLI locales ; aucun token
+n'est stocké ou affiché par le dashboard.
+
+## Administration depuis le dashboard
+
+La supervision et les actions administratives utilisent la même session NEXUS,
+mais toutes les mutations continuent de passer par leurs routes métier et leurs
+contrôles serveur :
+
+- approbation, permissions et révocation des appareils ;
+- annulation explicite d'une tâche active ;
+- création et oubli de souvenirs ;
+- lecture des notifications ;
+- création de portefeuilles et marchés de simulation ;
+- configuration, test et désactivation des agents ACP ;
+- réglages persistants de l'orchestrateur.
+
+Les vues d'historique — runs, sécurité et journaux — restent naturellement des
+vues de consultation. Les opérations irréversibles demandent une confirmation
+dans l'interface. Les onglets MCP et Browser Use n'inventent pas de service :
+ils affichent l'état réel des composants lorsqu'ils sont effectivement raccordés
+au cœur NEXUS.
 
 ## Surface exposée
 
