@@ -56,11 +56,13 @@ const mcp = new McpManager({
 });
 const browserConfiguration = await runtimeConfiguration.loadBrowser();
 const browserToken =
-  browserConfiguration?.enabled === true
+  browserConfiguration?.enabled === true && browserConfiguration.mode === "remote-worker"
     ? await vault.get(browserConfiguration.tokenRef)
     : undefined;
 const browser =
-  browserConfiguration?.enabled === true && browserToken !== undefined
+  browserConfiguration?.enabled === true &&
+  browserConfiguration.mode === "remote-worker" &&
+  browserToken !== undefined
     ? new BrowserWorkerClient({ baseUrl: browserConfiguration.baseUrl, token: browserToken })
     : undefined;
 

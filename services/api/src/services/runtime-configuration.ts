@@ -4,17 +4,48 @@ import { join } from "node:path";
 import { z } from "zod";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 
-const browserConfigSchema = z.object({
-  enabled: z.boolean(),
-  baseUrl: z
-    .string()
-    .url()
-    .refine((value) => {
-      const url = new URL(value);
-      return url.protocol === "https:" || ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-    }, "HTTP est réservé à la boucle locale"),
-  tokenRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
-});
+const loopbackHttpUrl = z
+  .string()
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  }, "L'adresse doit être une URL HTTP de boucle locale");
+
+const browserConfigSchema = z.discriminatedUnion("mode", [
+  z.object({
+    enabled: z.boolean(),
+    mode: z.literal("local-harness"),
+    cdpUrl: loopbackHttpUrl,
+  }),
+  z.object({
+    enabled: z.boolean(),
+    mode: z.literal("remote-worker"),
+    baseUrl: z
+      .string()
+      .url()
+      .refine((value) => {
+        const url = new URL(value);
+        return (
+          url.protocol === "https:" || ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+        );
+      }, "HTTP est réservé à la boucle locale"),
+    tokenRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
+  }),
+]);
+
+const persistedBrowserConfigSchema = z.union([
+  browserConfigSchema,
+  // Migration transparente de la configuration NEXUS 1.x. Le prochain
+  // enregistrement depuis le dashboard écrira explicitement le mode.
+  z
+    .object({
+      enabled: z.boolean(),
+      baseUrl: z.string().url(),
+      tokenRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
+    })
+    .transform((value) => ({ ...value, mode: "remote-worker" as const })),
+]);
 
 export type BrowserRuntimeConfig = z.infer<typeof browserConfigSchema>;
 
@@ -36,7 +67,7 @@ export class RuntimeConfigurationStore {
 
   async loadBrowser(): Promise<BrowserRuntimeConfig | null> {
     const raw = await this.#read("browser.json", null);
-    return raw === null ? null : browserConfigSchema.parse(raw);
+    return raw === null ? null : persistedBrowserConfigSchema.parse(raw);
   }
 
   async saveBrowser(config: BrowserRuntimeConfig): Promise<void> {

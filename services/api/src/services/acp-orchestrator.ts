@@ -116,6 +116,7 @@ Règles absolues :
 - produis un DAG sans cycle et sans dépendance inconnue ;
 - chaque instruction doit être autonome, vérifiable et ne contenir aucun secret ;
 - antigravity est privilégié pour recherche/exploration, claude pour analyse et critique, codex pour code/intégration ;
+- toute tâche qui exige un vrai navigateur, des clics, un formulaire, une session connectée ou du JavaScript doit être confiée à codex ou claude et mentionner l'utilisation de browser-harness local sans clé API ;
 - ne crée PAS de tâche de synthèse finale : NEXUS l'ajoute après validation ;
 - pour une demande simple, une seule tâche suffit.`;
     const messages: LlmMessage[] = [{ role: "user", content: [{ type: "text", text: objective }] }];
@@ -171,7 +172,7 @@ function ensureFinalSynthesis(
   // planificateur, sans devenir un point unique de panne pour chaque mission.
   const finalProfile = preferred(profiles, settings.synthesis_priority);
   const executionTasks: MissionTaskInput[] = planned.map((task) => {
-    const fallbacks = fallbackOrder(task.profile, profiles);
+    const fallbacks = fallbackOrder(task.profile, profiles, requiresBrowser(task.instruction));
     return {
       ...task,
       fallback_profiles: fallbacks,
@@ -223,14 +224,19 @@ function fallbackPlan(
   profiles: string[],
   settings: RuntimeSettings,
 ): z.infer<typeof plannedMissionSchema> {
-  const researcher = preferred(profiles, settings.research_priority);
+  const browserRequired = requiresBrowser(objective);
+  const researcher = browserRequired
+    ? preferred(profiles, ["codex", "claude"])
+    : preferred(profiles, settings.research_priority);
   const critic = preferred(profiles, settings.review_priority);
   const tasks: z.infer<typeof plannedTaskSchema>[] = [
     {
       key: "investigate",
       profile: researcher,
       depends_on: [],
-      instruction: `Analyse cette mission, rassemble les faits nécessaires et propose une solution vérifiable. N'expose aucun identifiant.\n\n${objective}`,
+      instruction: browserRequired
+        ? `Exécute cette mission avec le navigateur local officiel browser-harness, sans Browser Use Cloud ni clé API. Vérifie le résultat dans la page et n'expose aucun identifiant, cookie ou token.\n\n${objective}`
+        : `Analyse cette mission, rassemble les faits nécessaires et propose une solution vérifiable. N'expose aucun identifiant.\n\n${objective}`,
     },
   ];
   if (profiles.length > 1) {
@@ -248,11 +254,20 @@ function preferred(profiles: string[], order: string[]): string {
   return order.find((candidate) => profiles.includes(candidate)) ?? profiles[0] ?? "";
 }
 
-function fallbackOrder(primary: string, profiles: string[]): string[] {
+function fallbackOrder(primary: string, profiles: string[], browserRequired = false): string[] {
   const preferredOrder = ["claude", "antigravity", "codex"];
   return [...preferredOrder, ...profiles].filter(
     (candidate, index, values) =>
-      candidate !== primary && profiles.includes(candidate) && values.indexOf(candidate) === index,
+      candidate !== primary &&
+      profiles.includes(candidate) &&
+      (!browserRequired || candidate === "codex" || candidate === "claude") &&
+      values.indexOf(candidate) === index,
+  );
+}
+
+function requiresBrowser(objective: string): boolean {
+  return /\b(browser|navigateur|naviguer|site\s+web|page\s+web|cliquer|formulaire|connexion|connecte(?:e)?|login|scrap(?:e|er|ing)|chrom(?:e|ium)|interface\s+web|ui\s+web)\b/i.test(
+    objective,
   );
 }
 

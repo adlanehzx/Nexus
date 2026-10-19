@@ -6,14 +6,23 @@ import { ok, okSchema } from "../../lib/response.js";
 import { NotFoundError } from "../../services/stores.js";
 import { BrowserWorkerClient } from "@nexus/browser-client";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
+import { BrowserHarnessClient } from "../../services/browser-harness.js";
 
 const secretNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const vaultReferenceSchema = z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/);
-const browserConfigurationSchema = z.object({
-  enabled: z.boolean(),
-  baseUrl: z.string().url(),
-  tokenRef: vaultReferenceSchema,
-});
+const browserConfigurationSchema = z.discriminatedUnion("mode", [
+  z.object({
+    enabled: z.boolean(),
+    mode: z.literal("local-harness"),
+    cdpUrl: z.string().url(),
+  }),
+  z.object({
+    enabled: z.boolean(),
+    mode: z.literal("remote-worker"),
+    baseUrl: z.string().url(),
+    tokenRef: vaultReferenceSchema,
+  }),
+]);
 
 /**
  * Le tableau de bord de supervision.
@@ -563,9 +572,40 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       const browser = app.services.browser;
       const configuration = (await app.services.runtimeConfiguration?.loadBrowser()) ?? null;
       const tokenConfigured =
-        configuration === null
+        configuration === null || configuration.mode === "local-harness"
           ? false
           : (await app.services.vault?.get(configuration.tokenRef)) !== undefined;
+      if (configuration?.enabled === true && configuration.mode === "local-harness") {
+        const harness = new BrowserHarnessClient({ cdpUrl: configuration.cdpUrl });
+        try {
+          const health = await harness.health();
+          return ok(
+            {
+              configured: true,
+              reachable: health.healthy,
+              detail: health.healthy
+                ? "harness local connecté"
+                : "harness installé, navigateur non connecté",
+              health,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        } catch (cause) {
+          return ok(
+            {
+              configured: true,
+              reachable: false,
+              detail: cause instanceof Error ? cause.message : "harness local indisponible",
+              health: null,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        }
+      }
       if (browser === undefined) {
         return ok(
           {
@@ -623,6 +663,15 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       if (store === undefined || vault === undefined)
         throw new Error("Configuration indisponible.");
       const parsed = browserConfigurationSchema.parse(request.body);
+      if (parsed.mode === "local-harness") {
+        const url = new URL(parsed.cdpUrl);
+        if (url.protocol !== "http:" || !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+          throw new Error("Le CDP Browser Use doit rester sur la boucle locale.");
+        }
+        await store.saveBrowser(parsed);
+        app.services.setBrowser(undefined);
+        return ok({ saved: true }, request.id);
+      }
       const url = new URL(parsed.baseUrl);
       if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
         throw new Error("HTTP est réservé à la boucle locale.");
@@ -644,6 +693,11 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     "/dashboard/browser/test",
     { preHandler: app.requireAdmin, schema: { tags: ["dashboard"] } },
     async (request) => {
+      const configuration = await app.services.runtimeConfiguration?.loadBrowser();
+      if (configuration?.enabled === true && configuration.mode === "local-harness") {
+        const harness = new BrowserHarnessClient({ cdpUrl: configuration.cdpUrl });
+        return ok({ health: await harness.connect() }, request.id);
+      }
       const browser = app.services.browser;
       if (browser === undefined) throw new Error("Worker navigateur non configuré.");
       return ok({ health: await browser.health() }, request.id);

@@ -13,6 +13,7 @@ Environment=NEXUS_ENGINE_PROFILES_FILE=/home/adlane/Documents/Codex/2026-10-11/t
 Environment=NEXUS_ENGINE_RUNTIME_SETTINGS_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/runtime-settings.json
 Environment=NEXUS_ENGINE_WORKER_ENABLED=true
 Environment=NEXUS_ENGINE_WORKER_CONCURRENCY=2
+Environment=BU_CDP_URL=http://127.0.0.1:19222
 Environment=PATH=/home/adlane/.local/bin:/home/adlane/.local/share/mise/shims:/usr/local/bin:/usr/bin
 ExecStartPre=/home/adlane/.local/share/mise/shims/pnpm --dir /home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit --filter @nexus/agent build
 ExecStart=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/.venv/bin/nexus-mission-engine

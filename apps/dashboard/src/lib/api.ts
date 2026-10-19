@@ -219,7 +219,10 @@ export interface BrowserSection {
   reachable: boolean;
   detail: string;
   health: unknown;
-  configuration: { enabled: boolean; baseUrl: string; tokenRef: string } | null;
+  configuration:
+    | { enabled: boolean; mode: "local-harness"; cdpUrl: string }
+    | { enabled: boolean; mode: "remote-worker"; baseUrl: string; tokenRef: string }
+    | null;
   tokenConfigured: boolean;
 }
 
@@ -454,11 +457,11 @@ export class DashboardApi {
     return this.#get("/api/v1/dashboard/browser");
   }
 
-  configureBrowser(input: {
-    enabled: boolean;
-    baseUrl: string;
-    tokenRef: string;
-  }): Promise<unknown> {
+  configureBrowser(
+    input:
+      | { enabled: boolean; mode: "local-harness"; cdpUrl: string }
+      | { enabled: boolean; mode: "remote-worker"; baseUrl: string; tokenRef: string },
+  ): Promise<unknown> {
     return this.#request("PUT", "/api/v1/dashboard/browser/configuration", input);
   }
 

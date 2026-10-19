@@ -904,6 +904,8 @@ export function Mcp({ api }: { api: DashboardApi }) {
 
 export function Browser({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.browser());
+  const [mode, setMode] = useState<"local-harness" | "remote-worker">("local-harness");
+  const [cdpUrl, setCdpUrl] = useState("http://127.0.0.1:19222");
   const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8100");
   const [tokenRef, setTokenRef] = useState("vault://nexus/browser-worker-token");
   const [enabled, setEnabled] = useState(false);
@@ -913,8 +915,12 @@ export function Browser({ api }: { api: DashboardApi }) {
   useEffect(() => {
     const configuration = state.data?.configuration;
     if (configuration === null || configuration === undefined) return;
-    setBaseUrl(configuration.baseUrl);
-    setTokenRef(configuration.tokenRef);
+    setMode(configuration.mode);
+    if (configuration.mode === "local-harness") setCdpUrl(configuration.cdpUrl);
+    else {
+      setBaseUrl(configuration.baseUrl);
+      setTokenRef(configuration.tokenRef);
+    }
     setEnabled(configuration.enabled);
   }, [state.data]);
 
@@ -936,24 +942,52 @@ export function Browser({ api }: { api: DashboardApi }) {
       {message === null ? null : <p className="banniere succes">{message}</p>}
       {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <section className="settings-panel">
-        <h3>Configurer le worker navigateur</h3>
+        <h3>Configurer Browser Use</h3>
+        <p className="faible">
+          Le mode local utilise le harness officiel avec Codex ou Claude comme cerveau. Il ne
+          demande aucune clé API et conserve un profil Chromium NEXUS séparé.
+        </p>
         <div className="settings-grid">
           <label className="settings-wide">
-            URL du worker
-            <input
-              className="champ mono"
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
-            />
+            Mode
+            <select
+              className="champ"
+              value={mode}
+              onChange={(event) => setMode(event.target.value as "local-harness" | "remote-worker")}
+            >
+              <option value="local-harness">Navigateur local — sans clé API</option>
+              <option value="remote-worker">Worker autonome — fournisseur LLM requis</option>
+            </select>
           </label>
-          <label className="settings-wide">
-            Référence du jeton
-            <input
-              className="champ mono"
-              value={tokenRef}
-              onChange={(event) => setTokenRef(event.target.value)}
-            />
-          </label>
+          {mode === "local-harness" ? (
+            <label className="settings-wide">
+              URL CDP locale
+              <input
+                className="champ mono"
+                value={cdpUrl}
+                onChange={(event) => setCdpUrl(event.target.value)}
+              />
+            </label>
+          ) : (
+            <>
+              <label className="settings-wide">
+                URL du worker
+                <input
+                  className="champ mono"
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+              </label>
+              <label className="settings-wide">
+                Référence du jeton
+                <input
+                  className="champ mono"
+                  value={tokenRef}
+                  onChange={(event) => setTokenRef(event.target.value)}
+                />
+              </label>
+            </>
+          )}
           <label className="settings-wide check-label">
             <input
               type="checkbox"
@@ -969,7 +1003,12 @@ export function Browser({ api }: { api: DashboardApi }) {
             type="button"
             onClick={() =>
               act(
-                () => api.configureBrowser({ enabled, baseUrl, tokenRef }),
+                () =>
+                  api.configureBrowser(
+                    mode === "local-harness"
+                      ? { enabled, mode, cdpUrl }
+                      : { enabled, mode, baseUrl, tokenRef },
+                  ),
                 "Configuration navigateur enregistrée.",
               )
             }
@@ -991,16 +1030,18 @@ export function Browser({ api }: { api: DashboardApi }) {
             <div className="mesures">
               <Metric value={data.configured ? "oui" : "non"} label="configuré" />
               <Metric
-                value={data.reachable ? "joignable" : "injoignable"}
-                label="worker navigateur"
+                value={data.reachable ? "prêt" : "injoignable"}
+                label="navigateur"
                 alert={data.configured && !data.reachable}
               />
             </div>
 
             <p className="faible">{data.detail}</p>
-            <p className="faible">
-              Secret : {data.tokenConfigured ? "présent dans le trousseau" : "absent"}
-            </p>
+            {data.configuration?.mode === "remote-worker" ? (
+              <p className="faible">
+                Secret : {data.tokenConfigured ? "présent dans le trousseau" : "absent"}
+              </p>
+            ) : null}
 
             {data.health === null ? null : (
               <>

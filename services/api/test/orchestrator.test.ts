@@ -146,6 +146,24 @@ describe("façade orchestrateur NEXUS", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("route une mission navigateur vers un agent équipé du harness local", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: {
+        message: "Ouvre le navigateur, visite example.com et vérifie le titre de la page.",
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitted?.tasks[0]).toMatchObject({
+      profile: "codex",
+      fallback_profiles: ["claude"],
+    });
+    expect(submitted?.tasks[0]?.instruction).toContain("browser-harness");
+  });
+
   it("permet à l'administrateur de consulter et enregistrer les profils ACP NEXUS", async () => {
     const listed = await harness.app.inject({
       method: "GET",

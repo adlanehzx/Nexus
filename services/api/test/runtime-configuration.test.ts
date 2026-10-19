@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -34,16 +34,35 @@ describe("configuration administrable NEXUS", () => {
     ]);
     await store.saveBrowser({
       enabled: false,
-      baseUrl: "http://127.0.0.1:8100",
-      tokenRef: "vault://nexus/browser-worker-token",
+      mode: "local-harness",
+      cdpUrl: "http://127.0.0.1:19222",
     });
     await store.saveSecretNames(["mcp-token", "browser-worker-token"]);
 
     expect((await store.loadMcp())[0]?.name).toBe("filesystem");
-    expect((await store.loadBrowser())?.baseUrl).toBe("http://127.0.0.1:8100");
+    expect((await store.loadBrowser())?.mode).toBe("local-harness");
     expect(await store.listSecretNames()).toEqual(["browser-worker-token", "mcp-token"]);
     expect(await readFile(join(directory, "secret-refs.json"), "utf8")).not.toContain(
       "valeur-secrète",
     );
+  });
+
+  it("migre en lecture la configuration historique du worker navigateur", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-legacy-"));
+    const store = new RuntimeConfigurationStore(directory);
+    await store.saveBrowser({
+      enabled: false,
+      mode: "remote-worker",
+      baseUrl: "http://127.0.0.1:8100",
+      tokenRef: "vault://nexus/browser-worker-token",
+    });
+    const current = JSON.parse(await readFile(join(directory, "browser.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete current.mode;
+    await writeFile(join(directory, "browser.json"), JSON.stringify(current));
+
+    expect(await store.loadBrowser()).toMatchObject({ mode: "remote-worker", enabled: false });
   });
 });

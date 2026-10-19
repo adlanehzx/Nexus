@@ -151,6 +151,21 @@ profils ACP et l'intégrité du journal d'audit.
 Architecture et limites de sécurité :
 [`docs/architecture/23-nexus-mission-engine.md`](docs/architecture/23-nexus-mission-engine.md).
 
+### Navigateur autonome sans clé API
+
+NEXUS utilise le `browser-harness` officiel de Browser Use avec un Chromium local dédié. Codex ou
+Claude fournit le raisonnement via l'abonnement ACP déjà connecté : aucune clé Gemini, OpenAI,
+Anthropic ou Browser Use n'est nécessaire. Installation reproductible :
+
+```bash
+./scripts/setup-browser-use.sh
+```
+
+Le script installe la version épinglée du harness, désactive télémétrie et enregistrements, crée
+un profil Chromium séparé, enregistre les skills Codex/Claude et active le service systemd user.
+L'onglet **Browser Use** du dashboard expose ensuite le diagnostic réel. Les actions sont
+sérialisées sur ce navigateur local ; le parallélisme isolé de Browser Use Cloud n'est pas activé.
+
 Les paquets marqués « contrats seuls » ne contiennent **que** des types et des schémas — aucune
 implémentation fictive. Ils fixent la forme sur laquelle les phases suivantes s'accorderont.
 

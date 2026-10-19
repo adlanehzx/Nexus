@@ -1,5 +1,22 @@
 # 18 — Browser Use (implémenté)
 
+## 0. Chemin local recommandé, sans clé API
+
+Pour les agents ACP Codex et Claude, NEXUS réutilise désormais le
+[`browser-harness`](https://github.com/browser-use/browser-harness) officiel. Le modèle ACP pilote
+directement Chromium via CDP : le harness ne contient pas de seconde boucle LLM et ne demande donc
+aucune clé API. Un service systemd user démarre un profil Chromium NEXUS séparé sur la boucle locale
+`127.0.0.1:19222`; l'accès au profil Chromium personnel n'est jamais accordé implicitement.
+
+Le planificateur route les missions de navigation vers Codex, puis Claude en fallback, et exclut
+Antigravity des fallbacks navigateur tant que son adaptateur ACP n'offre pas cette intégration de
+façon démontrée. Le harness local est une voie partagée : les actions navigateur sont sérialisées,
+alors que les autres tâches peuvent rester parallèles.
+
+Le worker Python décrit dans le reste de ce document reste disponible comme mode avancé autonome.
+Il possède sa propre boucle `browser-use` et exige donc un fournisseur LLM ; il n'est pas utilisé
+par la configuration locale sans clé.
+
 Décrit l'intégration **telle qu'elle est construite**. Le document
 [05 — Browser Use worker](05-browser-use.md) en pose la conception ; celui-ci
 fait foi pour le code.
@@ -106,11 +123,12 @@ bloqué alors qu'il avance. Les événements du worker (`navigation`, `action`,
 
 ## 8. Administration locale
 
-L'onglet Browser Use configure l'URL interne, l'activation et une référence
-`vault://nexus/...`. Le jeton est résolu dans le trousseau Linux par l'API et
-n'est jamais renvoyé au navigateur. HTTP n'est accepté que pour `localhost`,
-`127.0.0.1` ou `::1`; toute URL distante doit utiliser HTTPS. Le bouton de test
-appelle la vraie sonde `/v1/health` du worker.
+L'onglet Browser Use propose deux modes. Le mode recommandé « navigateur local » configure l'URL
+CDP de boucle locale et appelle `browser-harness doctor --json --require-existing-daemon`; le test
+établit réellement la connexion sans renvoyer le titre, l'URL ou le contenu des onglets à l'API.
+Le mode avancé « worker autonome » conserve l'URL interne et la référence `vault://nexus/...` : le
+jeton est résolu dans le trousseau Linux et n'est jamais renvoyé au navigateur. HTTP n'est accepté
+que pour `localhost`, `127.0.0.1` ou `::1`; toute URL distante doit utiliser HTTPS.
 
 ## 9. Vérification croisée TypeScript ↔ Python
 
