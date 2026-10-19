@@ -464,6 +464,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except NotFoundError as exc:
             raise HTTPException(404, "mission not found") from exc
 
+    @app.get("/v1/missions")
+    def list_missions(
+        limit: int = 50, external_prefix: str | None = None
+    ) -> dict[str, Any]:
+        return {"missions": repository.missions(limit, external_prefix)}
+
     @app.post("/v1/research-missions")
     def submit_research_mission(
         request: ResearchMissionRequest,

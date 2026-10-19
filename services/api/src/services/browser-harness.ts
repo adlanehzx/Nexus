@@ -44,11 +44,29 @@ export class BrowserHarnessClient {
     ) {
       throw new Error("Diagnostic Browser Use invalide.");
     }
+
+    // `doctor` compte les connexions CDP actives a l'instant T. Or le client
+    // CLI ferme normalement la sienne a la fin de chaque commande : un
+    // navigateur parfaitement joignable et inactif etait donc presente comme
+    // indisponible. Une sonde reelle, dont la sortie n'est jamais journalisee,
+    // mesure ici la capacite qui nous interesse vraiment.
+    if (!parsed.daemon.browser_ready) {
+      try {
+        await this.#run([], "print(page_info())\n", 8_000);
+        return {
+          ...parsed,
+          healthy: true,
+          chrome_running: true,
+          daemon: { ...parsed.daemon, browser_ready: true },
+        };
+      } catch {
+        // Le rapport initial reste le diagnostic le plus utile en cas d'echec.
+      }
+    }
     return parsed;
   }
 
   async connect(): Promise<BrowserHarnessHealth> {
-    await this.#run([], "print(page_info())\n", 30_000);
     return this.health();
   }
 

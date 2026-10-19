@@ -51,6 +51,19 @@ def test_submission_is_idempotent(repository: MissionRepository) -> None:
     assert replayed_again is True
 
 
+def test_recent_missions_include_dependencies_and_attempts(repository: MissionRepository) -> None:
+    mission_id, _ = repository.submit(spec(), "observable-request")
+    lease = repository.acquire("worker-a")
+    assert lease is not None
+
+    visible = repository.missions(10, "mission-")
+
+    assert [mission["id"] for mission in visible] == [mission_id]
+    assert visible[0]["tasks"][1]["depends_on"] == ["produce"]
+    assert visible[0]["tasks"][0]["attempts"][0]["conversation_id"] == lease.conversation_id
+    assert repository.missions(10, "another-owner-") == []
+
+
 def test_idempotency_conflict(repository: MissionRepository) -> None:
     repository.submit(spec(), "request-1")
     changed = spec()

@@ -22,6 +22,7 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
+import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { ClientChannel } from "./ws/client-channel.js";
 import { WorkerChannel } from "./ws/worker-channel.js";
 import { websocketRoutes } from "./ws/routes.js";
@@ -39,6 +40,7 @@ import {
 import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { missionControlRoutes } from "./routes/v1/mission-control.js";
 import { orchestratorRoutes } from "./routes/v1/orchestrator.js";
+import { agentCoreRoutes } from "./routes/v1/agent-core.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -141,6 +143,7 @@ export async function buildApp(options: BuildAppOptions) {
       },
       users: new PrismaUserStore(prisma),
       sessions: new PrismaSessionStore(prisma),
+      conversations: new PrismaConversationStore(prisma),
       deviceStore: new PrismaDeviceStore(prisma),
       taskStore: new PrismaTaskStore(prisma),
     });
@@ -234,6 +237,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(dashboardRoutes);
       await v1.register(missionControlRoutes);
       await v1.register(orchestratorRoutes);
+      await v1.register(agentCoreRoutes);
     },
     { prefix: "/api/v1" },
   );

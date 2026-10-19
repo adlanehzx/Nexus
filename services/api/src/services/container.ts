@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { TokenService, type ScryptParams } from "@nexus/auth";
 import type { LLMProvider } from "@nexus/llm";
 import {
@@ -20,7 +21,12 @@ import {
   PermissionService,
   ToolRegistry,
 } from "@nexus/tools";
-import { InMemoryAgentRunStore } from "@nexus/agent-core";
+import {
+  AgentOrchestrator,
+  InMemoryAgentRunStore,
+  type AgentRunStore,
+  type AgentState,
+} from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
 import { createBrowserTools, type BrowserWorkerClient } from "@nexus/browser-client";
 import type { MissionControlPort } from "@nexus/mission-control-client";
@@ -81,6 +87,7 @@ export interface ServiceContainerOptions {
   credentials?: DeviceCredentialProvider;
   taskStore?: import("@nexus/devices").TaskStore;
   deviceStore?: import("@nexus/devices").DeviceStore;
+  runStore?: QueryableAgentRunStore;
 
   /**
    * Vérificateur de signature d'appareil.
@@ -123,6 +130,8 @@ export interface ServiceContainerOptions {
   missionControl?: MissionControlPort;
   /** Version affichee par le tableau de bord. */
   apiVersion?: string;
+  /** Répertoire local privé pour les journaux rédigés et bornés. */
+  observabilityDirectory?: string;
   /** Provider LLM pour le TaskPlanner. */
   llmProvider?: LLMProvider;
 }
@@ -163,7 +172,9 @@ export class ServiceContainer {
   // remplira, et le tableau de bord lit deja les bons objets. Un magasin vide
   // est honnete ; un magasin invente ne l'aurait pas ete.
   readonly toolRegistry: ToolRegistry;
-  readonly runStore: InMemoryAgentRunStore;
+  readonly runStore: QueryableAgentRunStore;
+  /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
+  readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
   readonly logs: LogBuffer;
   readonly dashboard: DashboardService;
@@ -287,8 +298,17 @@ export class ServiceContainer {
     // directement depuis une route.
     // Le journal de securite doit exister avant le service de memoire, qui lui
     // remonte ses refus.
-    this.securityLog = new SecurityLog({ now });
-    this.logs = new LogBuffer();
+    this.securityLog = new SecurityLog({
+      now,
+      ...(options.observabilityDirectory === undefined
+        ? {}
+        : { filePath: resolve(options.observabilityDirectory, "security.jsonl") }),
+    });
+    this.logs = new LogBuffer(
+      options.observabilityDirectory === undefined
+        ? {}
+        : { filePath: resolve(options.observabilityDirectory, "application.jsonl") },
+    );
 
     this.memoryService = new MemoryService({
       provider: this.memory,
@@ -373,7 +393,18 @@ export class ServiceContainer {
 
     // ── Observabilite ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
-    this.runStore = new InMemoryAgentRunStore();
+    this.runStore = options.runStore ?? new InMemoryAgentRunStore();
+    this.agentCore =
+      options.llmProvider === undefined
+        ? undefined
+        : new AgentOrchestrator({
+            llm: options.llmProvider,
+            registry: this.toolRegistry,
+            permissions: this.permissions,
+            confirmations: this.confirmations,
+            context: this.context,
+            store: this.runStore,
+          });
     this.mcp = options.mcp;
     this.browser = undefined;
     this.setBrowser(options.browser);
@@ -413,6 +444,10 @@ export class ServiceContainer {
   async permissionsFor(userId: string): Promise<string[]> {
     return [...(await this.permissions.listGranted(userId))];
   }
+}
+
+export interface QueryableAgentRunStore extends AgentRunStore {
+  listAll(): Promise<AgentState[]>;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-core";
-import type { HttpClient } from "@nexus/client-core";
+import type { HttpClient, SecureStorage } from "@nexus/client-core";
 
 /**
  * Le client du tableau de bord.
@@ -99,6 +99,7 @@ export interface TaskRow {
   completedAt: string | null;
   progressPercent: number;
   steps: TaskStepRow[];
+  source: "device" | "acp";
 }
 
 export interface TaskDetail extends TaskRow {
@@ -164,6 +165,7 @@ export interface ToolRow {
   riskLevel: string;
   requiredPermissions: string[];
   allowed: boolean;
+  source: "native" | "browser" | "acp";
 }
 
 export interface McpSection {
@@ -267,6 +269,34 @@ export interface MissionControlSection {
     error_code: string | null;
     created_at: string;
     updated_at: string;
+  }[];
+  missions: {
+    id: string;
+    title: string;
+    state: string;
+    created_at: string;
+    updated_at: string;
+    tasks: {
+      id: string;
+      task_key: string;
+      profile_key: string;
+      state: string;
+      result_json: string | null;
+      error_json: string | null;
+      created_at: string;
+      updated_at: string;
+      depends_on: string[];
+      attempts: {
+        id: string;
+        attempt_no: number;
+        state: string;
+        conversation_id: string;
+        started_at: string;
+        updated_at: string;
+        finished_at: string | null;
+        error_json: string | null;
+      }[];
+    }[];
   }[];
 }
 
@@ -643,12 +673,44 @@ function messageOf(body: unknown): string {
 /**
  * Assemble une session pour le tableau de bord.
  *
- * Le coffre est **volatil** : les jetons vivent en mémoire et disparaissent au
- * rechargement. Un tableau de bord d'administration est précisément l'endroit où
- * l'on ne veut pas d'un jeton de longue durée lisible par n'importe quel script
- * de la page. Se reconnecter coûte dix secondes.
+ * Les jetons sont limités à la session de l'onglet : ils survivent à un
+ * rafraîchissement, mais disparaissent à sa fermeture. Aucun jeton n'est écrit
+ * dans le stockage permanent du navigateur.
  */
-export function createSession(baseUrl: string): SessionManager {
+export function createSession(baseUrl: string, onSignedOut?: (reason: string) => void): SessionManager {
   const http: HttpClient = new FetchHttpClient(baseUrl);
-  return new SessionManager({ http, storage: new VolatileStorage() });
+  return new SessionManager({
+    http,
+    storage: new TabSessionStorage(),
+    ...(onSignedOut === undefined ? {} : { onSignedOut }),
+  });
+}
+
+class TabSessionStorage implements SecureStorage {
+  readonly #fallback = new VolatileStorage();
+
+  async get(key: string): Promise<string | undefined> {
+    try {
+      return window.sessionStorage.getItem(key) ?? undefined;
+    } catch {
+      return this.#fallback.get(key);
+    }
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      await this.#fallback.set(key, value);
+    }
+  }
+
+  async remove(key: string): Promise<void> {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Le stockage peut être indisponible ; le repli est vidé ci-dessous.
+    }
+    await this.#fallback.remove(key);
+  }
 }

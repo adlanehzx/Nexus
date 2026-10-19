@@ -118,12 +118,13 @@ describe("aucun secret embarqué", () => {
     }
   });
 
-  it("les jetons ne sont pas écrits dans le stockage du navigateur", () => {
-    // Un tableau de bord d'administration est précisément l'endroit où l'on ne
-    // veut pas d'un jeton de longue durée lisible par n'importe quel script.
+  it("les jetons ne sont jamais écrits dans un stockage navigateur permanent", () => {
+    // La session de l'onglet permet de survivre à F5, mais la fermeture de
+    // l'onglet efface les jetons. Le stockage permanent reste interdit.
     for (const fichier of sources) {
       expect(fichier.code, fichier.chemin).not.toContain("localStorage");
-      expect(fichier.code, fichier.chemin).not.toContain("sessionStorage");
     }
+    const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+    expect(api).toContain("sessionStorage");
   });
 });

@@ -977,15 +977,79 @@ class MissionRepository:
 
     def mission(self, mission_id: str) -> dict[str, Any]:
         with self.db.connect() as connection:
-            mission = connection.execute(
-                "SELECT * FROM missions WHERE id=?", (mission_id,)
-            ).fetchone()
-            if not mission:
-                raise NotFoundError(mission_id)
-            tasks = connection.execute(
-                "SELECT * FROM tasks WHERE mission_id=? ORDER BY ordinal", (mission_id,)
+            return self._mission_snapshot(connection, mission_id)
+
+    def missions(
+        self, limit: int = 50, external_prefix: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Recent durable missions, including task/attempt observability.
+
+        ``external_prefix`` is applied in SQL so an API caller never receives
+        another NEXUS user's mission and then filters it in application code.
+        """
+        bounded = max(1, min(limit, 200))
+        with self.db.connect() as connection:
+            if external_prefix is None:
+                rows = connection.execute(
+                    "SELECT id FROM missions ORDER BY created_at DESC LIMIT ?",
+                    (bounded,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT id FROM missions
+                    WHERE external_key LIKE ? ESCAPE '\\'
+                    ORDER BY created_at DESC LIMIT ?
+                    """,
+                    (self._like_prefix(external_prefix), bounded),
+                ).fetchall()
+            return [self._mission_snapshot(connection, str(row["id"])) for row in rows]
+
+    @staticmethod
+    def _like_prefix(value: str) -> str:
+        escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return f"{escaped}%"
+
+    @staticmethod
+    def _mission_snapshot(
+        connection: sqlite3.Connection, mission_id: str
+    ) -> dict[str, Any]:
+        mission = connection.execute(
+            "SELECT * FROM missions WHERE id=?", (mission_id,)
+        ).fetchone()
+        if not mission:
+            raise NotFoundError(mission_id)
+        tasks = connection.execute(
+            "SELECT * FROM tasks WHERE mission_id=? ORDER BY ordinal", (mission_id,)
+        ).fetchall()
+        snapshots: list[dict[str, Any]] = []
+        for task in tasks:
+            task_id = str(task["id"])
+            dependencies = connection.execute(
+                """
+                SELECT parent.task_key
+                FROM task_dependencies dependency
+                JOIN tasks parent ON parent.id=dependency.depends_on_task_id
+                WHERE dependency.task_id=? ORDER BY parent.ordinal
+                """,
+                (task_id,),
             ).fetchall()
-            return {**dict(mission), "tasks": [dict(row) for row in tasks]}
+            attempts = connection.execute(
+                """
+                SELECT id,attempt_no,state,conversation_id,started_at,updated_at,
+                       finished_at,error_json
+                FROM attempts WHERE task_id=? ORDER BY attempt_no
+                """,
+                (task_id,),
+            ).fetchall()
+            snapshots.append(
+                {
+                    **dict(task),
+                    "depends_on": [str(row["task_key"]) for row in dependencies],
+                    "attempts": [dict(row) for row in attempts],
+                }
+            )
+        return {**dict(mission), "tasks": snapshots}
 
     def _lease_update(self, lease: Lease, state: str) -> None:
         with self.db.transaction(immediate=True) as connection:

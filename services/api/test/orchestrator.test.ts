@@ -34,6 +34,8 @@ const engine = {
       title: submitted?.title ?? "Mission",
       workspace: submitted?.workspace ?? "/tmp",
       state: "succeeded",
+      created_at: "2026-10-19T10:00:00+00:00",
+      updated_at: "2026-10-19T10:01:00+00:00",
       tasks: [
         {
           id: "44444444-4444-4444-8444-444444444444",
@@ -44,10 +46,15 @@ const engine = {
           state: "succeeded",
           result_json: '{"response":"Réponse finale vérifiée"}',
           error_json: null,
+          created_at: "2026-10-19T10:00:00+00:00",
+          updated_at: "2026-10-19T10:01:00+00:00",
+          depends_on: [],
+          attempts: [],
         },
       ],
     }),
   ),
+  listMissions: vi.fn().mockResolvedValue([]),
   agents: vi.fn().mockResolvedValue({ worker_enabled: true, configured: [], available: [] }),
   registerAgent: vi.fn().mockResolvedValue({
     worker_enabled: true,
@@ -144,6 +151,28 @@ describe("façade orchestrateur NEXUS", () => {
       payload: { message: "test" },
     });
     expect(response.statusCode).toBe(401);
+  });
+
+  it("injecte la mémoire persistante dans les tâches ACP sans la traiter comme une instruction", async () => {
+    await harness.services.memoryService.remember({
+      userId: account.userId,
+      content: "Toujours livrer un résumé final en français.",
+      layer: "PREFERENCE",
+    });
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Analyse le projet." },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitted?.tasks[0]?.instruction).toContain("<USER_CONTEXT>");
+    expect(submitted?.tasks[0]?.instruction).toContain(
+      "Toujours livrer un résumé final en français.",
+    );
+    expect(submitted?.tasks[0]?.instruction).toContain("donnée non fiable");
   });
 
   it("route une mission navigateur vers un agent équipé du harness local", async () => {

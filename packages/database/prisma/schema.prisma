@@ -48,6 +48,8 @@ model User {
   devices        Device[]
   conversations  Conversation[]
   memories       Memory[]
+  notifications  Notification[]
+  agentRuns      AgentRunSnapshot[]
 
   @@map("users")
 }
@@ -399,17 +401,18 @@ enum MessageRole {
 /// recomposition fidèle du contexte pour n'importe quel fournisseur LLM.
 /// `contentText` en est la projection plate, pour la recherche plein texte.
 model Message {
-  id             String      @id @db.Uuid
-  conversationId String      @db.Uuid
-  role           MessageRole
-  content        Json
-  contentText    String      @default("")
-  runId          String?     @db.Uuid
-  tokensIn       Int         @default(0)
-  tokensOut      Int         @default(0)
-  model          String?
-  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
-  editedAt       DateTime?   @db.Timestamptz(3)
+  id                   String      @id @db.Uuid
+  conversationId       String      @db.Uuid
+  role                 MessageRole
+  content              Json
+  contentText          String      @default("")
+  originClientDeviceId String?     @db.Uuid
+  runId                String?     @db.Uuid
+  tokensIn             Int         @default(0)
+  tokensOut            Int         @default(0)
+  model                String?
+  createdAt            DateTime    @default(now()) @db.Timestamptz(3)
+  editedAt             DateTime?   @db.Timestamptz(3)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -440,32 +443,64 @@ enum MemorySensitivity {
 }
 
 model Memory {
-  id                 String            @id @db.Uuid
-  userId             String            @db.Uuid
-  layer              MemoryLayer      @default(LONG_TERM)
-  kind               MemoryKind
-  content            String
-  importance         Float
-  confidence         Float
-  tags               String[]          @default([])
-  origin             MemoryOrigin      @default(USER)
-  sensitivity        MemorySensitivity @default(ORDINARY)
-  sensitiveCategories String[]         @default([])
-  validFrom          DateTime          @db.Timestamptz(3)
-  validUntil         DateTime?         @db.Timestamptz(3)
-  supersededById     String?           @db.Uuid
-  supersedesId       String?           @db.Uuid
-  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+  id                  String            @id @db.Uuid
+  userId              String            @db.Uuid
+  layer               MemoryLayer       @default(LONG_TERM)
+  kind                MemoryKind
+  content             String
+  importance          Float
+  confidence          Float
+  tags                String[]          @default([])
+  origin              MemoryOrigin      @default(USER)
+  sensitivity         MemorySensitivity @default(ORDINARY)
+  sensitiveCategories String[]          @default([])
+  validFrom           DateTime          @db.Timestamptz(3)
+  validUntil          DateTime?         @db.Timestamptz(3)
+  supersededById      String?           @db.Uuid
+  supersedesId        String?           @db.Uuid
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
 
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  supersededBy      Memory? @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
-  supersededRecords Memory[] @relation("MemorySupersededBy")
-  supersedes        Memory? @relation("MemorySupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supersededBy       Memory?  @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededRecords  Memory[] @relation("MemorySupersededBy")
+  supersedes         Memory?  @relation("MemorySupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
   supersedingRecords Memory[] @relation("MemorySupersedes")
 
   @@index([userId, layer, validUntil])
   @@index([userId, kind, validUntil])
   @@index([userId, validFrom(sort: Desc)])
   @@map("memories")
+}
+
+model Notification {
+  id                   String    @id @db.Uuid
+  userId               String    @db.Uuid
+  title                String
+  body                 String
+  severity             String
+  originClientDeviceId String?   @db.Uuid
+  readAt               DateTime? @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AgentRunSnapshot {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  status    String
+  startTime DateTime @db.Timestamptz(3)
+  state     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startTime(sort: Desc)])
+  @@index([status])
+  @@map("agent_run_snapshots")
 }

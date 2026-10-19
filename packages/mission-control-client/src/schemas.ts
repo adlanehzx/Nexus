@@ -55,6 +55,23 @@ export const missionTaskSchema = z
     state: z.string(),
     result_json: z.string().nullable(),
     error_json: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    depends_on: z.array(z.string()).default([]),
+    attempts: z
+      .array(
+        z.object({
+          id: identifier,
+          attempt_no: z.number().int().positive(),
+          state: z.string(),
+          conversation_id: identifier,
+          started_at: z.string(),
+          updated_at: z.string(),
+          finished_at: z.string().nullable(),
+          error_json: z.string().nullable(),
+        }),
+      )
+      .default([]),
   })
   .passthrough();
 
@@ -65,9 +82,15 @@ export const missionSnapshotSchema = z
     title: z.string(),
     workspace: z.string(),
     state: z.string(),
+    created_at: z.string(),
+    updated_at: z.string(),
     tasks: z.array(missionTaskSchema),
   })
   .passthrough();
+
+export const missionSnapshotsSchema = z.object({
+  missions: z.array(missionSnapshotSchema),
+});
 
 export const configuredAgentSchema = z.object({
   key: z.string(),

@@ -148,6 +148,41 @@ est activée et que son jeton existe dans le trousseau Linux. Les fichiers
 `services/api/config/*.json` ne contiennent que des références
 `vault://nexus/...`, jamais les valeurs.
 
+### Supervision unifiée et persistance
+
+Mission Engine expose une liste filtrable des missions durables. Chaque
+projection contient le DAG, les dépendances et les tentatives ACP, mais jamais
+le transcript interne ni les blocs de raisonnement du fournisseur. L'API NEXUS
+filtre cette liste avec le préfixe propriétaire dérivé du compte avant de la
+présenter dans trois vues complémentaires :
+
+- `Tâches` montre une mission comme un plan et ses tâches ACP comme étapes ;
+- `Runs agent` montre chaque tentative ACP, son profil, sa durée et son erreur ;
+- `Outils` déclare chaque profil actif sous la forme `acp.<profil>`, à côté des
+  outils natifs et navigateur.
+
+La page `Missions ACP` conserve la chronologie complète mission → tâches →
+tentatives. SQLite reste la source de vérité de l'orchestration : PostgreSQL ne
+duplique pas cet état.
+
+Les préférences et souvenirs PostgreSQL sont assemblés avant la planification,
+puis injectés dans les tâches et la synthèse finale dans un bloc explicitement
+traité comme données non fiables. Une phrase mémorisée ne peut donc pas devenir
+une instruction de niveau système.
+
+Les conversations, leurs messages, les notifications et les états de runs Agent
+Core sont persistés dans PostgreSQL. Agent Core est exécutable par les routes
+`/api/v1/agent-core/runs` ; ses reprises après confirmation passent par la même
+politique de permissions que les outils natifs. Les journaux applicatifs et de sécurité sont conservés dans
+`var/observability` sous forme JSONL rédigée, permissions `0600`, avec une
+fenêtre bornée et remplacement atomique. Ils survivent au redémarrage sans
+conserver de token brut.
+
+Les quotas 5 h et hebdomadaires restent `null` tant que le fournisseur ne les
+expose pas officiellement. NEXUS ne déduit pas un faux pourcentage à partir du
+nombre de requêtes ; le fallback continue de s'appuyer sur les erreurs ACP
+structurées et les cooldowns observés.
+
 ## Surface exposée
 
 - santé, profils ACP et vérification du journal d'audit ;

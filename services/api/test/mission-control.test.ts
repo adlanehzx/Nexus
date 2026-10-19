@@ -15,6 +15,7 @@ const fake = {
   updateSettings: vi.fn(),
   submitMission: vi.fn(),
   getMission: vi.fn(),
+  listMissions: vi.fn().mockResolvedValue([]),
   agents: vi.fn(),
   registerAgent: vi.fn(),
   createAgent: vi.fn(),

@@ -121,6 +121,7 @@ function task(steps: TaskRow["steps"]): TaskRow {
     startedAt: "2026-09-03T10:00:00.000Z",
     completedAt: null,
     progressPercent: 50,
+    source: "device",
     steps,
   };
 }

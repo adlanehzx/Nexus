@@ -146,7 +146,18 @@ NEXUS peut superviser et piloter le service local Mission Control qui orchestre
 Antigravity, Claude et Codex et porte le simulateur paper-only. Configurez
 `MISSION_CONTROL_URL=http://127.0.0.1:18100` lorsque les deux services tournent
 sur le même hôte. Le tableau de bord affiche alors la santé des workers, les
-profils ACP et l'intégrité du journal d'audit.
+profils ACP, l'intégrité du journal d'audit et une chronologie unifiée des
+missions. Les mêmes missions sont projetées dans `Tâches`, `Runs agent` et
+`Outils`; les souvenirs utilisateur sont injectés dans le planificateur ACP.
+
+Les migrations de production sont additives et s'appliquent avec :
+
+```bash
+pnpm --filter @nexus/database migrate:deploy
+```
+
+Les conversations, messages, notifications et runs Agent Core sont alors persistés dans PostgreSQL ;
+les journaux rédigés et bornés vivent dans `var/observability`.
 
 Architecture et limites de sécurité :
 [`docs/architecture/23-nexus-mission-engine.md`](docs/architecture/23-nexus-mission-engine.md).
@@ -177,11 +188,16 @@ Vérifiées par la revue et le graphe Turborepo ; elles ne sont pas décoratives
 agent-core ──▶ llm · tools · memory · protocol · shared     autorisé
 agent-core ──╳ database · mcp · browser-client              interdit
 tools      ──╳ llm                                          interdit
-api        ──╳ agent-core (au runtime)                       interdit
+api        ──▶ agent-core (composition et routes uniquement) autorisé
 ```
 
 `agent-core` reçoit un port `AgentRunStore` plutôt que Prisma : c'est ce qui rend la boucle
 testable sans base de données et rejouable sur un état en mémoire.
+
+L'API est le composition root : elle injecte les ports PostgreSQL, les outils,
+les permissions et les confirmations, puis expose `/api/v1/agent-core/runs`.
+Le cœur reste donc indépendant de Fastify et de Prisma même s'il est désormais
+exécutable depuis NEXUS.
 
 ### Moteur d'agent
 

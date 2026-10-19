@@ -117,6 +117,7 @@ const taskViewSchema = z.object({
   completedAt: z.string().nullable(),
   progressPercent: z.number(),
   steps: z.array(taskStepSchema),
+  source: z.enum(["device", "acp"]),
 });
 
 const taskDetailSchema = taskViewSchema.extend({
@@ -409,6 +410,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
                   riskLevel: z.string(),
                   requiredPermissions: z.array(z.string()),
                   allowed: z.boolean(),
+                  source: z.enum(["native", "browser", "acp"]),
                 }),
               ),
             }),

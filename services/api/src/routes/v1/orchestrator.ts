@@ -84,6 +84,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       ? undefined
       : new AcpOrchestrator({
           missionControl,
+          context: app.services.context,
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 

@@ -72,6 +72,8 @@ describe("MissionControlClient", () => {
             title: "Test",
             workspace: "/tmp/nexus",
             state: "succeeded",
+            created_at: "2026-10-19T10:00:00+00:00",
+            updated_at: "2026-10-19T10:01:00+00:00",
             tasks: [
               {
                 id: "44444444-4444-4444-8444-444444444444",
@@ -82,6 +84,10 @@ describe("MissionControlClient", () => {
                 state: "succeeded",
                 result_json: '{"response":"ok"}',
                 error_json: null,
+                created_at: "2026-10-19T10:00:00+00:00",
+                updated_at: "2026-10-19T10:01:00+00:00",
+                depends_on: [],
+                attempts: [],
               },
             ],
           }),

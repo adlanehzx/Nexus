@@ -126,6 +126,11 @@ bloqué alors qu'il avance. Les événements du worker (`navigation`, `action`,
 L'onglet Browser Use propose deux modes. Le mode recommandé « navigateur local » configure l'URL
 CDP de boucle locale et appelle `browser-harness doctor --json --require-existing-daemon`; le test
 établit réellement la connexion sans renvoyer le titre, l'URL ou le contenu des onglets à l'API.
+La santé ne se fonde pas sur le nombre instantané de connexions du démon : le CLI
+ferme normalement son canal CDP après chaque commande. NEXUS exécute une sonde
+`page_info()` silencieuse et ne marque le navigateur prêt que si cette connexion
+effective réussit. L'unité `nexus-browser.service` utilise `Restart=always`, afin
+qu'une fermeture propre de Chromium ne laisse pas le dashboard dans un état mort.
 Le mode avancé « worker autonome » conserve l'URL interne et la référence `vault://nexus/...` : le
 jeton est résolu dans le trousseau Linux et n'est jamais renvoyé au navigateur. HTTP n'est accepté
 que pour `localhost`, `127.0.0.1` ou `::1`; toute URL distante doit utiliser HTTPS.

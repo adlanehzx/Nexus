@@ -1,6 +1,8 @@
 import { canAcceptTasks, type Device } from "@nexus/devices";
 import { projectAgentRun, type AgentRunView, type ProjectableRun } from "./observability.js";
 import type { ServiceContainer } from "./container.js";
+import type { MissionSnapshot, MissionTask } from "@nexus/mission-control-client";
+import { missionOwnerPrefix } from "./acp-orchestrator.js";
 
 /**
  * Le tableau de bord de supervision.
@@ -113,6 +115,7 @@ export interface TaskView {
   completedAt: string | null;
   progressPercent: number;
   steps: TaskStepView[];
+  source: "device" | "acp";
 }
 
 export interface TaskDetailView extends TaskView {
@@ -139,6 +142,7 @@ export interface ToolView {
   requiredPermissions: string[];
   /** Vrai si les permissions de l'administrateur couvrent cet outil. */
   allowed: boolean;
+  source: "native" | "browser" | "acp";
 }
 
 export interface MemoryStats {
@@ -390,15 +394,27 @@ export class DashboardService {
   // ── Tâches ──────────────────────────────────────────────────────────────
 
   async listTasks(userId: string, limit = 50): Promise<TaskView[]> {
-    const plans = await this.#services.taskStore.listByUser(userId, limit);
+    const [plans, missions] = await Promise.all([
+      this.#services.taskStore.listByUser(userId, limit),
+      this.#acpMissions(userId, limit),
+    ]);
     const names = await this.#deviceNames(userId);
 
-    return plans.map((plan) => presentTask(plan, names));
+    return [...plans.map((plan) => presentTask(plan, names)), ...missions.map(presentAcpTask)]
+      .sort((left, right) => (left.createdAt < right.createdAt ? 1 : -1))
+      .slice(0, limit);
   }
 
   async getTask(userId: string, taskId: string): Promise<TaskDetailView | undefined> {
     const plan = await this.#services.taskStore.get(taskId);
-    if (plan?.userId !== userId) return undefined;
+    if (plan === undefined) {
+      const mission = await this.#services.missionControl?.getMission(taskId);
+      if (!mission?.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) {
+        return undefined;
+      }
+      return presentAcpTaskDetail(mission);
+    }
+    if (plan.userId !== userId) return undefined;
 
     const names = await this.#deviceNames(userId);
     const executions = await this.#services.taskStore.listExecutions(taskId);
@@ -442,13 +458,20 @@ export class DashboardService {
    * raisonnement du fournisseur ne traversent jamais cette frontière.
    */
   async listAgentRuns(userId: string, limit = 50): Promise<AgentRunView[]> {
-    const runs = await this.#services.runStore.listAll();
+    const [runs, missions] = await Promise.all([
+      this.#services.runStore.listAll(),
+      this.#acpMissions(userId, limit),
+    ]);
 
-    return runs
+    const native = runs
       .filter((run) => run.record.userId === userId)
-      .sort((left, right) => (left.record.startTime < right.record.startTime ? 1 : -1))
-      .slice(0, limit)
       .map((run) => projectAgentRun(run as ProjectableRun));
+    const acp = missions.flatMap((mission) =>
+      mission.tasks.map((task) => presentAcpRun(userId, mission, task)),
+    );
+    return [...native, ...acp]
+      .sort((left, right) => (left.startedAt < right.startedAt ? 1 : -1))
+      .slice(0, limit);
   }
 
   async getAgentRun(userId: string, runId: string): Promise<AgentRunView | undefined> {
@@ -461,15 +484,34 @@ export class DashboardService {
 
   async listTools(userId: string): Promise<ToolView[]> {
     const granted = new Set(await this.#services.permissionsFor(userId));
-
-    return this.#services.toolRegistry.list().map((tool) => ({
+    const native: ToolView[] = this.#services.toolRegistry.list().map((tool) => ({
       name: tool.name,
       description: tool.description,
       version: tool.version ?? "1",
       riskLevel: tool.riskLevel,
       requiredPermissions: [...tool.requiredPermissions],
       allowed: tool.requiredPermissions.every((permission) => granted.has(permission)),
+      source: tool.name.startsWith("browser.") ? "browser" : "native",
     }));
+    if (this.#services.missionControl === undefined) return native;
+    try {
+      const registry = await this.#services.missionControl.agents();
+      return [
+        ...native,
+        ...registry.configured.map((agent) => ({
+          name: `acp.${agent.key}`,
+          description: `Délègue une tâche durable au profil ACP ${agent.key}.`,
+          version: "1",
+          riskLevel: "MEDIUM",
+          requiredPermissions: [],
+          allowed:
+            registry.worker_enabled && (agent.status === "available" || agent.status === "unknown"),
+          source: "acp" as const,
+        })),
+      ];
+    } catch {
+      return native;
+    }
   }
 
   // ── Mémoire ─────────────────────────────────────────────────────────────
@@ -500,6 +542,18 @@ export class DashboardService {
         createdAt: hit.record.validFrom.toISOString(),
       })),
     };
+  }
+
+  async #acpMissions(userId: string, limit: number): Promise<MissionSnapshot[]> {
+    if (this.#services.missionControl === undefined) return [];
+    try {
+      return await this.#services.missionControl.listMissions(
+        limit,
+        `${missionOwnerPrefix(userId)}-`,
+      );
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -576,6 +630,7 @@ function presentTask(plan: PlanLike, names: Map<string, string>): TaskView {
     startedAt: plan.startedAt,
     completedAt: plan.completedAt,
     progressPercent: plan.steps.length === 0 ? 0 : Math.round((done / plan.steps.length) * 100),
+    source: "device",
     steps: plan.steps.map((step) => ({
       id: step.id,
       description: step.description,
@@ -589,4 +644,153 @@ function presentTask(plan: PlanLike, names: Map<string, string>): TaskView {
       error: step.error === null ? null : { code: step.error.code, message: step.error.message },
     })),
   };
+}
+
+function presentAcpTask(mission: MissionSnapshot): TaskView {
+  const terminal = new Set(["succeeded", "failed", "cancelled", "skipped"]);
+  const done = mission.tasks.filter((task) => terminal.has(task.state)).length;
+  const attempts = mission.tasks.flatMap((task) => task.attempts);
+  const startedAt = attempts.map((attempt) => attempt.started_at).sort()[0] ?? null;
+  return {
+    id: mission.id,
+    title: mission.title,
+    status: mission.state,
+    originClientDeviceId: "ACP",
+    correlationId: `mission:${mission.id}`,
+    createdAt: mission.created_at,
+    startedAt,
+    completedAt: terminal.has(mission.state) ? mission.updated_at : null,
+    progressPercent:
+      mission.tasks.length === 0 ? 0 : Math.round((done / mission.tasks.length) * 100),
+    source: "acp",
+    steps: mission.tasks.map((task) => ({
+      id: task.id,
+      description: task.task_key,
+      tool: `acp.${task.profile_key}`,
+      requiredCapabilities: ["acp"],
+      status: task.state,
+      selectedDeviceId: task.profile_key,
+      selectedDeviceName: task.profile_key,
+      riskLevel: "MEDIUM",
+      error: parseAcpError(task.error_json),
+    })),
+  };
+}
+
+function presentAcpTaskDetail(mission: MissionSnapshot): TaskDetailView {
+  return {
+    ...presentAcpTask(mission),
+    executions: mission.tasks.flatMap((task) =>
+      task.attempts.map((attempt) => ({
+        id: attempt.id,
+        stepId: task.id,
+        deviceId: task.profile_key,
+        deviceName: task.profile_key,
+        status: attempt.state,
+        startedAt: attempt.started_at,
+        completedAt: attempt.finished_at,
+        durationMs:
+          attempt.finished_at === null
+            ? null
+            : new Date(attempt.finished_at).getTime() - new Date(attempt.started_at).getTime(),
+        result: task.result_json === null ? null : safeJson(task.result_json),
+        error: parseAcpError(attempt.error_json),
+      })),
+    ),
+  };
+}
+
+function presentAcpRun(userId: string, mission: MissionSnapshot, task: MissionTask): AgentRunView {
+  const firstAttempt = task.attempts[0];
+  const lastAttempt = task.attempts.at(-1);
+  const startedAt = firstAttempt?.started_at ?? task.created_at;
+  const endedAt = lastAttempt?.finished_at ?? (isAcpTerminal(task.state) ? task.updated_at : null);
+  const error = parseAcpError(task.error_json ?? lastAttempt?.error_json ?? null);
+  return {
+    runId: lastAttempt?.id ?? task.id,
+    userId,
+    conversationId: lastAttempt?.conversation_id ?? task.id,
+    correlationId: `mission:${mission.id}:${task.task_key}`,
+    status:
+      task.state === "succeeded" ? "completed" : task.state === "failed" ? "failed" : task.state,
+    stopReason: task.state === "succeeded" ? "completed" : (error?.code ?? null),
+    startedAt,
+    endedAt,
+    durationMs:
+      endedAt === null ? null : new Date(endedAt).getTime() - new Date(startedAt).getTime(),
+    iterations: task.attempts.length,
+    response: responseFromAcp(task.result_json),
+    tools: [
+      {
+        callId: task.id,
+        tool: `acp.${task.profile_key}`,
+        riskLevel: "MEDIUM",
+        status:
+          task.state === "succeeded" ? "success" : task.state === "failed" ? "failed" : task.state,
+        durationMs:
+          endedAt === null ? 0 : new Date(endedAt).getTime() - new Date(startedAt).getTime(),
+        attempts: task.attempts.length,
+        action: `${task.task_key}${task.depends_on.length === 0 ? "" : ` ← ${task.depends_on.join(", ")}`}`,
+        errorCode: error?.code ?? null,
+      },
+    ],
+    errors:
+      error === null
+        ? []
+        : [
+            {
+              at: task.updated_at,
+              code: error.code,
+              message: error.message,
+              iteration: task.attempts.length,
+            },
+          ],
+    metrics: {
+      model: task.profile_key,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      toolCalls: 1,
+      failedToolCalls: error === null ? 0 : 1,
+    },
+  };
+}
+
+function isAcpTerminal(state: string): boolean {
+  return (
+    state === "succeeded" || state === "failed" || state === "cancelled" || state === "skipped"
+  );
+}
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function parseAcpError(raw: string | null): { code: string; message: string } | null {
+  if (raw === null) return null;
+  const parsed = safeJson(raw);
+  if (parsed !== null && typeof parsed === "object") {
+    const value = parsed as { code?: unknown; error?: unknown; message?: unknown };
+    const message = value.message ?? value.error;
+    return {
+      code: typeof value.code === "string" ? value.code : "ACP_ERROR",
+      message: typeof message === "string" ? message : "Échec de l'agent ACP",
+    };
+  }
+  return { code: "ACP_ERROR", message: "Échec de l'agent ACP" };
+}
+
+function responseFromAcp(raw: string | null): string | null {
+  if (raw === null) return null;
+  const parsed = safeJson(raw);
+  if (parsed !== null && typeof parsed === "object" && "response" in parsed) {
+    const response = (parsed as { response?: unknown }).response;
+    return typeof response === "string" ? response : null;
+  }
+  return null;
 }

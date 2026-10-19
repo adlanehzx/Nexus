@@ -349,7 +349,9 @@ export function Tasks({ api }: { api: DashboardApi }) {
                   >
                     <td>
                       {task.title}
-                      <div className="faible mono">{task.correlationId}</div>
+                      <div className="faible mono">
+                        {task.source.toUpperCase()} · {task.correlationId}
+                      </div>
                     </td>
                     <td>
                       <State tone={taskTone(task.status)} label={task.status} />
@@ -357,7 +359,11 @@ export function Tasks({ api }: { api: DashboardApi }) {
                     <td>
                       <Bar percent={task.progressPercent} />
                     </td>
-                    <td className="faible mono">{task.originClientDeviceId.slice(0, 8)}</td>
+                    <td className="faible mono">
+                      {task.source === "acp"
+                        ? "orchestrateur"
+                        : task.originClientDeviceId.slice(0, 8)}
+                    </td>
                     <td className="faible">{formatAge(task.createdAt)}</td>
                     <td className="faible">
                       {formatDuration(
@@ -368,7 +374,8 @@ export function Tasks({ api }: { api: DashboardApi }) {
                       )}
                     </td>
                     <td>
-                      {new Set(["running", "pending", "waiting_for_confirmation"]).has(
+                      {task.source === "device" &&
+                      new Set(["running", "pending", "waiting_for_confirmation"]).has(
                         task.status,
                       ) ? (
                         <button
@@ -662,10 +669,11 @@ export function Tools({ api }: { api: DashboardApi }) {
               Aucun outil enregistré. Le catalogue se remplit quand le service agent démarre.
             </Empty>
           ) : (
-            <Table head={["Outil", "Description", "Risque", "Permissions", "Autorisé"]}>
+            <Table head={["Outil", "Source", "Description", "Risque", "Permissions", "Autorisé"]}>
               {data.tools.map((tool) => (
                 <tr key={tool.name}>
                   <td className="mono">{tool.name}</td>
+                  <td>{tool.source}</td>
                   <td className="faible">{tool.description}</td>
                   <td>{tool.riskLevel}</td>
                   <td className="mono faible">{tool.requiredPermissions.join(", ") || "—"}</td>
@@ -1130,6 +1138,73 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   ? "aucun"
                   : data.health.profiles.join(", ")}
               </p>
+
+              <h3>Chronologie unifiée des missions</h3>
+              {data.missions.length === 0 ? (
+                <Empty>Aucune mission ACP NEXUS pour ce compte.</Empty>
+              ) : (
+                <div className="stack">
+                  {data.missions.map((mission) => (
+                    <details className="card" key={mission.id}>
+                      <summary>
+                        <State
+                          tone={
+                            mission.state === "succeeded"
+                              ? "ok"
+                              : mission.state === "failed"
+                                ? "down"
+                                : "info"
+                          }
+                          label={mission.state}
+                        />{" "}
+                        {mission.title} · {mission.tasks.length} étape(s) ·{" "}
+                        {formatAge(mission.created_at)}
+                      </summary>
+                      <Table
+                        head={["Étape", "Agent", "État", "Dépendances", "Tentatives", "Durée"]}
+                      >
+                        {mission.tasks.map((task) => {
+                          const first = task.attempts[0];
+                          const last = task.attempts.at(-1);
+                          return (
+                            <tr key={task.id}>
+                              <td className="mono">{task.task_key}</td>
+                              <td>{task.profile_key}</td>
+                              <td>
+                                <State
+                                  tone={
+                                    task.state === "succeeded"
+                                      ? "ok"
+                                      : task.state === "failed"
+                                        ? "down"
+                                        : task.state === "retry_wait"
+                                          ? "degraded"
+                                          : "info"
+                                  }
+                                  label={task.state}
+                                />
+                              </td>
+                              <td className="faible">
+                                {task.depends_on.length === 0 ? "—" : task.depends_on.join(", ")}
+                              </td>
+                              <td>{task.attempts.length}</td>
+                              <td className="faible">
+                                {first === undefined
+                                  ? "—"
+                                  : formatDuration(
+                                      new Date(
+                                        last?.finished_at ?? last?.updated_at ?? first.started_at,
+                                      ).getTime() - new Date(first.started_at).getTime(),
+                                    )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    </details>
+                  ))}
+                </div>
+              )}
 
               <h3>Portefeuilles fictifs</h3>
               <div className="inline-admin-form">

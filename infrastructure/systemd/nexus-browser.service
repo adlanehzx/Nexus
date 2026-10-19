@@ -1,14 +1,16 @@
 [Unit]
 Description=NEXUS local Chromium for Browser Use
 After=graphical-session.target
-PartOf=graphical-session.target
 
 [Service]
 Type=simple
 Environment=XDG_CONFIG_HOME=%h/.local/share/nexus/browser-xdg/config
 Environment=XDG_CACHE_HOME=%h/.local/share/nexus/browser-xdg/cache
 ExecStart=/usr/bin/chromium --user-data-dir=%h/.local/share/nexus/browser-profile --remote-debugging-address=127.0.0.1 --remote-debugging-port=19222 --no-first-run --no-default-browser-check --ozone-platform=wayland about:blank
-Restart=on-failure
+# Chromium peut se fermer proprement lors d'une fin de session ou d'une mise a
+# jour. NEXUS attend pourtant un CDP permanent : une sortie 0 doit donc etre
+# relancee au meme titre qu'un crash.
+Restart=always
 RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true

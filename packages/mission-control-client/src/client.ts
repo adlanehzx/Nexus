@@ -14,6 +14,7 @@ import {
   missionControlHealthSchema,
   runtimeSettingsSchema,
   missionSnapshotSchema,
+  missionSnapshotsSchema,
   missionSubmissionSchema,
   paperAccountSchema,
   paperAccountsSchema,
@@ -76,6 +77,11 @@ export interface MissionControlPort {
     signal?: AbortSignal,
   ): Promise<MissionSubmission>;
   getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
+  listMissions(
+    limit?: number,
+    externalPrefix?: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSnapshot[]>;
   agents(signal?: AbortSignal): Promise<AgentRegistry>;
   registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry>;
@@ -168,6 +174,23 @@ export class MissionControlClient implements MissionControlPort {
       undefined,
       signal,
     );
+  }
+
+  async listMissions(
+    limit = 50,
+    externalPrefix?: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSnapshot[]> {
+    const query = new URLSearchParams({ limit: String(boundedLimit(limit)) });
+    if (externalPrefix !== undefined) query.set("external_prefix", externalPrefix);
+    const result = await this.#request(
+      "GET",
+      `/v1/missions?${query.toString()}`,
+      missionSnapshotsSchema,
+      undefined,
+      signal,
+    );
+    return result.missions;
   }
 
   agents(signal?: AbortSignal): Promise<AgentRegistry> {
