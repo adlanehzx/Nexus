@@ -443,23 +443,38 @@ enum MemorySensitivity {
 }
 
 model Memory {
-  id                  String            @id @db.Uuid
-  userId              String            @db.Uuid
-  layer               MemoryLayer       @default(LONG_TERM)
-  kind                MemoryKind
-  content             String
-  importance          Float
-  confidence          Float
-  tags                String[]          @default([])
-  origin              MemoryOrigin      @default(USER)
-  sensitivity         MemorySensitivity @default(ORDINARY)
-  sensitiveCategories String[]          @default([])
-  validFrom           DateTime          @db.Timestamptz(3)
-  validUntil          DateTime?         @db.Timestamptz(3)
-  supersededById      String?           @db.Uuid
-  supersedesId        String?           @db.Uuid
-  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  id                   String            @id @db.Uuid
+  userId               String            @db.Uuid
+  layer                MemoryLayer       @default(LONG_TERM)
+  kind                 MemoryKind
+  content              String
+  importance           Float
+  confidence           Float
+  tags                 String[]          @default([])
+  origin               MemoryOrigin      @default(USER)
+  sensitivity          MemorySensitivity @default(ORDINARY)
+  sensitiveCategories  String[]          @default([])
+  /// Provenance explicite. Ces champs ne contiennent jamais le texte source :
+  /// ils permettent de retrouver le run, la conversation ou la ressource qui
+  /// a produit le fait sans recopier une donnée potentiellement sensible.
+  sourceRunId          String?           @db.Uuid
+  sourceConversationId String?           @db.Uuid
+  sourceMessageId      String?           @db.Uuid
+  sourceUri            String?
+  /// Empreinte du contenu normalisé, utilisée pour la déduplication.
+  contentHash          String
+  /// Vecteur local et modèle qui l'a produit. Un tableau PostgreSQL garde le
+  /// mode local fonctionnel ; un adaptateur pgvector peut remplacer la recherche
+  /// sans modifier le contrat MemoryProvider.
+  embedding            Float[]           @default([])
+  embeddingModel       String?
+  extractedAt          DateTime?         @db.Timestamptz(3)
+  validFrom            DateTime          @db.Timestamptz(3)
+  validUntil           DateTime?         @db.Timestamptz(3)
+  supersededById       String?           @db.Uuid
+  supersedesId         String?           @db.Uuid
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
 
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   supersededBy       Memory?  @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
@@ -470,6 +485,8 @@ model Memory {
   @@index([userId, layer, validUntil])
   @@index([userId, kind, validUntil])
   @@index([userId, validFrom(sort: Desc)])
+  @@index([userId, contentHash, validUntil])
+  @@index([sourceRunId])
   @@map("memories")
 }
 

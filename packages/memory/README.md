@@ -108,6 +108,28 @@ Trois précautions à l'oubli :
 
 ---
 
+## Recherche hybride et provenance
+
+Chaque souvenir porte désormais une empreinte du contenu normalisé, un embedding, le nom du
+modèle d'embedding et, quand ils existent, les identifiants du run, de la conversation, du
+message ou de la ressource source. Le texte source n'est pas recopié dans la provenance.
+
+`EmbeddingProvider` est le port d'extension. Le repli `LocalHashEmbeddingProvider` est local,
+déterministe et sans téléchargement. Il combine mots et bigrammes et sert un score hybride
+lexical/vectoriel. Il n'a pas la finesse d'un encodeur neuronal : FastEmbed ou pgvector peuvent
+le remplacer sans modifier `MemoryService` ni `ContextAssembler`.
+
+Le schéma PostgreSQL conserve actuellement le vecteur comme `DOUBLE PRECISION[]`. Ce choix
+maintient l'image `postgres:17-alpine` fonctionnelle et évite d'imposer une extension à toutes
+les installations. Un index pgvector sera l'optimisation de production lorsque l'image NEXUS
+l'embarquera ; le contrat applicatif est déjà indépendant du moteur.
+
+`ControlledMemoryExtractor` ne stocke jamais une inférence directement : il produit des
+candidats `requiresReview`, élimine les secrets puis `storeApproved` n'écrit que les index
+explicitement approuvés. `MemoryConsolidator` suit la même règle : plan en lecture seule, puis
+application aux groupes approuvés. La consolidation automatique de paraphrases reste interdite,
+car deux formulations proches peuvent se contredire.
+
 ## Assemblage du contexte
 
 `ContextAssembler` réunit les six couches, **chacune dans sa section et son budget**.
@@ -117,9 +139,15 @@ mange tout, et les préférences — trois lignes qui changent la réponse — t
 qu'elles arrivent en dernier. Le découpage garantit qu'un historique bavard ne fait pas
 oublier à NEXUS que l'utilisateur préfère le train.
 
-Le budget est compté **en caractères, pas en tokens** : compter des tokens exigerait le
-tokeniseur du fournisseur, donc une dépendance au modèle dans un paquet qui n'en a
-aucune. C'est une barrière, pas une comptabilité.
+Deux barrières sont appliquées : caractères et tokens. `TokenCounter` permet à un adaptateur
+d'injecter le tokeniseur exact du modèle ; `ConservativeTokenCounter` est le repli local et
+annoncé comme estimation, jamais comme consommation facturée. `ContextWindowPlanner` réserve
+la sortie et une marge de sécurité selon le modèle.
+
+`ContextCompactor` déplace un contenu trop grand vers un `ContextArtifactStore` **avant** de le
+résumer. Le prompt reçoit le résumé et l'identifiant de l'artefact ; l'original reste récupérable
+avec une frontière `userId`. Le magasin en mémoire livré ici est destiné au développement ; le
+port attend un adaptateur PostgreSQL ou objet durable pour la production.
 
 Deux détails qui comptent :
 
@@ -132,7 +160,7 @@ Deux détails qui comptent :
 
 ## Tests
 
-99 tests, sans base ni réseau.
+106 tests, sans base ni réseau, plus 5 tests PostgreSQL activés avec `DATABASE_URL`.
 
 | Fichier                    | Couvre                                                                    |
 | -------------------------- | ------------------------------------------------------------------------- |
@@ -140,6 +168,7 @@ Deux détails qui comptent :
 | `test/sensitivity.test.ts` | les trois verdicts, les commandes explicites, ce qui n'en est pas une     |
 | `test/service.test.ts`     | la politique : refus, accord, oubli, ambiguïté, audit sans contenu        |
 | `test/context.test.ts`     | séparation des couches, budgets, contexte court terme                     |
+| `test/semantic.test.ts`    | hybride local, provenance, extraction, consolidation, tokens, artefacts   |
 
 Plus `services/api/test/memory.test.ts`, qui vérifie que le service est bien le seul
 chemin — ce qu'aucun test unitaire ne peut voir.

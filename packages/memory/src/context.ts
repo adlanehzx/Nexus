@@ -1,6 +1,7 @@
 import type { MemoryProvider } from "./provider.js";
 import type { ShortTermContext } from "./short-term.js";
 import type { ConversationHistoryPort, DeviceContextPort, TaskHistoryPort } from "./sources.js";
+import { ConservativeTokenCounter, type TokenCounter } from "./tokens.js";
 
 /**
  * Assemblage du contexte.
@@ -64,6 +65,7 @@ export interface ContextSection {
   title: string;
   lines: string[];
   chars: number;
+  tokens: number;
   /** Éléments écartés faute de place. Affiché nulle part, utile au diagnostic. */
   dropped: number;
 }
@@ -73,6 +75,8 @@ export interface AssembledContext {
   /** Le bloc prêt à joindre aux instructions système. */
   text: string;
   chars: number;
+  /** Estimation locale ou comptage exact si l'adaptateur injecte son tokeniseur. */
+  tokens: number;
 }
 
 export interface ContextAssemblerOptions {
@@ -82,6 +86,9 @@ export interface ContextAssemblerOptions {
   devices?: DeviceContextPort;
   tasks?: TaskHistoryPort;
   budget?: Partial<ContextBudget>;
+  /** Seconde barrière exprimée en tokens, indépendante de la barrière historique en caractères. */
+  tokenBudget?: Partial<ContextBudget>;
+  tokenCounter?: TokenCounter;
 }
 
 export interface AssembleInput {
@@ -89,6 +96,7 @@ export interface AssembleInput {
   conversationId: string;
   /** Le tour courant. Sert de requête pour la recherche de souvenirs. */
   query: string;
+  model?: string;
 }
 
 const TITLES: Record<ContextSectionName, string> = {
@@ -103,10 +111,22 @@ const TITLES: Record<ContextSectionName, string> = {
 export class ContextAssembler {
   readonly #options: ContextAssemblerOptions;
   readonly #budget: ContextBudget;
+  readonly #tokenBudget: ContextBudget;
+  readonly #tokens: TokenCounter;
 
   constructor(options: ContextAssemblerOptions) {
     this.#options = options;
     this.#budget = { ...DEFAULT_BUDGET, ...options.budget };
+    this.#tokenBudget = {
+      preferences: 180,
+      shortTerm: 240,
+      longTerm: 450,
+      devices: 180,
+      tasks: 240,
+      conversation: 520,
+      ...options.tokenBudget,
+    };
+    this.#tokens = options.tokenCounter ?? new ConservativeTokenCounter();
   }
 
   async assemble(input: AssembleInput): Promise<AssembledContext> {
@@ -134,7 +154,7 @@ export class ContextAssembler {
       .map((section) => `## ${section.title}\n${section.lines.join("\n")}`)
       .join("\n\n");
 
-    return { sections, text, chars: text.length };
+    return { sections, text, chars: text.length, tokens: this.#tokens.count(text, input.model) };
   }
 
   // ── 4. Préférences ──────────────────────────────────────────────────────
@@ -155,6 +175,9 @@ export class ContextAssembler {
       "preferences",
       hits.map((hit) => `- ${hit.record.content}`),
       this.#budget.preferences,
+      this.#tokenBudget.preferences,
+      this.#tokens,
+      input.model,
     );
   }
 
@@ -167,6 +190,9 @@ export class ContextAssembler {
       "shortTerm",
       notes.map((note) => `- ${note.key} : ${note.value}`),
       this.#budget.shortTerm,
+      this.#tokenBudget.shortTerm,
+      this.#tokens,
+      input.model,
     );
   }
 
@@ -189,6 +215,9 @@ export class ContextAssembler {
         (hit) => `- ${hit.record.content}${hit.record.origin === "AGENT" ? " (déduit)" : ""}`,
       ),
       this.#budget.longTerm,
+      this.#tokenBudget.longTerm,
+      this.#tokens,
+      input.model,
     );
   }
 
@@ -205,6 +234,9 @@ export class ContextAssembler {
           (device.capabilities.length === 0 ? "" : ` : ${device.capabilities.join(", ")}`),
       ),
       this.#budget.devices,
+      this.#tokenBudget.devices,
+      this.#tokens,
+      input.model,
     );
   }
 
@@ -222,6 +254,9 @@ export class ContextAssembler {
           (task.deviceName === null ? "" : ` sur ${task.deviceName}`),
       ),
       this.#budget.tasks,
+      this.#tokenBudget.tasks,
+      this.#tokens,
+      input.model,
     );
   }
 
@@ -240,7 +275,14 @@ export class ContextAssembler {
     // remet à l'endroit une fois le budget consommé.
     const lines = [...turns].reverse().map((turn) => `- ${turn.role} : ${collapse(turn.content)}`);
 
-    const section = fit("conversation", lines, this.#budget.conversation);
+    const section = fit(
+      "conversation",
+      lines,
+      this.#budget.conversation,
+      this.#tokenBudget.conversation,
+      this.#tokens,
+      input.model,
+    );
     return { ...section, lines: [...section.lines].reverse() };
   }
 }
@@ -252,14 +294,24 @@ export class ContextAssembler {
  * mi-phrase peut changer de sens, et un modèle n'a aucun moyen de savoir qu'il
  * lui manque la fin.
  */
-function fit(name: ContextSectionName, lines: string[], budget: number): ContextSection {
+function fit(
+  name: ContextSectionName,
+  lines: string[],
+  budget: number,
+  tokenBudget: number,
+  tokenCounter: TokenCounter,
+  model?: string,
+): ContextSection {
   const kept: string[] = [];
   let chars = 0;
+  let tokens = 0;
 
   for (const line of lines) {
-    if (chars + line.length + 1 > budget) break;
+    const lineTokens = tokenCounter.count(line, model);
+    if (chars + line.length + 1 > budget || tokens + lineTokens > tokenBudget) break;
     kept.push(line);
     chars += line.length + 1;
+    tokens += lineTokens;
   }
 
   return {
@@ -267,6 +319,7 @@ function fit(name: ContextSectionName, lines: string[], budget: number): Context
     title: TITLES[name],
     lines: kept,
     chars,
+    tokens,
     dropped: lines.length - kept.length,
   };
 }
