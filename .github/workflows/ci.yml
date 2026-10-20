@@ -273,7 +273,13 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+          # Le chemin versionne, explicitement : avec les clients 16 et 17
+          # installes cote a cote, le wrapper Debian peut resoudre `pg_dump` et
+          # `pg_restore` sur des versions differentes -- et `pg_restore` 16
+          # refuse alors une archive ecrite par `pg_dump` 17.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
 
       - name: Installer les dépendances
         run: pnpm install --frozen-lockfile

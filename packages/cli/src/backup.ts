@@ -400,7 +400,6 @@ export function libpqUrl(databaseUrl: string): string {
   return url.toString();
 }
 
-
 /**
  * Repère un refus de `pg_dump` pour cause de version trop ancienne.
  *
@@ -452,11 +451,13 @@ async function dumpPostgres(databaseUrl: string): Promise<Buffer> {
       const dumped = await dumpThroughContainer(url);
       if (dumped === undefined) {
         throw new Error(
-          `${message}\n` +
-            "Le client pg_dump local est plus ancien que le serveur, et aucun " +
+          "Le client pg_dump local est plus ancien que le serveur, et aucun " +
             "conteneur publiant ce port n'a été trouvé.\n" +
             "Installer un client de la même version majeure que le serveur, " +
             "ou démarrer PostgreSQL par `pnpm docker:up`.",
+          // La cause d'origine porte les deux versions en présence : la perdre
+          // obligerait à relancer la commande pour savoir laquelle manque.
+          { cause: error },
         );
       }
       return dumped;
