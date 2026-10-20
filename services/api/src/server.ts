@@ -6,7 +6,11 @@ import { buildApp } from "./app.js";
 import { ServiceContainer } from "./services/container.js";
 import { ToolRegistry } from "@nexus/tools";
 import { McpManager } from "@nexus/mcp";
-import { BrowserWorkerClient } from "@nexus/browser-client";
+import {
+  BrowserWorkerClient,
+  BrowserHarnessDriver,
+  BrowserSessionManager,
+} from "@nexus/browser-client";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
 
 /**
@@ -80,6 +84,23 @@ const browser =
     ? new BrowserWorkerClient({ baseUrl: browserConfiguration.baseUrl, token: browserToken })
     : undefined;
 
+const isLocalHarnessEnabled =
+  browserConfiguration?.enabled !== false &&
+  (browserConfiguration?.mode === "local-harness" || browserConfiguration === null);
+
+const nativeBrowserDriver = isLocalHarnessEnabled
+  ? new BrowserHarnessDriver({
+      cdpUrl: browserConfiguration?.cdpUrl ?? process.env.BU_CDP_URL ?? "http://127.0.0.1:19222",
+    })
+  : undefined;
+
+const browserSessionManager = nativeBrowserDriver
+  ? new BrowserSessionManager({
+      driver: nativeBrowserDriver,
+      artifactsDirectory: resolve(here, "../../../var/artifacts/browser"),
+    })
+  : undefined;
+
 /**
  * Signeur dédié aux appels sortants.
  *
@@ -110,6 +131,7 @@ const services = new ServiceContainer({
   runtimeConfiguration,
   vault,
   ...(browser === undefined ? {} : { browser }),
+  ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
   llmProvider: new FallbackProvider([
     new ClaudeCliProvider(),
     new GeminiCliProvider(),

@@ -572,11 +572,45 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
     async (request) => {
       const browser = app.services.browser;
+      const sessionManager = app.services.browserSessionManager;
       const configuration = (await app.services.runtimeConfiguration?.loadBrowser()) ?? null;
       const tokenConfigured =
         configuration === null || configuration.mode === "local-harness"
           ? false
           : (await app.services.vault?.get(configuration.tokenRef)) !== undefined;
+
+      if (sessionManager !== undefined) {
+        try {
+          const health = await sessionManager.driver.doctor();
+          const activeSessions = sessionManager.listActiveSessions();
+          return ok(
+            {
+              configured: true,
+              reachable: health.healthy,
+              detail: health.healthy
+                ? `harness local connecté (${activeSessions.length} session(s) active(s))`
+                : "harness installé, navigateur non connecté",
+              health,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        } catch (cause) {
+          return ok(
+            {
+              configured: true,
+              reachable: false,
+              detail: cause instanceof Error ? cause.message : "harness local indisponible",
+              health: null,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        }
+      }
+
       if (configuration?.enabled === true && configuration.mode === "local-harness") {
         const harness = new BrowserHarnessClient({ cdpUrl: configuration.cdpUrl });
         try {

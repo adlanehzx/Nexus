@@ -147,3 +147,72 @@ Deux mécanismes, complémentaires :
   sérialisation, authentification, codes d'erreur.
 
 Le premier compare des schémas, le second des comportements. Il faut les deux.
+
+## 10. Navigation web native unifiée (Agent Core & browser-harness)
+
+Pour lever la dépendance au worker Python lourd tout en garantissant une autonomie totale sans clé API, NEXUS unifie le démon local `browser-harness` directement avec Agent Core via les composants de `@nexus/browser-client`.
+
+### Architecture et flux de contrôle
+
+Chromium s'exécute sur `127.0.0.1:19222` sous le service `nexus-browser.service`. Agent Core orchestre la navigation native via :
+
+```
+Agent Core (TS)
+  │
+  ├── ToolRegistry (5 outils natifs browser.*)
+  │      │
+  │      ▼
+  └── BrowserSessionManager ──▶ BrowserSecurityPolicy (SSRF, schémas, téléchargements, CAPTCHA)
+         │
+         ├── Isolation onglet par mission (createTab / switchTab / closeTab)
+         ├── Quotas d'actions (50 max) et de durée (300s max)
+         ├── Stockage des artefacts (var/artifacts/browser/<sessionId>/)
+         │
+         ▼
+      BrowserHarnessDriver (CDP local 127.0.0.1:19222)
+         │
+         ▼
+      browser-harness CLI ──▶ Chromium Daemon
+```
+
+### Les 5 outils natifs Agent Core
+
+1. **`browser.navigate`** :
+   - Navigue vers une URL web sécurisée (`http:` ou `https:`).
+   - Ouvre ou active l'onglet dédié à la session (`sessionId` résolu d'après le `runId` de mission).
+   - Attend la stabilisation de la page (`wait_for_load`).
+   - Détecte immédiatement les challenges anti-bots ou formulaires d'authentification.
+   - Capture une capture d'écran horodatée d'étape et l'enregistre en artefact persistant.
+
+2. **`browser.extract`** :
+   - Extrait le contenu lisible de la page courante au format `markdown`, `text` ou `html`.
+   - Cible optionnellement un sous-arbre via sélecteur CSS.
+   - Assainit systématiquement le contenu en retirant balises `<script>`, `<style>`, `<noscript>`, `<iframe>` et champs `<input type="password">`.
+   - Limite et tronque le texte retourné selon `maxCharacters` (12 000 par défaut) avec signalement de troncature.
+
+3. **`browser.click`** :
+   - Clique sur un élément ciblé par sélecteur CSS ou par coordonnées relatives `(x, y)`.
+   - Pour les sélecteurs, calcule le centre de l'élément via `getBoundingClientRect()` et vérifie sa visibilité avant le clic CDP.
+   - Déclenche une attente de chargement (`wait_for_load`) et retourne la nouvelle URL et le nouveau titre de page.
+
+4. **`browser.type`** :
+   - Saisit du texte dans un champ ciblé par sélecteur CSS.
+   - Propose les options `clear` (effacement préalable du champ, activé par défaut) et `submit` (envoi automatique de la touche `Enter` suivi de la stabilisation de la page).
+
+5. **`browser.screenshot`** :
+   - Déclenche une capture d'écran explicite de l'onglet actif.
+   - Archive l'image au format PNG dans le dossier d'artefacts sous `var/artifacts/browser/<sessionId>/<timestamp>-<uuid>.png`.
+   - Enregistre et retourne les métadonnées de l'artefact (`artifactId`, `fileName`, `filePath`, `url`, `title`).
+
+### Isolation des sessions et quotas opérationnels
+
+- **Isolation stricte** : Chaque session de navigation est liée à un `sessionId` unique (par défaut le `runId` de la mission). Une session possède un onglet Chromium dédié ; la fermeture de la session via `closeSession()` ferme physiquement l'onglet CDP correspondant.
+- **Plafond d'actions** : Chaque session est limitée à un quota par défaut de 50 actions (`QuotaExceededError`) pour interdire les boucles infinies de navigation.
+- **Délai maximal (TTL)** : Une session expire automatiquement après 300 secondes (5 minutes) d'activité cumulée.
+
+### Politiques de sécurité et reprise humaine
+
+- **Validation des schémas** : Seuls les protocoles `http:` et `https:` sont acceptés. Les schémas `file:`, `chrome:`, `javascript:`, `about:`, `data:` sont immédiatement rejetés.
+- **Protection anti-SSRF** : Blocage formel des adresses IP de boucle locale (`127.0.0.1`, `localhost`, `::1`), du service de métadonnées d'instance cloud (`169.254.169.254`), et des plages privées RFC 1918 et RFC 4193 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`).
+- **Prévention des téléchargements dangereux** : Blocage préventif des URLs pointant vers des exécutables ou installateurs binaires (`.exe`, `.sh`, `.bin`, `.msi`, `.dmg`, `.apk`, `.deb`, `.iso`, etc.).
+- **Détection d'intervention humaine** : L'analyse proactive du titre et du DOM détecte les challenges Cloudflare, Turnstile, CAPTCHA et pages MFA. Lors d'une détection, `BrowserSessionManager` suspend la session, sauvegarde l'artefact visuel et lève une exception `HumanInterventionRequiredError` permettant à l'utilisateur de reprendre la main depuis le dashboard NEXUS avant de relancer l'agent.

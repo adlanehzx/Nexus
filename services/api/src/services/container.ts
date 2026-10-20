@@ -37,7 +37,12 @@ import {
   type AgentState,
 } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
-import { createBrowserTools, type BrowserWorkerClient } from "@nexus/browser-client";
+import {
+  createBrowserTools,
+  createNativeBrowserTools,
+  type BrowserWorkerClient,
+  type BrowserSessionManager,
+} from "@nexus/browser-client";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { PrismaClient } from "@nexus/database";
 import {
@@ -151,6 +156,8 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
+  /** Gestionnaire des sessions de navigation natives (browser-harness). */
+  browserSessionManager?: BrowserSessionManager;
   /** Configuration administrable, stockée localement sans secret en clair. */
   runtimeConfiguration?: RuntimeConfigurationStore;
   /** Coffre adossé au trousseau de session Linux. */
@@ -214,6 +221,8 @@ export class ServiceContainer {
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
   browser: BrowserWorkerClient | undefined;
+  /** Gestionnaire des sessions de navigation natives locales. */
+  browserSessionManager: BrowserSessionManager | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
@@ -447,7 +456,12 @@ export class ServiceContainer {
           });
     this.mcp = options.mcp;
     this.browser = undefined;
-    this.setBrowser(options.browser);
+    this.browserSessionManager = undefined;
+    if (options.browserSessionManager !== undefined) {
+      this.setNativeBrowser(options.browserSessionManager);
+    } else {
+      this.setBrowser(options.browser);
+    }
     this.runtimeConfiguration = options.runtimeConfiguration;
     this.vault = options.vault;
     this.missionControl = options.missionControl;
@@ -467,8 +481,21 @@ export class ServiceContainer {
     for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
     this.#browserToolNames.clear();
     this.browser = browser;
+    this.browserSessionManager = undefined;
     if (browser === undefined) return;
     for (const tool of createBrowserTools({ client: browser })) {
+      this.toolRegistry.register(tool, { replace: true });
+      this.#browserToolNames.add(tool.name);
+    }
+  }
+
+  setNativeBrowser(sessionManager: BrowserSessionManager | undefined): void {
+    for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
+    this.#browserToolNames.clear();
+    this.browser = undefined;
+    this.browserSessionManager = sessionManager;
+    if (sessionManager === undefined) return;
+    for (const tool of createNativeBrowserTools({ sessionManager })) {
       this.toolRegistry.register(tool, { replace: true });
       this.#browserToolNames.add(tool.name);
     }
