@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -7,8 +10,10 @@ import {
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
+  createMissionScheduleSchema,
   missionControlHealthSchema,
   missionSnapshotSchema,
+  missionScheduleSchema,
   paperAccountSchema,
   paperAccountsSchema,
   paperMarketSchema,
@@ -17,12 +22,15 @@ import {
   researchMissionResponseSchema,
   researchRunSchema,
   researchRunsSchema,
+  scheduleRunsSchema,
   submitResearchMissionSchema,
   type MissionControlPort,
+  type MissionSchedule,
 } from "@nexus/mission-control-client";
 import { ok, okSchema } from "../../lib/response.js";
 import { currentUser } from "../../plugins/authentication.js";
 import { missionOwnerPrefix } from "../../services/acp-orchestrator.js";
+import { NotFoundError } from "../../services/stores.js";
 
 const idParams = z.object({ id: z.string().uuid() });
 
@@ -36,14 +44,16 @@ const statusSchema = z.object({
   markets: paperMarketsSchema.shape.markets,
   recent_runs: researchRunsSchema.shape.runs,
   missions: z.array(missionSnapshotSchema),
+  schedules: z.array(missionScheduleSchema),
 });
 
 /**
  * Pont administrateur vers NEXUS Mission Engine.
  *
  * Le navigateur ne joint jamais le port 18100. Nexus authentifie l'utilisateur,
- * valide les contrats puis parle au service local. Les mutations exposées sont
- * exclusivement celles du simulateur paper-only.
+ * valide les contrats puis parle au service local. Les calendriers reçoivent
+ * côté serveur une clé propriétaire et un workspace isolé : le navigateur ne
+ * choisit jamais un chemin sur la machine hôte.
  */
 export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -71,20 +81,23 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             markets: [],
             recent_runs: [],
             missions: [],
+            schedules: [],
           },
           request.id,
         );
       }
       try {
         const { userId } = currentUser(request);
-        const [health, audit, accounts, markets, recentRuns, missions] = await Promise.all([
-          client.health(),
-          client.verifyAudit(),
-          client.listPaperAccounts(20),
-          client.listPaperMarkets(20),
-          client.listResearchRuns(50),
-          client.listMissions(50, `${missionOwnerPrefix(userId)}-`),
-        ]);
+        const [health, audit, accounts, markets, recentRuns, missions, schedules] =
+          await Promise.all([
+            client.health(),
+            client.verifyAudit(),
+            client.listPaperAccounts(20),
+            client.listPaperMarkets(20),
+            client.listResearchRuns(50),
+            client.listMissions(50, `${missionOwnerPrefix(userId)}-`),
+            client.listSchedules(200),
+          ]);
         return ok(
           {
             configured: true,
@@ -96,6 +109,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             markets,
             recent_runs: recentRuns,
             missions,
+            schedules: schedules.filter((schedule) => isOwnedSchedule(schedule, userId)),
           },
           request.id,
         );
@@ -111,12 +125,100 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             markets: [],
             recent_runs: [],
             missions: [],
+            schedules: [],
           },
           request.id,
         );
       }
     },
   );
+
+  app.post(
+    "/mission-control/schedules",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["mission-control"],
+        body: createMissionScheduleSchema,
+        response: { 200: okSchema(missionScheduleSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const scheduleKey = randomUUID();
+      const externalKey = `${missionOwnerPrefix(userId)}-schedule-${scheduleKey}`;
+      const workspace = resolve(process.cwd(), ".nexus-workspaces", `schedule-${scheduleKey}`);
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      const created = await required(app.services.missionControl).createSchedule({
+        ...request.body,
+        mission: { ...request.body.mission, external_key: externalKey, workspace },
+      });
+      return ok(created, request.id);
+    },
+  );
+
+  app.get(
+    "/mission-control/schedules/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["mission-control"],
+        params: idParams,
+        response: { 200: okSchema(missionScheduleSchema) },
+      },
+    },
+    async (request) => {
+      const client = required(app.services.missionControl);
+      const { userId } = currentUser(request);
+      return ok(await ownedSchedule(client, request.params.id, userId), request.id);
+    },
+  );
+
+  app.get(
+    "/mission-control/schedules/:id/runs",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["mission-control"],
+        params: idParams,
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) }),
+        response: { 200: okSchema(scheduleRunsSchema) },
+      },
+    },
+    async (request) => {
+      const client = required(app.services.missionControl);
+      const { userId } = currentUser(request);
+      await ownedSchedule(client, request.params.id, userId);
+      return ok(
+        { runs: await client.listScheduleRuns(request.params.id, request.query.limit) },
+        request.id,
+      );
+    },
+  );
+
+  for (const action of ["pause", "resume"] as const) {
+    app.post(
+      `/mission-control/schedules/:id/${action}`,
+      {
+        preHandler: app.requireAdmin,
+        schema: {
+          tags: ["mission-control"],
+          params: idParams,
+          response: { 200: okSchema(missionScheduleSchema) },
+        },
+      },
+      async (request) => {
+        const client = required(app.services.missionControl);
+        const { userId } = currentUser(request);
+        await ownedSchedule(client, request.params.id, userId);
+        const schedule =
+          action === "pause"
+            ? await client.pauseSchedule(request.params.id)
+            : await client.resumeSchedule(request.params.id);
+        return ok(schedule, request.id);
+      },
+    );
+  }
 
   app.post(
     "/mission-control/paper/accounts",
@@ -236,4 +338,18 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
 function required(client: MissionControlPort | undefined): MissionControlPort {
   if (client !== undefined) return client;
   throw new DependencyError({ message: "Mission Control integration is not configured" });
+}
+
+function isOwnedSchedule(schedule: MissionSchedule, userId: string): boolean {
+  return schedule.mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`);
+}
+
+async function ownedSchedule(
+  client: MissionControlPort,
+  scheduleId: string,
+  userId: string,
+): Promise<MissionSchedule> {
+  const schedule = await client.getSchedule(scheduleId);
+  if (!isOwnedSchedule(schedule, userId)) throw new NotFoundError("Calendrier", scheduleId);
+  return schedule;
 }

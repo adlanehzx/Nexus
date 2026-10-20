@@ -8,3 +8,8 @@ export * from "./short-term.js";
 export * from "./sources.js";
 export * from "./context.js";
 export * from "./service.js";
+export * from "./embedding.js";
+export * from "./extraction.js";
+export * from "./consolidation.js";
+export * from "./tokens.js";
+export * from "./artifacts.js";

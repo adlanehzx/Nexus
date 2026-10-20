@@ -14,6 +14,30 @@ const account = {
   orders: [],
 };
 
+const schedule = {
+  id: "55555555-5555-4555-8555-555555555555",
+  name: "Veille",
+  state: "active",
+  schedule_kind: "cron",
+  run_at: null,
+  cron_expression: "0 8 * * 1-5",
+  timezone: "Europe/Paris",
+  catch_up_policy: "latest",
+  max_catch_up: 3,
+  max_concurrency: 1,
+  misfire_grace_seconds: 300,
+  mission: {
+    external_key: "nexus-owned-schedule",
+    title: "Veille",
+    workspace: "/tmp/nexus",
+    tasks: [{ key: "watch", profile: "codex", instruction: "Veille", depends_on: [] }],
+  },
+  next_run_at: "2030-01-01T07:00:00+00:00",
+  last_scheduled_at: null,
+  created_at: "2026-10-20T10:00:00+00:00",
+  updated_at: "2026-10-20T10:00:00+00:00",
+};
+
 describe("MissionControlClient", () => {
   it("refuse HTTP hors boucle locale et les credentials dans l'URL", () => {
     expect(() => new MissionControlClient({ baseUrl: "http://example.org:18100" })).toThrow(
@@ -108,6 +132,63 @@ describe("MissionControlClient", () => {
     expect(mission.state).toBe("succeeded");
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("http://localhost:18100/v1/missions");
     expect(fetchImpl.mock.calls[1]?.[0]).toBe(`http://localhost:18100/v1/missions/${missionId}`);
+  });
+
+  it("pilote un calendrier et valide son historique", async () => {
+    const run = {
+      id: "66666666-6666-4666-8666-666666666666",
+      schedule_id: schedule.id,
+      scheduled_for: "2030-01-01T07:00:00+00:00",
+      state: "submitted",
+      mission_id: "77777777-7777-4777-8777-777777777777",
+      error_code: null,
+      created_at: "2030-01-01T07:00:00+00:00",
+      updated_at: "2030-01-01T07:00:01+00:00",
+      started_at: "2030-01-01T07:00:00+00:00",
+      finished_at: null,
+    };
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(schedule), { status: 201 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ schedules: [schedule] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ runs: [run] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...schedule, state: "paused" }), { status: 200 }),
+      );
+    const client = new MissionControlClient({ baseUrl: "http://localhost:18100", fetchImpl });
+
+    await client.createSchedule({
+      name: "Veille",
+      mission: schedule.mission,
+      timezone: "Europe/Paris",
+      cron_expression: "0 8 * * 1-5",
+    });
+    expect(await client.listSchedules()).toHaveLength(1);
+    expect(await client.listScheduleRuns(schedule.id)).toEqual([run]);
+    expect((await client.pauseSchedule(schedule.id)).state).toBe("paused");
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
+      "http://localhost:18100/v1/schedules",
+      "http://localhost:18100/v1/schedules?limit=50",
+      `http://localhost:18100/v1/schedules/${schedule.id}/runs?limit=100`,
+      `http://localhost:18100/v1/schedules/${schedule.id}/pause`,
+    ]);
+  });
+
+  it("refuse un calendrier avec run_at et cron simultanément", () => {
+    const client = new MissionControlClient({
+      baseUrl: "http://localhost:18100",
+      fetchImpl: vi.fn<typeof fetch>(),
+    });
+    expect(() =>
+      client.createSchedule({
+        name: "Invalide",
+        mission: schedule.mission,
+        run_at: "2030-01-01T00:00:00Z",
+        cron_expression: "0 8 * * *",
+      }),
+    ).toThrow(/exactly one/i);
   });
 
   it("valide le registre d'agents avant de l'exposer", async () => {

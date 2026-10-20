@@ -236,6 +236,7 @@ export interface MissionControlSection {
     status: "ready";
     worker_enabled: boolean;
     worker_concurrency: number;
+    scheduler_enabled: boolean;
     profiles: string[];
   };
   audit: null | {
@@ -298,6 +299,44 @@ export interface MissionControlSection {
       }[];
     }[];
   }[];
+  schedules: MissionSchedule[];
+}
+
+export interface MissionSchedule {
+  id: string;
+  name: string;
+  state: "active" | "paused" | "completed";
+  schedule_kind: "one_shot" | "cron";
+  run_at: string | null;
+  cron_expression: string | null;
+  timezone: string;
+  catch_up_policy: "skip" | "latest" | "all";
+  max_catch_up: number;
+  max_concurrency: number;
+  misfire_grace_seconds: number;
+  mission: {
+    external_key: string;
+    title: string;
+    workspace: string;
+    tasks: { key: string; profile: string; instruction: string }[];
+  };
+  next_run_at: string | null;
+  last_scheduled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleRun {
+  id: string;
+  schedule_id: string;
+  scheduled_for: string;
+  state: "pending" | "claimed" | "submitted" | "succeeded" | "failed" | "cancelled" | "skipped";
+  mission_id: string | null;
+  error_code: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface OrchestratedMission {
@@ -517,8 +556,48 @@ export class DashboardApi {
     return this.#get("/api/v1/dashboard/mission-control");
   }
 
+  createSchedule(input: {
+    name: string;
+    mission: {
+      external_key: string;
+      title: string;
+      workspace: string;
+      tasks: { key: string; profile: string; instruction: string; depends_on: string[] }[];
+    };
+    timezone: string;
+    run_at?: string;
+    cron_expression?: string;
+    catch_up_policy: "skip" | "latest" | "all";
+    max_catch_up: number;
+    max_concurrency: number;
+    misfire_grace_seconds: number;
+  }): Promise<MissionSchedule> {
+    return this.#request("POST", "/api/v1/mission-control/schedules", input);
+  }
+
+  pauseSchedule(id: string): Promise<MissionSchedule> {
+    return this.#request(
+      "POST",
+      `/api/v1/mission-control/schedules/${encodeURIComponent(id)}/pause`,
+    );
+  }
+
+  resumeSchedule(id: string): Promise<MissionSchedule> {
+    return this.#request(
+      "POST",
+      `/api/v1/mission-control/schedules/${encodeURIComponent(id)}/resume`,
+    );
+  }
+
+  scheduleRuns(id: string): Promise<{ runs: ScheduleRun[] }> {
+    return this.#get(`/api/v1/mission-control/schedules/${encodeURIComponent(id)}/runs?limit=100`);
+  }
+
   sendToNexus(message: string): Promise<OrchestratedMission> {
-    return this.#request("POST", "/api/v1/orchestrator/messages", { message });
+    return this.#request("POST", "/api/v1/orchestrator/messages", {
+      message,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    });
   }
 
   nexusMission(missionId: string): Promise<OrchestratedMission> {

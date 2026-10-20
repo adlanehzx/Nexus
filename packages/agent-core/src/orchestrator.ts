@@ -416,6 +416,7 @@ export class AgentOrchestrator {
           userId: state.record.userId,
           conversationId: state.record.conversationId,
           query: firstMessage,
+          model: state.record.model,
         });
         context.setBackground(assembled.text);
       } else if (this.#options.memory !== undefined) {

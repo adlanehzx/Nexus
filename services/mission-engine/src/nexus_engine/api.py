@@ -22,6 +22,7 @@ from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
 from nexus_engine.paper import PaperTradingRepository, RiskPolicy
 from nexus_engine.repository import MissionRepository
 from nexus_engine.research import ResearchRunRepository, build_research_plan
+from nexus_engine.scheduler import Scheduler, SchedulerRepository
 from nexus_engine.service_auth import (
     ServiceAuthError,
     ServiceTokenVerifier,
@@ -55,6 +56,20 @@ class MissionRequest(BaseModel):
     defaults: dict[str, Any] = Field(default_factory=dict)
     tasks: list[dict[str, Any]]
     owner: MissionOwnerRequest | None = None
+
+
+class ScheduleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    mission: MissionRequest
+    timezone: str = Field(default="UTC", min_length=1, max_length=100)
+    run_at: datetime | None = None
+    cron_expression: str | None = Field(default=None, min_length=1, max_length=100)
+    catch_up_policy: str = Field(default="latest", pattern=r"^(skip|latest|all)$")
+    max_catch_up: int = Field(default=10, ge=1, le=100)
+    max_concurrency: int = Field(default=1, ge=1, le=32)
+    misfire_grace_seconds: int = Field(default=300, ge=0, le=86400)
 
 
 class ResearchMissionRequest(BaseModel):
@@ -169,6 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repository = MissionRepository(Database(configured.database_path))
     paper = PaperTradingRepository(repository.db)
     research_runs = ResearchRunRepository(repository.db, paper)
+    schedules = SchedulerRepository(repository.db, repository)
     repository.sync_profiles(configured.load_profiles())
     profile_lock = threading.Lock()
     profile_gateway = (
@@ -243,6 +259,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 except TimeoutError:
                     pass
 
+        async def scheduler_loop() -> None:
+            scheduler = Scheduler(schedules)
+            while not stop.is_set():
+                try:
+                    worked = await asyncio.to_thread(scheduler.run_once)
+                except Exception:
+                    logging.getLogger("nexus_engine.scheduler").exception(
+                        "scheduler iteration failed"
+                    )
+                    worked = False
+                delay = 0.0 if worked else configured.scheduler_poll_seconds
+                if delay:
+                    try:
+                        await asyncio.wait_for(stop.wait(), timeout=delay)
+                    except TimeoutError:
+                        pass
+
         tasks = (
             [
                 asyncio.create_task(worker_loop(index))
@@ -253,6 +286,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         if configured.worker_enabled:
             tasks.append(asyncio.create_task(research_reconciler_loop()))
+        if configured.scheduler_enabled:
+            tasks.append(asyncio.create_task(scheduler_loop()))
         try:
             yield
         finally:
@@ -298,9 +333,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         request.state.service_identity = identity
         return await call_next(request)
+
     app.state.repository = repository
     app.state.paper = paper
     app.state.research_runs = research_runs
+    app.state.schedules = schedules
 
     @app.get("/v1/health/live")
     def live() -> dict[str, str]:
@@ -312,6 +349,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ready",
             "worker_enabled": configured.worker_enabled,
             "worker_concurrency": configured.worker_concurrency,
+            "scheduler_enabled": configured.scheduler_enabled,
             "profiles": sorted(repository.routable_profiles()),
         }
 
@@ -558,6 +596,59 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         limit: int = 50, external_prefix: str | None = None
     ) -> dict[str, Any]:
         return {"missions": repository.missions(limit, external_prefix)}
+
+    @app.post("/v1/schedules", status_code=201)
+    def create_schedule(request: ScheduleRequest) -> dict[str, Any]:
+        try:
+            return schedules.create(
+                name=request.name,
+                mission=request.mission.model_dump(),
+                timezone=request.timezone,
+                run_at=request.run_at,
+                cron_expression=request.cron_expression,
+                catch_up_policy=request.catch_up_policy,
+                max_catch_up=request.max_catch_up,
+                max_concurrency=request.max_concurrency,
+                misfire_grace_seconds=request.misfire_grace_seconds,
+            )
+        except ValidationError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/v1/schedules")
+    def list_schedules(limit: int = 50) -> dict[str, Any]:
+        return {"schedules": schedules.list(limit)}
+
+    @app.get("/v1/schedules/{schedule_id}")
+    def get_schedule(schedule_id: str) -> dict[str, Any]:
+        try:
+            return schedules.get(schedule_id)
+        except NotFoundError as exc:
+            raise HTTPException(404, "schedule not found") from exc
+
+    @app.get("/v1/schedules/{schedule_id}/runs")
+    def schedule_history(schedule_id: str, limit: int = 100) -> dict[str, Any]:
+        try:
+            return {"runs": schedules.history(schedule_id, limit)}
+        except NotFoundError as exc:
+            raise HTTPException(404, "schedule not found") from exc
+
+    @app.post("/v1/schedules/{schedule_id}/pause")
+    def pause_schedule(schedule_id: str) -> dict[str, Any]:
+        try:
+            return schedules.pause(schedule_id)
+        except NotFoundError as exc:
+            raise HTTPException(404, "schedule not found") from exc
+        except ConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post("/v1/schedules/{schedule_id}/resume")
+    def resume_schedule(schedule_id: str) -> dict[str, Any]:
+        try:
+            return schedules.resume(schedule_id)
+        except NotFoundError as exc:
+            raise HTTPException(404, "schedule not found") from exc
+        except ConflictError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.post("/v1/research-missions")
     def submit_research_mission(

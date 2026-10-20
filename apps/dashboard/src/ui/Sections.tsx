@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DashboardApi, McpConfiguration, TaskDetail } from "../lib/api.js";
+import type { DashboardApi, McpConfiguration, ScheduleRun, TaskDetail } from "../lib/api.js";
 import {
   HEALTH_LABELS,
   WORKER_LABELS,
@@ -1076,6 +1076,17 @@ export function MissionControl({ api }: { api: DashboardApi }) {
   const [bankroll, setBankroll] = useState("50.00");
   const [marketQuestion, setMarketQuestion] = useState("");
   const [marketClose, setMarketClose] = useState("");
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleInstruction, setScheduleInstruction] = useState("");
+  const [scheduleProfile, setScheduleProfile] = useState("");
+  const [scheduleKind, setScheduleKind] = useState<"one_shot" | "cron">("cron");
+  const [scheduleRunAt, setScheduleRunAt] = useState("");
+  const [scheduleCron, setScheduleCron] = useState("0 8 * * 1-5");
+  const [scheduleTimezone, setScheduleTimezone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  );
+  const [scheduleCatchUp, setScheduleCatchUp] = useState<"skip" | "latest" | "all">("latest");
+  const [scheduleHistory, setScheduleHistory] = useState<Record<string, ScheduleRun[]>>({});
   const [actionError, setActionError] = useState<string | null>(null);
 
   const act = (operation: () => Promise<unknown>): void => {
@@ -1138,6 +1149,235 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   ? "aucun"
                   : data.health.profiles.join(", ")}
               </p>
+
+              <h3>Calendriers autonomes</h3>
+              <div className="admin-form-card schedule-form-card">
+                <div className="inline-admin-form schedule-form">
+                  <input
+                    className="champ"
+                    value={scheduleName}
+                    onChange={(event) => setScheduleName(event.target.value)}
+                    placeholder="Nom du calendrier"
+                  />
+                  <select
+                    className="champ"
+                    value={scheduleKind}
+                    onChange={(event) => setScheduleKind(event.target.value as "one_shot" | "cron")}
+                  >
+                    <option value="cron">Récurrent · cron</option>
+                    <option value="one_shot">Une seule fois</option>
+                  </select>
+                  <select
+                    className="champ"
+                    value={scheduleProfile}
+                    onChange={(event) => setScheduleProfile(event.target.value)}
+                  >
+                    <option value="">Choisir automatiquement le premier profil</option>
+                    {(data.health?.profiles ?? []).map((profile) => (
+                      <option value={profile} key={profile}>
+                        {profile}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="champ"
+                    value={scheduleTimezone}
+                    onChange={(event) => setScheduleTimezone(event.target.value)}
+                    placeholder="Europe/Paris"
+                  />
+                  {scheduleKind === "cron" ? (
+                    <input
+                      className="champ mono"
+                      value={scheduleCron}
+                      onChange={(event) => setScheduleCron(event.target.value)}
+                      placeholder="0 8 * * 1-5"
+                    />
+                  ) : (
+                    <input
+                      className="champ"
+                      type="datetime-local"
+                      value={scheduleRunAt}
+                      onChange={(event) => setScheduleRunAt(event.target.value)}
+                    />
+                  )}
+                  <select
+                    className="champ"
+                    value={scheduleCatchUp}
+                    onChange={(event) =>
+                      setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
+                    }
+                  >
+                    <option value="skip">Ignorer les occurrences manquées</option>
+                    <option value="latest">Rattraper seulement la dernière</option>
+                    <option value="all">Rattraper les dernières occurrences</option>
+                  </select>
+                </div>
+                <textarea
+                  className="champ schedule-instruction"
+                  value={scheduleInstruction}
+                  onChange={(event) => setScheduleInstruction(event.target.value)}
+                  placeholder="Mission à exécuter automatiquement"
+                  rows={3}
+                />
+                <button
+                  className="bouton"
+                  type="button"
+                  disabled={
+                    data.health?.scheduler_enabled !== true ||
+                    scheduleName.trim().length === 0 ||
+                    scheduleInstruction.trim().length === 0 ||
+                    (data.health?.profiles.length ?? 0) === 0 ||
+                    (scheduleKind === "cron"
+                      ? scheduleCron.trim().length === 0
+                      : scheduleRunAt.length === 0)
+                  }
+                  onClick={() => {
+                    const profile = scheduleProfile || data.health?.profiles[0];
+                    if (profile === undefined) return;
+                    act(() =>
+                      api.createSchedule({
+                        name: scheduleName.trim(),
+                        mission: {
+                          // Le serveur remplace systématiquement cette valeur
+                          // par une clé liée au compte authentifié.
+                          external_key: "dashboard-owned-server-side",
+                          title: scheduleName.trim(),
+                          workspace: "/tmp/nexus-scheduled",
+                          tasks: [
+                            {
+                              key: "scheduled_task",
+                              profile,
+                              instruction: scheduleInstruction.trim(),
+                              depends_on: [],
+                            },
+                          ],
+                        },
+                        timezone: scheduleTimezone.trim(),
+                        ...(scheduleKind === "cron"
+                          ? { cron_expression: scheduleCron.trim() }
+                          : { run_at: new Date(scheduleRunAt).toISOString() }),
+                        catch_up_policy: scheduleCatchUp,
+                        max_catch_up: 10,
+                        max_concurrency: 1,
+                        misfire_grace_seconds: 300,
+                      }),
+                    );
+                  }}
+                >
+                  Créer le calendrier
+                </button>
+                {data.health?.scheduler_enabled === true ? null : (
+                  <p className="faible">Le dispatcher de calendriers est désactivé.</p>
+                )}
+              </div>
+
+              {data.schedules.length === 0 ? (
+                <Empty>Aucun calendrier pour ce compte.</Empty>
+              ) : (
+                <div className="stack">
+                  {data.schedules.map((schedule) => (
+                    <details className="card" key={schedule.id}>
+                      <summary>
+                        <State
+                          tone={
+                            schedule.state === "active"
+                              ? "ok"
+                              : schedule.state === "paused"
+                                ? "degraded"
+                                : "info"
+                          }
+                          label={schedule.state}
+                        />{" "}
+                        {schedule.name} ·{" "}
+                        {schedule.schedule_kind === "cron" ? schedule.cron_expression : "une fois"}
+                      </summary>
+                      <div className="schedule-details">
+                        <p className="faible">
+                          Fuseau : {schedule.timezone} · prochaine exécution :{" "}
+                          {schedule.next_run_at === null
+                            ? "aucune"
+                            : new Date(schedule.next_run_at).toLocaleString("fr-FR")}
+                        </p>
+                        <p>{schedule.mission.tasks[0]?.instruction ?? schedule.mission.title}</p>
+                        <div className="actions-row">
+                          {schedule.state === "active" ? (
+                            <button
+                              className="bouton secondaire compact"
+                              type="button"
+                              onClick={() => act(() => api.pauseSchedule(schedule.id))}
+                            >
+                              Mettre en pause
+                            </button>
+                          ) : schedule.state === "paused" ? (
+                            <button
+                              className="bouton compact"
+                              type="button"
+                              onClick={() => act(() => api.resumeSchedule(schedule.id))}
+                            >
+                              Reprendre
+                            </button>
+                          ) : null}
+                          <button
+                            className="bouton secondaire compact"
+                            type="button"
+                            onClick={() => {
+                              setActionError(null);
+                              void api
+                                .scheduleRuns(schedule.id)
+                                .then(({ runs }) =>
+                                  setScheduleHistory((current) => ({
+                                    ...current,
+                                    [schedule.id]: runs,
+                                  })),
+                                )
+                                .catch((cause: unknown) =>
+                                  setActionError(
+                                    cause instanceof Error
+                                      ? cause.message
+                                      : "Historique indisponible.",
+                                  ),
+                                );
+                            }}
+                          >
+                            Charger l’historique
+                          </button>
+                        </div>
+                        {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
+                            schedule.id
+                          ]?.length === 0 ? (
+                          <p className="faible">Aucune occurrence exécutée.</p>
+                        ) : (
+                          <Table head={["Prévue", "État", "Mission", "Erreur"]}>
+                            {scheduleHistory[schedule.id]?.map((run) => (
+                              <tr key={run.id}>
+                                <td>{new Date(run.scheduled_for).toLocaleString("fr-FR")}</td>
+                                <td>
+                                  <State
+                                    tone={
+                                      run.state === "succeeded"
+                                        ? "ok"
+                                        : run.state === "failed"
+                                          ? "down"
+                                          : run.state === "skipped"
+                                            ? "degraded"
+                                            : "info"
+                                    }
+                                    label={run.state}
+                                  />
+                                </td>
+                                <td className="mono faible">
+                                  {run.mission_id?.slice(0, 8) ?? "—"}
+                                </td>
+                                <td className="faible">{run.error_code ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </Table>
+                        )}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
 
               <h3>Chronologie unifiée des missions</h3>
               {data.missions.length === 0 ? (

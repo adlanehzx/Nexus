@@ -22,9 +22,26 @@ const plannedTaskSchema = z.object({
   depends_on: z.array(z.string()).max(8),
 });
 
+const plannedScheduleSchema = z
+  .discriminatedUnion("kind", [
+    z.object({ kind: z.literal("immediate") }),
+    z.object({
+      kind: z.literal("one_shot"),
+      run_at: z.iso.datetime({ offset: true }),
+      timezone: z.string().min(1).max(100),
+    }),
+    z.object({
+      kind: z.literal("cron"),
+      cron_expression: z.string().min(1).max(100),
+      timezone: z.string().min(1).max(100),
+    }),
+  ])
+  .default({ kind: "immediate" });
+
 const plannedMissionSchema = z.object({
   title: z.string().min(1).max(200),
   tasks: z.array(plannedTaskSchema).min(1).max(7),
+  schedule: plannedScheduleSchema,
 });
 
 /**
@@ -94,7 +111,7 @@ export class AcpOrchestrator {
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
   }
 
-  async submit(userId: string, objective: string): Promise<OrchestratedMission> {
+  async submit(userId: string, objective: string, timezone = "UTC"): Promise<OrchestratedMission> {
     const [health, settings] = await Promise.all([
       this.#missionControl.health(),
       this.#missionControl.settings(),
@@ -117,7 +134,7 @@ export class AcpOrchestrator {
               query: objective,
             })
           ).text;
-    const planned = await this.#plan(objective, health.profiles, settings, memoryContext);
+    const planned = await this.#plan(objective, health.profiles, settings, memoryContext, timezone);
     const tasks = ensureFinalSynthesis(
       planned.tasks,
       objective,
@@ -126,6 +143,38 @@ export class AcpOrchestrator {
       memoryContext,
     );
     const externalKey = `${missionOwnerPrefix(userId)}-${missionKey}`;
+    if (planned.schedule.kind !== "immediate") {
+      if (health.scheduler_enabled !== true) {
+        throw new Error("Le planificateur durable NEXUS est désactivé.");
+      }
+      const schedule = await this.#missionControl.createSchedule({
+        name: planned.title,
+        mission: {
+          external_key: `${externalKey}-schedule`,
+          title: planned.title,
+          workspace,
+          tasks,
+        },
+        timezone: planned.schedule.timezone,
+        ...(planned.schedule.kind === "cron"
+          ? { cron_expression: planned.schedule.cron_expression }
+          : { run_at: planned.schedule.run_at }),
+        catch_up_policy: "latest",
+        max_catch_up: 10,
+        max_concurrency: 1,
+        misfire_grace_seconds: 300,
+      });
+      return {
+        missionId: schedule.id,
+        title: planned.title,
+        state: "scheduled",
+        profiles: [...new Set(tasks.map((task) => task.profile))],
+        completedTasks: 0,
+        totalTasks: tasks.length,
+        response: describeSchedule(schedule),
+        error: null,
+      };
+    }
     // Le préfixe d'`external_key` reste lisible pour filtrer les missions d'un
     // utilisateur, mais il ne prouve rien : c'est l'assertion qui porte
     // désormais la propriété, et elle est signée.
@@ -180,6 +229,7 @@ export class AcpOrchestrator {
     profiles: string[],
     settings: RuntimeSettings,
     memoryContext: string,
+    timezone: string,
   ): Promise<z.infer<typeof plannedMissionSchema>> {
     if (this.#llm === undefined) return fallbackPlan(objective, profiles, settings);
 
@@ -188,6 +238,8 @@ export class AcpOrchestrator {
 Profils réellement disponibles : ${profiles.join(", ")}.
 Priorité recherche : ${settings.research_priority.join(", ")}.
 Priorité critique : ${settings.review_priority.join(", ")}.
+Date courante : ${new Date().toISOString()}.
+Fuseau du client : ${timezone}.
 
 Règles absolues :
 - utilise exclusivement ces profils ;
@@ -195,6 +247,8 @@ Règles absolues :
 - chaque instruction doit être autonome, vérifiable et ne contenir aucun secret ;
 - antigravity est privilégié pour recherche/exploration, claude pour analyse et critique, codex pour code/intégration ;
 - toute tâche qui exige un vrai navigateur, des clics, un formulaire, une session connectée ou du JavaScript doit être confiée à codex ou claude et mentionner l'utilisation de browser-harness local sans clé API ;
+- utilise schedule.kind="cron" ou "one_shot" uniquement si l'utilisateur demande explicitement une exécution future ou répétée ; sinon utilise "immediate" ;
+- pour cron, produis cinq champs standards et conserve le fuseau IANA du client ; pour one_shot, produis une date ISO 8601 avec décalage ;
 - ne crée PAS de tâche de synthèse finale : NEXUS l'ajoute après validation ;
 - pour une demande simple, une seule tâche suffit.`;
     const contextualSystem = appendUserContext(system, memoryContext);
@@ -339,7 +393,29 @@ function fallbackPlan(
       instruction: `Effectue une revue critique indépendante de la mission et du résultat amont. Repère les erreurs, risques et éléments non prouvés, puis propose les corrections nécessaires.\n\n${objective}`,
     });
   }
-  return { title: objective.slice(0, 120), tasks };
+  return { title: objective.slice(0, 120), tasks, schedule: { kind: "immediate" } };
+}
+
+function describeSchedule(schedule: {
+  name: string;
+  schedule_kind: "one_shot" | "cron";
+  cron_expression: string | null;
+  next_run_at: string | null;
+  timezone: string;
+}): string {
+  const next =
+    schedule.next_run_at === null
+      ? "aucune date calculée"
+      : new Intl.DateTimeFormat("fr-FR", {
+          dateStyle: "long",
+          timeStyle: "short",
+          timeZone: schedule.timezone,
+        }).format(new Date(schedule.next_run_at));
+  const recurrence =
+    schedule.schedule_kind === "cron"
+      ? `Récurrence cron : ${schedule.cron_expression ?? "inconnue"}.`
+      : "Exécution unique.";
+  return `Calendrier « ${schedule.name} » créé. ${recurrence} Prochaine exécution : ${next} (${schedule.timezone}).`;
 }
 
 function preferred(profiles: string[], order: string[]): string {

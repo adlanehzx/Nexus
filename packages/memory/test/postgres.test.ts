@@ -48,6 +48,28 @@ describePostgres("PostgresMemoryProvider", () => {
     expect(hits[0]?.record.kind).toBe("SEMANTIC");
   });
 
+  it("persists embeddings and provenance for hybrid retrieval", async () => {
+    const sourceRunId = uuidv7();
+    const stored = await provider.store({
+      userId,
+      kind: "SEMANTIC",
+      content: "J'aime le vélo",
+      sourceRunId,
+      sourceUri: "https://example.test/source",
+      extractedAt: new Date("2026-10-20T10:00:00Z"),
+    });
+
+    const hits = await new PostgresMemoryProvider({ prisma }).search({
+      userId,
+      query: "J'adore la bicyclette",
+    });
+
+    expect(hits[0]?.record.id).toBe(stored.id);
+    expect(hits[0]?.record.sourceRunId).toBe(sourceRunId);
+    expect(hits[0]?.record.sourceUri).toBe("https://example.test/source");
+    expect(hits[0]?.record.embeddingModel).toMatch(/^nexus-hash-v1-/);
+  });
+
   it("persists updates and supersession", async () => {
     const previous = await provider.store({ userId, kind: "SEMANTIC", content: "Habite à Lyon" });
     const current = await provider.update({ userId, id: previous.id, content: "Habite à Paris" });

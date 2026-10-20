@@ -8,6 +8,12 @@ import type {
   MemorySummarizeInput,
   MemoryUpdateInput,
 } from "./provider.js";
+import {
+  cosineSimilarity,
+  LocalHashEmbeddingProvider,
+  memoryContentHash,
+  type EmbeddingProvider,
+} from "./embedding.js";
 
 /**
  * Fournisseur de mémoire en mémoire vive.
@@ -22,14 +28,18 @@ import type {
  */
 export class InMemoryMemoryProvider implements MemoryProvider {
   readonly #records = new Map<string, MemoryRecord>();
+  readonly #vectors = new Map<string, readonly number[]>();
   readonly #now: () => Date;
+  readonly #embeddings: EmbeddingProvider;
 
-  constructor(options: { now?: () => Date } = {}) {
+  constructor(options: { now?: () => Date; embeddings?: EmbeddingProvider } = {}) {
     this.#now = options.now ?? (() => new Date());
+    this.#embeddings = options.embeddings ?? new LocalHashEmbeddingProvider();
   }
 
-  store(input: MemoryStoreInput): Promise<MemoryRecord> {
+  async store(input: MemoryStoreInput): Promise<MemoryRecord> {
     const now = this.#now();
+    const [embedding = []] = await this.#embeddings.embed([input.content]);
     const record: MemoryRecord = {
       id: uuidv7(now.getTime()),
       userId: input.userId,
@@ -42,13 +52,21 @@ export class InMemoryMemoryProvider implements MemoryProvider {
       origin: input.origin ?? "USER",
       sensitivity: input.sensitivity ?? "ORDINARY",
       sensitiveCategories: [...(input.sensitiveCategories ?? [])],
+      sourceRunId: input.sourceRunId ?? null,
+      sourceConversationId: input.sourceConversationId ?? null,
+      sourceMessageId: input.sourceMessageId ?? null,
+      sourceUri: input.sourceUri ?? null,
+      contentHash: memoryContentHash(input.content),
+      embeddingModel: this.#embeddings.model,
+      extractedAt: input.extractedAt ?? null,
       validFrom: now,
       validUntil: null,
       supersededById: null,
       supersedesId: null,
     };
     this.#records.set(record.id, record);
-    return Promise.resolve(record);
+    this.#vectors.set(record.id, embedding);
+    return record;
   }
 
   /**
@@ -58,9 +76,9 @@ export class InMemoryMemoryProvider implements MemoryProvider {
    * réviser ce qui est **affirmé** supersède, corriger ce qui est **annoté**
    * s'applique sur place.
    */
-  update(input: MemoryUpdateInput): Promise<MemoryRecord | undefined> {
+  async update(input: MemoryUpdateInput): Promise<MemoryRecord | undefined> {
     const existing = this.#owned(input.userId, input.id);
-    if (existing === undefined) return Promise.resolve(undefined);
+    if (existing === undefined) return undefined;
 
     const changesContent = input.content !== undefined && input.content !== existing.content;
 
@@ -74,7 +92,7 @@ export class InMemoryMemoryProvider implements MemoryProvider {
         ...(input.kind === undefined ? {} : { kind: input.kind }),
       };
       this.#records.set(patched.id, patched);
-      return Promise.resolve(patched);
+      return patched;
     }
 
     const now = this.#now();
@@ -91,7 +109,10 @@ export class InMemoryMemoryProvider implements MemoryProvider {
       validUntil: null,
       supersededById: null,
       supersedesId: existing.id,
+      contentHash: memoryContentHash(input.content ?? existing.content),
+      embeddingModel: this.#embeddings.model,
     };
+    const [embedding = []] = await this.#embeddings.embed([replacement.content]);
 
     // L'ancien n'est pas détruit : il cesse d'être vrai à partir de maintenant.
     this.#records.set(existing.id, {
@@ -100,17 +121,21 @@ export class InMemoryMemoryProvider implements MemoryProvider {
       supersededById: replacement.id,
     });
     this.#records.set(replacement.id, replacement);
+    this.#vectors.set(replacement.id, embedding);
 
-    return Promise.resolve(replacement);
+    return replacement;
   }
 
   delete(input: { userId: string; id: string }): Promise<boolean> {
     if (this.#owned(input.userId, input.id) === undefined) return Promise.resolve(false);
+    this.#vectors.delete(input.id);
     return Promise.resolve(this.#records.delete(input.id));
   }
 
-  search(query: MemorySearchQuery): Promise<MemoryHit[]> {
+  async search(query: MemorySearchQuery): Promise<MemoryHit[]> {
     const terms = tokenize(query.query);
+    const [queryVector = []] =
+      terms.length === 0 ? [[]] : await this.#embeddings.embed([query.query]);
     const now = this.#now().getTime();
     const limit = query.limit ?? 8;
     const hits: MemoryHit[] = [];
@@ -136,17 +161,22 @@ export class InMemoryMemoryProvider implements MemoryProvider {
 
       const recordTerms = new Set(tokenize(record.content));
       const overlap = terms.filter((term) => recordTerms.has(term)).length;
-      if (overlap === 0) continue;
+      const semantic = Math.max(
+        0,
+        cosineSimilarity(queryVector, this.#vectors.get(record.id) ?? []),
+      );
+      if (overlap === 0 && semantic < 0.08) continue;
 
       const lexical = overlap / terms.length;
       hits.push({
         record,
-        score: 0.7 * lexical + 0.2 * record.importance + 0.1 * recency(record, now),
+        score:
+          0.45 * lexical + 0.35 * semantic + 0.12 * record.importance + 0.08 * recency(record, now),
       });
     }
 
     hits.sort((left, right) => right.score - left.score || compareIds(left, right));
-    return Promise.resolve(hits.slice(0, limit));
+    return hits.slice(0, limit);
   }
 
   /**

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MissionControlPort, SubmitMission } from "@nexus/mission-control-client";
+import type { LLMProvider } from "@nexus/llm";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
 const missionId = "33333333-3333-4333-8333-333333333333";
@@ -10,6 +11,7 @@ const engine = {
     status: "ready" as const,
     worker_enabled: true,
     worker_concurrency: 2,
+    scheduler_enabled: true,
     profiles: ["antigravity", "claude", "codex"],
   }),
   settings: vi.fn().mockResolvedValue({
@@ -55,6 +57,12 @@ const engine = {
     }),
   ),
   listMissions: vi.fn().mockResolvedValue([]),
+  createSchedule: vi.fn(),
+  getSchedule: vi.fn(),
+  listSchedules: vi.fn().mockResolvedValue([]),
+  listScheduleRuns: vi.fn().mockResolvedValue([]),
+  pauseSchedule: vi.fn(),
+  resumeSchedule: vi.fn(),
   agents: vi.fn().mockResolvedValue({ worker_enabled: true, configured: [], available: [] }),
   registerAgent: vi.fn().mockResolvedValue({
     worker_enabled: true,
@@ -191,6 +199,99 @@ describe("façade orchestrateur NEXUS", () => {
       fallback_profiles: ["claude"],
     });
     expect(submitted?.tasks[0]?.instruction).toContain("browser-harness");
+  });
+
+  it("crée depuis le chat un calendrier durable quand la demande temporelle est explicite", async () => {
+    await harness.close();
+    const scheduleId = "88888888-8888-4888-8888-888888888888";
+    const scheduledLlm: LLMProvider = {
+      id: "scheduled-test",
+      model: "scheduled-test",
+      capabilities: {
+        tools: false,
+        vision: false,
+        structuredOutput: true,
+        maxContextTokens: 100_000,
+      },
+      countTokens: () => Promise.resolve(10),
+      structuredOutput: <T>() =>
+        Promise.resolve({
+          title: "Veille quotidienne",
+          tasks: [
+            {
+              key: "daily_watch",
+              profile: "antigravity",
+              instruction: "Analyse les nouvelles informations et signale les changements.",
+              depends_on: [],
+            },
+          ],
+          schedule: {
+            kind: "cron",
+            cron_expression: "0 8 * * *",
+            timezone: "Europe/Paris",
+          },
+        } as T),
+      generate: () =>
+        Promise.resolve({
+          content: [],
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          model: "scheduled-test",
+        }),
+      stream: async function* () {
+        await Promise.resolve();
+        yield { type: "text_delta", delta: "" } as const;
+      },
+    };
+    engine.createSchedule.mockResolvedValueOnce({
+      id: scheduleId,
+      name: "Veille quotidienne",
+      state: "active",
+      schedule_kind: "cron",
+      run_at: null,
+      cron_expression: "0 8 * * *",
+      timezone: "Europe/Paris",
+      catch_up_policy: "latest",
+      max_catch_up: 10,
+      max_concurrency: 1,
+      misfire_grace_seconds: 300,
+      mission: {
+        external_key: "nexus-owner-schedule",
+        title: "Veille quotidienne",
+        workspace: "/tmp/nexus",
+        tasks: [],
+      },
+      next_run_at: "2030-01-01T07:00:00+00:00",
+      last_scheduled_at: null,
+      created_at: "2026-10-20T10:00:00+00:00",
+      updated_at: "2026-10-20T10:00:00+00:00",
+    });
+    harness = await makeApi({ missionControl: engine, llmProvider: scheduledLlm });
+    account = await createAccount(harness, "scheduled-chat@example.org");
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: {
+        message: "Tous les jours à 8 h, surveille les nouvelles informations.",
+        timezone: "Europe/Paris",
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data).toMatchObject({
+      missionId: scheduleId,
+      state: "scheduled",
+    });
+    expect(response.json().data.response).toContain("Calendrier");
+    expect(engine.createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timezone: "Europe/Paris",
+        cron_expression: "0 8 * * *",
+      }),
+    );
+    expect(engine.submitMission).not.toHaveBeenCalled();
   });
 
   it("permet à l'administrateur de consulter et enregistrer les profils ACP NEXUS", async () => {

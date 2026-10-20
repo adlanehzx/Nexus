@@ -35,6 +35,11 @@ export interface MemoryStoreInput {
   confidence?: number;
   tags?: readonly string[];
   sourceRunId?: string;
+  sourceConversationId?: string;
+  sourceMessageId?: string;
+  sourceUri?: string;
+  /** Date d'extraction automatique. Absente pour une commande explicite. */
+  extractedAt?: Date;
   /** Sensibilité déjà arbitrée par `MemoryService`. */
   sensitivity?: MemoryRecord["sensitivity"];
   sensitiveCategories?: readonly string[];

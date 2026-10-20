@@ -9,19 +9,28 @@ import type {
   MemorySummarizeInput,
   MemoryUpdateInput,
 } from "./provider.js";
+import {
+  cosineSimilarity,
+  LocalHashEmbeddingProvider,
+  memoryContentHash,
+  type EmbeddingProvider,
+} from "./embedding.js";
 
 /** Durable PostgreSQL implementation of the existing MemoryProvider contract. */
 export class PostgresMemoryProvider implements MemoryProvider {
   readonly #prisma: PrismaClient;
   readonly #now: () => Date;
+  readonly #embeddings: EmbeddingProvider;
 
-  constructor(options: { prisma: PrismaClient; now?: () => Date }) {
+  constructor(options: { prisma: PrismaClient; now?: () => Date; embeddings?: EmbeddingProvider }) {
     this.#prisma = options.prisma;
     this.#now = options.now ?? (() => new Date());
+    this.#embeddings = options.embeddings ?? new LocalHashEmbeddingProvider();
   }
 
   async store(input: MemoryStoreInput): Promise<MemoryRecord> {
     const now = this.#now();
+    const [embedding = []] = await this.#embeddings.embed([input.content]);
     const record = await this.#prisma.memory.create({
       data: {
         id: uuidv7(now.getTime()),
@@ -35,6 +44,14 @@ export class PostgresMemoryProvider implements MemoryProvider {
         origin: input.origin ?? "USER",
         sensitivity: input.sensitivity ?? "ORDINARY",
         sensitiveCategories: [...(input.sensitiveCategories ?? [])],
+        sourceRunId: input.sourceRunId ?? null,
+        sourceConversationId: input.sourceConversationId ?? null,
+        sourceMessageId: input.sourceMessageId ?? null,
+        sourceUri: input.sourceUri ?? null,
+        contentHash: memoryContentHash(input.content),
+        embedding: [...embedding],
+        embeddingModel: this.#embeddings.model,
+        extractedAt: input.extractedAt ?? null,
         validFrom: now,
         validUntil: null,
         supersededById: null,
@@ -68,19 +85,29 @@ export class PostgresMemoryProvider implements MemoryProvider {
       }
 
       const now = this.#now();
+      const replacementContent = input.content ?? existing.content;
+      const [embedding = []] = await this.#embeddings.embed([replacementContent]);
       const replacement = await transaction.memory.create({
         data: {
           id: uuidv7(now.getTime()),
           userId: existing.userId,
           layer: input.layer ?? existing.layer,
           kind: input.kind ?? existing.kind,
-          content: input.content ?? existing.content,
+          content: replacementContent,
           importance: input.importance ?? existing.importance,
           confidence: input.confidence ?? existing.confidence,
           tags: input.tags === undefined ? existing.tags : [...input.tags],
           origin: existing.origin,
           sensitivity: existing.sensitivity,
           sensitiveCategories: existing.sensitiveCategories,
+          sourceRunId: existing.sourceRunId,
+          sourceConversationId: existing.sourceConversationId,
+          sourceMessageId: existing.sourceMessageId,
+          sourceUri: existing.sourceUri,
+          contentHash: memoryContentHash(replacementContent),
+          embedding: [...embedding],
+          embeddingModel: this.#embeddings.model,
+          extractedAt: existing.extractedAt,
           validFrom: now,
           validUntil: null,
           supersededById: null,
@@ -120,6 +147,8 @@ export class PostgresMemoryProvider implements MemoryProvider {
       },
     });
     const terms = tokenize(query.query);
+    const [queryVector = []] =
+      terms.length === 0 ? [[]] : await this.#embeddings.embed([query.query]);
     const hits: MemoryHit[] = [];
 
     for (const stored of records) {
@@ -131,12 +160,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       const recordTerms = new Set(tokenize(record.content));
       const overlap = terms.filter((term) => recordTerms.has(term)).length;
-      if (overlap === 0) continue;
+      const semantic = Math.max(0, cosineSimilarity(queryVector, stored.embedding));
+      if (overlap === 0 && semantic < 0.08) continue;
 
       hits.push({
         record,
         score:
-          0.7 * (overlap / terms.length) + 0.2 * record.importance + 0.1 * recency(record, now),
+          0.45 * (overlap / terms.length) +
+          0.35 * semantic +
+          0.12 * record.importance +
+          0.08 * recency(record, now),
       });
     }
 
@@ -174,6 +207,13 @@ function toRecord(record: Prisma.MemoryModel): MemoryRecord {
     origin: record.origin,
     sensitivity: record.sensitivity,
     sensitiveCategories: record.sensitiveCategories,
+    sourceRunId: record.sourceRunId,
+    sourceConversationId: record.sourceConversationId,
+    sourceMessageId: record.sourceMessageId,
+    sourceUri: record.sourceUri,
+    contentHash: record.contentHash,
+    embeddingModel: record.embeddingModel,
+    extractedAt: record.extractedAt,
     validFrom: record.validFrom,
     validUntil: record.validUntil,
     supersededById: record.supersededById,

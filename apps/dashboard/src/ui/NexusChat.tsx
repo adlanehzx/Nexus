@@ -72,6 +72,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           ...current,
           { id: crypto.randomUUID(), role: "assistant", text: "", mission },
         ]);
+        if (mission.state === "scheduled" || mission.response !== null) return;
         const url = new URL(window.location.href);
         url.searchParams.set("mission", mission.missionId);
         window.history.replaceState(null, "", url);

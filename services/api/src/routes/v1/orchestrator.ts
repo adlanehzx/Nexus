@@ -129,14 +129,21 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
       schema: {
         tags: ["orchestrator"],
-        body: z.object({ message: z.string().trim().min(1).max(32_000) }),
+        body: z.object({
+          message: z.string().trim().min(1).max(32_000),
+          timezone: z.string().trim().min(1).max(100).default("UTC"),
+        }),
         response: { 202: okSchema(missionViewSchema) },
       },
     },
     async (request, reply) => {
       if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
       const { userId } = currentUser(request);
-      const mission = await orchestrator.submit(userId, request.body.message);
+      const mission = await orchestrator.submit(
+        userId,
+        request.body.message,
+        request.body.timezone,
+      );
       return reply.code(202).send(ok(mission, request.id));
     },
   );

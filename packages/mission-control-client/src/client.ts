@@ -6,6 +6,7 @@ import {
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
+  createMissionScheduleSchema,
   createAgentSchema,
   updateAgentProfileSchema,
   testAgentProfileSchema,
@@ -16,6 +17,8 @@ import {
   missionSnapshotSchema,
   missionSnapshotsSchema,
   missionSubmissionSchema,
+  missionScheduleSchema,
+  missionSchedulesSchema,
   paperAccountSchema,
   paperAccountsSchema,
   paperMarketSchema,
@@ -24,6 +27,7 @@ import {
   researchMissionResponseSchema,
   researchRunSchema,
   researchRunsSchema,
+  scheduleRunsSchema,
   registerAgentSchema,
   submitResearchMissionSchema,
   submitMissionSchema,
@@ -32,6 +36,7 @@ import {
   type AuditVerification,
   type CreatePaperAccount,
   type CreatePaperMarket,
+  type CreateMissionSchedule,
   type CreateAgent,
   type UpdateAgentProfile,
   type TestAgentProfile,
@@ -41,11 +46,13 @@ import {
   type RuntimeSettings,
   type MissionSnapshot,
   type MissionSubmission,
+  type MissionSchedule,
   type PaperAccount,
   type PaperMarket,
   type PaperQuote,
   type ResearchMissionResponse,
   type ResearchRun,
+  type ScheduleRun,
   type RegisterAgent,
   type SubmitResearchMission,
   type SubmitMission,
@@ -95,6 +102,12 @@ export interface MissionControlPort {
     externalPrefix?: string,
     signal?: AbortSignal,
   ): Promise<MissionSnapshot[]>;
+  createSchedule(input: CreateMissionSchedule, signal?: AbortSignal): Promise<MissionSchedule>;
+  getSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule>;
+  listSchedules(limit?: number, signal?: AbortSignal): Promise<MissionSchedule[]>;
+  listScheduleRuns(id: string, limit?: number, signal?: AbortSignal): Promise<ScheduleRun[]>;
+  pauseSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule>;
+  resumeSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule>;
   agents(signal?: AbortSignal): Promise<AgentRegistry>;
   registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
   createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry>;
@@ -206,6 +219,68 @@ export class MissionControlClient implements MissionControlPort {
       signal,
     );
     return result.missions;
+  }
+
+  createSchedule(input: CreateMissionSchedule, signal?: AbortSignal): Promise<MissionSchedule> {
+    return this.#request(
+      "POST",
+      "/v1/schedules",
+      missionScheduleSchema,
+      createMissionScheduleSchema.parse(input),
+      signal,
+    );
+  }
+
+  getSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule> {
+    return this.#request(
+      "GET",
+      `/v1/schedules/${encodeURIComponent(id)}`,
+      missionScheduleSchema,
+      undefined,
+      signal,
+    );
+  }
+
+  async listSchedules(limit = 50, signal?: AbortSignal): Promise<MissionSchedule[]> {
+    const result = await this.#request(
+      "GET",
+      `/v1/schedules?limit=${String(boundedLimit(limit))}`,
+      missionSchedulesSchema,
+      undefined,
+      signal,
+    );
+    return result.schedules;
+  }
+
+  async listScheduleRuns(id: string, limit = 100, signal?: AbortSignal): Promise<ScheduleRun[]> {
+    const result = await this.#request(
+      "GET",
+      `/v1/schedules/${encodeURIComponent(id)}/runs?limit=${String(boundedLimit(limit, 500))}`,
+      scheduleRunsSchema,
+      undefined,
+      signal,
+    );
+    return result.runs;
+  }
+
+  pauseSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule> {
+    return this.#request(
+      "POST",
+      `/v1/schedules/${encodeURIComponent(id)}/pause`,
+      missionScheduleSchema,
+      undefined,
+      signal,
+    );
+  }
+
+  resumeSchedule(id: string, signal?: AbortSignal): Promise<MissionSchedule> {
+    return this.#request(
+      "POST",
+      `/v1/schedules/${encodeURIComponent(id)}/resume`,
+      missionScheduleSchema,
+      undefined,
+      signal,
+    );
   }
 
   agents(signal?: AbortSignal): Promise<AgentRegistry> {
@@ -467,9 +542,9 @@ function validateBaseUrl(value: string): URL {
   return url;
 }
 
-function boundedLimit(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > 200) {
-    throw new TypeError("limit must be an integer between 1 and 200");
+function boundedLimit(value: number, maximum = 200): number {
+  if (!Number.isInteger(value) || value < 1 || value > maximum) {
+    throw new TypeError(`limit must be an integer between 1 and ${String(maximum)}`);
   }
   return value;
 }

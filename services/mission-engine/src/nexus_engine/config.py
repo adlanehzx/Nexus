@@ -31,6 +31,11 @@ class Settings:
     #: exigent alors un jeton de service signe. Absente, le port reste protege
     #: par la seule boucle locale, et le demarrage le dit dans le journal.
     api_public_key_pem: str | None = None
+    #: Le scheduler est un petit dispatcher durable indépendant des workers
+    #: ACP. Il peut donc matérialiser des missions même si leur exécution est
+    #: assurée par une autre instance du moteur.
+    scheduler_enabled: bool = True
+    scheduler_poll_seconds: float = 1.0
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -51,6 +56,17 @@ class Settings:
             == "true",
             worker_concurrency=max(
                 1, min(8, int(os.getenv("NEXUS_ENGINE_WORKER_CONCURRENCY", "2")))
+            ),
+            scheduler_enabled=os.getenv(
+                "NEXUS_ENGINE_SCHEDULER_ENABLED", "true"
+            ).lower()
+            == "true",
+            scheduler_poll_seconds=max(
+                0.2,
+                min(
+                    60.0,
+                    float(os.getenv("NEXUS_ENGINE_SCHEDULER_POLL_SECONDS", "1")),
+                ),
             ),
             profiles_file=(
                 Path(value)

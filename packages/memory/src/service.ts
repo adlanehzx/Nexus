@@ -8,6 +8,7 @@ import type {
   MemoryUpdateInput,
 } from "./provider.js";
 import type { MemoryKind, MemoryOrigin, MemoryRecord, StorableLayer } from "./types.js";
+import { memoryContentHash } from "./embedding.js";
 
 /**
  * Le service de mémoire.
@@ -78,6 +79,10 @@ export interface RememberInput {
   confidence?: number;
   tags?: readonly string[];
   sourceRunId?: string;
+  sourceConversationId?: string;
+  sourceMessageId?: string;
+  sourceUri?: string;
+  extractedAt?: Date;
   /**
    * L'utilisateur a vu la nature du contenu et l'a confirmé.
    *
@@ -189,6 +194,19 @@ export class MemoryService {
       throw new SensitiveMemoryNeedsConsentError(verdict.explanation, verdict.categories);
     }
 
+    // Déduplication avant écriture : elle est fondée sur l'empreinte du contenu
+    // normalisé, pas sur le score sémantique. Deux faits proches peuvent être
+    // contradictoires et doivent alors suivre le mécanisme de supersession.
+    const contentHash = memoryContentHash(content);
+    const existing = await this.#provider.search({
+      userId: input.userId,
+      query: content,
+      layers: [input.layer ?? "LONG_TERM"],
+      limit: 50,
+    });
+    const duplicate = existing.find((hit) => hit.record.contentHash === contentHash)?.record;
+    if (duplicate !== undefined) return duplicate;
+
     const record = await this.#provider.store({
       userId: input.userId,
       kind: input.kind ?? "SEMANTIC",
@@ -201,6 +219,12 @@ export class MemoryService {
       ...(input.confidence === undefined ? {} : { confidence: input.confidence }),
       ...(input.tags === undefined ? {} : { tags: input.tags }),
       ...(input.sourceRunId === undefined ? {} : { sourceRunId: input.sourceRunId }),
+      ...(input.sourceConversationId === undefined
+        ? {}
+        : { sourceConversationId: input.sourceConversationId }),
+      ...(input.sourceMessageId === undefined ? {} : { sourceMessageId: input.sourceMessageId }),
+      ...(input.sourceUri === undefined ? {} : { sourceUri: input.sourceUri }),
+      ...(input.extractedAt === undefined ? {} : { extractedAt: input.extractedAt }),
     });
 
     this.#onAudit?.({ action: "store", userId: input.userId, recordId: record.id });

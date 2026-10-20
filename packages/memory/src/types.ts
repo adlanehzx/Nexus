@@ -89,6 +89,13 @@ export const memoryRecordSchema = z.object({
    * expliquer et à filtrer, pas à reproduire ce qu'on cherche à protéger.
    */
   sensitiveCategories: z.array(z.string()).default([]),
+  sourceRunId: z.string().nullable().default(null),
+  sourceConversationId: z.string().nullable().default(null),
+  sourceMessageId: z.string().nullable().default(null),
+  sourceUri: z.string().nullable().default(null),
+  contentHash: z.string().min(1),
+  embeddingModel: z.string().nullable().default(null),
+  extractedAt: z.date().nullable().default(null),
   validFrom: z.date(),
   validUntil: z.date().nullable().default(null),
   supersededById: z.string().nullable().default(null),
