@@ -26,6 +26,11 @@ class Settings:
     #: Délai d'un appel au pont, bail compris. Un run Agent Core peut être long ;
     #: ce qui le borne reste le ``timeout_seconds`` de la tâche.
     api_timeout_seconds: int = 900
+    #: Cle publique Ed25519 de l'API, au format PEM SPKI. Sa presence **active**
+    #: l'authentification des appels entrants : toutes les routes de mutation
+    #: exigent alors un jeton de service signe. Absente, le port reste protege
+    #: par la seule boucle locale, et le demarrage le dit dans le journal.
+    api_public_key_pem: str | None = None
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -33,6 +38,7 @@ class Settings:
         registry = os.getenv("NEXUS_ENGINE_ACP_REGISTRY")
         return cls(
             api_base_url=os.getenv("NEXUS_ENGINE_API_URL") or None,
+            api_public_key_pem=_read_api_public_key(),
             api_timeout_seconds=max(
                 30, min(3_600, int(os.getenv("NEXUS_ENGINE_API_TIMEOUT", "900")))
             ),
@@ -121,3 +127,27 @@ class Settings:
             if os.path.exists(temporary):
                 os.unlink(temporary)
         return path
+
+
+def _read_api_public_key() -> str | None:
+    """Lit la cle publique de l'API, depuis un fichier ou depuis l'environnement.
+
+    Les deux formes existent parce qu'elles servent deux usages : un fichier
+    pour un deploiement -- c'est ce que `systemd` sait faire proprement, et la
+    cle n'apparait alors dans aucune liste de processus -- et une variable pour
+    un conteneur ou un test.
+
+    Le fichier a la priorite : si les deux sont fournis, l'intention la plus
+    explicite gagne, et on ne laisse pas une variable oubliee dans un
+    environnement prendre le pas sur une cle deployee.
+    """
+    path = os.getenv("NEXUS_ENGINE_API_PUBLIC_KEY_FILE")
+    if path:
+        return Path(path).read_text(encoding="utf-8")
+    inline = os.getenv("NEXUS_ENGINE_API_PUBLIC_KEY")
+    if not inline:
+        return None
+    # Une cle collee dans une variable d'environnement arrive souvent avec des
+    # sauts de ligne echappes : les restaurer evite un echec de lecture PEM
+    # dont la cause est invisible.
+    return inline.replace("\\n", "\n")

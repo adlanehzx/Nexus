@@ -61,6 +61,32 @@ export const missionGrantClaimsSchema = z.object({
 
 export type MissionGrantClaims = z.infer<typeof missionGrantClaimsSchema>;
 
+/**
+ * Claims d'un **jeton de service**, émis par l'API pour s'adresser à un autre
+ * service de NEXUS.
+ *
+ * Quatrième surface, et la plus courte : un jeton de service ne désigne ni
+ * utilisateur, ni appareil, ni mission. Il dit seulement « cet appel vient de
+ * l'API », et c'est tout ce dont le destinataire a besoin pour savoir qu'il ne
+ * parle pas à un processus local quelconque.
+ *
+ * Sa durée de vie est de l'ordre de la minute : il est émis par appel, et ce
+ * qui le borne est son expiration, pas un registre. Aucun état à tenir pour
+ * une identité qui ne survit pas à la requête.
+ */
+export const serviceTokenClaimsSchema = z.object({
+  /** Service émetteur. */
+  sub: z.string().min(1),
+  iat: z.number().int(),
+  exp: z.number().int(),
+  iss: z.string().min(1),
+  /** Service destinataire. */
+  aud: z.string().min(1),
+  jti: z.string().min(1),
+});
+
+export type ServiceTokenClaims = z.infer<typeof serviceTokenClaimsSchema>;
+
 export type Principal =
   | { kind: "user"; userId: string; sessionId: string }
   | { kind: "device"; deviceId: string; userId: string; capabilities: string[] }

@@ -194,6 +194,44 @@ structurées et les cooldowns observés.
 Une tâche du DAG peut déléguer à Agent Core au lieu de lancer un agent ACP. Elle
 le déclare par `agent_kind: "agent-core"`.
 
+### Authentification des appels API → moteur
+
+Le port 18100 n'était protégé que par la boucle locale. C'est une frontière
+suffisante pour une installation personnelle sur une machine, et elle cesse de
+l'être dès qu'il y a Docker, plusieurs machines, des workers distants ou une
+exposition publique : tout processus local pouvait soumettre une mission,
+enregistrer un agent, modifier la configuration ou placer un ordre fictif.
+
+L'API signe désormais ses appels sortants avec un **jeton de service** —
+quatrième surface, audience `nexus-mission-engine`, deux minutes de durée de
+vie. Émis par appel, donc aucun registre à tenir : ce qui le borne est son
+expiration. Le moteur **ne détient que la clé publique** : il vérifie, il
+n'émet pas. Compromettre le moteur ne permet pas de forger un appel de l'API.
+
+**Un middleware, pas une dépendance par route.** Il y a quatorze routes de
+mutation aujourd'hui, et celle qu'on ajoutera demain doit être protégée sans
+qu'on y pense — oublier un `Depends` ne produit aucune erreur, juste une route
+ouverte découverte trop tard. Le middleware filtre par méthode : tout ce qui
+n'est pas `GET`, `HEAD` ou `OPTIONS` exige une identité. Un test parcourt les
+routes de l'application et vérifie qu'aucune n'y échappe.
+
+La lecture reste libre. Ce qui compte ici est l'écriture, et la boucle locale
+reste la première barrière.
+
+**Activation.** La présence de `NEXUS_ENGINE_API_PUBLIC_KEY_FILE` (ou
+`NEXUS_ENGINE_API_PUBLIC_KEY`) active la vérification. Absente, le moteur garde
+sa posture précédente et **le démarrage l'annonce dans le journal** plutôt que
+de laisser croire à une protection qui n'existe pas.
+
+Ce n'est pas encore actif par défaut, et la raison est concrète : l'API génère
+une clé de signature éphémère à chaque démarrage tant que `AUTH_SIGNING_KEY`
+n'est pas défini. Sans clé persistante, il n'y a pas de clé publique à
+provisionner. La procédure est dans `.env.example`, et l'unité systemd porte la
+ligne à décommenter.
+
+Le motif d'un refus va dans le journal du moteur, jamais dans la réponse :
+savoir *pourquoi* un jeton est refusé n'aide que celui qui en forge un.
+
 ### Identité propriétaire signée
 
 Jusqu'ici la propriété d'une mission n'était portée que par un préfixe
@@ -389,10 +427,11 @@ run que le propriétaire a lancé lui-même.
   ce qui ne l'est pas, c'est un agent demandant spontanément un outil à risque
   puis une approbation depuis le tableau de bord — le modèle ne le fait pas sur
   commande.
-- **Rien n'authentifie encore l'API vers le moteur.** Le port 18100 n'est
-  protégé que par la boucle locale : tout processus local peut soumettre une
-  mission. La direction moteur → API, elle, est authentifiée, enregistrée,
-  rotative et révocable.
+- **L'authentification API → moteur existe mais n'est pas activée par
+  défaut** : elle attend une clé de signature persistante côté API, faute de
+  quoi il n'y a pas de clé publique à provisionner. Le mécanisme est en place
+  et testé ; tant qu'il n'est pas configuré, le port 18100 reste protégé par la
+  seule boucle locale, et le démarrage le dit.
 
 ## Surface exposée
 

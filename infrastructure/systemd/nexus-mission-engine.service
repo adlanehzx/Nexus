@@ -15,6 +15,15 @@ Environment=NEXUS_ENGINE_RUNTIME_SETTINGS_FILE=/home/adlane/Documents/Codex/2026
 # uniquement : l'assertion de mission part dans un en-tete Authorization, et la
 # passerelle refuse toute URL HTTP qui sortirait de la machine.
 Environment=NEXUS_ENGINE_API_URL=http://127.0.0.1:3000
+# Cle publique Ed25519 de l'API. Sa presence ACTIVE l'authentification des
+# appels entrants : toutes les routes de mutation exigent alors un jeton de
+# service signe. Absente, le port n'est protege que par la boucle locale -- ce
+# que le demarrage annonce dans le journal.
+#
+# Un fichier et non une variable : la cle n'apparait dans aucune liste de
+# processus, et c'est ce que systemd sait faire proprement. Voir .env.example
+# pour la generation de la paire.
+#Environment=NEXUS_ENGINE_API_PUBLIC_KEY_FILE=%h/.config/nexus/api-public.pem
 Environment=NEXUS_ENGINE_WORKER_ENABLED=true
 Environment=NEXUS_ENGINE_WORKER_CONCURRENCY=2
 Environment=BU_CDP_URL=http://127.0.0.1:19222

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import threading
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -9,7 +10,8 @@ from decimal import Decimal
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from nexus_engine.acp import AcpError, AcpGateway
@@ -20,6 +22,11 @@ from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
 from nexus_engine.paper import PaperTradingRepository, RiskPolicy
 from nexus_engine.repository import MissionRepository
 from nexus_engine.research import ResearchRunRepository, build_research_plan
+from nexus_engine.service_auth import (
+    ServiceAuthError,
+    ServiceTokenVerifier,
+    bearer_token,
+)
 from nexus_engine.worker import Worker
 
 
@@ -172,6 +179,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Construite même sans URL : la passerelle sait dire qu'elle n'est pas
     # configurée, et le dire sur une tâche vaut mieux que de laisser le worker
     # découvrir un `None` au moment de l'exécuter.
+    # Verificateur des appels entrants. Instancie une fois : charger une cle PEM
+    # a chaque requete serait du gaspillage, et elle ne change pas en cours
+    # d'execution.
+    service_verifier = (
+        ServiceTokenVerifier(configured.api_public_key_pem)
+        if configured.api_public_key_pem
+        else None
+    )
+    if service_verifier is None:
+        # Dit au demarrage plutot que decouvert apres coup. Sans cle, la seule
+        # barriere est la boucle locale : acceptable pour une installation
+        # personnelle sur une machine, insuffisant des qu'il y a Docker,
+        # plusieurs machines ou des workers distants.
+        logging.getLogger("nexus_engine.service_auth").warning(
+            "aucune cle publique d'API configuree : les routes de mutation ne sont "
+            "protegees que par la boucle locale (voir NEXUS_ENGINE_API_PUBLIC_KEY_FILE)"
+        )
+    else:
+        logging.getLogger("nexus_engine.service_auth").info(
+            "authentification des appels entrants active"
+        )
+
     agent_core_gateway = AgentCoreGateway(
         validated_base_url(configured.api_base_url),
         timeout_seconds=configured.api_timeout_seconds,
@@ -235,6 +264,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await task
 
     app = FastAPI(title="NEXUS Mission Engine", version="0.3.0", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def require_service_identity(request: Request, call_next):  # noqa: ANN001
+        """Exige un jeton de service sur toute route qui modifie l'etat.
+
+        Un middleware, et non une dependance par route : il y a quatorze routes
+        de mutation aujourd'hui, et celle qu'on ajoutera demain doit etre
+        protegee sans qu'on ait a y penser. Oublier un `Depends` ne produit
+        aucune erreur -- juste une route ouverte, decouverte trop tard.
+
+        La lecture reste libre. Ce qui compte ici est l'ecriture : soumettre une
+        mission, enregistrer un agent, modifier la configuration, placer un
+        ordre fictif. Un `GET` ne fait fuiter que vers la boucle locale, qui
+        reste la premiere barriere.
+        """
+        if service_verifier is None or request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+
+        try:
+            identity = service_verifier.verify(
+                bearer_token(request.headers.get("authorization"))
+            )
+        except ServiceAuthError as exc:
+            # Le motif va dans le journal du moteur, pas dans la reponse :
+            # savoir *pourquoi* un jeton est refuse n'aide que qui en forge un.
+            logging.getLogger("nexus_engine.service_auth").warning(
+                "appel refuse sur %s %s : %s", request.method, request.url.path, exc
+            )
+            return JSONResponse(
+                status_code=401, content={"detail": "service authentication required"}
+            )
+
+        request.state.service_identity = identity
+        return await call_next(request)
     app.state.repository = repository
     app.state.paper = paper
     app.state.research_runs = research_runs

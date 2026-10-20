@@ -314,3 +314,94 @@ describe("mots de passe", { timeout: 30_000 }, () => {
     expect(needsRehash(await hashPassword("un mot de passe correct"))).toBe(false);
   });
 });
+
+/**
+ * Jetons de service.
+ *
+ * Quatrième surface. Elle existe parce que le port de Mission Engine n'était
+ * protégé que par la boucle locale : suffisant pour une installation
+ * personnelle sur une machine, insuffisant dès qu'il y a Docker, plusieurs
+ * machines ou des workers distants.
+ *
+ * Les tests portent surtout sur la séparation : la même clé signe les quatre
+ * sortes de jetons, et c'est l'audience qui empêche l'un de tenir le rôle d'un
+ * autre.
+ */
+describe("jetons de service", () => {
+  it("émet un jeton que le service relit pour la bonne audience", () => {
+    const service = makeService();
+    const { token } = service.issueServiceToken({
+      service: "nexus-api",
+      audience: "nexus-mission-engine",
+    });
+
+    expect(service.verifyServiceToken(token, "nexus-mission-engine")).toMatchObject({
+      sub: "nexus-api",
+      aud: "nexus-mission-engine",
+    });
+  });
+
+  it("refuse un jeton présenté pour une autre audience", () => {
+    const service = makeService();
+    const { token } = service.issueServiceToken({
+      service: "nexus-api",
+      audience: "nexus-mission-engine",
+    });
+
+    // Signature valide, mais destiné à un autre service : sans ce refus, un
+    // jeton émis pour un composant servirait à en piloter un autre.
+    expect(() => service.verifyServiceToken(token, "nexus-autre-service")).toThrow(/audience/i);
+  });
+
+  it("ne tient pas lieu de jeton d'accès ni d'assertion de mission", () => {
+    const service = makeService();
+    const { token } = service.issueServiceToken({
+      service: "nexus-api",
+      audience: "nexus-mission-engine",
+    });
+
+    expect(() => service.verifyAccessToken(token)).toThrow();
+    expect(() => service.verifyMissionGrant(token)).toThrow();
+  });
+
+  it("refuse une assertion de mission présentée comme jeton de service", () => {
+    const service = makeService();
+    const { token } = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+
+    expect(() => service.verifyServiceToken(token, "nexus-mission-engine")).toThrow();
+  });
+
+  it("expire en quelques minutes, pas en heures", () => {
+    let instant = new Date("2026-09-02T10:00:00.000Z");
+    const service = new TokenService({
+      privateKeyPem: keys.privateKeyPem,
+      serviceTtlSeconds: 120,
+      now: () => instant,
+    });
+    const { token } = service.issueServiceToken({
+      service: "nexus-api",
+      audience: "nexus-mission-engine",
+    });
+
+    instant = new Date("2026-09-02T10:01:00.000Z");
+    expect(service.verifyServiceToken(token, "nexus-mission-engine")).toBeDefined();
+    // Un jeton émis par appel n'a aucune raison de survivre à la requête :
+    // c'est ce qui dispense d'un registre de révocation.
+    instant = new Date("2026-09-02T10:03:00.000Z");
+    expect(() => service.verifyServiceToken(token, "nexus-mission-engine")).toThrow(/expir/i);
+  });
+
+  it("refuse un jeton signé par une autre clé", () => {
+    const foreign = new TokenService({ privateKeyPem: generateSigningKeyPair().privateKeyPem });
+    const { token } = foreign.issueServiceToken({
+      service: "nexus-api",
+      audience: "nexus-mission-engine",
+    });
+
+    expect(() => makeService().verifyServiceToken(token, "nexus-mission-engine")).toThrow();
+  });
+});

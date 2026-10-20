@@ -65,6 +65,19 @@ export interface MissionControlClientOptions {
   baseUrl: string;
   requestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Fournit le jeton de service à présenter au moteur.
+   *
+   * Une fonction et non une valeur : un jeton de service vit deux minutes, donc
+   * il doit être émis par appel. Mémoriser une chaîne à la construction du
+   * client la rendrait périmée dès le troisième appel.
+   *
+   * Facultatif, et son absence a une conséquence nette : les appels partent
+   * sans identité, et un moteur configuré pour l'exiger les refusera. C'est le
+   * comportement voulu — mieux vaut un refus franc qu'une authentification qu'on
+   * croit active.
+   */
+  serviceToken?: () => string;
 }
 
 export interface MissionControlPort {
@@ -122,12 +135,14 @@ export class MissionControlClient implements MissionControlPort {
   readonly #baseUrl: string;
   readonly #timeoutMs: number;
   readonly #fetch: typeof fetch;
+  readonly #serviceToken: (() => string) | undefined;
 
   constructor(options: MissionControlClientOptions) {
     const url = validateBaseUrl(options.baseUrl);
     this.#baseUrl = url.toString().replace(/\/$/, "");
     this.#timeoutMs = options.requestTimeoutMs ?? 15_000;
     this.#fetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    this.#serviceToken = options.serviceToken;
   }
 
   health(signal?: AbortSignal): Promise<MissionControlHealth> {
@@ -402,6 +417,11 @@ export class MissionControlClient implements MissionControlPort {
         headers: {
           accept: "application/json",
           "content-type": "application/json",
+          // Émis ici, au moment de l'appel, pour la raison expliquée sur
+          // `serviceToken` : sa durée de vie se compte en minutes.
+          ...(this.#serviceToken === undefined
+            ? {}
+            : { authorization: `Bearer ${this.#serviceToken()}` }),
           ...extraHeaders,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

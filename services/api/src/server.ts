@@ -49,6 +49,7 @@ import { PrismaNotificationStore } from "./services/persistence/prisma-notificat
 import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
+import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
@@ -70,6 +71,17 @@ const browser =
   browserToken !== undefined
     ? new BrowserWorkerClient({ baseUrl: browserConfiguration.baseUrl, token: browserToken })
     : undefined;
+
+/**
+ * Signeur dédié aux appels sortants.
+ *
+ * Une seconde instance sur la même clé, et non une référence au conteneur :
+ * capturer `services` dans une fermeture qui se trouve dans son propre
+ * initialiseur le fait inférer `any`, ce qui désarme toutes les règles
+ * `no-unsafe-*` sur ce chemin. Le service de jetons est sans état, donc deux
+ * instances issues du même PEM produisent des jetons interchangeables.
+ */
+const outboundSigner = new TokenService({ privateKeyPem: config.AUTH_SIGNING_KEY });
 
 const services = new ServiceContainer({
   prisma,
@@ -97,7 +109,20 @@ const services = new ServiceContainer({
   ]),
   ...(config.MISSION_CONTROL_URL === undefined
     ? {}
-    : { missionControl: new MissionControlClient({ baseUrl: config.MISSION_CONTROL_URL }) }),
+    : {
+        missionControl: new MissionControlClient({
+          baseUrl: config.MISSION_CONTROL_URL,
+          // Fermeture, et non valeur : elle n'est appelée qu'au moment d'un
+          // appel sortant, donc bien après que `services` soit construit — et
+          // elle émet alors un jeton frais, ce qu'une chaîne figée ici ne
+          // saurait pas faire.
+          serviceToken: () =>
+            outboundSigner.issueServiceToken({
+              service: "nexus-api",
+              audience: MISSION_ENGINE_AUDIENCE,
+            }).token,
+        }),
+      }),
 });
 
 const logger = createLogger(config, [services.logs]);
