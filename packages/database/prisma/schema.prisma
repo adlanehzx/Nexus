@@ -490,6 +490,44 @@ model Notification {
   @@map("notifications")
 }
 
+/// Registre des assertions de mission émises.
+///
+/// Son existence change la nature de l'assertion : sans registre, une assertion
+/// volée reste exploitable jusqu'à son expiration, et rien ne permet de la
+/// retirer. `requireMissionGrant` consulte donc cette table à chaque requête —
+/// une signature valide ne suffit plus, il faut aussi que l'assertion soit
+/// toujours active.
+///
+/// Refuser par défaut est délibéré : une assertion absente du registre est
+/// rejetée. Une signature correcte mais inconnue signifie soit une clé
+/// compromise, soit un enregistrement perdu, et aucun des deux ne doit ouvrir.
+model MissionGrant {
+  /// Le `jti` de l'assertion.
+  id                 String            @id @db.Uuid
+  missionExternalKey String            @db.VarChar(128)
+  userId             String            @db.Uuid
+  service            String            @db.VarChar(64)
+  issuedAt           DateTime          @default(now()) @db.Timestamptz(3)
+  expiresAt          DateTime          @db.Timestamptz(3)
+  status             MissionGrantState @default(ACTIVE)
+  /// Horodatage du retrait, quel qu'en soit le motif. Nul tant que l'assertion
+  /// est active.
+  retiredAt          DateTime?         @db.Timestamptz(3)
+
+  @@index([missionExternalKey, status])
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("mission_grants")
+}
+
+enum MissionGrantState {
+  ACTIVE
+  /// Retirée parce que la mission est terminée ou annulée. Chemin normal.
+  COMPLETED
+  /// Retirée parce qu'on ne lui fait plus confiance. Chemin d'incident.
+  REVOKED
+}
+
 /// Réservation d'un run Agent Core pour une tentative de tâche.
 ///
 /// La contrainte d'unicité porte sur `(mission, tâche, tentative)` et c'est

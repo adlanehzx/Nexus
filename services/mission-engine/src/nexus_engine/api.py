@@ -36,6 +36,7 @@ class MissionOwnerRequest(BaseModel):
 
     user_id: str
     assertion: str
+    expires_at: str | None = None
 
 
 class MissionRequest(BaseModel):

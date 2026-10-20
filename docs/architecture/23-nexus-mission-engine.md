@@ -222,6 +222,56 @@ L'assertion est retirée du plan avant le calcul de `content_hash` : elle n'entr
 donc ni dans `definition_json`, ni dans l'empreinte d'idempotence. Resoumettre
 le même plan avec une assertion renouvelée reste idempotent.
 
+### Cycle de vie d'une assertion
+
+Une assertion vit vingt-quatre heures. Trois choses manquaient autour de ça, et
+chacune cassait un cas réel.
+
+**Le registre.** `mission_grants` consigne toute assertion émise, et
+`requireMissionGrant` le consulte à chaque requête. Une signature valide ne
+suffit donc plus : il faut aussi que l'assertion soit connue, active et non
+expirée. C'est ce qui rend une assertion volée **retirable avant son terme** —
+avant, le `jti` l'identifiait sans que personne ne le lise, et elle ouvrait
+vingt-quatre heures.
+
+Le refus est par défaut : une assertion signée mais absente du registre est
+rejetée. Une signature correcte et inconnue signifie soit une clé compromise,
+soit un enregistrement perdu, et aucun des deux ne doit ouvrir.
+
+**La rotation.** Une mission suspendue sur une confirmation humaine peut durer
+plus longtemps que son assertion ; elle devenait alors irreprenable. L'API
+renouvelle donc dans la réponse d'un appel déjà authentifié, quand il reste
+moins de huit heures. Pas de second point d'entrée, pas de second identifiant à
+protéger, et la rotation se produit tant que l'ancienne assertion est valide.
+
+L'ancienne n'est pas retirée : elle expire d'elle-même. La retirer casserait
+toute requête déjà en vol, pour un gain nul. Conséquence à connaître :
+plusieurs assertions d'une même mission sont valides simultanément, et c'est
+pourquoi le retrait porte sur la **mission** et non sur une assertion.
+
+Le moteur écrit l'assertion reçue en une seule instruction, donc atomiquement :
+un worker interrompu laisse soit l'ancienne, soit la nouvelle.
+
+**Le retrait.** Quand une mission atteint un état terminal, le worker demande
+le retrait de ses assertions puis oublie celle qu'il stockait. C'est une
+auto-révocation : on présente l'assertion qu'on veut retirer, ce qui ne donne
+aucun pouvoir supplémentaire — là où un point d'entrée capable de révoquer
+*autrui* en donnerait un.
+
+Le retrait passe par le worker et non par la transaction qui conclut la mission :
+y faire un appel réseau rendrait la clôture dépendante de la disponibilité de
+l'API. Un échec réseau laisse l'assertion expirer naturellement, ce qui est le
+comportement d'avant — une dégradation, pas une régression.
+
+**La resoumission idempotente rafraîchit l'assertion stockée.** C'était un
+défaut : `submit` rendait la mission existante sans remplacer `owner_assertion`,
+donc une mission longue restait collée sur un jeton périmé. Le propriétaire, en
+revanche, n'est jamais réécrit — l'accepter permettrait de s'approprier une
+mission en resoumettant sa clé externe sous un autre compte.
+
+Tout cela est éprouvé avec une **horloge injectée**, y compris une mission de
+trois jours qui traverse plusieurs rotations.
+
 ### Surface du pont
 
 `POST /api/v1/agent-core/mission-runs`, gardée par `requireMissionGrant` —
@@ -341,7 +391,8 @@ run que le propriétaire a lancé lui-même.
   commande.
 - **Rien n'authentifie encore l'API vers le moteur.** Le port 18100 n'est
   protégé que par la boucle locale : tout processus local peut soumettre une
-  mission. La direction moteur → API, elle, est authentifiée.
+  mission. La direction moteur → API, elle, est authentifiée, enregistrée,
+  rotative et révocable.
 
 ## Surface exposée
 

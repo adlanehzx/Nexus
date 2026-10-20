@@ -308,6 +308,102 @@ class MissionRepository:
                 ),
             )
 
+    def _refresh_owner_assertion(
+        self,
+        connection: sqlite3.Connection,
+        mission_id: str,
+        owner: Any,
+        current: str,
+    ) -> None:
+        """Remplace l'assertion d'une mission existante lors d'une resoumission.
+
+        Sans cela, une resoumission idempotente rendait la mission telle quelle
+        et gardait l'ancienne assertion. Une mission Agent Core qui dure plus
+        longtemps que la duree de vie d'une assertion devenait alors
+        irreprenable : le moteur rejouait un jeton perime, l'API refusait, et la
+        tache echouait en ``auth_required`` sans qu'aucune relance n'y change
+        quoi que ce soit.
+
+        Le proprietaire, lui, n'est pas reecrit : une mission ne change pas de
+        propietaire, et accepter de le faire ouvrirait un detournement — il
+        suffirait de resoumettre la meme cle externe avec un autre compte.
+        """
+        if owner is None:
+            return
+        row = connection.execute(
+            "SELECT owner_user_id FROM missions WHERE id=?", (mission_id,)
+        ).fetchone()
+        if row is not None and row["owner_user_id"] not in (None, owner.user_id):
+            raise ConflictError("mission owner cannot change on resubmission")
+        connection.execute(
+            """
+            UPDATE missions SET owner_user_id=?,owner_assertion=?,
+                owner_assertion_expires_at=?,updated_at=?
+            WHERE id=?
+            """,
+            (owner.user_id, owner.assertion, owner.expires_at, current, mission_id),
+        )
+
+    def rotate_owner_assertion(
+        self, mission_id: str, assertion: str, expires_at: str | None
+    ) -> None:
+        """Remplace l'assertion d'une mission par celle que l'API vient d'emettre.
+
+        Une seule instruction, donc atomique : un worker interrompu laisse soit
+        l'ancienne assertion, soit la nouvelle, jamais un etat intermediaire.
+        Les deux sont valides au moment de l'ecriture — l'API ne retire pas
+        l'ancienne en emettant la nouvelle — donc meme un entrelacement
+        malheureux ne casse rien.
+        """
+        with self.db.transaction(immediate=True) as connection:
+            connection.execute(
+                """
+                UPDATE missions SET owner_assertion=?,owner_assertion_expires_at=?,
+                    updated_at=? WHERE id=?
+                """,
+                (assertion, expires_at, timestamp(), mission_id),
+            )
+
+    def clear_owner_assertion(self, mission_id: str) -> None:
+        """Oublie l'assertion d'une mission dont les acces ont ete retires.
+
+        Appele apres un retrait cote API. Garder un jeton devenu inutile ne sert
+        rien et le laisse disponible a qui lirait la base.
+        """
+        with self.db.transaction(immediate=True) as connection:
+            connection.execute(
+                """
+                UPDATE missions SET owner_assertion=NULL,
+                    owner_assertion_expires_at=NULL,updated_at=? WHERE id=?
+                """,
+                (timestamp(), mission_id),
+            )
+
+    def terminal_mission_with_assertion(self, mission_id: str) -> str | None:
+        """Assertion d'une mission arrivee a son terme, s'il y en a une.
+
+        Sert au retrait : le worker ne doit demander la revocation que lorsque la
+        mission est reellement finie, et seulement s'il reste quelque chose a
+        retirer.
+        """
+        with self.db.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT owner_assertion,external_key FROM missions
+                WHERE id=? AND state IN ('succeeded','failed','cancelled')
+                  AND owner_assertion IS NOT NULL
+                """,
+                (mission_id,),
+            ).fetchone()
+            return None if row is None else str(row["owner_assertion"])
+
+    def mission_external_key(self, mission_id: str) -> str | None:
+        with self.db.connect() as connection:
+            row = connection.execute(
+                "SELECT external_key FROM missions WHERE id=?", (mission_id,)
+            ).fetchone()
+            return None if row is None else str(row["external_key"])
+
     def submit(self, raw: dict[str, Any], idempotency_key: str) -> tuple[str, bool]:
         if not idempotency_key or len(idempotency_key) > 128:
             raise ConflictError("a non-empty idempotency key is required")
@@ -326,6 +422,9 @@ class MissionRepository:
             if existing:
                 if existing["content_hash"] != plan.content_hash:
                     raise ConflictError("idempotency key reused with different content")
+                self._refresh_owner_assertion(
+                    connection, str(existing["id"]), plan.owner, created
+                )
                 return str(existing["id"]), True
             external = connection.execute(
                 "SELECT id, content_hash FROM missions WHERE external_key=?",
@@ -342,6 +441,9 @@ class MissionRepository:
                     """,
                     (idempotency_key, plan.content_hash, external["id"], created),
                 )
+                self._refresh_owner_assertion(
+                    connection, str(external["id"]), plan.owner, created
+                )
                 return str(external["id"]), True
 
             connection.execute(
@@ -349,8 +451,8 @@ class MissionRepository:
                 INSERT INTO missions(
                     id,idempotency_key,external_key,content_hash,title,workspace,
                     state,definition_json,owner_user_id,owner_assertion,
-                    created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,'pending',?,?,?,?,?)
+                    owner_assertion_expires_at,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,'pending',?,?,?,?,?,?)
                 """,
                 (
                     mission_id,
@@ -362,6 +464,7 @@ class MissionRepository:
                     plan.canonical_json,
                     plan.owner.user_id if plan.owner else None,
                     plan.owner.assertion if plan.owner else None,
+                    plan.owner.expires_at if plan.owner else None,
                     created,
                     created,
                 ),

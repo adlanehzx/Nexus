@@ -178,6 +178,11 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
         });
       }
 
+      // Signature valide ne suffit pas : le registre dit si l'assertion est
+      // toujours exploitable. C'est ce qui rend une assertion volée retirable
+      // avant son expiration, au lieu d'ouvrir vingt-quatre heures durant.
+      await options.services.missionGrants.assertUsable(claims);
+
       request.principal = {
         kind: "mission",
         userId: claims.sub,
@@ -264,10 +269,7 @@ export function currentMission(request: FastifyRequest): {
  * signature prouverait le propriétaire, mais plus la portée, et toute la raison
  * d'être de l'assertion disparaîtrait.
  */
-export function assertMissionScope(
-  grantedExternalKey: string,
-  requestedExternalKey: string,
-): void {
+export function assertMissionScope(grantedExternalKey: string, requestedExternalKey: string): void {
   if (grantedExternalKey === requestedExternalKey) return;
 
   throw new AuthorizationError({

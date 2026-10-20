@@ -1,5 +1,10 @@
 import { resolve } from "node:path";
 import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
+import {
+  InMemoryMissionGrantRegistry,
+  MissionGrantService,
+  type MissionGrantRegistry,
+} from "./mission-grants.js";
 import { TokenService, type ScryptParams } from "@nexus/auth";
 import type { LLMProvider } from "@nexus/llm";
 import {
@@ -104,6 +109,16 @@ export interface ServiceContainerOptions {
   agentRunClaims?: AgentRunClaimStore;
 
   /**
+   * Registre des assertions de mission. En mémoire par défaut ; en production
+   * c'est celui de PostgreSQL, sans quoi un redémarrage de l'API rendrait toute
+   * assertion inconnue — donc refusée — et casserait les missions en cours.
+   */
+  missionGrantRegistry?: MissionGrantRegistry;
+
+  /** Marge de renouvellement d'une assertion. Exposée pour les tests d'horloge. */
+  missionGrantRenewWithinMs?: number;
+
+  /**
    * Vérificateur de signature d'appareil.
    *
    * Par défaut, le type de secret enregistré décide : Ed25519 pour les postes
@@ -188,6 +203,7 @@ export class ServiceContainer {
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
   readonly agentRunClaims: AgentRunClaimStore;
+  readonly missionGrants: MissionGrantService;
   /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
   readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
@@ -410,6 +426,14 @@ export class ServiceContainer {
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.runStore = options.runStore ?? new InMemoryAgentRunStore();
     this.agentRunClaims = options.agentRunClaims ?? new InMemoryAgentRunClaimStore();
+    this.missionGrants = new MissionGrantService({
+      signer: this.tokens,
+      registry: options.missionGrantRegistry ?? new InMemoryMissionGrantRegistry(),
+      ...(options.missionGrantRenewWithinMs === undefined
+        ? {}
+        : { renewWithinMs: options.missionGrantRenewWithinMs }),
+      now,
+    });
     this.agentCore =
       options.llmProvider === undefined
         ? undefined

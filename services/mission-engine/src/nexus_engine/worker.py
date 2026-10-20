@@ -58,6 +58,7 @@ class Worker:
                     heartbeat=heartbeat,
                 )
             self.repository.succeed(lease, response)
+            self._retire_grants_if_mission_finished(lease)
             return True
         except Exception as exc:
             # Persist only a stable category, never a provider or HTTP response body.
@@ -71,6 +72,35 @@ class Worker:
             except LeaseLostError:
                 pass
             return True
+
+    def _retire_grants_if_mission_finished(self, lease: Lease) -> None:
+        """Retire les assertions dès que la mission est terminée.
+
+        Le retrait passe par le worker et non par la transaction qui conclut la
+        mission : celle-ci est en base, et y faire un appel réseau la rendrait
+        dépendante de la disponibilité de l'API. Ici, un échec réseau laisse
+        simplement l'assertion en place jusqu'à son expiration naturelle — ce
+        qui est le comportement d'avant, donc une dégradation et non une
+        régression.
+
+        L'assertion locale n'est effacée qu'après un retrait confirmé : la
+        garder tant qu'on n'est pas sûr permet de réessayer.
+        """
+        if self.agent_core is None or lease.owner_assertion is None:
+            return
+        assertion = self.repository.terminal_mission_with_assertion(lease.mission_id)
+        if assertion is None:
+            return
+        try:
+            self.agent_core.retire_grants(
+                mission_external_key=lease.mission_external_key,
+                assertion=assertion,
+            )
+        except AcpError:
+            # Rien à signaler au-delà du journal : la mission est terminée, son
+            # résultat est écrit, et les assertions expireront d'elles-mêmes.
+            return
+        self.repository.clear_owner_assertion(lease.mission_id)
 
     def _advance_agent_core(
         self, lease: Lease, heartbeat: Callable[[], None]
@@ -101,6 +131,17 @@ class Worker:
             outcome = self.agent_core.poll(
                 run_id=lease.agent_core_run_id,
                 assertion=lease.owner_assertion,
+            )
+
+        # La rotation d'abord : si l'API vient d'émettre une assertion de
+        # remplacement, l'écrire avant tout le reste réduit la fenêtre où un
+        # redémarrage laisserait la mission avec l'ancienne — laquelle est encore
+        # valide, donc même perdue l'incident reste bénin.
+        if outcome.renewed_assertion is not None:
+            self.repository.rotate_owner_assertion(
+                lease.mission_id,
+                outcome.renewed_assertion,
+                outcome.renewed_expires_at,
             )
 
         # Mémorisée dès qu'elle est connue : c'est ce qui permet au prochain

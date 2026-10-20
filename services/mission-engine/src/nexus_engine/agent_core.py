@@ -34,6 +34,11 @@ class AgentCoreOutcome:
     conversation_id: str | None
     response: str | None
     confirmation_id: str | None
+    #: Assertion emise par l'API en remplacement de celle presentee, quand
+    #: celle-ci approchait de son terme. `None` le reste du temps : il ne faut
+    #: alors surtout rien reecrire.
+    renewed_assertion: str | None = None
+    renewed_expires_at: str | None = None
 
     @property
     def awaits_confirmation(self) -> bool:
@@ -158,6 +163,37 @@ class AgentCoreGateway:
             )
         )
 
+    def retire_grants(
+        self,
+        *,
+        mission_external_key: str,
+        assertion: str,
+        reason: str = "completed",
+        timeout_seconds: int = 30,
+    ) -> int:
+        """Demande le retrait des assertions d'une mission terminee.
+
+        Auto-revocation : on presente l'assertion qu'on veut retirer. C'est ce
+        qui rend l'operation sure — presenter une assertion valide pour la
+        retirer ne donne aucun pouvoir de plus, la ou un point d'entree capable
+        de revoquer *autrui* en donnerait un.
+        """
+        if self.base_url is None:
+            raise AcpError("Agent Core bridge is not configured", category="config")
+        payload = json.dumps(
+            {"missionExternalKey": mission_external_key, "reason": reason}
+        ).encode()
+        body = self._call(
+            "POST",
+            "/api/v1/agent-core/mission-grants/retire",
+            assertion,
+            min(self.timeout_seconds, timeout_seconds),
+            payload,
+        )
+        data = body.get("data") if isinstance(body, dict) else None
+        retired = data.get("retired") if isinstance(data, dict) else None
+        return int(retired) if isinstance(retired, int) else 0
+
     def _call(
         self,
         method: str,
@@ -203,12 +239,25 @@ def _read_run(body: Any) -> AgentCoreOutcome:
         if isinstance(confirmation, dict) and isinstance(confirmation.get("id"), str)
         else None
     )
+    renewed = data.get("renewedAssertion")
+    renewed_assertion = (
+        str(renewed["assertion"])
+        if isinstance(renewed, dict) and isinstance(renewed.get("assertion"), str)
+        else None
+    )
+    renewed_expires_at = (
+        str(renewed["expiresAt"])
+        if isinstance(renewed, dict) and isinstance(renewed.get("expiresAt"), str)
+        else None
+    )
     outcome = AgentCoreOutcome(
         status=status,
         run_id=text("runId"),
         conversation_id=text("conversationId"),
         response=text("response"),
         confirmation_id=confirmation_id,
+        renewed_assertion=renewed_assertion,
+        renewed_expires_at=renewed_expires_at,
     )
 
     # Une personne a refusé, ou n'a pas répondu à temps. C'est un échec franc :

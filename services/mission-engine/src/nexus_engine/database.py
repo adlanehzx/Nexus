@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS missions (
     -- à le savoir : il la conserve et la rejoue. Elle ne sort jamais par l'API
     -- du moteur, n'entre dans aucun journal et n'est jamais donnée à un modèle.
     owner_assertion TEXT,
+    -- Expiration de l'assertion, telle que l'API l'a annoncee. Le moteur ne
+    -- sait pas relire le jeton -- il n'a pas la cle -- mais il doit savoir
+    -- quand son assertion devient inutilisable, ne serait-ce que pour le dire
+    -- dans un journal plutot que d'echouer sur une erreur de signature.
+    owner_assertion_expires_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -410,6 +415,10 @@ class Database:
                 connection.execute("ALTER TABLE missions ADD COLUMN owner_user_id TEXT")
             if "owner_assertion" not in mission_columns:
                 connection.execute("ALTER TABLE missions ADD COLUMN owner_assertion TEXT")
+            if "owner_assertion_expires_at" not in mission_columns:
+                connection.execute(
+                    "ALTER TABLE missions ADD COLUMN owner_assertion_expires_at TEXT"
+                )
             # Après les ALTER, pour que la table reconstruite emporte aussi les
             # colonnes qui viennent d'être ajoutées.
             self._widen_state_checks(connection)

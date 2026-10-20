@@ -35,6 +35,7 @@ class MissionOwner:
 
     user_id: str
     assertion: str
+    expires_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,12 +74,16 @@ def _optional_owner(value: Any) -> MissionOwner | None:
         return None
     if not isinstance(value, dict):
         raise ValidationError("owner must be an object")
-    unknown = set(value) - {"user_id", "assertion"}
+    unknown = set(value) - {"user_id", "assertion", "expires_at"}
     if unknown:
         raise ValidationError(f"unknown owner fields: {', '.join(sorted(unknown))}")
+    expires_at = value.get("expires_at")
+    if expires_at is not None and not isinstance(expires_at, str):
+        raise ValidationError("owner.expires_at must be a string")
     return MissionOwner(
         user_id=_required_string(value, "user_id", 128),
         assertion=_required_string(value, "assertion", 4_096),
+        expires_at=expires_at,
     )
 
 

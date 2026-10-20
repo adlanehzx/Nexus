@@ -9,7 +9,7 @@ import pytest
 from nexus_engine.acp import AcpError
 from nexus_engine.agent_core import AgentCoreGateway, AgentCoreOutcome, validated_base_url
 from nexus_engine.database import Database
-from nexus_engine.errors import ValidationError
+from nexus_engine.errors import ConflictError, ValidationError
 from nexus_engine.repository import MissionRepository
 from nexus_engine.worker import Worker
 
@@ -579,3 +579,154 @@ def test_the_migration_adds_the_awaiting_state_to_existing_databases(tmp_path) -
     }
     assert {"idx_tasks_schedulable", "idx_attempts_lease"} <= indexes
     migrated.close()
+
+
+def _owner_spec(assertion: str, expires_at: str | None = None) -> dict:
+    owner = {"user_id": "user-1", "assertion": assertion}
+    if expires_at is not None:
+        owner["expires_at"] = expires_at
+    return {
+        "external_key": "rotation-demo",
+        "title": "Rotation demo",
+        "workspace": "/tmp/workspace",
+        "owner": owner,
+        "tasks": [
+            {
+                "key": "delegated",
+                "agent_kind": "agent-core",
+                "instruction": "Range mes mails",
+                "depends_on": [],
+            }
+        ],
+    }
+
+
+def _stored_owner(repository: MissionRepository, mission_id: str) -> tuple:
+    with repository.db.connect() as connection:
+        row = connection.execute(
+            """
+            SELECT owner_assertion,owner_assertion_expires_at
+            FROM missions WHERE id=?
+            """,
+            (mission_id,),
+        ).fetchone()
+    return (row["owner_assertion"], row["owner_assertion_expires_at"])
+
+
+def test_resubmission_refreshes_a_stale_assertion(tmp_path) -> None:
+    """Le defaut signale en revue.
+
+    Une resoumission idempotente rendait la mission existante *sans* remplacer
+    l'assertion stockee. Une mission Agent Core plus longue que la duree de vie
+    d'une assertion devenait donc irreprenable : le moteur rejouait un jeton
+    perime et la tache echouait en ``auth_required``, sans qu'aucune relance
+    n'y change quoi que ce soit.
+    """
+    repository = MissionRepository(Database(tmp_path / "rotation.db"))
+    repository.register_profile("codex", "profile-codex")
+
+    first, replayed = repository.submit(
+        _owner_spec("assertion-v1", "2026-10-21T08:00:00+00:00"), "rotation-key"
+    )
+    assert replayed is False
+    assert _stored_owner(repository, first) == (
+        "assertion-v1",
+        "2026-10-21T08:00:00+00:00",
+    )
+
+    second, replayed = repository.submit(
+        _owner_spec("assertion-v2", "2026-10-23T08:00:00+00:00"), "rotation-key"
+    )
+    # Meme mission — l'idempotence est preservee — mais assertion a jour.
+    assert (second, replayed) == (first, True)
+    assert _stored_owner(repository, first) == (
+        "assertion-v2",
+        "2026-10-23T08:00:00+00:00",
+    )
+
+
+def test_resubmission_refuses_to_change_the_owner(tmp_path) -> None:
+    repository = MissionRepository(Database(tmp_path / "rotation.db"))
+    repository.register_profile("codex", "profile-codex")
+    repository.submit(_owner_spec("assertion-v1"), "rotation-key")
+
+    spec = _owner_spec("assertion-v2")
+    spec["owner"]["user_id"] = "user-2"
+    # Sinon il suffirait de resoumettre la meme cle externe sous un autre compte
+    # pour s'approprier une mission.
+    with pytest.raises(ConflictError, match="owner cannot change"):
+        repository.submit(spec, "rotation-key-2")
+
+
+def test_rotation_replaces_the_stored_assertion_atomically(tmp_path) -> None:
+    repository = MissionRepository(Database(tmp_path / "rotation.db"))
+    repository.register_profile("codex", "profile-codex")
+    mission_id, _ = repository.submit(_owner_spec("assertion-v1"), "rotation-key")
+
+    repository.rotate_owner_assertion(
+        mission_id, "assertion-v2", "2026-10-23T08:00:00+00:00"
+    )
+
+    assert _stored_owner(repository, mission_id) == (
+        "assertion-v2",
+        "2026-10-23T08:00:00+00:00",
+    )
+
+
+def test_worker_applies_a_renewed_assertion(tmp_path) -> None:
+    repository = MissionRepository(Database(tmp_path / "rotation.db"))
+    repository.register_profile("codex", "profile-codex")
+    mission_id, _ = repository.submit(_owner_spec("assertion-v1"), "rotation-key")
+
+    renewed = AgentCoreOutcome(
+        status="completed",
+        run_id="run-1",
+        conversation_id="conv-1",
+        response="fait",
+        confirmation_id=None,
+        renewed_assertion="assertion-v2",
+        renewed_expires_at="2026-10-23T08:00:00+00:00",
+    )
+
+    class RetiringGateway(_ScriptedGateway):
+        def __init__(self, outcomes: list) -> None:
+            super().__init__(outcomes)
+            self.retired: list[str] = []
+
+        def retire_grants(self, *, mission_external_key, assertion, **_kw) -> int:
+            self.retired.append(assertion)
+            return 1
+
+    gateway = RetiringGateway([renewed])
+    worker = Worker("worker-1", repository, None, agent_core=gateway)  # type: ignore[arg-type]
+    assert worker.run_once() is True
+
+    # La mission est terminee : les assertions sont retirees, et c'est la
+    # version renouvelee qui a servi au retrait puisqu'elle a remplace l'ancienne.
+    assert gateway.retired == ["assertion-v2"]
+    # Puis oubliee : garder un jeton devenu inutile ne sert rien.
+    assert _stored_owner(repository, mission_id) == (None, None)
+
+
+def test_a_failed_retirement_keeps_the_assertion_for_a_later_attempt(tmp_path) -> None:
+    repository = MissionRepository(Database(tmp_path / "rotation.db"))
+    repository.register_profile("codex", "profile-codex")
+    mission_id, _ = repository.submit(_owner_spec("assertion-v1"), "rotation-key")
+
+    class UnreachableGateway(_ScriptedGateway):
+        def retire_grants(self, **_kw) -> int:
+            raise AcpError("unreachable", category="transport")
+
+    worker = Worker(
+        "worker-1",
+        repository,
+        None,  # type: ignore[arg-type]
+        agent_core=UnreachableGateway([_completed("fait")]),
+    )
+    assert worker.run_once() is True
+
+    # Le resultat de la mission est ecrit malgre l'echec du retrait, et
+    # l'assertion reste en place : on pourra reessayer, et a defaut elle
+    # expirera d'elle-meme.
+    assert repository.mission(mission_id)["state"] == "succeeded"
+    assert _stored_owner(repository, mission_id)[0] == "assertion-v1"

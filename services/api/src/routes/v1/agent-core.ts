@@ -11,6 +11,7 @@ import {
 import { ok, okSchema } from "../../lib/response.js";
 import { ConflictError, NotFoundError, type ConversationStore } from "../../services/stores.js";
 import { DependencyError } from "@nexus/shared";
+import type { IssuedMissionGrant } from "../../services/mission-grants.js";
 import type { AgentRunResult } from "@nexus/agent-core";
 
 const runSchema = z.object({
@@ -29,6 +30,18 @@ const runSchema = z.object({
       expiresAt: z.date(),
     })
     .nullable(),
+  /**
+   * Assertion renouvelée, quand celle présentée approche de son terme.
+   *
+   * La rotation voyage dans la réponse d'un appel déjà authentifié : pas de
+   * second point d'entrée, pas de second identifiant à protéger, et elle se
+   * produit tant que l'ancienne assertion est encore valide. Absente le reste
+   * du temps — le moteur ne doit alors rien réécrire.
+   */
+  renewedAssertion: z
+    .object({ assertion: z.string(), expiresAt: z.string() })
+    .nullable()
+    .optional(),
 });
 
 export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) => {
@@ -229,7 +242,16 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         originClientDeviceId: null,
       });
       await persistResponse(app.services.conversations, conversation.id, result.record.response);
-      return ok(present(result), request.id);
+      // La rotation est calculée après le travail, pas avant : si le run échoue,
+      // rien ne justifie d'avoir émis une assertion de plus.
+      const renewed = await app.services.missionGrants.renewById(mission.grantId);
+      if (renewed !== undefined) {
+        request.log.info(
+          { grantId: mission.grantId, replacedBy: renewed.grantId },
+          "assertion de mission renouvelée avant son terme",
+        );
+      }
+      return ok(present(result, renewed), request.id);
     },
   );
 
@@ -262,7 +284,64 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
       // `null` pour un run lancé par une personne : une assertion ne doit pas
       // pouvoir le lire, et `assertMissionScope` le refuse sur une clé vide.
       assertMissionScope(mission.missionExternalKey, record.missionExternalKey ?? "");
-      return ok(present({ record }), request.id);
+      // Le chemin le plus important pour la rotation : une mission suspendue sur
+      // une confirmation ne passe plus que par ici, et c'est elle qui risque de
+      // dépasser la durée de vie de son assertion.
+      const renewed = await app.services.missionGrants.renewById(mission.grantId);
+      return ok(present({ record }, renewed), request.id);
+    },
+  );
+
+  /**
+   * Retrait des assertions d'une mission terminée.
+   *
+   * C'est le moteur qui l'appelle, avec l'assertion qu'il veut justement
+   * retirer : une auto-révocation. Rien n'est plus sûr que ça ici — présenter
+   * une assertion valide pour la retirer ne donne aucun pouvoir
+   * supplémentaire, alors qu'un point d'entrée capable de révoquer *autrui*
+   * en donnerait un.
+   *
+   * Idempotent : le filtre sur les assertions actives fait qu'un second appel
+   * ne réécrit rien. Le moteur peut donc redemander le retrait si sa première
+   * tentative a échoué sur le réseau.
+   */
+  app.post(
+    "/agent-core/mission-grants/retire",
+    {
+      preHandler: app.requireMissionGrant,
+      schema: {
+        tags: ["agent-core"],
+        body: z.object({
+          missionExternalKey: z.string().min(1).max(128),
+          /**
+           * Motif du retrait. `completed` est le chemin normal — la mission est
+           * finie ; `revoked` est le chemin d'incident. Les distinguer permet de
+           * répondre plus tard à « qu'a-t-on dû retirer en urgence ».
+           */
+          reason: z.enum(["completed", "revoked"]).default("completed"),
+        }),
+        response: {
+          200: okSchema(z.object({ retired: z.number().int().nonnegative() })),
+        },
+      },
+    },
+    async (request) => {
+      const mission = currentMission(request);
+      assertMissionScope(mission.missionExternalKey, request.body.missionExternalKey);
+
+      const retired = await app.services.missionGrants.retire(
+        mission.missionExternalKey,
+        request.body.reason === "revoked" ? "REVOKED" : "COMPLETED",
+      );
+      request.log.info(
+        {
+          missionExternalKey: mission.missionExternalKey,
+          reason: request.body.reason,
+          retired,
+        },
+        "assertions de mission retirées",
+      );
+      return ok({ retired }, request.id);
     },
   );
 
@@ -345,8 +424,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
   done();
 };
 
-function present(result: AgentRunResult) {
+function present(result: AgentRunResult, renewed?: IssuedMissionGrant) {
   return {
+    renewedAssertion:
+      renewed === undefined
+        ? null
+        : { assertion: renewed.token, expiresAt: renewed.expiresAt.toISOString() },
     runId: result.record.runId,
     conversationId: result.record.conversationId,
     status: result.record.status,

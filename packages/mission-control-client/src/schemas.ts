@@ -52,6 +52,14 @@ export const missionTaskInputSchema = z.object({
 export const missionOwnerSchema = z.object({
   user_id: z.string().trim().min(1).max(128),
   assertion: z.string().trim().min(1).max(4_096),
+  /**
+   * Expiration de l'assertion, en ISO 8601.
+   *
+   * Transmise pour que le moteur la connaisse sans savoir relire le jeton : il
+   * n'a pas la clé, et c'est voulu. Facultative, comme le reste du bloc, pour
+   * les missions d'avant l'identité signée.
+   */
+  expires_at: z.string().datetime().optional(),
 });
 
 export const submitMissionSchema = z.object({

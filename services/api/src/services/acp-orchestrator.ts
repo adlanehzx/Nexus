@@ -28,18 +28,23 @@ const plannedMissionSchema = z.object({
 });
 
 /**
- * Ce dont l'orchestrateur a besoin pour signer une identité propriétaire.
+ * Ce dont l'orchestrateur a besoin pour délivrer une identité propriétaire.
  *
  * Volontairement réduit à cette seule méthode : l'orchestrateur n'a aucune
  * raison de pouvoir émettre un jeton d'accès, et ce type le lui interdit à la
  * compilation plutôt que par convention.
+ *
+ * Asynchrone parce que délivrer veut dire **signer et enregistrer**. Une
+ * assertion signée sans être au registre serait refusée à la première
+ * utilisation — ou, si l'on inversait la règle du registre, serait
+ * irrévocable.
  */
 export interface MissionGrantIssuer {
-  issueMissionGrant(input: { userId: string; service: string; missionExternalKey: string }): {
+  issue(input: { userId: string; service: string; missionExternalKey: string }): Promise<{
     token: string;
     expiresAt: Date;
     grantId: string;
-  };
+  }>;
 }
 
 export interface OrchestratedMission {
@@ -124,21 +129,30 @@ export class AcpOrchestrator {
     // Le préfixe d'`external_key` reste lisible pour filtrer les missions d'un
     // utilisateur, mais il ne prouve rien : c'est l'assertion qui porte
     // désormais la propriété, et elle est signée.
+    const granted =
+      this.#grants === undefined
+        ? undefined
+        : await this.#grants.issue({
+            userId,
+            service: "mission-engine",
+            missionExternalKey: externalKey,
+          });
+
     const input: SubmitMission = {
       external_key: externalKey,
       title: planned.title,
       workspace,
       tasks,
-      ...(this.#grants === undefined
+      ...(granted === undefined
         ? {}
         : {
             owner: {
               user_id: userId,
-              assertion: this.#grants.issueMissionGrant({
-                userId,
-                service: "mission-engine",
-                missionExternalKey: externalKey,
-              }).token,
+              assertion: granted.token,
+              // L'expiration voyage avec l'assertion : le moteur la stocke et
+              // sait donc, sans savoir relire le jeton, quand une rotation
+              // devient nécessaire.
+              expires_at: granted.expiresAt.toISOString(),
             },
           }),
     };

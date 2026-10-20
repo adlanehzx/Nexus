@@ -7,6 +7,7 @@ import { PrismaAgentRunStore } from "../src/services/persistence/prisma-agent-ru
 import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.js";
 import { PrismaDeviceStore } from "../src/services/persistence/prisma-device-store.js";
 import { PrismaAgentRunClaimStore } from "../src/services/persistence/prisma-agent-run-claim-store.js";
+import { PrismaMissionGrantRegistry } from "../src/services/persistence/prisma-mission-grant-registry.js";
 
 /**
  * Magasins Prisma contre un PostgreSQL réel.
@@ -98,6 +99,7 @@ afterAll(async () => {
   await prisma.taskStep.deleteMany({ where: { taskId: planId } });
   await prisma.taskPlan.deleteMany({ where: { id: planId } });
   await prisma.agentCoreRunClaim.deleteMany({ where: { userId: ownerId } });
+  await prisma.missionGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.agentRunSnapshot.deleteMany({ where: { userId: ownerId } });
   await prisma.deviceCapability.deleteMany({ where: { deviceId } });
   await prisma.device.deleteMany({ where: { id: deviceId } });
@@ -410,5 +412,74 @@ describe("réservations de run Agent Core sur PostgreSQL", () => {
       },
     });
     await expect(duplicate).rejects.toThrow();
+  });
+});
+
+describe("registre des assertions sur PostgreSQL", () => {
+  const mission = "nexus-registre-mission";
+
+  it("inscrit, relit et retire", async () => {
+    const registry = new PrismaMissionGrantRegistry(prisma);
+    const grantId = randomUUID();
+    const expiresAt = new Date(Date.now() + 86_400_000);
+
+    await registry.record({
+      grantId,
+      missionExternalKey: mission,
+      userId: ownerId,
+      service: "mission-engine",
+      issuedAt: new Date(),
+      expiresAt,
+    });
+
+    expect(await registry.find(grantId)).toMatchObject({
+      grantId,
+      status: "ACTIVE",
+      retiredAt: null,
+    });
+
+    const at = new Date();
+    expect(await registry.retireMission(mission, "COMPLETED", at)).toBe(1);
+    expect(await registry.find(grantId)).toMatchObject({ status: "COMPLETED" });
+    // Idempotent : un second retrait ne réécrit rien.
+    expect(await registry.retireMission(mission, "COMPLETED", new Date())).toBe(0);
+  });
+
+  it("retire toutes les assertions actives d'une mission en une écriture", async () => {
+    const registry = new PrismaMissionGrantRegistry(prisma);
+    const rotated = `${mission}-rotation`;
+    for (let index = 0; index < 3; index += 1) {
+      await registry.record({
+        grantId: randomUUID(),
+        missionExternalKey: rotated,
+        userId: ownerId,
+        service: "mission-engine",
+        issuedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      });
+    }
+
+    expect(await registry.retireMission(rotated, "REVOKED", new Date())).toBe(3);
+    const all = await registry.listByMission(rotated);
+    expect(all.every((grant) => grant.status === "REVOKED")).toBe(true);
+    expect(all.every((grant) => grant.retiredAt !== null)).toBe(true);
+  });
+
+  it("laisse la base refuser un état et un horodatage contradictoires", async () => {
+    // La contrainte `CHECK` de la migration : une assertion active ne peut pas
+    // porter de date de retrait, et un retrait ne peut pas en manquer. Sans
+    // elle, un bug applicatif produirait des lignes qu'on ne saurait pas lire.
+    const invalid = prisma.missionGrant.create({
+      data: {
+        id: randomUUID(),
+        missionExternalKey: mission,
+        userId: ownerId,
+        service: "mission-engine",
+        expiresAt: new Date(Date.now() + 86_400_000),
+        status: "ACTIVE",
+        retiredAt: new Date(),
+      },
+    });
+    await expect(invalid).rejects.toThrow();
   });
 });

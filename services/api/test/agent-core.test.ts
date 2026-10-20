@@ -82,7 +82,7 @@ describe("pont Mission Engine vers Agent Core", () => {
     );
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
-    const grant = harness.services.tokens.issueMissionGrant({
+    const grant = await harness.services.missionGrants.issue({
       userId: account.userId,
       service: "mission-engine",
       missionExternalKey: MISSION,
@@ -239,7 +239,7 @@ describe("lecture d'un run de mission", () => {
     const llm = new ScriptedLLMProvider([{ kind: "final", text: "Fait." }]);
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
-    const grant = harness.services.tokens.issueMissionGrant({
+    const grant = await harness.services.missionGrants.issue({
       userId: account.userId,
       service: "mission-engine",
       missionExternalKey: MISSION,
@@ -306,7 +306,7 @@ describe("lecture d'un run de mission", () => {
     });
     const runId = started.json<{ data: { runId: string } }>().data.runId;
 
-    const other = api.services.tokens.issueMissionGrant({
+    const other = await api.services.missionGrants.issue({
       userId: account.userId,
       service: "mission-engine",
       missionExternalKey: "nexus-mission-voisine",
@@ -346,7 +346,7 @@ describe("unicité d'un run de mission", () => {
     );
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
-    const grant = harness.services.tokens.issueMissionGrant({
+    const grant = await harness.services.missionGrants.issue({
       userId: account.userId,
       service: "mission-engine",
       missionExternalKey: MISSION,
@@ -458,5 +458,108 @@ describe("unicité d'un run de mission", () => {
       first.json<{ data: { runId: string } }>().data.runId,
     );
     expect(llm.requests).toHaveLength(2);
+  });
+});
+
+/**
+ * Le registre vu depuis la surface HTTP.
+ *
+ * Les tests de `mission-grants.test.ts` éprouvent le service ; ceux-ci
+ * vérifient que la garde le consulte réellement. La distinction compte : un
+ * registre parfait qu'aucune route n'interroge ne protège rien.
+ */
+describe("registre des assertions sur la surface du pont", () => {
+  let harness: ApiHarness | undefined;
+
+  afterEach(async () => harness?.close());
+
+  const MISSION = "nexus-mission-registre";
+
+  async function setup() {
+    const llm = new ScriptedLLMProvider([
+      { kind: "final", text: "Fait." },
+      { kind: "final", text: "Encore." },
+    ]);
+    harness = await makeApi({ llmProvider: llm });
+    const account = await createAccount(harness);
+    const granted = await harness.services.missionGrants.issue({
+      userId: account.userId,
+      service: "mission-engine",
+      missionExternalKey: MISSION,
+    });
+    return { account, granted, api: harness };
+  }
+
+  const run = (api: ApiHarness, token: string, attemptId: string) =>
+    api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        missionExternalKey: MISSION,
+        taskKey: "deleguee",
+        instruction: "Agis",
+        attemptId,
+      },
+    });
+
+  it("accepte une assertion inscrite au registre", async () => {
+    const { granted, api } = await setup();
+    expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(200);
+  });
+
+  it("refuse une assertion signée mais jamais enregistrée", async () => {
+    const { account, api } = await setup();
+    // Émise par le service de jetons seul : signature valide, aucune trace.
+    const orphan = api.services.tokens.issueMissionGrant({
+      userId: account.userId,
+      service: "mission-engine",
+      missionExternalKey: MISSION,
+    });
+
+    expect((await run(api, orphan.token, "attempt-1")).statusCode).toBe(403);
+  });
+
+  it("refuse une assertion retirée, sans attendre son expiration", async () => {
+    const { granted, api } = await setup();
+    expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(200);
+
+    await api.services.missionGrants.retire(MISSION);
+
+    // C'est la capacité qui manquait : jusqu'ici une assertion volée restait
+    // exploitable vingt-quatre heures.
+    expect((await run(api, granted.token, "attempt-2")).statusCode).toBe(403);
+  });
+
+  it("retire les assertions par sa propre route, sur présentation de l'une d'elles", async () => {
+    const { granted, api } = await setup();
+
+    const retired = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-grants/retire",
+      headers: { authorization: `Bearer ${granted.token}` },
+      payload: { missionExternalKey: MISSION, reason: "completed" },
+    });
+
+    expect(retired.statusCode).toBe(200);
+    expect(retired.json<{ data: { retired: number } }>().data.retired).toBe(1);
+    // L'assertion qui vient de servir au retrait ne vaut plus rien : c'est le
+    // propre d'une auto-révocation.
+    expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(403);
+  });
+
+  it("refuse de retirer les assertions d'une autre mission", async () => {
+    const { granted, api } = await setup();
+
+    const attempted = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-grants/retire",
+      headers: { authorization: `Bearer ${granted.token}` },
+      payload: { missionExternalKey: "nexus-mission-voisine", reason: "revoked" },
+    });
+
+    // Sans cette vérification de portée, une assertion quelconque permettrait
+    // de couper les accès de n'importe quelle mission du compte.
+    expect(attempted.statusCode).toBe(403);
   });
 });
