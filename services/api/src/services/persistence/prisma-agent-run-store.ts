@@ -19,6 +19,7 @@ export class PrismaAgentRunStore implements QueryableAgentRunStore {
         status: state.record.status,
         startTime: new Date(state.record.startTime),
         state: state as never,
+        missionExternalKey: state.record.missionExternalKey,
       },
       update: {
         status: state.record.status,

@@ -80,6 +80,15 @@ export interface AgentRunRecord {
   model: string;
   /** Réponse finale rendue à l'utilisateur, y compris en cas de résultat partiel. */
   response: string | null;
+  /**
+   * Mission qui a demandé ce run, ou `null` pour un run lancé par une personne.
+   *
+   * Sans ce lien, une assertion de mission ne serait scopée que par
+   * propriétaire : elle ouvrirait aussi les runs issus des conversations
+   * privées du compte. La portée se vérifie donc ici, et non sur la seule
+   * identité de l'appelant.
+   */
+  missionExternalKey: string | null;
 }
 
 /**

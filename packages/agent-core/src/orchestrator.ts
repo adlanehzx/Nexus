@@ -55,6 +55,8 @@ export interface StartRunInput {
   message: string;
   correlationId?: string;
   policy?: Partial<ExecutionPolicy>;
+  /** Mission d'origine, quand le run est demandé par le moteur et non par une personne. */
+  missionExternalKey?: string;
 }
 
 export interface AgentRunResult {
@@ -137,6 +139,7 @@ export class AgentOrchestrator {
         usage: { inputTokens: 0, outputTokens: 0 },
         model: this.#options.llm.model,
         response: null,
+        missionExternalKey: input.missionExternalKey ?? null,
       },
       messages: [],
       pendingConfirmation: null,

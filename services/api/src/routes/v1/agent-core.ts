@@ -148,6 +148,9 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         conversationId: conversation.id,
         message: request.body.instruction,
         correlationId: request.id,
+        // Inscrit sur le run : c'est ce qui permet plus tard de le relire sous
+        // cette assertion, et uniquement sous celle-ci.
+        missionExternalKey: mission.missionExternalKey,
       });
       await app.services.conversations.appendMessage({
         conversationId: conversation.id,
@@ -157,6 +160,39 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
       });
       await persistResponse(app.services.conversations, conversation.id, result.record.response);
       return ok(present(result), request.id);
+    },
+  );
+
+  /**
+   * Lecture d'un run par le moteur, pour savoir où en est une confirmation.
+   *
+   * C'est la moitié « le moteur interroge » de la suspension durable : rien
+   * n'est notifié au moteur, donc rien de nouveau n'est joignable sur son port.
+   * Il redemande, et l'état qu'il lit vient de la base.
+   *
+   * La portée est vérifiée **deux fois** : le propriétaire, comme partout, et
+   * la mission. La seconde n'est pas redondante — sans elle, une assertion
+   * ouvrirait aussi les runs issus des conversations privées du compte.
+   */
+  app.get(
+    "/agent-core/mission-runs/:runId",
+    {
+      preHandler: app.requireMissionGrant,
+      schema: {
+        tags: ["agent-core"],
+        params: z.object({ runId: z.string().uuid() }),
+        response: { 200: okSchema(runSchema) },
+      },
+    },
+    async (request) => {
+      const mission = currentMission(request);
+      const record = await app.services.agentCore?.getRun(request.params.runId);
+      if (record === undefined) throw new NotFoundError("Run agent", request.params.runId);
+      assertOwnedBy(record.userId, mission.userId, "Run agent");
+      // `null` pour un run lancé par une personne : une assertion ne doit pas
+      // pouvoir le lire, et `assertMissionScope` le refuse sur une clé vide.
+      assertMissionScope(mission.missionExternalKey, record.missionExternalKey ?? "");
+      return ok(present({ record }), request.id);
     },
   );
 

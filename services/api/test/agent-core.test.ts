@@ -217,3 +217,104 @@ describe("pont Mission Engine vers Agent Core", () => {
     expect(executed.statusCode).toBe(403);
   });
 });
+
+/**
+ * Lecture d'un run par le moteur.
+ *
+ * C'est la moitié « le moteur interroge » de la suspension durable. Le risque
+ * propre à cette route n'est pas la lecture mais sa portée : une assertion ne
+ * doit ouvrir que les runs de sa mission, et surtout pas ceux que le
+ * propriétaire a lancés depuis ses conversations privées.
+ */
+describe("lecture d'un run de mission", () => {
+  let harness: ApiHarness | undefined;
+
+  afterEach(async () => harness?.close());
+
+  const MISSION = "nexus-mission-lecture";
+
+  async function setup() {
+    const llm = new ScriptedLLMProvider([{ kind: "final", text: "Fait." }]);
+    harness = await makeApi({ llmProvider: llm });
+    const account = await createAccount(harness);
+    const grant = harness.services.tokens.issueMissionGrant({
+      userId: account.userId,
+      service: "mission-engine",
+      missionExternalKey: MISSION,
+    });
+    return { account, grant, api: harness };
+  }
+
+  it("relit le run qu'elle a lancé, dans sa mission", async () => {
+    const { grant, api } = await setup();
+    const started = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-runs",
+      headers: { authorization: `Bearer ${grant.token}` },
+      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Agis" },
+    });
+    const runId = started.json<{ data: { runId: string } }>().data.runId;
+
+    const reread = await api.app.inject({
+      method: "GET",
+      url: `/api/v1/agent-core/mission-runs/${runId}`,
+      headers: { authorization: `Bearer ${grant.token}` },
+    });
+
+    expect(reread.statusCode).toBe(200);
+    expect(reread.json<{ data: { runId: string } }>().data.runId).toBe(runId);
+  });
+
+  it("refuse de relire un run lancé par une personne", async () => {
+    const { account, grant, api } = await setup();
+    const created = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/conversations",
+      headers: account.authorization,
+      payload: { title: "Conversation privée" },
+    });
+    const conversationId = created.json<{ data: { id: string } }>().data.id;
+    const personal = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/runs",
+      headers: account.authorization,
+      payload: { conversationId, message: "Travaille" },
+    });
+    const runId = personal.json<{ data: { runId: string } }>().data.runId;
+
+    const attempted = await api.app.inject({
+      method: "GET",
+      url: `/api/v1/agent-core/mission-runs/${runId}`,
+      headers: { authorization: `Bearer ${grant.token}` },
+    });
+
+    // Même propriétaire, même signature valide — mais ce run n'appartient à
+    // aucune mission. Sans ce refus, une assertion lirait les conversations
+    // privées du compte.
+    expect(attempted.statusCode).toBe(403);
+  });
+
+  it("refuse une assertion émise pour une autre mission", async () => {
+    const { account, grant, api } = await setup();
+    const started = await api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-runs",
+      headers: { authorization: `Bearer ${grant.token}` },
+      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Agis" },
+    });
+    const runId = started.json<{ data: { runId: string } }>().data.runId;
+
+    const other = api.services.tokens.issueMissionGrant({
+      userId: account.userId,
+      service: "mission-engine",
+      missionExternalKey: "nexus-mission-voisine",
+    });
+    const attempted = await api.app.inject({
+      method: "GET",
+      url: `/api/v1/agent-core/mission-runs/${runId}`,
+      headers: { authorization: `Bearer ${other.token}` },
+    });
+
+    expect(attempted.statusCode).toBe(403);
+  });
+});

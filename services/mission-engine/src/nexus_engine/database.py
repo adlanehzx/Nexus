@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     profile_key TEXT NOT NULL REFERENCES profiles(profile_key),
     agent_profile_id TEXT NOT NULL,
     instruction TEXT NOT NULL,
-    state TEXT NOT NULL CHECK (state IN ('blocked','ready','running','retry_wait','succeeded','failed','cancelled','skipped')),
+    state TEXT NOT NULL CHECK (state IN ('blocked','ready','running','retry_wait','awaiting_confirmation','succeeded','failed','cancelled','skipped')),
     timeout_seconds INTEGER NOT NULL,
     max_attempts INTEGER NOT NULL,
     retry_delay_seconds INTEGER NOT NULL,
@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     -- suivants. C'est ce qui fait qu'un retry prolonge un historique au lieu
     -- d'en ouvrir un second. Nulle pour toute tâche ACP.
     agent_core_conversation_id TEXT,
+    -- Run Agent Core suspendu sur une confirmation humaine, et la confirmation
+    -- attendue. Renseignes uniquement entre la suspension et la decision : le
+    -- moteur s'en sert pour redemander ou en est le run, et c'est ce qui rend
+    -- l'attente durable — elle survit a un redemarrage comme tout le reste.
+    agent_core_run_id TEXT,
+    agent_core_confirmation_id TEXT,
     next_attempt_at TEXT,
     result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
     error_json TEXT CHECK (error_json IS NULL OR json_valid(error_json)),
@@ -107,7 +113,7 @@ CREATE TABLE IF NOT EXISTS attempts (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     attempt_no INTEGER NOT NULL,
-    state TEXT NOT NULL CHECK (state IN ('leased','creating','running','succeeded','failed','timed_out','cancelled','orphaned')),
+    state TEXT NOT NULL CHECK (state IN ('leased','creating','running','awaiting_confirmation','succeeded','failed','timed_out','cancelled','orphaned')),
     lease_owner TEXT,
     lease_token TEXT,
     lease_expires_at TEXT,
@@ -246,6 +252,20 @@ CREATE INDEX IF NOT EXISTS idx_research_runs_state ON research_runs(state, updat
 """
 
 
+def table_ddl(name: str) -> str:
+    """Extrait du schéma de référence le ``CREATE TABLE`` d'une table.
+
+    Une seule source de vérité. Recopier la définition ailleurs pour les besoins
+    d'une reconstruction la ferait diverger du schéma d'une base neuve au
+    premier changement suivant — et cette divergence ne se verrait que le jour
+    où une contrainte manquerait sur l'une des deux.
+    """
+    marker = f"CREATE TABLE IF NOT EXISTS {name} ("
+    start = SCHEMA.index(marker)
+    end = SCHEMA.index("\n);", start) + len("\n);")
+    return SCHEMA[start:end]
+
+
 class Database:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -259,6 +279,75 @@ class Database:
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
         return connection
+
+    def _widen_state_checks(self, connection: sqlite3.Connection) -> None:
+        """Ajoute ``awaiting_confirmation`` aux CHECK de ``tasks`` et ``attempts``.
+
+        SQLite ne sait pas modifier une contrainte CHECK : il faut reconstruire
+        la table. C'est la seule migration non additive de ce service, et elle
+        est écrite pour être sûre plutôt que courte —
+
+        - elle ne fait rien si la base porte déjà le nouvel état, donc elle est
+          idempotente et ne coûte rien aux démarrages suivants ;
+        - la table neuve vient de `SCHEMA`, pas d'une copie manuelle, donc une
+          base migrée a exactement la structure d'une base neuve — au seul
+          détail près que SQLite met le nom de la table entre guillemets après
+          un `RENAME`, ce qui ne change ni les colonnes ni les contraintes ;
+        - les colonnes copiées sont l'intersection des deux schémas, de sorte
+          qu'une colonne ajoutée plus tard au schéma ne fasse pas échouer la
+          copie d'une base qui ne l'a pas encore ;
+        - `foreign_key_check` tourne avant de valider : si la copie avait cassé
+          une référence, on sort sans rien avoir écrit.
+        """
+        for table in ("tasks", "attempts"):
+            existing = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone()
+            if existing is None or "awaiting_confirmation" in str(existing["sql"]):
+                continue
+
+            target = table_ddl(table).replace(
+                f"CREATE TABLE IF NOT EXISTS {table} (",
+                f"CREATE TABLE {table}__migrating (",
+                1,
+            )
+            # Hors transaction, seul endroit où ce PRAGMA a un effet. Sans lui,
+            # le DROP serait refusé par les tables qui référencent celle-ci.
+            connection.execute("PRAGMA foreign_keys = OFF")
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(target)
+                old_columns = [
+                    row["name"]
+                    for row in connection.execute(f"PRAGMA table_info({table})")
+                ]
+                new_columns = [
+                    row["name"]
+                    for row in connection.execute(
+                        f"PRAGMA table_info({table}__migrating)"
+                    )
+                ]
+                carried = [name for name in new_columns if name in old_columns]
+                columns = ",".join(f'"{name}"' for name in carried)
+                connection.execute(
+                    f"INSERT INTO {table}__migrating ({columns}) "
+                    f"SELECT {columns} FROM {table}"
+                )
+                connection.execute(f"DROP TABLE {table}")
+                connection.execute(
+                    f"ALTER TABLE {table}__migrating RENAME TO {table}"
+                )
+                violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+                if violations:
+                    raise RuntimeError(
+                        f"cannot migrate {table}: {len(violations)} foreign key violations"
+                    )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+            finally:
+                connection.execute("PRAGMA foreign_keys = ON")
 
     def migrate(self) -> None:
         with self.connect() as connection:
@@ -296,6 +385,12 @@ class Database:
                 connection.execute(
                     "ALTER TABLE tasks ADD COLUMN agent_core_conversation_id TEXT"
                 )
+            if "agent_core_run_id" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN agent_core_run_id TEXT")
+            if "agent_core_confirmation_id" not in task_columns:
+                connection.execute(
+                    "ALTER TABLE tasks ADD COLUMN agent_core_confirmation_id TEXT"
+                )
             profile_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(profiles)")
             }
@@ -315,6 +410,13 @@ class Database:
                 connection.execute("ALTER TABLE missions ADD COLUMN owner_user_id TEXT")
             if "owner_assertion" not in mission_columns:
                 connection.execute("ALTER TABLE missions ADD COLUMN owner_assertion TEXT")
+            # Après les ALTER, pour que la table reconstruite emporte aussi les
+            # colonnes qui viennent d'être ajoutées.
+            self._widen_state_checks(connection)
+            # `DROP TABLE` a emporté les index de la table reconstruite. Rejouer
+            # le schéma les recrée — les `CREATE TABLE IF NOT EXISTS` qui
+            # précèdent sont alors sans effet.
+            connection.executescript(SCHEMA)
             # Profil réservé de l'exécutant Agent Core.
             #
             # C'est une ligne de `profiles` comme les autres, et c'est tout

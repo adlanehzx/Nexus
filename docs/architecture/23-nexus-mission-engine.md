@@ -246,6 +246,44 @@ Une tâche `agent-core` **ne peut pas déclarer de repli**. Basculer vers un age
 ACP lui ferait perdre ses outils, ses permissions et ses confirmations, et
 réussirait en apparence.
 
+### Suspension durable sur confirmation
+
+Quand un run délégué ouvre une confirmation humaine, la tâche n'échoue pas :
+elle passe en `awaiting_confirmation`, garde son run (`tasks.agent_core_run_id`)
+et rend son bail. L'attente est en base, donc elle survit à un redémarrage du
+moteur comme le reste de l'état.
+
+**C'est le moteur qui interroge ; rien ne le notifie.** Le choix est délibéré.
+Une notification aurait demandé d'ouvrir, sur le port du moteur, un point
+d'entrée capable de marquer une tâche réussie avec un contenu arbitraire — sur
+un port que tout processus local atteint, et qui n'est aujourd'hui protégé que
+par la boucle locale. Interroger ne crée aucune surface nouvelle et réutilise
+les bails, les réveils et la durabilité déjà en place.
+
+Trois conséquences qui comptent :
+
+- **Une attente ne consomme pas de tentative.** `claim_confirmation_poll`
+  reprend la tentative existante au lieu d'en créer une nouvelle. Sans cela,
+  quelques sondages suffiraient à épuiser `max_attempts` et la tâche échouerait
+  pour « trop d'essais » alors qu'elle n'a fait qu'attendre.
+- **Un refus humain ne se retente pas.** `confirmation_rejected` et
+  `confirmation_expired` font échouer la tâche franchement : réessayer, même
+  vers un autre agent, rouvrirait la même confirmation et redemanderait la même
+  décision. La santé du profil reste intacte — un refus humain n'est pas une
+  défaillance d'agent.
+- **Les confirmations dues passent avant le travail neuf.** Un run déjà ouvert
+  côté Agent Core retient tout le DAG qui en dépend.
+
+La décision humaine, elle, passe par la surface utilisateur existante :
+`POST /api/v1/agent-core/runs/:runId/confirmation`. Le run délégué appartient au
+propriétaire de la mission, donc il s'approuve depuis le tableau de bord sans
+rien de spécifique.
+
+Lire un run sous assertion exige une vérification de portée **double** —
+propriétaire et mission — d'où la colonne `agent_run_snapshots.missionExternalKey`.
+Sans elle, une assertion de mission ouvrirait aussi les runs que le propriétaire
+a lancés depuis ses conversations privées.
+
 ### Ce qui fonctionne réellement, et ce qui manque
 
 Vérifié de bout en bout, par HTTP réel entre les deux processus : une tâche
@@ -254,12 +292,18 @@ signature forgée, un service non listé, une assertion hors de sa portée et un
 absence d'assertion sont tous refusés en `auth_required` ; la conversation et le
 run sont persistés dans PostgreSQL et appartiennent au propriétaire.
 
+Vérifié également par HTTP réel : le moteur relit un run avec l'assertion de sa
+mission, et se fait refuser avec l'assertion d'une autre mission comme sur un
+run que le propriétaire a lancé lui-même.
+
 **Non fait, et à savoir avant de s'appuyer dessus** :
 
-- **La suspension durable sur confirmation n'existe pas.** Un run qui ouvre une
-  confirmation humaine fait échouer la tâche en `confirmation_required`. Le
-  moteur ne sait pas encore attendre une décision puis reprendre — c'est le
-  travail prioritaire suivant, et la table `outbox` existe déjà pour le porter.
+- **Le tour complet de confirmation humaine n'est pas exercé en conditions
+  réelles.** La mécanique de suspension, de sondage et de reprise est couverte
+  par des tests avec issues scriptées, et le sondage l'est aussi par HTTP réel ;
+  ce qui ne l'est pas, c'est un agent demandant spontanément un outil à risque
+  puis une approbation depuis le tableau de bord — le modèle ne le fait pas sur
+  commande.
 - **Pas d'unicité de run par tentative.** Si le bail expire pendant un run, la
   tâche repart et un second run démarre. La conversation est réutilisée, les
   deux réponses y figurent. Le fencing du bail borne le risque, il ne l'annule

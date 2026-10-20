@@ -62,6 +62,11 @@ class Lease:
     owner_assertion: str | None = None
     #: Conversation Agent Core deja ouverte pour cette tache, s'il y en a une.
     agent_core_conversation_id: str | None = None
+    #: Run Agent Core suspendu sur une confirmation. Renseigne => le worker
+    #: vient lire ou en est ce run, il ne rejoue pas l'instruction.
+    agent_core_run_id: str | None = None
+    #: Confirmation attendue, pour les journaux et le tableau de bord.
+    agent_core_confirmation_id: str | None = None
 
 
 class MissionRepository:
@@ -432,7 +437,8 @@ class MissionRepository:
                 """
                 SELECT a.*,t.mission_id,t.task_key,t.profile_key,t.agent_profile_id,
                        t.instruction,t.timeout_seconds,t.context_budget_chars,
-                       t.agent_core_conversation_id,m.workspace,m.external_key,
+                       t.agent_core_conversation_id,t.agent_core_run_id,
+                       t.agent_core_confirmation_id,m.workspace,m.external_key,
                        m.owner_user_id,m.owner_assertion,p.agent_kind
                 FROM attempts a
                 JOIN tasks t ON t.id=a.task_id
@@ -481,6 +487,10 @@ class MissionRepository:
                     owner_assertion=_optional_text(expired["owner_assertion"]),
                     agent_core_conversation_id=_optional_text(
                         expired["agent_core_conversation_id"]
+                    ),
+                    agent_core_run_id=_optional_text(expired["agent_core_run_id"]),
+                    agent_core_confirmation_id=_optional_text(
+                        expired["agent_core_confirmation_id"]
                     ),
                 )
             connection.execute(
@@ -580,6 +590,10 @@ class MissionRepository:
                 owner_assertion=_optional_text(row["owner_assertion"]),
                 agent_core_conversation_id=_optional_text(
                     row["agent_core_conversation_id"]
+                ),
+                agent_core_run_id=_optional_text(row["agent_core_run_id"]),
+                agent_core_confirmation_id=_optional_text(
+                    row["agent_core_confirmation_id"]
                 ),
             )
 
@@ -688,6 +702,153 @@ class MissionRepository:
                 ),
             )
         return Lease(**{**lease.__dict__, "lease_expires_at": expiry})
+
+    def suspend(
+        self,
+        lease: Lease,
+        *,
+        run_id: str,
+        confirmation_id: str | None,
+        poll_delay_seconds: int,
+    ) -> None:
+        """Suspend une tâche en attente d'un accord humain.
+
+        Ce n'est ni un succès ni un échec, et surtout **pas une tentative
+        consommée** : la tentative en cours reste la même, elle passe seulement
+        en attente et rend son bail. Compter une attente comme un essai ferait
+        échouer une tâche pour une raison fausse — « trop d'essais » — alors
+        qu'elle attend simplement une décision.
+
+        L'attente est durable parce qu'elle est en base : un redémarrage du
+        moteur retrouve la tâche en `awaiting_confirmation`, avec le run à
+        interroger.
+        """
+        current_dt = now_utc()
+        current = timestamp(current_dt)
+        next_poll = timestamp(current_dt + timedelta(seconds=poll_delay_seconds))
+        with self.db.transaction(immediate=True) as connection:
+            self._assert_lease(connection, lease)
+            # Première suspension de ce run, ou énième sondage ? L'événement ne
+            # doit sortir qu'une fois : le tableau de bord veut savoir qu'une
+            # tâche attend une décision, pas le réapprendre toutes les trente
+            # secondes jusqu'à ce qu'elle arrive.
+            already_awaiting = (
+                connection.execute(
+                    "SELECT agent_core_run_id FROM tasks WHERE id=?", (lease.task_id,)
+                ).fetchone()["agent_core_run_id"]
+                == run_id
+            )
+            connection.execute(
+                """
+                UPDATE attempts SET state='awaiting_confirmation',updated_at=?,
+                    lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL
+                WHERE id=?
+                """,
+                (current, lease.attempt_id),
+            )
+            connection.execute(
+                """
+                UPDATE tasks SET state='awaiting_confirmation',next_attempt_at=?,
+                    agent_core_run_id=?,agent_core_confirmation_id=?,updated_at=?
+                WHERE id=?
+                """,
+                (next_poll, run_id, confirmation_id, current, lease.task_id),
+            )
+            if not already_awaiting:
+                self._emit(
+                    connection,
+                    "task",
+                    lease.task_id,
+                    "task.awaiting_confirmation",
+                    # Clé portée par le run : un même run suspendu puis
+                    # re-sondé n'émet qu'une fois, et un run ultérieur sur la
+                    # même tâche émet de nouveau.
+                    f"task:{lease.task_id}:awaiting:{run_id}",
+                    {
+                        "task_id": lease.task_id,
+                        "attempt_id": lease.attempt_id,
+                        # Ni le run ni la confirmation ne sont des secrets, mais
+                        # l'assertion, elle, ne sort jamais : elle n'est pas ici.
+                        "run_id": run_id,
+                        "confirmation_id": confirmation_id,
+                    },
+                    current,
+                )
+
+    def claim_confirmation_poll(self, owner: str, lease_seconds: int = 30) -> Lease | None:
+        """Reprend une tâche suspendue dont le prochain sondage est dû.
+
+        Distincte d'`acquire` sur un point qui compte : elle **réutilise la
+        tentative existante** au lieu d'en créer une nouvelle. Passer par
+        `acquire` incrémenterait `attempt_no` à chaque sondage et épuiserait
+        `max_attempts` en quelques minutes d'attente.
+        """
+        current_dt = now_utc()
+        current = timestamp(current_dt)
+        expiry = timestamp(current_dt + timedelta(seconds=lease_seconds))
+        with self.db.transaction(immediate=True) as connection:
+            row = connection.execute(
+                """
+                SELECT t.*, m.workspace, m.external_key, m.owner_user_id,
+                       m.owner_assertion, p.agent_kind,
+                       a.id AS attempt_id, a.attempt_no, a.conversation_id
+                FROM tasks t
+                JOIN missions m ON m.id=t.mission_id
+                JOIN profiles p ON p.profile_key=t.profile_key
+                JOIN attempts a ON a.task_id=t.id AND a.state='awaiting_confirmation'
+                WHERE t.state='awaiting_confirmation'
+                  AND t.next_attempt_at IS NOT NULL AND t.next_attempt_at<=?
+                  AND m.state IN ('pending','running')
+                ORDER BY t.next_attempt_at
+                LIMIT 1
+                """,
+                (current,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            token = secrets.token_urlsafe(24)
+            connection.execute(
+                """
+                UPDATE attempts SET state='running',lease_owner=?,lease_token=?,
+                    lease_expires_at=?,updated_at=?
+                WHERE id=? AND state='awaiting_confirmation'
+                """,
+                (owner, token, expiry, current, row["attempt_id"]),
+            )
+            connection.execute(
+                "UPDATE tasks SET state='running',updated_at=? WHERE id=? AND state='awaiting_confirmation'",
+                (current, row["id"]),
+            )
+            return Lease(
+                attempt_id=str(row["attempt_id"]),
+                task_id=str(row["id"]),
+                mission_id=str(row["mission_id"]),
+                task_key=str(row["task_key"]),
+                profile_key=str(row["profile_key"]),
+                agent_profile_id=str(row["agent_profile_id"]),
+                # L'instruction n'est pas rejouée : on vient lire un run, pas
+                # en relancer un. Elle reste là pour les journaux.
+                instruction=str(row["instruction"]),
+                workspace=str(row["workspace"]),
+                attempt_no=int(row["attempt_no"]),
+                conversation_id=str(row["conversation_id"]),
+                lease_owner=owner,
+                lease_token=token,
+                lease_expires_at=expiry,
+                timeout_seconds=int(row["timeout_seconds"]),
+                agent_kind=str(row["agent_kind"]),
+                mission_external_key=str(row["external_key"]),
+                owner_user_id=_optional_text(row["owner_user_id"]),
+                owner_assertion=_optional_text(row["owner_assertion"]),
+                agent_core_conversation_id=_optional_text(
+                    row["agent_core_conversation_id"]
+                ),
+                agent_core_run_id=_optional_text(row["agent_core_run_id"]),
+                agent_core_confirmation_id=_optional_text(
+                    row["agent_core_confirmation_id"]
+                ),
+            )
 
     def succeed(self, lease: Lease, response: str) -> None:
         current = timestamp()
@@ -952,19 +1113,26 @@ class MissionRepository:
             remaining_fallbacks = fallbacks[1:] if next_profile is not None else fallbacks
             if category in {"auth_required", "quota_exhausted"} and next_profile is None:
                 retry = False
+            # Un refus humain ne se retente jamais, même s'il reste des essais
+            # et même vers un autre agent : la décision portait sur l'action,
+            # pas sur l'exécutant. Réessayer rouvrirait la même confirmation.
+            if category == "confirmation_declined":
+                retry = False
+                next_profile = None
             cooldown_until = (
                 timestamp(current_dt + timedelta(seconds=cooldown_seconds))
                 if cooldown_seconds is not None
                 else None
             )
-            connection.execute(
-                """
-                UPDATE profile_health SET status=?,cooldown_until=?,
-                    consecutive_failures=consecutive_failures+1,
-                    last_error_category=?,updated_at=? WHERE profile_key=?
-                """,
-                (health_status, cooldown_until, category, current, lease.profile_key),
-            )
+            if category != "confirmation_declined":
+                connection.execute(
+                    """
+                    UPDATE profile_health SET status=?,cooldown_until=?,
+                        consecutive_failures=consecutive_failures+1,
+                        last_error_category=?,updated_at=? WHERE profile_key=?
+                    """,
+                    (health_status, cooldown_until, category, current, lease.profile_key),
+                )
             connection.execute(
                 """
                 UPDATE attempts SET state='failed',error_json=?,finished_at=?,updated_at=?,
@@ -1059,6 +1227,13 @@ class MissionRepository:
     @staticmethod
     def _classify_failure(error: str) -> tuple[str, str, int | None]:
         normalized = error.lower()
+        # Une personne a refusé, ou n'a pas répondu à temps. Testé avant la
+        # règle « auth », que le mot `confirmation_declined` ne déclenche pas
+        # mais dont l'ordre ne doit pas dépendre du hasard. La santé du profil
+        # reste intacte : un refus humain n'est pas une défaillance d'agent, et
+        # le compter comme telle mettrait l'agent en cooldown pour rien.
+        if "confirmation_declined" in normalized:
+            return "confirmation_declined", "available", None
         if "auth" in normalized or "credential" in normalized or "401" in normalized:
             return "auth_required", "auth_required", None
         if "quota" in normalized or "usage_limit" in normalized:

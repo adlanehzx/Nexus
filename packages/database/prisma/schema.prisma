@@ -498,9 +498,15 @@ model AgentRunSnapshot {
   state     Json
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
+  /// Mission qui a demandé ce run. `null` pour un run lancé par une personne.
+  /// Colonne à part entière, et pas seulement un champ de `state` : la portée
+  /// d'une assertion se vérifie à la lecture, donc elle doit être indexable.
+  missionExternalKey String? @db.VarChar(128)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, startTime(sort: Desc)])
   @@index([status])
+  @@index([missionExternalKey])
   @@map("agent_run_snapshots")
 }

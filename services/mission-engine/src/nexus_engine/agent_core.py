@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -11,6 +12,32 @@ from nexus_engine.acp import AcpError
 #: Nom sous lequel le moteur se présente dans l'assertion. L'API tient une liste
 #: blanche des services admis ; cette valeur doit y figurer.
 SERVICE_NAME = "mission-engine"
+
+#: Arrêts de run qui signifient qu'une personne a tranché par la négative, ou
+#: n'a pas tranché à temps. La tâche échoue alors franchement : réessayer
+#: rouvrirait la même confirmation et redemanderait la même décision.
+DECLINED_STOP_REASONS = frozenset({"confirmation_rejected", "confirmation_expired"})
+
+
+@dataclass(frozen=True)
+class AgentCoreOutcome:
+    """Où en est un run Agent Core, vu du moteur.
+
+    Trois issues, et c'est tout l'intérêt de ne pas rendre un simple tuple :
+    une réponse, une attente de décision humaine, ou une erreur. L'attente
+    n'est pas un échec, et le type l'empêche d'être traitée comme tel par
+    distraction.
+    """
+
+    status: str
+    run_id: str | None
+    conversation_id: str | None
+    response: str | None
+    confirmation_id: str | None
+
+    @property
+    def awaits_confirmation(self) -> bool:
+        return self.confirmation_id is not None
 
 
 class AgentCoreGateway:
@@ -54,8 +81,8 @@ class AgentCoreGateway:
         conversation_id: str | None,
         timeout_seconds: int,
         heartbeat: Callable[[], None],
-    ) -> tuple[str, str | None]:
-        """Lance un run Agent Core et rend ``(réponse, conversation)``.
+    ) -> AgentCoreOutcome:
+        """Lance un run Agent Core.
 
         La conversation revient pour être mémorisée sur la tâche : au prochain
         essai, la même conversation est réutilisée et l'historique se prolonge
@@ -81,25 +108,70 @@ class AgentCoreGateway:
             }
         ).encode()
 
-        request = urllib.request.Request(
-            f"{self.base_url}/api/v1/agent-core/mission-runs",
-            data=payload,
-            method="POST",
-            headers={
-                "content-type": "application/json",
-                "authorization": f"Bearer {assertion}",
-            },
-        )
-
         # Le bail doit être renouvelé avant un appel qui peut durer : sans cela
         # un autre worker reprendrait la tâche pendant que celui-ci travaille.
         heartbeat()
+        return _read_run(
+            self._call(
+                "POST",
+                "/api/v1/agent-core/mission-runs",
+                assertion,
+                min(self.timeout_seconds, timeout_seconds),
+                payload,
+            )
+        )
+
+    def poll(
+        self,
+        *,
+        run_id: str,
+        assertion: str | None,
+        timeout_seconds: int = 30,
+    ) -> AgentCoreOutcome:
+        """Redemande où en est un run suspendu sur une confirmation.
+
+        C'est le moteur qui interroge, et rien ne le notifie. Le choix est
+        délibéré : la notification aurait demandé d'ouvrir sur le port du moteur
+        un point d'entrée capable de marquer une tâche réussie avec un contenu
+        arbitraire — sur un port que tout processus local atteint. Interroger ne
+        crée aucune surface nouvelle et réutilise les bails qui existent déjà.
+        """
+        if self.base_url is None:
+            raise AcpError("Agent Core bridge is not configured", category="config")
+        if not assertion:
+            raise AcpError(
+                "mission has no signed owner assertion", category="auth_required"
+            )
+        return _read_run(
+            self._call(
+                "GET",
+                f"/api/v1/agent-core/mission-runs/{run_id}",
+                assertion,
+                min(self.timeout_seconds, timeout_seconds),
+                None,
+            )
+        )
+
+    def _call(
+        self,
+        method: str,
+        path: str,
+        assertion: str,
+        timeout: int,
+        payload: bytes | None,
+    ) -> Any:
+        headers = {"authorization": f"Bearer {assertion}"}
+        if payload is not None:
+            headers["content-type"] = "application/json"
+        request = urllib.request.Request(
+            f"{self.base_url}{path}", data=payload, method=method, headers=headers
+        )
         try:
-            with self._opener(request, min(self.timeout_seconds, timeout_seconds)) as response:
-                body = json.loads(response.read().decode())
+            with self._opener(request, timeout) as response:
+                return json.loads(response.read().decode())
         except urllib.error.HTTPError as exc:
             raise AcpError(
-                "Agent Core bridge refused the run",
+                "Agent Core bridge refused the request",
                 category=_category_for_status(exc.code),
             ) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
@@ -107,32 +179,52 @@ class AgentCoreGateway:
         except json.JSONDecodeError as exc:
             raise AcpError("Agent Core bridge returned invalid JSON", category="transport") from exc
 
-        return _read_run(body)
 
-
-def _read_run(body: Any) -> tuple[str, str | None]:
+def _read_run(body: Any) -> AgentCoreOutcome:
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
         raise AcpError("Agent Core bridge returned an unexpected envelope", category="transport")
 
-    conversation_id = data.get("conversationId")
-    conversation = str(conversation_id) if isinstance(conversation_id, str) else None
+    def text(key: str) -> str | None:
+        value = data.get(key)
+        return str(value) if isinstance(value, str) else None
 
-    # Un run suspendu sur une confirmation humaine n'est **pas** un échec : il
-    # attend une décision. Le distinguer ici évite de le retenter en boucle, ce
-    # qui rouvrirait une confirmation à chaque tentative. La suspension durable
-    # reste à construire ; en l'état la tâche échoue sur une catégorie explicite
-    # plutôt que de faire semblant d'avoir réussi.
-    if data.get("confirmation") is not None:
+    status = text("status") or "unknown"
+    stop_reason = text("stopReason")
+    confirmation = data.get("confirmation")
+    confirmation_id = (
+        str(confirmation["id"])
+        if isinstance(confirmation, dict) and isinstance(confirmation.get("id"), str)
+        else None
+    )
+    outcome = AgentCoreOutcome(
+        status=status,
+        run_id=text("runId"),
+        conversation_id=text("conversationId"),
+        response=text("response"),
+        confirmation_id=confirmation_id,
+    )
+
+    # Une personne a refusé, ou n'a pas répondu à temps. C'est un échec franc :
+    # réessayer rouvrirait la même confirmation.
+    if stop_reason in DECLINED_STOP_REASONS:
         raise AcpError(
-            "Agent Core run awaits a human confirmation",
-            category="confirmation_required",
+            f"Agent Core run stopped: {stop_reason}", category="confirmation_declined"
         )
 
-    response = data.get("response")
-    if not isinstance(response, str) or not response.strip():
+    # Une attente de décision : rendue telle quelle, sans réponse. C'est au
+    # worker de suspendre la tâche, pas à la passerelle d'en décider.
+    if outcome.awaits_confirmation or status == "waiting_for_confirmation":
+        if outcome.run_id is None:
+            raise AcpError(
+                "Agent Core awaits a confirmation without naming its run",
+                category="transport",
+            )
+        return outcome
+
+    if outcome.response is None or not outcome.response.strip():
         raise AcpError("Agent Core run returned an empty response", category="empty_response")
-    return response, conversation
+    return outcome
 
 
 def _category_for_status(status: int) -> str:
