@@ -98,3 +98,19 @@ export class McpSchemaError extends AppError {
     this.tool = tool;
   }
 }
+
+export class McpSecurityError extends AppError {
+  readonly code = "MCP_SECURITY_VIOLATION";
+  readonly httpStatus = 403;
+  override readonly retryable = false;
+  readonly server: string;
+
+  constructor(server: string, reason: string) {
+    super({
+      message: `Violation de sécurité sur le serveur MCP « ${server} » : ${reason}`,
+      userMessage: `L'exécution du serveur MCP « ${server} » a été bloquée par la politique de sécurité.`,
+      context: { server, reason },
+    });
+    this.server = server;
+  }
+}
