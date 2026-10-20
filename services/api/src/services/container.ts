@@ -1,3 +1,10 @@
+import { resolve } from "node:path";
+import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
+import {
+  InMemoryMissionGrantRegistry,
+  MissionGrantService,
+  type MissionGrantRegistry,
+} from "./mission-grants.js";
 import { TokenService, type ScryptParams } from "@nexus/auth";
 import type { LLMProvider } from "@nexus/llm";
 import {
@@ -12,7 +19,10 @@ import {
   ecdsaP256Verifier,
   ed25519Verifier,
   type DeviceCredentialProvider,
+  type DeviceStore,
   type SignatureVerifier,
+  type TaskPlan,
+  type TaskStore,
 } from "@nexus/devices";
 import {
   ConfirmationService,
@@ -20,9 +30,14 @@ import {
   PermissionService,
   ToolRegistry,
 } from "@nexus/tools";
-import { InMemoryAgentRunStore } from "@nexus/agent-core";
+import {
+  AgentOrchestrator,
+  InMemoryAgentRunStore,
+  type AgentRunStore,
+  type AgentState,
+} from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
-import type { BrowserWorkerClient } from "@nexus/browser-client";
+import { createBrowserTools, type BrowserWorkerClient } from "@nexus/browser-client";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { PrismaClient } from "@nexus/database";
 import {
@@ -49,6 +64,7 @@ import { ConfirmationBroker } from "./confirmation-broker.js";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
+import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 
 /**
  * Assemblage des services de l'API.
@@ -78,8 +94,29 @@ export interface ServiceContainerOptions {
   notifications?: NotificationStore;
   memory?: MemoryProvider;
   credentials?: DeviceCredentialProvider;
-  taskStore?: import("@nexus/devices").TaskStore;
-  deviceStore?: import("@nexus/devices").DeviceStore;
+  taskStore?: TaskStore;
+  deviceStore?: DeviceStore;
+  runStore?: QueryableAgentRunStore;
+
+  /**
+   * Registre des réservations de run Agent Core.
+   *
+   * En mémoire par défaut, ce qui convient aux tests et à un mono-processus.
+   * En production il doit être celui de PostgreSQL : c'est la contrainte
+   * d'unicité de la base qui tient la promesse, pas une structure de données
+   * locale à un processus.
+   */
+  agentRunClaims?: AgentRunClaimStore;
+
+  /**
+   * Registre des assertions de mission. En mémoire par défaut ; en production
+   * c'est celui de PostgreSQL, sans quoi un redémarrage de l'API rendrait toute
+   * assertion inconnue — donc refusée — et casserait les missions en cours.
+   */
+  missionGrantRegistry?: MissionGrantRegistry;
+
+  /** Marge de renouvellement d'une assertion. Exposée pour les tests d'horloge. */
+  missionGrantRenewWithinMs?: number;
 
   /**
    * Vérificateur de signature d'appareil.
@@ -114,10 +151,16 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
-  /** Client du moteur OpenHands ACP/paper-trading. */
+  /** Configuration administrable, stockée localement sans secret en clair. */
+  runtimeConfiguration?: RuntimeConfigurationStore;
+  /** Coffre adossé au trousseau de session Linux. */
+  vault?: KeyringVault;
+  /** Client du moteur NEXUS ACP/paper-trading. */
   missionControl?: MissionControlPort;
   /** Version affichee par le tableau de bord. */
   apiVersion?: string;
+  /** Répertoire local privé pour les journaux rédigés et bornés. */
+  observabilityDirectory?: string;
   /** Provider LLM pour le TaskPlanner. */
   llmProvider?: LLMProvider;
 }
@@ -142,7 +185,7 @@ export class ServiceContainer {
   readonly selector: DeviceSelector;
   readonly router: EventRouter;
   readonly gateway: WorkerGateway;
-  readonly taskStore: import("@nexus/devices").TaskStore;
+  readonly taskStore: TaskStore;
   readonly coordinator: TaskCoordinator;
 
   readonly permissions: PermissionService;
@@ -158,7 +201,11 @@ export class ServiceContainer {
   // remplira, et le tableau de bord lit deja les bons objets. Un magasin vide
   // est honnete ; un magasin invente ne l'aurait pas ete.
   readonly toolRegistry: ToolRegistry;
-  readonly runStore: InMemoryAgentRunStore;
+  readonly runStore: QueryableAgentRunStore;
+  readonly agentRunClaims: AgentRunClaimStore;
+  readonly missionGrants: MissionGrantService;
+  /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
+  readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
   readonly logs: LogBuffer;
   readonly dashboard: DashboardService;
@@ -166,13 +213,16 @@ export class ServiceContainer {
   /** Gestionnaire MCP, quand il y en a un. `undefined` = non configure. */
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
-  readonly browser: BrowserWorkerClient | undefined;
-  /** Moteur OpenHands ACP/paper-trading, quand il est configuré. */
+  browser: BrowserWorkerClient | undefined;
+  readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
+  readonly vault: KeyringVault | undefined;
+  /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
   /** Provider LLM pour planifier des tâches (optionnel). */
   readonly llmProvider: LLMProvider | undefined;
 
   readonly #now: () => Date;
+  readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
@@ -279,8 +329,17 @@ export class ServiceContainer {
     // directement depuis une route.
     // Le journal de securite doit exister avant le service de memoire, qui lui
     // remonte ses refus.
-    this.securityLog = new SecurityLog({ now });
-    this.logs = new LogBuffer();
+    this.securityLog = new SecurityLog({
+      now,
+      ...(options.observabilityDirectory === undefined
+        ? {}
+        : { filePath: resolve(options.observabilityDirectory, "security.jsonl") }),
+    });
+    this.logs = new LogBuffer(
+      options.observabilityDirectory === undefined
+        ? {}
+        : { filePath: resolve(options.observabilityDirectory, "application.jsonl") },
+    );
 
     this.memoryService = new MemoryService({
       provider: this.memory,
@@ -341,14 +400,14 @@ export class ServiceContainer {
       },
       tasks: {
         recentTasks: async (input) => {
-          const plans = await (this.taskStore as any).listByUser(input.userId, input.limit);
+          const plans = await this.taskStore.listByUser(input.userId, input.limit);
           const devices = await this.deviceRegistry.listDevices(input.userId);
           const names = new Map(devices.map((device) => [device.id, device.name]));
 
-          return plans.map((plan: any) => {
+          return plans.map((plan: TaskPlan) => {
             // La machine qui a exécuté la dernière étape retenue. Un
             // identifiant n'apprend rien au modèle ; un nom, si.
-            const executed = plan.steps.findLast((step: any) => step.selectedDeviceId !== null);
+            const executed = plan.steps.findLast((step) => step.selectedDeviceId !== null);
             const deviceId = executed?.selectedDeviceId ?? null;
 
             return {
@@ -365,9 +424,32 @@ export class ServiceContainer {
 
     // ── Observabilite ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
-    this.runStore = new InMemoryAgentRunStore();
+    this.runStore = options.runStore ?? new InMemoryAgentRunStore();
+    this.agentRunClaims = options.agentRunClaims ?? new InMemoryAgentRunClaimStore();
+    this.missionGrants = new MissionGrantService({
+      signer: this.tokens,
+      registry: options.missionGrantRegistry ?? new InMemoryMissionGrantRegistry(),
+      ...(options.missionGrantRenewWithinMs === undefined
+        ? {}
+        : { renewWithinMs: options.missionGrantRenewWithinMs }),
+      now,
+    });
+    this.agentCore =
+      options.llmProvider === undefined
+        ? undefined
+        : new AgentOrchestrator({
+            llm: options.llmProvider,
+            registry: this.toolRegistry,
+            permissions: this.permissions,
+            confirmations: this.confirmations,
+            context: this.context,
+            store: this.runStore,
+          });
     this.mcp = options.mcp;
-    this.browser = options.browser;
+    this.browser = undefined;
+    this.setBrowser(options.browser);
+    this.runtimeConfiguration = options.runtimeConfiguration;
+    this.vault = options.vault;
     this.missionControl = options.missionControl;
 
     this.dashboard = new DashboardService({
@@ -381,6 +463,17 @@ export class ServiceContainer {
     return this.#now();
   }
 
+  setBrowser(browser: BrowserWorkerClient | undefined): void {
+    for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
+    this.#browserToolNames.clear();
+    this.browser = browser;
+    if (browser === undefined) return;
+    for (const tool of createBrowserTools({ client: browser })) {
+      this.toolRegistry.register(tool, { replace: true });
+      this.#browserToolNames.add(tool.name);
+    }
+  }
+
   /**
    * Permissions effectives d'un utilisateur.
    *
@@ -391,6 +484,10 @@ export class ServiceContainer {
   async permissionsFor(userId: string): Promise<string[]> {
     return [...(await this.permissions.listGranted(userId))];
   }
+}
+
+export interface QueryableAgentRunStore extends AgentRunStore {
+  listAll(): Promise<AgentState[]>;
 }
 
 /**

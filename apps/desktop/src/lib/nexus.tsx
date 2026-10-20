@@ -62,7 +62,6 @@ import { taskRequestBody, type TaskDraft } from "./tasks.js";
  * qu'une application mobile.
  */
 function backendUrl(): string {
-  
   return import.meta.env.VITE_NEXUS_URL ?? "https://nexus.local";
 }
 

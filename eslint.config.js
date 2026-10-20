@@ -76,5 +76,22 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
 
+  {
+    /**
+     * Scripts de scénario, hors projet TypeScript.
+     *
+     * Ils sont exécutés par Node, pas compilés, et ne figurent donc dans aucun
+     * `tsconfig` — le service de projet ne peut pas les typer. Plutôt que de les
+     * exclure du lint, on y désactive les seules règles qui exigent un type :
+     * les erreurs ordinaires, elles, restent attrapées.
+     */
+    files: ["**/scripts/**/*.mjs"],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: { projectService: false },
+    },
+  },
+
   prettier,
 );

@@ -1,7 +1,25 @@
 import type { PrismaClient } from "@nexus/database";
 import type { TaskStore } from "@nexus/devices";
 import type { TaskPlan, TaskExecution } from "@nexus/devices";
+import {
+  dateOrNull,
+  executionFromRow,
+  jsonOrNull,
+  planFromRow,
+  planStatusToDb,
+  stepStatusToDb,
+  stepToRow,
+} from "./task-mapping.js";
 
+/**
+ * Magasin de plans de tâches sur PostgreSQL.
+ *
+ * Toutes les traductions entre le domaine et les colonnes passent par
+ * `task-mapping.ts`. Elles ne sont pas cosmétiques : les statuts changent de
+ * casse, les dates de type, et un champ de nom. Les faire au vol dans chaque
+ * requête est ce qui avait laissé ce magasin inutilisable sans que rien ne le
+ * signale.
+ */
 export class PrismaTaskStore implements TaskStore {
   readonly #prisma: PrismaClient;
   constructor(prisma: PrismaClient) {
@@ -9,28 +27,6 @@ export class PrismaTaskStore implements TaskStore {
   }
 
   async save(plan: TaskPlan): Promise<void> {
-    const stepsData = plan.steps.map((step) => ({
-      id: step.id,
-      key: step.id, // Fallback since 'key' is not in taskStepSchema
-      description: step.description,
-      requiredCapabilities: step.requiredCapabilities,
-      tool: step.tool,
-      arguments: step.arguments as any,
-      dependsOn: step.dependsOn,
-      selectedDeviceId: step.selectedDeviceId,
-      preferredDeviceId: step.preferredDeviceId,
-      constraints: step.constraints as any,
-      riskLevel: step.riskLevel,
-      retryPolicy: step.retry as any,
-      timeoutMs: step.timeoutMs,
-      status: step.status as any,
-      attempt: step.attempt,
-      result: step.result as any,
-      error: step.error as any,
-      startedAt: step.startedAt,
-      completedAt: step.completedAt,
-    }));
-
     await this.#prisma.taskPlan.upsert({
       where: { id: plan.id },
       create: {
@@ -41,20 +37,18 @@ export class PrismaTaskStore implements TaskStore {
         runId: plan.runId,
         conversationId: plan.conversationId,
         correlationId: plan.correlationId,
-        status: plan.status as any,
-        metadata: plan.metadata as any,
-        createdAt: plan.createdAt,
-        startedAt: plan.startedAt,
-        completedAt: plan.completedAt,
-        steps: {
-          create: stepsData,
-        },
+        status: planStatusToDb(plan.status),
+        metadata: plan.metadata,
+        createdAt: new Date(plan.createdAt),
+        startedAt: dateOrNull(plan.startedAt),
+        completedAt: dateOrNull(plan.completedAt),
+        steps: { create: plan.steps.map(stepToRow) },
       },
       update: {
-        status: plan.status as any,
-        metadata: plan.metadata as any,
-        startedAt: plan.startedAt,
-        completedAt: plan.completedAt,
+        status: planStatusToDb(plan.status),
+        metadata: plan.metadata,
+        startedAt: dateOrNull(plan.startedAt),
+        completedAt: dateOrNull(plan.completedAt),
       },
     });
 
@@ -62,14 +56,14 @@ export class PrismaTaskStore implements TaskStore {
       await this.#prisma.taskStep.updateMany({
         where: { id: step.id, taskId: plan.id },
         data: {
-          status: step.status as any,
+          status: stepStatusToDb(step.status),
           attempt: step.attempt,
           selectedDeviceId: step.selectedDeviceId,
-          result: step.result as any,
-          error: step.error as any,
-          startedAt: step.startedAt,
-          completedAt: step.completedAt,
-        }
+          result: jsonOrNull(step.result),
+          error: jsonOrNull(step.error),
+          startedAt: dateOrNull(step.startedAt),
+          completedAt: dateOrNull(step.completedAt),
+        },
       });
     }
   }
@@ -79,8 +73,7 @@ export class PrismaTaskStore implements TaskStore {
       where: { id },
       include: { steps: true },
     });
-    if (!plan) return undefined;
-    return plan as unknown as TaskPlan;
+    return plan === null ? undefined : planFromRow(plan);
   }
 
   async saveExecution(execution: TaskExecution): Promise<void> {
@@ -92,50 +85,57 @@ export class PrismaTaskStore implements TaskStore {
         stepId: execution.stepId,
         deviceId: execution.deviceId,
         attempt: execution.attempt,
-        status: execution.status as any,
-        startedAt: execution.startedAt,
-        completedAt: execution.completedAt,
+        status: stepStatusToDb(execution.status),
+        startedAt: new Date(execution.startedAt),
+        completedAt: dateOrNull(execution.completedAt),
         durationMs: execution.durationMs,
-        input: execution.input as any,
-        result: execution.result as any,
-        error: execution.error as any,
+        input: jsonOrNull(execution.input),
+        result: jsonOrNull(execution.result),
+        error: jsonOrNull(execution.error),
       },
       update: {
-        status: execution.status as any,
-        completedAt: execution.completedAt,
+        status: stepStatusToDb(execution.status),
+        completedAt: dateOrNull(execution.completedAt),
         durationMs: execution.durationMs,
-        result: execution.result as any,
-        error: execution.error as any,
+        result: jsonOrNull(execution.result),
+        error: jsonOrNull(execution.error),
       },
     });
   }
 
   async listExecutions(taskId: string): Promise<TaskExecution[]> {
-    const execs = await this.#prisma.taskExecution.findMany({
+    const executions = await this.#prisma.taskExecution.findMany({
       where: { taskId },
       orderBy: { startedAt: "asc" },
     });
-    return execs as unknown as TaskExecution[];
+    return executions.map(executionFromRow);
   }
 
-  async listByUser(userId: string, limit: number = 20): Promise<TaskPlan[]> {
+  async listByUser(userId: string, limit = 20): Promise<TaskPlan[]> {
     const plans = await this.#prisma.taskPlan.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: { steps: true },
     });
-    return plans as unknown as TaskPlan[];
+    return plans.map(planFromRow);
   }
 
   async listActive(): Promise<TaskPlan[]> {
     const plans = await this.#prisma.taskPlan.findMany({
+      // Les valeurs de l'enum viennent de la table de correspondance : écrire
+      // ces trois littéraux à la main les laisserait dériver du domaine.
       where: {
-        status: { in: ["PENDING", "RUNNING", "WAITING_FOR_CONFIRMATION"] }
+        status: {
+          in: [
+            planStatusToDb("pending"),
+            planStatusToDb("running"),
+            planStatusToDb("waiting_for_confirmation"),
+          ],
+        },
       },
       include: { steps: true },
     });
-    return plans as unknown as TaskPlan[];
+    return plans.map(planFromRow);
   }
 }
-

@@ -23,6 +23,7 @@ coverage/
 *.key
 *.p12
 secrets/
+/services/api/config/*.json
 
 # Logs
 *.log
@@ -34,6 +35,9 @@ logs/
 .data/
 postgres-data/
 redis-data/
+/var/
+/backups/
+*.bak-*
 
 # Éditeurs
 .vscode/*

@@ -78,26 +78,23 @@ describe("le raisonnement n'est jamais demandé", () => {
   });
 });
 
-describe("le tableau de bord ne fait que lire", () => {
-  it("aucune requête d'écriture", () => {
-    // Superviser et administrer sont deux surfaces. Les réunir mettrait une
-    // action destructrice à un clic d'un écran qu'on consulte machinalement.
-    const client = codeSeul(readFileSync(join(racine, "src/lib/api.ts"), "utf8"));
-
-    for (const verbe of ["POST", "PATCH", "DELETE", "PUT"]) {
-      expect(client).not.toContain(verbe);
-    }
+describe("l'administration reste bornée", () => {
+  it("les mutations passent toutes par le client authentifié", () => {
+    const source = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+    expect(source).not.toContain("fetch(");
+    expect(source).not.toContain("XMLHttpRequest");
+    expect(source).toContain("authorizedRequest");
   });
 
-  it("n'appelle que les routes du tableau de bord", () => {
-    // Une route voisine ouverte « pour déboguer » n'aurait pas la même garde ni
-    // la même projection.
+  it("n'appelle que les surfaces d'administration explicitement autorisées", () => {
     const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
     const chemins = [...api.matchAll(/"(\/api\/v1\/[^"`]*)"/g)].map((match) => match[1] ?? "");
     const gabarits = [...api.matchAll(/`(\/api\/v1\/[^`]*)`/g)].map((match) => match[1] ?? "");
 
     for (const chemin of [...chemins, ...gabarits]) {
-      expect(chemin, chemin).toMatch(/^\/api\/v1\/dashboard\//);
+      expect(chemin, chemin).toMatch(
+        /^\/api\/v1\/(dashboard|orchestrator|devices|tasks|memory|notifications|mission-control)(\/|$)/,
+      );
     }
   });
 
@@ -121,12 +118,13 @@ describe("aucun secret embarqué", () => {
     }
   });
 
-  it("les jetons ne sont pas écrits dans le stockage du navigateur", () => {
-    // Un tableau de bord d'administration est précisément l'endroit où l'on ne
-    // veut pas d'un jeton de longue durée lisible par n'importe quel script.
+  it("les jetons ne sont jamais écrits dans un stockage navigateur permanent", () => {
+    // La session de l'onglet permet de survivre à F5, mais la fermeture de
+    // l'onglet efface les jetons. Le stockage permanent reste interdit.
     for (const fichier of sources) {
       expect(fichier.code, fichier.chemin).not.toContain("localStorage");
-      expect(fichier.code, fichier.chemin).not.toContain("sessionStorage");
     }
+    const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+    expect(api).toContain("sessionStorage");
   });
 });

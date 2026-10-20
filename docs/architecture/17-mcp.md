@@ -85,6 +85,12 @@ Les valeurs sensibles n'apparaissent jamais dans la configuration : seules des
 **références** (`envRefs`, `headerRefs`) y figurent, résolues au lancement via le
 coffre. `describeConfig()` ne rend que les clés.
 
+Sur l'installation locale, le coffre est le trousseau de session Linux via
+`secret-tool`. Le dashboard envoie une valeur en écriture seule puis ne reçoit
+plus que le nom de sa référence. Le gestionnaire MCP, le registre d'outils et la
+configuration JSON sont créés au démarrage de l'API ; ajouter, reconnecter ou
+retirer un serveur depuis NEXUS ne demande donc aucun redémarrage.
+
 Le processus enfant ne reçoit que `getDefaultEnvironment()` (PATH, HOME…) plus
 ce qu'on lui donne explicitement. Aucune variable du backend n'est héritée — un
 test le vérifie avec un vrai processus et une variable piégée.

@@ -57,10 +57,12 @@ describe("Provisioning Android Worker", () => {
       url: `/api/v1/devices/${device.id}/challenge`,
     });
     expect(challengeResponse.statusCode).toBe(200);
-    const challenge = challengeResponse.json().data;
+    const challenge = challengeResponse.json<{ data: { nonce: string } }>().data;
 
     const crypto = await import("node:crypto");
-    const signature = crypto.sign(null, Buffer.from(challenge.nonce, "utf8"), privateKey).toString("base64");
+    const signature = crypto
+      .sign(null, Buffer.from(challenge.nonce, "utf8"), privateKey)
+      .toString("base64");
 
     const declaredCapabilities = ["android.app.list", "android.app.open", "android.notification"];
     const authWorkerResponse = await harness.app.inject({

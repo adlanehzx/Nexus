@@ -80,6 +80,22 @@ describe("parseConfig", () => {
     ).toBeUndefined();
   });
 
+  it("valide SearXNG local, interne ou HTTPS et traite une valeur vide comme désactivée", () => {
+    expect(parseConfig({ ...minimalEnv, SEARXNG_URL: "http://127.0.0.1:8080" }).SEARXNG_URL).toBe(
+      "http://127.0.0.1:8080",
+    );
+    expect(parseConfig({ ...minimalEnv, SEARXNG_URL: "http://searxng:8080" }).SEARXNG_URL).toBe(
+      "http://searxng:8080",
+    );
+    expect(
+      parseConfig({ ...minimalEnv, SEARXNG_URL: "https://search.example.org" }).SEARXNG_URL,
+    ).toBe("https://search.example.org");
+    expect(parseConfig({ ...minimalEnv, SEARXNG_URL: "" }).SEARXNG_URL).toBeUndefined();
+    expect(() => parseConfig({ ...minimalEnv, SEARXNG_URL: "http://search.example.org" })).toThrow(
+      ConfigurationError,
+    );
+  });
+
   it("découpe CORS_ORIGINS et supprime les espaces", () => {
     const config = parseConfig({
       ...minimalEnv,

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nexus-mission-engine"
+version = "0.3.0"
+description = "NEXUS durable multi-agent orchestration for native ACP profiles"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic>=2.10,<3",
+  "uvicorn>=0.34,<1",
+  # Verification Ed25519 des jetons de service emis par l'API. Le moteur ne
+  # detient que la cle publique : il verifie, il n'emet pas. Une dependance
+  # eprouvee plutot qu'une implementation maison -- on n'ecrit pas sa propre
+  # arithmetique sur courbe, meme pour verifier.
+  "cryptography>=44,<47",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.28,<1", "pytest>=8.3,<9"]
+
+[project.scripts]
+nexus-mission-engine = "nexus_engine.api:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nexus_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

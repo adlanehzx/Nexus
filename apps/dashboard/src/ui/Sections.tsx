@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { DashboardApi, TaskDetail } from "../lib/api.js";
+import { useEffect, useState } from "react";
+import type { DashboardApi, McpConfiguration, TaskDetail } from "../lib/api.js";
 import {
   HEALTH_LABELS,
   WORKER_LABELS,
@@ -20,10 +20,9 @@ import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.j
  * Chacune charge la sienne : une section qui échoue n'emporte pas les autres, et
  * un serveur MCP injoignable ne doit pas vider l'écran des exécutants.
  *
- * Aucune ne propose d'action. Approuver un appareil, révoquer, annuler une tâche
- * restent sur les surfaces qui portent leurs propres contrôles — mettre une
- * action destructrice dans un écran qu'on consulte machinalement est une
- * mauvaise idée qui ne se remarque qu'une fois.
+ * Les actions d'administration réutilisent les routes métier existantes. Les
+ * opérations irréversibles restent confirmées explicitement ; aucune section
+ * ne contourne les permissions ni les validations du cœur.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,9 +110,20 @@ function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH
 
 export function Devices({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.devices());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>): void => {
+    setActionError(null);
+    void operation()
+      .then(() => state.reload())
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) =>
           data.devices.length === 0 ? (
@@ -130,6 +140,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                 "Dernier battement",
                 "Santé",
                 "Permissions",
+                "Actions",
               ]}
             >
               {data.devices.map((device) => (
@@ -186,6 +197,55 @@ export function Devices({ api }: { api: DashboardApi }) {
                     {device.grantedPermissions.length === 0
                       ? "—"
                       : device.grantedPermissions.join(", ")}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {device.trust === "PENDING" ? (
+                        <button
+                          className="bouton"
+                          type="button"
+                          onClick={() => act(() => api.trustDevice(device.id))}
+                        >
+                          Approuver
+                        </button>
+                      ) : null}
+                      {device.trust !== "REVOKED" ? (
+                        <>
+                          <button
+                            className="bouton"
+                            type="button"
+                            onClick={() => {
+                              const value = window.prompt(
+                                "Permissions séparées par des virgules",
+                                device.grantedPermissions.join(", "),
+                              );
+                              if (value !== null)
+                                act(() =>
+                                  api.updateDevicePermissions(
+                                    device.id,
+                                    value
+                                      .split(",")
+                                      .map((item) => item.trim())
+                                      .filter(Boolean),
+                                  ),
+                                );
+                            }}
+                          >
+                            Permissions
+                          </button>
+                          <button
+                            className="bouton danger"
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Révoquer définitivement ${device.name} ?`))
+                                act(() => api.revokeDevice(device.id));
+                            }}
+                          >
+                            Révoquer
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -265,16 +325,20 @@ export function Workers({ api }: { api: DashboardApi }) {
 export function Tasks({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.tasks());
   const [selected, setSelected] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) =>
           data.tasks.length === 0 ? (
             <Empty>Aucune tâche.</Empty>
           ) : (
             <>
-              <Table head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée"]}>
+              <Table
+                head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée", "Actions"]}
+              >
                 {data.tasks.map((task) => (
                   <tr
                     key={task.id}
@@ -285,7 +349,9 @@ export function Tasks({ api }: { api: DashboardApi }) {
                   >
                     <td>
                       {task.title}
-                      <div className="faible mono">{task.correlationId}</div>
+                      <div className="faible mono">
+                        {task.source.toUpperCase()} · {task.correlationId}
+                      </div>
                     </td>
                     <td>
                       <State tone={taskTone(task.status)} label={task.status} />
@@ -293,7 +359,11 @@ export function Tasks({ api }: { api: DashboardApi }) {
                     <td>
                       <Bar percent={task.progressPercent} />
                     </td>
-                    <td className="faible mono">{task.originClientDeviceId.slice(0, 8)}</td>
+                    <td className="faible mono">
+                      {task.source === "acp"
+                        ? "orchestrateur"
+                        : task.originClientDeviceId.slice(0, 8)}
+                    </td>
                     <td className="faible">{formatAge(task.createdAt)}</td>
                     <td className="faible">
                       {formatDuration(
@@ -301,6 +371,33 @@ export function Tasks({ api }: { api: DashboardApi }) {
                           ? null
                           : new Date(task.completedAt).getTime() -
                               new Date(task.startedAt).getTime(),
+                      )}
+                    </td>
+                    <td>
+                      {task.source === "device" &&
+                      new Set(["running", "pending", "waiting_for_confirmation"]).has(
+                        task.status,
+                      ) ? (
+                        <button
+                          className="bouton danger"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!window.confirm(`Annuler « ${task.title} » ?`)) return;
+                            void api
+                              .cancelTask(task.id)
+                              .then(() => state.reload())
+                              .catch((cause: unknown) =>
+                                setActionError(
+                                  cause instanceof Error ? cause.message : "Annulation impossible.",
+                                ),
+                              );
+                          }}
+                        >
+                          Annuler
+                        </button>
+                      ) : (
+                        "—"
                       )}
                     </td>
                   </tr>
@@ -572,10 +669,11 @@ export function Tools({ api }: { api: DashboardApi }) {
               Aucun outil enregistré. Le catalogue se remplit quand le service agent démarre.
             </Empty>
           ) : (
-            <Table head={["Outil", "Description", "Risque", "Permissions", "Autorisé"]}>
+            <Table head={["Outil", "Source", "Description", "Risque", "Permissions", "Autorisé"]}>
               {data.tools.map((tool) => (
                 <tr key={tool.name}>
                   <td className="mono">{tool.name}</td>
+                  <td>{tool.source}</td>
                   <td className="faible">{tool.description}</td>
                   <td>{tool.riskLevel}</td>
                   <td className="mono faible">{tool.requiredPermissions.join(", ") || "—"}</td>
@@ -601,12 +699,141 @@ export function Tools({ api }: { api: DashboardApi }) {
 
 export function Mcp({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.mcp());
+  const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"stdio" | "http" | "sse">("stdio");
+  const [target, setTarget] = useState("");
+  const [args, setArgs] = useState("");
+  const [secretRefs, setSecretRefs] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>, success: string): void => {
+    setActionError(null);
+    setMessage(null);
+    void operation()
+      .then(() => {
+        setMessage(success);
+        state.reload();
+      })
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
+
+  const save = (): void => {
+    let refs: Record<string, string>;
+    try {
+      refs = secretRefs.trim() === "" ? {} : (JSON.parse(secretRefs) as Record<string, string>);
+    } catch {
+      setActionError("Les références de secrets doivent être un objet JSON.");
+      return;
+    }
+    const common = {
+      name,
+      enabled: true,
+      defaultPermissions: [],
+      defaultRisk: "MEDIUM" as const,
+      toolPolicies: {},
+      connectTimeoutMs: 15_000,
+      requestTimeoutMs: 60_000,
+      autoReconnect: true,
+      maxReconnectAttempts: 5,
+      reconnectInitialDelayMs: 500,
+      reconnectMaxDelayMs: 30_000,
+      circuitBreakerThreshold: 5,
+      circuitBreakerResetMs: 60_000,
+      exposeResources: true,
+    };
+    const config: McpConfiguration =
+      transport === "stdio"
+        ? {
+            ...common,
+            transport,
+            command: target,
+            args: args
+              .split("\n")
+              .map((item) => item.trim())
+              .filter(Boolean),
+            env: {},
+            envRefs: refs,
+          }
+        : { ...common, transport, url: target, headers: {}, headerRefs: refs };
+    act(() => api.saveMcp(config), `Serveur ${name} enregistré et connecté.`);
+  };
 
   return (
     <div className="contenu">
+      {message === null ? null : <p className="banniere succes">{message}</p>}
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      <section className="settings-panel">
+        <h3>Ajouter ou remplacer un serveur MCP</h3>
+        <div className="settings-grid">
+          <label>
+            Nom
+            <input
+              className="champ mono"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="filesystem"
+            />
+          </label>
+          <label>
+            Transport
+            <select
+              className="champ"
+              value={transport}
+              onChange={(event) => setTransport(event.target.value as "stdio" | "http" | "sse")}
+            >
+              <option value="stdio">stdio</option>
+              <option value="http">HTTP</option>
+              <option value="sse">SSE</option>
+            </select>
+          </label>
+          <label className="settings-wide">
+            {transport === "stdio" ? "Commande" : "URL"}
+            <input
+              className="champ mono"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+              placeholder={transport === "stdio" ? "npx" : "https://…"}
+            />
+          </label>
+          {transport === "stdio" ? (
+            <label className="settings-wide">
+              Arguments · un par ligne
+              <textarea
+                className="champ mono"
+                rows={3}
+                value={args}
+                onChange={(event) => setArgs(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <label className="settings-wide">
+            {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON vers vault://nexus/…
+            <textarea
+              className="champ mono"
+              rows={3}
+              value={secretRefs}
+              onChange={(event) => setSecretRefs(event.target.value)}
+              placeholder={'{"TOKEN":"vault://nexus/mcp-token"}'}
+            />
+          </label>
+        </div>
+        <div className="settings-actions">
+          <button
+            className="bouton primary"
+            type="button"
+            disabled={name === "" || target === ""}
+            onClick={save}
+          >
+            Enregistrer et connecter
+          </button>
+        </div>
+      </section>
       <Section state={state}>
         {(data) =>
-          !data.configured ? (
+          data.configurations.length === 0 ? (
             // Non configuré n'est pas en panne. Le dire évite d'envoyer chercher
             // un incident qui n'existe pas.
             <Empty>Aucun serveur MCP configuré.</Empty>
@@ -620,6 +847,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                 "Reconnexions",
                 "Circuit",
                 "Dernière erreur",
+                "Actions",
               ]}
             >
               {data.servers.map((server) => (
@@ -647,6 +875,27 @@ export function Mcp({ api }: { api: DashboardApi }) {
                       : `ouvert jusqu'à ${server.circuitOpenUntil}`}
                   </td>
                   <td className="faible">{server.lastError ?? "—"}</td>
+                  <td>
+                    <button
+                      className="bouton compact"
+                      type="button"
+                      onClick={() =>
+                        act(() => api.reconnectMcp(server.name), `${server.name} reconnecté.`)
+                      }
+                    >
+                      Reconnecter
+                    </button>{" "}
+                    <button
+                      className="bouton compact danger"
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Supprimer le serveur ${server.name} ?`))
+                          act(() => api.removeMcp(server.name), `${server.name} supprimé.`);
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </td>
                 </tr>
               ))}
             </Table>
@@ -663,22 +912,144 @@ export function Mcp({ api }: { api: DashboardApi }) {
 
 export function Browser({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.browser());
+  const [mode, setMode] = useState<"local-harness" | "remote-worker">("local-harness");
+  const [cdpUrl, setCdpUrl] = useState("http://127.0.0.1:19222");
+  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8100");
+  const [tokenRef, setTokenRef] = useState("vault://nexus/browser-worker-token");
+  const [enabled, setEnabled] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const configuration = state.data?.configuration;
+    if (configuration === null || configuration === undefined) return;
+    setMode(configuration.mode);
+    if (configuration.mode === "local-harness") setCdpUrl(configuration.cdpUrl);
+    else {
+      setBaseUrl(configuration.baseUrl);
+      setTokenRef(configuration.tokenRef);
+    }
+    setEnabled(configuration.enabled);
+  }, [state.data]);
+
+  const act = (operation: () => Promise<unknown>, success: string): void => {
+    setActionError(null);
+    setMessage(null);
+    void operation()
+      .then(() => {
+        setMessage(success);
+        state.reload();
+      })
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {message === null ? null : <p className="banniere succes">{message}</p>}
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      <section className="settings-panel">
+        <h3>Configurer Browser Use</h3>
+        <p className="faible">
+          Le mode local utilise le harness officiel avec Codex ou Claude comme cerveau. Il ne
+          demande aucune clé API et conserve un profil Chromium NEXUS séparé.
+        </p>
+        <div className="settings-grid">
+          <label className="settings-wide">
+            Mode
+            <select
+              className="champ"
+              value={mode}
+              onChange={(event) => setMode(event.target.value as "local-harness" | "remote-worker")}
+            >
+              <option value="local-harness">Navigateur local — sans clé API</option>
+              <option value="remote-worker">Worker autonome — fournisseur LLM requis</option>
+            </select>
+          </label>
+          {mode === "local-harness" ? (
+            <label className="settings-wide">
+              URL CDP locale
+              <input
+                className="champ mono"
+                value={cdpUrl}
+                onChange={(event) => setCdpUrl(event.target.value)}
+              />
+            </label>
+          ) : (
+            <>
+              <label className="settings-wide">
+                URL du worker
+                <input
+                  className="champ mono"
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+              </label>
+              <label className="settings-wide">
+                Référence du jeton
+                <input
+                  className="champ mono"
+                  value={tokenRef}
+                  onChange={(event) => setTokenRef(event.target.value)}
+                />
+              </label>
+            </>
+          )}
+          <label className="settings-wide check-label">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+            />
+            Activer Browser Use
+          </label>
+        </div>
+        <div className="settings-actions">
+          <button
+            className="bouton primary"
+            type="button"
+            onClick={() =>
+              act(
+                () =>
+                  api.configureBrowser(
+                    mode === "local-harness"
+                      ? { enabled, mode, cdpUrl }
+                      : { enabled, mode, baseUrl, tokenRef },
+                  ),
+                "Configuration navigateur enregistrée.",
+              )
+            }
+          >
+            Enregistrer
+          </button>
+          <button
+            className="bouton"
+            type="button"
+            onClick={() => act(() => api.testBrowser(), "Worker navigateur joignable.")}
+          >
+            Tester
+          </button>
+        </div>
+      </section>
       <Section state={state}>
         {(data) => (
           <>
             <div className="mesures">
               <Metric value={data.configured ? "oui" : "non"} label="configuré" />
               <Metric
-                value={data.reachable ? "joignable" : "injoignable"}
-                label="worker navigateur"
+                value={data.reachable ? "prêt" : "injoignable"}
+                label="navigateur"
                 alert={data.configured && !data.reachable}
               />
             </div>
 
             <p className="faible">{data.detail}</p>
+            {data.configuration?.mode === "remote-worker" ? (
+              <p className="faible">
+                Secret : {data.tokenConfigured ? "présent dans le trousseau" : "absent"}
+              </p>
+            ) : null}
 
             {data.health === null ? null : (
               <>
@@ -696,14 +1067,29 @@ export function Browser({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OpenHands Mission Control
+// NEXUS Mission Engine
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function MissionControl({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.missionControl());
+  const [accountName, setAccountName] = useState("Portefeuille NEXUS");
+  const [bankroll, setBankroll] = useState("50.00");
+  const [marketQuestion, setMarketQuestion] = useState("");
+  const [marketClose, setMarketClose] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (operation: () => Promise<unknown>): void => {
+    setActionError(null);
+    void operation()
+      .then(() => state.reload())
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+      );
+  };
 
   return (
     <div className="contenu">
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) => {
           const cash = data.accounts.reduce(
@@ -753,7 +1139,100 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   : data.health.profiles.join(", ")}
               </p>
 
+              <h3>Chronologie unifiée des missions</h3>
+              {data.missions.length === 0 ? (
+                <Empty>Aucune mission ACP NEXUS pour ce compte.</Empty>
+              ) : (
+                <div className="stack">
+                  {data.missions.map((mission) => (
+                    <details className="card" key={mission.id}>
+                      <summary>
+                        <State
+                          tone={
+                            mission.state === "succeeded"
+                              ? "ok"
+                              : mission.state === "failed"
+                                ? "down"
+                                : "info"
+                          }
+                          label={mission.state}
+                        />{" "}
+                        {mission.title} · {mission.tasks.length} étape(s) ·{" "}
+                        {formatAge(mission.created_at)}
+                      </summary>
+                      <Table
+                        head={["Étape", "Agent", "État", "Dépendances", "Tentatives", "Durée"]}
+                      >
+                        {mission.tasks.map((task) => {
+                          const first = task.attempts[0];
+                          const last = task.attempts.at(-1);
+                          return (
+                            <tr key={task.id}>
+                              <td className="mono">{task.task_key}</td>
+                              <td>{task.profile_key}</td>
+                              <td>
+                                <State
+                                  tone={
+                                    task.state === "succeeded"
+                                      ? "ok"
+                                      : task.state === "failed"
+                                        ? "down"
+                                        : task.state === "retry_wait"
+                                          ? "degraded"
+                                          : "info"
+                                  }
+                                  label={task.state}
+                                />
+                              </td>
+                              <td className="faible">
+                                {task.depends_on.length === 0 ? "—" : task.depends_on.join(", ")}
+                              </td>
+                              <td>{task.attempts.length}</td>
+                              <td className="faible">
+                                {first === undefined
+                                  ? "—"
+                                  : formatDuration(
+                                      new Date(
+                                        last?.finished_at ?? last?.updated_at ?? first.started_at,
+                                      ).getTime() - new Date(first.started_at).getTime(),
+                                    )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    </details>
+                  ))}
+                </div>
+              )}
+
               <h3>Portefeuilles fictifs</h3>
+              <div className="inline-admin-form">
+                <input
+                  className="champ"
+                  value={accountName}
+                  onChange={(event) => setAccountName(event.target.value)}
+                  placeholder="Nom du portefeuille"
+                />
+                <input
+                  className="champ"
+                  value={bankroll}
+                  onChange={(event) => setBankroll(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="Capital EUR"
+                />
+                <button
+                  className="bouton"
+                  type="button"
+                  onClick={() =>
+                    act(() =>
+                      api.createPaperAccount({ name: accountName.trim(), bankroll_eur: bankroll }),
+                    )
+                  }
+                >
+                  Créer
+                </button>
+              </div>
               {data.accounts.length === 0 ? (
                 <Empty>Aucun portefeuille de recherche.</Empty>
               ) : (
@@ -801,6 +1280,38 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </Table>
               )}
 
+              <h3>Marché de recherche fictif</h3>
+              <div className="inline-admin-form market-form">
+                <input
+                  className="champ"
+                  value={marketQuestion}
+                  onChange={(event) => setMarketQuestion(event.target.value)}
+                  placeholder="Question du marché"
+                />
+                <input
+                  className="champ"
+                  type="datetime-local"
+                  value={marketClose}
+                  onChange={(event) => setMarketClose(event.target.value)}
+                />
+                <button
+                  className="bouton"
+                  type="button"
+                  disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
+                  onClick={() => {
+                    act(() =>
+                      api.createPaperMarket({
+                        question: marketQuestion.trim(),
+                        close_at: new Date(marketClose).toISOString(),
+                      }),
+                    );
+                    setMarketQuestion("");
+                  }}
+                >
+                  Créer
+                </button>
+              </div>
+
               <p className="faible">
                 La création des missions et des portefeuilles fictifs passe par l’API administrateur
                 NEXUS. Aucun chemin de trading réel n’est exposé.
@@ -819,9 +1330,78 @@ export function MissionControl({ api }: { api: DashboardApi }) {
 
 export function Memory({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.memory());
+  const [content, setContent] = useState("");
+  const [layer, setLayer] = useState<"LONG_TERM" | "PREFERENCE">("LONG_TERM");
+  const [tags, setTags] = useState("");
+  const [acknowledgedSensitive, setAcknowledgedSensitive] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   return (
     <div className="contenu">
+      <div className="admin-form-card">
+        <h3>Ajouter un souvenir</h3>
+        <div className="inline-admin-form memory-form">
+          <input
+            className="champ"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Ce que NEXUS doit retenir"
+          />
+          <select
+            className="champ"
+            value={layer}
+            onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
+          >
+            <option value="LONG_TERM">Long terme</option>
+            <option value="PREFERENCE">Préférence</option>
+          </select>
+          <input
+            className="champ"
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="tags, séparés, par virgule"
+          />
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={acknowledgedSensitive}
+              onChange={(event) => setAcknowledgedSensitive(event.target.checked)}
+            />
+            contenu sensible vérifié
+          </label>
+          <button
+            className="bouton primary"
+            type="button"
+            disabled={content.trim().length === 0}
+            onClick={() => {
+              setActionError(null);
+              void api
+                .remember({
+                  content: content.trim(),
+                  layer,
+                  tags: tags
+                    .split(",")
+                    .map((tag) => tag.trim())
+                    .filter(Boolean),
+                  acknowledgedSensitive,
+                })
+                .then(() => {
+                  setContent("");
+                  setTags("");
+                  state.reload();
+                })
+                .catch((cause: unknown) =>
+                  setActionError(
+                    cause instanceof Error ? cause.message : "Enregistrement impossible.",
+                  ),
+                );
+            }}
+          >
+            Mémoriser
+          </button>
+        </div>
+      </div>
+      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
       <Section state={state}>
         {(data) => (
           <>
@@ -839,13 +1419,32 @@ export function Memory({ api }: { api: DashboardApi }) {
             {data.recent.length === 0 ? (
               <Empty>NEXUS ne retient rien.</Empty>
             ) : (
-              <Table head={["Contenu", "Couche", "Origine", "Créé"]}>
+              <Table head={["Contenu", "Couche", "Origine", "Créé", "Actions"]}>
                 {data.recent.map((record) => (
                   <tr key={record.id}>
                     <td>{record.content}</td>
                     <td className="faible">{record.layer}</td>
                     <td className="faible">{record.origin}</td>
                     <td className="faible">{formatAge(record.createdAt)}</td>
+                    <td>
+                      <button
+                        className="bouton danger"
+                        type="button"
+                        onClick={() => {
+                          if (!window.confirm("Oublier définitivement ce souvenir ?")) return;
+                          void api
+                            .forget(record.id)
+                            .then(() => state.reload())
+                            .catch((cause: unknown) =>
+                              setActionError(
+                                cause instanceof Error ? cause.message : "Suppression impossible.",
+                              ),
+                            );
+                        }}
+                      >
+                        Oublier
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </Table>
@@ -877,7 +1476,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
             {data.notifications.length === 0 ? (
               <Empty>Aucune notification.</Empty>
             ) : (
-              <Table head={["Quand", "Gravité", "Titre", "Corps", "Lue"]}>
+              <Table head={["Quand", "Gravité", "Titre", "Corps", "Lue", "Actions"]}>
                 {data.notifications.map((notification) => (
                   <tr key={notification.id}>
                     <td className="faible">{formatAge(notification.createdAt)}</td>
@@ -896,6 +1495,23 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     <td>{notification.title}</td>
                     <td className="faible">{notification.body}</td>
                     <td className="faible">{notification.readAt === null ? "non" : "oui"}</td>
+                    <td>
+                      {notification.readAt === null ? (
+                        <button
+                          className="bouton"
+                          type="button"
+                          onClick={() =>
+                            void api
+                              .markNotificationRead(notification.id)
+                              .then(() => state.reload())
+                          }
+                        >
+                          Marquer lue
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </Table>

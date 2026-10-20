@@ -48,6 +48,8 @@ model User {
   devices        Device[]
   conversations  Conversation[]
   memories       Memory[]
+  notifications  Notification[]
+  agentRuns      AgentRunSnapshot[]
 
   @@map("users")
 }
@@ -399,17 +401,18 @@ enum MessageRole {
 /// recomposition fidèle du contexte pour n'importe quel fournisseur LLM.
 /// `contentText` en est la projection plate, pour la recherche plein texte.
 model Message {
-  id             String      @id @db.Uuid
-  conversationId String      @db.Uuid
-  role           MessageRole
-  content        Json
-  contentText    String      @default("")
-  runId          String?     @db.Uuid
-  tokensIn       Int         @default(0)
-  tokensOut      Int         @default(0)
-  model          String?
-  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
-  editedAt       DateTime?   @db.Timestamptz(3)
+  id                   String      @id @db.Uuid
+  conversationId       String      @db.Uuid
+  role                 MessageRole
+  content              Json
+  contentText          String      @default("")
+  originClientDeviceId String?     @db.Uuid
+  runId                String?     @db.Uuid
+  tokensIn             Int         @default(0)
+  tokensOut            Int         @default(0)
+  model                String?
+  createdAt            DateTime    @default(now()) @db.Timestamptz(3)
+  editedAt             DateTime?   @db.Timestamptz(3)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -440,32 +443,131 @@ enum MemorySensitivity {
 }
 
 model Memory {
-  id                 String            @id @db.Uuid
-  userId             String            @db.Uuid
-  layer              MemoryLayer      @default(LONG_TERM)
-  kind               MemoryKind
-  content            String
-  importance         Float
-  confidence         Float
-  tags               String[]          @default([])
-  origin             MemoryOrigin      @default(USER)
-  sensitivity        MemorySensitivity @default(ORDINARY)
-  sensitiveCategories String[]         @default([])
-  validFrom          DateTime          @db.Timestamptz(3)
-  validUntil         DateTime?         @db.Timestamptz(3)
-  supersededById     String?           @db.Uuid
-  supersedesId       String?           @db.Uuid
-  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+  id                  String            @id @db.Uuid
+  userId              String            @db.Uuid
+  layer               MemoryLayer       @default(LONG_TERM)
+  kind                MemoryKind
+  content             String
+  importance          Float
+  confidence          Float
+  tags                String[]          @default([])
+  origin              MemoryOrigin      @default(USER)
+  sensitivity         MemorySensitivity @default(ORDINARY)
+  sensitiveCategories String[]          @default([])
+  validFrom           DateTime          @db.Timestamptz(3)
+  validUntil          DateTime?         @db.Timestamptz(3)
+  supersededById      String?           @db.Uuid
+  supersedesId        String?           @db.Uuid
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
 
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  supersededBy      Memory? @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
-  supersededRecords Memory[] @relation("MemorySupersededBy")
-  supersedes        Memory? @relation("MemorySupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supersededBy       Memory?  @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersededRecords  Memory[] @relation("MemorySupersededBy")
+  supersedes         Memory?  @relation("MemorySupersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
   supersedingRecords Memory[] @relation("MemorySupersedes")
 
   @@index([userId, layer, validUntil])
   @@index([userId, kind, validUntil])
   @@index([userId, validFrom(sort: Desc)])
   @@map("memories")
+}
+
+model Notification {
+  id                   String    @id @db.Uuid
+  userId               String    @db.Uuid
+  title                String
+  body                 String
+  severity             String
+  originClientDeviceId String?   @db.Uuid
+  readAt               DateTime? @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// Registre des assertions de mission émises.
+///
+/// Son existence change la nature de l'assertion : sans registre, une assertion
+/// volée reste exploitable jusqu'à son expiration, et rien ne permet de la
+/// retirer. `requireMissionGrant` consulte donc cette table à chaque requête —
+/// une signature valide ne suffit plus, il faut aussi que l'assertion soit
+/// toujours active.
+///
+/// Refuser par défaut est délibéré : une assertion absente du registre est
+/// rejetée. Une signature correcte mais inconnue signifie soit une clé
+/// compromise, soit un enregistrement perdu, et aucun des deux ne doit ouvrir.
+model MissionGrant {
+  /// Le `jti` de l'assertion.
+  id                 String            @id @db.Uuid
+  missionExternalKey String            @db.VarChar(128)
+  userId             String            @db.Uuid
+  service            String            @db.VarChar(64)
+  issuedAt           DateTime          @default(now()) @db.Timestamptz(3)
+  expiresAt          DateTime          @db.Timestamptz(3)
+  status             MissionGrantState @default(ACTIVE)
+  /// Horodatage du retrait, quel qu'en soit le motif. Nul tant que l'assertion
+  /// est active.
+  retiredAt          DateTime?         @db.Timestamptz(3)
+
+  @@index([missionExternalKey, status])
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("mission_grants")
+}
+
+enum MissionGrantState {
+  ACTIVE
+  /// Retirée parce que la mission est terminée ou annulée. Chemin normal.
+  COMPLETED
+  /// Retirée parce qu'on ne lui fait plus confiance. Chemin d'incident.
+  REVOKED
+}
+
+/// Réservation d'un run Agent Core pour une tentative de tâche.
+///
+/// La contrainte d'unicité porte sur `(mission, tâche, tentative)` et c'est
+/// elle, et non une lecture préalable, qui garantit qu'un bail expiré pendant
+/// un appel long ne produit pas deux runs. Un `SELECT` suivi d'un `INSERT`
+/// laisserait passer deux requêtes concurrentes dans l'intervalle.
+model AgentCoreRunClaim {
+  id                 String   @id @db.Uuid
+  missionExternalKey String   @db.VarChar(128)
+  taskKey            String   @db.VarChar(128)
+  /// Tentative du moteur. Stable pour une tentative, différente d'un vrai
+  /// réessai : c'est ce qui distingue « deux workers sur le même travail » de
+  /// « nouvelle tentative après échec ».
+  attemptId          String   @db.VarChar(128)
+  runId              String   @db.Uuid
+  userId             String   @db.Uuid
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([missionExternalKey, taskKey, attemptId])
+  @@index([runId])
+  @@map("agent_core_run_claims")
+}
+
+model AgentRunSnapshot {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  status    String
+  startTime DateTime @db.Timestamptz(3)
+  state     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  /// Mission qui a demandé ce run. `null` pour un run lancé par une personne.
+  /// Colonne à part entière, et pas seulement un champ de `state` : la portée
+  /// d'une assertion se vérifie à la lecture, donc elle doit être indexable.
+  missionExternalKey String? @db.VarChar(128)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startTime(sort: Desc)])
+  @@index([status])
+  @@index([missionExternalKey])
+  @@map("agent_run_snapshots")
 }

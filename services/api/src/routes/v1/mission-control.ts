@@ -8,6 +8,7 @@ import {
   createPaperAccountSchema,
   createPaperMarketSchema,
   missionControlHealthSchema,
+  missionSnapshotSchema,
   paperAccountSchema,
   paperAccountsSchema,
   paperMarketSchema,
@@ -20,6 +21,8 @@ import {
   type MissionControlPort,
 } from "@nexus/mission-control-client";
 import { ok, okSchema } from "../../lib/response.js";
+import { currentUser } from "../../plugins/authentication.js";
+import { missionOwnerPrefix } from "../../services/acp-orchestrator.js";
 
 const idParams = z.object({ id: z.string().uuid() });
 
@@ -32,10 +35,11 @@ const statusSchema = z.object({
   accounts: paperAccountsSchema.shape.accounts,
   markets: paperMarketsSchema.shape.markets,
   recent_runs: researchRunsSchema.shape.runs,
+  missions: z.array(missionSnapshotSchema),
 });
 
 /**
- * Pont administrateur vers OpenHands Mission Control.
+ * Pont administrateur vers NEXUS Mission Engine.
  *
  * Le navigateur ne joint jamais le port 18100. Nexus authentifie l'utilisateur,
  * valide les contrats puis parle au service local. Les mutations exposées sont
@@ -66,17 +70,20 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             accounts: [],
             markets: [],
             recent_runs: [],
+            missions: [],
           },
           request.id,
         );
       }
       try {
-        const [health, audit, accounts, markets, recentRuns] = await Promise.all([
+        const { userId } = currentUser(request);
+        const [health, audit, accounts, markets, recentRuns, missions] = await Promise.all([
           client.health(),
           client.verifyAudit(),
           client.listPaperAccounts(20),
           client.listPaperMarkets(20),
           client.listResearchRuns(50),
+          client.listMissions(50, `${missionOwnerPrefix(userId)}-`),
         ]);
         return ok(
           {
@@ -88,6 +95,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             accounts,
             markets,
             recent_runs: recentRuns,
+            missions,
           },
           request.id,
         );
@@ -102,6 +110,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
             accounts: [],
             markets: [],
             recent_runs: [],
+            missions: [],
           },
           request.id,
         );

@@ -47,7 +47,10 @@ export function App() {
           const hostMatch = scriptURL.match(/:\/\/([^:/]+)/);
           if (hostMatch && hostMatch[1]) {
             const metroHost = hostMatch[1];
-            env.NEXUS_BACKEND_URL = env.NEXUS_BACKEND_URL.replace(/:\/\/([^:/]+)/, `://${metroHost}`);
+            env.NEXUS_BACKEND_URL = env.NEXUS_BACKEND_URL.replace(
+              /:\/\/([^:/]+)/,
+              `://${metroHost}`,
+            );
           }
         } catch (e) {
           console.error("NEXUS_BACKEND_URL: Erreur lors de la résolution dynamique de l'hôte", e);

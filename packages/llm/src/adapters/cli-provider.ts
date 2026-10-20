@@ -91,9 +91,7 @@ export class CliProvider implements LLMProvider {
     }
   }
 
-  countTokens(
-    request: Pick<GenerateRequest, "messages" | "system" | "tools">,
-  ): Promise<number> {
+  countTokens(request: Pick<GenerateRequest, "messages" | "system" | "tools">): Promise<number> {
     return Promise.resolve(Math.ceil(JSON.stringify(request).length / 4));
   }
 

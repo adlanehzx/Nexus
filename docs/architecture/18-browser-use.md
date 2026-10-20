@@ -1,5 +1,22 @@
 # 18 — Browser Use (implémenté)
 
+## 0. Chemin local recommandé, sans clé API
+
+Pour les agents ACP Codex et Claude, NEXUS réutilise désormais le
+[`browser-harness`](https://github.com/browser-use/browser-harness) officiel. Le modèle ACP pilote
+directement Chromium via CDP : le harness ne contient pas de seconde boucle LLM et ne demande donc
+aucune clé API. Un service systemd user démarre un profil Chromium NEXUS séparé sur la boucle locale
+`127.0.0.1:19222`; l'accès au profil Chromium personnel n'est jamais accordé implicitement.
+
+Le planificateur route les missions de navigation vers Codex, puis Claude en fallback, et exclut
+Antigravity des fallbacks navigateur tant que son adaptateur ACP n'offre pas cette intégration de
+façon démontrée. Le harness local est une voie partagée : les actions navigateur sont sérialisées,
+alors que les autres tâches peuvent rester parallèles.
+
+Le worker Python décrit dans le reste de ce document reste disponible comme mode avancé autonome.
+Il possède sa propre boucle `browser-use` et exige donc un fournisseur LLM ; il n'est pas utilisé
+par la configuration locale sans clé.
+
 Décrit l'intégration **telle qu'elle est construite**. Le document
 [05 — Browser Use worker](05-browser-use.md) en pose la conception ; celui-ci
 fait foi pour le code.
@@ -102,9 +119,23 @@ bloqué alors qu'il avance. Les événements du worker (`navigation`, `action`,
 | Outils exposés      | `browser.act` + bas niveau | Un outil par intention                      | Le risque doit être gradué ; « chercher un prix » et « acheter » ne peuvent pas partager une confirmation |
 | Progression         | Redis Stream               | Scrutation HTTP avec `seq`                  | Les événements numérotés rendent la reprise sûre sans connexion longue, pour un service interne           |
 | Captures d'écran    | Par étape, stockage objet  | Champ `screenshotRef` réservé, non alimenté | Le stockage objet arrive avec la phase 5 d'infrastructure                                                 |
-| Profils persistants | Cookies chiffrés au repos  | Sessions éphémères uniquement               | Le coffre à credentials (ADR-013) n'existe pas encore                                                     |
+| Profils persistants | Cookies chiffrés au repos  | Sessions éphémères uniquement               | Le trousseau local protège le jeton de service ; les cookies persistants par site restent hors périmètre  |
 
-## 8. Vérification croisée TypeScript ↔ Python
+## 8. Administration locale
+
+L'onglet Browser Use propose deux modes. Le mode recommandé « navigateur local » configure l'URL
+CDP de boucle locale et appelle `browser-harness doctor --json --require-existing-daemon`; le test
+établit réellement la connexion sans renvoyer le titre, l'URL ou le contenu des onglets à l'API.
+La santé ne se fonde pas sur le nombre instantané de connexions du démon : le CLI
+ferme normalement son canal CDP après chaque commande. NEXUS exécute une sonde
+`page_info()` silencieuse et ne marque le navigateur prêt que si cette connexion
+effective réussit. L'unité `nexus-browser.service` utilise `Restart=always`, afin
+qu'une fermeture propre de Chromium ne laisse pas le dashboard dans un état mort.
+Le mode avancé « worker autonome » conserve l'URL interne et la référence `vault://nexus/...` : le
+jeton est résolu dans le trousseau Linux et n'est jamais renvoyé au navigateur. HTTP n'est accepté
+que pour `localhost`, `127.0.0.1` ou `::1`; toute URL distante doit utiliser HTTPS.
+
+## 9. Vérification croisée TypeScript ↔ Python
 
 Deux mécanismes, complémentaires :
 

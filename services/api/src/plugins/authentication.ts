@@ -40,12 +40,32 @@ declare module "fastify" {
      * conversation.
      */
     requireAdmin: (request: FastifyRequest) => Promise<void>;
+    /**
+     * Exige une **assertion de mission** signée.
+     *
+     * Troisième surface, pour les services internes — Mission Engine
+     * aujourd'hui. Elle n'authentifie pas un porteur mais une délégation : le
+     * principal obtenu porte un utilisateur *et* la mission dans laquelle il
+     * est permis d'agir. Une route gardée par celle-ci ne doit jamais accepter
+     * une ressource hors de cette portée, et `assertMissionScope` est là pour
+     * l'exiger explicitement.
+     */
+    requireMissionGrant: (request: FastifyRequest) => Promise<void>;
   }
 
   interface FastifyRequest {
     principal?: Principal;
   }
 }
+
+/**
+ * Services autorisés à présenter une assertion de mission.
+ *
+ * Liste blanche, et non simple vérification de signature : la clé qui signe les
+ * assertions signe aussi les jetons d'accès. Nommer le service attendu ferme la
+ * porte à une assertion émise pour un autre usage interne, présente ou futur.
+ */
+const ALLOWED_GRANT_SERVICES = new Set(["mission-engine"]);
 
 export interface AuthenticationPluginOptions {
   services: ServiceContainer;
@@ -126,6 +146,52 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
       };
     });
 
+    /**
+     * Aucune session n'est consultée ici, et c'est délibéré.
+     *
+     * Une assertion de mission ne représente pas une connexion : elle
+     * représente un travail en cours. La subordonner à une session active
+     * casserait la promesse de durabilité du moteur — une mission lancée le
+     * soir doit pouvoir se terminer après la déconnexion de son propriétaire.
+     * Ce qui la borne n'est donc pas la session mais sa portée et son
+     * expiration, toutes deux inscrites dans la signature.
+     */
+    app.decorate("requireMissionGrant", async (request: FastifyRequest) => {
+      const claims = options.services.tokens.verifyMissionGrant(bearerToken(request));
+
+      if (!ALLOWED_GRANT_SERVICES.has(claims.svc)) {
+        throw new AuthorizationError({
+          message: `Assertion de mission présentée par un service inconnu : ${claims.svc}`,
+          userMessage: "Accès refusé.",
+          context: { service: claims.svc },
+        });
+      }
+
+      // Le propriétaire a pu être supprimé ou suspendu depuis l'émission. Une
+      // mission ne doit pas continuer d'agir pour un compte qui n'existe plus.
+      const owner = await options.services.users.findById(claims.sub);
+      if (owner?.status !== "ACTIVE") {
+        throw new AuthorizationError({
+          message: `Assertion de mission pour un compte inactif : ${claims.sub}`,
+          userMessage: "Accès refusé.",
+          context: { userId: claims.sub },
+        });
+      }
+
+      // Signature valide ne suffit pas : le registre dit si l'assertion est
+      // toujours exploitable. C'est ce qui rend une assertion volée retirable
+      // avant son expiration, au lieu d'ouvrir vingt-quatre heures durant.
+      await options.services.missionGrants.assertUsable(claims);
+
+      request.principal = {
+        kind: "mission",
+        userId: claims.sub,
+        service: claims.svc,
+        missionExternalKey: claims.mek,
+        grantId: claims.jti,
+      };
+    });
+
     done();
   },
   { name: "nexus-authentication" },
@@ -167,6 +233,50 @@ export function currentDevice(request: FastifyRequest): {
     userId: principal.userId,
     capabilities: principal.capabilities,
   };
+}
+
+/**
+ * Mission de la requête. Même règle que ci-dessus : une route gardée par
+ * `requireMissionGrant` qui oublierait d'appeler ceci doit échouer, pas servir.
+ */
+export function currentMission(request: FastifyRequest): {
+  userId: string;
+  service: string;
+  missionExternalKey: string;
+  grantId: string;
+} {
+  const principal = request.principal;
+  if (principal?.kind !== "mission") {
+    throw new AuthorizationError({
+      message: "Route de mission atteinte sans principal de mission",
+      userMessage: "Accès refusé.",
+    });
+  }
+  return {
+    userId: principal.userId,
+    service: principal.service,
+    missionExternalKey: principal.missionExternalKey,
+    grantId: principal.grantId,
+  };
+}
+
+/**
+ * Vérifie qu'une requête reste dans la mission que l'assertion lui ouvre.
+ *
+ * C'est le pendant de `assertOwnedBy` pour la surface de délégation, et il est
+ * tout aussi facile à oublier. Sans lui, une assertion valide pour une mission
+ * pourrait piloter le travail d'une autre mission du même utilisateur — la
+ * signature prouverait le propriétaire, mais plus la portée, et toute la raison
+ * d'être de l'assertion disparaîtrait.
+ */
+export function assertMissionScope(grantedExternalKey: string, requestedExternalKey: string): void {
+  if (grantedExternalKey === requestedExternalKey) return;
+
+  throw new AuthorizationError({
+    message: "Assertion de mission utilisée hors de sa portée",
+    userMessage: "La ressource demandée n'existe pas.",
+    context: { granted: grantedExternalKey, requested: requestedExternalKey },
+  });
 }
 
 /**

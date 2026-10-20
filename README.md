@@ -108,11 +108,11 @@ Documentation complète : **[docs/README.md](docs/README.md)** — 16 documents 
 apps/                    clients
   mobile/                iPhone — Expo / React Native ✅
   desktop/               Windows — Vite + Tauri v2    ✅ (coquille Rust non compilée)
-  dashboard/             Supervision — Vite + React   ✅ lecture seule, rôle ADMIN
+  dashboard/             Administration — Vite/React ✅ rôle ADMIN, réglages persistants
   web/                   Vite + React                 → phase 8
 services/
   api/                   Fastify — REST v1, WS, auth  ✅
-  agent/                 Agent Runtime (BullMQ)       → phase 2
+  agent/                 Runtime ACP natif NEXUS      ✅
   browser-worker/        Python — browser-use         ✅
   windows-worker/        Exécutant Windows            ✅
   android-worker/        Exécutant Redmi Note 10S     ✅ (Kotlin non compilé)
@@ -130,7 +130,7 @@ packages/
   memory/                port + implémentation mémoire ✅
   mcp/                   clients MCP → ToolRegistry   ✅
   browser-client/        client du Browser Worker     ✅
-  mission-control-client/contrat OpenHands ACP/paper  ✅
+  mission-control-client/contrat NEXUS ACP/paper      ✅
   worker-core/           runtime commun aux exécutants ✅
   client-core/           cœur client — session, temps  ✅
                          réel, état, voix
@@ -140,16 +140,42 @@ mcp/
 infrastructure/docker/   Dockerfiles + compose        ✅
 ```
 
-### OpenHands Mission Control
+### NEXUS Mission Engine
 
 NEXUS peut superviser et piloter le service local Mission Control qui orchestre
 Antigravity, Claude et Codex et porte le simulateur paper-only. Configurez
 `MISSION_CONTROL_URL=http://127.0.0.1:18100` lorsque les deux services tournent
 sur le même hôte. Le tableau de bord affiche alors la santé des workers, les
-profils ACP et l'intégrité du journal d'audit.
+profils ACP, l'intégrité du journal d'audit et une chronologie unifiée des
+missions. Les mêmes missions sont projetées dans `Tâches`, `Runs agent` et
+`Outils`; les souvenirs utilisateur sont injectés dans le planificateur ACP.
+
+Les migrations de production sont additives et s'appliquent avec :
+
+```bash
+pnpm --filter @nexus/database migrate:deploy
+```
+
+Les conversations, messages, notifications et runs Agent Core sont alors persistés dans PostgreSQL ;
+les journaux rédigés et bornés vivent dans `var/observability`.
 
 Architecture et limites de sécurité :
-[`docs/architecture/23-openhands-mission-control.md`](docs/architecture/23-openhands-mission-control.md).
+[`docs/architecture/23-nexus-mission-engine.md`](docs/architecture/23-nexus-mission-engine.md).
+
+### Navigateur autonome sans clé API
+
+NEXUS utilise le `browser-harness` officiel de Browser Use avec un Chromium local dédié. Codex ou
+Claude fournit le raisonnement via l'abonnement ACP déjà connecté : aucune clé Gemini, OpenAI,
+Anthropic ou Browser Use n'est nécessaire. Installation reproductible :
+
+```bash
+./scripts/setup-browser-use.sh
+```
+
+Le script installe la version épinglée du harness, désactive télémétrie et enregistrements, crée
+un profil Chromium séparé, enregistre les skills Codex/Claude et active le service systemd user.
+L'onglet **Browser Use** du dashboard expose ensuite le diagnostic réel. Les actions sont
+sérialisées sur ce navigateur local ; le parallélisme isolé de Browser Use Cloud n'est pas activé.
 
 Les paquets marqués « contrats seuls » ne contiennent **que** des types et des schémas — aucune
 implémentation fictive. Ils fixent la forme sur laquelle les phases suivantes s'accorderont.
@@ -162,11 +188,16 @@ Vérifiées par la revue et le graphe Turborepo ; elles ne sont pas décoratives
 agent-core ──▶ llm · tools · memory · protocol · shared     autorisé
 agent-core ──╳ database · mcp · browser-client              interdit
 tools      ──╳ llm                                          interdit
-api        ──╳ agent-core (au runtime)                       interdit
+api        ──▶ agent-core (composition et routes uniquement) autorisé
 ```
 
 `agent-core` reçoit un port `AgentRunStore` plutôt que Prisma : c'est ce qui rend la boucle
 testable sans base de données et rejouable sur un état en mémoire.
+
+L'API est le composition root : elle injecte les ports PostgreSQL, les outils,
+les permissions et les confirmations, puis expose `/api/v1/agent-core/runs`.
+Le cœur reste donc indépendant de Fastify et de Prisma même s'il est désormais
+exécutable depuis NEXUS.
 
 ### Moteur d'agent
 

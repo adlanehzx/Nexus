@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { redact, truncate } from "@nexus/shared";
 
 /**
@@ -86,9 +88,12 @@ function toIso(value: unknown): string {
 export class LogBuffer {
   readonly #entries: LogEntry[] = [];
   readonly #max: number;
+  readonly #filePath: string | undefined;
 
-  constructor(options: { max?: number } = {}) {
+  constructor(options: { max?: number; filePath?: string } = {}) {
     this.#max = options.max ?? 500;
+    this.#filePath = options.filePath;
+    this.#entries.push(...readJsonLines<LogEntry>(options.filePath, this.#max));
   }
 
   /** Destination pino. Une ligne NDJSON par appel. */
@@ -100,6 +105,7 @@ export class LogBuffer {
   push(entry: LogEntry): void {
     this.#entries.push(entry);
     if (this.#entries.length > this.#max) this.#entries.splice(0, this.#entries.length - this.#max);
+    persistJsonLines(this.#filePath, this.#entries);
   }
 
   /** Les plus récentes d'abord. */
@@ -206,10 +212,13 @@ export class SecurityLog {
   readonly #events: SecurityEvent[] = [];
   readonly #max: number;
   readonly #now: () => Date;
+  readonly #filePath: string | undefined;
 
-  constructor(options: { max?: number; now?: () => Date } = {}) {
+  constructor(options: { max?: number; now?: () => Date; filePath?: string } = {}) {
     this.#max = options.max ?? 500;
     this.#now = options.now ?? (() => new Date());
+    this.#filePath = options.filePath;
+    this.#events.push(...readJsonLines<SecurityEvent>(options.filePath, this.#max));
   }
 
   record(input: {
@@ -228,6 +237,7 @@ export class SecurityLog {
 
     this.#events.push(event);
     if (this.#events.length > this.#max) this.#events.splice(0, this.#events.length - this.#max);
+    persistJsonLines(this.#filePath, this.#events);
 
     return event;
   }
@@ -252,6 +262,38 @@ export class SecurityLog {
   get size(): number {
     return this.#events.length;
   }
+}
+
+function readJsonLines<T>(filePath: string | undefined, maximum: number): T[] {
+  if (filePath === undefined) return [];
+  try {
+    return readFileSync(filePath, "utf8")
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .slice(-maximum)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as T];
+        } catch {
+          return [];
+        }
+      });
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return [];
+    throw cause;
+  }
+}
+
+function persistJsonLines<T>(filePath: string | undefined, entries: readonly T[]): void {
+  if (filePath === undefined) return;
+  mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
+  const temporary = `${filePath}.tmp`;
+  writeFileSync(temporary, entries.map((entry) => JSON.stringify(entry)).join("\n") + "\n", {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  renameSync(temporary, filePath);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

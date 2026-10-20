@@ -27,9 +27,18 @@ export function State({ tone, label }: { tone: string; label: string }) {
 }
 
 export function Bar({ percent }: { percent: number }) {
+  const value = Math.max(0, Math.min(100, percent));
   return (
-    <div className="jauge" title={`${String(percent)} %`}>
-      <div style={{ width: `${String(Math.max(0, Math.min(100, percent)))}%` }} />
+    <div
+      className="jauge"
+      title={`${String(value)} %`}
+      role="progressbar"
+      aria-label="Utilisation"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+    >
+      <div style={{ width: `${String(value)}%` }} />
     </div>
   );
 }
@@ -54,7 +63,12 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="vide">{children}</p>;
+  return (
+    <div className="vide">
+      <strong>Aucune donnée</strong>
+      <span>{children}</span>
+    </div>
+  );
 }
 
 /**
@@ -116,10 +130,25 @@ export function Section<T>(props: {
   children: (data: T) => React.ReactNode;
 }) {
   if (props.state.error !== undefined) {
-    return <p className="banniere erreur">{props.state.error}</p>;
+    return (
+      <div className="banniere erreur section-error" role="alert">
+        <span>{props.state.error}</span>
+        <button className="bouton compact" type="button" onClick={props.state.reload}>
+          Réessayer
+        </button>
+      </div>
+    );
   }
   if (props.state.data === undefined) {
-    return <p className="vide">{props.state.loading ? "Chargement…" : "Aucune donnée."}</p>;
+    return props.state.loading ? (
+      <div className="loading-state" role="status" aria-label="Chargement en cours">
+        <span />
+        <span />
+        <span />
+      </div>
+    ) : (
+      <Empty>Aucune donnée disponible pour cette section.</Empty>
+    );
   }
   return <>{props.children(props.state.data)}</>;
 }

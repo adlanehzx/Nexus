@@ -2,10 +2,20 @@ import { AppError, type AppErrorOptions } from "@nexus/shared";
 import type { z } from "zod";
 import {
   addPaperQuoteSchema,
+  agentRegistrySchema,
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
+  createAgentSchema,
+  updateAgentProfileSchema,
+  testAgentProfileSchema,
+  agentTestResultSchema,
+  updateAgentHealthSchema,
   missionControlHealthSchema,
+  runtimeSettingsSchema,
+  missionSnapshotSchema,
+  missionSnapshotsSchema,
+  missionSubmissionSchema,
   paperAccountSchema,
   paperAccountsSchema,
   paperMarketSchema,
@@ -14,18 +24,31 @@ import {
   researchMissionResponseSchema,
   researchRunSchema,
   researchRunsSchema,
+  registerAgentSchema,
   submitResearchMissionSchema,
+  submitMissionSchema,
   type AddPaperQuote,
+  type AgentRegistry,
   type AuditVerification,
   type CreatePaperAccount,
   type CreatePaperMarket,
+  type CreateAgent,
+  type UpdateAgentProfile,
+  type TestAgentProfile,
+  type AgentTestResult,
+  type UpdateAgentHealth,
   type MissionControlHealth,
+  type RuntimeSettings,
+  type MissionSnapshot,
+  type MissionSubmission,
   type PaperAccount,
   type PaperMarket,
   type PaperQuote,
   type ResearchMissionResponse,
   type ResearchRun,
+  type RegisterAgent,
   type SubmitResearchMission,
+  type SubmitMission,
 } from "./schemas.js";
 
 export class MissionControlClientError extends AppError {
@@ -42,10 +65,55 @@ export interface MissionControlClientOptions {
   baseUrl: string;
   requestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Fournit le jeton de service à présenter au moteur.
+   *
+   * Une fonction et non une valeur : un jeton de service vit deux minutes, donc
+   * il doit être émis par appel. Mémoriser une chaîne à la construction du
+   * client la rendrait périmée dès le troisième appel.
+   *
+   * Facultatif, et son absence a une conséquence nette : les appels partent
+   * sans identité, et un moteur configuré pour l'exiger les refusera. C'est le
+   * comportement voulu — mieux vaut un refus franc qu'une authentification qu'on
+   * croit active.
+   */
+  serviceToken?: () => string;
 }
 
 export interface MissionControlPort {
   health(signal?: AbortSignal): Promise<MissionControlHealth>;
+  settings(signal?: AbortSignal): Promise<RuntimeSettings>;
+  updateSettings(input: RuntimeSettings, signal?: AbortSignal): Promise<RuntimeSettings>;
+  submitMission(
+    input: SubmitMission,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSubmission>;
+  getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
+  listMissions(
+    limit?: number,
+    externalPrefix?: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSnapshot[]>;
+  agents(signal?: AbortSignal): Promise<AgentRegistry>;
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry>;
+  createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry>;
+  updateAgentProfile(
+    id: string,
+    input: UpdateAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry>;
+  disableAgent(key: string, signal?: AbortSignal): Promise<AgentRegistry>;
+  testAgentProfile(
+    id: string,
+    input: TestAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentTestResult>;
+  updateAgentHealth(
+    key: string,
+    input: UpdateAgentHealth,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry>;
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification>;
   createPaperAccount(input: CreatePaperAccount, signal?: AbortSignal): Promise<PaperAccount>;
   getPaperAccount(id: string, signal?: AbortSignal): Promise<PaperAccount>;
@@ -67,16 +135,155 @@ export class MissionControlClient implements MissionControlPort {
   readonly #baseUrl: string;
   readonly #timeoutMs: number;
   readonly #fetch: typeof fetch;
+  readonly #serviceToken: (() => string) | undefined;
 
   constructor(options: MissionControlClientOptions) {
     const url = validateBaseUrl(options.baseUrl);
     this.#baseUrl = url.toString().replace(/\/$/, "");
     this.#timeoutMs = options.requestTimeoutMs ?? 15_000;
     this.#fetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    this.#serviceToken = options.serviceToken;
   }
 
   health(signal?: AbortSignal): Promise<MissionControlHealth> {
     return this.#request("GET", "/v1/health/ready", missionControlHealthSchema, undefined, signal);
+  }
+
+  settings(signal?: AbortSignal): Promise<RuntimeSettings> {
+    return this.#request("GET", "/v1/settings", runtimeSettingsSchema, undefined, signal);
+  }
+
+  updateSettings(input: RuntimeSettings, signal?: AbortSignal): Promise<RuntimeSettings> {
+    return this.#request(
+      "PUT",
+      "/v1/settings",
+      runtimeSettingsSchema,
+      runtimeSettingsSchema.parse(input),
+      signal,
+    );
+  }
+
+  submitMission(
+    input: SubmitMission,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSubmission> {
+    if (idempotencyKey.length < 1 || idempotencyKey.length > 128) {
+      throw new TypeError("idempotencyKey must contain 1 to 128 characters");
+    }
+    return this.#request(
+      "POST",
+      "/v1/missions",
+      missionSubmissionSchema,
+      submitMissionSchema.parse(input),
+      signal,
+      { "idempotency-key": idempotencyKey },
+    );
+  }
+
+  getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot> {
+    return this.#request(
+      "GET",
+      `/v1/missions/${encodeURIComponent(id)}`,
+      missionSnapshotSchema,
+      undefined,
+      signal,
+    );
+  }
+
+  async listMissions(
+    limit = 50,
+    externalPrefix?: string,
+    signal?: AbortSignal,
+  ): Promise<MissionSnapshot[]> {
+    const query = new URLSearchParams({ limit: String(boundedLimit(limit)) });
+    if (externalPrefix !== undefined) query.set("external_prefix", externalPrefix);
+    const result = await this.#request(
+      "GET",
+      `/v1/missions?${query.toString()}`,
+      missionSnapshotsSchema,
+      undefined,
+      signal,
+    );
+    return result.missions;
+  }
+
+  agents(signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request("GET", "/v1/agents", agentRegistrySchema, undefined, signal);
+  }
+
+  registerAgent(input: RegisterAgent, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "POST",
+      "/v1/agents",
+      agentRegistrySchema,
+      registerAgentSchema.parse(input),
+      signal,
+    );
+  }
+
+  createAgent(input: CreateAgent, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "POST",
+      "/v1/agents/create",
+      agentRegistrySchema,
+      createAgentSchema.parse(input),
+      signal,
+    );
+  }
+
+  updateAgentProfile(
+    id: string,
+    input: UpdateAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry> {
+    return this.#request(
+      "PUT",
+      `/v1/agents/profiles/${encodeURIComponent(id)}`,
+      agentRegistrySchema,
+      updateAgentProfileSchema.parse(input),
+      signal,
+    );
+  }
+
+  disableAgent(key: string, signal?: AbortSignal): Promise<AgentRegistry> {
+    return this.#request(
+      "DELETE",
+      `/v1/agents/${encodeURIComponent(key)}`,
+      agentRegistrySchema,
+      undefined,
+      signal,
+    );
+  }
+
+  testAgentProfile(
+    id: string,
+    input: TestAgentProfile,
+    signal?: AbortSignal,
+  ): Promise<AgentTestResult> {
+    return this.#request(
+      "POST",
+      `/v1/agents/profiles/${encodeURIComponent(id)}/test`,
+      agentTestResultSchema,
+      testAgentProfileSchema.parse(input),
+      signal,
+      {},
+      input.timeout_seconds * 1_000 + 5_000,
+    );
+  }
+
+  updateAgentHealth(
+    key: string,
+    input: UpdateAgentHealth,
+    signal?: AbortSignal,
+  ): Promise<AgentRegistry> {
+    return this.#request(
+      "PATCH",
+      `/v1/agents/${encodeURIComponent(key)}/health`,
+      agentRegistrySchema,
+      updateAgentHealthSchema.parse(input),
+      signal,
+    );
   }
 
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification> {
@@ -199,8 +406,9 @@ export class MissionControlClient implements MissionControlPort {
     body?: unknown,
     signal?: AbortSignal,
     extraHeaders: Record<string, string> = {},
+    timeoutMs = this.#timeoutMs,
   ): Promise<T> {
-    const timeout = AbortSignal.timeout(this.#timeoutMs);
+    const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
     let response: Response;
     try {
@@ -209,6 +417,11 @@ export class MissionControlClient implements MissionControlPort {
         headers: {
           accept: "application/json",
           "content-type": "application/json",
+          // Émis ici, au moment de l'appel, pour la raison expliquée sur
+          // `serviceToken` : sa durée de vie se compte en minutes.
+          ...(this.#serviceToken === undefined
+            ? {}
+            : { authorization: `Bearer ${this.#serviceToken()}` }),
           ...extraHeaders,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

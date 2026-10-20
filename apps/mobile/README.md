@@ -56,20 +56,20 @@ secondes qui suivent.
 
 Tout ce qui pouvait l'être sans compte Apple est en place :
 
-| | |
-| --- | --- |
-| `expo-dev-client` | installé |
-| `eas.json` | profil `development`, `developmentClient: true`, `distribution: internal` |
-| Icône | `assets/icon.png`, 1024×1024, opaque |
-| Écran de lancement | `assets/splash-icon.png` via le greffon `expo-splash-screen` |
-| Identifiant de paquet | `fr.nexus.client` |
-| Projet EAS | lié (`extra.eas.projectId`) |
+|                       |                                                                           |
+| --------------------- | ------------------------------------------------------------------------- |
+| `expo-dev-client`     | installé                                                                  |
+| `eas.json`            | profil `development`, `developmentClient: true`, `distribution: internal` |
+| Icône                 | `assets/icon.png`, 1024×1024, opaque                                      |
+| Écran de lancement    | `assets/splash-icon.png` via le greffon `expo-splash-screen`              |
+| Identifiant de paquet | `fr.nexus.client`                                                         |
+| Projet EAS            | lié (`extra.eas.projectId`)                                               |
 
-**Ce qui manque est hors du code** : Apple exige une adhésion au *Developer
-Program* (99 $/an) pour installer une application hors App Store sur un appareil
+**Ce qui manque est hors du code** : Apple exige une adhésion au _Developer
+Program_ (99 $/an) pour installer une application hors App Store sur un appareil
 physique. La distribution `internal` d'EAS repose sur un profil ad hoc listant
-l'UDID du téléphone, et seul un compte payant peut en émettre. Le *free
-provisioning* d'Apple existe mais passe obligatoirement par Xcode — donc par un
+l'UDID du téléphone, et seul un compte payant peut en émettre. Le _free
+provisioning_ d'Apple existe mais passe obligatoirement par Xcode — donc par un
 Mac — et ses certificats expirent au bout de sept jours.
 
 Le jour où une solution de signature existe :

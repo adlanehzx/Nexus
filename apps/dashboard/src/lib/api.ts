@@ -1,5 +1,5 @@
 import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-core";
-import type { HttpClient } from "@nexus/client-core";
+import type { HttpClient, SecureStorage } from "@nexus/client-core";
 
 /**
  * Le client du tableau de bord.
@@ -8,11 +8,9 @@ import type { HttpClient } from "@nexus/client-core";
  * rafraîchissement transparent, même trousseau — parce qu'un second mécanisme de
  * session serait un second endroit où se tromper sur l'expiration d'un jeton.
  *
- * Ce qui change tient en une phrase : **toutes les routes sont en lecture**. Il
- * n'existe aucune méthode d'écriture dans ce fichier, et ce n'est pas un oubli.
- * Superviser et administrer sont deux surfaces ; mettre une action destructrice
- * dans un écran qu'on consulte machinalement est une mauvaise idée qui ne se
- * remarque qu'une fois.
+ * Les mutations sont volontairement centralisées ici. Elles passent toutes par
+ * la session administrateur, les validations du cœur et, pour les opérations
+ * irréversibles, une confirmation explicite dans l'interface.
  *
  * Les types décrivent ce que le serveur envoie **réellement** — c'est-à-dire ce
  * qu'il a le droit d'envoyer. On n'y trouvera ni transcript, ni bloc de
@@ -101,6 +99,7 @@ export interface TaskRow {
   completedAt: string | null;
   progressPercent: number;
   steps: TaskStepRow[];
+  source: "device" | "acp";
 }
 
 export interface TaskDetail extends TaskRow {
@@ -166,10 +165,12 @@ export interface ToolRow {
   riskLevel: string;
   requiredPermissions: string[];
   allowed: boolean;
+  source: "native" | "browser" | "search" | "acp";
 }
 
 export interface McpSection {
   configured: boolean;
+  configurations: McpConfiguration[];
   servers: {
     name: string;
     status: string;
@@ -182,11 +183,49 @@ export interface McpSection {
   }[];
 }
 
+export type McpConfiguration = {
+  name: string;
+  enabled: boolean;
+  transport: "stdio" | "http" | "sse";
+  defaultPermissions: string[];
+  defaultRisk: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  toolPolicies: Record<string, unknown>;
+  connectTimeoutMs: number;
+  requestTimeoutMs: number;
+  autoReconnect: boolean;
+  maxReconnectAttempts: number;
+  reconnectInitialDelayMs: number;
+  reconnectMaxDelayMs: number;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+  exposeResources: boolean;
+} & (
+  | {
+      transport: "stdio";
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+      envRefs: Record<string, string>;
+      cwd?: string;
+    }
+  | {
+      transport: "http" | "sse";
+      url: string;
+      headers: Record<string, string>;
+      headerRefs: Record<string, string>;
+    }
+);
+
 export interface BrowserSection {
   configured: boolean;
   reachable: boolean;
   detail: string;
   health: unknown;
+  configuration:
+    | { enabled: boolean; mode: "local-harness"; cdpUrl: string }
+    | { enabled: boolean; mode: "remote-worker"; baseUrl: string; tokenRef: string }
+    | null;
+  tokenConfigured: boolean;
 }
 
 export interface MissionControlSection {
@@ -231,6 +270,91 @@ export interface MissionControlSection {
     created_at: string;
     updated_at: string;
   }[];
+  missions: {
+    id: string;
+    title: string;
+    state: string;
+    created_at: string;
+    updated_at: string;
+    tasks: {
+      id: string;
+      task_key: string;
+      profile_key: string;
+      state: string;
+      result_json: string | null;
+      error_json: string | null;
+      created_at: string;
+      updated_at: string;
+      depends_on: string[];
+      attempts: {
+        id: string;
+        attempt_no: number;
+        state: string;
+        conversation_id: string;
+        started_at: string;
+        updated_at: string;
+        finished_at: string | null;
+        error_json: string | null;
+      }[];
+    }[];
+  }[];
+}
+
+export interface OrchestratedMission {
+  missionId: string;
+  title: string;
+  state: string;
+  profiles: string[];
+  completedTasks: number;
+  totalTasks: number;
+  response: string | null;
+  error: string | null;
+}
+
+export interface AgentRegistry {
+  worker_enabled: boolean;
+  configured: {
+    key: string;
+    agent_profile_id: string;
+    running_tasks: number;
+    queued_tasks: number;
+    last_task_state: string | null;
+    status: "available" | "degraded" | "cooldown" | "quota_exhausted" | "auth_required" | "unknown";
+    cooldown_until: string | null;
+    remaining_5h_percent: number | null;
+    remaining_week_percent: number | null;
+    resets_5h_at: string | null;
+    resets_week_at: string | null;
+    usage_source: string;
+    consecutive_failures: number;
+    last_error_category: string | null;
+  }[];
+  available: {
+    id: string;
+    name: string;
+    agent_kind: string;
+    revision?: number | null;
+    registered_as?: string | null;
+    command: string;
+    args: string[];
+    model: string | null;
+    system_prompt: string;
+    reasoning_effort: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | null;
+    additional_dirs: string[];
+    config_options: Record<string, string>;
+    permission_policy: "workspace";
+  }[];
+}
+
+export interface RuntimeSettings {
+  task_timeout_seconds: number;
+  max_attempts: number;
+  retry_delay_seconds: number;
+  context_budget_chars: number;
+  quality_review: boolean;
+  research_priority: string[];
+  review_priority: string[];
+  synthesis_priority: string[];
 }
 
 export interface MemorySection {
@@ -308,6 +432,26 @@ export class DashboardApi {
     return this.#get(`/api/v1/dashboard/tasks/${taskId}`);
   }
 
+  cancelTask(taskId: string): Promise<{ cancelled: boolean }> {
+    return this.#request("POST", `/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
+      reason: "annulé depuis la supervision NEXUS",
+    });
+  }
+
+  trustDevice(deviceId: string): Promise<unknown> {
+    return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/trust`);
+  }
+
+  revokeDevice(deviceId: string): Promise<unknown> {
+    return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/revoke`);
+  }
+
+  updateDevicePermissions(deviceId: string, grantedPermissions: string[]): Promise<unknown> {
+    return this.#request("PATCH", `/api/v1/devices/${encodeURIComponent(deviceId)}/permissions`, {
+      grantedPermissions,
+    });
+  }
+
   runs(): Promise<{ runs: AgentRunRow[] }> {
     return this.#get("/api/v1/dashboard/runs?limit=100");
   }
@@ -320,20 +464,161 @@ export class DashboardApi {
     return this.#get("/api/v1/dashboard/mcp");
   }
 
+  saveMcp(config: McpConfiguration): Promise<unknown> {
+    return this.#request(
+      "PUT",
+      `/api/v1/dashboard/mcp/servers/${encodeURIComponent(config.name)}`,
+      config,
+    );
+  }
+
+  removeMcp(name: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/dashboard/mcp/servers/${encodeURIComponent(name)}`);
+  }
+
+  reconnectMcp(name: string): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/mcp/servers/${encodeURIComponent(name)}/reconnect`,
+    );
+  }
+
   browser(): Promise<BrowserSection> {
     return this.#get("/api/v1/dashboard/browser");
+  }
+
+  configureBrowser(
+    input:
+      | { enabled: boolean; mode: "local-harness"; cdpUrl: string }
+      | { enabled: boolean; mode: "remote-worker"; baseUrl: string; tokenRef: string },
+  ): Promise<unknown> {
+    return this.#request("PUT", "/api/v1/dashboard/browser/configuration", input);
+  }
+
+  testBrowser(): Promise<unknown> {
+    return this.#request("POST", "/api/v1/dashboard/browser/test");
+  }
+
+  secrets(): Promise<{ names: string[] }> {
+    return this.#get("/api/v1/dashboard/secrets");
+  }
+
+  saveSecret(name: string, secret: string): Promise<unknown> {
+    return this.#request("PUT", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`, {
+      secret,
+    });
+  }
+
+  removeSecret(name: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`);
   }
 
   missionControl(): Promise<MissionControlSection> {
     return this.#get("/api/v1/dashboard/mission-control");
   }
 
+  sendToNexus(message: string): Promise<OrchestratedMission> {
+    return this.#request("POST", "/api/v1/orchestrator/messages", { message });
+  }
+
+  nexusMission(missionId: string): Promise<OrchestratedMission> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`);
+  }
+
+  agents(): Promise<AgentRegistry> {
+    return this.#get("/api/v1/orchestrator/agents");
+  }
+
+  runtimeSettings(): Promise<RuntimeSettings> {
+    return this.#get("/api/v1/orchestrator/settings");
+  }
+
+  updateRuntimeSettings(input: RuntimeSettings): Promise<RuntimeSettings> {
+    return this.#request("PUT", "/api/v1/orchestrator/settings", input);
+  }
+
+  registerAgent(input: { key: string; agent_profile_id: string }): Promise<AgentRegistry> {
+    return this.#request("POST", "/api/v1/orchestrator/agents", input);
+  }
+
+  createAgent(input: {
+    key: string;
+    name: string;
+    template_profile_id: string;
+    model?: string | null;
+  }): Promise<AgentRegistry> {
+    return this.#request("POST", "/api/v1/orchestrator/agents/create", input);
+  }
+
+  updateAgentProfile(
+    id: string,
+    input: {
+      name: string;
+      command: string;
+      args: string[];
+      model?: string | null;
+      system_prompt: string;
+      reasoning_effort: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | null;
+      additional_dirs: string[];
+      config_options: Record<string, string>;
+    },
+  ): Promise<AgentRegistry> {
+    return this.#request(
+      "PUT",
+      `/api/v1/orchestrator/agents/profiles/${encodeURIComponent(id)}`,
+      input,
+    );
+  }
+
+  disableAgent(key: string): Promise<AgentRegistry> {
+    return this.#request("DELETE", `/api/v1/orchestrator/agents/${encodeURIComponent(key)}`);
+  }
+
+  testAgentProfile(
+    id: string,
+    input: { workspace: string; prompt: string; timeout_seconds: number },
+  ): Promise<{ ok: true; response: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/agents/profiles/${encodeURIComponent(id)}/test`,
+      input,
+    );
+  }
+
   memory(): Promise<MemorySection> {
     return this.#get("/api/v1/dashboard/memory");
   }
 
+  remember(input: {
+    content: string;
+    layer: "LONG_TERM" | "PREFERENCE";
+    tags: string[];
+    acknowledgedSensitive: boolean;
+  }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/memory", input);
+  }
+
+  forget(memoryId: string): Promise<unknown> {
+    return this.#request("DELETE", `/api/v1/memory/${encodeURIComponent(memoryId)}`);
+  }
+
   notifications(): Promise<NotificationSection> {
     return this.#get("/api/v1/dashboard/notifications?limit=100");
+  }
+
+  markNotificationRead(notificationId: string): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+    );
+  }
+
+  createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/mission-control/paper/accounts", input);
+  }
+
+  createPaperMarket(input: { question: string; close_at: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/mission-control/paper/markets", input);
   }
 
   security(): Promise<SecuritySection> {
@@ -350,7 +635,15 @@ export class DashboardApi {
   }
 
   async #get<T>(path: string): Promise<T> {
-    const response = await this.#session.authorizedRequest({ method: "GET", path });
+    return this.#request("GET", path);
+  }
+
+  async #request<T>(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    const response = await this.#session.authorizedRequest({ method, path, body });
 
     if (response.status === 403 || response.status === 404) {
       // Le serveur ne distingue pas « pas administrateur » de « n'existe pas » —
@@ -380,12 +673,47 @@ function messageOf(body: unknown): string {
 /**
  * Assemble une session pour le tableau de bord.
  *
- * Le coffre est **volatil** : les jetons vivent en mémoire et disparaissent au
- * rechargement. Un tableau de bord d'administration est précisément l'endroit où
- * l'on ne veut pas d'un jeton de longue durée lisible par n'importe quel script
- * de la page. Se reconnecter coûte dix secondes.
+ * Les jetons sont limités à la session de l'onglet : ils survivent à un
+ * rafraîchissement, mais disparaissent à sa fermeture. Aucun jeton n'est écrit
+ * dans le stockage permanent du navigateur.
  */
-export function createSession(baseUrl: string): SessionManager {
+export function createSession(
+  baseUrl: string,
+  onSignedOut?: (reason: string) => void,
+): SessionManager {
   const http: HttpClient = new FetchHttpClient(baseUrl);
-  return new SessionManager({ http, storage: new VolatileStorage() });
+  return new SessionManager({
+    http,
+    storage: new TabSessionStorage(),
+    ...(onSignedOut === undefined ? {} : { onSignedOut }),
+  });
+}
+
+class TabSessionStorage implements SecureStorage {
+  readonly #fallback = new VolatileStorage();
+
+  async get(key: string): Promise<string | undefined> {
+    try {
+      return window.sessionStorage.getItem(key) ?? undefined;
+    } catch {
+      return this.#fallback.get(key);
+    }
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      await this.#fallback.set(key, value);
+    }
+  }
+
+  async remove(key: string): Promise<void> {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Le stockage peut être indisponible ; le repli est vidé ci-dessous.
+    }
+    await this.#fallback.remove(key);
+  }
 }

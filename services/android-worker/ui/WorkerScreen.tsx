@@ -64,12 +64,24 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
-        <View style={[styles.orbHalo, snapshot.state === "ready" ? styles.orbHaloReady : styles.orbHaloIdle]}>
-          <View style={[styles.orbCore, snapshot.state === "ready" ? styles.orbCoreReady : styles.orbCoreIdle]} />
+        <View
+          style={[
+            styles.orbHalo,
+            snapshot.state === "ready" ? styles.orbHaloReady : styles.orbHaloIdle,
+          ]}
+        >
+          <View
+            style={[
+              styles.orbCore,
+              snapshot.state === "ready" ? styles.orbCoreReady : styles.orbCoreIdle,
+            ]}
+          />
         </View>
         <View style={styles.heroText}>
           <Text style={styles.kicker}>NEXUS CONNECTION</Text>
-          <Text style={styles.title}>{snapshot.state === "ready" ? "CONNECTED" : frenchState(snapshot.state).toUpperCase()}</Text>
+          <Text style={styles.title}>
+            {snapshot.state === "ready" ? "CONNECTED" : frenchState(snapshot.state).toUpperCase()}
+          </Text>
           <Text style={styles.subtitle}>Agent système de cet appareil</Text>
         </View>
       </View>
@@ -236,13 +248,33 @@ const styles = StyleSheet.create({
   kicker: { color: "#64758a", fontSize: 11, letterSpacing: 1.2, fontWeight: "700" },
   title: { color: "#edf5ff", fontSize: 23, fontWeight: "800", letterSpacing: -0.4 },
   subtitle: { color: "#91a1b6", fontSize: 13, lineHeight: 20 },
-  orbHalo: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  orbHalo: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   orbHaloReady: { borderColor: "#7de8ff", backgroundColor: "#102837" },
   orbHaloIdle: { borderColor: "#64758a", backgroundColor: "#121b28" },
   orbCore: { width: 25, height: 25, borderRadius: 13 },
-  orbCoreReady: { backgroundColor: "#7de8ff", shadowColor: "#7de8ff", shadowOpacity: 0.8, shadowRadius: 12, elevation: 6 },
+  orbCoreReady: {
+    backgroundColor: "#7de8ff",
+    shadowColor: "#7de8ff",
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 6,
+  },
   orbCoreIdle: { backgroundColor: "#91a1b6" },
-  section: { gap: 8, padding: 14, borderWidth: 1, borderColor: "#26364a", borderRadius: 16, backgroundColor: "#0d131d" },
+  section: {
+    gap: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#26364a",
+    borderRadius: 16,
+    backgroundColor: "#0d131d",
+  },
   sectionTitle: {
     color: "#7c869b",
     fontSize: 13,

@@ -2,7 +2,7 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
-  "description": "NEXUS â€” assistant personnel IA multi-appareils",
+  "description": "NEXUS \u00e2\u20ac\u201d assistant personnel IA multi-appareils",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
@@ -16,9 +16,11 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
+    "test:pg": "pnpm --filter @nexus/api test:pg",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test",
+    "nexus": "node packages/cli/dist/index.js",
     "db:generate": "pnpm --filter @nexus/database generate",
     "db:migrate": "pnpm --filter @nexus/database migrate",
     "db:studio": "pnpm --filter @nexus/database studio",
@@ -27,7 +29,8 @@
     "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env down",
     "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env logs -f",
     "clean": "turbo run clean && rimraf node_modules",
-    "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker"
+    "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker",
+    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

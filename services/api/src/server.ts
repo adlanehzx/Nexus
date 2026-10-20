@@ -4,6 +4,10 @@ import { getConfig, loadDotEnv } from "@nexus/config";
 import { createLogger } from "./lib/logger.js";
 import { buildApp } from "./app.js";
 import { ServiceContainer } from "./services/container.js";
+import { ToolRegistry } from "@nexus/tools";
+import { McpManager } from "@nexus/mcp";
+import { BrowserWorkerClient } from "@nexus/browser-client";
+import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
 
 /**
  * Point d'entrée du service API.
@@ -39,18 +43,73 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
+import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
+import { PrismaMissionGrantRegistry } from "./services/persistence/prisma-mission-grant-registry.js";
+import { PrismaNotificationStore } from "./services/persistence/prisma-notification-store.js";
+import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
+import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
+import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
+import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
+const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
+const vault = new KeyringVault(runtimeConfiguration);
+const toolRegistry = new ToolRegistry();
+if (config.SEARXNG_URL !== undefined) {
+  const webSearch = new SearxngClient({
+    baseUrl: config.SEARXNG_URL,
+    timeoutMs: config.SEARXNG_TIMEOUT_MS,
+  });
+  toolRegistry.registerAll(createWebSearchTools({ provider: webSearch }));
+}
+const mcp = new McpManager({
+  registry: toolRegistry,
+  configs: await runtimeConfiguration.loadMcp(),
+  resolveSecret: (reference) => vault.get(reference),
+});
+const browserConfiguration = await runtimeConfiguration.loadBrowser();
+const browserToken =
+  browserConfiguration?.enabled === true && browserConfiguration.mode === "remote-worker"
+    ? await vault.get(browserConfiguration.tokenRef)
+    : undefined;
+const browser =
+  browserConfiguration?.enabled === true &&
+  browserConfiguration.mode === "remote-worker" &&
+  browserToken !== undefined
+    ? new BrowserWorkerClient({ baseUrl: browserConfiguration.baseUrl, token: browserToken })
+    : undefined;
+
+/**
+ * Signeur dédié aux appels sortants.
+ *
+ * Une seconde instance sur la même clé, et non une référence au conteneur :
+ * capturer `services` dans une fermeture qui se trouve dans son propre
+ * initialiseur le fait inférer `any`, ce qui désarme toutes les règles
+ * `no-unsafe-*` sur ce chemin. Le service de jetons est sans état, donc deux
+ * instances issues du même PEM produisent des jetons interchangeables.
+ */
+const outboundSigner = new TokenService({ privateKeyPem: config.AUTH_SIGNING_KEY });
 
 const services = new ServiceContainer({
   prisma,
   users: new PrismaUserStore(prisma),
   sessions: new PrismaSessionStore(prisma),
+  conversations: new PrismaConversationStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),
   taskStore: new PrismaTaskStore(prisma),
+  agentRunClaims: new PrismaAgentRunClaimStore(prisma),
+  missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
+  notifications: new PrismaNotificationStore(prisma),
+  runStore: new PrismaAgentRunStore(prisma),
+  observabilityDirectory: resolve(here, "../../../var/observability"),
   tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
   apiVersion: config.API_VERSION,
+  toolRegistry,
+  mcp,
+  runtimeConfiguration,
+  vault,
+  ...(browser === undefined ? {} : { browser }),
   llmProvider: new FallbackProvider([
     new ClaudeCliProvider(),
     new GeminiCliProvider(),
@@ -58,7 +117,20 @@ const services = new ServiceContainer({
   ]),
   ...(config.MISSION_CONTROL_URL === undefined
     ? {}
-    : { missionControl: new MissionControlClient({ baseUrl: config.MISSION_CONTROL_URL }) }),
+    : {
+        missionControl: new MissionControlClient({
+          baseUrl: config.MISSION_CONTROL_URL,
+          // Fermeture, et non valeur : elle n'est appelée qu'au moment d'un
+          // appel sortant, donc bien après que `services` soit construit — et
+          // elle émet alors un jeton frais, ce qu'une chaîne figée ici ne
+          // saurait pas faire.
+          serviceToken: () =>
+            outboundSigner.issueServiceToken({
+              service: "nexus-api",
+              audience: MISSION_ENGINE_AUDIENCE,
+            }).token,
+        }),
+      }),
 });
 
 const logger = createLogger(config, [services.logs]);
@@ -69,6 +141,7 @@ async function main(): Promise<void> {
   // Redis est en `lazyConnect` : on force la connexion maintenant pour qu'un
   // Redis injoignable fasse échouer le démarrage bruyamment.
   await app.redis.connect();
+  await services.mcp?.start();
 
   // Phase 5 Recovery: Reconstruct active task states from persistent storage
   // before accepting new traffic.
@@ -107,7 +180,7 @@ async function main(): Promise<void> {
 
     try {
       await app.close();
-      await Promise.allSettled([app.prisma.$disconnect(), app.redis.quit()]);
+      await Promise.allSettled([services.mcp?.stop(), app.prisma.$disconnect(), app.redis.quit()]);
       logger.info({ event: "api.shutdown.done" }, "Arrêt terminé");
       process.exit(0);
     } catch (error) {
