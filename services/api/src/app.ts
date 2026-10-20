@@ -22,6 +22,7 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
+import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { ClientChannel } from "./ws/client-channel.js";
 import { WorkerChannel } from "./ws/worker-channel.js";
@@ -146,6 +147,7 @@ export async function buildApp(options: BuildAppOptions) {
       conversations: new PrismaConversationStore(prisma),
       deviceStore: new PrismaDeviceStore(prisma),
       taskStore: new PrismaTaskStore(prisma),
+      agentRunClaims: new PrismaAgentRunClaimStore(prisma),
     });
 
   app.decorate(

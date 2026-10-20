@@ -43,6 +43,7 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
+import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaNotificationStore } from "./services/persistence/prisma-notification-store.js";
 import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
@@ -76,6 +77,7 @@ const services = new ServiceContainer({
   conversations: new PrismaConversationStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),
   taskStore: new PrismaTaskStore(prisma),
+  agentRunClaims: new PrismaAgentRunClaimStore(prisma),
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
   observabilityDirectory: resolve(here, "../../../var/observability"),

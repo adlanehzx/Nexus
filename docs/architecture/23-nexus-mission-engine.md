@@ -246,6 +246,41 @@ Une tâche `agent-core` **ne peut pas déclarer de repli**. Basculer vers un age
 ACP lui ferait perdre ses outils, ses permissions et ses confirmations, et
 réussirait en apparence.
 
+### Unicité d'un run par tentative
+
+Un run Agent Core dure facilement plus longtemps qu'un bail de trente secondes.
+Quand le bail expire pendant l'appel, un second worker reprend la tâche et
+redemande un run : deux exécutions pour un même travail, et une action faite
+deux fois dès qu'un outil a un effet externe.
+
+Le pont transmet donc `attemptId`, et l'API réserve
+`(missionExternalKey, taskKey, attemptId)` dans `agent_core_run_claims`, sous
+contrainte unique. Une seconde demande sur la même tentative rend le run déjà
+réservé **sans rappeler le modèle**.
+
+Trois choix qui portent la garantie :
+
+- **C'est l'insertion qui tranche, pas une lecture.** Un `SELECT` suivi d'un
+  `INSERT` laisse passer deux requêtes dans l'intervalle ; l'index unique, non.
+  Vérifié par un test qui lance huit réservations concurrentes et constate
+  qu'exactement une est accordée.
+- **La granularité est la tentative, pas la tâche.** Deux workers qui se
+  disputent la même tentative convergent, alors qu'un vrai réessai après échec
+  — nouvelle tentative, nouvel identifiant — obtient bien un run neuf. Réserver
+  par tâche bloquerait la tâche sur son premier résultat.
+- **L'identifiant du run est choisi avant la réservation**, et imposé à
+  l'orchestrateur. Réserver puis compléter en deux temps laisserait, en cas
+  d'incident entre les deux, une réservation qui ne désigne aucun run.
+
+Si une réservation existe mais que son run est introuvable — l'appelant
+précédent est entre les deux appels — la route répond `409` plutôt que d'en
+lancer un second. Le moteur réessaie plus tard, ce que sa machinerie de bails
+sait déjà faire.
+
+`attemptId` reste facultatif dans le contrat, pour ne pas casser un appelant
+plus ancien. Son absence désactive la garantie, et le journal le dit au lieu de
+laisser croire le contraire.
+
 ### Suspension durable sur confirmation
 
 Quand un run délégué ouvre une confirmation humaine, la tâche n'échoue pas :
@@ -304,10 +339,6 @@ run que le propriétaire a lancé lui-même.
   ce qui ne l'est pas, c'est un agent demandant spontanément un outil à risque
   puis une approbation depuis le tableau de bord — le modèle ne le fait pas sur
   commande.
-- **Pas d'unicité de run par tentative.** Si le bail expire pendant un run, la
-  tâche repart et un second run démarre. La conversation est réutilisée, les
-  deux réponses y figurent. Le fencing du bail borne le risque, il ne l'annule
-  pas.
 - **Rien n'authentifie encore l'API vers le moteur.** Le port 18100 n'est
   protégé que par la boucle locale : tout processus local peut soumettre une
   mission. La direction moteur → API, elle, est authentifiée.

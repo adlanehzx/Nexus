@@ -320,3 +320,143 @@ describe("lecture d'un run de mission", () => {
     expect(attempted.statusCode).toBe(403);
   });
 });
+
+/**
+ * Unicité d'un run par tentative.
+ *
+ * Le risque est concret : un run Agent Core dure facilement plus longtemps
+ * qu'un bail de trente secondes. Quand le bail expire pendant l'appel, un
+ * second worker reprend la tâche et redemande un run. Sans réservation, le
+ * modèle est rappelé et les outils rejouent leurs effets — un message envoyé
+ * deux fois, un fichier écrit deux fois.
+ *
+ * La granularité est la tentative, et c'est ce que ces tests fixent : deux
+ * workers sur la même tentative convergent, un vrai réessai obtient un run neuf.
+ */
+describe("unicité d'un run de mission", () => {
+  let harness: ApiHarness | undefined;
+
+  afterEach(async () => harness?.close());
+
+  const MISSION = "nexus-mission-unicite";
+
+  async function setup(responses: string[]) {
+    const llm = new ScriptedLLMProvider(
+      responses.map((text) => ({ kind: "final" as const, text })),
+    );
+    harness = await makeApi({ llmProvider: llm });
+    const account = await createAccount(harness);
+    const grant = harness.services.tokens.issueMissionGrant({
+      userId: account.userId,
+      service: "mission-engine",
+      missionExternalKey: MISSION,
+    });
+    return { account, grant, api: harness, llm };
+  }
+
+  const request = (api: ApiHarness, token: string, payload: Record<string, unknown>) =>
+    api.app.inject({
+      method: "POST",
+      url: "/api/v1/agent-core/mission-runs",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { missionExternalKey: MISSION, taskKey: "deleguee", ...payload },
+    });
+
+  it("rend le même run pour une tentative redemandée, sans rappeler le modèle", async () => {
+    const { grant, api, llm } = await setup(["Travail unique."]);
+
+    const first = await request(api, grant.token, {
+      instruction: "Range mes mails",
+      attemptId: "attempt-1",
+    });
+    const second = await request(api, grant.token, {
+      instruction: "Range mes mails",
+      attemptId: "attempt-1",
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    const firstRun = first.json<{ data: { runId: string } }>().data.runId;
+    const secondRun = second.json<{ data: { runId: string } }>().data.runId;
+    expect(secondRun).toBe(firstRun);
+
+    // Le point qui compte vraiment : un seul appel au modèle. Un second aurait
+    // rejoué les outils du run, et coûté des jetons pour un travail déjà fait.
+    expect(llm.requests).toHaveLength(1);
+  });
+
+  it("lance un run neuf pour une tentative différente", async () => {
+    const { grant, api, llm } = await setup(["Premier essai.", "Second essai."]);
+
+    const first = await request(api, grant.token, {
+      instruction: "Range mes mails",
+      attemptId: "attempt-1",
+    });
+    const second = await request(api, grant.token, {
+      instruction: "Range mes mails",
+      attemptId: "attempt-2",
+    });
+
+    const firstRun = first.json<{ data: { runId: string } }>().data.runId;
+    const secondRun = second.json<{ data: { runId: string } }>().data.runId;
+    // Un réessai après échec est un travail neuf : le confondre avec un doublon
+    // bloquerait la tâche sur son premier résultat.
+    expect(secondRun).not.toBe(firstRun);
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it("réserve le run sous l'identifiant qu'il portera vraiment", async () => {
+    const { grant, api } = await setup(["Travail unique."]);
+
+    const response = await request(api, grant.token, {
+      instruction: "Range mes mails",
+      attemptId: "attempt-1",
+    });
+    const runId = response.json<{ data: { runId: string } }>().data.runId;
+
+    const claim = await api.services.agentRunClaims.find({
+      missionExternalKey: MISSION,
+      taskKey: "deleguee",
+      attemptId: "attempt-1",
+    });
+    // Si la réservation désignait un autre identifiant, elle ne protégerait
+    // rien : la seconde requête rendrait un run introuvable.
+    expect(claim?.runId).toBe(runId);
+  });
+
+  it("isole les réservations par tâche et par mission", async () => {
+    const { account, grant, api, llm } = await setup(["A.", "B."]);
+
+    await request(api, grant.token, {
+      instruction: "Tâche A",
+      taskKey: "tache-a",
+      attemptId: "attempt-1",
+    });
+    await request(api, grant.token, {
+      instruction: "Tâche B",
+      taskKey: "tache-b",
+      attemptId: "attempt-1",
+    });
+
+    // Même identifiant de tentative, mais deux tâches : la clé est composite,
+    // donc ce sont deux réservations distinctes.
+    expect(llm.requests).toHaveLength(2);
+    expect(account.userId).toBeDefined();
+  });
+
+  it("n'exige pas de tentative, mais ne garantit alors plus rien", async () => {
+    const { grant, api, llm } = await setup(["Sans tentative.", "Encore."]);
+
+    const first = await request(api, grant.token, { instruction: "Range mes mails" });
+    const second = await request(api, grant.token, { instruction: "Range mes mails" });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    // Documenté plutôt que corrigé : un appelant qui n'envoie pas de tentative
+    // ne peut pas être protégé, et le prétendre serait pire.
+    expect(second.json<{ data: { runId: string } }>().data.runId).not.toBe(
+      first.json<{ data: { runId: string } }>().data.runId,
+    );
+    expect(llm.requests).toHaveLength(2);
+  });
+});

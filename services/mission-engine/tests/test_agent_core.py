@@ -119,6 +119,7 @@ def test_bridge_sends_the_assertion_and_the_mission_scope() -> None:
         instruction="Range mes mails",
         assertion="signed-assertion",
         conversation_id=None,
+        attempt_id="attempt-1",
         timeout_seconds=120,
         heartbeat=lambda: None,
     )
@@ -132,6 +133,9 @@ def test_bridge_sends_the_assertion_and_the_mission_scope() -> None:
     # La portée voyage avec l'appel : l'API refuse de travailler sur une autre
     # mission que celle inscrite dans l'assertion.
     assert body["missionExternalKey"] == "bridge-demo"
+    # La tentative porte l'unicité : sans elle, l'API ne peut pas réserver et un
+    # bail expiré pendant un appel long produirait deux runs.
+    assert body["attemptId"] == "attempt-1"
     assert "conversationId" not in body
 
 
@@ -145,6 +149,7 @@ def test_bridge_reuses_a_known_conversation() -> None:
         instruction="Suite",
         assertion="signed-assertion",
         conversation_id="conv-1",
+        attempt_id="attempt-1",
         timeout_seconds=120,
         heartbeat=lambda: None,
     )
@@ -160,6 +165,7 @@ def test_bridge_refuses_to_run_without_an_assertion() -> None:
             instruction="Range mes mails",
             assertion=None,
             conversation_id=None,
+            attempt_id="attempt-1",
             timeout_seconds=120,
             heartbeat=lambda: None,
         )
@@ -175,6 +181,7 @@ def test_bridge_reports_a_missing_configuration_instead_of_calling() -> None:
             instruction="Range mes mails",
             assertion="signed-assertion",
             conversation_id=None,
+            attempt_id="attempt-1",
             timeout_seconds=120,
             heartbeat=lambda: None,
         )
@@ -189,6 +196,7 @@ def test_bridge_reports_a_pending_confirmation_without_failing() -> None:
         instruction="Envoie un message",
         assertion="signed-assertion",
         conversation_id=None,
+        attempt_id="attempt-1",
         timeout_seconds=120,
         heartbeat=lambda: None,
     )
@@ -228,6 +236,7 @@ def test_bridge_maps_http_refusals_onto_known_categories(status: int, category: 
             instruction="Range mes mails",
             assertion="signed-assertion",
             conversation_id=None,
+            attempt_id="attempt-1",
             timeout_seconds=120,
             heartbeat=lambda: None,
         )

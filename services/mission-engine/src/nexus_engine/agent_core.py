@@ -79,6 +79,7 @@ class AgentCoreGateway:
         instruction: str,
         assertion: str | None,
         conversation_id: str | None,
+        attempt_id: str,
         timeout_seconds: int,
         heartbeat: Callable[[], None],
     ) -> AgentCoreOutcome:
@@ -104,6 +105,11 @@ class AgentCoreGateway:
                 "missionExternalKey": mission_external_key,
                 "taskKey": task_key,
                 "instruction": instruction,
+                # La tentative porte l'unicite : l'API reserve
+                # (mission, tache, tentative) et rend le run deja reserve si
+                # deux workers se disputent la meme. Sans ce champ, un bail
+                # expire pendant un appel long produirait deux runs.
+                "attemptId": attempt_id,
                 **({} if conversation_id is None else {"conversationId": conversation_id}),
             }
         ).encode()

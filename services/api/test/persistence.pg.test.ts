@@ -6,6 +6,7 @@ import { PrismaTaskStore } from "../src/services/persistence/prisma-task-store.j
 import { PrismaAgentRunStore } from "../src/services/persistence/prisma-agent-run-store.js";
 import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.js";
 import { PrismaDeviceStore } from "../src/services/persistence/prisma-device-store.js";
+import { PrismaAgentRunClaimStore } from "../src/services/persistence/prisma-agent-run-claim-store.js";
 
 /**
  * Magasins Prisma contre un PostgreSQL réel.
@@ -96,6 +97,7 @@ afterAll(async () => {
   await prisma.taskExecution.deleteMany({ where: { taskId: planId } });
   await prisma.taskStep.deleteMany({ where: { taskId: planId } });
   await prisma.taskPlan.deleteMany({ where: { id: planId } });
+  await prisma.agentCoreRunClaim.deleteMany({ where: { userId: ownerId } });
   await prisma.agentRunSnapshot.deleteMany({ where: { userId: ownerId } });
   await prisma.deviceCapability.deleteMany({ where: { deviceId } });
   await prisma.device.deleteMany({ where: { id: deviceId } });
@@ -337,5 +339,76 @@ describe("magasin de runs Agent Core sur PostgreSQL", () => {
     orphan.record.userId = randomUUID();
 
     await expect(store.save(orphan)).rejects.toThrow();
+  });
+});
+
+describe("réservations de run Agent Core sur PostgreSQL", () => {
+  const mission = "nexus-unicite-mission";
+
+  it("accorde la réservation une seule fois, et rend l'existante ensuite", async () => {
+    const store = new PrismaAgentRunClaimStore(prisma);
+    const key = { missionExternalKey: mission, taskKey: "tache", attemptId: "attempt-1" };
+    const first = randomUUID();
+
+    expect(await store.claim({ ...key, runId: first, userId: ownerId })).toEqual({
+      claimed: true,
+    });
+
+    const second = await store.claim({ ...key, runId: randomUUID(), userId: ownerId });
+    expect(second.claimed).toBe(false);
+    // C'est le run du premier appelant qui est rendu : celui du second est
+    // simplement abandonné, et n'a jamais servi à lancer quoi que ce soit.
+    expect(second.claimed === false && second.existing.runId).toBe(first);
+  });
+
+  it("tranche en faveur d'un seul appelant sous concurrence réelle", async () => {
+    const store = new PrismaAgentRunClaimStore(prisma);
+    const key = { missionExternalKey: mission, taskKey: "concurrente", attemptId: "attempt-1" };
+
+    // Huit requêtes lancées ensemble. C'est le cas que le code existe pour
+    // tenir, et celui qu'un `SELECT` suivi d'un `INSERT` perdrait : l'unicité
+    // vient de l'index, pas d'une lecture préalable.
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        store.claim({ ...key, runId: randomUUID(), userId: ownerId }),
+      ),
+    );
+
+    expect(results.filter((item) => item.claimed)).toHaveLength(1);
+    const winner = await store.find(key);
+    const granted = results.find((item) => item.claimed === false);
+    expect(granted?.claimed === false && granted.existing.runId).toBe(winner?.runId);
+  });
+
+  it("sépare les réservations par tâche, par tentative et par mission", async () => {
+    const store = new PrismaAgentRunClaimStore(prisma);
+    const base = { userId: ownerId, runId: randomUUID() };
+
+    for (const key of [
+      { missionExternalKey: mission, taskKey: "a", attemptId: "attempt-1" },
+      { missionExternalKey: mission, taskKey: "b", attemptId: "attempt-1" },
+      { missionExternalKey: mission, taskKey: "a", attemptId: "attempt-2" },
+      { missionExternalKey: `${mission}-bis`, taskKey: "a", attemptId: "attempt-1" },
+    ]) {
+      expect(await store.claim({ ...base, ...key, runId: randomUUID() })).toEqual({
+        claimed: true,
+      });
+    }
+  });
+
+  it("laisse la base refuser un doublon inséré hors du magasin", async () => {
+    // Le garde-fou : si la contrainte disparaissait d'une migration, c'est ce
+    // test qui le dirait, et non un comportement étrange en production.
+    const duplicate = prisma.agentCoreRunClaim.create({
+      data: {
+        id: randomUUID(),
+        missionExternalKey: mission,
+        taskKey: "concurrente",
+        attemptId: "attempt-1",
+        runId: randomUUID(),
+        userId: ownerId,
+      },
+    });
+    await expect(duplicate).rejects.toThrow();
   });
 });

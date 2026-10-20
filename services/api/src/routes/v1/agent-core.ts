@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -8,7 +9,7 @@ import {
   currentUser,
 } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
-import { NotFoundError, type ConversationStore } from "../../services/stores.js";
+import { ConflictError, NotFoundError, type ConversationStore } from "../../services/stores.js";
 import { DependencyError } from "@nexus/shared";
 import type { AgentRunResult } from "@nexus/agent-core";
 
@@ -88,11 +89,17 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
    * chose. Le moteur n'y choisit ni l'utilisateur — il vient de la signature —
    * ni la mission : il ne peut que travailler dans celle qui lui a été confiée.
    *
-   * **Ce que la route ne garantit pas** : l'unicité d'un run par tentative.
-   * C'est le bail du moteur qui la tient — une seule tentative détient le bail
-   * d'une tâche à un instant donné. Si ce bail expire pendant un run, le moteur
-   * relancera la tâche et un second run partira ; la conversation est alors
-   * réutilisée, et les deux réponses y sont visibles.
+   * **Unicité par tentative.** Un run Agent Core dure facilement plus longtemps
+   * qu'un bail de trente secondes. Si le bail expire pendant l'appel, un second
+   * worker reprend la tâche et redemanderait un run : deux exécutions pour un
+   * même travail, et une action faite deux fois dès qu'un outil a un effet
+   * externe. La route réserve donc `(mission, tâche, tentative)` dans une table
+   * à contrainte unique, et une seconde demande sur la même tentative rend le
+   * run déjà réservé au lieu d'en lancer un nouveau.
+   *
+   * La granularité est la tentative, et c'est ce qui compte : deux workers qui
+   * se disputent la même tentative convergent, alors qu'un vrai réessai après
+   * échec — nouvelle tentative, nouvel identifiant — obtient bien un run neuf.
    */
   app.post(
     "/agent-core/mission-runs",
@@ -110,6 +117,14 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
            * retry prolonge l'historique au lieu d'en ouvrir un second.
            */
           conversationId: z.string().uuid().optional(),
+          /**
+           * Tentative du moteur.
+           *
+           * Facultative pour ne pas casser un appelant plus ancien, mais son
+           * absence désactive la garantie d'unicité — c'est dit dans le journal
+           * plutôt que silencieux.
+           */
+          attemptId: z.string().min(1).max(128).optional(),
         }),
         response: { 200: okSchema(runSchema) },
       },
@@ -125,6 +140,55 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         });
       }
 
+      const { attemptId } = request.body;
+
+      // L'identifiant est choisi **avant** la réservation, parce que c'est lui
+      // qu'elle inscrit : c'est ce qui rend l'opération atomique. Le générer
+      // après, ou laisser l'orchestrateur le produire, obligerait à réserver
+      // puis à compléter en deux temps — et un incident entre les deux
+      // laisserait une réservation sans run.
+      const reservedRunId = randomUUID();
+
+      // Réservation avant toute exécution. Si une autre requête détient déjà
+      // cette tentative, c'est son run qu'on rend — sans rappeler le modèle, ce
+      // qui est tout l'intérêt : un second run coûterait des jetons et
+      // rejouerait les effets de bord de ses outils.
+      if (attemptId !== undefined) {
+        const reserved = await app.services.agentRunClaims.claim({
+          missionExternalKey: mission.missionExternalKey,
+          taskKey: request.body.taskKey,
+          attemptId,
+          runId: reservedRunId,
+          userId: mission.userId,
+        });
+
+        if (!reserved.claimed) {
+          const existing = await app.services.agentCore.getRun(reserved.existing.runId);
+          if (existing !== undefined) {
+            assertOwnedBy(existing.userId, mission.userId, "Run agent");
+            request.log.info(
+              {
+                grantId: mission.grantId,
+                missionExternalKey: mission.missionExternalKey,
+                taskKey: request.body.taskKey,
+                attemptId,
+                runId: existing.runId,
+              },
+              "tentative déjà réservée : run existant rendu sans relancer Agent Core",
+            );
+            return ok(present({ record: existing }), request.id);
+          }
+          // Réservation prise mais run introuvable : l'appelant précédent est
+          // entre les deux, ou il a échoué avant la première sauvegarde. Un
+          // conflit dit au moteur de réessayer plus tard ; inventer un second
+          // run annulerait la garantie qu'on vient d'établir.
+          throw new ConflictError(
+            `Tentative ${attemptId} en cours de démarrage`,
+            "Cette tâche est déjà en train de démarrer.",
+          );
+        }
+      }
+
       const conversation = await resolveMissionConversation(app.services.conversations, {
         conversationId: request.body.conversationId,
         userId: mission.userId,
@@ -138,9 +202,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
           grantId: mission.grantId,
           missionExternalKey: mission.missionExternalKey,
           taskKey: request.body.taskKey,
+          attemptId: attemptId ?? null,
           conversationId: conversation.id,
         },
-        "run Agent Core demandé par un service pour le compte du propriétaire de la mission",
+        attemptId === undefined
+          ? "run Agent Core demandé sans tentative : unicité non garantie"
+          : "run Agent Core demandé par un service pour le compte du propriétaire de la mission",
       );
 
       const result = await app.services.agentCore.run({
@@ -151,6 +218,9 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         // Inscrit sur le run : c'est ce qui permet plus tard de le relire sous
         // cette assertion, et uniquement sous celle-ci.
         missionExternalKey: mission.missionExternalKey,
+        // Celui de la réservation, sans quoi elle désignerait un run qui
+        // n'existe pas et la garantie d'unicité ne vaudrait rien.
+        ...(attemptId === undefined ? {} : { runId: reservedRunId }),
       });
       await app.services.conversations.appendMessage({
         conversationId: conversation.id,

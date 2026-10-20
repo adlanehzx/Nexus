@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
 import { TokenService, type ScryptParams } from "@nexus/auth";
 import type { LLMProvider } from "@nexus/llm";
 import {
@@ -93,6 +94,16 @@ export interface ServiceContainerOptions {
   runStore?: QueryableAgentRunStore;
 
   /**
+   * Registre des réservations de run Agent Core.
+   *
+   * En mémoire par défaut, ce qui convient aux tests et à un mono-processus.
+   * En production il doit être celui de PostgreSQL : c'est la contrainte
+   * d'unicité de la base qui tient la promesse, pas une structure de données
+   * locale à un processus.
+   */
+  agentRunClaims?: AgentRunClaimStore;
+
+  /**
    * Vérificateur de signature d'appareil.
    *
    * Par défaut, le type de secret enregistré décide : Ed25519 pour les postes
@@ -176,6 +187,7 @@ export class ServiceContainer {
   // est honnete ; un magasin invente ne l'aurait pas ete.
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
+  readonly agentRunClaims: AgentRunClaimStore;
   /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
   readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
@@ -397,6 +409,7 @@ export class ServiceContainer {
     // ── Observabilite ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.runStore = options.runStore ?? new InMemoryAgentRunStore();
+    this.agentRunClaims = options.agentRunClaims ?? new InMemoryAgentRunClaimStore();
     this.agentCore =
       options.llmProvider === undefined
         ? undefined

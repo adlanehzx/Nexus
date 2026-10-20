@@ -92,6 +92,7 @@ class Worker:
                 instruction=lease.instruction,
                 assertion=lease.owner_assertion,
                 conversation_id=lease.agent_core_conversation_id,
+                attempt_id=lease.attempt_id,
                 timeout_seconds=lease.timeout_seconds,
                 heartbeat=heartbeat,
             )

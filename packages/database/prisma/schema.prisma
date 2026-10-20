@@ -490,6 +490,29 @@ model Notification {
   @@map("notifications")
 }
 
+/// Réservation d'un run Agent Core pour une tentative de tâche.
+///
+/// La contrainte d'unicité porte sur `(mission, tâche, tentative)` et c'est
+/// elle, et non une lecture préalable, qui garantit qu'un bail expiré pendant
+/// un appel long ne produit pas deux runs. Un `SELECT` suivi d'un `INSERT`
+/// laisserait passer deux requêtes concurrentes dans l'intervalle.
+model AgentCoreRunClaim {
+  id                 String   @id @db.Uuid
+  missionExternalKey String   @db.VarChar(128)
+  taskKey            String   @db.VarChar(128)
+  /// Tentative du moteur. Stable pour une tentative, différente d'un vrai
+  /// réessai : c'est ce qui distingue « deux workers sur le même travail » de
+  /// « nouvelle tentative après échec ».
+  attemptId          String   @db.VarChar(128)
+  runId              String   @db.Uuid
+  userId             String   @db.Uuid
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([missionExternalKey, taskKey, attemptId])
+  @@index([runId])
+  @@map("agent_core_run_claims")
+}
+
 model AgentRunSnapshot {
   id        String   @id @db.Uuid
   userId    String   @db.Uuid

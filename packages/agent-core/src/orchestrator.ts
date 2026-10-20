@@ -57,6 +57,15 @@ export interface StartRunInput {
   policy?: Partial<ExecutionPolicy>;
   /** Mission d'origine, quand le run est demandé par le moteur et non par une personne. */
   missionExternalKey?: string;
+  /**
+   * Identifiant imposé au run.
+   *
+   * Normalement l'orchestrateur le génère. L'appelant le fournit quand il doit
+   * le connaître **avant** de lancer le run — c'est le cas du pont, qui réserve
+   * la tentative dans une table à contrainte unique, et doit donc inscrire le
+   * `runId` dans la réservation au moment où il la prend.
+   */
+  runId?: string;
 }
 
 export interface AgentRunResult {
@@ -120,7 +129,7 @@ export class AgentOrchestrator {
     const policy = input.policy
       ? resolvePolicy({ ...this.#options.policy, ...input.policy })
       : this.#policy;
-    const runId = this.#newId();
+    const runId = input.runId ?? this.#newId();
     const startedAt = this.#now();
 
     const state: AgentState = {
