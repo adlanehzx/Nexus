@@ -68,6 +68,7 @@ export async function makeApi(
     llmProvider?: LLMProvider;
     missionControl?: MissionControlPort;
     runtimeConfiguration?: RuntimeConfigurationStore;
+    publicApiUrl?: string;
   } = {},
 ): Promise<ApiHarness> {
   const credentials = new InMemoryCredentialProvider();
@@ -82,6 +83,7 @@ export async function makeApi(
     ...(options.runtimeConfiguration === undefined
       ? {}
       : { runtimeConfiguration: options.runtimeConfiguration }),
+    ...(options.publicApiUrl === undefined ? {} : { publicApiUrl: options.publicApiUrl }),
     // Le coût de scrypt est voulu en production ; le faire payer à chaque test
     // rendrait la suite inutilisable, et une suite lente finit par ne plus être
     // lancée. Les paramètres sont inscrits dans l'empreinte : rien d'autre ne

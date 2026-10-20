@@ -94,6 +94,37 @@ export const configSchema = z
 
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
 
+    /**
+     * Adresse publique de l'API, telle qu'un appareil doit l'appeler.
+     *
+     * Nécessaire pour l'appairage par QR, et explicite plutôt que déduite de
+     * l'en-tête `Host` : cet en-tête est choisi par l'appelant, et un QR qui en
+     * dériverait son adresse laisserait n'importe quelle requête décider où un
+     * téléphone enverra sa clé publique. Un réglage se relit et s'audite ; un
+     * en-tête, non.
+     *
+     * Absente, l'appairage par QR est refusé avec un message qui nomme ce
+     * réglage — plutôt que de produire un QR qui mène au mauvais endroit.
+     */
+    PUBLIC_API_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .refine((value) => {
+          if (!URL.canParse(value)) return false;
+          const url = new URL(value);
+          if (url.username || url.password) return false;
+          const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+          // Un réseau local est le cas d'usage normal : le téléphone et le cœur
+          // sont sur le même Wi-Fi. HTTPS reste exigé dès qu'on sort de là.
+          const privateHost = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname);
+          return (
+            url.protocol === "https:" || (url.protocol === "http:" && (loopback || privateHost))
+          );
+        }, "doit être une URL HTTPS, ou HTTP sur la boucle locale ou un réseau privé")
+        .optional(),
+    ),
+
     /** Moteur NEXUS ACP/paper-trading, optionnel. */
     MISSION_CONTROL_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),

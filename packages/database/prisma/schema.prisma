@@ -518,6 +518,30 @@ model Notification {
 /// Refuser par défaut est délibéré : une assertion absente du registre est
 /// rejetée. Une signature correcte mais inconnue signifie soit une clé
 /// compromise, soit un enregistrement perdu, et aucun des deux ne doit ouvrir.
+/// Ticket d'appairage à usage unique.
+///
+/// Le code n'est **jamais** stocké : seule son empreinte SHA-256 l'est, et la
+/// recherche se fait par empreinte. Il n'y a donc aucune comparaison à rendre
+/// constante, et une base lue par un tiers ne livre aucun ticket utilisable.
+model DevicePairingTicket {
+  id         String    @id @db.Uuid
+  userId     String    @db.Uuid
+  /// SHA-256 du code, en hexadécimal. Unique : deux tickets ne peuvent pas
+  /// partager un code, et la contrainte le garantit plutôt que le supposer.
+  codeHash   String    @unique @db.Char(64)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  /// Nul tant que le ticket n'a pas servi. C'est lui qui rend l'usage unique.
+  consumedAt DateTime? @db.Timestamptz(3)
+  /// Appareil créé par ce ticket. Renseigné à la consommation.
+  deviceId   String?   @db.Uuid
+  label      String?   @db.VarChar(120)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("device_pairing_tickets")
+}
+
 model MissionGrant {
   /// Le `jti` de l'assertion.
   id                 String            @id @db.Uuid

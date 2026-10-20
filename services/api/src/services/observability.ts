@@ -177,6 +177,10 @@ export type SecurityEventKind =
   | "auth.login_failed"
   | "auth.logout"
   | "device.registered"
+  /** Ticket d'appairage émis. Jamais le code, ni son empreinte. */
+  | "device.pairing_ticket_issued"
+  /** Appareil créé par un scan de QR, et donc par une présence physique. */
+  | "device.paired"
   | "device.trusted"
   | "device.revoked"
   | "device.auth_failed"

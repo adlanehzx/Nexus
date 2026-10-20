@@ -45,6 +45,7 @@ import {
 } from "@nexus/llm";
 import { createDatabaseClient } from "@nexus/database";
 import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
+import { PrismaPairingTicketStore } from "./services/persistence/prisma-pairing-ticket-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
@@ -162,6 +163,8 @@ const services = new ServiceContainer({
     new GeminiCliProvider(),
     new LocalLLMProvider(),
   ]),
+  ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
+  pairingTickets: new PrismaPairingTicketStore(prisma),
   ...(config.MISSION_CONTROL_URL === undefined
     ? {}
     : {

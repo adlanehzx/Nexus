@@ -120,6 +120,94 @@ rejouer l'historique.
   worker et ne survit pas à la ligne de journal. Les événements, eux, ne portent
   jamais d'arguments — seulement des identifiants, une capacité et une description.
 
+## 7 bis. Appairage par QR code
+
+### Ce que le QR remplace, et ce qu'il ne remplace pas
+
+La clé privée d'un téléphone naît dans son magasin de clés et n'en sort jamais.
+Le cœur doit donc recevoir la **clé publique**, et quelqu'un doit la lui
+porter. Ce transport se faisait à la main : lire la clé sur le téléphone, la
+coller dans le tableau de bord. C'est long, et une clé recopiée de travers
+produit un appareil qui s'enregistre puis échoue à chaque poignée de main sans
+que rien ne nomme la cause.
+
+Le ticket remplace ce **transport**. Il ne remplace pas la preuve.
+
+### Pourquoi un ticket prouve quelque chose
+
+Il est émis par une surface **déjà authentifiée** et s'affiche sur l'écran du
+propriétaire. Le scanner demande de voir cet écran : c'est une preuve de
+présence physique, la même que la recopie manuelle, sans la recopie.
+
+```
+  tableau de bord (authentifié)        téléphone
+  POST /devices/pairing-tickets  ──▶  QR : nexus://pair?api=…&token=…
+                                       │
+                                       ▼  (aucune identité encore)
+                                 POST /devices/pair
+                                       │
+  appareil PENDING chez le propriétaire du ticket ◀┘
+                                       │
+  approbation explicite  ──────────────┘  puis première session
+```
+
+L'asymétrie des deux routes **est** le dispositif : émettre exige un
+utilisateur, utiliser n'exige que le ticket — parce que l'appareil qui scanne ne
+possède encore aucune identité, c'est précisément ce qu'il vient chercher.
+
+### Les quatre propriétés qui rendent la fenêtre étroite
+
+| propriété                            | ce qu'elle empêche                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **usage unique** (`consumedAt`)      | un QR photographié par-dessus l'épaule ne sert plus une fois l'appareil appairé                                                      |
+| **cinq minutes**                     | très au-delà du geste, très en deçà d'une fenêtre exploitable                                                                        |
+| **jamais en clair au repos**         | seule l'empreinte SHA-256 est stockée, et la recherche se fait _par_ empreinte — il n'y a donc aucune comparaison à rendre constante |
+| **propriétaire porté par le ticket** | le porteur d'un code ne choisit pas à qui l'appareil sera rattaché                                                                   |
+
+Le motif d'un refus — inconnu, expiré, déjà consommé — reste dans le contexte
+et ne sort jamais vers le porteur. « Expiré » apprendrait à qui tâtonne qu'il a
+touché un vrai ticket ; le propriétaire, lui, a le même geste dans les trois
+cas : réafficher un QR.
+
+### Ce que le ticket ne donne pas
+
+L'appareil arrive `PENDING` et hors ligne, comme n'importe quel appareil
+enregistré à la main. Le ticket porte la preuve d'un transport, pas une
+décision de confiance. Les confondre économiserait un clic et supprimerait le
+seul endroit où le propriétaire voit _ce_ qu'il approuve.
+
+De même, le ticket ne change pas la règle qui exige une clé publique d'un
+`WORKER` : il change la façon dont la clé voyage. Une tentative invalide ne
+consomme pas le ticket — sans quoi une faute de frappe coûterait un nouveau QR.
+
+### `PUBLIC_API_URL`, et pourquoi elle est explicite
+
+Le QR porte l'adresse que l'appareil appellera. Elle est **configurée**, pas
+déduite de l'en-tête `Host` : cet en-tête est choisi par l'appelant, et un QR
+qui en dériverait son adresse laisserait n'importe quelle requête décider où un
+téléphone envoie sa clé publique. Absente, l'émission est refusée avec un
+message qui nomme le réglage — produire un QR qui mène ailleurs serait pire,
+parce que le symptôme apparaîtrait sur le téléphone, loin de la cause.
+
+Le schéma `nexus://` n'est pas accidentel non plus : un code dans une URL
+`https://` finit dans un historique, un journal de proxy, un presse-papiers
+partagé. `nexus://` n'est pas ouvrable par un navigateur, donc une charge utile
+qui sort du chemin prévu n'atteint rien. Le décodeur refuse par ailleurs toute
+adresse d'API qui ne soit pas `http(s)` : le QR est une **donnée**, et un
+scanneur qui accepterait `file://` offrirait à un QR malveillant de choisir la
+destination.
+
+### Surface
+
+```
+POST /api/v1/devices/pairing-tickets   (utilisateur)  → { id, token, payload, expiresAt }
+GET  /api/v1/devices/pairing-tickets   (utilisateur)  → tickets récents, sans leur code
+POST /api/v1/devices/pair              (ticket seul)  → appareil PENDING
+```
+
+Les deux routes sont limitées en débit. Sur `/devices/pair` ce n'est pas du
+confort : c'est ce qui rend le tâtonnement d'un code inutile.
+
 ## 8. Le pont vers l'agent : pas de second système d'outils
 
 Une capacité devient un `ToolDefinition` ordinaire du `ToolRegistry` existant,
@@ -134,7 +222,14 @@ remplaçable sans toucher au prompt.
 
 ## 9. Ce qui n'est pas encore là
 
-Ce document décrit le **cœur**. Les exécutants concrets ne sont pas implémentés :
-worker Windows, automatisation d'interface Android, client iPhone. Ils se
-branchent sur `WorkerTransport` et sur le protocole d'événements, sans modifier
-ce qui précède — c'était l'objectif.
+Ce document décrit le **cœur**. Les exécutants concrets se branchent sur
+`WorkerTransport` et sur le protocole d'événements sans modifier ce qui précède
+— c'était l'objectif.
+
+Restent à faire, et à savoir avant de s'appuyer dessus :
+
+- **L'écran qui affiche le QR.** L'API émet le ticket et rend une charge utile
+  prête à encoder ; aucune surface ne la dessine encore. Tant que c'est le cas,
+  l'appairage par QR s'exerce en appelant l'API, pas en scannant.
+- **Le scanneur côté téléphone.** `decodePairingPayload` existe et est testé,
+  mais rien ne l'appelle encore depuis l'application Android.
