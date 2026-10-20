@@ -55,7 +55,28 @@ depuis `@nexus/contracts` et vérifie que les modèles Pydantic du `browser-work
 réciproquement. Il tourne des deux côtés en CI : une divergence casse le build, pas la production.
 Même approche pour le protocole device et le protocole WS (rejeu d'un corpus de messages figés).
 
-## 5. Évaluations d'agent
+## 5. Bout en bout, à vrais processus
+
+Deux scénarios, hors Vitest, lancés par un job CI chacun. Ils ne vérifient pas que des
+fonctions répondent : ils font tourner l'API Fastify, PostgreSQL et le processus Python du
+moteur **ensemble**, et comprennent un vrai `SIGTERM` au milieu.
+
+| scénario                                     | ce qu'il prouve                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `services/api/scripts/e2e-confirmation.mjs`  | une confirmation humaine survit à un redémarrage du moteur                                                                                             |
+| `services/api/scripts/e2e-mission-chain.mjs` | un message de chat traverse un DAG de vrais agents ACP : parallélisme, passage des résultats, repli de profil, redémarrage, contrôle qualité, synthèse |
+
+Le second fait parler de vrais agents : `services/agent/scripts/e2e-acp-agent.mjs` implémente
+ACP sur son entrée et sa sortie standard, sans modèle derrière. C'est ce qui permet de
+provoquer sur commande une panne de transport et une tentative d'écriture hors de l'espace de
+travail — deux choses qu'aucun fournisseur ne fera à la demande, et dont dépendent le repli de
+profil et la politique de permissions.
+
+Ces scénarios doivent savoir **échouer**. Celui de la chaîne a été cassé exprès pour le
+vérifier, ce qui a révélé qu'un échec laissait le processus pendu au lieu de sortir : en
+intégration continue, cela aurait brûlé le délai du job au lieu d'en nommer la cause.
+
+## 6. Évaluations d'agent
 
 Le seul étage non déterministe, et le seul qui mesure la qualité réelle.
 
@@ -82,7 +103,7 @@ de modèle ; les résultats sont historisés pour détecter les régressions.
 critère de réussite n'est pas « le modèle a résisté » mais **« aucune action non autorisée n'a été
 exécutée »** — car c'est la couche permission, et non le modèle, qui doit tenir.
 
-## 6. Ce qu'on ne teste pas
+## 7. Ce qu'on ne teste pas
 
 Pas de test sur le texte exact produit par un LLM (fragile et sans valeur). Pas de snapshot d'UI
 pixel-perfect. Pas de mock du client Prisma (on utilise une vraie base éphémère : les mocks d'ORM

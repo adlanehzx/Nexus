@@ -433,6 +433,61 @@ une confirmation mais ne fait rien — il rend une chaîne. Un outil à effet r�
 rendrait ce test dangereux à relancer, pour aucun gain : ce qu'on éprouve est la
 suspension et la reprise, pas l'effet de l'outil.
 
+### La chaîne normale, éprouvée aussi
+
+Le scénario ci-dessus couvre l'exception — une confirmation humaine. Celui que
+règle `services/api/scripts/e2e-mission-chain.mjs` couvre la **règle** : ce
+qu'un message de chat déclenche à chaque fois.
+
+```
+message de chat → plan validé (DAG) → deux agents en parallèle
+→ un troisième qui dépend des deux et reçoit leurs résultats
+→ son profil tombe en panne → repli sur un autre agent
+→ redémarrage du moteur pendant que la mission est en vol → reprise
+→ contrôle qualité (verdict analysé par le moteur) → synthèse finale
+→ réponse lisible par le propriétaire, invisible pour un tiers
+```
+
+Vingt-six étapes, un job CI dédié.
+
+**Les agents sont réels.** `services/agent/scripts/e2e-acp-agent.mjs` parle ACP
+sur son entrée et sa sortie standard ; le runtime de NEXUS ne le distingue en
+rien d'un agent de fournisseur. Ce qu'il n'a pas, c'est un modèle : il décide
+par son `--mode`. Un bouchon posé plus haut dans le moteur aurait sauté
+exactement ce qu'on veut éprouver — la négociation d'initialisation, les
+options de session, les demandes de permission, le découpage de la réponse en
+fragments, le `stopReason`.
+
+Et c'est ce qui permet de provoquer sur commande deux choses qu'aucun
+fournisseur ne fera à la demande :
+
+- **une panne de transport**, qui déclenche le vrai repli de profil — la tâche
+  repart sur un autre agent, et le scénario vérifie que `profile_key` a changé
+  et qu'il y a bien eu deux tentatives ;
+- **une écriture hors de l'espace de travail**, que la politique du runtime
+  doit refuser. Le scénario l'affirme dans les deux sens : accordée pour un
+  chemin interne, refusée pour un chemin étranger.
+
+**Le passage des résultats est vérifié sur le contenu**, pas sur la forme : la
+tâche aval doit retrouver les clés de ses deux parents _et_ les marqueurs
+portés par leurs réponses. Un bloc `<DEPENDENCY_RESULTS>` présent mais vide
+passerait la première vérification et pas la seconde.
+
+**Le redémarrage tombe dans une fenêtre déterministe.** La temporisation de
+reprise ouvre un intervalle où deux tâches sont terminées et une attend sa
+seconde tentative ; c'est là qu'on envoie SIGTERM. Sans cette fenêtre, le test
+courrait après une course et finirait par échouer un jour sur deux pour une
+raison qui n'est pas celle qu'il surveille.
+
+**Ce qui est scripté** : le planificateur, pour que la forme du graphe soit
+toujours la même — le plan passe quand même par la validation réelle, côté API
+puis côté moteur — et le modèle _dans_ les agents, comme dit plus haut.
+
+**Ce que ce scénario ne couvre pas** : la confirmation humaine durable, qui
+n'existe que sur le chemin Agent Core et reste couverte par le scénario
+précédent. Un agent ACP ne suspend pas une mission en attendant une personne ;
+sa permission est tranchée par la politique du runtime.
+
 ### Ce qui fonctionne réellement, et ce qui manque
 
 Vérifié de bout en bout, par HTTP réel entre les deux processus : une tâche
@@ -447,12 +502,13 @@ run que le propriétaire a lancé lui-même.
 
 **Non fait, et à savoir avant de s'appuyer dessus** :
 
-- **Le smoke test à vrai agent reste à faire.** Le scénario complet est couvert
-  de façon déterministe (voir ci-dessus), mais personne n'a encore vérifié qu'un
-  vrai agent, livré à lui-même, réclame bien un outil à risque et que la carte
-  de confirmation s'affiche correctement dans le tableau de bord. Le modèle ne
-  réclame pas un outil dangereux sur commande ; cette vérification-là est
-  manuelle par nature.
+- **Le smoke test à vrai _modèle_ reste à faire.** Les deux scénarios font
+  tourner de vrais processus d'agents, et le second les fait parler ACP pour de
+  bon ; ce que personne n'a encore vérifié, c'est qu'un agent **piloté par un
+  modèle**, livré à lui-même, réclame spontanément un outil à risque et que la
+  carte de confirmation s'affiche correctement dans le tableau de bord. Un
+  modèle ne réclame pas un outil dangereux sur commande ; cette
+  vérification-là est manuelle par nature.
 - **L'authentification API → moteur existe mais n'est pas activée par
   défaut** : elle attend une clé de signature persistante côté API, faute de
   quoi il n'y a pas de clé publique à provisionner. Le mécanisme est en place
