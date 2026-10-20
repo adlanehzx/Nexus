@@ -50,11 +50,19 @@ import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-sto
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
+import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
 const vault = new KeyringVault(runtimeConfiguration);
 const toolRegistry = new ToolRegistry();
+if (config.SEARXNG_URL !== undefined) {
+  const webSearch = new SearxngClient({
+    baseUrl: config.SEARXNG_URL,
+    timeoutMs: config.SEARXNG_TIMEOUT_MS,
+  });
+  toolRegistry.registerAll(createWebSearchTools({ provider: webSearch }));
+}
 const mcp = new McpManager({
   registry: toolRegistry,
   configs: await runtimeConfiguration.loadMcp(),

@@ -107,6 +107,27 @@ export const configSchema = z
         }, "doit être une URL HTTPS ou une URL HTTP de boucle locale")
         .optional(),
     ),
+
+    /** Métamoteur local optionnel. Aucun compte ni clé API n'est nécessaire. */
+    SEARXNG_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .refine((value) => {
+          if (!URL.canParse(value)) return false;
+          const url = new URL(value);
+          if (url.username || url.password) return false;
+          if (url.protocol === "https:") return true;
+          if (url.protocol !== "http:") return false;
+          return (
+            ["127.0.0.1", "localhost", "::1"].includes(url.hostname) ||
+            !url.hostname.includes(".") ||
+            url.hostname.endsWith(".internal")
+          );
+        }, "doit être HTTPS ou un service HTTP local/interne, sans credentials")
+        .optional(),
+    ),
+    SEARXNG_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(15_000),
   })
   /**
    * Les origines par défaut dépendent de l'environnement, et cet

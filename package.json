@@ -28,7 +28,8 @@
     "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env down",
     "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env logs -f",
     "clean": "turbo run clean && rimraf node_modules",
-    "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker"
+    "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker",
+    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -165,7 +165,7 @@ export interface ToolRow {
   riskLevel: string;
   requiredPermissions: string[];
   allowed: boolean;
-  source: "native" | "browser" | "acp";
+  source: "native" | "browser" | "search" | "acp";
 }
 
 export interface McpSection {

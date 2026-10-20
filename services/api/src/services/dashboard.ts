@@ -142,7 +142,7 @@ export interface ToolView {
   requiredPermissions: string[];
   /** Vrai si les permissions de l'administrateur couvrent cet outil. */
   allowed: boolean;
-  source: "native" | "browser" | "acp";
+  source: "native" | "browser" | "search" | "acp";
 }
 
 export interface MemoryStats {
@@ -491,7 +491,11 @@ export class DashboardService {
       riskLevel: tool.riskLevel,
       requiredPermissions: [...tool.requiredPermissions],
       allowed: tool.requiredPermissions.every((permission) => granted.has(permission)),
-      source: tool.name.startsWith("browser.") ? "browser" : "native",
+      source: tool.name.startsWith("browser.")
+        ? "browser"
+        : tool.name.startsWith("search.")
+          ? "search"
+          : "native",
     }));
     if (this.#services.missionControl === undefined) return native;
     try {

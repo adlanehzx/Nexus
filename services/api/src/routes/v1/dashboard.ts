@@ -410,7 +410,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
                   riskLevel: z.string(),
                   requiredPermissions: z.array(z.string()),
                   allowed: z.boolean(),
-                  source: z.enum(["native", "browser", "acp"]),
+                  source: z.enum(["native", "browser", "search", "acp"]),
                 }),
               ),
             }),

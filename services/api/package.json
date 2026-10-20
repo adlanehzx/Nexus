@@ -36,6 +36,7 @@
     "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
+    "@nexus/web-search": "workspace:*",
     "fastify": "5.12.1",
     "fastify-plugin": "6.0.0",
     "fastify-type-provider-zod": "7.0.0",
