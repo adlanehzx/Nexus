@@ -71,6 +71,7 @@ import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
+import { ProviderAccountService } from "./provider-accounts.js";
 
 /**
  * Assemblage des services de l'API.
@@ -229,6 +230,7 @@ export class ServiceContainer {
   /** Dispatcher des notifications externes. */
   readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
+  readonly providerAccounts: ProviderAccountService | undefined;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
@@ -470,6 +472,13 @@ export class ServiceContainer {
       this.setBrowser(options.browser);
     }
     this.runtimeConfiguration = options.runtimeConfiguration;
+    this.providerAccounts =
+      options.runtimeConfiguration === undefined
+        ? undefined
+        : new ProviderAccountService({
+            runtimeConfiguration: options.runtimeConfiguration,
+            now,
+          });
     this.vault = options.vault;
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;

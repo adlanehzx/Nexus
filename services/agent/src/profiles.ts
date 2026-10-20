@@ -13,6 +13,8 @@ const profileSchema = z.object({
     .optional(),
   additional_dirs: z.array(z.string()).max(32).default([]),
   config_options: z.record(z.string(), z.string()).default({}),
+  session_dir: z.string().optional(),
+  env: z.record(z.string(), z.string()).default({}),
 });
 
 const registrySchema = z.object({
@@ -21,18 +23,30 @@ const registrySchema = z.object({
 
 export type AcpProfile = z.infer<typeof profileSchema>;
 
-function expand(value: string): string {
-  return value.replaceAll("${HOME}", homedir());
+function expand(value: string, sessionDir?: string): string {
+  let result = value.replaceAll("${HOME}", homedir());
+  if (sessionDir !== undefined) {
+    result = result.replaceAll("${SESSION_DIR}", sessionDir);
+  }
+  return result;
 }
 
 export async function loadProfile(path: string, key: string): Promise<AcpProfile> {
   const parsed = registrySchema.parse(JSON.parse(await readFile(path, "utf8")));
   const profile = parsed.profiles[key];
   if (profile === undefined) throw new Error("unknown_profile");
+  const expandedSessionDir =
+    profile.session_dir !== undefined ? expand(profile.session_dir) : undefined;
+  const expandedEnv: Record<string, string> = {};
+  for (const [k, v] of Object.entries(profile.env)) {
+    expandedEnv[k] = expand(v, expandedSessionDir);
+  }
   return {
     ...profile,
-    command: expand(profile.command),
-    args: profile.args.map(expand),
-    additional_dirs: profile.additional_dirs.map(expand),
+    command: expand(profile.command, expandedSessionDir),
+    args: profile.args.map((arg) => expand(arg, expandedSessionDir)),
+    additional_dirs: profile.additional_dirs.map((dir) => expand(dir, expandedSessionDir)),
+    session_dir: expandedSessionDir,
+    env: expandedEnv,
   };
 }

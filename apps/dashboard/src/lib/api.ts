@@ -411,6 +411,42 @@ export interface NotificationTestReportDto {
   };
 }
 
+export interface ProviderAccountDto {
+  id: string;
+  provider: string;
+  name: string;
+  profileKey: string;
+  sessionDir: string;
+  env: Record<string, string>;
+  authStatus: "authenticated" | "unauthenticated" | "expired" | "unknown";
+  lastCheckedAt: string | null;
+  quotas: {
+    remaining5hPercent: number | null;
+    remainingWeekPercent: number | null;
+    resets5hAt: string | null;
+    resetsWeekAt: string | null;
+    exhausted: boolean;
+  };
+  cooldown: {
+    active: boolean;
+    until: string | null;
+    reason: string | null;
+  };
+  priority: number;
+  reliability: {
+    score: number;
+    totalRuns: number;
+    successCount: number;
+    failureCount: number;
+    consecutiveFailures: number;
+    lastErrorCategory: string | null;
+    lastErrorAt: string | null;
+  };
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SecuritySection {
   events: {
     at: string;
@@ -657,6 +693,42 @@ export class DashboardApi {
 
   testNotification(): Promise<NotificationTestReportDto> {
     return this.#request("POST", "/api/v1/dashboard/notifications/test");
+  }
+
+  providerAccounts(): Promise<{ accounts: ProviderAccountDto[] }> {
+    return this.#get("/api/v1/orchestrator/accounts");
+  }
+
+  createProviderAccount(input: {
+    id: string;
+    provider: string;
+    name: string;
+    profileKey: string;
+    priority?: number;
+    sessionDir?: string;
+  }): Promise<ProviderAccountDto> {
+    return this.#request("POST", "/api/v1/orchestrator/accounts", input);
+  }
+
+  testProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/test`);
+  }
+
+  toggleProviderAccountCooldown(
+    id: string,
+    active: boolean,
+    durationSeconds?: number,
+    reason?: string,
+  ): Promise<ProviderAccountDto> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/cooldown`,
+      { active, durationSeconds, reason },
+    );
+  }
+
+  deleteProviderAccount(id: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {

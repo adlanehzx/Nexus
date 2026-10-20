@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AgentRegistry, DashboardApi } from "../lib/api.js";
+import type { AgentRegistry, DashboardApi, ProviderAccountDto } from "../lib/api.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
+  const [accounts, setAccounts] = useState<ProviderAccountDto[]>([]);
+  const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
+  const [accActionLoading, setAccActionLoading] = useState(false);
+  const [newAccId, setNewAccId] = useState("");
+  const [newAccProvider, setNewAccProvider] = useState("antigravity");
+  const [newAccName, setNewAccName] = useState("");
+  const [newAccPriority, setNewAccPriority] = useState(2);
   const [selected, setSelected] = useState("");
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,6 +33,15 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshAccounts = (): void => {
+    void api
+      .providerAccounts()
+      .then((res) => setAccounts(res.accounts))
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Impossible de charger les comptes.");
+      });
+  };
+
   const refresh = (): void => {
     setError(null);
     void api
@@ -34,6 +50,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
       });
+    refreshAccounts();
   };
 
   useEffect(() => {
@@ -44,7 +61,77 @@ export function Agents({ api }: { api: DashboardApi }) {
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
       });
+    refreshAccounts();
   }, [api]);
+
+  const handleTestAccount = async (id: string): Promise<void> => {
+    setAccActionLoading(true);
+    setAccountFeedback(null);
+    try {
+      const res = await api.testProviderAccount(id);
+      setAccountFeedback(`Identité "${res.id}" testée : statut "${res.authStatus}"`);
+      refreshAccounts();
+    } catch (err) {
+      setAccountFeedback(`Échec du test : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAccActionLoading(false);
+    }
+  };
+
+  const handleToggleCooldown = async (id: string, currentlyActive: boolean): Promise<void> => {
+    setAccActionLoading(true);
+    setAccountFeedback(null);
+    try {
+      await api.toggleProviderAccountCooldown(id, !currentlyActive, 300, "Pause manuelle");
+      setAccountFeedback(
+        !currentlyActive ? `Pause activée sur "${id}" (5 min)` : `Pause levée sur "${id}"`,
+      );
+      refreshAccounts();
+    } catch (err) {
+      setAccountFeedback(`Erreur : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAccActionLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async (): Promise<void> => {
+    if (!newAccId.trim() || !newAccName.trim()) return;
+    setAccActionLoading(true);
+    setAccountFeedback(null);
+    try {
+      await api.createProviderAccount({
+        id: newAccId.trim(),
+        provider: newAccProvider,
+        name: newAccName.trim(),
+        profileKey: newAccProvider,
+        priority: newAccPriority,
+      });
+      setAccountFeedback(`Identité "${newAccId.trim()}" créée.`);
+      setNewAccId("");
+      setNewAccName("");
+      refreshAccounts();
+    } catch (err) {
+      setAccountFeedback(`Erreur création : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAccActionLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (id: string): Promise<void> => {
+    setAccActionLoading(true);
+    setAccountFeedback(null);
+    try {
+      await api.deleteProviderAccount(id);
+      setAccountFeedback(`Identité "${id}" supprimée.`);
+      refreshAccounts();
+    } catch (err) {
+      setAccountFeedback(
+        `Erreur suppression : ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setAccActionLoading(false);
+    }
+  };
 
   const candidates = useMemo(
     () => registry?.available.filter((agent) => !agent.registered_as) ?? [],
@@ -499,6 +586,170 @@ export function Agents({ api }: { api: DashboardApi }) {
             </button>
           </div>
         )}
+      </div>
+
+      {/* ── Gestion multi-comptes fournisseurs (Chantier 12) ── */}
+      <div className="settings-panel" style={{ marginTop: "28px" }}>
+        <div className="settings-panel-heading">
+          <div>
+            <h3>Comptes Fournisseurs & Identités Isolées</h3>
+            <p className="faible">
+              Gestion multi-comptes (Antigravity, Claude, Codex) avec sessions CLI locales étanches,
+              suivi d'authentification, quotas, cooldowns et fiabilité.
+            </p>
+          </div>
+        </div>
+
+        {accountFeedback !== null ? (
+          <div className="banniere succes" style={{ marginBottom: "16px" }}>
+            {accountFeedback}
+          </div>
+        ) : null}
+
+        <div className="agent-grid" style={{ marginBottom: "20px" }}>
+          {accounts.map((acc) => {
+            const isCooldown = acc.cooldown.active;
+            const isExhausted = acc.quotas.exhausted;
+            const isAuthOk = acc.authStatus === "authenticated";
+            const statusClass = isCooldown
+              ? "attention"
+              : isExhausted
+                ? "attention"
+                : isAuthOk
+                  ? "active"
+                  : "idle";
+            const statusLabel = isCooldown
+              ? "En pause"
+              : isExhausted
+                ? "Quota atteint"
+                : isAuthOk
+                  ? "Authentifié"
+                  : acc.authStatus === "expired"
+                    ? "Expiré"
+                    : "Non vérifié";
+
+            return (
+              <article className="agent-card" key={acc.id}>
+                <div className="agent-card-top">
+                  <div className={`agent-avatar ${statusClass}`}>
+                    {acc.provider.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3>{acc.name}</h3>
+                    <div className="faible">
+                      {acc.id} · Priorité P{acc.priority}
+                    </div>
+                  </div>
+                  <span className={`agent-status ${statusClass}`}>{statusLabel}</span>
+                </div>
+
+                <div className="agent-stats">
+                  <span>
+                    <strong>{Math.round(acc.reliability.score * 100)} %</strong> fiabilité (
+                    {acc.reliability.successCount}/{acc.reliability.totalRuns})
+                  </span>
+                  <span>
+                    <strong>{acc.reliability.consecutiveFailures}</strong> erreurs conséc.
+                  </span>
+                  <span>
+                    <strong>{acc.cooldown.active ? "Actif" : "Non"}</strong> cooldown
+                  </span>
+                </div>
+
+                {acc.cooldown.reason ? (
+                  <div
+                    className="faible"
+                    style={{ marginTop: "8px", fontSize: "11px", color: "var(--degrade)" }}
+                  >
+                    Raison cooldown : {acc.cooldown.reason}
+                  </div>
+                ) : null}
+
+                <div className="agent-card-actions">
+                  <button
+                    className="bouton"
+                    type="button"
+                    disabled={accActionLoading}
+                    onClick={() => void handleTestAccount(acc.id)}
+                  >
+                    Tester connexion
+                  </button>
+                  <button
+                    className="bouton"
+                    type="button"
+                    disabled={accActionLoading}
+                    onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
+                  >
+                    {acc.cooldown.active ? "Lever pause" : "Mettre en pause"}
+                  </button>
+                  {!["antigravity-personnel", "claude-principal", "codex-principal"].includes(
+                    acc.id,
+                  ) ? (
+                    <button
+                      className="bouton danger"
+                      type="button"
+                      disabled={accActionLoading}
+                      onClick={() => void handleDeleteAccount(acc.id)}
+                    >
+                      Supprimer
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="agent-add" style={{ marginTop: "16px" }}>
+          <div>
+            <h3>Ajouter une identité fournisseur</h3>
+            <p className="faible">Ex: antigravity-secondaire, claude-backup, codex-dev.</p>
+          </div>
+          <div className="agent-add-form">
+            <select
+              className="champ"
+              value={newAccProvider}
+              onChange={(e) => {
+                setNewAccProvider(e.target.value);
+                if (!newAccId) setNewAccId(`${e.target.value}-secondaire`);
+              }}
+            >
+              <option value="antigravity">Antigravity (Google AI Pro)</option>
+              <option value="claude">Claude (Abonnement Claude Pro)</option>
+              <option value="codex">Codex (Abonnement ChatGPT Plus)</option>
+            </select>
+            <input
+              className="champ"
+              value={newAccId}
+              placeholder="identifiant-unique"
+              onChange={(e) => setNewAccId(normalizeKey(e.target.value))}
+            />
+            <input
+              className="champ"
+              value={newAccName}
+              placeholder="Nom complet (ex: Claude Backup)"
+              onChange={(e) => setNewAccName(e.target.value)}
+            />
+            <input
+              className="champ"
+              type="number"
+              min={1}
+              max={10}
+              value={newAccPriority}
+              style={{ width: "80px" }}
+              title="Priorité (1 = haute priorité)"
+              onChange={(e) => setNewAccPriority(Number(e.target.value) || 1)}
+            />
+            <button
+              className="bouton primary"
+              type="button"
+              disabled={accActionLoading || !newAccId.trim() || !newAccName.trim()}
+              onClick={() => void handleCreateAccount()}
+            >
+              {accActionLoading ? "Création…" : "Créer l'identité"}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

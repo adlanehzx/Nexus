@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { realpath } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
@@ -84,9 +84,22 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
     workspace,
     ...(await Promise.all(profile.additional_dirs.map((path) => realpath(path)))),
   ];
+
+  const customEnv: NodeJS.ProcessEnv = {};
+  if (profile.session_dir !== undefined) {
+    await mkdir(profile.session_dir, { recursive: true, mode: 0o700 });
+    customEnv.CLAUDE_CONFIG_DIR = profile.session_dir;
+    customEnv.ANTIGRAVITY_CONFIG_DIR = profile.session_dir;
+    customEnv.CODEX_CONFIG_DIR = profile.session_dir;
+    customEnv.XDG_CONFIG_HOME = profile.session_dir;
+  }
+  for (const [key, val] of Object.entries(profile.env)) {
+    customEnv[key] = val;
+  }
+
   const child = spawn(profile.command, profile.args, {
     cwd: workspace,
-    env: cleanEnvironment(),
+    env: { ...cleanEnvironment(), ...customEnv },
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stderr = "";

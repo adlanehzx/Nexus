@@ -5,6 +5,11 @@ import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { AcpOrchestrator } from "../../services/acp-orchestrator.js";
 import { NotFoundError } from "../../services/stores.js";
+import {
+  createProviderAccountSchema,
+  providerAccountSchema,
+  updateProviderAccountSchema,
+} from "../../services/provider-accounts.js";
 
 const missionViewSchema = z.object({
   missionId: z.string().uuid(),
@@ -79,6 +84,7 @@ const runtimeSettingsViewSchema = z.object({
 export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
+  const providerAccounts = app.services.providerAccounts;
   const orchestrator =
     missionControl === undefined
       ? undefined
@@ -322,6 +328,154 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
       const registry = await missionControl.updateAgentHealth(request.params.key, request.body);
       return ok(registry, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/accounts",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: { 200: okSchema(z.object({ accounts: z.array(providerAccountSchema) })) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      return ok({ accounts: await providerAccounts.listAccounts() }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: createProviderAccountSchema,
+        response: { 201: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request, reply) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const created = await providerAccounts.createAccount(request.body);
+      return reply.code(201).send(ok(created, request.id));
+    },
+  );
+
+  app.get(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const account = await providerAccounts.getAccount(request.params.id);
+      if (account === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(account, request.id);
+    },
+  );
+
+  app.patch(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        body: updateProviderAccountSchema,
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const updated = await providerAccounts.updateAccount(request.params.id, request.body);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
+    },
+  );
+
+  app.delete(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(z.object({ deleted: z.boolean() })) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const deleted = await providerAccounts.deleteAccount(request.params.id);
+      if (!deleted) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok({ deleted: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts/:id/test",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const tested = await providerAccounts.probeAuth(request.params.id);
+      if (tested === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(tested, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts/:id/cooldown",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        body: z.object({
+          active: z.boolean(),
+          durationSeconds: z.number().int().min(1).max(86_400).optional(),
+          reason: z.string().max(256).optional(),
+        }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const updated = request.body.active
+        ? await providerAccounts.setCooldown(
+            request.params.id,
+            request.body.durationSeconds ?? 300,
+            request.body.reason ?? "Cooldown manuel",
+          )
+        : await providerAccounts.clearCooldown(request.params.id);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
     },
   );
 

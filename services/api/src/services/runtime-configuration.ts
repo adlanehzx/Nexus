@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 import { notificationsConfigSchema, type NotificationsConfig } from "@nexus/notifications";
+import { providerAccountSchema, type ProviderAccount } from "./provider-accounts.js";
 
 const loopbackHttpUrl = z
   .string()
@@ -82,6 +83,15 @@ export class RuntimeConfigurationStore {
 
   async saveNotifications(config: NotificationsConfig): Promise<void> {
     await this.#write("notifications.json", notificationsConfigSchema.parse(config));
+  }
+
+  async loadProviderAccounts(): Promise<ProviderAccount[] | null> {
+    const raw = await this.#read("provider-accounts.json", null);
+    return raw === null ? null : z.array(providerAccountSchema).parse(raw);
+  }
+
+  async saveProviderAccounts(accounts: ProviderAccount[]): Promise<void> {
+    await this.#write("provider-accounts.json", z.array(providerAccountSchema).parse(accounts));
   }
 
   async listSecretNames(): Promise<string[]> {
