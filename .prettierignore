@@ -13,3 +13,15 @@ __pycache__
 services/android-worker/android/.gradle
 services/android-worker/android/build
 services/android-worker/android/app/build
+
+# Schémas générés par Tauri (`tauri build` les réécrit). Les reformater serait
+# défait à la génération suivante, et le diff reviendrait à chaque build.
+apps/desktop/src-tauri/gen
+
+# Configuration que Mission Engine écrit lui-même, en JSON trié et indenté par
+# `json.dumps`. Si Prettier imposait un autre style, chaque modification de
+# réglage depuis le tableau de bord re-salirait l'arbre de travail — le dépôt et
+# le service se battraient pour la même ligne. Les copies `.bak-*` sont des
+# sauvegardes horodatées, et n'ont pas davantage à être mises en forme.
+services/mission-engine/config/*.json
+services/mission-engine/config/*.bak-*
