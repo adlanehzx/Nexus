@@ -7,6 +7,7 @@ export const missionControlHealthSchema = z.object({
   status: z.literal("ready"),
   worker_enabled: z.boolean(),
   worker_concurrency: z.number().int().positive(),
+  scheduler_enabled: z.boolean().default(false),
   profiles: z.array(z.string()),
 });
 
@@ -121,6 +122,62 @@ export const missionSnapshotSchema = z
 export const missionSnapshotsSchema = z.object({
   missions: z.array(missionSnapshotSchema),
 });
+
+const schedulableMissionSchema = submitMissionSchema.omit({ owner: true });
+
+export const createMissionScheduleSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    mission: schedulableMissionSchema,
+    timezone: z.string().trim().min(1).max(100).default("UTC"),
+    run_at: z.iso.datetime({ offset: true }).optional(),
+    cron_expression: z.string().trim().min(1).max(100).optional(),
+    catch_up_policy: z.enum(["skip", "latest", "all"]).default("latest"),
+    max_catch_up: z.number().int().min(1).max(100).default(10),
+    max_concurrency: z.number().int().min(1).max(32).default(1),
+    misfire_grace_seconds: z.number().int().min(0).max(86_400).default(300),
+  })
+  .refine((value) => (value.run_at === undefined) !== (value.cron_expression === undefined), {
+    message: "exactly one of run_at or cron_expression is required",
+  });
+
+export const missionScheduleSchema = z.object({
+  id: identifier,
+  name: z.string(),
+  state: z.enum(["active", "paused", "completed"]),
+  schedule_kind: z.enum(["one_shot", "cron"]),
+  run_at: z.string().nullable(),
+  cron_expression: z.string().nullable(),
+  timezone: z.string(),
+  catch_up_policy: z.enum(["skip", "latest", "all"]),
+  max_catch_up: z.number().int().min(1).max(100),
+  max_concurrency: z.number().int().min(1).max(32),
+  misfire_grace_seconds: z.number().int().min(0).max(86_400),
+  mission: schedulableMissionSchema,
+  next_run_at: z.string().nullable(),
+  last_scheduled_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const missionSchedulesSchema = z.object({
+  schedules: z.array(missionScheduleSchema),
+});
+
+export const scheduleRunSchema = z.object({
+  id: identifier,
+  schedule_id: identifier,
+  scheduled_for: z.string(),
+  state: z.enum(["pending", "claimed", "submitted", "succeeded", "failed", "cancelled", "skipped"]),
+  mission_id: identifier.nullable(),
+  error_code: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+});
+
+export const scheduleRunsSchema = z.object({ runs: z.array(scheduleRunSchema) });
 
 export const configuredAgentSchema = z.object({
   key: z.string(),
@@ -323,6 +380,9 @@ export type SubmitMission = z.input<typeof submitMissionSchema>;
 export type MissionSubmission = z.infer<typeof missionSubmissionSchema>;
 export type MissionTask = z.infer<typeof missionTaskSchema>;
 export type MissionSnapshot = z.infer<typeof missionSnapshotSchema>;
+export type CreateMissionSchedule = z.input<typeof createMissionScheduleSchema>;
+export type MissionSchedule = z.infer<typeof missionScheduleSchema>;
+export type ScheduleRun = z.infer<typeof scheduleRunSchema>;
 export type ConfiguredAgent = z.infer<typeof configuredAgentSchema>;
 export type AvailableAgent = z.infer<typeof availableAgentSchema>;
 export type AgentRegistry = z.infer<typeof agentRegistrySchema>;

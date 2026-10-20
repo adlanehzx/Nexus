@@ -163,6 +163,63 @@ CREATE INDEX IF NOT EXISTS idx_tasks_schedulable ON tasks(state, next_attempt_at
 CREATE INDEX IF NOT EXISTS idx_attempts_lease ON attempts(state, lease_expires_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(delivered_at, available_at);
 
+CREATE TABLE IF NOT EXISTS mission_schedules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('active','paused','completed')),
+    schedule_kind TEXT NOT NULL CHECK (schedule_kind IN ('one_shot','cron')),
+    run_at TEXT,
+    cron_expression TEXT,
+    timezone TEXT NOT NULL,
+    catch_up_policy TEXT NOT NULL CHECK (catch_up_policy IN ('skip','latest','all')),
+    max_catch_up INTEGER NOT NULL CHECK (max_catch_up BETWEEN 1 AND 100),
+    max_concurrency INTEGER NOT NULL CHECK (max_concurrency BETWEEN 1 AND 32),
+    misfire_grace_seconds INTEGER NOT NULL CHECK (misfire_grace_seconds BETWEEN 0 AND 86400),
+    mission_template_json TEXT NOT NULL CHECK (json_valid(mission_template_json)),
+    next_run_at TEXT,
+    last_scheduled_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+        (schedule_kind='one_shot' AND run_at IS NOT NULL AND cron_expression IS NULL)
+        OR
+        (schedule_kind='cron' AND run_at IS NULL AND cron_expression IS NOT NULL)
+    )
+);
+
+CREATE TABLE IF NOT EXISTS schedule_runs (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES mission_schedules(id) ON DELETE CASCADE,
+    scheduled_for TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (
+        state IN ('pending','claimed','submitted','succeeded','failed','cancelled','skipped')
+    ),
+    lease_owner TEXT,
+    lease_token TEXT,
+    lease_expires_at TEXT,
+    mission_id TEXT REFERENCES missions(id),
+    error_code TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    UNIQUE (schedule_id, scheduled_for),
+    CHECK (
+        (state='claimed' AND lease_owner IS NOT NULL AND lease_token IS NOT NULL
+                         AND lease_expires_at IS NOT NULL)
+        OR
+        (state<>'claimed' AND lease_owner IS NULL AND lease_token IS NULL
+                          AND lease_expires_at IS NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_mission_schedules_due
+    ON mission_schedules(state, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_dispatch
+    ON schedule_runs(state, lease_expires_at, scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_history
+    ON schedule_runs(schedule_id, scheduled_for DESC);
+
 CREATE TABLE IF NOT EXISTS paper_accounts (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

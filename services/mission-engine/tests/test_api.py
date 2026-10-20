@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -69,6 +70,48 @@ def test_submit_and_replay(tmp_path: Path) -> None:
         mission = api.get(f"/v1/missions/{first.json()['mission_id']}")
         assert mission.status_code == 200
         assert mission.json()["tasks"][0]["task_key"] == "one"
+
+
+def test_schedule_crud_pause_resume_and_history(tmp_path: Path) -> None:
+    run_at = datetime.now(UTC) + timedelta(days=1)
+    request = {
+        "name": "Daily review",
+        "mission": payload(),
+        "timezone": "Europe/Paris",
+        "run_at": run_at.isoformat(),
+        "catch_up_policy": "latest",
+        "max_catch_up": 3,
+        "max_concurrency": 1,
+        "misfire_grace_seconds": 300,
+    }
+    with client(tmp_path) as api:
+        created = api.post("/v1/schedules", json=request)
+        assert created.status_code == 201
+        schedule_id = created.json()["id"]
+        assert created.json()["next_run_at"] == run_at.isoformat(
+            timespec="microseconds"
+        )
+        assert api.get("/v1/schedules").json()["schedules"][0]["id"] == schedule_id
+        assert (
+            api.post(f"/v1/schedules/{schedule_id}/pause").json()["state"] == "paused"
+        )
+        assert (
+            api.post(f"/v1/schedules/{schedule_id}/resume").json()["state"] == "active"
+        )
+        assert api.get(f"/v1/schedules/{schedule_id}/runs").json() == {"runs": []}
+
+
+def test_schedule_api_validates_timing_and_timezone(tmp_path: Path) -> None:
+    request = {
+        "name": "Invalid",
+        "mission": payload(),
+        "timezone": "Nowhere/Invalid",
+        "cron_expression": "* * * * *",
+    }
+    with client(tmp_path) as api:
+        response = api.post("/v1/schedules", json=request)
+    assert response.status_code == 422
+    assert "unknown timezone" in response.json()["detail"]
 
 
 def test_agent_registry_discovers_and_persists_native_profile(tmp_path: Path) -> None:

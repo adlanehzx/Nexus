@@ -55,6 +55,12 @@ const engine = {
     }),
   ),
   listMissions: vi.fn().mockResolvedValue([]),
+  createSchedule: vi.fn(),
+  getSchedule: vi.fn(),
+  listSchedules: vi.fn().mockResolvedValue([]),
+  listScheduleRuns: vi.fn().mockResolvedValue([]),
+  pauseSchedule: vi.fn(),
+  resumeSchedule: vi.fn(),
   agents: vi.fn().mockResolvedValue({ worker_enabled: true, configured: [], available: [] }),
   registerAgent: vi.fn().mockResolvedValue({
     worker_enabled: true,
