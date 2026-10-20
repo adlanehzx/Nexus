@@ -321,6 +321,80 @@ jobs:
             exit 1
           fi
 
+  blank-machine:
+    name: Réinstallation sur machine vide
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Le critère de réussite de la priorité 0, et le seul qui compte vraiment :
+    # réinstaller sur une machine vide et retrouver missions, conversations et
+    # agents. Le scénario part d'un `git clone` neuf -- aucun `.env`, aucun
+    # `dist`, aucune donnée -- y déroule l'installation complète, restaure, puis
+    # vérifie ce qu'il devait retrouver.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "5432"
+      DATABASE_USER: nexus
+      DATABASE_PASSWORD: nexus
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Installer les clients PostgreSQL 17 et SQLite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates lsb-release sqlite3
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # L'environnement Python du moteur : le semis de la mission passe par son
+      # dépôt, qui est le seul à connaître son schéma.
+      - name: Installer l'environnement du moteur
+        working-directory: services/mission-engine
+        run: uv sync --frozen --extra dev
+
+      - name: Scénario complet
+        run: bash scripts/blank-machine-restore.sh
+
   security:
     name: Secrets et dépendances
     runs-on: ubuntu-latest

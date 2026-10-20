@@ -493,6 +493,37 @@ async function dumpThroughContainer(url: string): Promise<Buffer | undefined> {
 }
 
 /**
+ * Candidats pour l'instantané SQLite, dans l'ordre de préférence.
+ *
+ * Trois, parce qu'une sauvegarde ne doit pas dépendre d'un outil que
+ * l'installation n'a pas forcément : le Python du moteur existe sur une
+ * installation complète, `sqlite3` est souvent là, et le Python du système
+ * presque toujours. Tous trois utilisent la **même** API `backup` de SQLite —
+ * ce qui est négociable est l'interpréteur, pas la méthode.
+ */
+export function snapshotCommands(
+  venvBin: string,
+  source: string,
+  target: string,
+): { file: string; args: string[] }[] {
+  const script = [
+    "import sqlite3, sys",
+    "source = sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True)",
+    "target = sqlite3.connect(sys.argv[2])",
+    "source.backup(target)",
+    "target.close(); source.close()",
+  ].join("\n");
+
+  return [
+    { file: join(venvBin, "python"), args: ["-c", script, source, target] },
+    // `.backup` du client sqlite3 appelle la même API : cohérent sous WAL, et
+    // sans arrêter le service qui écrit.
+    { file: "sqlite3", args: [source, `.backup '${target}'`] },
+    { file: "python3", args: ["-c", script, source, target] },
+  ];
+}
+
+/**
  * Instantané SQLite par l'API `backup`, et non par une copie.
  *
  * Le moteur écrit en WAL : une copie de fichier pendant une écriture donne une
@@ -500,24 +531,32 @@ async function dumpThroughContainer(url: string): Promise<Buffer | undefined> {
  * est cohérent sans arrêter le service.
  */
 function snapshotSqlite(paths: NexusPaths): Buffer {
-  const python = join(paths.missionEngineVenvBin, "python");
   const workspace = mkdtempSync(join(tmpdir(), "nexus-sqlite-"));
   try {
     const target = join(workspace, "snapshot.db");
-    const script = [
-      "import sqlite3, sys",
-      "source = sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True)",
-      "target = sqlite3.connect(sys.argv[2])",
-      "source.backup(target)",
-      "target.close(); source.close()",
-    ].join("\n");
+    const attempts: string[] = [];
 
-    // Synchrone : la fonction est appelée une fois et son résultat est
-    // immédiatement nécessaire pour composer l'archive.
-    execFileSync(python, ["-c", script, paths.missionEngineDatabase, target], {
-      stdio: "pipe",
-    });
-    return readFileSync(target);
+    for (const candidate of snapshotCommands(
+      paths.missionEngineVenvBin,
+      paths.missionEngineDatabase,
+      target,
+    )) {
+      try {
+        // Synchrone : la fonction est appelée une fois et son résultat est
+        // immédiatement nécessaire pour composer l'archive.
+        execFileSync(candidate.file, candidate.args, { stdio: "pipe" });
+        return readFileSync(target);
+      } catch (error) {
+        attempts.push(
+          `${candidate.file} : ${error instanceof Error ? error.message.split("\n")[0] : "échec"}`,
+        );
+      }
+    }
+
+    throw new Error(
+      `aucun outil disponible pour un instantané SQLite cohérent.\n${attempts.join("\n")}\n` +
+        "Installer `sqlite3`, ou construire l'environnement Python du moteur.",
+    );
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

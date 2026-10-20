@@ -30,6 +30,10 @@ const USAGE = `nexus — installation, diagnostic et conduite d'une instance NEX
   nexus backup [options]    sauvegarde complète, avec rotation
   nexus restore <archive>   restaure une sauvegarde sur cette installation
 
+Options communes
+  --root <chemin>           installation visée, au lieu de celle qui contient
+                            le répertoire courant
+
 Options de setup
   --dry-run                 affiche le plan sans rien écrire
   --rotate-keys             remplace la clé de signature existante
@@ -62,7 +66,11 @@ async function main(argv: string[]): Promise<number> {
     return rawCommand === "help" || rawCommand === "--help" || rawCommand === "-h" ? 0 : 1;
   }
 
-  const root = findRepositoryRoot(process.cwd());
+  // `--root` vise une autre installation que celle qui contient le répertoire
+  // courant. Utile pour sauvegarder depuis ailleurs, et c'est ce qui permet au
+  // scénario de réinstallation de ne jamais toucher l'installation vivante.
+  const explicitRoot = valueOf(rest, "--root");
+  const root = explicitRoot ?? findRepositoryRoot(process.cwd());
   const paths = resolvePaths(root);
 
   switch (command) {
