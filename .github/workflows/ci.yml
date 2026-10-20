@@ -250,12 +250,22 @@ jobs:
       - name: Installer les dépendances
         run: pnpm install --frozen-lockfile
 
-      # Volontairement **non bloquant**, et la raison est documentée plutôt que
-      # cachée : l'audit remonte aujourd'hui 38 avis dont 2 critiques, tous
-      # transitifs. Rendre l'étape bloquante immobiliserait chaque branche sur
-      # des correctifs qui ne dépendent pas de ce dépôt ; la rendre silencieuse
-      # reviendrait à ne pas auditer. Elle signale, et le jour où l'arriéré est
-      # purgé, retirer cette ligne la rend bloquante.
-      - name: Auditer les dépendances
+      # Deux étapes, deux exigences, parce que les deux niveaux n'appellent pas
+      # la même réponse.
+      #
+      # Les critiques sont **bloquantes**. Il n'y en a plus : les deux qui
+      # restaient — `proxy-addr` et `shell-quote` — sont corrigées par un
+      # plancher dans `pnpm-workspace.yaml`. Cette étape est donc ce qui empêche
+      # une régression, et non un vœu.
+      - name: Auditer les dépendances (critique)
+        run: pnpm audit --prod --audit-level critical
+
+      # Le reste **signale sans bloquer**, et la raison est écrite plutôt que
+      # cachée : trente-six avis transitifs subsistent, dont la correction ne
+      # dépend pas de ce dépôt. Immobiliser chaque branche dessus ferait
+      # désactiver l'étape à la première urgence ; la supprimer reviendrait à ne
+      # pas auditer. Le jour où l'arriéré est purgé, il suffit de retirer
+      # `continue-on-error`.
+      - name: Auditer les dépendances (élevé et moindre)
         continue-on-error: true
         run: pnpm audit --prod --audit-level high

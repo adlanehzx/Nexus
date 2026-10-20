@@ -2,7 +2,7 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
-  "description": "NEXUS \u00e2\u20ac\u201d assistant personnel IA multi-appareils",
+  "description": "NEXUS â€” assistant personnel IA multi-appareils",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {

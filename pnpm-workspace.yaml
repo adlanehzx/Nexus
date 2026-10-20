@@ -4,6 +4,23 @@ packages:
   - "packages/*"
   - "mcp/*"
 
+# Planchers de sécurité sur des dépendances transitives.
+#
+# Les deux versions vulnérables étaient atteignables alors que les plages
+# déclarées par leurs parents acceptaient déjà les versions corrigées : seul le
+# verrou était figé plus bas. Un plancher explicite plutôt qu'une simple mise à
+# jour du verrou, pour qu'une régénération ultérieure ne puisse pas redescendre
+# en silence — et pour que la raison soit lisible ici.
+#
+#   proxy-addr  : usurpation d'IP via un sous-réseau IPv6 mappant IPv4
+#                 (GHSA-jqcg-44mw-7w3h), atteint par express via le SDK MCP
+#   shell-quote : injection de commande dans `quote()` via un terminateur de
+#                 ligne (GHSA-pqg4-j6r4-53mv), atteint par l'outillage de
+#                 développement React Native
+overrides:
+  proxy-addr: "^2.0.8"
+  shell-quote: "^1.11.0"
+
 # pnpm bloque les scripts d'installation par défaut (protection chaîne
 # d'approvisionnement). On autorise explicitement les seuls paquets qui en ont
 # réellement besoin — tout ajout ici est une décision, pas une formalité.
