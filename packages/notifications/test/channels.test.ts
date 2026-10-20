@@ -64,7 +64,9 @@ describe("NtfyChannel", () => {
     expect(capturedHeaders.Priority).toBe("5");
     expect(capturedHeaders.Authorization).toBe("Bearer secret-token");
     expect(capturedHeaders.Click).toBe("http://localhost:3000/dashboard/confirmations/123");
-    expect(capturedHeaders.Actions).toBe("view, Valider, http://localhost:3000/dashboard/confirmations/123");
+    expect(capturedHeaders.Actions).toBe(
+      "view, Valider, http://localhost:3000/dashboard/confirmations/123",
+    );
     expect(capturedHeaders.Tags).toContain("nexus,tool,security,warning");
     expect(capturedBody).toContain("L'agent Codex");
   });
@@ -147,6 +149,6 @@ describe("WebhookChannel", () => {
     const text = capturedPayload.text as string;
     expect(text).toContain("<b>Alerte &lt;Sécurité&gt;</b>");
     expect(text).toContain("Contenu avec &amp; caractères");
-    expect(text).toContain("<a href=\"http://localhost:3000/check\">Voir</a>");
+    expect(text).toContain('<a href="http://localhost:3000/check">Voir</a>');
   });
 });

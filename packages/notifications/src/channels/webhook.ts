@@ -1,8 +1,4 @@
-import type {
-  ChannelDeliveryResult,
-  NotificationMessage,
-  WebhookChannelConfig,
-} from "../types.js";
+import type { ChannelDeliveryResult, NotificationMessage, WebhookChannelConfig } from "../types.js";
 
 export interface WebhookChannelOptions {
   config: WebhookChannelConfig;

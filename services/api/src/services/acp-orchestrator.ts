@@ -12,10 +12,7 @@ import type {
   SubmitMission,
 } from "@nexus/mission-control-client";
 import { AgentRouter } from "./agent-router.js";
-import {
-  SharedArtifactStore,
-  type SharedArtifactRecord,
-} from "./shared-artifacts.js";
+import { SharedArtifactStore, type SharedArtifactRecord } from "./shared-artifacts.js";
 import {
   AgentCollaborationService,
   type CrossCritiqueDebate,

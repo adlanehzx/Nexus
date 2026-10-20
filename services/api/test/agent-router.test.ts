@@ -40,20 +40,28 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
     expect(codeTask.requiresBrowser).toBe(false);
 
     // 2. Tâche de recherche
-    const researchTask = router.classifyTask("Recherche et analyse la documentation officielle de Fastify");
+    const researchTask = router.classifyTask(
+      "Recherche et analyse la documentation officielle de Fastify",
+    );
     expect(researchTask.primaryCategory).toBe("research");
 
     // 3. Tâche de revue critique
-    const reviewTask = router.classifyTask("Fais une revue critique de sécurité pour détecter les contradictions");
+    const reviewTask = router.classifyTask(
+      "Fais une revue critique de sécurité pour détecter les contradictions",
+    );
     expect(reviewTask.primaryCategory).toBe("review");
 
     // 4. Tâche navigateur
-    const browserTask = router.classifyTask("Ouvre le navigateur Chromium et clique sur le bouton de connexion");
+    const browserTask = router.classifyTask(
+      "Ouvre le navigateur Chromium et clique sur le bouton de connexion",
+    );
     expect(browserTask.primaryCategory).toBe("browser");
     expect(browserTask.requiresBrowser).toBe(true);
 
     // 5. Tâche de synthèse
-    const synthesisTask = router.classifyTask("Rédige la synthèse finale et le bilan des résultats");
+    const synthesisTask = router.classifyTask(
+      "Rédige la synthèse finale et le bilan des résultats",
+    );
     expect(synthesisTask.primaryCategory).toBe("synthesis");
   });
 
@@ -61,15 +69,24 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
     const profiles = ["antigravity", "claude", "codex"];
 
     // Pour du code : Codex doit avoir le score le plus élevé
-    const codeRanked = await router.rankProfiles(profiles, "Implémente un module TypeScript et écris les tests");
+    const codeRanked = await router.rankProfiles(
+      profiles,
+      "Implémente un module TypeScript et écris les tests",
+    );
     expect(codeRanked[0]?.key).toBe("codex");
 
     // Pour de la critique : Claude doit être en tête
-    const reviewRanked = await router.rankProfiles(profiles, "Fais une revue critique détaillée et valide le verdict");
+    const reviewRanked = await router.rankProfiles(
+      profiles,
+      "Fais une revue critique détaillée et valide le verdict",
+    );
     expect(reviewRanked[0]?.key).toBe("claude");
 
     // Pour de la recherche : Antigravity doit être en tête
-    const researchRanked = await router.rankProfiles(profiles, "Explore et recherche les faits documentaires");
+    const researchRanked = await router.rankProfiles(
+      profiles,
+      "Explore et recherche les faits documentaires",
+    );
     expect(researchRanked[0]?.key).toBe("antigravity");
   });
 

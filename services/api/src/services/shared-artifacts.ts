@@ -92,7 +92,8 @@ export class SharedArtifactStore {
     const targetPath = resolve(taskDir, safeName);
     this.#assertInsideDir(artifactsDir, targetPath);
 
-    const buffer = typeof input.content === "string" ? Buffer.from(input.content, "utf-8") : input.content;
+    const buffer =
+      typeof input.content === "string" ? Buffer.from(input.content, "utf-8") : input.content;
 
     if (buffer.length > this.#maxFileSizeBytes) {
       throw new ArtifactSecurityError(
@@ -152,7 +153,10 @@ export class SharedArtifactStore {
   ): Promise<{ record: SharedArtifactRecord; content: Buffer }> {
     const manifest = await this.loadManifest(missionWorkspace);
     const record = manifest.artifacts.find(
-      (a) => a.uri === uriOrRelativePath || a.relativePath === uriOrRelativePath || a.name === uriOrRelativePath,
+      (a) =>
+        a.uri === uriOrRelativePath ||
+        a.relativePath === uriOrRelativePath ||
+        a.name === uriOrRelativePath,
     );
 
     if (!record) {
@@ -210,8 +214,13 @@ export class SharedArtifactStore {
   #assertInsideDir(parentDir: string, targetPath: string): void {
     const normalizedParent = resolve(normalize(parentDir));
     const normalizedTarget = resolve(normalize(targetPath));
-    if (!normalizedTarget.startsWith(normalizedParent + "/") && normalizedTarget !== normalizedParent) {
-      throw new ArtifactSecurityError(`Tentative de traversée de répertoire détectée : ${targetPath}`);
+    if (
+      !normalizedTarget.startsWith(normalizedParent + "/") &&
+      normalizedTarget !== normalizedParent
+    ) {
+      throw new ArtifactSecurityError(
+        `Tentative de traversée de répertoire détectée : ${targetPath}`,
+      );
     }
   }
 }

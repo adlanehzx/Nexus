@@ -911,10 +911,7 @@ export class DashboardApi {
     return this.#get("/api/v1/orchestrator/routing/matrix");
   }
 
-  evaluateRouting(
-    instruction: string,
-    contextChars?: number,
-  ): Promise<RoutingEvaluationDto> {
+  evaluateRouting(instruction: string, contextChars?: number): Promise<RoutingEvaluationDto> {
     return this.#request("POST", "/api/v1/orchestrator/routing/evaluate", {
       instruction,
       contextChars,
@@ -930,7 +927,9 @@ export class DashboardApi {
   }
 
   missionCollaboration(missionId: string): Promise<MissionCollaborationDto> {
-    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/collaboration`);
+    return this.#get(
+      `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/collaboration`,
+    );
   }
 
   uploadMissionArtifact(

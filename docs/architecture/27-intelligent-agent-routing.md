@@ -20,14 +20,14 @@ Le système de **routage intelligent multi-critères** (Chantier 13 de la Priori
 
 Le classifieur analyse l'instruction de la tâche selon un système d'analyse lexicale pondérée et d'intention :
 
-| Catégorie | Signaux lexicaux principaux | Agent de référence par défaut |
-|---|---|---|
-| `browser` | Mots-clés navigation, chromium, clics, formulaires, scrape web | `codex`, `claude` (agents équipés du harness local) |
-| `code` | Fichiers source (.ts, .py, etc.), refactor, build, git, tests vitest | `codex` (92), `claude` (90), `antigravity` (85) |
-| `research` | Analyse de codebase, architecture, documentation, exploration | `antigravity` (95), `claude` (90), `codex` (80) |
-| `review` | Critique, audit, vérification de sécurité, détection d'erreurs | `claude` (95), `codex` (85), `antigravity` (80) |
-| `synthesis` | Résumé exécutif, synthèse finale, conclusion, bilan | `claude` (95), `antigravity` (85), `codex` (80) |
-| `general` | Tâches polyvalentes non spécialisées | `claude` (85), `antigravity` (85), `codex` (85) |
+| Catégorie   | Signaux lexicaux principaux                                          | Agent de référence par défaut                       |
+| ----------- | -------------------------------------------------------------------- | --------------------------------------------------- |
+| `browser`   | Mots-clés navigation, chromium, clics, formulaires, scrape web       | `codex`, `claude` (agents équipés du harness local) |
+| `code`      | Fichiers source (.ts, .py, etc.), refactor, build, git, tests vitest | `codex` (92), `claude` (90), `antigravity` (85)     |
+| `research`  | Analyse de codebase, architecture, documentation, exploration        | `antigravity` (95), `claude` (90), `codex` (80)     |
+| `review`    | Critique, audit, vérification de sécurité, détection d'erreurs       | `claude` (95), `codex` (85), `antigravity` (80)     |
+| `synthesis` | Résumé exécutif, synthèse finale, conclusion, bilan                  | `claude` (95), `antigravity` (85), `codex` (80)     |
+| `general`   | Tâches polyvalentes non spécialisées                                 | `claude` (85), `antigravity` (85), `codex` (85)     |
 
 ---
 
@@ -38,6 +38,7 @@ Pour chaque candidat disponible, le score global $S_{total} \in [0, 100]$ est ca
 $$S_{total} = w_1 S_{compat} + w_2 S_{auth} + w_3 S_{quota} + w_4 S_{health} + w_5 S_{quality} + w_6 S_{perf} + w_7 S_{context}$$
 
 Avec les coefficients standardisés :
+
 - $w_1 = 0.30$ : **Compatibilité de la tâche** (affinité de base modulée par le taux de succès appris dans cette catégorie) ;
 - $w_2 = 0.20$ : **Authentification** ($100$ si session valide, $0$ si expirée ou requise) ;
 - $w_3 = 0.15$ : **Disponibilité des quotas** (pourcentage de réserve 5h/hebdo, $0$ si épuisé) ;
@@ -47,6 +48,7 @@ Avec les coefficients standardisés :
 - $w_7 = 0.05$ : **Capacité de contexte** (adéquation de la fenêtre de contexte au volume de caractères).
 
 ### Règle d'éligibilité stricte
+
 Si un agent est en cooldown, si son quota est épuisé ou s'il n'est pas compatible avec le navigateur local alors que la tâche l'exige, il est marqué `isAvailable = false` et relégué après les agents disponibles, avec son motif d'exclusion affiché.
 
 ---
@@ -74,6 +76,7 @@ export interface AgentPerformanceStats {
 ```
 
 À chaque issue de tâche ACP dans le Mission Engine :
+
 1. `recordOutcome(key, category, outcome, durationMs, qualityVerdict)` met à jour les compteurs atomiquement.
 2. Si un agent subit plusieurs échecs consécutifs, un cooldown automatique temporaire est suggéré.
 3. Le score de compatibilité $S_{compat}$ s'auto-ajuste de $\pm 15$ points selon l'historique empirique réel.

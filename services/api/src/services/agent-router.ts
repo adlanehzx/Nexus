@@ -138,8 +138,7 @@ export class AgentRouter {
         /\b(navigateur|navigation|chromium|chrome|browser|browser-harness|clique|cliquer|click|url|http|https|dom|formulaire|champ|saisie|screenshot|capture d'écran)\b/g,
       ) ?? []
     ).length;
-    const requiresBrowser =
-      browserMatches >= 1 || /browser-harness|bu_cdp_url|19222/.test(text);
+    const requiresBrowser = browserMatches >= 1 || /browser-harness|bu_cdp_url|19222/.test(text);
 
     // Détection code
     const codeMatches = (
@@ -330,14 +329,18 @@ export class AgentRouter {
       let S_perf = 80;
       if (catStats && catStats.avgDurationMs > 0) {
         // Benchmark moyen : 15s (15000ms). Si plus rapide, bonus, si >60s, pénalité
-        const speedScore = Math.max(20, Math.min(100, 100 - (catStats.avgDurationMs - 10_000) / 1000));
+        const speedScore = Math.max(
+          20,
+          Math.min(100, 100 - (catStats.avgDurationMs - 10_000) / 1000),
+        );
         S_perf = Math.round(speedScore);
       }
 
       // 7. Longueur de contexte
       let S_context = 90;
       if (classification.contextChars > 60_000) {
-        if (provider === "antigravity") S_context = 100; // Fenêtre géante
+        if (provider === "antigravity")
+          S_context = 100; // Fenêtre géante
         else if (provider === "claude") S_context = 95;
         else if (provider === "codex") S_context = 75;
       }
@@ -346,10 +349,10 @@ export class AgentRouter {
       // Poids : compatibilité (35%), santé (20%), quota (15%), auth (15%), qualité (10%), perf (5%)
       const weightedScore =
         S_compat * 0.35 +
-        S_health * 0.20 +
+        S_health * 0.2 +
         S_quota * 0.15 +
         S_auth * 0.15 +
-        S_quality * 0.10 +
+        S_quality * 0.1 +
         S_perf * 0.05;
 
       const totalScore = isAvailable ? Math.round(weightedScore) : 0;
@@ -448,7 +451,14 @@ export class AgentRouter {
       (catCurrent.avgDurationMs * catCurrent.runs + duration) / nextRuns,
     );
 
-    const qualityVal = outcome.qualityVerdict === "pass" ? 1.0 : outcome.qualityVerdict === "revise" ? 0.3 : outcome.success ? 1.0 : 0.0;
+    const qualityVal =
+      outcome.qualityVerdict === "pass"
+        ? 1.0
+        : outcome.qualityVerdict === "revise"
+          ? 0.3
+          : outcome.success
+            ? 1.0
+            : 0.0;
     const nextQualitySum = catCurrent.qualitySum + qualityVal;
 
     current.categories[category] = {
@@ -526,8 +536,7 @@ export class AgentRouter {
         key,
         categoryScores,
         totalRuns: agentStats?.totalRuns ?? account?.reliability.totalRuns ?? 0,
-        overallSuccessRate:
-          agentStats?.overallSuccessRate ?? account?.reliability.score ?? 1.0,
+        overallSuccessRate: agentStats?.overallSuccessRate ?? account?.reliability.score ?? 1.0,
         avgDurationMs: durationCount > 0 ? Math.round(totalDuration / durationCount) : 0,
         healthStatus: account?.cooldown.active
           ? "cooldown"

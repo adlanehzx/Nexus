@@ -119,8 +119,7 @@ export class AgentCollaborationService {
     const text = raw.trim();
 
     // 2. Tenter d'extraire un bloc JSON complet ou un bloc ```json ... ```
-    const jsonMatch =
-      /```json\s*([\s\S]*?)\s*```/.exec(text) ?? /^(\{[\s\S]*\})$/.exec(text);
+    const jsonMatch = /```json\s*([\s\S]*?)\s*```/.exec(text) ?? /^(\{[\s\S]*\})$/.exec(text);
     if (jsonMatch?.[1]) {
       try {
         const obj = JSON.parse(jsonMatch[1]) as unknown;
@@ -148,7 +147,9 @@ export class AgentCollaborationService {
     if (/diff\s+--git|@@\s+-[0-9]+,[0-9]+\s+\+[0-9]+,[0-9]+\s+@@/i.test(text)) {
       payloadType = "code_patch";
     } else if (
-      /\b(vulnérabilité|faille|audit\s+sécurité|audit\s+de\s+conformité|cve|injection)\b/i.test(text)
+      /\b(vulnérabilité|faille|audit\s+sécurité|audit\s+de\s+conformité|cve|injection)\b/i.test(
+        text,
+      )
     ) {
       payloadType = "audit_report";
     } else if (/\b(contradiction|désaccord|invalide|erreur\s+majeure|réfutation)\b/i.test(text)) {
@@ -358,9 +359,10 @@ export class AgentCollaborationService {
         proposal.instruction,
       );
 
-      const dependsOn = proposal.depends_on && proposal.depends_on.length > 0
-        ? proposal.depends_on.filter((d) => existingKeys.has(d))
-        : [options.parentTaskKey];
+      const dependsOn =
+        proposal.depends_on && proposal.depends_on.length > 0
+          ? proposal.depends_on.filter((d) => existingKeys.has(d))
+          : [options.parentTaskKey];
 
       newTasks.push({
         key: proposal.key,

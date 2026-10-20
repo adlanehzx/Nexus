@@ -49,7 +49,10 @@ export function Agents({ api }: { api: DashboardApi }) {
       .routingMatrix()
       .then((res) => setRoutingMatrix(res.matrix))
       .catch((cause: unknown) => {
-        console.warn("Routing matrix fetch skipped:", cause instanceof Error ? cause.message : cause);
+        console.warn(
+          "Routing matrix fetch skipped:",
+          cause instanceof Error ? cause.message : cause,
+        );
       });
   };
 
@@ -799,13 +802,26 @@ export function Agents({ api }: { api: DashboardApi }) {
         </div>
 
         {/* Section 4 : Routage Intelligent & Matrice d'Affinité */}
-        <div style={{ marginTop: "40px", borderTop: "1px solid var(--border, #333)", paddingTop: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div
+          style={{
+            marginTop: "40px",
+            borderTop: "1px solid var(--border, #333)",
+            paddingTop: "24px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
             <div>
               <h3>Routage Intelligent & Feedback Learning</h3>
               <p className="faible">
-                Scoring dynamique multi-critères (affinités, auth, quotas 5h/hebdo, cooldowns, latence, historique)
-                remplaçant les priorités statiques.
+                Scoring dynamique multi-critères (affinités, auth, quotas 5h/hebdo, cooldowns,
+                latence, historique) remplaçant les priorités statiques.
               </p>
             </div>
             <button
@@ -826,7 +842,10 @@ export function Agents({ api }: { api: DashboardApi }) {
 
           {/* Matrice d'affinité */}
           <div style={{ overflowX: "auto", marginBottom: "24px" }}>
-            <table className="nexus-table" style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}>
+            <table
+              className="nexus-table"
+              style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}
+            >
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border, #444)" }}>
                   <th style={{ padding: "8px" }}>Profil</th>
@@ -842,7 +861,14 @@ export function Agents({ api }: { api: DashboardApi }) {
               <tbody>
                 {routingMatrix.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "var(--text-muted, #888)" }}>
+                    <td
+                      colSpan={8}
+                      style={{
+                        padding: "12px",
+                        textAlign: "center",
+                        color: "var(--text-muted, #888)",
+                      }}
+                    >
                       Aucune donnée de routage disponible.
                     </td>
                   </tr>
@@ -851,18 +877,28 @@ export function Agents({ api }: { api: DashboardApi }) {
                     <tr key={r.key} style={{ borderBottom: "1px solid var(--border-light, #222)" }}>
                       <td style={{ padding: "8px", fontWeight: "bold" }}>
                         {r.key}
-                        {r.cooldownActive ? <span style={{ color: "orange", marginLeft: "6px" }}>(Cooldown)</span> : null}
+                        {r.cooldownActive ? (
+                          <span style={{ color: "orange", marginLeft: "6px" }}>(Cooldown)</span>
+                        ) : null}
                       </td>
                       <td style={{ padding: "8px" }}>
-                        <span className={`badge ${r.authStatus === "authenticated" ? "succes" : "attention"}`}>
+                        <span
+                          className={`badge ${r.authStatus === "authenticated" ? "succes" : "attention"}`}
+                        >
                           {r.authStatus}
                         </span>
                       </td>
                       <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.code ?? 0)}</td>
-                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.research ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>
+                        {Math.round(r.categoryScores.research ?? 0)}
+                      </td>
                       <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.review ?? 0)}</td>
-                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.browser ?? 0)}</td>
-                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.synthesis ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>
+                        {Math.round(r.categoryScores.browser ?? 0)}
+                      </td>
+                      <td style={{ padding: "8px" }}>
+                        {Math.round(r.categoryScores.synthesis ?? 0)}
+                      </td>
                       <td style={{ padding: "8px" }}>
                         {r.totalRuns} runs ({Math.round(r.overallSuccessRate * 100)} %)
                       </td>
@@ -874,10 +910,14 @@ export function Agents({ api }: { api: DashboardApi }) {
           </div>
 
           {/* Simulateur de routage */}
-          <div className="carte" style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}>
+          <div
+            className="carte"
+            style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}
+          >
             <h4 style={{ margin: "0 0 10px 0" }}>Simulateur d'évaluation du routage</h4>
             <p className="faible" style={{ marginBottom: "12px" }}>
-              Testez quelle route et quel agent l'orchestrateur sélectionne pour une instruction donnée.
+              Testez quelle route et quel agent l'orchestrateur sélectionne pour une instruction
+              donnée.
             </p>
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
               <input
@@ -902,14 +942,25 @@ export function Agents({ api }: { api: DashboardApi }) {
             </div>
 
             {routingEvaluation ? (
-              <div style={{ marginTop: "12px", borderTop: "1px solid var(--border, #333)", paddingTop: "12px" }}>
-                <div style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  marginTop: "12px",
+                  borderTop: "1px solid var(--border, #333)",
+                  paddingTop: "12px",
+                }}
+              >
+                <div
+                  style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}
+                >
                   <div>
                     <strong>Catégorie :</strong>{" "}
-                    <span className="badge">{routingEvaluation.classification.primaryCategory}</span>
+                    <span className="badge">
+                      {routingEvaluation.classification.primaryCategory}
+                    </span>
                   </div>
                   <div>
-                    <strong>Complexité :</strong> {routingEvaluation.classification.estimatedComplexity}
+                    <strong>Complexité :</strong>{" "}
+                    {routingEvaluation.classification.estimatedComplexity}
                   </div>
                   <div>
                     <strong>Navigateur requis :</strong>{" "}
@@ -924,8 +975,14 @@ export function Agents({ api }: { api: DashboardApi }) {
                       style={{
                         padding: "10px",
                         borderRadius: "6px",
-                        background: idx === 0 && agent.isAvailable ? "rgba(40, 167, 69, 0.15)" : "var(--card-bg, #282828)",
-                        border: idx === 0 && agent.isAvailable ? "1px solid #28a745" : "1px solid var(--border, #444)",
+                        background:
+                          idx === 0 && agent.isAvailable
+                            ? "rgba(40, 167, 69, 0.15)"
+                            : "var(--card-bg, #282828)",
+                        border:
+                          idx === 0 && agent.isAvailable
+                            ? "1px solid #28a745"
+                            : "1px solid var(--border, #444)",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
@@ -936,15 +993,19 @@ export function Agents({ api }: { api: DashboardApi }) {
                           #{idx + 1} {agent.key}
                         </strong>{" "}
                         {idx === 0 && agent.isAvailable ? (
-                          <span style={{ color: "#28a745", fontWeight: "bold", marginLeft: "6px" }}>★ Recommandé</span>
+                          <span style={{ color: "#28a745", fontWeight: "bold", marginLeft: "6px" }}>
+                            ★ Recommandé
+                          </span>
                         ) : null}
                         {!agent.isAvailable ? (
-                          <span style={{ color: "#dc3545", marginLeft: "6px" }}>({agent.unavailabilityReason})</span>
+                          <span style={{ color: "#dc3545", marginLeft: "6px" }}>
+                            ({agent.unavailabilityReason})
+                          </span>
                         ) : null}
                         <div className="faible" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
-                          Compat: {agent.breakdown.compatibility} · Auth: {agent.breakdown.authentication} · Quota:{" "}
-                          {agent.breakdown.quota} · Fiabilité: {agent.breakdown.health} · Perf:{" "}
-                          {agent.breakdown.performance}
+                          Compat: {agent.breakdown.compatibility} · Auth:{" "}
+                          {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·
+                          Fiabilité: {agent.breakdown.health} · Perf: {agent.breakdown.performance}
                         </div>
                       </div>
                       <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>

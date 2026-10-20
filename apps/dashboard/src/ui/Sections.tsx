@@ -1594,14 +1594,18 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
   };
 
   return (
-    <div style={{ marginTop: "12px", borderTop: "1px dashed var(--border, #444)", paddingTop: "8px" }}>
+    <div
+      style={{ marginTop: "12px", borderTop: "1px dashed var(--border, #444)", paddingTop: "8px" }}
+    >
       <button
         type="button"
         className="bouton"
         style={{ fontSize: "0.85rem", padding: "4px 10px" }}
         onClick={() => void toggle()}
       >
-        {open ? "Masquer les artefacts et la collaboration" : "Artefacts partagés & Collaboration inter-agents"}
+        {open
+          ? "Masquer les artefacts et la collaboration"
+          : "Artefacts partagés & Collaboration inter-agents"}
       </button>
 
       {loading ? (
@@ -1698,7 +1702,8 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                       fontSize: "0.85rem",
                     }}
                   >
-                    <strong>{st.title}</strong> ({st.key}) · <span className="badge">{st.priority}</span>
+                    <strong>{st.title}</strong> ({st.key}) ·{" "}
+                    <span className="badge">{st.priority}</span>
                     <div className="faible">{st.reason}</div>
                   </div>
                 ))}
@@ -1877,7 +1882,8 @@ export function Notifications({ api }: { api: DashboardApi }) {
         <div>
           <h2>Notifications</h2>
           <p className="faible">
-            Journal central et diffusion vers les canaux externes (desktop, mobile push ntfy, webhooks).
+            Journal central et diffusion vers les canaux externes (desktop, mobile push ntfy,
+            webhooks).
           </p>
         </div>
         <button

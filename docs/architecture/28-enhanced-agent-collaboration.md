@@ -3,6 +3,7 @@
 ## 1. Contexte & Objectifs
 
 Dans une architecture multi-agents coordonnée, le simple passage de texte brut non typé (`<DEPENDENCY_RESULTS>`) présente de sévères limites :
+
 - Risque de tronquage intempestif des fichiers de code volumineux et des journaux d'audit ;
 - Impossibilité de transmettre des données binaires (captures Chromium, schémas, archives) ;
 - Absence de métadonnées sémantiques (niveau de confiance, hypothèses, questions ouvertes) ;
@@ -10,6 +11,7 @@ Dans une architecture multi-agents coordonnée, le simple passage de texte brut 
 - Incapacité pour un agent en cours d'exécution de soumettre des sous-tâches imprévues au DAG.
 
 Le **Chantier 14** (finalisant la **Priorité 2**) dote NEXUS d'une suite de collaboration inter-agents complète :
+
 1. **Espace d'artefacts partagés (`SharedArtifactStore`)** avec adressage URI `artifact://` et intégrité SHA-256 ;
 2. **Messages structurés inter-tâches (`StructuredTaskOutput`)** avec typologie et métadonnées d'exécution ;
 3. **Protocole de débat & cross-critique contradictoire** avec tâche d'arbitrage neutre (`nexus_cross_critique_arbitration`) ;
@@ -35,6 +37,7 @@ Chaque mission dispose d'un espace d'artefacts sanctuarisé dans son workspace :
 ```
 
 ### Manifeste atomique (`manifest.json`)
+
 ```typescript
 export interface SharedArtifactRecord {
   id: string; // UUID v7
@@ -53,6 +56,7 @@ export interface SharedArtifactRecord {
 ```
 
 ### Garanties de sécurité
+
 - **Isolation anti-directory traversal** : le chemin absolu de destination doit strictement résider sous le répertoire canonique `artifacts/` de la mission. Toute tentative (`..`, liens symboliques, barres obliques doubles) est rejetée avec `ArtifactSecurityError`.
 - **Permissions strictes** : dossiers en `0700`, fichiers d'artefacts en `0600`.
 - **Quotas stricts** : 25 Mo maximum par artefact, 100 Mo maximum cumulés par mission.
@@ -85,7 +89,9 @@ export interface StructuredTaskOutput {
 ```
 
 ### Injection dans les tâches aval
+
 Les tâches dépendantes reçoivent un bloc typé `<STRUCTURED_UPSTREAM_CONTEXT>` contenant :
+
 - Le profil et la tâche source ;
 - Le type de payload et le niveau de confiance ;
 - Le résumé factuel ;
@@ -123,6 +129,7 @@ export interface ProposedSubtask {
 ```
 
 ### Règles d'adoption
+
 - Seules les sous-tâches prioritaires (`critical` ou `recommended`) sont retenues ;
 - Plafond de sous-tâches dynamiques par mission (3 maximum) pour empêcher toute dérive du DAG ;
 - Vérification anti-cycle et assignation du profil optimal par `AgentRouter` si non renseigné ;
@@ -133,13 +140,16 @@ export interface ProposedSubtask {
 ## 6. Endpoints REST & Interface Tableau de Bord
 
 ### Endpoints REST (`/api/v1/orchestrator/missions/:missionId/*`)
+
 - `GET /artifacts` : Liste des artefacts enregistrés dans la mission.
 - `GET /artifacts/download?uri=...` : Téléchargement sécurisé avec streaming du fichier.
 - `POST /artifacts` : Dépôt manuel ou programmatique d'un artefact.
 - `GET /collaboration` : Vue d'ensemble collaborative (tâches, sorties structurées, artefacts, débats détectés, sous-tâches).
 
 ### Tableau de bord (`apps/dashboard/src/ui/Sections.tsx`)
+
 Le panneau `MissionCollaborationPanel` intégré dans chaque carte de mission permet :
+
 - De visualiser et télécharger directement les artefacts partagés ;
 - De visualiser les débats contradictoires détectés avec la recommandation d'arbitrage ;
 - De consulter les sous-tâches dynamiques proposées par les agents au cours de la mission.

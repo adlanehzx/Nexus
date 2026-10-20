@@ -104,7 +104,9 @@ describe("AgentCollaborationService (Chantier 14)", () => {
     ]);
 
     expect(context).toContain("<STRUCTURED_UPSTREAM_CONTEXT>");
-    expect(context).toContain("[TASK: investigate | AGENT: codex | TYPE: audit_report | CONFIANCE: 92%]");
+    expect(context).toContain(
+      "[TASK: investigate | AGENT: codex | TYPE: audit_report | CONFIANCE: 92%]",
+    );
     expect(context).toContain("artifact://investigate/report.json");
     expect(context).toContain("Version TypeScript 5.8");
     expect(context).toContain("</STRUCTURED_UPSTREAM_CONTEXT>");

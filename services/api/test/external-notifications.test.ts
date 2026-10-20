@@ -33,7 +33,9 @@ describe("Notifications externes (Chantier 11)", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { enabled: boolean; desktop: { enabled: boolean }; ntfy: { enabled: boolean } } }>();
+    const body = res.json<{
+      data: { enabled: boolean; desktop: { enabled: boolean }; ntfy: { enabled: boolean } };
+    }>();
     expect(body.data.enabled).toBe(true);
     expect(body.data.desktop.enabled).toBe(true);
     expect(body.data.ntfy.enabled).toBe(false);
@@ -155,7 +157,9 @@ describe("Notifications externes (Chantier 11)", () => {
     });
 
     // Vérifie que le store de notifications a reçu l'enregistrement
-    const userNotifs = await harness.services.notificationStore.listByUser(admin.userId, { limit: 10 });
+    const userNotifs = await harness.services.notificationStore.listByUser(admin.userId, {
+      limit: 10,
+    });
     expect(userNotifs.items.length).toBeGreaterThan(0);
     expect(userNotifs.items[0]?.title).toContain("Confirmation requise");
   });

@@ -57,9 +57,9 @@ export class NtfyChannel {
     }
 
     const headers: Record<string, string> = {
-      "Title": message.title,
-      "Priority": priorityHeader,
-      "Tags": tags.join(","),
+      Title: message.title,
+      Priority: priorityHeader,
+      Tags: tags.join(","),
     };
 
     if (this.#token) {
