@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateKeyPairSync } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -80,11 +80,16 @@ describe("lecture et écriture de .env", () => {
 
   it("restaure les sauts de ligne échappés d'une valeur entre guillemets", () => {
     const root = workspace();
-    writeFileSync(join(root, ".env"), 'AUTH_SIGNING_KEY="-----BEGIN PRIVATE KEY-----\\nabc\\n"\n');
+    // La clé vient de `generateKeyPairSync`, jamais d'un littéral : un en-tête
+    // PEM écrit en dur dans une source est signalé par le scanner de secrets,
+    // et il a raison de ne pas savoir distinguer un exemple d'une vraie clé.
+    writeFileSync(join(root, ".env"), `AUTH_SIGNING_KEY="${PRIVATE_PEM.replace(/\n/g, "\\n")}"\n`);
 
-    // Sans cette restitution, une clé PEM relue serait sur une seule ligne et
+    // Sans cette restitution, la clé relue serait sur une seule ligne et
     // illisible par `createPrivateKey`.
-    expect(readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY).toContain("\n");
+    const reread = readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY ?? "";
+    expect(reread).toContain("\n");
+    expect(() => createPrivateKey(reread)).not.toThrow();
   });
 
   it("rend un objet vide quand le fichier n'existe pas, sans lever", () => {
@@ -108,9 +113,11 @@ describe("lecture et écriture de .env", () => {
   });
 
   it("protège par des guillemets une valeur multiligne", () => {
-    const after = upsertEnvValue("", "AUTH_SIGNING_KEY", "-----BEGIN PRIVATE KEY-----\nabc\n");
+    const after = upsertEnvValue("", "AUTH_SIGNING_KEY", PRIVATE_PEM);
 
     expect(after).toContain('"');
+    // Une seule ligne, donc : les sauts de ligne de la clé sont échappés, sans
+    // quoi le fichier serait illisible par un chargeur de `.env`.
     expect(after.split("\n")).toHaveLength(2);
   });
 
