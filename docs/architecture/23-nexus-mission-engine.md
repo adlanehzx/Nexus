@@ -77,6 +77,14 @@ de santé. Il peut être remplacé sans changer le moteur. En cas de sortie inva
 ou d'indisponibilité, un plan déterministe prend le relais. Mission Engine reste
 responsable de la persistance, des leases, des délais et des nouvelles tentatives.
 
+Une demande temporelle explicite peut aussi produire un calendrier durable depuis
+le même chat. Le plan structuré distingue `immediate`, `one_shot` et `cron`; une
+ambiguïté retombe toujours sur `immediate` plutôt que d'inventer une récurrence.
+Le fuseau IANA du navigateur accompagne la demande, puis Mission Engine calcule
+les occurrences, les rattrapages et l'historique. Ces calendriers exécutent des
+tâches ACP : les assertions Agent Core, volontairement courtes, ne sont jamais
+persistées comme identifiants longue durée.
+
 Chaque tâche conserve désormais une liste ordonnée de profils de secours. Une
 erreur ACP est classée localement par le runtime NEXUS
 (`auth`, `quota`, `rate_limit`, etc.) sans recopier le détail fournisseur. Le

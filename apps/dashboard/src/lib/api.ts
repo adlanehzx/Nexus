@@ -594,7 +594,10 @@ export class DashboardApi {
   }
 
   sendToNexus(message: string): Promise<OrchestratedMission> {
-    return this.#request("POST", "/api/v1/orchestrator/messages", { message });
+    return this.#request("POST", "/api/v1/orchestrator/messages", {
+      message,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    });
   }
 
   nexusMission(missionId: string): Promise<OrchestratedMission> {
