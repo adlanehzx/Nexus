@@ -42,4 +42,32 @@ describe("registre ACP NEXUS", () => {
 
     await expect(loadProfile(registry, "missing")).rejects.toThrow("unknown_profile");
   });
+
+  it("gère l'isolation de session_dir et les variables d'environnement", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-acp-"));
+    const registry = join(directory, "profiles.json");
+    await writeFile(
+      registry,
+      JSON.stringify({
+        profiles: {
+          "claude-secondary": {
+            command: "${HOME}/bin/claude",
+            args: ["--config", "${SESSION_DIR}/config.json"],
+            session_dir: "${HOME}/.nexus/sessions/claude-2",
+            env: {
+              CLAUDE_CONFIG_DIR: "${SESSION_DIR}",
+              CUSTOM_VAR: "active",
+            },
+          },
+        },
+      }),
+      { mode: 0o600 },
+    );
+
+    const profile = await loadProfile(registry, "claude-secondary");
+    expect(profile.session_dir).toMatch(/\/\.nexus\/sessions\/claude-2$/);
+    expect(profile.args[1]).toMatch(/\/\.nexus\/sessions\/claude-2\/config\.json$/);
+    expect(profile.env.CLAUDE_CONFIG_DIR).toMatch(/\/\.nexus\/sessions\/claude-2$/);
+    expect(profile.env.CUSTOM_VAR).toBe("active");
+  });
 });

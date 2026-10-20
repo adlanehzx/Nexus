@@ -1,5 +1,6 @@
 import type { ConfirmationGate } from "@nexus/devices";
 import type { ConfirmationService } from "@nexus/tools";
+import type { NotificationService } from "./notification-service.js";
 
 /**
  * Le pont entre le coordinateur de tâches et une décision humaine.
@@ -30,6 +31,8 @@ interface Pending {
 
 export interface ConfirmationBrokerOptions {
   confirmations: ConfirmationService;
+  notifications?: NotificationService | undefined;
+  dashboardBaseUrl?: string | undefined;
   now?: () => Date;
   /** Injectables pour éprouver l'expiration sans attendre réellement. */
   setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
@@ -38,6 +41,8 @@ export interface ConfirmationBrokerOptions {
 
 export class ConfirmationBroker implements ConfirmationGate {
   readonly #confirmations: ConfirmationService;
+  readonly #notifications: NotificationService | undefined;
+  readonly #dashboardBaseUrl: string;
   readonly #now: () => Date;
   readonly #setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly #clearTimer: (handle: ReturnType<typeof setTimeout>) => void;
@@ -46,6 +51,8 @@ export class ConfirmationBroker implements ConfirmationGate {
 
   constructor(options: ConfirmationBrokerOptions) {
     this.#confirmations = options.confirmations;
+    this.#notifications = options.notifications;
+    this.#dashboardBaseUrl = options.dashboardBaseUrl ?? "http://localhost:3000";
     this.#now = options.now ?? (() => new Date());
     this.#setTimer = options.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs));
     this.#clearTimer =
@@ -95,6 +102,25 @@ export class ConfirmationBroker implements ConfirmationGate {
         timer,
         userId: input.userId,
       });
+
+      if (this.#notifications) {
+        const desc = input.description ?? "action sensible";
+        const confirmUrl = `${this.#dashboardBaseUrl.replace(/\/$/, "")}/dashboard?tab=confirmations&id=${encodeURIComponent(input.confirmationId)}`;
+        void this.#notifications
+          .create({
+            userId: input.userId,
+            title: `Confirmation requise : ${desc.slice(0, 45)}`,
+            body: `L'agent demande une confirmation : ${desc}`,
+            severity: "warning",
+            url: confirmUrl,
+            actionTitle: "Valider l'action",
+            tags: ["confirmation", "security"],
+            groupKey: `confirmation-${input.confirmationId}`,
+          })
+          .catch(() => {
+            // Ignoré : l'échec de notification ne bloque pas le flux de confirmation
+          });
+      }
     });
   }
 

@@ -6,7 +6,12 @@ import { buildApp } from "./app.js";
 import { ServiceContainer } from "./services/container.js";
 import { ToolRegistry } from "@nexus/tools";
 import { McpManager } from "@nexus/mcp";
-import { BrowserWorkerClient } from "@nexus/browser-client";
+import {
+  BrowserWorkerClient,
+  BrowserHarnessDriver,
+  BrowserSessionManager,
+} from "@nexus/browser-client";
+import { NotificationDispatcher } from "@nexus/notifications";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
 
 /**
@@ -80,6 +85,46 @@ const browser =
     ? new BrowserWorkerClient({ baseUrl: browserConfiguration.baseUrl, token: browserToken })
     : undefined;
 
+const isLocalHarnessEnabled =
+  browserConfiguration?.enabled !== false &&
+  (browserConfiguration?.mode === "local-harness" || browserConfiguration === null);
+
+const nativeBrowserDriver = isLocalHarnessEnabled
+  ? new BrowserHarnessDriver({
+      cdpUrl: browserConfiguration?.cdpUrl ?? process.env.BU_CDP_URL ?? "http://127.0.0.1:19222",
+    })
+  : undefined;
+
+const browserSessionManager = nativeBrowserDriver
+  ? new BrowserSessionManager({
+      driver: nativeBrowserDriver,
+      artifactsDirectory: resolve(here, "../../../var/artifacts/browser"),
+    })
+  : undefined;
+
+const notificationsConfiguration = (await runtimeConfiguration?.loadNotifications()) ?? null;
+
+const notificationDispatcher =
+  notificationsConfiguration?.enabled !== false
+    ? new NotificationDispatcher({
+        config: notificationsConfiguration ?? {
+          enabled: true,
+          desktop: { enabled: true, urgency: "normal" },
+          ntfy: { enabled: false, serverUrl: "https://ntfy.sh", topic: "nexus-alerts" },
+          quietHours: {
+            enabled: false,
+            start: "22:00",
+            end: "08:00",
+            timezone: "Europe/Paris",
+            allowUrgent: true,
+          },
+          grouping: { enabled: true, windowSeconds: 30 },
+          dashboardBaseUrl: `http://localhost:${config.API_PORT}`,
+        },
+        resolveSecret: vault ? (ref) => vault.get(ref) : undefined,
+      })
+    : undefined;
+
 /**
  * Signeur dédié aux appels sortants.
  *
@@ -110,6 +155,8 @@ const services = new ServiceContainer({
   runtimeConfiguration,
   vault,
   ...(browser === undefined ? {} : { browser }),
+  ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
+  ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
   llmProvider: new FallbackProvider([
     new ClaudeCliProvider(),
     new GeminiCliProvider(),

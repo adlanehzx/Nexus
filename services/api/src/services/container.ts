@@ -37,7 +37,12 @@ import {
   type AgentState,
 } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
-import { createBrowserTools, type BrowserWorkerClient } from "@nexus/browser-client";
+import {
+  createBrowserTools,
+  createNativeBrowserTools,
+  type BrowserWorkerClient,
+  type BrowserSessionManager,
+} from "@nexus/browser-client";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { PrismaClient } from "@nexus/database";
 import {
@@ -61,10 +66,15 @@ import {
 } from "./stores.js";
 import { NotificationService } from "./notification-service.js";
 import { ConfirmationBroker } from "./confirmation-broker.js";
+import type { NotificationDispatcher } from "@nexus/notifications";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
+import { ProviderAccountService } from "./provider-accounts.js";
+import { AgentRouter } from "./agent-router.js";
+import { SharedArtifactStore } from "./shared-artifacts.js";
+import { AgentCollaborationService } from "./agent-collaboration.js";
 
 /**
  * Assemblage des services de l'API.
@@ -151,6 +161,10 @@ export interface ServiceContainerOptions {
   mcp?: McpManager;
   /** Client du worker navigateur. Absent = non configure. */
   browser?: BrowserWorkerClient;
+  /** Gestionnaire des sessions de navigation natives (browser-harness). */
+  browserSessionManager?: BrowserSessionManager;
+  /** Dispatcher des notifications externes (desktop, mobile push ntfy, webhooks). */
+  notificationDispatcher?: NotificationDispatcher;
   /** Configuration administrable, stockée localement sans secret en clair. */
   runtimeConfiguration?: RuntimeConfigurationStore;
   /** Coffre adossé au trousseau de session Linux. */
@@ -214,7 +228,15 @@ export class ServiceContainer {
   readonly mcp: McpManager | undefined;
   /** Client du worker navigateur, quand il y en a un. */
   browser: BrowserWorkerClient | undefined;
+  /** Gestionnaire des sessions de navigation natives locales. */
+  browserSessionManager: BrowserSessionManager | undefined;
+  /** Dispatcher des notifications externes. */
+  readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
+  readonly providerAccounts: ProviderAccountService | undefined;
+  readonly agentRouter: AgentRouter;
+  readonly sharedArtifacts: SharedArtifactStore;
+  readonly agentCollaboration: AgentCollaborationService;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
@@ -292,11 +314,13 @@ export class ServiceContainer {
     this.notifications = new NotificationService({
       store: this.notificationStore,
       router: this.router,
+      dispatcher: options.notificationDispatcher,
       now,
     });
 
     this.confirmationBroker = new ConfirmationBroker({
       confirmations: this.confirmations,
+      notifications: this.notifications,
       now,
     });
 
@@ -447,10 +471,30 @@ export class ServiceContainer {
           });
     this.mcp = options.mcp;
     this.browser = undefined;
-    this.setBrowser(options.browser);
+    this.browserSessionManager = undefined;
+    if (options.browserSessionManager !== undefined) {
+      this.setNativeBrowser(options.browserSessionManager);
+    } else {
+      this.setBrowser(options.browser);
+    }
     this.runtimeConfiguration = options.runtimeConfiguration;
+    this.providerAccounts =
+      options.runtimeConfiguration === undefined
+        ? undefined
+        : new ProviderAccountService({
+            runtimeConfiguration: options.runtimeConfiguration,
+            now,
+          });
+    this.agentRouter = new AgentRouter({
+      runtimeConfiguration: options.runtimeConfiguration,
+      providerAccounts: this.providerAccounts,
+      now,
+    });
+    this.sharedArtifacts = new SharedArtifactStore();
+    this.agentCollaboration = new AgentCollaborationService();
     this.vault = options.vault;
     this.missionControl = options.missionControl;
+    this.notificationDispatcher = options.notificationDispatcher;
 
     this.dashboard = new DashboardService({
       services: this,
@@ -467,8 +511,21 @@ export class ServiceContainer {
     for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
     this.#browserToolNames.clear();
     this.browser = browser;
+    this.browserSessionManager = undefined;
     if (browser === undefined) return;
     for (const tool of createBrowserTools({ client: browser })) {
+      this.toolRegistry.register(tool, { replace: true });
+      this.#browserToolNames.add(tool.name);
+    }
+  }
+
+  setNativeBrowser(sessionManager: BrowserSessionManager | undefined): void {
+    for (const name of this.#browserToolNames) this.toolRegistry.unregister(name);
+    this.#browserToolNames.clear();
+    this.browser = undefined;
+    this.browserSessionManager = sessionManager;
+    if (sessionManager === undefined) return;
+    for (const tool of createNativeBrowserTools({ sessionManager })) {
       this.toolRegistry.register(tool, { replace: true });
       this.#browserToolNames.add(tool.name);
     }

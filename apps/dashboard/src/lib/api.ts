@@ -416,6 +416,173 @@ export interface NotificationSection {
   }[];
 }
 
+export interface ExternalNotificationConfigDto {
+  enabled: boolean;
+  desktop: { enabled: boolean; urgency: "low" | "normal" | "critical" };
+  ntfy: { enabled: boolean; serverUrl: string; topic: string; tokenRef?: string };
+  webhook?: {
+    enabled: boolean;
+    url?: string;
+    format: "discord" | "telegram" | "apprise" | "generic";
+    tokenRef?: string;
+  };
+  quietHours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+    timezone: string;
+    allowUrgent: boolean;
+  };
+  grouping: { enabled: boolean; windowSeconds: number };
+  dashboardBaseUrl: string;
+}
+
+export interface NotificationTestReportDto {
+  report: {
+    messageId: string;
+    timestamp: string;
+    channels: {
+      channel: string;
+      success: boolean;
+      error?: string;
+      skippedReason?: string;
+    }[];
+  };
+}
+
+export interface ProviderAccountDto {
+  id: string;
+  provider: string;
+  name: string;
+  profileKey: string;
+  sessionDir: string;
+  env: Record<string, string>;
+  authStatus: "authenticated" | "unauthenticated" | "expired" | "unknown";
+  lastCheckedAt: string | null;
+  quotas: {
+    remaining5hPercent: number | null;
+    remainingWeekPercent: number | null;
+    resets5hAt: string | null;
+    resetsWeekAt: string | null;
+    exhausted: boolean;
+  };
+  cooldown: {
+    active: boolean;
+    until: string | null;
+    reason: string | null;
+  };
+  priority: number;
+  reliability: {
+    score: number;
+    totalRuns: number;
+    successCount: number;
+    failureCount: number;
+    consecutiveFailures: number;
+    lastErrorCategory: string | null;
+    lastErrorAt: string | null;
+  };
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentRoutingEntry {
+  key: string;
+  categoryScores: Record<string, number>;
+  totalRuns: number;
+  overallSuccessRate: number;
+  avgDurationMs: number;
+  healthStatus: string;
+  authStatus: string;
+  cooldownActive: boolean;
+}
+
+export interface TaskClassificationDto {
+  primaryCategory: string;
+  categoryWeights: Record<string, number>;
+  requiresBrowser: boolean;
+  estimatedComplexity: string;
+  contextChars: number;
+}
+
+export interface RankedAgentDto {
+  key: string;
+  totalScore: number;
+  isAvailable: boolean;
+  unavailabilityReason?: string;
+  recommendedCategory: string;
+  breakdown: {
+    compatibility: number;
+    authentication: number;
+    quota: number;
+    health: number;
+    quality: number;
+    performance: number;
+    context: number;
+  };
+}
+
+export interface RoutingEvaluationDto {
+  classification: TaskClassificationDto;
+  ranked: RankedAgentDto[];
+}
+
+export interface SharedArtifactDto {
+  id: string;
+  missionKey: string;
+  taskKey: string;
+  name: string;
+  relativePath: string;
+  uri: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface CrossCritiqueDebateDto {
+  id: string;
+  taskA: { key: string; profile: string; summary: string; confidence: number };
+  taskB: { key: string; profile: string; summary: string; confidence: number };
+  issue: string;
+  severity: string;
+  recommendation: string;
+}
+
+export interface ProposedSubtaskDto {
+  key: string;
+  title: string;
+  instruction: string;
+  reason: string;
+  priority: string;
+  profile?: string;
+  depends_on?: string[];
+}
+
+export interface MissionCollaborationDto {
+  missionId: string;
+  workspace: string;
+  tasks: {
+    taskKey: string;
+    profileKey: string;
+    state: string;
+    structuredOutput: {
+      summary: string;
+      payloadType: string;
+      confidenceScore: number;
+      assumptions: string[];
+      openQuestions: string[];
+      proposedSubtasks: ProposedSubtaskDto[];
+      artifacts: unknown[];
+    };
+    artifacts: SharedArtifactDto[];
+  }[];
+  artifacts: SharedArtifactDto[];
+  debates: CrossCritiqueDebateDto[];
+  proposedSubtasks: ProposedSubtaskDto[];
+}
+
 export interface SecuritySection {
   events: {
     at: string;
@@ -690,6 +857,101 @@ export class DashboardApi {
       "POST",
       `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
     );
+  }
+
+  notificationConfig(): Promise<ExternalNotificationConfigDto> {
+    return this.#get("/api/v1/dashboard/notifications/config");
+  }
+
+  saveNotificationConfig(config: ExternalNotificationConfigDto): Promise<{ saved: boolean }> {
+    return this.#request("PUT", "/api/v1/dashboard/notifications/config", config);
+  }
+
+  testNotification(): Promise<NotificationTestReportDto> {
+    return this.#request("POST", "/api/v1/dashboard/notifications/test");
+  }
+
+  providerAccounts(): Promise<{ accounts: ProviderAccountDto[] }> {
+    return this.#get("/api/v1/orchestrator/accounts");
+  }
+
+  createProviderAccount(input: {
+    id: string;
+    provider: string;
+    name: string;
+    profileKey: string;
+    priority?: number;
+    sessionDir?: string;
+  }): Promise<ProviderAccountDto> {
+    return this.#request("POST", "/api/v1/orchestrator/accounts", input);
+  }
+
+  testProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/test`);
+  }
+
+  toggleProviderAccountCooldown(
+    id: string,
+    active: boolean,
+    durationSeconds?: number,
+    reason?: string,
+  ): Promise<ProviderAccountDto> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/cooldown`,
+      { active, durationSeconds, reason },
+    );
+  }
+
+  deleteProviderAccount(id: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
+  }
+
+  routingMatrix(): Promise<{ matrix: AgentRoutingEntry[] }> {
+    return this.#get("/api/v1/orchestrator/routing/matrix");
+  }
+
+  evaluateRouting(
+    instruction: string,
+    contextChars?: number,
+  ): Promise<RoutingEvaluationDto> {
+    return this.#request("POST", "/api/v1/orchestrator/routing/evaluate", {
+      instruction,
+      contextChars,
+    });
+  }
+
+  resetRoutingStats(): Promise<{ ok: boolean }> {
+    return this.#request("POST", "/api/v1/orchestrator/routing/reset");
+  }
+
+  missionArtifacts(missionId: string): Promise<{ artifacts: SharedArtifactDto[] }> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts`);
+  }
+
+  missionCollaboration(missionId: string): Promise<MissionCollaborationDto> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/collaboration`);
+  }
+
+  uploadMissionArtifact(
+    missionId: string,
+    input: {
+      taskKey: string;
+      name: string;
+      content: string;
+      description?: string;
+      mimeType?: string;
+    },
+  ): Promise<{ artifact: SharedArtifactDto }> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts`,
+      input,
+    );
+  }
+
+  artifactDownloadUrl(missionId: string, uri: string): string {
+    return `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts/download?uri=${encodeURIComponent(uri)}`;
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {

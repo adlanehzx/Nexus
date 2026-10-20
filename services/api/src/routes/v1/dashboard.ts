@@ -6,6 +6,7 @@ import { ok, okSchema } from "../../lib/response.js";
 import { NotFoundError } from "../../services/stores.js";
 import { BrowserWorkerClient } from "@nexus/browser-client";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
+import { notificationsConfigSchema } from "@nexus/notifications";
 import { BrowserHarnessClient } from "../../services/browser-harness.js";
 
 const secretNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
@@ -572,11 +573,45 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
     async (request) => {
       const browser = app.services.browser;
+      const sessionManager = app.services.browserSessionManager;
       const configuration = (await app.services.runtimeConfiguration?.loadBrowser()) ?? null;
       const tokenConfigured =
         configuration === null || configuration.mode === "local-harness"
           ? false
           : (await app.services.vault?.get(configuration.tokenRef)) !== undefined;
+
+      if (sessionManager !== undefined) {
+        try {
+          const health = await sessionManager.driver.doctor();
+          const activeSessions = sessionManager.listActiveSessions();
+          return ok(
+            {
+              configured: true,
+              reachable: health.healthy,
+              detail: health.healthy
+                ? `harness local connecté (${activeSessions.length} session(s) active(s))`
+                : "harness installé, navigateur non connecté",
+              health,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        } catch (cause) {
+          return ok(
+            {
+              configured: true,
+              reachable: false,
+              detail: cause instanceof Error ? cause.message : "harness local indisponible",
+              health: null,
+              configuration,
+              tokenConfigured: false,
+            },
+            request.id,
+          );
+        }
+      }
+
       if (configuration?.enabled === true && configuration.mode === "local-harness") {
         const harness = new BrowserHarnessClient({ cdpUrl: configuration.cdpUrl });
         try {
@@ -837,6 +872,79 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
         },
         request.id,
       );
+    },
+  );
+
+  app.get(
+    "/dashboard/notifications/config",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        response: { 200: okSchema(notificationsConfigSchema) },
+      },
+    },
+    async (request) => {
+      const config =
+        (await app.services.runtimeConfiguration?.loadNotifications()) ??
+        notificationsConfigSchema.parse({});
+      return ok(config, request.id);
+    },
+  );
+
+  app.put(
+    "/dashboard/notifications/config",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        body: notificationsConfigSchema,
+        response: { 200: okSchema(z.object({ saved: z.boolean() })) },
+      },
+    },
+    async (request) => {
+      const config = request.body;
+      await app.services.runtimeConfiguration?.saveNotifications(config);
+      if (app.services.notificationDispatcher !== undefined) {
+        app.services.notificationDispatcher.updateConfig(config);
+      }
+      return ok({ saved: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/notifications/test",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        response: {
+          200: okSchema(
+            z.object({
+              report: z.object({
+                messageId: z.string(),
+                timestamp: z.string(),
+                channels: z.array(
+                  z.object({
+                    channel: z.string(),
+                    success: z.boolean(),
+                    error: z.string().optional(),
+                    skippedReason: z.string().optional(),
+                  }),
+                ),
+              }),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const dispatcher = app.services.notificationDispatcher;
+      if (dispatcher === undefined) {
+        throw new Error("Moteur de notifications externes non configuré.");
+      }
+      const report = await dispatcher.sendTest();
+      return ok({ report }, request.id);
     },
   );
 

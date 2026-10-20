@@ -1,5 +1,6 @@
 import { newCorrelationId } from "@nexus/shared";
 import type { EventRouter } from "@nexus/devices";
+import type { NotificationDispatcher, NotificationPriority } from "@nexus/notifications";
 import type { Notification, NotificationStore } from "./stores.js";
 
 /**
@@ -14,11 +15,17 @@ import type { Notification, NotificationStore } from "./stores.js";
  * les clients de l'utilisateur par le routeur existant. Un client absent la
  * retrouve dans sa file au retour ; un client présent la voit tout de suite. Les
  * deux voient la même.
+ *
+ * En complément, le NotificationDispatcher relaie les alertes vers les canaux
+ * externes (desktop notify-send, mobile push ntfy, webhooks Discord/Telegram)
+ * en appliquant les plages silencieuses et le regroupement.
  */
 
 export interface NotificationServiceOptions {
   store: NotificationStore;
   router: EventRouter;
+  dispatcher?: NotificationDispatcher | undefined;
+  dashboardBaseUrl?: string | undefined;
   now?: () => Date;
 }
 
@@ -26,38 +33,52 @@ export interface CreateNotificationInput {
   userId: string;
   title: string;
   body: string;
-  severity?: "info" | "warning" | "error";
+  severity?: "info" | "warning" | "error" | "critical" | undefined;
   /**
    * Appareil à l'origine de ce qui a produit la notification.
    *
    * Transmis tel quel dans l'événement : le client d'origine sait déjà ce qui
    * s'est passé et peut la présenter autrement, voire ne pas la sonner.
    */
-  originClientDeviceId?: string | null;
+  originClientDeviceId?: string | null | undefined;
+  url?: string | undefined;
+  actionTitle?: string | undefined;
+  tags?: string[] | undefined;
+  groupKey?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export class NotificationService {
   readonly #store: NotificationStore;
   readonly #router: EventRouter;
+  readonly #dispatcher: NotificationDispatcher | undefined;
+  readonly #dashboardBaseUrl: string;
 
   constructor(options: NotificationServiceOptions) {
     this.#store = options.store;
     this.#router = options.router;
+    this.#dispatcher = options.dispatcher;
+    this.#dashboardBaseUrl = options.dashboardBaseUrl ?? "http://localhost:3000";
+  }
+
+  get dispatcher(): NotificationDispatcher | undefined {
+    return this.#dispatcher;
   }
 
   /**
-   * Crée une notification et la diffuse.
+   * Crée une notification et la diffuse (WebSocket interne + canaux externes).
    *
    * La persistance précède la diffusion, et l'ordre compte : si la diffusion
    * échoue, la notification existe quand même et sera lue au prochain appel de
    * l'API. Dans l'autre sens, un client hors ligne perdrait l'information.
    */
   async create(input: CreateNotificationInput): Promise<Notification> {
+    const storeSeverity = input.severity === "critical" ? "error" : (input.severity ?? "info");
     const notification = await this.#store.create({
       userId: input.userId,
       title: input.title,
       body: input.body,
-      severity: input.severity ?? "info",
+      severity: storeSeverity,
       originClientDeviceId: input.originClientDeviceId ?? null,
     });
 
@@ -74,17 +95,46 @@ export class NotificationService {
       },
     });
 
+    // Envoi externe vers le bureau, ntfy ou les webhooks
+    if (this.#dispatcher) {
+      const priority = this.#mapSeverityToPriority(input.severity ?? "info");
+      void this.#dispatcher
+        .dispatch({
+          id: notification.id,
+          title: notification.title,
+          body: notification.body,
+          priority,
+          tags: input.tags,
+          url: input.url,
+          actionTitle: input.actionTitle,
+          groupKey: input.groupKey,
+          userId: input.userId,
+          metadata: input.metadata,
+        })
+        .catch(() => {
+          // Les erreurs des canaux externes sont interceptées et ne bloquent pas
+        });
+    }
+
     return notification;
+  }
+
+  #mapSeverityToPriority(severity: string): NotificationPriority {
+    switch (severity) {
+      case "critical":
+        return "urgent";
+      case "error":
+        return "high";
+      case "warning":
+        return "default";
+      case "info":
+      default:
+        return "low";
+    }
   }
 
   /**
    * Notifie l'issue d'une tâche.
-   *
-   * Le seul endroit du système qui décide qu'une tâche mérite une notification.
-   * La règle est simple et volontairement conservatrice : **on ne notifie pas un
-   * succès complet**. L'utilisateur qui a lancé la tâche voit déjà les
-   * événements arriver ; une notification de plus pour dire que tout va bien est
-   * du bruit, et le bruit fait couper les notifications.
    */
   async notifyTaskOutcome(input: {
     userId: string;
@@ -92,18 +142,8 @@ export class NotificationService {
     title: string;
     status: "succeeded" | "partial" | "failed" | "cancelled";
     originClientDeviceId: string | null;
-    detail?: string;
+    detail?: string | undefined;
   }): Promise<Notification | undefined> {
-    // **Une tâche qui aboutit produit une notification, elle aussi.**
-    //
-    // Ce n'est pas du bruit : une tâche est une demande explicite de
-    // l'utilisateur, pas un appel d'outil. « Lance mon projet et dis-moi quand
-    // le serveur est prêt » n'a de sens que si quelque chose le lui dit — et
-    // l'écran de la tâche ne le lui dira pas si le téléphone est dans sa poche.
-    //
-    // La gravité, elle, distingue : `info` pour une réussite, `warning` pour un
-    // résultat partiel ou une annulation, `error` pour un échec. C'est elle qui
-    // décide si le téléphone vibre.
     const severity =
       input.status === "failed" ? "error" : input.status === "succeeded" ? "info" : "warning";
 
@@ -116,12 +156,18 @@ export class NotificationService {
             ? "La tâche a été annulée."
             : (input.detail ?? "La tâche a échoué.");
 
+    const taskUrl = `${this.#dashboardBaseUrl.replace(/\/$/, "")}/dashboard?tab=tasks&taskId=${encodeURIComponent(input.taskId)}`;
+
     return this.create({
       userId: input.userId,
       title: input.title,
       body,
       severity,
       originClientDeviceId: input.originClientDeviceId,
+      url: taskUrl,
+      actionTitle: "Voir la tâche",
+      groupKey: `task-${input.taskId}`,
+      tags: ["task", input.status],
     });
   }
 }

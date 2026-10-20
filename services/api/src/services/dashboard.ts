@@ -302,6 +302,13 @@ export class DashboardService {
   }
 
   #browserHealth(): SubsystemHealth {
+    if (this.#services.browserSessionManager !== undefined) {
+      return {
+        name: "Navigateur",
+        level: "ok",
+        detail: "harness local Chromium connecté (mode natif)",
+      };
+    }
     if (this.#services.browser === undefined) {
       return {
         name: "Browser Use",

@@ -5,6 +5,11 @@ import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { AcpOrchestrator } from "../../services/acp-orchestrator.js";
 import { NotFoundError } from "../../services/stores.js";
+import {
+  createProviderAccountSchema,
+  providerAccountSchema,
+  updateProviderAccountSchema,
+} from "../../services/provider-accounts.js";
 
 const missionViewSchema = z.object({
   missionId: z.string().uuid(),
@@ -79,6 +84,8 @@ const runtimeSettingsViewSchema = z.object({
 export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
+  const providerAccounts = app.services.providerAccounts;
+  const agentRouter = app.services.agentRouter;
   const orchestrator =
     missionControl === undefined
       ? undefined
@@ -88,6 +95,9 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           // Le service d'assertions signe **et** enregistre : l'orchestrateur ne
           // reçoit que la capacité de délivrer une portée de mission.
           grants: app.services.missionGrants,
+          agentRouter,
+          sharedArtifacts: app.services.sharedArtifacts,
+          agentCollaboration: app.services.agentCollaboration,
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 
@@ -329,6 +339,438 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
       const registry = await missionControl.updateAgentHealth(request.params.key, request.body);
       return ok(registry, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/accounts",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: { 200: okSchema(z.object({ accounts: z.array(providerAccountSchema) })) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      return ok({ accounts: await providerAccounts.listAccounts() }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: createProviderAccountSchema,
+        response: { 201: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request, reply) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const created = await providerAccounts.createAccount(request.body);
+      return reply.code(201).send(ok(created, request.id));
+    },
+  );
+
+  app.get(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const account = await providerAccounts.getAccount(request.params.id);
+      if (account === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(account, request.id);
+    },
+  );
+
+  app.patch(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        body: updateProviderAccountSchema,
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const updated = await providerAccounts.updateAccount(request.params.id, request.body);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
+    },
+  );
+
+  app.delete(
+    "/orchestrator/accounts/:id",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(z.object({ deleted: z.boolean() })) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const deleted = await providerAccounts.deleteAccount(request.params.id);
+      if (!deleted) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok({ deleted: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts/:id/test",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const tested = await providerAccounts.probeAuth(request.params.id);
+      if (tested === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(tested, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts/:id/cooldown",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        body: z.object({
+          active: z.boolean(),
+          durationSeconds: z.number().int().min(1).max(86_400).optional(),
+          reason: z.string().max(256).optional(),
+        }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+      }
+      const updated = request.body.active
+        ? await providerAccounts.setCooldown(
+            request.params.id,
+            request.body.durationSeconds ?? 300,
+            request.body.reason ?? "Cooldown manuel",
+          )
+        : await providerAccounts.clearCooldown(request.params.id);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/routing/matrix",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: {
+          200: okSchema(
+            z.object({
+              matrix: z.array(
+                z.object({
+                  key: z.string(),
+                  categoryScores: z.record(z.string(), z.number()),
+                  totalRuns: z.number(),
+                  overallSuccessRate: z.number(),
+                  avgDurationMs: z.number(),
+                  healthStatus: z.string(),
+                  authStatus: z.string(),
+                  cooldownActive: z.boolean(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const health = missionControl ? await missionControl.health() : { profiles: [] };
+      const defaultProfiles = providerAccounts
+        ? (await providerAccounts.listAccounts()).map((a) => a.id)
+        : ["antigravity", "claude", "codex"];
+      const profiles = health.profiles.length > 0 ? health.profiles : defaultProfiles;
+      const matrix = await agentRouter.getRoutingMatrix(profiles);
+      return ok({ matrix }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/routing/evaluate",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: z.object({
+          instruction: z.string().min(1).max(10_000),
+          contextChars: z.number().int().nonnegative().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              classification: z.object({
+                primaryCategory: z.string(),
+                categoryWeights: z.record(z.string(), z.number()),
+                requiresBrowser: z.boolean(),
+                estimatedComplexity: z.string(),
+                contextChars: z.number(),
+              }),
+              ranked: z.array(
+                z.object({
+                  key: z.string(),
+                  totalScore: z.number(),
+                  isAvailable: z.boolean(),
+                  unavailabilityReason: z.string().optional(),
+                  recommendedCategory: z.string(),
+                  breakdown: z.object({
+                    compatibility: z.number(),
+                    authentication: z.number(),
+                    quota: z.number(),
+                    health: z.number(),
+                    quality: z.number(),
+                    performance: z.number(),
+                    context: z.number(),
+                  }),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const health = missionControl ? await missionControl.health() : { profiles: [] };
+      const defaultProfiles = providerAccounts
+        ? (await providerAccounts.listAccounts()).map((a) => a.id)
+        : ["antigravity", "claude", "codex"];
+      const profiles = health.profiles.length > 0 ? health.profiles : defaultProfiles;
+      const classification = agentRouter.classifyTask(
+        request.body.instruction,
+        request.body.contextChars,
+      );
+      const ranked = await agentRouter.rankProfiles(
+        profiles,
+        request.body.instruction,
+        request.body.contextChars !== undefined
+          ? { contextChars: request.body.contextChars }
+          : undefined,
+      );
+      return ok({ classification, ranked }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/routing/reset",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: { 200: okSchema(z.object({ reset: z.boolean() })) },
+      },
+    },
+    async (request) => {
+      await agentRouter.resetStats();
+      return ok({ reset: true }, request.id);
+    },
+  );
+
+  const artifactRecordSchema = z.object({
+    id: z.string().uuid(),
+    missionKey: z.string(),
+    taskKey: z.string(),
+    name: z.string(),
+    relativePath: z.string(),
+    uri: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    sha256: z.string(),
+    description: z.string(),
+    createdAt: z.string(),
+  });
+
+  app.get(
+    "/orchestrator/missions/:missionId/artifacts",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        response: { 200: okSchema(z.object({ artifacts: z.array(artifactRecordSchema) })) },
+      },
+    },
+    async (request) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const artifacts = await orchestrator.getArtifacts(request.params.missionId);
+      return ok({ artifacts }, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/missions/:missionId/artifacts/download",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        querystring: z.object({ uri: z.string().min(1).max(512) }),
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const { record, content } = await orchestrator.readArtifact(
+        request.params.missionId,
+        request.query.uri,
+      );
+      return reply
+        .header("Content-Type", record.mimeType)
+        .header("Content-Disposition", `inline; filename="${record.name}"`)
+        .header("ETag", `"${record.sha256}"`)
+        .send(content);
+    },
+  );
+
+  app.post(
+    "/orchestrator/missions/:missionId/artifacts",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        body: z.object({
+          taskKey: z.string().min(1).max(64),
+          name: z.string().min(1).max(128),
+          content: z.string().max(25 * 1024 * 1024),
+          description: z.string().max(500).optional(),
+          mimeType: z.string().max(64).optional(),
+        }),
+        response: { 201: okSchema(z.object({ artifact: artifactRecordSchema })) },
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const artifact = await orchestrator.saveArtifact(request.params.missionId, {
+        taskKey: request.body.taskKey,
+        name: request.body.name,
+        content: request.body.content,
+        description: request.body.description,
+        mimeType: request.body.mimeType,
+      });
+      return reply.code(201).send(ok({ artifact }, request.id));
+    },
+  );
+
+  app.get(
+    "/orchestrator/missions/:missionId/collaboration",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        response: {
+          200: okSchema(
+            z.object({
+              missionId: z.string(),
+              workspace: z.string(),
+              tasks: z.array(
+                z.object({
+                  taskKey: z.string(),
+                  profileKey: z.string(),
+                  state: z.string(),
+                  structuredOutput: z.object({
+                    summary: z.string(),
+                    payloadType: z.string(),
+                    confidenceScore: z.number(),
+                    assumptions: z.array(z.string()),
+                    openQuestions: z.array(z.string()),
+                    proposedSubtasks: z.array(
+                      z.object({
+                        key: z.string(),
+                        title: z.string(),
+                        instruction: z.string(),
+                        reason: z.string(),
+                        priority: z.string(),
+                        profile: z.string().optional(),
+                        depends_on: z.array(z.string()).optional(),
+                      }),
+                    ),
+                    artifacts: z.array(z.any()),
+                  }),
+                  artifacts: z.array(artifactRecordSchema),
+                }),
+              ),
+              artifacts: z.array(artifactRecordSchema),
+              debates: z.array(
+                z.object({
+                  id: z.string(),
+                  taskA: z.object({
+                    key: z.string(),
+                    profile: z.string(),
+                    summary: z.string(),
+                    confidence: z.number(),
+                  }),
+                  taskB: z.object({
+                    key: z.string(),
+                    profile: z.string(),
+                    summary: z.string(),
+                    confidence: z.number(),
+                  }),
+                  issue: z.string(),
+                  severity: z.string(),
+                  recommendation: z.string(),
+                }),
+              ),
+              proposedSubtasks: z.array(
+                z.object({
+                  key: z.string(),
+                  title: z.string(),
+                  instruction: z.string(),
+                  reason: z.string(),
+                  priority: z.string(),
+                  profile: z.string().optional(),
+                  depends_on: z.array(z.string()).optional(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const view = await orchestrator.getCollaborationView(request.params.missionId);
+      return ok(view, request.id);
     },
   );
 

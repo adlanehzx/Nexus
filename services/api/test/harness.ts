@@ -60,12 +60,14 @@ export interface ApiHarness {
 
 import type { LLMProvider } from "@nexus/llm";
 import type { MissionControlPort } from "@nexus/mission-control-client";
+import type { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 
 export async function makeApi(
   options: {
     confirmationThreshold?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
     llmProvider?: LLMProvider;
     missionControl?: MissionControlPort;
+    runtimeConfiguration?: RuntimeConfigurationStore;
   } = {},
 ): Promise<ApiHarness> {
   const credentials = new InMemoryCredentialProvider();
@@ -77,6 +79,9 @@ export async function makeApi(
       : { confirmationThreshold: options.confirmationThreshold }),
     ...(options.llmProvider === undefined ? {} : { llmProvider: options.llmProvider }),
     ...(options.missionControl === undefined ? {} : { missionControl: options.missionControl }),
+    ...(options.runtimeConfiguration === undefined
+      ? {}
+      : { runtimeConfiguration: options.runtimeConfiguration }),
     // Le coût de scrypt est voulu en production ; le faire payer à chaque test
     // rendrait la suite inutilisable, et une suite lente finit par ne plus être
     // lancée. Les paramètres sont inscrits dans l'empreinte : rien d'autre ne
