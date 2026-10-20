@@ -3,6 +3,9 @@ packages:
   - "services/*"
   - "packages/*"
   - "mcp/*"
+  # Les évaluations sont un paquet comme un autre : elles dépendent du cœur
+  # agent et de la couche d'outils, et doivent donc être résolues par pnpm.
+  - "evals/*"
 
 # Planchers de sécurité sur des dépendances transitives.
 #

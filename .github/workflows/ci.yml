@@ -492,6 +492,15 @@ jobs:
       # restaient — `proxy-addr` et `shell-quote` — sont corrigées par un
       # plancher dans `pnpm-workspace.yaml`. Cette étape est donc ce qui empêche
       # une régression, et non un vœu.
+      # Les évaluations de sécurité agentique, nommées à part.
+      #
+      # Elles tournent déjà dans `pnpm test` du job TypeScript, mais un échec y
+      # ressemblerait à n'importe quel test cassé. Ici, l'étape dit ce qu'elle
+      # mesure : une barrière a cédé. `turbo run` plutôt que `pnpm --filter`,
+      # pour que les paquets dont elles dépendent soient construits.
+      - name: Évaluations de sécurité agentique
+        run: pnpm turbo run test --filter=@nexus/security-evals
+
       - name: Auditer les dépendances (critique)
         run: pnpm audit --prod --audit-level critical
 
