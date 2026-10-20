@@ -238,23 +238,39 @@ fi
 # échecs — et on les nomme plutôt que de les supposer : affirmer « services non
 # démarrés » sans l'avoir lu serait exactement le genre de certitude que ce
 # scénario existe pour remplacer par une mesure.
+#
+# La liste des échecs tolérés est fermée, et chacun a sa raison. Elle sépare
+# deux questions que `doctor` pose ensemble : l'installation est-elle
+# **conforme**, et les services tournent-ils. Ce scénario répond de la première.
+# Il ne démarre aucun service, donc les sondes de disponibilité ne peuvent rien
+# apprendre ici ; les exiger vertes rendrait le résultat dépendant de ce qui
+# tourne sur la machine — c'est précisément ce qui a fait diverger le poste de
+# développement, où le moteur et Redis tournent, et le runner, où non.
+#
+#   Redis, Mission Engine  services non démarrés : disponibilité, pas conformité
+#   (chemins)              les unités systemd sont globales à la session
+#                          utilisateur, pas propres à une installation ; vue de
+#                          la copie, l'unité installée désigne une autre racine,
+#                          et `doctor` a raison de le dire
+#
+# Tout le reste reste bloquant, et c'est là que vit la valeur de l'étape :
+# PostgreSQL injoignable, une migration en retard, une clé de signature absente
+# ou une clé publique désaccordée feraient échouer le scénario.
+TOLERATED='Redis|Mission Engine|\(chemins\)'
 DOCTOR_OUT="$WORK/doctor.txt"
-if ( cd "$BLANK" && HOME="$WORK/home-blank" node packages/cli/dist/index.js doctor \
-      > "$DOCTOR_OUT" 2>&1 ); then
+( cd "$BLANK" && HOME="$WORK/home-blank" node packages/cli/dist/index.js doctor \
+    > "$DOCTOR_OUT" 2>&1 ) || true
+
+grep '✗' "$DOCTOR_OUT" | sed 's/^/      /' || true
+OBSERVED="$(grep -c '✗' "$DOCTOR_OUT" || true)"
+UNEXPECTED="$(grep '✗' "$DOCTOR_OUT" | grep -Evc "$TOLERATED" || true)"
+
+if [ "$UNEXPECTED" -gt 0 ]; then
+  fail "nexus doctor" "$UNEXPECTED échec(s) hors de la liste tolérée"
+elif [ "$OBSERVED" -eq 0 ]; then
   step "✓ nexus doctor" "aucune vérification en échec"
 else
-  # Un seul échec est attendu, et pour une raison qui tient au scénario : les
-  # unités systemd sont globales à la session utilisateur, pas propres à une
-  # installation. Vu du clone, l'unité installée sur la machine désigne une
-  # autre racine — et `doctor` a raison de le dire. Tout autre échec, en
-  # revanche, est un vrai défaut de la restauration.
-  UNEXPECTED="$(grep '✗' "$DOCTOR_OUT" | grep -vc '(chemins)' || true)"
-  grep '✗' "$DOCTOR_OUT" | sed 's/^/      /'
-  if [ "$UNEXPECTED" -eq 0 ]; then
-    step "✓ nexus doctor" "seul l'écart de chemins systemd, attendu hors d'une vraie installation"
-  else
-    fail "nexus doctor" "$UNEXPECTED échec(s) sans rapport avec le scénario"
-  fi
+  step "✓ nexus doctor" "$OBSERVED échec(s), tous dans la liste tolérée"
 fi
 
 printf '\n%d étapes, %d échec(s)\n\n' "$steps" "$failures"
