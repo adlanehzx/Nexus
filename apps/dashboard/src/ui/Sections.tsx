@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DashboardApi, McpConfiguration, TaskDetail } from "../lib/api.js";
+import type { DashboardApi, McpConfiguration, MissionCollaborationDto, TaskDetail } from "../lib/api.js";
 import {
   HEALTH_LABELS,
   WORKER_LABELS,
@@ -1201,6 +1201,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                           );
                         })}
                       </Table>
+                      <MissionCollaborationPanel api={api} missionId={mission.id} />
                     </details>
                   ))}
                 </div>
@@ -1320,6 +1321,146 @@ export function MissionControl({ api }: { api: DashboardApi }) {
           );
         }}
       </Section>
+    </div>
+  );
+}
+
+function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; missionId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [collab, setCollab] = useState<MissionCollaborationDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async (): Promise<void> => {
+    if (!open && collab === null) {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await api.missionCollaboration(missionId);
+        setCollab(res);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erreur de chargement");
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpen(!open);
+  };
+
+  return (
+    <div style={{ marginTop: "12px", borderTop: "1px dashed var(--border, #444)", paddingTop: "8px" }}>
+      <button
+        type="button"
+        className="bouton"
+        style={{ fontSize: "0.85rem", padding: "4px 10px" }}
+        onClick={() => void toggle()}
+      >
+        {open ? "Masquer les artefacts et la collaboration" : "Artefacts partagés & Collaboration inter-agents"}
+      </button>
+
+      {loading ? (
+        <p className="faible" style={{ marginTop: "6px" }}>
+          Chargement de l'espace de collaboration…
+        </p>
+      ) : null}
+      {error ? <p style={{ color: "var(--danger, #ff5555)", marginTop: "6px" }}>{error}</p> : null}
+
+      {open && collab ? (
+        <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          {/* Artefacts */}
+          <div>
+            <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem" }}>
+              Artefacts partagés ({collab.artifacts.length})
+            </h4>
+            {collab.artifacts.length === 0 ? (
+              <p className="faible">Aucun fichier généré dans cette mission.</p>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {collab.artifacts.map((art) => (
+                  <div
+                    key={art.id}
+                    style={{
+                      background: "var(--surface, #222)",
+                      border: "1px solid var(--border, #444)",
+                      borderRadius: "6px",
+                      padding: "8px 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <div>
+                      <strong>{art.name}</strong>
+                      <div className="faible" style={{ fontSize: "0.75rem" }}>
+                        {(art.sizeBytes / 1024).toFixed(1)} KB · {art.mimeType} · {art.taskKey}
+                      </div>
+                    </div>
+                    <a
+                      href={api.artifactDownloadUrl(missionId, art.uri)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bouton primary"
+                      style={{ fontSize: "0.75rem", padding: "2px 8px" }}
+                    >
+                      Ouvrir
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Débats contradictoires */}
+          {collab.debates.length > 0 ? (
+            <div
+              style={{
+                background: "rgba(255, 165, 0, 0.1)",
+                border: "1px solid orange",
+                borderRadius: "6px",
+                padding: "10px",
+              }}
+            >
+              <h4 style={{ margin: "0 0 6px 0", color: "orange", fontSize: "0.95rem" }}>
+                Débat contradictoire détecté
+              </h4>
+              {collab.debates.map((d) => (
+                <div key={d.id} style={{ fontSize: "0.85rem" }}>
+                  <p>
+                    <strong>{d.issue}</strong>
+                  </p>
+                  <p className="faible">{d.recommendation}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Sous-tâches proposées */}
+          {collab.proposedSubtasks.length > 0 ? (
+            <div>
+              <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem" }}>
+                Sous-tâches dynamiques proposées ({collab.proposedSubtasks.length})
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {collab.proposedSubtasks.map((st) => (
+                  <div
+                    key={st.key}
+                    style={{
+                      background: "var(--surface, #222)",
+                      border: "1px solid var(--border, #444)",
+                      borderRadius: "6px",
+                      padding: "6px 10px",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <strong>{st.title}</strong> ({st.key}) · <span className="badge">{st.priority}</span>
+                    <div className="faible">{st.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

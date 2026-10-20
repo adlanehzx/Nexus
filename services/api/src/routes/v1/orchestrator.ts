@@ -96,6 +96,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           // reçoit que la capacité de délivrer une portée de mission.
           grants: app.services.missionGrants,
           agentRouter,
+          sharedArtifacts: app.services.sharedArtifacts,
+          agentCollaboration: app.services.agentCollaboration,
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 
@@ -594,6 +596,174 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     async (request) => {
       await agentRouter.resetStats();
       return ok({ reset: true }, request.id);
+    },
+  );
+
+  const artifactRecordSchema = z.object({
+    id: z.string().uuid(),
+    missionKey: z.string(),
+    taskKey: z.string(),
+    name: z.string(),
+    relativePath: z.string(),
+    uri: z.string(),
+    mimeType: z.string(),
+    sizeBytes: z.number(),
+    sha256: z.string(),
+    description: z.string(),
+    createdAt: z.string(),
+  });
+
+  app.get(
+    "/orchestrator/missions/:missionId/artifacts",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        response: { 200: okSchema(z.object({ artifacts: z.array(artifactRecordSchema) })) },
+      },
+    },
+    async (request) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const artifacts = await orchestrator.getArtifacts(request.params.missionId);
+      return ok({ artifacts }, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/missions/:missionId/artifacts/download",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        querystring: z.object({ uri: z.string().min(1).max(512) }),
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const { record, content } = await orchestrator.readArtifact(
+        request.params.missionId,
+        request.query.uri,
+      );
+      return reply
+        .header("Content-Type", record.mimeType)
+        .header("Content-Disposition", `inline; filename="${record.name}"`)
+        .header("ETag", `"${record.sha256}"`)
+        .send(content);
+    },
+  );
+
+  app.post(
+    "/orchestrator/missions/:missionId/artifacts",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        body: z.object({
+          taskKey: z.string().min(1).max(64),
+          name: z.string().min(1).max(128),
+          content: z.string().max(25 * 1024 * 1024),
+          description: z.string().max(500).optional(),
+          mimeType: z.string().max(64).optional(),
+        }),
+        response: { 201: okSchema(z.object({ artifact: artifactRecordSchema })) },
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const artifact = await orchestrator.saveArtifact(request.params.missionId, {
+        taskKey: request.body.taskKey,
+        name: request.body.name,
+        content: request.body.content,
+        description: request.body.description,
+        mimeType: request.body.mimeType,
+      });
+      return reply.code(201).send(ok({ artifact }, request.id));
+    },
+  );
+
+  app.get(
+    "/orchestrator/missions/:missionId/collaboration",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        response: {
+          200: okSchema(
+            z.object({
+              missionId: z.string(),
+              workspace: z.string(),
+              tasks: z.array(
+                z.object({
+                  taskKey: z.string(),
+                  profileKey: z.string(),
+                  state: z.string(),
+                  structuredOutput: z.object({
+                    summary: z.string(),
+                    payloadType: z.string(),
+                    confidenceScore: z.number(),
+                    assumptions: z.array(z.string()),
+                    openQuestions: z.array(z.string()),
+                    proposedSubtasks: z.array(
+                      z.object({
+                        key: z.string(),
+                        title: z.string(),
+                        instruction: z.string(),
+                        reason: z.string(),
+                        priority: z.string(),
+                        profile: z.string().optional(),
+                        depends_on: z.array(z.string()).optional(),
+                      }),
+                    ),
+                    artifacts: z.array(z.any()),
+                  }),
+                  artifacts: z.array(artifactRecordSchema),
+                }),
+              ),
+              artifacts: z.array(artifactRecordSchema),
+              debates: z.array(
+                z.object({
+                  id: z.string(),
+                  taskA: z.object({
+                    key: z.string(),
+                    profile: z.string(),
+                    summary: z.string(),
+                    confidence: z.number(),
+                  }),
+                  taskB: z.object({
+                    key: z.string(),
+                    profile: z.string(),
+                    summary: z.string(),
+                    confidence: z.number(),
+                  }),
+                  issue: z.string(),
+                  severity: z.string(),
+                  recommendation: z.string(),
+                }),
+              ),
+              proposedSubtasks: z.array(
+                z.object({
+                  key: z.string(),
+                  title: z.string(),
+                  instruction: z.string(),
+                  reason: z.string(),
+                  priority: z.string(),
+                  profile: z.string().optional(),
+                  depends_on: z.array(z.string()).optional(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      const view = await orchestrator.getCollaborationView(request.params.missionId);
+      return ok(view, request.id);
     },
   );
 

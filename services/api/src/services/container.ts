@@ -73,6 +73,8 @@ import { DashboardService } from "./dashboard.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 import { ProviderAccountService } from "./provider-accounts.js";
 import { AgentRouter } from "./agent-router.js";
+import { SharedArtifactStore } from "./shared-artifacts.js";
+import { AgentCollaborationService } from "./agent-collaboration.js";
 
 /**
  * Assemblage des services de l'API.
@@ -233,6 +235,8 @@ export class ServiceContainer {
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
   readonly providerAccounts: ProviderAccountService | undefined;
   readonly agentRouter: AgentRouter;
+  readonly sharedArtifacts: SharedArtifactStore;
+  readonly agentCollaboration: AgentCollaborationService;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
@@ -486,6 +490,8 @@ export class ServiceContainer {
       providerAccounts: this.providerAccounts,
       now,
     });
+    this.sharedArtifacts = new SharedArtifactStore();
+    this.agentCollaboration = new AgentCollaborationService();
     this.vault = options.vault;
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;

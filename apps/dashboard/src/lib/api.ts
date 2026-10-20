@@ -488,6 +488,62 @@ export interface RoutingEvaluationDto {
   ranked: RankedAgentDto[];
 }
 
+export interface SharedArtifactDto {
+  id: string;
+  missionKey: string;
+  taskKey: string;
+  name: string;
+  relativePath: string;
+  uri: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface CrossCritiqueDebateDto {
+  id: string;
+  taskA: { key: string; profile: string; summary: string; confidence: number };
+  taskB: { key: string; profile: string; summary: string; confidence: number };
+  issue: string;
+  severity: string;
+  recommendation: string;
+}
+
+export interface ProposedSubtaskDto {
+  key: string;
+  title: string;
+  instruction: string;
+  reason: string;
+  priority: string;
+  profile?: string;
+  depends_on?: string[];
+}
+
+export interface MissionCollaborationDto {
+  missionId: string;
+  workspace: string;
+  tasks: {
+    taskKey: string;
+    profileKey: string;
+    state: string;
+    structuredOutput: {
+      summary: string;
+      payloadType: string;
+      confidenceScore: number;
+      assumptions: string[];
+      openQuestions: string[];
+      proposedSubtasks: ProposedSubtaskDto[];
+      artifacts: unknown[];
+    };
+    artifacts: SharedArtifactDto[];
+  }[];
+  artifacts: SharedArtifactDto[];
+  debates: CrossCritiqueDebateDto[];
+  proposedSubtasks: ProposedSubtaskDto[];
+}
+
 export interface SecuritySection {
   events: {
     at: string;
@@ -788,6 +844,35 @@ export class DashboardApi {
 
   resetRoutingStats(): Promise<{ ok: boolean }> {
     return this.#request("POST", "/api/v1/orchestrator/routing/reset");
+  }
+
+  missionArtifacts(missionId: string): Promise<{ artifacts: SharedArtifactDto[] }> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts`);
+  }
+
+  missionCollaboration(missionId: string): Promise<MissionCollaborationDto> {
+    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/collaboration`);
+  }
+
+  uploadMissionArtifact(
+    missionId: string,
+    input: {
+      taskKey: string;
+      name: string;
+      content: string;
+      description?: string;
+      mimeType?: string;
+    },
+  ): Promise<{ artifact: SharedArtifactDto }> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts`,
+      input,
+    );
+  }
+
+  artifactDownloadUrl(missionId: string, uri: string): string {
+    return `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts/download?uri=${encodeURIComponent(uri)}`;
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {

@@ -12,6 +12,16 @@ import type {
   SubmitMission,
 } from "@nexus/mission-control-client";
 import { AgentRouter } from "./agent-router.js";
+import {
+  SharedArtifactStore,
+  type SharedArtifactRecord,
+} from "./shared-artifacts.js";
+import {
+  AgentCollaborationService,
+  type CrossCritiqueDebate,
+  type ProposedSubtask,
+  type StructuredTaskOutput,
+} from "./agent-collaboration.js";
 
 const plannedTaskSchema = z.object({
   key: z
@@ -59,6 +69,21 @@ export interface OrchestratedMission {
   error: string | null;
 }
 
+export interface MissionCollaborationView {
+  missionId: string;
+  workspace: string;
+  tasks: {
+    taskKey: string;
+    profileKey: string;
+    state: string;
+    structuredOutput: StructuredTaskOutput;
+    artifacts: SharedArtifactRecord[];
+  }[];
+  artifacts: SharedArtifactRecord[];
+  debates: CrossCritiqueDebate[];
+  proposedSubtasks: ProposedSubtask[];
+}
+
 /**
  * Façade NEXUS au-dessus du moteur ACP durable.
  *
@@ -72,6 +97,8 @@ export class AcpOrchestrator {
   readonly #workspaceRoot: string;
   readonly #grants: MissionGrantIssuer | undefined;
   readonly #router: AgentRouter;
+  readonly #sharedArtifacts: SharedArtifactStore;
+  readonly #agentCollaboration: AgentCollaborationService;
 
   constructor(options: {
     missionControl: MissionControlPort;
@@ -89,6 +116,8 @@ export class AcpOrchestrator {
      */
     grants?: MissionGrantIssuer;
     agentRouter?: AgentRouter;
+    sharedArtifacts?: SharedArtifactStore;
+    agentCollaboration?: AgentCollaborationService;
   }) {
     this.#missionControl = options.missionControl;
     this.#llm = options.llm;
@@ -96,10 +125,96 @@ export class AcpOrchestrator {
     this.#grants = options.grants;
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
     this.#router = options.agentRouter ?? new AgentRouter();
+    this.#sharedArtifacts = options.sharedArtifacts ?? new SharedArtifactStore();
+    this.#agentCollaboration = options.agentCollaboration ?? new AgentCollaborationService();
   }
 
   get router(): AgentRouter {
     return this.#router;
+  }
+
+  get sharedArtifacts(): SharedArtifactStore {
+    return this.#sharedArtifacts;
+  }
+
+  get agentCollaboration(): AgentCollaborationService {
+    return this.#agentCollaboration;
+  }
+
+  async getArtifacts(missionId: string): Promise<SharedArtifactRecord[]> {
+    const mission = await this.#missionControl.getMission(missionId);
+    return this.#sharedArtifacts.listArtifacts(mission.workspace);
+  }
+
+  async readArtifact(
+    missionId: string,
+    uriOrRelativePath: string,
+  ): Promise<{ record: SharedArtifactRecord; content: Buffer }> {
+    const mission = await this.#missionControl.getMission(missionId);
+    return this.#sharedArtifacts.readArtifact(mission.workspace, uriOrRelativePath);
+  }
+
+  async saveArtifact(
+    missionId: string,
+    input: {
+      taskKey: string;
+      name: string;
+      content: Buffer | string;
+      description?: string | undefined;
+      mimeType?: string | undefined;
+      metadata?: Record<string, unknown> | undefined;
+    },
+  ): Promise<SharedArtifactRecord> {
+    const mission = await this.#missionControl.getMission(missionId);
+    return this.#sharedArtifacts.saveArtifact({
+      missionWorkspace: mission.workspace,
+      missionKey: missionId,
+      taskKey: input.taskKey,
+      name: input.name,
+      content: input.content,
+      description: input.description,
+      mimeType: input.mimeType,
+      metadata: input.metadata,
+    });
+  }
+
+  async getCollaborationView(missionId: string): Promise<MissionCollaborationView> {
+    const mission = await this.#missionControl.getMission(missionId);
+    const artifacts = await this.#sharedArtifacts.listArtifacts(mission.workspace);
+
+    const tasks = mission.tasks.map((task) => {
+      const structuredOutput = this.#agentCollaboration.parseTaskOutput(task.result_json);
+      const taskArtifacts = artifacts.filter((a) => a.taskKey === task.task_key);
+      return {
+        taskKey: task.task_key,
+        profileKey: task.profile_key,
+        state: task.state,
+        structuredOutput,
+        artifacts: taskArtifacts,
+      };
+    });
+
+    const completedContexts = tasks
+      .filter((t) => t.state === "succeeded")
+      .map((t) => ({
+        taskKey: t.taskKey,
+        profileKey: t.profileKey,
+        output: t.structuredOutput,
+        artifacts: t.artifacts,
+      }));
+
+    const debate = this.#agentCollaboration.detectContradiction(completedContexts);
+    const debates = debate ? [debate] : [];
+    const proposedSubtasks = tasks.flatMap((t) => t.structuredOutput.proposedSubtasks);
+
+    return {
+      missionId: mission.id,
+      workspace: mission.workspace,
+      tasks,
+      artifacts,
+      debates,
+      proposedSubtasks,
+    };
   }
 
   async submit(userId: string, objective: string): Promise<OrchestratedMission> {
