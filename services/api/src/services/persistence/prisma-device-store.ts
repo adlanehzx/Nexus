@@ -1,5 +1,5 @@
-import { uuidv7 } from '@nexus/shared';
-import type { PrismaClient } from "@nexus/database";
+import { uuidv7 } from "@nexus/shared";
+import type { InputJsonObject, PrismaClient } from "@nexus/database";
 import type { DeviceStore, Device } from "@nexus/devices";
 
 export class PrismaDeviceStore implements DeviceStore {
@@ -14,9 +14,9 @@ export class PrismaDeviceStore implements DeviceStore {
       name: c.name,
       version: c.version,
       description: c.description,
-      inputSchema: c.inputSchema as any,
       enabled: c.enabled,
-      metadata: c.metadata as any,
+      metadata: c.metadata,
+      ...jsonField("inputSchema", c.inputSchema),
     }));
 
     await this.#prisma.device.upsert({
@@ -25,15 +25,15 @@ export class PrismaDeviceStore implements DeviceStore {
         id: device.id,
         userId: device.userId,
         name: device.name,
-        type: device.type as any,
-        platform: device.platform as any,
-        role: device.role as any,
-        status: device.status as any,
-        trust: device.trust as any,
+        type: device.type,
+        platform: device.platform,
+        role: device.role,
+        status: device.status,
+        trust: device.trust,
         agentVersion: device.agentVersion,
-        health: device.health as any,
+        health: device.health,
         grantedPermissions: device.grantedPermissions,
-        metadata: device.metadata as any,
+        metadata: device.metadata,
         lastSeenAt: device.lastSeenAt,
         pairedAt: device.pairedAt,
         revokedAt: device.revokedAt,
@@ -43,12 +43,12 @@ export class PrismaDeviceStore implements DeviceStore {
       },
       update: {
         name: device.name,
-        status: device.status as any,
-        trust: device.trust as any,
+        status: device.status,
+        trust: device.trust,
         agentVersion: device.agentVersion,
-        health: device.health as any,
+        health: device.health,
         grantedPermissions: device.grantedPermissions,
-        metadata: device.metadata as any,
+        metadata: device.metadata,
         lastSeenAt: device.lastSeenAt,
         revokedAt: device.revokedAt,
       },
@@ -63,16 +63,16 @@ export class PrismaDeviceStore implements DeviceStore {
           name: cap.name,
           version: cap.version,
           description: cap.description,
-          inputSchema: cap.inputSchema as any,
           enabled: cap.enabled,
-          metadata: cap.metadata as any,
+          metadata: cap.metadata,
+          ...jsonField("inputSchema", cap.inputSchema),
         },
         update: {
           version: cap.version,
           description: cap.description,
-          inputSchema: cap.inputSchema as any,
           enabled: cap.enabled,
-          metadata: cap.metadata as any,
+          metadata: cap.metadata,
+          ...jsonField("inputSchema", cap.inputSchema),
         },
       });
     }
@@ -105,3 +105,24 @@ export class PrismaDeviceStore implements DeviceStore {
   }
 }
 
+/**
+ * Champ JSON facultatif d'une entrée Prisma.
+ *
+ * `exactOptionalPropertyTypes` est actif, et les types d'entrée de Prisma
+ * n'acceptent pas `undefined` sur une colonne `Json` : passer la clé à
+ * `undefined` est refusé, l'omettre est accepté. On omet donc, plutôt que de
+ * masquer le désaccord sous un `as any` — un cast ici laisserait aussi passer
+ * une valeur non sérialisable.
+ */
+function jsonField<K extends string>(
+  key: K,
+  value: Record<string, unknown> | undefined,
+): Record<K, InputJsonObject> | Record<string, never> {
+  // L'assertion est ici, une fois, et elle est précise : `InputJsonObject`,
+  // pas `any`. Ce qu'elle affirme est vrai par construction — ces objets
+  // viennent de schémas JSON validés par Zod — et si elle devenait fausse, le
+  // compilateur continuerait de vérifier tout le reste de l'appel.
+  return value === undefined
+    ? {}
+    : ({ [key]: value as InputJsonObject } as Record<K, InputJsonObject>);
+}

@@ -26,21 +26,24 @@ export class PrismaUserStore implements UserStore {
             create: {
               id: uuidv7(),
               passwordHash: input.passwordHash,
-            }
-          }
-        }
+            },
+          },
+        },
       });
       return {
         id: user.id,
         email: user.email,
         displayName: user.displayName,
-        role: (user as any).role as UserRole ?? 'USER',
+        role: toUserRole(user.role),
         status: user.status as "ACTIVE" | "SUSPENDED",
         createdAt: user.createdAt,
       };
-    } catch (err: any) {
-      if (err.code === "P2002") {
-        throw new ConflictError(`Adresse d�j� enregistr�e : ${email}`, "Un compte existe d�j� avec cette adresse.");
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError(
+          `Adresse déjà enregistrée : ${email}`,
+          "Un compte existe déjà avec cette adresse.",
+        );
       }
       throw err;
     }
@@ -53,7 +56,7 @@ export class PrismaUserStore implements UserStore {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
-      role: (user as any).role as UserRole ?? 'USER',
+      role: toUserRole(user.role),
       status: user.status as "ACTIVE" | "SUSPENDED",
       createdAt: user.createdAt,
     };
@@ -64,12 +67,12 @@ export class PrismaUserStore implements UserStore {
       where: { email: email.trim().toLowerCase() },
       include: { authCredential: true },
     });
-    if (!user || !user.authCredential) return undefined;
+    if (!user?.authCredential) return undefined;
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
-      role: (user as any).role as UserRole ?? 'USER',
+      role: toUserRole(user.role),
       status: user.status as "ACTIVE" | "SUSPENDED",
       createdAt: user.createdAt,
       passwordHash: user.authCredential.passwordHash,
@@ -95,3 +98,30 @@ export class PrismaUserStore implements UserStore {
   }
 }
 
+/**
+ * Resserre le rôle lu en base sur l'union du domaine.
+ *
+ * La colonne est un `TEXT` nullable : Prisma la rend donc `string | null`, et
+ * rien ne garantit au compilateur qu'elle ne contient que les deux valeurs
+ * attendues. Le défaut `USER` est le choix sûr — un rôle illisible ne doit pas
+ * accorder des droits d'administration.
+ */
+function toUserRole(value: string | null): UserRole {
+  return value === "ADMIN" ? "ADMIN" : "USER";
+}
+
+/**
+ * Violation de contrainte d'unicité Prisma (`P2002`).
+ *
+ * L'erreur d'un `catch` est `unknown`, et c'est exact : rien ne promet qu'elle
+ * porte un `code`. On le vérifie donc, au lieu de l'affirmer avec un `any` qui
+ * ferait aussi taire le compilateur sur tout le reste du bloc.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}

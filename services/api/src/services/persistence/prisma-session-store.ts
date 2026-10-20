@@ -23,13 +23,13 @@ export class PrismaSessionStore implements SessionStore {
   async get(id: string): Promise<UserSession | undefined> {
     const s = await this.#prisma.session.findUnique({ where: { id } });
     if (!s) return undefined;
-    return s as unknown as UserSession;
+    return s;
   }
 
   async findByRefreshHash(hash: string): Promise<UserSession | undefined> {
     const s = await this.#prisma.session.findUnique({ where: { refreshTokenHash: hash } });
     if (!s) return undefined;
-    return s as unknown as UserSession;
+    return s;
   }
 
   async revoke(id: string, at: Date): Promise<void> {

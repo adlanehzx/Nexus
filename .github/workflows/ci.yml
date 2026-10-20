@@ -1,0 +1,140 @@
+# Intégration continue NEXUS.
+#
+# Ce workflow existe parce que son absence a coûté cher : `pnpm lint` échouait
+# depuis septembre sur 95 erreurs, et personne ne le voyait — `pnpm verify`
+# s'arrête au lint, donc en le lançant on ne voyait même pas les tests passer.
+# Un magasin PostgreSQL entier était inutilisable sans que rien ne le signale.
+#
+# Deux principes de conception :
+#
+#   1. **Les étapes sont séparées.** `pnpm verify` enchaîne tout et s'arrête à
+#      la première erreur ; ici build, lint, typecheck et tests ont chacun leur
+#      étape, pour qu'un échec de lint ne cache pas un test rouge.
+#   2. **Aucun service n'est nécessaire.** Les tests de l'API utilisent des
+#      magasins en mémoire, et le moteur une base SQLite temporaire. Ne pas
+#      dépendre de PostgreSQL garde la CI rapide et sans état partagé — c'est
+#      aussi pour cela qu'elle ne couvre pas les magasins Prisma.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Monorepo TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Installer pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # La version vient de `packageManager` dans package.json : la répéter
+          # ici la ferait dériver au prochain changement.
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          # `.nvmrc` est la source de vérité. `engine-strict` est actif et
+          # pnpm 11, ESLint 10 et Prisma 7 refusent de tourner en deçà de
+          # Node 22.13 : une version plus ancienne échouerait, mais tard.
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      # Le client Prisma est généré, pas versionné. `build` le produit via le
+      # paquet @nexus/database, mais lint et typecheck en ont besoin aussi :
+      # sans lui, les types des magasins deviennent `any` et les règles
+      # `no-unsafe-*` passent à côté de tout.
+      - name: Générer le client Prisma
+        run: pnpm db:generate
+
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      # `pnpm format:check` n'est volontairement pas une étape : il échoue
+      # aujourd'hui sur 47 fichiers antérieurs, et le rendre bloquant
+      # imposerait un reformatage massif sans rapport avec le code qui change.
+      # La roadmap ne le liste pas non plus parmi les portes de la phase 0.
+
+  mission-engine:
+    name: Mission Engine (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/mission-engine
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Installer uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Installer les dépendances
+        run: uv sync --frozen --dev
+
+      - name: Tests
+        run: uv run pytest -q
+
+  security:
+    name: Secrets et dépendances
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks a besoin de l'historique pour inspecter les commits, pas
+          # seulement l'arbre de travail.
+          fetch-depth: 0
+
+      - name: Rechercher des secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      # Volontairement **non bloquant**, et la raison est documentée plutôt que
+      # cachée : l'audit remonte aujourd'hui 38 avis dont 2 critiques, tous
+      # transitifs. Rendre l'étape bloquante immobiliserait chaque branche sur
+      # des correctifs qui ne dépendent pas de ce dépôt ; la rendre silencieuse
+      # reviendrait à ne pas auditer. Elle signale, et le jour où l'arriéré est
+      # purgé, retirer cette ligne la rend bloquante.
+      - name: Auditer les dépendances
+        continue-on-error: true
+        run: pnpm audit --prod --audit-level high

@@ -77,7 +77,9 @@ describe("pont Mission Engine vers Agent Core", () => {
   const MISSION = "nexus-mission-sous-test";
 
   async function setup(responses = ["Travail délégué effectué."]) {
-    const llm = new ScriptedLLMProvider(responses.map((text) => ({ kind: "final" as const, text })));
+    const llm = new ScriptedLLMProvider(
+      responses.map((text) => ({ kind: "final" as const, text })),
+    );
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
     const grant = harness.services.tokens.issueMissionGrant({
