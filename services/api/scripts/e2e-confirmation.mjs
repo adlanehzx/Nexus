@@ -259,7 +259,11 @@ async function main() {
     token: account.accessToken,
     body: { decision: "approved" },
   });
-  assert("confirmation approuvée par le propriétaire", approved.status === 200, `HTTP ${approved.status}`);
+  assert(
+    "confirmation approuvée par le propriétaire",
+    approved.status === 200,
+    `HTTP ${approved.status}`,
+  );
 
   const finished = await until(
     "tâche reprise et terminée",
@@ -303,7 +307,9 @@ async function main() {
       body: { email, displayName: "E2E", password: PASSWORD },
     });
     if (response.status !== 201 && response.status !== 200) {
-      throw new Error(`inscription refusée : HTTP ${response.status} ${JSON.stringify(response.body)}`);
+      throw new Error(
+        `inscription refusée : HTTP ${response.status} ${JSON.stringify(response.body)}`,
+      );
     }
     return {
       userId: response.body.data.user.id,
@@ -369,7 +375,11 @@ async function startEngine(env) {
       "-c",
       `import uvicorn; uvicorn.run("nexus_engine.api:app", host="127.0.0.1", port=${ENGINE_PORT}, log_level="warning")`,
     ],
-    { cwd: new URL("../../mission-engine", import.meta.url).pathname, env, stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd: new URL("../../mission-engine", import.meta.url).pathname,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
   );
   // Le flux est consomme sans etre relaye : sans lecteur, le tube se remplit et
   // finirait par bloquer le processus enfant.

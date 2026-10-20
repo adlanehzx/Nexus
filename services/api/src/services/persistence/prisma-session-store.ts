@@ -47,4 +47,3 @@ export class PrismaSessionStore implements SessionStore {
     return res.count;
   }
 }
-

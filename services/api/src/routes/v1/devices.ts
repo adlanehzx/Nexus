@@ -27,12 +27,14 @@ const deviceSchema = z.object({
   trust: z.string(),
   capabilities: z.array(z.string()),
   grantedPermissions: z.array(z.string()),
-  health: z.object({
-    activeTasks: z.number(),
-    maxConcurrentTasks: z.number(),
-    batteryPercent: z.number().optional(),
-    onBattery: z.boolean().optional(),
-  }).passthrough(),
+  health: z
+    .object({
+      activeTasks: z.number(),
+      maxConcurrentTasks: z.number(),
+      batteryPercent: z.number().optional(),
+      onBattery: z.boolean().optional(),
+    })
+    .passthrough(),
   lastSeenAt: z.string().datetime().nullable(),
   authenticated: z.boolean(),
 });
@@ -107,23 +109,24 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       schema: {
         tags: ["devices"],
         summary: "Enregistre un appareil — il arrive hors ligne et non approuvé",
-        body: z.object({
-          name: z.string().min(1).max(120),
-          type: z.enum(["IPHONE", "ANDROID", "WINDOWS_PC", "MAC", "LINUX", "BROWSER_WORKER"]),
-          platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
-          role: z.enum(["CLIENT", "WORKER", "BOTH"]),
-          /**
-           * Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android.
-           *
-           * Facultative **dans la forme seulement** : le raffinement ci-dessous
-           * la rend obligatoire dès que l'appareil demande à exécuter. Un rôle
-           * `WORKER` ou `BOTH` sans clé serait un exécutant dont on ne peut
-           * vérifier aucune signature — l'ouvrir reviendrait à supprimer la
-           * poignée de main worker.
-           */
-          publicKeyPem: z.string().min(1).max(4_096).optional(),
-          grantedPermissions: z.array(z.string()).max(64).default([]),
-        })
+        body: z
+          .object({
+            name: z.string().min(1).max(120),
+            type: z.enum(["IPHONE", "ANDROID", "WINDOWS_PC", "MAC", "LINUX", "BROWSER_WORKER"]),
+            platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
+            role: z.enum(["CLIENT", "WORKER", "BOTH"]),
+            /**
+             * Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android.
+             *
+             * Facultative **dans la forme seulement** : le raffinement ci-dessous
+             * la rend obligatoire dès que l'appareil demande à exécuter. Un rôle
+             * `WORKER` ou `BOTH` sans clé serait un exécutant dont on ne peut
+             * vérifier aucune signature — l'ouvrir reviendrait à supprimer la
+             * poignée de main worker.
+             */
+            publicKeyPem: z.string().min(1).max(4_096).optional(),
+            grantedPermissions: z.array(z.string()).max(64).default([]),
+          })
           /**
            * Un exécutant signe ; un client ne signe pas.
            *
@@ -138,14 +141,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
            * posée ici plutôt que dans le code métier pour qu'aucun appelant ne
            * puisse l'oublier.
            */
-          .refine(
-            (body) => body.role === "CLIENT" || body.publicKeyPem !== undefined,
-            {
-              path: ["publicKeyPem"],
-              message:
-                "Une clé publique est obligatoire pour un appareil exécutant (WORKER ou BOTH).",
-            },
-          ),
+          .refine((body) => body.role === "CLIENT" || body.publicKeyPem !== undefined, {
+            path: ["publicKeyPem"],
+            message:
+              "Une clé publique est obligatoire pour un appareil exécutant (WORKER ou BOTH).",
+          }),
         response: { 201: okSchema(deviceSchema) },
       },
     },

@@ -23,7 +23,9 @@ export class FallbackProvider implements LLMProvider {
       tools: this.providers.some((p) => p.capabilities.tools ?? false),
       vision: this.providers.some((p) => p.capabilities.vision ?? false),
       structuredOutput: this.providers.some((p) => p.capabilities.structuredOutput ?? false),
-      maxContextTokens: Math.max(...this.providers.map((p) => p.capabilities.maxContextTokens ?? 0)),
+      maxContextTokens: Math.max(
+        ...this.providers.map((p) => p.capabilities.maxContextTokens ?? 0),
+      ),
     };
   }
   private readonly providers: LLMProvider[];

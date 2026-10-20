@@ -63,7 +63,12 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="vide"><strong>Aucune donnée</strong><span>{children}</span></div>;
+  return (
+    <div className="vide">
+      <strong>Aucune donnée</strong>
+      <span>{children}</span>
+    </div>
+  );
 }
 
 /**
@@ -128,16 +133,22 @@ export function Section<T>(props: {
     return (
       <div className="banniere erreur section-error" role="alert">
         <span>{props.state.error}</span>
-        <button className="bouton compact" type="button" onClick={props.state.reload}>Réessayer</button>
+        <button className="bouton compact" type="button" onClick={props.state.reload}>
+          Réessayer
+        </button>
       </div>
     );
   }
   if (props.state.data === undefined) {
     return props.state.loading ? (
       <div className="loading-state" role="status" aria-label="Chargement en cours">
-        <span /><span /><span />
+        <span />
+        <span />
+        <span />
       </div>
-    ) : <Empty>Aucune donnée disponible pour cette section.</Empty>;
+    ) : (
+      <Empty>Aucune donnée disponible pour cette section.</Empty>
+    );
   }
   return <>{props.children(props.state.data)}</>;
 }

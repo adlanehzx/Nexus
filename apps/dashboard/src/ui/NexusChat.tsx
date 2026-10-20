@@ -43,7 +43,11 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               message.mission?.missionId === missionId ? { ...message, mission } : message,
             ),
           );
-          if (mission.state === "succeeded" || mission.state === "failed" || mission.error !== null) {
+          if (
+            mission.state === "succeeded" ||
+            mission.state === "failed" ||
+            mission.error !== null
+          ) {
             setActiveMission(null);
           }
         })
@@ -86,8 +90,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             <div className="nexus-mark">N</div>
             <h2>Que veux-tu accomplir&nbsp;?</h2>
             <p>
-              Parle à NEXUS. Il choisit les agents, répartit le travail, confronte leurs réponses
-              et te livre un seul résultat.
+              Parle à NEXUS. Il choisit les agents, répartit le travail, confronte leurs réponses et
+              te livre un seul résultat.
             </p>
           </div>
         ) : null}
@@ -113,7 +117,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           aria-label="Mission à confier à NEXUS"
           value={draft}
           disabled={activeMission !== null}
-          placeholder={activeMission === null ? "Donne une mission à NEXUS…" : "Les agents travaillent…"}
+          placeholder={
+            activeMission === null ? "Donne une mission à NEXUS…" : "Les agents travaillent…"
+          }
           rows={3}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -154,9 +160,8 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
   if (mission.error !== null || mission.state === "failed") {
     return <div className="chat-error">{mission.error ?? "La mission a échoué."}</div>;
   }
-  const percent = mission.totalTasks === 0
-    ? 0
-    : Math.round((mission.completedTasks / mission.totalTasks) * 100);
+  const percent =
+    mission.totalTasks === 0 ? 0 : Math.round((mission.completedTasks / mission.totalTasks) * 100);
   return (
     <div className="mission-progress">
       <div className="agent-line">
@@ -171,7 +176,9 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
-      ><div style={{ width: `${String(percent)}%` }} /></div>
+      >
+        <div style={{ width: `${String(percent)}%` }} />
+      </div>
       <div className="faible">
         NEXUS orchestre la mission · {mission.completedTasks}/{mission.totalTasks} tâches terminées
       </div>

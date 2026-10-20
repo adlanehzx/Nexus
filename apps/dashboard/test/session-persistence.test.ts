@@ -13,12 +13,20 @@ describe("session du tableau de bord", () => {
         removeItem: (key: string) => values.delete(key),
       },
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      data: {
-        user: { id: "user-1" },
-        tokens: { accessToken: "access-for-test", refreshToken: "refresh-for-test" },
-      },
-    }), { status: 200, headers: { "content-type": "application/json" } })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              user: { id: "user-1" },
+              tokens: { accessToken: "access-for-test", refreshToken: "refresh-for-test" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
 
     const first = createSession("http://localhost:3000");
     await first.login("admin@example.test", "test-password");

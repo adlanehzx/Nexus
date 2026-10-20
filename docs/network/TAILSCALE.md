@@ -14,24 +14,24 @@ fiable.**
 
 Tout ce qui suit a été **mesuré sur le poste**, pas déduit d'une configuration.
 
-| Point | État | Preuve |
-| --- | --- | --- |
-| Nœud Core | `adlane`, Windows, Tailscale actif | `tailscale status` |
-| MagicDNS | actif, suffixe `tail9a479d.ts.net` | `tailscale dns status` |
-| FQDN | `adlane.tail9a479d.ts.net` → `100.90.176.40` | résolution vérifiée |
-| Pare-feu hôte | **activé** sur les trois profils | `Get-NetFirewallProfile` |
-| API (Core) | `127.0.0.1:3000` uniquement | `docker ps` |
-| PostgreSQL | `127.0.0.1:15432` uniquement | `docker ps` |
-| Redis | `127.0.0.1:6379` uniquement | `docker ps` |
-| Worker navigateur | aucun port publié | `docker-compose.yml` |
-| Port 3000 via IP Tailscale | **fermé** | `Test-NetConnection` |
-| Cœur joignable en direct sur `:3000` | **non** | `Test-NetConnection` |
-| Tailscale Serve | **actif**, `tailnet only` | `tailscale serve status` |
-| Certificat | Let's Encrypt, `CN=adlane.tail9a479d.ts.net` | `openssl s_client` |
-| HTTPS `/health` | **200** | `curl` sur le FQDN |
-| WSS `/ws/client` | **accepté** après approbation | poignée de main rejouée |
-| Tailscale Funnel | **désactivé** | aucune clé `AllowFunnel` |
-| Politique du tailnet | **encore ouverte** | `tailscale debug netmap` |
+| Point                                | État                                         | Preuve                   |
+| ------------------------------------ | -------------------------------------------- | ------------------------ |
+| Nœud Core                            | `adlane`, Windows, Tailscale actif           | `tailscale status`       |
+| MagicDNS                             | actif, suffixe `tail9a479d.ts.net`           | `tailscale dns status`   |
+| FQDN                                 | `adlane.tail9a479d.ts.net` → `100.90.176.40` | résolution vérifiée      |
+| Pare-feu hôte                        | **activé** sur les trois profils             | `Get-NetFirewallProfile` |
+| API (Core)                           | `127.0.0.1:3000` uniquement                  | `docker ps`              |
+| PostgreSQL                           | `127.0.0.1:15432` uniquement                 | `docker ps`              |
+| Redis                                | `127.0.0.1:6379` uniquement                  | `docker ps`              |
+| Worker navigateur                    | aucun port publié                            | `docker-compose.yml`     |
+| Port 3000 via IP Tailscale           | **fermé**                                    | `Test-NetConnection`     |
+| Cœur joignable en direct sur `:3000` | **non**                                      | `Test-NetConnection`     |
+| Tailscale Serve                      | **actif**, `tailnet only`                    | `tailscale serve status` |
+| Certificat                           | Let's Encrypt, `CN=adlane.tail9a479d.ts.net` | `openssl s_client`       |
+| HTTPS `/health`                      | **200**                                      | `curl` sur le FQDN       |
+| WSS `/ws/client`                     | **accepté** après approbation                | poignée de main rejouée  |
+| Tailscale Funnel                     | **désactivé**                                | aucune clé `AllowFunnel` |
+| Politique du tailnet                 | **encore ouverte**                           | `tailscale debug netmap` |
 
 Le blocage pare-feu constaté le 2026-09-06 est **levé** : les trois profils sont
 actifs. La publication Docker sur `0.0.0.0` l'est également.
@@ -82,12 +82,12 @@ contient aucune clé `AllowFunnel`, et `serve status` porte la mention
 
 Vérifié de bout en bout à travers `https://` et `wss://` :
 
-| Geste | Résultat |
-| --- | --- |
-| `GET /health` en HTTPS | 200, TLS valide |
-| Inscription, enregistrement d'appareil, approbation | 201 / 201 / 200 |
-| WSS avec un appareil `PENDING` | refusé, code 4403 |
-| WSS avec un appareil `TRUSTED` | accepté, `device.list` accusé |
+| Geste                                               | Résultat                      |
+| --------------------------------------------------- | ----------------------------- |
+| `GET /health` en HTTPS                              | 200, TLS valide               |
+| Inscription, enregistrement d'appareil, approbation | 201 / 201 / 200               |
+| WSS avec un appareil `PENDING`                      | refusé, code 4403             |
+| WSS avec un appareil `TRUSTED`                      | accepté, `device.list` accusé |
 
 Le Core reste inaccessible sur `100.90.176.40:3000`, comme sur les ports de
 PostgreSQL et de Redis.
@@ -115,9 +115,11 @@ réellement appliqué à ce nœud — lu par `tailscale debug netmap` — est ce
 la politique par défaut :
 
 ```json
-{ "Srcs": ["100.64.0.0/11", "fd7a:115c:a1e0::/48"],
+{
+  "Srcs": ["100.64.0.0/11", "fd7a:115c:a1e0::/48"],
   "Dsts": [{ "Net": "0.0.0.0/0", "Ports": { "First": 0, "Last": 65535 } }],
-  "IPProto": [6, 17, 1, 58] }
+  "IPProto": [6, 17, 1, 58]
+}
 ```
 
 Autrement dit : **tout nœud du tailnet peut joindre tout port de tout autre
@@ -170,7 +172,7 @@ CORS_ORIGINS=…,https://adlane.tail9a479d.ts.net
 téléphone, ouvrir une socket en imposant l'en-tête :
 
 ```js
-new WebSocket("wss://<fqdn>/ws/client", { origin: "https://<fqdn>" })
+new WebSocket("wss://<fqdn>/ws/client", { origin: "https://<fqdn>" });
 ```
 
 Une origine inconnue — `null`, par exemple — doit continuer d'être refusée :

@@ -6,7 +6,9 @@ const fakeLlm = {
   id: "fake",
   model: "fake",
   capabilities: { tools: false, vision: false, structuredOutput: true, maxContextTokens: 100000 },
-  countTokens() { return Promise.resolve(10); },
+  countTokens() {
+    return Promise.resolve(10);
+  },
   structuredOutput<T>(_request: unknown, _schema: unknown): Promise<T> {
     return Promise.resolve({
       title: "Ouvrir Chrome",
@@ -20,12 +22,22 @@ const fakeLlm = {
           arguments: { app: "chrome" },
           dependsOn: [],
           riskLevel: "LOW",
-        }
-      ]
+        },
+      ],
     } as unknown as T);
   },
-  generate() { return Promise.resolve({ content: [], stopReason: "end_turn" as const, usage: { inputTokens: 0, outputTokens: 0 }, model: "fake" }); },
-  async *stream() { await Promise.resolve(); yield { type: "text_delta", delta: "" } as unknown as { type: "text_delta"; delta: string }; }
+  generate() {
+    return Promise.resolve({
+      content: [],
+      stopReason: "end_turn" as const,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      model: "fake",
+    });
+  },
+  async *stream() {
+    await Promise.resolve();
+    yield { type: "text_delta", delta: "" } as unknown as { type: "text_delta"; delta: string };
+  },
 };
 
 describe("POST /api/v1/tasks/instruct", () => {
@@ -58,7 +70,7 @@ describe("POST /api/v1/tasks/instruct", () => {
     });
 
     expect(response.statusCode).toBe(202);
-    
+
     const body = response.json<{ data: { title: string; steps: unknown[] } }>();
     expect(body.data.title).toBe("Ouvrir Chrome");
     expect(body.data.steps).toHaveLength(1);

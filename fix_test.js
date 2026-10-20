@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require("fs");
 const code = `\ndescribe('CORS et CSP', () => {
   it('doit accepter un preflight valide', async () => {
     const response = await harness.app.inject({
@@ -14,4 +14,4 @@ const code = `\ndescribe('CORS et CSP', () => {
     expect(response.headers['access-control-allow-methods']).toMatch(/POST/);
   });
 });\n`;
-fs.appendFileSync('services/api/test/rest.test.ts', code, 'utf8');
+fs.appendFileSync("services/api/test/rest.test.ts", code, "utf8");

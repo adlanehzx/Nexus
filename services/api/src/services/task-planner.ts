@@ -12,7 +12,9 @@ export const llmTaskStepSchema = z.object({
   tool: z
     .string()
     .describe("L'outil à invoquer (doit toujours correspondre au format 'device.<capability>')"),
-  arguments: z.record(z.string(), z.unknown()).describe("Arguments spécifiques à fournir à l'outil"),
+  arguments: z
+    .record(z.string(), z.unknown())
+    .describe("Arguments spécifiques à fournir à l'outil"),
   dependsOn: z
     .array(z.string())
     .describe("Liste des identifiants (id) des étapes qui doivent réussir avant celle-ci"),
@@ -80,7 +82,9 @@ RÈGLES ABSOLUES :
 `;
 
     const request = {
-      messages: [{ role: "user", content: [{ type: "text", text: input.instruction }] }] as LlmMessage[],
+      messages: [
+        { role: "user", content: [{ type: "text", text: input.instruction }] },
+      ] as LlmMessage[],
       system: systemPrompt,
     };
 
@@ -89,7 +93,8 @@ RÈGLES ABSOLUES :
       result = await this.#llm.structuredOutput(request, llmTaskPlanSchema);
     } catch (err: unknown) {
       throw new TaskPlannerError(
-        "Erreur lors de la generation du plan par le LLM : " + (err instanceof Error ? err.message : String(err)),
+        "Erreur lors de la generation du plan par le LLM : " +
+          (err instanceof Error ? err.message : String(err)),
       );
     }
 

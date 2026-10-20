@@ -61,11 +61,15 @@ describe("LLM Providers Phase 2", () => {
       mockProc.emit("close", 0);
 
       const res = await promise;
-      const textContent = res.content[0] as Extract<typeof res.content[0], { type: "text" }>;
+      const textContent = res.content[0] as Extract<(typeof res.content)[0], { type: "text" }>;
       expect(textContent.type).toBe("text");
       expect(textContent.text).toBe("World!");
       const isWin = process.platform === "win32";
-      expect(spawn).toHaveBeenCalledWith(isWin ? "npx.cmd" : "npx", ["--yes", "@anthropic-ai/claude-code", "-p", "user: Hello"], expect.any(Object));
+      expect(spawn).toHaveBeenCalledWith(
+        isWin ? "npx.cmd" : "npx",
+        ["--yes", "@anthropic-ai/claude-code", "-p", "user: Hello"],
+        expect.any(Object),
+      );
     });
 
     test("Doit throw une erreur retryable si exit code non nul", async () => {
@@ -149,7 +153,7 @@ describe("LLM Providers Phase 2", () => {
       expect(vi.mocked(failingProvider.generate)).toHaveBeenCalled();
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(vi.mocked(successProvider.generate)).toHaveBeenCalled();
-      const textContent = res.content[0] as Extract<typeof res.content[0], { type: "text" }>;
+      const textContent = res.content[0] as Extract<(typeof res.content)[0], { type: "text" }>;
       expect(textContent.text).toBe("Success!");
     });
 

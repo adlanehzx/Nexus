@@ -230,7 +230,7 @@ provisionner. La procédure est dans `.env.example`, et l'unité systemd porte l
 ligne à décommenter.
 
 Le motif d'un refus va dans le journal du moteur, jamais dans la réponse :
-savoir *pourquoi* un jeton est refusé n'aide que celui qui en forge un.
+savoir _pourquoi_ un jeton est refusé n'aide que celui qui en forge un.
 
 ### Identité propriétaire signée
 
@@ -294,7 +294,7 @@ un worker interrompu laisse soit l'ancienne, soit la nouvelle.
 le retrait de ses assertions puis oublie celle qu'il stockait. C'est une
 auto-révocation : on présente l'assertion qu'on veut retirer, ce qui ne donne
 aucun pouvoir supplémentaire — là où un point d'entrée capable de révoquer
-*autrui* en donnerait un.
+_autrui_ en donnerait un.
 
 Le retrait passe par le worker et non par la transaction qui conclut la mission :
 y faire un appel réseau rendrait la clôture dépendante de la disponibilité de

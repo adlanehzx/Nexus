@@ -677,7 +677,10 @@ function messageOf(body: unknown): string {
  * rafraîchissement, mais disparaissent à sa fermeture. Aucun jeton n'est écrit
  * dans le stockage permanent du navigateur.
  */
-export function createSession(baseUrl: string, onSignedOut?: (reason: string) => void): SessionManager {
+export function createSession(
+  baseUrl: string,
+  onSignedOut?: (reason: string) => void,
+): SessionManager {
   const http: HttpClient = new FetchHttpClient(baseUrl);
   return new SessionManager({
     http,

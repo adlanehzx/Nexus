@@ -36,7 +36,9 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.orb}><NexusOrb state={busy ? "executing" : "idle"} size={132} /></View>
+      <View style={styles.orb}>
+        <NexusOrb state={busy ? "executing" : "idle"} size={132} />
+      </View>
       <Text style={styles.eyebrow}>PERSONAL INTELLIGENCE OS</Text>
       <Text style={styles.title}>NEXUS</Text>
       <Text style={styles.subtitle}>Votre console personnelle, sur tous vos appareils.</Text>
