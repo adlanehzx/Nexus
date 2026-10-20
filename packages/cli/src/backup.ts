@@ -400,19 +400,95 @@ export function libpqUrl(databaseUrl: string): string {
   return url.toString();
 }
 
+
+/**
+ * Repère un refus de `pg_dump` pour cause de version trop ancienne.
+ *
+ * `pg_dump` refuse de sauvegarder un serveur plus récent que lui, et c'est une
+ * protection légitime : le format de sortie dépend de la version. Le cas est
+ * courant — un client issu des paquets de la distribution face à un serveur
+ * lancé par Docker.
+ */
+export function isVersionMismatch(message: string): boolean {
+  return /server version mismatch|server version: \d+/.test(message);
+}
+
+/**
+ * Nom du conteneur Docker qui publie ce port.
+ *
+ * Le repli quand le client local est trop ancien : le conteneur embarque un
+ * `pg_dump` de la même version que son serveur, par construction. On identifie
+ * le conteneur par le port publié plutôt que par son nom — un nom codé en dur
+ * serait faux dès la première installation qui le change.
+ */
+export function containerPublishing(dockerPs: string, port: number): string | undefined {
+  for (const line of dockerPs.split("\n")) {
+    const [name = "", ports = ""] = line.split("\t");
+    if (name.length === 0) continue;
+    if (new RegExp(`:${port}->`).test(ports)) return name;
+  }
+  return undefined;
+}
+
 async function dumpPostgres(databaseUrl: string): Promise<Buffer> {
   const workspace = mkdtempSync(join(tmpdir(), "nexus-dump-"));
   try {
     const path = join(workspace, "postgres.dump");
-    // Format personnalisé : compressé, et restaurable table par table si la
-    // restauration complète échoue un jour.
-    await run("pg_dump", ["--format", "custom", "--file", path, libpqUrl(databaseUrl)], {
-      maxBuffer: 1024 * 1024 * 64,
-    });
-    return readFileSync(path);
+    const url = libpqUrl(databaseUrl);
+    try {
+      // Format personnalisé : compressé, et restaurable table par table si la
+      // restauration complète échoue un jour.
+      await run("pg_dump", ["--format", "custom", "--file", path, url], {
+        maxBuffer: 1024 * 1024 * 64,
+      });
+      return readFileSync(path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isVersionMismatch(message)) throw error;
+
+      // Repli par le conteneur, qui embarque un client de la même version que
+      // son serveur. Refuser ici obligerait à installer un paquet pour
+      // sauvegarder une base qui tourne déjà très bien.
+      const dumped = await dumpThroughContainer(url);
+      if (dumped === undefined) {
+        throw new Error(
+          `${message}\n` +
+            "Le client pg_dump local est plus ancien que le serveur, et aucun " +
+            "conteneur publiant ce port n'a été trouvé.\n" +
+            "Installer un client de la même version majeure que le serveur, " +
+            "ou démarrer PostgreSQL par `pnpm docker:up`.",
+        );
+      }
+      return dumped;
+    }
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
+}
+
+async function dumpThroughContainer(url: string): Promise<Buffer | undefined> {
+  const parsed = new URL(url);
+  const port = Number(parsed.port.length > 0 ? parsed.port : 5432);
+  const listing = await run("docker", ["ps", "--format", "{{.Names}}\\t{{.Ports}}"]).then(
+    (result) => result.stdout,
+    () => undefined,
+  );
+  if (listing === undefined) return undefined;
+
+  const container = containerPublishing(listing, port);
+  if (container === undefined) return undefined;
+
+  // Vu de l'intérieur du conteneur, le serveur est sur son propre réseau local.
+  const internal = new URL(url);
+  internal.hostname = "127.0.0.1";
+  internal.port = "5432";
+
+  const { stdout } = await run(
+    "docker",
+    ["exec", container, "pg_dump", "--format", "custom", internal.toString()],
+    { maxBuffer: 1024 * 1024 * 256, encoding: "buffer" },
+  );
+  return Buffer.from(stdout);
 }
 
 /**

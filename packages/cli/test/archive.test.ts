@@ -8,7 +8,7 @@ import {
   rotationVictims,
   sha256,
 } from "../src/archive.js";
-import { libpqUrl } from "../src/backup.js";
+import { containerPublishing, isVersionMismatch, libpqUrl } from "../src/backup.js";
 
 /**
  * Format d'archive de sauvegarde.
@@ -190,5 +190,42 @@ describe("URL de connexion", () => {
     expect(libpqUrl("postgresql://u:p@h/db?sslmode=require&schema=public")).toBe(
       "postgresql://u:p@h/db?sslmode=require",
     );
+  });
+});
+
+describe("client PostgreSQL plus ancien que le serveur", () => {
+  it("reconnaît le refus de pg_dump", () => {
+    // Le cas rencontré en CI : client 16 des paquets de la distribution face à
+    // un serveur 17 lancé par Docker. `pg_dump` refuse, et il a raison — le
+    // format de sortie dépend de la version.
+    expect(
+      isVersionMismatch(
+        "pg_dump: error: aborting because of server version mismatch\n" +
+          "pg_dump: detail: server version: 17.11; pg_dump version: 16.15",
+      ),
+    ).toBe(true);
+  });
+
+  it("ne confond pas une autre erreur avec un écart de version", () => {
+    expect(isVersionMismatch('pg_dump: error: invalid URI query parameter: "schema"')).toBe(false);
+    expect(isVersionMismatch("connection refused")).toBe(false);
+  });
+
+  it("trouve le conteneur par le port publié, pas par son nom", () => {
+    // Un nom codé en dur serait faux dès la première installation qui le
+    // change ; le port publié, lui, vient de la configuration.
+    const listing = [
+      "nexus-redis\t0.0.0.0:6379->6379/tcp",
+      "nexus-postgres\t127.0.0.1:15432->5432/tcp",
+      "autre-chose\t",
+    ].join("\n");
+
+    expect(containerPublishing(listing, 15432)).toBe("nexus-postgres");
+    expect(containerPublishing(listing, 6379)).toBe("nexus-redis");
+    expect(containerPublishing(listing, 5432)).toBeUndefined();
+  });
+
+  it("rend undefined quand aucun conteneur ne publie ce port", () => {
+    expect(containerPublishing("", 15432)).toBeUndefined();
   });
 });
