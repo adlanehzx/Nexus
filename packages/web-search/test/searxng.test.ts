@@ -58,10 +58,13 @@ describe("SearxngClient", () => {
 
   it("expose un outil SAFE, idempotent et protégé par la permission navigateur", () => {
     const provider = { search: vi.fn() };
-    const [tool] = createWebSearchTools({ provider });
+    const [tool, fetchTool] = createWebSearchTools({ provider });
     expect(tool?.name).toBe("search.web");
     expect(tool?.riskLevel).toBe("SAFE");
     expect(tool?.idempotent).toBe(true);
     expect(tool?.requiredPermissions).toEqual(["browser.navigate"]);
+    expect(fetchTool?.name).toBe("web.fetch");
+    expect(fetchTool?.riskLevel).toBe("SAFE");
+    expect(fetchTool?.requiredPermissions).toEqual(["browser.navigate"]);
   });
 });
