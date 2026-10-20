@@ -5,6 +5,7 @@ import { z } from "zod";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 import { notificationsConfigSchema, type NotificationsConfig } from "@nexus/notifications";
 import { providerAccountSchema, type ProviderAccount } from "./provider-accounts.js";
+import { agentRoutingStatsSchema, type AgentRoutingStats } from "./agent-router.js";
 
 const loopbackHttpUrl = z
   .string()
@@ -92,6 +93,15 @@ export class RuntimeConfigurationStore {
 
   async saveProviderAccounts(accounts: ProviderAccount[]): Promise<void> {
     await this.#write("provider-accounts.json", z.array(providerAccountSchema).parse(accounts));
+  }
+
+  async loadRoutingStats(): Promise<AgentRoutingStats | null> {
+    const raw = await this.#read("agent-routing-stats.json", null);
+    return raw === null ? null : agentRoutingStatsSchema.parse(raw);
+  }
+
+  async saveRoutingStats(stats: AgentRoutingStats): Promise<void> {
+    await this.#write("agent-routing-stats.json", agentRoutingStatsSchema.parse(stats));
   }
 
   async listSecretNames(): Promise<string[]> {

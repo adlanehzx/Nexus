@@ -1,0 +1,557 @@
+import { z } from "zod";
+import type { RuntimeConfigurationStore } from "./runtime-configuration.js";
+import type { ProviderAccountService } from "./provider-accounts.js";
+
+export const TASK_CATEGORIES = [
+  "code",
+  "research",
+  "review",
+  "browser",
+  "synthesis",
+  "general",
+] as const;
+export type TaskCategory = (typeof TASK_CATEGORIES)[number];
+
+export const taskCategorySchema = z.enum(TASK_CATEGORIES);
+
+export const categoryStatsSchema = z.object({
+  runs: z.number().int().nonnegative().default(0),
+  successes: z.number().int().nonnegative().default(0),
+  failures: z.number().int().nonnegative().default(0),
+  avgDurationMs: z.number().nonnegative().default(0),
+  qualitySum: z.number().nonnegative().default(0),
+});
+export type CategoryStats = z.infer<typeof categoryStatsSchema>;
+
+export const agentRoutingStatsSchema = z.record(
+  z.string(),
+  z.object({
+    categories: z.record(z.string(), categoryStatsSchema).default({}),
+    totalRuns: z.number().int().nonnegative().default(0),
+    overallSuccessRate: z.number().min(0).max(1).default(1.0),
+    updatedAt: z.string(),
+  }),
+);
+export type AgentRoutingStats = Record<
+  string,
+  {
+    categories: Record<string, CategoryStats>;
+    totalRuns: number;
+    overallSuccessRate: number;
+    updatedAt: string;
+  }
+>;
+
+export interface TaskClassification {
+  primaryCategory: TaskCategory;
+  categoryWeights: Record<TaskCategory, number>;
+  requiresBrowser: boolean;
+  estimatedComplexity: "low" | "medium" | "high";
+  contextChars: number;
+}
+
+export interface AgentScoreBreakdown {
+  compatibility: number;
+  authentication: number;
+  quota: number;
+  health: number;
+  quality: number;
+  performance: number;
+  context: number;
+}
+
+export interface RankedAgent {
+  key: string;
+  totalScore: number;
+  isAvailable: boolean;
+  unavailabilityReason?: string | undefined;
+  breakdown: AgentScoreBreakdown;
+  recommendedCategory: TaskCategory;
+}
+
+export interface RoutingMatrixItem {
+  key: string;
+  categoryScores: Record<TaskCategory, number>;
+  totalRuns: number;
+  overallSuccessRate: number;
+  avgDurationMs: number;
+  healthStatus: string;
+  authStatus: string;
+  cooldownActive: boolean;
+}
+
+export interface AgentRouterOptions {
+  runtimeConfiguration?: RuntimeConfigurationStore | undefined;
+  providerAccounts?: ProviderAccountService | undefined;
+  now?: () => Date;
+}
+
+// Profils de base empiriques pour chaque grand modèle CLI
+const BASE_AFFINITIES: Record<string, Record<TaskCategory, number>> = {
+  codex: {
+    browser: 98,
+    code: 95,
+    review: 80,
+    synthesis: 80,
+    research: 75,
+    general: 80,
+  },
+  claude: {
+    review: 95,
+    synthesis: 95,
+    code: 90,
+    browser: 90,
+    research: 85,
+    general: 90,
+  },
+  antigravity: {
+    research: 95,
+    general: 85,
+    synthesis: 85,
+    code: 75,
+    review: 75,
+    browser: 10,
+  },
+};
+
+export class AgentRouter {
+  readonly #config: RuntimeConfigurationStore | undefined;
+  readonly #providerAccounts: ProviderAccountService | undefined;
+  readonly #now: () => Date;
+  #statsCache: AgentRoutingStats | null = null;
+
+  constructor(options: AgentRouterOptions = {}) {
+    this.#config = options.runtimeConfiguration;
+    this.#providerAccounts = options.providerAccounts;
+    this.#now = options.now ?? (() => new Date());
+  }
+
+  /**
+   * Analyse syntaxique et sémantique d'une instruction de tâche.
+   */
+  classifyTask(instruction: string, contextChars = 0): TaskClassification {
+    const text = instruction.toLowerCase();
+
+    // Détection navigateur
+    const browserMatches = (
+      text.match(
+        /\b(navigateur|navigation|chromium|chrome|browser|browser-harness|clique|cliquer|click|url|http|https|dom|formulaire|champ|saisie|screenshot|capture d'écran)\b/g,
+      ) ?? []
+    ).length;
+    const requiresBrowser =
+      browserMatches >= 1 || /browser-harness|bu_cdp_url|19222/.test(text);
+
+    // Détection code
+    const codeMatches = (
+      text.match(
+        /\b(code|fonction|function|classe|class|méthode|script|typescript|javascript|python|rust|vitest|test|tests|bug|fix|refactor|git|commit|patch|diff|npm|pnpm|build|compil)\b/g,
+      ) ?? []
+    ).length;
+
+    // Détection critique / revue
+    const reviewMatches = (
+      text.match(
+        /\b(critique|revue|review|contrôle|verdict|qualité|audit|vérification|faille|sécurité|contradiction|cohérence|évalue|inspection)\b/g,
+      ) ?? []
+    ).length;
+
+    // Détection recherche / exploration
+    const researchMatches = (
+      text.match(
+        /\b(recherche|search|investigation|explore|analyse|documentation|veille|source|faits|trouve|état de l'art|bibliothèque)\b/g,
+      ) ?? []
+    ).length;
+
+    // Détection synthèse
+    const synthesisMatches = (
+      text.match(
+        /\b(synthèse|synthétiseur|résumé|résumer|rapport final|conclus|conclusion|réponse finale|bilan)\b/g,
+      ) ?? []
+    ).length;
+
+    // Calcul des poids relatifs
+    const weights: Record<TaskCategory, number> = {
+      browser: requiresBrowser ? 40 + browserMatches * 10 : browserMatches * 5,
+      code: codeMatches * 10,
+      review: reviewMatches * 10,
+      research: researchMatches * 10,
+      synthesis: synthesisMatches * 10,
+      general: 10,
+    };
+
+    // Détermine la catégorie principale
+    let primaryCategory: TaskCategory = "general";
+    let maxWeight = 0;
+
+    for (const cat of TASK_CATEGORIES) {
+      if (weights[cat] > maxWeight) {
+        maxWeight = weights[cat];
+        primaryCategory = cat;
+      }
+    }
+
+    if (maxWeight === 0) {
+      primaryCategory = "general";
+      weights.general = 50;
+    }
+
+    const estimatedComplexity =
+      instruction.length > 500 || (codeMatches > 2 && reviewMatches > 1)
+        ? "high"
+        : instruction.length > 150
+          ? "medium"
+          : "low";
+
+    return {
+      primaryCategory,
+      categoryWeights: weights,
+      requiresBrowser,
+      estimatedComplexity,
+      contextChars: contextChars || instruction.length,
+    };
+  }
+
+  async loadStats(): Promise<AgentRoutingStats> {
+    if (this.#statsCache !== null) return this.#statsCache;
+    if (this.#config === undefined) return {};
+    const loaded = await this.#config.loadRoutingStats();
+    this.#statsCache = loaded ?? {};
+    return this.#statsCache;
+  }
+
+  async saveStats(stats: AgentRoutingStats): Promise<void> {
+    this.#statsCache = stats;
+    if (this.#config !== undefined) {
+      await this.#config.saveRoutingStats(stats);
+    }
+  }
+
+  /**
+   * Évalue et classe l'ensemble des profils disponibles pour une instruction donnée.
+   */
+  async rankProfiles(
+    profiles: string[],
+    instruction: string,
+    options?: { contextChars?: number; exclude?: string[] },
+  ): Promise<RankedAgent[]> {
+    const classification = this.classifyTask(instruction, options?.contextChars);
+    const stats = await this.loadStats();
+    const accounts = this.#providerAccounts ? await this.#providerAccounts.listAccounts() : [];
+
+    const candidates = profiles.filter((p) => !(options?.exclude ?? []).includes(p));
+
+    const scored: RankedAgent[] = [];
+
+    for (const key of candidates) {
+      let isAvailable = true;
+      let unavailabilityReason: string | undefined;
+
+      // Déterminer le fournisseur (ex: "claude-review" -> "claude", "antigravity" -> "antigravity")
+      const provider = this.#resolveProvider(key);
+      const baseAffinity = BASE_AFFINITIES[provider] ?? BASE_AFFINITIES.claude;
+      const agentStats = stats[key] ?? stats[provider];
+      const account = accounts.find((a) => a.id === key || a.provider === provider);
+
+      // 1. Compatibilité intrinsèque + apprentissage historique
+      let S_compat = baseAffinity?.[classification.primaryCategory] ?? 80;
+
+      // Si la tâche exige un vrai navigateur, codex et claude sont les seuls profils viables
+      if (classification.requiresBrowser && provider !== "codex" && provider !== "claude") {
+        S_compat = 0;
+        isAvailable = false;
+        unavailabilityReason = "Non équipé pour le navigateur local";
+      }
+
+      // Modulation par les performances apprises
+      const catStats = agentStats?.categories[classification.primaryCategory];
+      if (catStats && catStats.runs >= 2) {
+        const catSuccessRate = catStats.successes / catStats.runs;
+        // Ajustement de ±15 points selon le taux de succès dans cette catégorie
+        S_compat += (catSuccessRate - 0.75) * 20;
+        // Ajustement qualité (pass verdicts)
+        if (catStats.runs > 0) {
+          const avgQuality = catStats.qualitySum / catStats.runs;
+          S_compat += (avgQuality - 0.5) * 10;
+        }
+      }
+      S_compat = Math.max(0, Math.min(100, S_compat));
+
+      // 2. Authentification
+      let S_auth = 85;
+
+      if (account) {
+        if (account.authStatus === "authenticated") S_auth = 100;
+        else if (account.authStatus === "unknown") S_auth = 75;
+        else if (account.authStatus === "expired" || account.authStatus === "unauthenticated") {
+          S_auth = 0;
+          isAvailable = false;
+          unavailabilityReason = "Authentification requise ou expirée";
+        }
+      }
+
+      // 3. Quota disponible
+      let S_quota = 85;
+      if (account) {
+        if (account.quotas.exhausted) {
+          S_quota = 0;
+          isAvailable = false;
+          unavailabilityReason = "Quota 5h ou hebdomadaire épuisé";
+        } else if (account.quotas.remaining5hPercent !== null) {
+          S_quota = account.quotas.remaining5hPercent;
+        }
+      }
+
+      // 4. Santé & Cooldowns
+      let S_health = 100;
+      if (account?.cooldown.active) {
+        S_health = 0;
+        isAvailable = false;
+        unavailabilityReason = account.cooldown.reason ?? "En cooldown temporaire";
+      } else if (account) {
+        const fails = account.reliability.consecutiveFailures;
+        if (fails === 1) S_health = 60;
+        else if (fails === 2) S_health = 30;
+        else if (fails >= 3) {
+          S_health = 0;
+          isAvailable = false;
+          unavailabilityReason = "Trop d'échecs consécutifs récents";
+        }
+      }
+
+      // 5. Qualité historique
+      let S_quality = 85;
+      if (account) {
+        S_quality = Math.round(account.reliability.score * 100);
+      } else if (agentStats && agentStats.totalRuns > 0) {
+        S_quality = Math.round(agentStats.overallSuccessRate * 100);
+      }
+
+      // 6. Performance & Vitesse
+      let S_perf = 80;
+      if (catStats && catStats.avgDurationMs > 0) {
+        // Benchmark moyen : 15s (15000ms). Si plus rapide, bonus, si >60s, pénalité
+        const speedScore = Math.max(20, Math.min(100, 100 - (catStats.avgDurationMs - 10_000) / 1000));
+        S_perf = Math.round(speedScore);
+      }
+
+      // 7. Longueur de contexte
+      let S_context = 90;
+      if (classification.contextChars > 60_000) {
+        if (provider === "antigravity") S_context = 100; // Fenêtre géante
+        else if (provider === "claude") S_context = 95;
+        else if (provider === "codex") S_context = 75;
+      }
+
+      // Calcul du score global pondéré
+      // Poids : compatibilité (35%), santé (20%), quota (15%), auth (15%), qualité (10%), perf (5%)
+      const weightedScore =
+        S_compat * 0.35 +
+        S_health * 0.20 +
+        S_quota * 0.15 +
+        S_auth * 0.15 +
+        S_quality * 0.10 +
+        S_perf * 0.05;
+
+      const totalScore = isAvailable ? Math.round(weightedScore) : 0;
+
+      scored.push({
+        key,
+        totalScore,
+        isAvailable,
+        unavailabilityReason,
+        recommendedCategory: classification.primaryCategory,
+        breakdown: {
+          compatibility: Math.round(S_compat),
+          authentication: Math.round(S_auth),
+          quota: Math.round(S_quota),
+          health: Math.round(S_health),
+          quality: Math.round(S_quality),
+          performance: Math.round(S_perf),
+          context: Math.round(S_context),
+        },
+      });
+    }
+
+    // Tri : disponibles d'abord, puis par score total décroissant
+    scored.sort((a, b) => {
+      if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+      return b.totalScore - a.totalScore;
+    });
+
+    return scored;
+  }
+
+  /**
+   * Retourne le meilleur profil sélectionné pour l'instruction donnée.
+   */
+  async bestProfileFor(
+    profiles: string[],
+    instruction: string,
+    fallbackDefault?: string,
+  ): Promise<string> {
+    const ranked = await this.rankProfiles(profiles, instruction);
+    const available = ranked.find((r) => r.isAvailable && r.totalScore > 0);
+    if (available) return available.key;
+    return fallbackDefault ?? profiles[0] ?? "";
+  }
+
+  /**
+   * Génère la chaîne ordonnée de fallbacks optimaux pour une tâche.
+   */
+  async fallbackOrderFor(
+    primary: string,
+    profiles: string[],
+    instruction: string,
+  ): Promise<string[]> {
+    const ranked = await this.rankProfiles(profiles, instruction, { exclude: [primary] });
+    return ranked.filter((r) => r.isAvailable && r.totalScore > 0).map((r) => r.key);
+  }
+
+  /**
+   * Enregistre le résultat d'exécution pour enrichir l'apprentissage de routage.
+   */
+  async recordOutcome(
+    agentKey: string,
+    category: TaskCategory,
+    outcome: {
+      success: boolean;
+      durationMs?: number | undefined;
+      qualityVerdict?: "pass" | "revise" | undefined;
+      errorCategory?: string | undefined;
+    },
+  ): Promise<void> {
+    const stats = await this.loadStats();
+    const provider = this.#resolveProvider(agentKey);
+
+    const nowIso = this.#now().toISOString();
+    const current = stats[agentKey] ?? {
+      categories: {},
+      totalRuns: 0,
+      overallSuccessRate: 1.0,
+      updatedAt: nowIso,
+    };
+
+    const catCurrent: CategoryStats = current.categories[category] ?? {
+      runs: 0,
+      successes: 0,
+      failures: 0,
+      avgDurationMs: 0,
+      qualitySum: 0,
+    };
+
+    const nextRuns = catCurrent.runs + 1;
+    const nextSuccesses = catCurrent.successes + (outcome.success ? 1 : 0);
+    const nextFailures = catCurrent.failures + (outcome.success ? 0 : 1);
+
+    const duration = outcome.durationMs ?? 10_000;
+    const nextAvgDuration = Math.round(
+      (catCurrent.avgDurationMs * catCurrent.runs + duration) / nextRuns,
+    );
+
+    const qualityVal = outcome.qualityVerdict === "pass" ? 1.0 : outcome.qualityVerdict === "revise" ? 0.3 : outcome.success ? 1.0 : 0.0;
+    const nextQualitySum = catCurrent.qualitySum + qualityVal;
+
+    current.categories[category] = {
+      runs: nextRuns,
+      successes: nextSuccesses,
+      failures: nextFailures,
+      avgDurationMs: nextAvgDuration,
+      qualitySum: nextQualitySum,
+    };
+
+    current.totalRuns += 1;
+    let totalSucc = 0;
+    let totalAll = 0;
+    for (const c of Object.values(current.categories)) {
+      if (c) {
+        totalSucc += c.successes;
+        totalAll += c.runs;
+      }
+    }
+    current.overallSuccessRate = totalAll > 0 ? Number((totalSucc / totalAll).toFixed(2)) : 1.0;
+    current.updatedAt = nowIso;
+
+    stats[agentKey] = current;
+    // Si la clé est distincte du provider, mettre à jour également le provider parent
+    if (provider !== agentKey && !stats[provider]) {
+      stats[provider] = { ...current };
+    }
+
+    await this.saveStats(stats);
+  }
+
+  /**
+   * Retourne la matrice complète de compétences et scores par catégorie.
+   */
+  async getRoutingMatrix(profiles: string[]): Promise<RoutingMatrixItem[]> {
+    const stats = await this.loadStats();
+    const accounts = this.#providerAccounts ? await this.#providerAccounts.listAccounts() : [];
+
+    const matrix: RoutingMatrixItem[] = [];
+
+    for (const key of profiles) {
+      const provider = this.#resolveProvider(key);
+      const baseAffinity = BASE_AFFINITIES[provider] ?? BASE_AFFINITIES.claude;
+      const agentStats = stats[key] ?? stats[provider];
+      const account = accounts.find((a) => a.id === key || a.provider === provider);
+
+      const categoryScores: Record<TaskCategory, number> = {
+        code: baseAffinity?.code ?? 70,
+        research: baseAffinity?.research ?? 70,
+        review: baseAffinity?.review ?? 70,
+        browser: baseAffinity?.browser ?? 70,
+        synthesis: baseAffinity?.synthesis ?? 70,
+        general: baseAffinity?.general ?? 70,
+      };
+
+      // Enrichissement avec l'apprentissage
+      let totalDuration = 0;
+      let durationCount = 0;
+
+      for (const cat of TASK_CATEGORIES) {
+        const catStats = agentStats?.categories[cat];
+        if (catStats && catStats.runs > 0) {
+          const successRate = catStats.successes / catStats.runs;
+          categoryScores[cat] = Math.round(
+            Math.max(0, Math.min(100, categoryScores[cat] + (successRate - 0.7) * 20)),
+          );
+          if (catStats.avgDurationMs > 0) {
+            totalDuration += catStats.avgDurationMs;
+            durationCount++;
+          }
+        }
+      }
+
+      matrix.push({
+        key,
+        categoryScores,
+        totalRuns: agentStats?.totalRuns ?? account?.reliability.totalRuns ?? 0,
+        overallSuccessRate:
+          agentStats?.overallSuccessRate ?? account?.reliability.score ?? 1.0,
+        avgDurationMs: durationCount > 0 ? Math.round(totalDuration / durationCount) : 0,
+        healthStatus: account?.cooldown.active
+          ? "cooldown"
+          : account?.quotas.exhausted
+            ? "quota_exhausted"
+            : "available",
+        authStatus: account?.authStatus ?? "unknown",
+        cooldownActive: account?.cooldown.active ?? false,
+      });
+    }
+
+    return matrix;
+  }
+
+  async resetStats(): Promise<void> {
+    await this.saveStats({});
+  }
+
+  #resolveProvider(profileKey: string): string {
+    const clean = profileKey.toLowerCase();
+    if (clean.includes("claude")) return "claude";
+    if (clean.includes("antigravity") || clean.includes("gemini") || clean.includes("agy"))
+      return "antigravity";
+    if (clean.includes("codex") || clean.includes("gpt")) return "codex";
+    return clean;
+  }
+}

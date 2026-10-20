@@ -11,6 +11,7 @@ import type {
   RuntimeSettings,
   SubmitMission,
 } from "@nexus/mission-control-client";
+import { AgentRouter } from "./agent-router.js";
 
 const plannedTaskSchema = z.object({
   key: z
@@ -70,6 +71,7 @@ export class AcpOrchestrator {
   readonly #context: ContextAssembler | undefined;
   readonly #workspaceRoot: string;
   readonly #grants: MissionGrantIssuer | undefined;
+  readonly #router: AgentRouter;
 
   constructor(options: {
     missionControl: MissionControlPort;
@@ -86,12 +88,18 @@ export class AcpOrchestrator {
      * ne sait pas pour qui elle agit.
      */
     grants?: MissionGrantIssuer;
+    agentRouter?: AgentRouter;
   }) {
     this.#missionControl = options.missionControl;
     this.#llm = options.llm;
     this.#context = options.context;
     this.#grants = options.grants;
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
+    this.#router = options.agentRouter ?? new AgentRouter();
+  }
+
+  get router(): AgentRouter {
+    return this.#router;
   }
 
   async submit(userId: string, objective: string): Promise<OrchestratedMission> {
@@ -118,11 +126,12 @@ export class AcpOrchestrator {
             })
           ).text;
     const planned = await this.#plan(objective, health.profiles, settings, memoryContext);
-    const tasks = ensureFinalSynthesis(
+    const tasks = await ensureFinalSynthesis(
       planned.tasks,
       objective,
       health.profiles,
       settings,
+      this.#router,
       memoryContext,
     );
     const externalKey = `${missionOwnerPrefix(userId)}-${missionKey}`;
@@ -181,7 +190,15 @@ export class AcpOrchestrator {
     settings: RuntimeSettings,
     memoryContext: string,
   ): Promise<z.infer<typeof plannedMissionSchema>> {
-    if (this.#llm === undefined) return fallbackPlan(objective, profiles, settings);
+    if (this.#llm === undefined) return fallbackPlan(objective, profiles, settings, this.#router);
+
+    const ranked = await this.#router.rankProfiles(profiles, objective);
+    const recommendations = ranked
+      .map(
+        (r) =>
+          `- ${r.key} : score ${r.totalScore}/100 (${r.isAvailable ? "disponible" : `indisponible : ${r.unavailabilityReason}`})`,
+      )
+      .join("\n");
 
     const system = `Tu es l'orchestrateur central de NEXUS. Décompose une mission utilisateur en tâches ACP spécialisées, parallèles lorsque possible.
 
@@ -189,12 +206,15 @@ Profils réellement disponibles : ${profiles.join(", ")}.
 Priorité recherche : ${settings.research_priority.join(", ")}.
 Priorité critique : ${settings.review_priority.join(", ")}.
 
+Scores et recommandations du routeur intelligent :
+${recommendations}
+
 Règles absolues :
 - utilise exclusivement ces profils ;
+- favorise les profils ayant le score de pertinence le plus élevé pour chaque nature de tâche ;
 - produis un DAG sans cycle et sans dépendance inconnue ;
 - chaque instruction doit être autonome, vérifiable et ne contenir aucun secret ;
-- antigravity est privilégié pour recherche/exploration, claude pour analyse et critique, codex pour code/intégration ;
-- toute tâche qui exige un vrai navigateur, des clics, un formulaire, une session connectée ou du JavaScript doit être confiée à codex ou claude et mentionner l'utilisation de browser-harness local sans clé API ;
+- toute tâche qui exige un vrai navigateur, des clics, un formulaire, une session connectée ou du JavaScript doit être confiée à un profil adapté et mentionner l'utilisation de browser-harness local sans clé API ;
 - ne crée PAS de tâche de synthèse finale : NEXUS l'ajoute après validation ;
 - pour une demande simple, une seule tâche suffit.`;
     const contextualSystem = appendUserContext(system, memoryContext);
@@ -211,7 +231,7 @@ Règles absolues :
       // La disponibilité du planificateur ne doit jamais être un point unique
       // de panne. Le plan conservateur utilise les mêmes agents et le même
       // moteur durable, sans inventer de capacité.
-      return fallbackPlan(objective, profiles, settings);
+      return fallbackPlan(objective, profiles, settings, this.#router);
     }
   }
 }
@@ -240,39 +260,61 @@ function validatePlan(tasks: z.infer<typeof plannedTaskSchema>[], profiles: stri
   for (const task of tasks) visit(task.key);
 }
 
-function ensureFinalSynthesis(
+async function ensureFinalSynthesis(
   planned: z.infer<typeof plannedTaskSchema>[],
   objective: string,
   profiles: string[],
   settings: RuntimeSettings,
+  router: AgentRouter,
   memoryContext = "",
-): MissionTaskInput[] {
+): Promise<MissionTaskInput[]> {
   validatePlan(planned, profiles);
   const dependencies = new Set(planned.flatMap((task) => task.depends_on));
   const leaves = planned.filter((task) => !dependencies.has(task.key)).map((task) => task.key);
-  // Claude est actuellement le synthétiseur le plus stable dans l'installation
-  // locale. Codex reste sélectionnable pour les tâches de code/revue par le
-  // planificateur, sans devenir un point unique de panne pour chaque mission.
-  const finalProfile = preferred(profiles, settings.synthesis_priority);
-  const executionTasks: MissionTaskInput[] = planned.map((task) => {
-    const fallbacks = fallbackOrder(task.profile, profiles, requiresBrowser(task.instruction));
-    return {
-      ...task,
-      instruction: appendUserContext(task.instruction, memoryContext),
-      fallback_profiles: fallbacks,
-      timeout_seconds: settings.task_timeout_seconds,
-      max_attempts: Math.min(settings.max_attempts, 1 + fallbacks.length),
-      retry_delay_seconds: settings.retry_delay_seconds,
-      context_budget_chars: settings.context_budget_chars,
-    };
-  });
-  const reviewProfile = preferred(profiles, settings.review_priority);
+
+  const finalProfile = await router.bestProfileFor(
+    profiles,
+    "Synthèse finale et réponse claire",
+    preferred(profiles, settings.synthesis_priority),
+  );
+
+  const executionTasks: MissionTaskInput[] = await Promise.all(
+    planned.map(async (task) => {
+      const fallbacks = await router.fallbackOrderFor(task.profile, profiles, task.instruction);
+      return {
+        ...task,
+        instruction: appendUserContext(task.instruction, memoryContext),
+        fallback_profiles: fallbacks,
+        timeout_seconds: settings.task_timeout_seconds,
+        max_attempts: Math.min(settings.max_attempts, 1 + fallbacks.length),
+        retry_delay_seconds: settings.retry_delay_seconds,
+        context_budget_chars: settings.context_budget_chars,
+      };
+    }),
+  );
+
+  const reviewProfile = await router.bestProfileFor(
+    profiles,
+    "Revue critique et contrôle qualité",
+    preferred(profiles, settings.review_priority),
+  );
+  const qualityReviewFallbacks = await router.fallbackOrderFor(
+    reviewProfile,
+    profiles,
+    "Revue critique et contrôle qualité",
+  );
+  const finalSynthesisFallbacks = await router.fallbackOrderFor(
+    finalProfile,
+    profiles,
+    "Synthèse finale et réponse claire",
+  );
+
   const qualityReview: MissionTaskInput | undefined =
     settings.quality_review && planned.length > 1
       ? {
           key: "nexus_quality_review_1",
           profile: reviewProfile,
-          fallback_profiles: fallbackOrder(reviewProfile, profiles),
+          fallback_profiles: qualityReviewFallbacks,
           depends_on: leaves,
           timeout_seconds: settings.task_timeout_seconds,
           max_attempts: Math.min(settings.max_attempts, profiles.length),
@@ -281,6 +323,7 @@ function ensureFinalSynthesis(
           instruction: qualityReviewInstruction(objective, 1),
         }
       : undefined;
+
   const finalDependencies = qualityReview === undefined ? leaves : [...leaves, qualityReview.key];
   return [
     ...executionTasks,
@@ -288,7 +331,7 @@ function ensureFinalSynthesis(
     {
       key: "nexus_final_synthesis",
       profile: finalProfile,
-      fallback_profiles: fallbackOrder(finalProfile, profiles),
+      fallback_profiles: finalSynthesisFallbacks,
       depends_on: finalDependencies,
       timeout_seconds: settings.task_timeout_seconds,
       max_attempts: Math.min(settings.max_attempts, profiles.length),
@@ -311,16 +354,31 @@ function qualityReviewInstruction(objective: string, cycle: number): string {
   return `Tu es le contrôleur qualité de NEXUS, cycle ${cycle}. Évalue uniquement si les résultats amont permettent de répondre correctement à la mission. Vérifie les contradictions, preuves, tests et critères de réussite. Réponds avec un objet JSON strict, sans markdown ni texte autour : {"verdict":"pass"|"revise","summary":"résumé factuel","corrective_instruction":"instruction précise ou chaîne vide"}. Choisis "revise" seulement si une correction concrète peut améliorer le résultat. N'inclus aucun secret.\n\nMISSION INITIALE :\n${objective}`;
 }
 
-function fallbackPlan(
+async function fallbackPlan(
   objective: string,
   profiles: string[],
   settings: RuntimeSettings,
-): z.infer<typeof plannedMissionSchema> {
+  router?: AgentRouter,
+): Promise<z.infer<typeof plannedMissionSchema>> {
   const browserRequired = requiresBrowser(objective);
-  const researcher = browserRequired
-    ? preferred(profiles, ["codex", "claude"])
-    : preferred(profiles, settings.research_priority);
-  const critic = preferred(profiles, settings.review_priority);
+  const researcher = router
+    ? await router.bestProfileFor(
+        profiles,
+        objective,
+        preferred(profiles, settings.research_priority),
+      )
+    : browserRequired
+      ? preferred(profiles, ["codex", "claude"])
+      : preferred(profiles, settings.research_priority);
+
+  const critic = router
+    ? await router.bestProfileFor(
+        profiles,
+        "Revue critique indépendante",
+        preferred(profiles, settings.review_priority),
+      )
+    : preferred(profiles, settings.review_priority);
+
   const tasks: z.infer<typeof plannedTaskSchema>[] = [
     {
       key: "investigate",
@@ -344,17 +402,6 @@ function fallbackPlan(
 
 function preferred(profiles: string[], order: string[]): string {
   return order.find((candidate) => profiles.includes(candidate)) ?? profiles[0] ?? "";
-}
-
-function fallbackOrder(primary: string, profiles: string[], browserRequired = false): string[] {
-  const preferredOrder = ["claude", "antigravity", "codex"];
-  return [...preferredOrder, ...profiles].filter(
-    (candidate, index, values) =>
-      candidate !== primary &&
-      profiles.includes(candidate) &&
-      (!browserRequired || candidate === "codex" || candidate === "claude") &&
-      values.indexOf(candidate) === index,
-  );
 }
 
 function requiresBrowser(objective: string): boolean {

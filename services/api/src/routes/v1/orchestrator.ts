@@ -85,6 +85,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
   const providerAccounts = app.services.providerAccounts;
+  const agentRouter = app.services.agentRouter;
   const orchestrator =
     missionControl === undefined
       ? undefined
@@ -94,6 +95,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           // Le service d'assertions signe **et** enregistre : l'orchestrateur ne
           // reçoit que la capacité de délivrer une portée de mission.
           grants: app.services.missionGrants,
+          agentRouter,
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 
@@ -476,6 +478,122 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
         : await providerAccounts.clearCooldown(request.params.id);
       if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
       return ok(updated, request.id);
+    },
+  );
+
+  app.get(
+    "/orchestrator/routing/matrix",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: {
+          200: okSchema(
+            z.object({
+              matrix: z.array(
+                z.object({
+                  key: z.string(),
+                  categoryScores: z.record(z.string(), z.number()),
+                  totalRuns: z.number(),
+                  overallSuccessRate: z.number(),
+                  avgDurationMs: z.number(),
+                  healthStatus: z.string(),
+                  authStatus: z.string(),
+                  cooldownActive: z.boolean(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const health = missionControl ? await missionControl.health() : { profiles: [] };
+      const defaultProfiles = providerAccounts
+        ? (await providerAccounts.listAccounts()).map((a) => a.id)
+        : ["antigravity", "claude", "codex"];
+      const profiles = health.profiles.length > 0 ? health.profiles : defaultProfiles;
+      const matrix = await agentRouter.getRoutingMatrix(profiles);
+      return ok({ matrix }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/routing/evaluate",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        body: z.object({
+          instruction: z.string().min(1).max(10_000),
+          contextChars: z.number().int().nonnegative().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              classification: z.object({
+                primaryCategory: z.string(),
+                categoryWeights: z.record(z.string(), z.number()),
+                requiresBrowser: z.boolean(),
+                estimatedComplexity: z.string(),
+                contextChars: z.number(),
+              }),
+              ranked: z.array(
+                z.object({
+                  key: z.string(),
+                  totalScore: z.number(),
+                  isAvailable: z.boolean(),
+                  unavailabilityReason: z.string().optional(),
+                  recommendedCategory: z.string(),
+                  breakdown: z.object({
+                    compatibility: z.number(),
+                    authentication: z.number(),
+                    quota: z.number(),
+                    health: z.number(),
+                    quality: z.number(),
+                    performance: z.number(),
+                    context: z.number(),
+                  }),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const health = missionControl ? await missionControl.health() : { profiles: [] };
+      const defaultProfiles = providerAccounts
+        ? (await providerAccounts.listAccounts()).map((a) => a.id)
+        : ["antigravity", "claude", "codex"];
+      const profiles = health.profiles.length > 0 ? health.profiles : defaultProfiles;
+      const classification = agentRouter.classifyTask(
+        request.body.instruction,
+        request.body.contextChars,
+      );
+      const ranked = await agentRouter.rankProfiles(
+        profiles,
+        request.body.instruction,
+        request.body.contextChars !== undefined
+          ? { contextChars: request.body.contextChars }
+          : undefined,
+      );
+      return ok({ classification, ranked }, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/routing/reset",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        response: { 200: okSchema(z.object({ reset: z.boolean() })) },
+      },
+    },
+    async (request) => {
+      await agentRouter.resetStats();
+      return ok({ reset: true }, request.id);
     },
   );
 

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AgentRegistry, DashboardApi, ProviderAccountDto } from "../lib/api.js";
+import type {
+  AgentRegistry,
+  AgentRoutingEntry,
+  DashboardApi,
+  ProviderAccountDto,
+  RoutingEvaluationDto,
+} from "../lib/api.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
@@ -10,6 +16,11 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [newAccProvider, setNewAccProvider] = useState("antigravity");
   const [newAccName, setNewAccName] = useState("");
   const [newAccPriority, setNewAccPriority] = useState(2);
+  const [routingMatrix, setRoutingMatrix] = useState<AgentRoutingEntry[]>([]);
+  const [testRoutingInstruction, setTestRoutingInstruction] = useState("");
+  const [routingEvaluation, setRoutingEvaluation] = useState<RoutingEvaluationDto | null>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [routingResetMsg, setRoutingResetMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState("");
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,6 +44,15 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshRouting = (): void => {
+    void api
+      .routingMatrix()
+      .then((res) => setRoutingMatrix(res.matrix))
+      .catch((cause: unknown) => {
+        console.warn("Routing matrix fetch skipped:", cause instanceof Error ? cause.message : cause);
+      });
+  };
+
   const refreshAccounts = (): void => {
     void api
       .providerAccounts()
@@ -51,6 +71,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
       });
     refreshAccounts();
+    refreshRouting();
   };
 
   useEffect(() => {
@@ -62,7 +83,33 @@ export function Agents({ api }: { api: DashboardApi }) {
         setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
       });
     refreshAccounts();
+    refreshRouting();
   }, [api]);
+
+  const handleEvaluateRouting = async (): Promise<void> => {
+    if (!testRoutingInstruction.trim()) return;
+    setRoutingLoading(true);
+    try {
+      const res = await api.evaluateRouting(testRoutingInstruction.trim());
+      setRoutingEvaluation(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur d'évaluation du routage.");
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
+
+  const handleResetRouting = async (): Promise<void> => {
+    if (!window.confirm("Réinitialiser l'historique d'apprentissage du routage ?")) return;
+    try {
+      await api.resetRoutingStats();
+      setRoutingResetMsg("Historique réinitialisé.");
+      refreshRouting();
+      setTimeout(() => setRoutingResetMsg(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur lors de la réinitialisation.");
+    }
+  };
 
   const handleTestAccount = async (id: string): Promise<void> => {
     setAccActionLoading(true);
@@ -748,6 +795,166 @@ export function Agents({ api }: { api: DashboardApi }) {
             >
               {accActionLoading ? "Création…" : "Créer l'identité"}
             </button>
+          </div>
+        </div>
+
+        {/* Section 4 : Routage Intelligent & Matrice d'Affinité */}
+        <div style={{ marginTop: "40px", borderTop: "1px solid var(--border, #333)", paddingTop: "24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div>
+              <h3>Routage Intelligent & Feedback Learning</h3>
+              <p className="faible">
+                Scoring dynamique multi-critères (affinités, auth, quotas 5h/hebdo, cooldowns, latence, historique)
+                remplaçant les priorités statiques.
+              </p>
+            </div>
+            <button
+              className="bouton"
+              type="button"
+              onClick={() => void handleResetRouting()}
+              title="Réinitialise les métriques de succès et scores appris"
+            >
+              Réinitialiser l'apprentissage
+            </button>
+          </div>
+
+          {routingResetMsg ? (
+            <div className="banniere succes" style={{ marginBottom: "16px" }}>
+              {routingResetMsg}
+            </div>
+          ) : null}
+
+          {/* Matrice d'affinité */}
+          <div style={{ overflowX: "auto", marginBottom: "24px" }}>
+            <table className="nexus-table" style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border, #444)" }}>
+                  <th style={{ padding: "8px" }}>Profil</th>
+                  <th style={{ padding: "8px" }}>Auth</th>
+                  <th style={{ padding: "8px" }}>Code</th>
+                  <th style={{ padding: "8px" }}>Recherche</th>
+                  <th style={{ padding: "8px" }}>Revue</th>
+                  <th style={{ padding: "8px" }}>Navigateur</th>
+                  <th style={{ padding: "8px" }}>Synthèse</th>
+                  <th style={{ padding: "8px" }}>Runs / Succès</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routingMatrix.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "var(--text-muted, #888)" }}>
+                      Aucune donnée de routage disponible.
+                    </td>
+                  </tr>
+                ) : (
+                  routingMatrix.map((r) => (
+                    <tr key={r.key} style={{ borderBottom: "1px solid var(--border-light, #222)" }}>
+                      <td style={{ padding: "8px", fontWeight: "bold" }}>
+                        {r.key}
+                        {r.cooldownActive ? <span style={{ color: "orange", marginLeft: "6px" }}>(Cooldown)</span> : null}
+                      </td>
+                      <td style={{ padding: "8px" }}>
+                        <span className={`badge ${r.authStatus === "authenticated" ? "succes" : "attention"}`}>
+                          {r.authStatus}
+                        </span>
+                      </td>
+                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.code ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.research ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.review ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.browser ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.synthesis ?? 0)}</td>
+                      <td style={{ padding: "8px" }}>
+                        {r.totalRuns} runs ({Math.round(r.overallSuccessRate * 100)} %)
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Simulateur de routage */}
+          <div className="carte" style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}>
+            <h4 style={{ margin: "0 0 10px 0" }}>Simulateur d'évaluation du routage</h4>
+            <p className="faible" style={{ marginBottom: "12px" }}>
+              Testez quelle route et quel agent l'orchestrateur sélectionne pour une instruction donnée.
+            </p>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
+              <input
+                className="champ"
+                type="text"
+                placeholder="Ex : Corrige le bug dans services/api/src/auth.ts et ajoute un test vitest"
+                value={testRoutingInstruction}
+                onChange={(e) => setTestRoutingInstruction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleEvaluateRouting();
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="bouton primary"
+                type="button"
+                disabled={routingLoading || !testRoutingInstruction.trim()}
+                onClick={() => void handleEvaluateRouting()}
+              >
+                {routingLoading ? "Évaluation…" : "Évaluer"}
+              </button>
+            </div>
+
+            {routingEvaluation ? (
+              <div style={{ marginTop: "12px", borderTop: "1px solid var(--border, #333)", paddingTop: "12px" }}>
+                <div style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <div>
+                    <strong>Catégorie :</strong>{" "}
+                    <span className="badge">{routingEvaluation.classification.primaryCategory}</span>
+                  </div>
+                  <div>
+                    <strong>Complexité :</strong> {routingEvaluation.classification.estimatedComplexity}
+                  </div>
+                  <div>
+                    <strong>Navigateur requis :</strong>{" "}
+                    {routingEvaluation.classification.requiresBrowser ? "Oui" : "Non"}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {routingEvaluation.ranked.map((agent, idx) => (
+                    <div
+                      key={agent.key}
+                      style={{
+                        padding: "10px",
+                        borderRadius: "6px",
+                        background: idx === 0 && agent.isAvailable ? "rgba(40, 167, 69, 0.15)" : "var(--card-bg, #282828)",
+                        border: idx === 0 && agent.isAvailable ? "1px solid #28a745" : "1px solid var(--border, #444)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <strong>
+                          #{idx + 1} {agent.key}
+                        </strong>{" "}
+                        {idx === 0 && agent.isAvailable ? (
+                          <span style={{ color: "#28a745", fontWeight: "bold", marginLeft: "6px" }}>★ Recommandé</span>
+                        ) : null}
+                        {!agent.isAvailable ? (
+                          <span style={{ color: "#dc3545", marginLeft: "6px" }}>({agent.unavailabilityReason})</span>
+                        ) : null}
+                        <div className="faible" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
+                          Compat: {agent.breakdown.compatibility} · Auth: {agent.breakdown.authentication} · Quota:{" "}
+                          {agent.breakdown.quota} · Fiabilité: {agent.breakdown.health} · Perf:{" "}
+                          {agent.breakdown.performance}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+                        {Math.round(agent.totalScore)} / 100
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

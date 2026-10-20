@@ -447,6 +447,47 @@ export interface ProviderAccountDto {
   updatedAt: string;
 }
 
+export interface AgentRoutingEntry {
+  key: string;
+  categoryScores: Record<string, number>;
+  totalRuns: number;
+  overallSuccessRate: number;
+  avgDurationMs: number;
+  healthStatus: string;
+  authStatus: string;
+  cooldownActive: boolean;
+}
+
+export interface TaskClassificationDto {
+  primaryCategory: string;
+  categoryWeights: Record<string, number>;
+  requiresBrowser: boolean;
+  estimatedComplexity: string;
+  contextChars: number;
+}
+
+export interface RankedAgentDto {
+  key: string;
+  totalScore: number;
+  isAvailable: boolean;
+  unavailabilityReason?: string;
+  recommendedCategory: string;
+  breakdown: {
+    compatibility: number;
+    authentication: number;
+    quota: number;
+    health: number;
+    quality: number;
+    performance: number;
+    context: number;
+  };
+}
+
+export interface RoutingEvaluationDto {
+  classification: TaskClassificationDto;
+  ranked: RankedAgentDto[];
+}
+
 export interface SecuritySection {
   events: {
     at: string;
@@ -729,6 +770,24 @@ export class DashboardApi {
 
   deleteProviderAccount(id: string): Promise<{ deleted: boolean }> {
     return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
+  }
+
+  routingMatrix(): Promise<{ matrix: AgentRoutingEntry[] }> {
+    return this.#get("/api/v1/orchestrator/routing/matrix");
+  }
+
+  evaluateRouting(
+    instruction: string,
+    contextChars?: number,
+  ): Promise<RoutingEvaluationDto> {
+    return this.#request("POST", "/api/v1/orchestrator/routing/evaluate", {
+      instruction,
+      contextChars,
+    });
+  }
+
+  resetRoutingStats(): Promise<{ ok: boolean }> {
+    return this.#request("POST", "/api/v1/orchestrator/routing/reset");
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {

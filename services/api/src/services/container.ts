@@ -72,6 +72,7 @@ import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 import { ProviderAccountService } from "./provider-accounts.js";
+import { AgentRouter } from "./agent-router.js";
 
 /**
  * Assemblage des services de l'API.
@@ -231,6 +232,7 @@ export class ServiceContainer {
   readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
   readonly providerAccounts: ProviderAccountService | undefined;
+  readonly agentRouter: AgentRouter;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
   readonly missionControl: MissionControlPort | undefined;
@@ -479,6 +481,11 @@ export class ServiceContainer {
             runtimeConfiguration: options.runtimeConfiguration,
             now,
           });
+    this.agentRouter = new AgentRouter({
+      runtimeConfiguration: options.runtimeConfiguration,
+      providerAccounts: this.providerAccounts,
+      now,
+    });
     this.vault = options.vault;
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
