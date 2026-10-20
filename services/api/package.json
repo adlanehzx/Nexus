@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FrontiÃ¨re rÃ©seau : REST v1, WebSocket gateway, authentification",
+  "description": "Fronti\u00c3\u00a8re r\u00c3\u00a9seau : REST v1, WebSocket gateway, authentification",
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:pg": "vitest run --config vitest.pg.config.ts",
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo"
   },

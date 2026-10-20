@@ -2,7 +2,7 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
-  "description": "NEXUS â€” assistant personnel IA multi-appareils",
+  "description": "NEXUS \u00e2\u20ac\u201d assistant personnel IA multi-appareils",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
@@ -16,6 +16,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
+    "test:pg": "pnpm --filter @nexus/api test:pg",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test",

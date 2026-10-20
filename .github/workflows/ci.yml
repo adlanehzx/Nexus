@@ -10,10 +10,12 @@
 #   1. **Les étapes sont séparées.** `pnpm verify` enchaîne tout et s'arrête à
 #      la première erreur ; ici build, lint, typecheck et tests ont chacun leur
 #      étape, pour qu'un échec de lint ne cache pas un test rouge.
-#   2. **Aucun service n'est nécessaire.** Les tests de l'API utilisent des
-#      magasins en mémoire, et le moteur une base SQLite temporaire. Ne pas
-#      dépendre de PostgreSQL garde la CI rapide et sans état partagé — c'est
-#      aussi pour cela qu'elle ne couvre pas les magasins Prisma.
+#   2. **Les tests qui exigent une base sont isolés dans leur propre job.** Le
+#      gros de la suite tourne sur des magasins en mémoire et une base SQLite
+#      temporaire, donc sans service. Mais ce qui n'est vérifié que contre une
+#      doublure n'est pas vérifié : le job `persistence` monte un PostgreSQL
+#      éphémère et écrit vraiment, parce que c'est précisément un défaut de
+#      production invisible aux doublures qui a motivé ce workflow.
 
 name: CI
 
@@ -104,6 +106,59 @@ jobs:
 
       - name: Tests
         run: uv run pytest -q
+
+  persistence:
+    name: Magasins Prisma (PostgreSQL réel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Un service éphémère, et non la base d'un poste : ces tests écrivent
+    # vraiment. L'image suit celle du compose de développement, sinon la CI
+    # validerait un PostgreSQL que personne n'exécute.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+          POSTGRES_DB: nexus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://nexus:nexus@127.0.0.1:5432/nexus_test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Générer le client Prisma
+        run: pnpm db:generate
+
+      # `migrate deploy` et non `db push` : c'est la commande du déploiement.
+      # Elle vérifie donc aussi que les migrations s'appliquent dans l'ordre sur
+      # une base vierge — ce qu'aucun autre job ne fait.
+      - name: Appliquer les migrations
+        run: pnpm --filter @nexus/database exec prisma migrate deploy
+
+      - name: Tests d'intégration
+        run: pnpm test:pg
 
   security:
     name: Secrets et dépendances
