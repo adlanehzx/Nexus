@@ -27,6 +27,21 @@ const plannedMissionSchema = z.object({
   tasks: z.array(plannedTaskSchema).min(1).max(7),
 });
 
+/**
+ * Ce dont l'orchestrateur a besoin pour signer une identité propriétaire.
+ *
+ * Volontairement réduit à cette seule méthode : l'orchestrateur n'a aucune
+ * raison de pouvoir émettre un jeton d'accès, et ce type le lui interdit à la
+ * compilation plutôt que par convention.
+ */
+export interface MissionGrantIssuer {
+  issueMissionGrant(input: { userId: string; service: string; missionExternalKey: string }): {
+    token: string;
+    expiresAt: Date;
+    grantId: string;
+  };
+}
+
 export interface OrchestratedMission {
   missionId: string;
   title: string;
@@ -49,16 +64,28 @@ export class AcpOrchestrator {
   readonly #llm: LLMProvider | undefined;
   readonly #context: ContextAssembler | undefined;
   readonly #workspaceRoot: string;
+  readonly #grants: MissionGrantIssuer | undefined;
 
   constructor(options: {
     missionControl: MissionControlPort;
     llm?: LLMProvider;
     context?: ContextAssembler;
     workspaceRoot?: string;
+    /**
+     * Émetteur de l'identité propriétaire signée.
+     *
+     * Facultatif, et son absence a une conséquence précise : la mission part
+     * sans propriétaire, donc sans possibilité de déléguer à Agent Core. Le
+     * moteur refusera toute tâche `agent-core`, ce qui est le bon comportement —
+     * mieux vaut une mission qui ne peut pas déléguer qu'une délégation dont on
+     * ne sait pas pour qui elle agit.
+     */
+    grants?: MissionGrantIssuer;
   }) {
     this.#missionControl = options.missionControl;
     this.#llm = options.llm;
     this.#context = options.context;
+    this.#grants = options.grants;
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
   }
 
@@ -93,11 +120,27 @@ export class AcpOrchestrator {
       settings,
       memoryContext,
     );
+    const externalKey = `${missionOwnerPrefix(userId)}-${missionKey}`;
+    // Le préfixe d'`external_key` reste lisible pour filtrer les missions d'un
+    // utilisateur, mais il ne prouve rien : c'est l'assertion qui porte
+    // désormais la propriété, et elle est signée.
     const input: SubmitMission = {
-      external_key: `${missionOwnerPrefix(userId)}-${missionKey}`,
+      external_key: externalKey,
       title: planned.title,
       workspace,
       tasks,
+      ...(this.#grants === undefined
+        ? {}
+        : {
+            owner: {
+              user_id: userId,
+              assertion: this.#grants.issueMissionGrant({
+                userId,
+                service: "mission-engine",
+                missionExternalKey: externalKey,
+              }).token,
+            },
+          }),
     };
     const submitted = await this.#missionControl.submitMission(input, `nexus-chat-${missionKey}`);
     return {

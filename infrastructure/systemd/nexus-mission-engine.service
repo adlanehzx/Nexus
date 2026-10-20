@@ -11,6 +11,10 @@ Environment=NEXUS_ENGINE_ACP_RUNNER=/home/adlane/Documents/Codex/2026-10-11/tu-e
 Environment=NEXUS_ENGINE_ACP_REGISTRY=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/agent/config/profiles.production.json
 Environment=NEXUS_ENGINE_PROFILES_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/profiles.production.json
 Environment=NEXUS_ENGINE_RUNTIME_SETTINGS_FILE=/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit/services/mission-engine/config/runtime-settings.json
+# Base de l'API NEXUS, pour les taches deleguees a Agent Core. Boucle locale
+# uniquement : l'assertion de mission part dans un en-tete Authorization, et la
+# passerelle refuse toute URL HTTP qui sortirait de la machine.
+Environment=NEXUS_ENGINE_API_URL=http://127.0.0.1:3000
 Environment=NEXUS_ENGINE_WORKER_ENABLED=true
 Environment=NEXUS_ENGINE_WORKER_CONCURRENCY=2
 Environment=BU_CDP_URL=http://127.0.0.1:19222

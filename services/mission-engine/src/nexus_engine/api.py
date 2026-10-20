@@ -13,6 +13,7 @@ from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from nexus_engine.acp import AcpError, AcpGateway
+from nexus_engine.agent_core import AgentCoreGateway, validated_base_url
 from nexus_engine.config import Settings
 from nexus_engine.database import Database
 from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
@@ -20,6 +21,21 @@ from nexus_engine.paper import PaperTradingRepository, RiskPolicy
 from nexus_engine.repository import MissionRepository
 from nexus_engine.research import ResearchRunRepository, build_research_plan
 from nexus_engine.worker import Worker
+
+
+class MissionOwnerRequest(BaseModel):
+    """Identité propriétaire signée, émise par l'API NEXUS.
+
+    Le moteur ne vérifie pas la signature : il n'a pas la clé, et c'est voulu —
+    ce qui vérifie ne doit pas pouvoir émettre. Il conserve l'assertion et la
+    rejoue au moment d'agir ; c'est l'API qui la refuse si elle est forgée,
+    périmée ou hors de sa portée.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    assertion: str
 
 
 class MissionRequest(BaseModel):
@@ -30,6 +46,7 @@ class MissionRequest(BaseModel):
     workspace: str
     defaults: dict[str, Any] = Field(default_factory=dict)
     tasks: list[dict[str, Any]]
+    owner: MissionOwnerRequest | None = None
 
 
 class ResearchMissionRequest(BaseModel):
@@ -151,6 +168,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if configured.acp_runner is not None and configured.acp_registry is not None
         else None
     )
+    # Construite même sans URL : la passerelle sait dire qu'elle n'est pas
+    # configurée, et le dire sur une tâche vaut mieux que de laisser le worker
+    # découvrir un `None` au moment de l'exécuter.
+    agent_core_gateway = AgentCoreGateway(
+        validated_base_url(configured.api_base_url),
+        timeout_seconds=configured.api_timeout_seconds,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -164,6 +188,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 worker_id=f"local-{index}",
                 repository=repository,
                 gateway=profile_gateway,
+                agent_core=agent_core_gateway,
             )
             while not stop.is_set():
                 try:

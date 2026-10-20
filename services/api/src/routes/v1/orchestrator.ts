@@ -85,6 +85,9 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       : new AcpOrchestrator({
           missionControl,
           context: app.services.context,
+          // Le service de jetons est l'unique émetteur : l'orchestrateur ne
+          // reçoit que la capacité de signer une portée de mission.
+          grants: app.services.tokens,
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 

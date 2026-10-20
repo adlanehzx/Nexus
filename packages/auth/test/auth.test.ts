@@ -151,6 +151,101 @@ describe("jetons d'accès", () => {
 });
 
 /**
+ * Assertions de mission.
+ *
+ * Cette surface existe pour qu'un service puisse agir *au nom* d'un
+ * utilisateur sans jamais détenir ses droits. Les tests portent donc d'abord
+ * sur ce qu'elle refuse : se faire passer pour un jeton d'accès, survivre à sa
+ * mission, ou être forgée par qui ne possède que la clé publique.
+ */
+describe("assertions de mission", () => {
+  it("émet une assertion que le service relit, portée à une mission", () => {
+    const service = makeService();
+    const { token, grantId } = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+
+    expect(service.verifyMissionGrant(token)).toMatchObject({
+      sub: "u1",
+      svc: "mission-engine",
+      mek: "nexus-abc-1",
+      aud: "nexus-mission-grant",
+      jti: grantId,
+    });
+  });
+
+  it("refuse une assertion présentée comme jeton d'accès", () => {
+    // La confusion de surfaces est le risque principal d'une troisième identité :
+    // une assertion qui passerait pour un jeton d'accès donnerait les droits
+    // complets du compte au lieu de la seule portée de la mission.
+    const service = makeService();
+    const { token } = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+
+    expect(() => service.verifyAccessToken(token)).toThrow(/audience|claims/i);
+  });
+
+  it("refuse un jeton d'accès présenté comme assertion de mission", () => {
+    const service = makeService();
+    const { token } = service.issueAccessToken({ userId: "u1", sessionId: "s1" });
+
+    expect(() => service.verifyMissionGrant(token)).toThrow(/claims de mission/i);
+  });
+
+  it("refuse une assertion signée par une autre clé", () => {
+    const foreign = new TokenService({ privateKeyPem: generateSigningKeyPair().privateKeyPem });
+    const { token } = foreign.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+
+    expect(() => makeService().verifyMissionGrant(token)).toThrow();
+  });
+
+  it("expire l'assertion au terme de sa durée de vie", () => {
+    let instant = new Date("2026-09-02T10:00:00.000Z");
+    const service = new TokenService({
+      privateKeyPem: keys.privateKeyPem,
+      missionGrantTtlSeconds: 60,
+      now: () => instant,
+    });
+    const { token } = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+
+    expect(service.verifyMissionGrant(token)).toMatchObject({ sub: "u1" });
+    instant = new Date("2026-09-02T10:01:01.000Z");
+    expect(() => service.verifyMissionGrant(token)).toThrow(/expir/i);
+  });
+
+  it("lie l'assertion à une mission et à une seule", () => {
+    const service = makeService();
+    const first = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-1",
+    });
+    const second = service.issueMissionGrant({
+      userId: "u1",
+      service: "mission-engine",
+      missionExternalKey: "nexus-abc-2",
+    });
+
+    expect(service.verifyMissionGrant(first.token).mek).toBe("nexus-abc-1");
+    expect(service.verifyMissionGrant(second.token).mek).toBe("nexus-abc-2");
+    expect(first.grantId).not.toBe(second.grantId);
+  });
+});
+
+/**
  * Le hachage coûte volontairement cher — environ 350 ms par appel. C'est le
  * but : c'est ce qui rend une attaque hors ligne pénible. Les tests qui hachent
  * ont donc besoin de plus que le délai par défaut de Vitest.

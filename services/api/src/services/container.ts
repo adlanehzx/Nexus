@@ -13,7 +13,10 @@ import {
   ecdsaP256Verifier,
   ed25519Verifier,
   type DeviceCredentialProvider,
+  type DeviceStore,
   type SignatureVerifier,
+  type TaskPlan,
+  type TaskStore,
 } from "@nexus/devices";
 import {
   ConfirmationService,
@@ -85,8 +88,8 @@ export interface ServiceContainerOptions {
   notifications?: NotificationStore;
   memory?: MemoryProvider;
   credentials?: DeviceCredentialProvider;
-  taskStore?: import("@nexus/devices").TaskStore;
-  deviceStore?: import("@nexus/devices").DeviceStore;
+  taskStore?: TaskStore;
+  deviceStore?: DeviceStore;
   runStore?: QueryableAgentRunStore;
 
   /**
@@ -156,7 +159,7 @@ export class ServiceContainer {
   readonly selector: DeviceSelector;
   readonly router: EventRouter;
   readonly gateway: WorkerGateway;
-  readonly taskStore: import("@nexus/devices").TaskStore;
+  readonly taskStore: TaskStore;
   readonly coordinator: TaskCoordinator;
 
   readonly permissions: PermissionService;
@@ -369,14 +372,14 @@ export class ServiceContainer {
       },
       tasks: {
         recentTasks: async (input) => {
-          const plans = await (this.taskStore as any).listByUser(input.userId, input.limit);
+          const plans = await this.taskStore.listByUser(input.userId, input.limit);
           const devices = await this.deviceRegistry.listDevices(input.userId);
           const names = new Map(devices.map((device) => [device.id, device.name]));
 
-          return plans.map((plan: any) => {
+          return plans.map((plan: TaskPlan) => {
             // La machine qui a exécuté la dernière étape retenue. Un
             // identifiant n'apprend rien au modèle ; un nom, si.
-            const executed = plan.steps.findLast((step: any) => step.selectedDeviceId !== null);
+            const executed = plan.steps.findLast((step) => step.selectedDeviceId !== null);
             const deviceId = executed?.selectedDeviceId ?? null;
 
             return {

@@ -19,12 +19,23 @@ class Settings:
     worker_concurrency: int
     profiles_file: Path | None
     runtime_settings_file: Path | None = None
+    #: Base de l'API NEXUS, pour les tâches ``agent-core``. Absente, l'exécutant
+    #: Agent Core n'est pas configuré et toute tâche de ce type échoue avec la
+    #: catégorie ``config`` — jamais silencieusement sur un repli ACP.
+    api_base_url: str | None = None
+    #: Délai d'un appel au pont, bail compris. Un run Agent Core peut être long ;
+    #: ce qui le borne reste le ``timeout_seconds`` de la tâche.
+    api_timeout_seconds: int = 900
 
     @classmethod
     def from_environment(cls) -> "Settings":
         runner = os.getenv("NEXUS_ENGINE_ACP_RUNNER")
         registry = os.getenv("NEXUS_ENGINE_ACP_REGISTRY")
         return cls(
+            api_base_url=os.getenv("NEXUS_ENGINE_API_URL") or None,
+            api_timeout_seconds=max(
+                30, min(3_600, int(os.getenv("NEXUS_ENGINE_API_TIMEOUT", "900")))
+            ),
             database_path=Path(
                 os.getenv("NEXUS_ENGINE_DATABASE", "var/nexus-engine.db")
             ),

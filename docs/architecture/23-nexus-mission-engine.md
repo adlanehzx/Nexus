@@ -42,6 +42,12 @@ Les réglages appliqués aux nouvelles missions sont conservés dans
 reprise, budgets de contexte, revue qualité et ordres de priorité. Chaque
 écriture est validée, atomique et précédée d'une copie `.bak-<UTC>`.
 
+Le pont vers Agent Core ajoute `NEXUS_ENGINE_API_URL` (base de l'API NEXUS).
+Absente, l'exécutant Agent Core n'est pas configuré et toute tâche `agent-core`
+échoue en catégorie `config` — jamais par un repli silencieux sur un agent ACP.
+La passerelle refuse une URL HTTP qui sortirait de la boucle locale : l'assertion
+voyage dans un en-tête `Authorization`.
+
 ## Conversation NEXUS unique
 
 Le dashboard ouvre désormais sur une seule façade de conversation. Un message
@@ -183,6 +189,85 @@ expose pas officiellement. NEXUS ne déduit pas un faux pourcentage à partir du
 nombre de requêtes ; le fallback continue de s'appuyer sur les erreurs ACP
 structurées et les cooldowns observés.
 
+## Pont Mission Engine → Agent Core
+
+Une tâche du DAG peut déléguer à Agent Core au lieu de lancer un agent ACP. Elle
+le déclare par `agent_kind: "agent-core"`.
+
+### Identité propriétaire signée
+
+Jusqu'ici la propriété d'une mission n'était portée que par un préfixe
+d'`external_key` (`nexus-<sha256(userId)[:24]>-…`). Lisible, mais invérifiable :
+le moteur ne pouvait pas distinguer un préfixe légitime d'un préfixe recopié.
+
+L'API émet désormais, au moment où l'utilisateur confie la mission, une
+**assertion Ed25519** portant `{sub, svc, mek, iat, exp, iss, aud, jti}` —
+propriétaire, service autorisé, et clé externe de la mission. Elle est stockée
+sur la mission (`missions.owner_user_id`, `missions.owner_assertion`) et rejouée
+à chaque appel du pont.
+
+Trois propriétés tiennent cette conception :
+
+1. **Le moteur ne sait pas signer.** Il n'a pas la clé. Compromettre sa base
+   SQLite ne permet pas de forger une assertion, et ne donne accès qu'aux
+   missions qui y figurent, jusqu'à leur expiration (24 h par défaut).
+2. **L'audience sépare les surfaces.** Un jeton d'accès utilisateur porte
+   `nexus-api`, une assertion porte `nexus-mission-grant`. Aucun des deux ne
+   peut tenir le rôle de l'autre, bien qu'ils soient signés par la même clé.
+3. **La portée est vérifiée, pas seulement la signature.** `assertMissionScope`
+   refuse une assertion valide présentée pour une autre mission — sans quoi une
+   seule assertion piloterait tout le travail du compte.
+
+L'assertion est retirée du plan avant le calcul de `content_hash` : elle n'entre
+donc ni dans `definition_json`, ni dans l'empreinte d'idempotence. Resoumettre
+le même plan avec une assertion renouvelée reste idempotent.
+
+### Surface du pont
+
+`POST /api/v1/agent-core/mission-runs`, gardée par `requireMissionGrant` —
+distincte de `/agent-core/runs`, qui reste réservée aux utilisateurs. Le moteur
+n'y choisit ni le compte (il vient de la signature) ni la mission (il ne peut
+travailler que dans la sienne).
+
+La conversation est créée au premier essai, puis mémorisée sur la tâche
+(`tasks.agent_core_conversation_id`) et renvoyée aux essais suivants : un retry
+prolonge l'historique au lieu d'en ouvrir un second.
+
+### Exécutant réservé
+
+Agent Core se présente comme une ligne de `profiles` (`profile_key='agent-core'`,
+`agent_kind='agent-core'`). Le routage, la santé, les bails et les tentatives
+continuent donc de fonctionner sans rien connaître d'Agent Core. Ce profil est
+exclu de toutes les listes qui décrivent les agents ACP — `/v1/profiles`,
+`routable_profiles`, le registre du tableau de bord — et `sync_profiles` ne le
+désactive pas, puisqu'il n'a pas d'entrée dans la configuration des agents.
+
+Une tâche `agent-core` **ne peut pas déclarer de repli**. Basculer vers un agent
+ACP lui ferait perdre ses outils, ses permissions et ses confirmations, et
+réussirait en apparence.
+
+### Ce qui fonctionne réellement, et ce qui manque
+
+Vérifié de bout en bout, par HTTP réel entre les deux processus : une tâche
+`agent-core` atteint Agent Core, exécute un run et rend sa réponse ; une
+signature forgée, un service non listé, une assertion hors de sa portée et une
+absence d'assertion sont tous refusés en `auth_required` ; la conversation et le
+run sont persistés dans PostgreSQL et appartiennent au propriétaire.
+
+**Non fait, et à savoir avant de s'appuyer dessus** :
+
+- **La suspension durable sur confirmation n'existe pas.** Un run qui ouvre une
+  confirmation humaine fait échouer la tâche en `confirmation_required`. Le
+  moteur ne sait pas encore attendre une décision puis reprendre — c'est le
+  travail prioritaire suivant, et la table `outbox` existe déjà pour le porter.
+- **Pas d'unicité de run par tentative.** Si le bail expire pendant un run, la
+  tâche repart et un second run démarre. La conversation est réutilisée, les
+  deux réponses y figurent. Le fencing du bail borne le risque, il ne l'annule
+  pas.
+- **Rien n'authentifie encore l'API vers le moteur.** Le port 18100 n'est
+  protégé que par la boucle locale : tout processus local peut soumettre une
+  mission. La direction moteur → API, elle, est authentifiée.
+
 ## Surface exposée
 
 - santé, profils ACP et vérification du journal d'audit ;
@@ -191,7 +276,8 @@ structurées et les cooldowns observés.
 - ajout de cotations fictives ;
 - soumission idempotente d'une recherche multi-agents ;
 - lecture du résultat d'une recherche.
-- soumission et suivi d'un DAG ACP générique depuis la conversation NEXUS.
+- soumission et suivi d'un DAG ACP générique depuis la conversation NEXUS ;
+- délégation d'une tâche du DAG à Agent Core, sous identité propriétaire signée.
 
 Il n'existe aucune route de trading réel, aucun wallet, aucune signature de
 transaction et aucun proxy générique vers Mission Engine.

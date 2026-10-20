@@ -19,6 +19,22 @@ class ValidatedTask:
     max_attempts: int
     retry_delay_seconds: int
     context_budget_chars: int
+    agent_kind: str = "acp"
+
+
+@dataclass(frozen=True)
+class MissionOwner:
+    """Identité propriétaire signée, telle que l'API l'a émise.
+
+    ``assertion`` est opaque pour le moteur : il ne la relit pas, il la rejoue.
+    Elle est volontairement absente de ``canonical_json`` — l'empreinte de
+    contenu doit rester celle du *travail demandé*, sinon deux soumissions
+    identiques du même plan cesseraient d'être idempotentes dès que l'assertion
+    est renouvelée.
+    """
+
+    user_id: str
+    assertion: str
 
 
 @dataclass(frozen=True)
@@ -29,19 +45,52 @@ class ValidatedPlan:
     tasks: tuple[ValidatedTask, ...]
     canonical_json: str
     content_hash: str
+    owner: MissionOwner | None = None
+
+
+#: Exécutant qui délègue la tâche à Agent Core au lieu de lancer un agent ACP.
+AGENT_CORE_KIND = "agent-core"
+
+#: Profil réservé qui porte cet exécutant. Voir la migration de `profiles`.
+AGENT_CORE_PROFILE = "agent-core"
+
+AGENT_KINDS = frozenset({"acp", AGENT_CORE_KIND})
 
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _optional_owner(value: Any) -> MissionOwner | None:
+    """Lit le bloc ``owner`` d'un plan.
+
+    Facultatif, et il doit le rester : les missions déjà en base n'en ont pas,
+    et une soumission faite par un outil local légitime n'en a pas besoin pour
+    des tâches purement ACP. Ce qui l'exige, c'est la tâche ``agent-core`` —
+    refusée sans propriétaire signé, au moment de la création de la mission.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValidationError("owner must be an object")
+    unknown = set(value) - {"user_id", "assertion"}
+    if unknown:
+        raise ValidationError(f"unknown owner fields: {', '.join(sorted(unknown))}")
+    return MissionOwner(
+        user_id=_required_string(value, "user_id", 128),
+        assertion=_required_string(value, "assertion", 4_096),
+    )
+
+
 def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedPlan:
     if not isinstance(raw, dict):
         raise ValidationError("plan must be an object")
-    allowed_top = {"external_key", "title", "workspace", "defaults", "tasks"}
+    allowed_top = {"external_key", "title", "workspace", "defaults", "tasks", "owner"}
     unknown = set(raw) - allowed_top
     if unknown:
         raise ValidationError(f"unknown plan fields: {', '.join(sorted(unknown))}")
+
+    owner = _optional_owner(raw.get("owner"))
 
     external_key = _required_string(raw, "external_key", 128)
     title = _required_string(raw, "title", 300)
@@ -81,6 +130,7 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
             "max_attempts",
             "retry_delay_seconds",
             "context_budget_chars",
+            "agent_kind",
         }
         if unknown_task:
             raise ValidationError(
@@ -90,9 +140,24 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
         if key in keys:
             raise ValidationError(f"duplicate task key: {key}")
         keys.add(key)
+        agent_kind = item.get("agent_kind", "acp")
+        if agent_kind not in AGENT_KINDS:
+            raise ValidationError(
+                f"task {key}: agent_kind must be one of {', '.join(sorted(AGENT_KINDS))}"
+            )
+        # L'exécutant Agent Core se présente comme un profil réservé. La tâche
+        # n'a donc pas à le nommer, et le nommer autrement est une erreur : les
+        # deux champs diraient alors deux exécutants différents.
         profile = item.get("profile", defaults.get("profile"))
+        if agent_kind == AGENT_CORE_KIND:
+            profile = item.get("profile", AGENT_CORE_PROFILE)
         if profile not in allowed_profiles:
             raise ValidationError(f"unknown or disabled profile: {profile}")
+        if (profile == AGENT_CORE_PROFILE) != (agent_kind == AGENT_CORE_KIND):
+            raise ValidationError(
+                f"task {key}: profile '{AGENT_CORE_PROFILE}' requires agent_kind "
+                f"'{AGENT_CORE_KIND}', and conversely"
+            )
         raw_fallbacks = item.get(
             "fallback_profiles", defaults.get("fallback_profiles", [])
         )
@@ -101,6 +166,17 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
         ):
             raise ValidationError(f"task {key}: fallback_profiles must be a string array")
         fallbacks = tuple(dict.fromkeys(raw_fallbacks))
+        # Un repli change d'agent, pas de nature d'exécutant : basculer une
+        # tâche Agent Core vers un agent ACP lui ferait perdre ses outils, ses
+        # permissions et ses confirmations, et réussirait en apparence.
+        if agent_kind == AGENT_CORE_KIND and fallbacks:
+            raise ValidationError(
+                f"task {key}: an {AGENT_CORE_KIND} task cannot declare fallback profiles"
+            )
+        if AGENT_CORE_PROFILE in fallbacks:
+            raise ValidationError(
+                f"task {key}: '{AGENT_CORE_PROFILE}' cannot be used as a fallback"
+            )
         if profile in fallbacks:
             raise ValidationError(f"task {key}: primary profile cannot be a fallback")
         unknown_fallbacks = set(fallbacks) - allowed_profiles
@@ -153,6 +229,7 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
                 max_attempts=max_attempts,
                 retry_delay_seconds=retry_delay,
                 context_budget_chars=context_budget,
+                agent_kind=agent_kind,
             )
         )
 
@@ -166,7 +243,21 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
             raise ValidationError(f"task {task.key}: self dependency")
     _reject_cycles(tasks)
 
-    rendered = canonical_json(raw)
+    # Une tâche ACP agit dans un espace de travail ; une tâche Agent Core agit
+    # avec les outils et les permissions d'un compte. Elle est donc refusée tant
+    # qu'aucun propriétaire signé ne dit lequel — et le refus tombe ici, à la
+    # création de la mission, plutôt que des heures plus tard sur un worker.
+    if owner is None and any(task.agent_kind == AGENT_CORE_KIND for task in tasks):
+        raise ValidationError(
+            f"an {AGENT_CORE_KIND} task requires a signed mission owner"
+        )
+
+    # L'assertion ne fait pas partie du travail demandé : elle est retirée avant
+    # d'être rendue. Deux conséquences, toutes deux voulues — elle n'entre pas
+    # dans `definition_json`, donc le secret ne se recopie pas dans la
+    # définition de la mission ; et resoumettre le même plan avec une assertion
+    # renouvelée reste idempotent au lieu de créer une seconde mission.
+    rendered = canonical_json({key: value for key, value in raw.items() if key != "owner"})
     return ValidatedPlan(
         external_key=external_key,
         title=title,
@@ -174,6 +265,7 @@ def validate_plan(raw: dict[str, Any], allowed_profiles: set[str]) -> ValidatedP
         tasks=tuple(tasks),
         canonical_json=rendered,
         content_hash=hashlib.sha256(rendered.encode()).hexdigest(),
+        owner=owner,
     )
 
 

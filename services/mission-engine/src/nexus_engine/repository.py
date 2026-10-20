@@ -22,6 +22,17 @@ def timestamp(value: datetime | None = None) -> str:
     return (value or now_utc()).isoformat(timespec="microseconds")
 
 
+def _optional_text(value: Any) -> str | None:
+    """Rend une colonne SQLite nullable sans transformer ``NULL`` en ``"None"``.
+
+    Le piège est bénin à l'écriture et coûteux à la lecture : ``str(None)``
+    produit une chaîne non vide, donc une assertion absente deviendrait une
+    assertion invalide — et le pont échouerait sur une erreur de signature au
+    lieu de dire que la mission n'a pas de propriétaire.
+    """
+    return None if value is None else str(value)
+
+
 @dataclass(frozen=True)
 class Lease:
     attempt_id: str
@@ -38,6 +49,19 @@ class Lease:
     lease_token: str
     lease_expires_at: str
     timeout_seconds: int
+    #: 'acp' ou 'agent-core'. Lu sur le profil, pas sur la tache : c'est le
+    #: profil qui designe l'executant.
+    agent_kind: str = "acp"
+    #: Cle externe de la mission. L'assertion y est liee ; l'API refuse de
+    #: travailler sur une autre.
+    mission_external_key: str = ""
+    #: Proprietaire signe de la mission. `None` pour les missions anterieures a
+    #: l'identite signee, et pour celles soumises sans proprietaire.
+    owner_user_id: str | None = None
+    #: Assertion opaque a rejouer. Ne doit jamais etre journalisee.
+    owner_assertion: str | None = None
+    #: Conversation Agent Core deja ouverte pour cette tache, s'il y en a une.
+    agent_core_conversation_id: str | None = None
 
 
 class MissionRepository:
@@ -68,10 +92,16 @@ class MissionRepository:
             )
 
     def sync_profiles(self, profiles: dict[str, str]) -> None:
-        """Make the enabled registry exactly match the configured mapping."""
+        """Make the enabled registry exactly match the configured mapping.
+
+        Only ACP profiles follow that mapping. The Agent Core executor is not an
+        ACP agent and has no entry in the agent configuration, so disabling every
+        profile here would switch it off on each sync — and silently turn every
+        ``agent-core`` task into a routing failure.
+        """
         current = timestamp()
         with self.db.transaction(immediate=True) as connection:
-            connection.execute("UPDATE profiles SET enabled=0")
+            connection.execute("UPDATE profiles SET enabled=0 WHERE agent_kind='acp'")
             for profile_key, agent_profile_id in profiles.items():
                 connection.execute(
                     """
@@ -97,6 +127,40 @@ class MissionRepository:
             return {
                 row["profile_key"]
                 for row in connection.execute(
+                    "SELECT profile_key FROM profiles WHERE enabled=1 AND agent_kind='acp'"
+                )
+            }
+
+    def record_agent_core_conversation(self, task_id: str, conversation_id: str) -> None:
+        """Mémorise la conversation Agent Core ouverte pour une tâche.
+
+        Écrit hors du bail, et sans le vérifier : si le bail a expiré entre
+        l'appel et ce retour, la conversation reste la bonne pour cette tâche,
+        et la perdre forcerait le prochain essai à repartir d'un historique
+        vide. Le fencing porte sur les transitions d'état de la tâche, pas sur
+        cette note.
+        """
+        with self.db.transaction(immediate=True) as connection:
+            connection.execute(
+                """
+                UPDATE tasks SET agent_core_conversation_id=?,updated_at=?
+                WHERE id=? AND agent_core_conversation_id IS NULL
+                """,
+                (conversation_id, timestamp(), task_id),
+            )
+
+    def plannable_profiles(self) -> set[str]:
+        """Profils qu'un plan a le droit de nommer.
+
+        Distinct de ``enabled_profiles``, qui décrit les agents ACP configurés —
+        ce que lisent le tableau de bord, le planificateur et les contrôles de
+        santé. Un plan peut en plus viser l'exécutant Agent Core, qui n'est pas
+        un agent ACP et n'a donc rien à faire dans ces listes.
+        """
+        with self.db.connect() as connection:
+            return {
+                str(row["profile_key"])
+                for row in connection.execute(
                     "SELECT profile_key FROM profiles WHERE enabled=1"
                 )
             }
@@ -117,7 +181,8 @@ class MissionRepository:
                     """
                     SELECT p.profile_key FROM profiles p
                     LEFT JOIN profile_health h ON h.profile_key=p.profile_key
-                    WHERE p.enabled=1 AND COALESCE(h.status,'unknown')
+                    WHERE p.enabled=1 AND p.agent_kind='acp'
+                      AND COALESCE(h.status,'unknown')
                         IN ('available','degraded','unknown')
                     """
                 )
@@ -141,7 +206,7 @@ class MissionRepository:
                 FROM profiles p
                 LEFT JOIN profile_health h ON h.profile_key=p.profile_key
                 LEFT JOIN tasks t ON t.profile_key=p.profile_key
-                WHERE p.enabled=1
+                WHERE p.enabled=1 AND p.agent_kind='acp'
                 GROUP BY p.profile_key,p.agent_profile_id,p.enabled
                 ORDER BY p.profile_key
                 """
@@ -241,7 +306,7 @@ class MissionRepository:
     def submit(self, raw: dict[str, Any], idempotency_key: str) -> tuple[str, bool]:
         if not idempotency_key or len(idempotency_key) > 128:
             raise ConflictError("a non-empty idempotency key is required")
-        plan = validate_plan(raw, self.enabled_profiles())
+        plan = validate_plan(raw, self.plannable_profiles())
         mission_id = str(uuid.uuid4())
         created = timestamp()
         with self.db.transaction(immediate=True) as connection:
@@ -278,8 +343,9 @@ class MissionRepository:
                 """
                 INSERT INTO missions(
                     id,idempotency_key,external_key,content_hash,title,workspace,
-                    state,definition_json,created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,'pending',?,?,?)
+                    state,definition_json,owner_user_id,owner_assertion,
+                    created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,'pending',?,?,?,?,?)
                 """,
                 (
                     mission_id,
@@ -289,6 +355,8 @@ class MissionRepository:
                     plan.title,
                     plan.workspace,
                     plan.canonical_json,
+                    plan.owner.user_id if plan.owner else None,
+                    plan.owner.assertion if plan.owner else None,
                     created,
                     created,
                 ),
@@ -363,10 +431,13 @@ class MissionRepository:
             expired = connection.execute(
                 """
                 SELECT a.*,t.mission_id,t.task_key,t.profile_key,t.agent_profile_id,
-                       t.instruction,t.timeout_seconds,t.context_budget_chars,m.workspace
+                       t.instruction,t.timeout_seconds,t.context_budget_chars,
+                       t.agent_core_conversation_id,m.workspace,m.external_key,
+                       m.owner_user_id,m.owner_assertion,p.agent_kind
                 FROM attempts a
                 JOIN tasks t ON t.id=a.task_id
                 JOIN missions m ON m.id=t.mission_id
+                JOIN profiles p ON p.profile_key=t.profile_key
                 WHERE a.state IN ('leased','creating','running')
                   AND a.lease_expires_at<=?
                   AND m.state IN ('pending','running')
@@ -404,6 +475,13 @@ class MissionRepository:
                     lease_token=token,
                     lease_expires_at=expiry,
                     timeout_seconds=int(expired["timeout_seconds"]),
+                    agent_kind=str(expired["agent_kind"]),
+                    mission_external_key=str(expired["external_key"]),
+                    owner_user_id=_optional_text(expired["owner_user_id"]),
+                    owner_assertion=_optional_text(expired["owner_assertion"]),
+                    agent_core_conversation_id=_optional_text(
+                        expired["agent_core_conversation_id"]
+                    ),
                 )
             connection.execute(
                 """
@@ -414,9 +492,11 @@ class MissionRepository:
             )
             ready_rows = connection.execute(
                 """
-                SELECT t.*, m.workspace
+                SELECT t.*, m.workspace, m.external_key, m.owner_user_id,
+                       m.owner_assertion, p.agent_kind
                 FROM tasks t
                 JOIN missions m ON m.id=t.mission_id
+                JOIN profiles p ON p.profile_key=t.profile_key
                 WHERE t.state='ready' AND m.state IN ('pending','running')
                 ORDER BY m.created_at, t.ordinal
                 LIMIT 100
@@ -494,6 +574,13 @@ class MissionRepository:
                 lease_token=token,
                 lease_expires_at=expiry,
                 timeout_seconds=int(row["timeout_seconds"]),
+                agent_kind=str(row["agent_kind"]),
+                mission_external_key=str(row["external_key"]),
+                owner_user_id=_optional_text(row["owner_user_id"]),
+                owner_assertion=_optional_text(row["owner_assertion"]),
+                agent_core_conversation_id=_optional_text(
+                    row["agent_core_conversation_id"]
+                ),
             )
 
     @staticmethod
@@ -567,7 +654,14 @@ class MissionRepository:
                 ),
             )
             return connection.execute(
-                "SELECT t.*,m.workspace FROM tasks t JOIN missions m ON m.id=t.mission_id WHERE t.id=?",
+                """
+                SELECT t.*,m.workspace,m.external_key,m.owner_user_id,
+                       m.owner_assertion,p.agent_kind
+                FROM tasks t
+                JOIN missions m ON m.id=t.mission_id
+                JOIN profiles p ON p.profile_key=t.profile_key
+                WHERE t.id=?
+                """,
                 (row["id"],),
             ).fetchone()
         return row

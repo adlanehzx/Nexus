@@ -31,6 +31,27 @@ export const missionTaskInputSchema = z.object({
   max_attempts: z.number().int().min(1).max(10).default(2),
   retry_delay_seconds: z.number().int().min(1).max(3_600).default(10),
   context_budget_chars: z.number().int().min(4_000).max(400_000).default(60_000),
+  /**
+   * Exécutant de la tâche.
+   *
+   * Sans défaut, délibérément : le champ reste absent de la charge utile tant
+   * qu'on ne le demande pas, et l'empreinte de contenu des plans purement ACP
+   * est donc inchangée. Un défaut `"acp"` explicite modifierait l'empreinte de
+   * tous les plans existants et casserait leur idempotence.
+   */
+  agent_kind: z.enum(["acp", "agent-core"]).optional(),
+});
+
+/**
+ * Identité propriétaire signée transmise au moteur.
+ *
+ * Facultative, et pas par confort : les missions créées avant son introduction
+ * n'en ont pas, et le moteur doit continuer de les porter. Ce qui l'exige, c'est
+ * la délégation à Agent Core — refusée sans elle.
+ */
+export const missionOwnerSchema = z.object({
+  user_id: z.string().trim().min(1).max(128),
+  assertion: z.string().trim().min(1).max(4_096),
 });
 
 export const submitMissionSchema = z.object({
@@ -38,6 +59,7 @@ export const submitMissionSchema = z.object({
   title: z.string().trim().min(1).max(300),
   workspace: z.string().trim().min(1).max(4_096),
   tasks: z.array(missionTaskInputSchema).min(1).max(100),
+  owner: missionOwnerSchema.optional(),
 });
 
 export const missionSubmissionSchema = z.object({

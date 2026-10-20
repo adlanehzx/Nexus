@@ -2,6 +2,7 @@ import {
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
+  randomUUID,
   sign as signRaw,
   timingSafeEqual,
   verify as verifyRaw,
@@ -11,8 +12,10 @@ import { AppError, type ErrorSeverity } from "@nexus/shared";
 import {
   accessTokenClaimsSchema,
   deviceTokenClaimsSchema,
+  missionGrantClaimsSchema,
   type AccessTokenClaims,
   type DeviceTokenClaims,
+  type MissionGrantClaims,
 } from "./index.js";
 
 /**
@@ -63,6 +66,16 @@ const fromBase64url = (input: string): Buffer => Buffer.from(input, "base64url")
 
 const HEADER = base64url(JSON.stringify({ alg: "EdDSA", typ: "JWT" }));
 
+/**
+ * Audience des assertions de mission.
+ *
+ * Constante et non configurable : c'est une frontière de privilèges, pas un
+ * réglage de déploiement. La rendre paramétrable permettrait de la faire
+ * coïncider par erreur avec l'audience des jetons d'accès, et d'effacer
+ * silencieusement la séparation que cette valeur existe pour tenir.
+ */
+export const MISSION_GRANT_AUDIENCE = "nexus-mission-grant";
+
 export interface TokenServiceOptions {
   /** Clé privée Ed25519 au format PEM PKCS8. */
   privateKeyPem: string;
@@ -76,6 +89,15 @@ export interface TokenServiceOptions {
    */
   accessTtlSeconds?: number;
   deviceTtlSeconds?: number;
+  /**
+   * Durée de vie d'une assertion de mission.
+   *
+   * Plus longue qu'un jeton d'accès — une mission multi-agents peut tourner des
+   * heures et doit survivre à un redémarrage — mais bornée : une assertion
+   * oubliée dans la base du moteur cesse d'ouvrir quoi que ce soit au bout
+   * d'une journée, et une mission plus longue se fait renouveler sa portée.
+   */
+  missionGrantTtlSeconds?: number;
   now?: () => Date;
 }
 
@@ -95,6 +117,7 @@ export class TokenService {
   readonly #audience: string;
   readonly #accessTtl: number;
   readonly #deviceTtl: number;
+  readonly #missionGrantTtl: number;
   readonly #now: () => Date;
 
   constructor(options: TokenServiceOptions) {
@@ -104,6 +127,7 @@ export class TokenService {
     this.#audience = options.audience ?? "nexus-api";
     this.#accessTtl = options.accessTtlSeconds ?? 15 * 60;
     this.#deviceTtl = options.deviceTtlSeconds ?? 30 * 60;
+    this.#missionGrantTtl = options.missionGrantTtlSeconds ?? 24 * 60 * 60;
     this.#now = options.now ?? (() => new Date());
   }
 
@@ -147,6 +171,63 @@ export class TokenService {
     };
 
     return { token: this.#sign(claims), expiresAt: new Date(expiresAt * 1000) };
+  }
+
+  /**
+   * Émet une assertion de mission pour un service.
+   *
+   * Appelée au moment où un utilisateur authentifié confie une mission au
+   * moteur : c'est **l'API qui signe**, jamais le moteur. Mission Engine ne
+   * détient donc aucun pouvoir d'émission — il conserve une assertion opaque et
+   * la rejoue. Compromettre sa base SQLite n'apprend pas à en forger une autre,
+   * et ne donne accès qu'aux missions qui y figurent, jusqu'à leur expiration.
+   */
+  issueMissionGrant(input: {
+    userId: string;
+    service: string;
+    missionExternalKey: string;
+  }): { token: string; expiresAt: Date; grantId: string } {
+    const issuedAt = Math.floor(this.#now().getTime() / 1000);
+    const expiresAt = issuedAt + this.#missionGrantTtl;
+    const grantId = randomUUID();
+
+    const claims: MissionGrantClaims = {
+      sub: input.userId,
+      svc: input.service,
+      mek: input.missionExternalKey,
+      iat: issuedAt,
+      exp: expiresAt,
+      iss: this.#issuer,
+      aud: MISSION_GRANT_AUDIENCE,
+      jti: grantId,
+    };
+
+    return { token: this.#sign(claims), expiresAt: new Date(expiresAt * 1000), grantId };
+  }
+
+  /**
+   * Vérifie une assertion de mission.
+   *
+   * L'audience dédiée est ce qui empêche la confusion de surfaces : un jeton
+   * d'accès utilisateur porte `nexus-api` et échoue ici, une assertion porte
+   * `nexus-mission-grant` et échoue dans `verifyAccessToken`. Aucun des deux
+   * ne peut tenir le rôle de l'autre, même signé par la même clé.
+   *
+   * @throws {TokenInvalidError} signature, forme, émetteur ou audience refusés.
+   * @throws {TokenExpiredError} assertion périmée.
+   */
+  verifyMissionGrant(token: string): MissionGrantClaims {
+    const payload = this.#verify(token);
+    const claims = missionGrantClaimsSchema.safeParse(payload);
+    if (!claims.success) throw new TokenInvalidError("claims de mission malformés");
+
+    if (claims.data.iss !== this.#issuer) throw new TokenInvalidError("émetteur inattendu");
+    if (claims.data.aud !== MISSION_GRANT_AUDIENCE) {
+      throw new TokenInvalidError("audience inattendue");
+    }
+    this.#assertNotExpired(claims.data.exp);
+
+    return claims.data;
   }
 
   /**

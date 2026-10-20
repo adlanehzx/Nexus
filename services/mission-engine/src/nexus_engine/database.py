@@ -12,7 +12,13 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS profiles (
     profile_key TEXT PRIMARY KEY,
     agent_profile_id TEXT NOT NULL UNIQUE,
-    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1))
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    -- Quel exécutant sert ce profil. 'acp' lance un agent par processus, et
+    -- 'agent-core' délègue à Agent Core via l'API. La colonne vit ici, et non
+    -- sur la tâche, parce que le routage et les replis raisonnent déjà par
+    -- profil : un repli entre deux exécutants de nature différente n'aurait pas
+    -- de sens, et le dire au niveau du profil l'interdit par construction.
+    agent_kind TEXT NOT NULL DEFAULT 'acp' CHECK (agent_kind IN ('acp', 'agent-core'))
 );
 
 CREATE TABLE IF NOT EXISTS profile_health (
@@ -44,6 +50,15 @@ CREATE TABLE IF NOT EXISTS missions (
     workspace TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('pending','running','succeeded','failed','cancelled')),
     definition_json TEXT NOT NULL CHECK (json_valid(definition_json)),
+    -- Propriétaire de la mission, tel que l'API l'a signé. Jusqu'ici la
+    -- propriété n'était portée que par un préfixe d'`external_key` : lisible,
+    -- mais invérifiable — le moteur ne pouvait pas distinguer un préfixe
+    -- légitime d'un préfixe recopié.
+    owner_user_id TEXT,
+    -- L'assertion signée elle-même. Le moteur ne sait pas la relire et n'a pas
+    -- à le savoir : il la conserve et la rejoue. Elle ne sort jamais par l'API
+    -- du moteur, n'entre dans aucun journal et n'est jamais donnée à un modèle.
+    owner_assertion TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -69,6 +84,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     retry_delay_seconds INTEGER NOT NULL,
     fallback_profiles_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(fallback_profiles_json)),
     context_budget_chars INTEGER NOT NULL DEFAULT 60000,
+    -- Conversation ouverte par Agent Core au premier essai, réutilisée aux
+    -- suivants. C'est ce qui fait qu'un retry prolonge un historique au lieu
+    -- d'en ouvrir un second. Nulle pour toute tâche ACP.
+    agent_core_conversation_id TEXT,
     next_attempt_at TEXT,
     result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
     error_json TEXT CHECK (error_json IS NULL OR json_valid(error_json)),
@@ -273,6 +292,43 @@ class Database:
                 connection.execute(
                     "ALTER TABLE tasks ADD COLUMN context_budget_chars INTEGER NOT NULL DEFAULT 60000"
                 )
+            if "agent_core_conversation_id" not in task_columns:
+                connection.execute(
+                    "ALTER TABLE tasks ADD COLUMN agent_core_conversation_id TEXT"
+                )
+            profile_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(profiles)")
+            }
+            if "agent_kind" not in profile_columns:
+                # SQLite refuse une contrainte CHECK dans un ALTER TABLE ADD
+                # COLUMN : sur une base existante la colonne arrive donc sans
+                # elle. Les écritures passent toutes par `register_profile` et
+                # par cette migration, qui n'écrivent que les deux valeurs
+                # admises — et une base neuve, elle, porte bien le CHECK.
+                connection.execute(
+                    "ALTER TABLE profiles ADD COLUMN agent_kind TEXT NOT NULL DEFAULT 'acp'"
+                )
+            mission_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(missions)")
+            }
+            if "owner_user_id" not in mission_columns:
+                connection.execute("ALTER TABLE missions ADD COLUMN owner_user_id TEXT")
+            if "owner_assertion" not in mission_columns:
+                connection.execute("ALTER TABLE missions ADD COLUMN owner_assertion TEXT")
+            # Profil réservé de l'exécutant Agent Core.
+            #
+            # C'est une ligne de `profiles` comme les autres, et c'est tout
+            # l'intérêt : le routage, la santé, les bails et les tentatives
+            # continuent de fonctionner sans connaître Agent Core. Elle n'est pas
+            # pilotée par la configuration des agents ACP — `sync_profiles` la
+            # laisse donc tranquille.
+            connection.execute(
+                """
+                INSERT INTO profiles(profile_key, agent_profile_id, enabled, agent_kind)
+                VALUES ('agent-core', 'agent-core', 1, 'agent-core')
+                ON CONFLICT(profile_key) DO UPDATE SET enabled=1, agent_kind='agent-core'
+                """
+            )
             connection.execute(
                 """
                 INSERT OR IGNORE INTO profile_health(profile_key,updated_at)
