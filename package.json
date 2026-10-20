@@ -2,7 +2,7 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
-  "description": "NEXUS â€” assistant personnel IA multi-appareils",
+  "description": "NEXUS \u00e2\u20ac\u201d assistant personnel IA multi-appareils",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test",
+    "nexus": "node packages/cli/dist/index.js",
     "db:generate": "pnpm --filter @nexus/database generate",
     "db:migrate": "pnpm --filter @nexus/database migrate",
     "db:studio": "pnpm --filter @nexus/database studio",
