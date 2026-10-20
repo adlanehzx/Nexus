@@ -77,10 +77,13 @@ jobs:
       - name: Tests
         run: pnpm test
 
-      # `pnpm format:check` n'est volontairement pas une étape : il échoue
-      # aujourd'hui sur 47 fichiers antérieurs, et le rendre bloquant
-      # imposerait un reformatage massif sans rapport avec le code qui change.
-      # La roadmap ne le liste pas non plus parmi les portes de la phase 0.
+      # Bloquant depuis que l'arriéré est purgé. Deux catégories en sont
+      # exclues, et pour des raisons différentes : les schémas générés par
+      # Tauri, qu'une génération réécrirait, et la configuration que Mission
+      # Engine écrit lui-même — imposer un autre style la ferait re-salir à
+      # chaque modification de réglage. Voir `.prettierignore`.
+      - name: Format
+        run: pnpm format:check
 
   mission-engine:
     name: Mission Engine (Python)
