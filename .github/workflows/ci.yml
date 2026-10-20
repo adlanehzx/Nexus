@@ -95,8 +95,12 @@ jobs:
         with:
           enable-cache: true
 
+      # `--extra dev` et non `--dev` : pytest est déclaré dans
+      # `[project.optional-dependencies]`, que `--dev` ne touche pas — celui-ci
+      # ne vise que `[dependency-groups]`. Sans cela, `uv run pytest` échoue sur
+      # un binaire absent.
       - name: Installer les dépendances
-        run: uv sync --frozen --dev
+        run: uv sync --frozen --extra dev
 
       - name: Tests
         run: uv run pytest -q
