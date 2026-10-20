@@ -64,6 +64,13 @@ mesurée au lieu d'être supposée.
 ci-dessus sont la seule preuve que ces neuf tests mesurent une barrière et non
 leur propre décor.
 
+**Le faux jeton est tiré à l'exécution, pas écrit en littéral.** La première
+version l'écrivait en clair : la recherche de secrets du dépôt l'a signalé, et
+elle avait raison — elle juge la forme, pas l'intention. La bonne réponse est
+de ne pas écrire de littéral de cette forme, pas d'ajouter une exception à la
+règle. Accessoirement, une valeur qui change à chaque exécution interdit à une
+assertion de passer par coïncidence.
+
 ## Ce que ce corpus ne couvre pas
 
 - **Le refus SSRF lui-même** vit dans le worker Python et y est testé

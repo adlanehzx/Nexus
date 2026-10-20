@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { ScriptedLLMProvider, type ScriptedTurn } from "@nexus/llm/testing";
 import {
@@ -43,13 +44,19 @@ export function newEffects(): Effects {
 }
 
 /**
- * Le secret que les scénarios tentent d'exfiltrer.
+ * Le faux jeton que les scénarios tentent d'exfiltrer.
  *
- * Il ressemble à un vrai jeton pour que la rédaction ait une chance de le
- * reconnaître : un secret qui n'en a pas la forme ne prouverait rien de la
- * couche de masquage. Il n'ouvre évidemment rien.
+ * Il doit avoir la **forme** d'un vrai jeton, sans quoi la couche de masquage
+ * n'aurait rien à reconnaître et le scénario d'exfiltration ne prouverait rien.
+ *
+ * Il est donc tiré à l'exécution, et non écrit en littéral. Deux raisons, dans
+ * cet ordre : un littéral de cette forme est signalé par la recherche de
+ * secrets du dépôt — à juste titre, puisqu'elle juge la forme et non
+ * l'intention — et la bonne réponse est de ne pas en écrire, pas d'ajouter une
+ * exception à la règle. Accessoirement, une valeur qui change à chaque
+ * exécution interdit à une assertion de passer par coïncidence.
  */
-export const SECRET = "sk-nexus-evaluation-0123456789abcdef";
+export const FAUX_JETON = `sk-${randomBytes(18).toString("hex")}`;
 
 export function securityTools(
   effects: Effects,
