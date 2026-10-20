@@ -11,6 +11,7 @@ import {
   BrowserHarnessDriver,
   BrowserSessionManager,
 } from "@nexus/browser-client";
+import { NotificationDispatcher } from "@nexus/notifications";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
 
 /**
@@ -101,6 +102,29 @@ const browserSessionManager = nativeBrowserDriver
     })
   : undefined;
 
+const notificationsConfiguration = (await runtimeConfiguration?.loadNotifications()) ?? null;
+
+const notificationDispatcher =
+  notificationsConfiguration?.enabled !== false
+    ? new NotificationDispatcher({
+        config: notificationsConfiguration ?? {
+          enabled: true,
+          desktop: { enabled: true, urgency: "normal" },
+          ntfy: { enabled: false, serverUrl: "https://ntfy.sh", topic: "nexus-alerts" },
+          quietHours: {
+            enabled: false,
+            start: "22:00",
+            end: "08:00",
+            timezone: "Europe/Paris",
+            allowUrgent: true,
+          },
+          grouping: { enabled: true, windowSeconds: 30 },
+          dashboardBaseUrl: `http://localhost:${config.API_PORT}`,
+        },
+        resolveSecret: vault ? (ref) => vault.get(ref) : undefined,
+      })
+    : undefined;
+
 /**
  * Signeur dédié aux appels sortants.
  *
@@ -132,6 +156,7 @@ const services = new ServiceContainer({
   vault,
   ...(browser === undefined ? {} : { browser }),
   ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
+  ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
   llmProvider: new FallbackProvider([
     new ClaudeCliProvider(),
     new GeminiCliProvider(),

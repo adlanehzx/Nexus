@@ -377,6 +377,40 @@ export interface NotificationSection {
   }[];
 }
 
+export interface ExternalNotificationConfigDto {
+  enabled: boolean;
+  desktop: { enabled: boolean; urgency: "low" | "normal" | "critical" };
+  ntfy: { enabled: boolean; serverUrl: string; topic: string; tokenRef?: string };
+  webhook?: {
+    enabled: boolean;
+    url?: string;
+    format: "discord" | "telegram" | "apprise" | "generic";
+    tokenRef?: string;
+  };
+  quietHours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+    timezone: string;
+    allowUrgent: boolean;
+  };
+  grouping: { enabled: boolean; windowSeconds: number };
+  dashboardBaseUrl: string;
+}
+
+export interface NotificationTestReportDto {
+  report: {
+    messageId: string;
+    timestamp: string;
+    channels: {
+      channel: string;
+      success: boolean;
+      error?: string;
+      skippedReason?: string;
+    }[];
+  };
+}
+
 export interface SecuritySection {
   events: {
     at: string;
@@ -611,6 +645,18 @@ export class DashboardApi {
       "POST",
       `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
     );
+  }
+
+  notificationConfig(): Promise<ExternalNotificationConfigDto> {
+    return this.#get("/api/v1/dashboard/notifications/config");
+  }
+
+  saveNotificationConfig(config: ExternalNotificationConfigDto): Promise<{ saved: boolean }> {
+    return this.#request("PUT", "/api/v1/dashboard/notifications/config", config);
+  }
+
+  testNotification(): Promise<NotificationTestReportDto> {
+    return this.#request("POST", "/api/v1/dashboard/notifications/test");
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {

@@ -3,6 +3,7 @@ import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
+import { notificationsConfigSchema, type NotificationsConfig } from "@nexus/notifications";
 
 const loopbackHttpUrl = z
   .string()
@@ -72,6 +73,15 @@ export class RuntimeConfigurationStore {
 
   async saveBrowser(config: BrowserRuntimeConfig): Promise<void> {
     await this.#write("browser.json", browserConfigSchema.parse(config));
+  }
+
+  async loadNotifications(): Promise<NotificationsConfig | null> {
+    const raw = await this.#read("notifications.json", null);
+    return raw === null ? null : notificationsConfigSchema.parse(raw);
+  }
+
+  async saveNotifications(config: NotificationsConfig): Promise<void> {
+    await this.#write("notifications.json", notificationsConfigSchema.parse(config));
   }
 
   async listSecretNames(): Promise<string[]> {

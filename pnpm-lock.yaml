@@ -399,6 +399,22 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
+  packages/notifications:
+    dependencies:
+      '@nexus/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
   packages/protocol:
     dependencies:
       zod:
@@ -608,6 +624,9 @@ importers:
       '@nexus/mission-control-client':
         specifier: workspace:*
         version: link:../../packages/mission-control-client
+      '@nexus/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@nexus/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

@@ -66,6 +66,7 @@ import {
 } from "./stores.js";
 import { NotificationService } from "./notification-service.js";
 import { ConfirmationBroker } from "./confirmation-broker.js";
+import type { NotificationDispatcher } from "@nexus/notifications";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
@@ -158,6 +159,8 @@ export interface ServiceContainerOptions {
   browser?: BrowserWorkerClient;
   /** Gestionnaire des sessions de navigation natives (browser-harness). */
   browserSessionManager?: BrowserSessionManager;
+  /** Dispatcher des notifications externes (desktop, mobile push ntfy, webhooks). */
+  notificationDispatcher?: NotificationDispatcher;
   /** Configuration administrable, stockée localement sans secret en clair. */
   runtimeConfiguration?: RuntimeConfigurationStore;
   /** Coffre adossé au trousseau de session Linux. */
@@ -223,6 +226,8 @@ export class ServiceContainer {
   browser: BrowserWorkerClient | undefined;
   /** Gestionnaire des sessions de navigation natives locales. */
   browserSessionManager: BrowserSessionManager | undefined;
+  /** Dispatcher des notifications externes. */
+  readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
   readonly vault: KeyringVault | undefined;
   /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
@@ -301,11 +306,13 @@ export class ServiceContainer {
     this.notifications = new NotificationService({
       store: this.notificationStore,
       router: this.router,
+      dispatcher: options.notificationDispatcher,
       now,
     });
 
     this.confirmationBroker = new ConfirmationBroker({
       confirmations: this.confirmations,
+      notifications: this.notifications,
       now,
     });
 
@@ -465,6 +472,7 @@ export class ServiceContainer {
     this.runtimeConfiguration = options.runtimeConfiguration;
     this.vault = options.vault;
     this.missionControl = options.missionControl;
+    this.notificationDispatcher = options.notificationDispatcher;
 
     this.dashboard = new DashboardService({
       services: this,

@@ -1462,9 +1462,53 @@ export function Memory({ api }: { api: DashboardApi }) {
 
 export function Notifications({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.notifications());
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { report } = await api.testNotification();
+      const summary = report.channels
+        .map(
+          (c) =>
+            `${c.channel}: ${c.success ? "✓ succès" : c.skippedReason ? `(ignoré: ${c.skippedReason})` : `✗ erreur (${c.error ?? ""})`}`,
+        )
+        .join(" | ");
+      setTestResult(`Rapport : ${summary}`);
+    } catch (err) {
+      setTestResult(`Échec du test : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div className="contenu">
+      <div className="agents-heading">
+        <div>
+          <h2>Notifications</h2>
+          <p className="faible">
+            Journal central et diffusion vers les canaux externes (desktop, mobile push ntfy, webhooks).
+          </p>
+        </div>
+        <button
+          className="bouton"
+          type="button"
+          disabled={testing}
+          onClick={() => void handleTest()}
+        >
+          {testing ? "Test en cours..." : "Tester canaux externes"}
+        </button>
+      </div>
+
+      {testResult !== null ? (
+        <p className="banniere succes" style={{ marginBottom: "1rem" }}>
+          {testResult}
+        </p>
+      ) : null}
+
       <Section state={state}>
         {(data) => (
           <>
