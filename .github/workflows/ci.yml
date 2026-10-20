@@ -164,6 +164,64 @@ jobs:
       - name: Tests d'intégration
         run: pnpm test:pg
 
+  e2e-confirmation:
+    name: Confirmation de bout en bout
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # Le seul job qui fait tourner les deux processus ensemble : l'API Node, le
+    # moteur Python, PostgreSQL, et un vrai redémarrage de processus au milieu.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+          POSTGRES_DB: nexus_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexus_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://nexus:nexus@127.0.0.1:5432/nexus_e2e
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Installer les dépendances Node
+        run: pnpm install --frozen-lockfile
+
+      - name: Installer les dépendances Python
+        working-directory: services/mission-engine
+        run: uv sync --frozen --extra dev
+
+      - name: Build
+        run: pnpm build
+
+      - name: Appliquer les migrations
+        run: pnpm --filter @nexus/database exec prisma migrate deploy
+
+      - name: Scénario complet
+        run: pnpm --filter @nexus/api e2e:confirmation
+
   security:
     name: Secrets et dépendances
     runs-on: ubuntu-latest

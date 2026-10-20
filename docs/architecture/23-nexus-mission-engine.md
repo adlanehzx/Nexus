@@ -407,6 +407,32 @@ propriétaire et mission — d'où la colonne `agent_run_snapshots.missionExtern
 Sans elle, une assertion de mission ouvrirait aussi les runs que le propriétaire
 a lancés depuis ses conversations privées.
 
+### Le scénario complet, éprouvé
+
+`services/api/scripts/e2e-confirmation.mjs` fait tourner la chaîne entière avec
+**deux vrais processus** :
+
+```
+mission → tâche Agent Core → outil à risque → awaiting_confirmation
+→ redémarrage du moteur (SIGTERM puis relance) → approbation par la surface
+utilisateur → reprise → tâche succeeded → mission succeeded
+```
+
+Quatorze étapes vérifiées, dont le retrait des assertions à la clôture. Un job
+CI dédié le rejoue à chaque poussée.
+
+**Ce qui est réel** : l'API Fastify, PostgreSQL, le processus Python du moteur,
+sa base SQLite, le HTTP entre les deux, l'authentification de service et les
+assertions signées. Le redémarrage est un vrai arrêt de processus — c'est ce qui
+prouve que l'attente vit en base et non en mémoire.
+
+**Ce qui est simulé** : le modèle, scripté pour réclamer un outil à risque puis
+répondre une fois l'accord donné. C'est la seule façon de rendre le scénario
+déterministe, et la séparation est volontaire : l'outil de démonstration exige
+une confirmation mais ne fait rien — il rend une chaîne. Un outil à effet réel
+rendrait ce test dangereux à relancer, pour aucun gain : ce qu'on éprouve est la
+suspension et la reprise, pas l'effet de l'outil.
+
 ### Ce qui fonctionne réellement, et ce qui manque
 
 Vérifié de bout en bout, par HTTP réel entre les deux processus : une tâche
@@ -421,12 +447,12 @@ run que le propriétaire a lancé lui-même.
 
 **Non fait, et à savoir avant de s'appuyer dessus** :
 
-- **Le tour complet de confirmation humaine n'est pas exercé en conditions
-  réelles.** La mécanique de suspension, de sondage et de reprise est couverte
-  par des tests avec issues scriptées, et le sondage l'est aussi par HTTP réel ;
-  ce qui ne l'est pas, c'est un agent demandant spontanément un outil à risque
-  puis une approbation depuis le tableau de bord — le modèle ne le fait pas sur
-  commande.
+- **Le smoke test à vrai agent reste à faire.** Le scénario complet est couvert
+  de façon déterministe (voir ci-dessus), mais personne n'a encore vérifié qu'un
+  vrai agent, livré à lui-même, réclame bien un outil à risque et que la carte
+  de confirmation s'affiche correctement dans le tableau de bord. Le modèle ne
+  réclame pas un outil dangereux sur commande ; cette vérification-là est
+  manuelle par nature.
 - **L'authentification API → moteur existe mais n'est pas activée par
   défaut** : elle attend une clé de signature persistante côté API, faute de
   quoi il n'y a pas de clé publique à provisionner. Le mécanisme est en place

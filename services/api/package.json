@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Fronti\u00c3\u00a8re r\u00c3\u00a9seau : REST v1, WebSocket gateway, authentification",
+  "description": "FrontiÃ¨re rÃ©seau : REST v1, WebSocket gateway, authentification",
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:pg": "vitest run --config vitest.pg.config.ts",
     "test:watch": "vitest",
-    "clean": "rimraf dist .turbo"
+    "clean": "rimraf dist .turbo",
+    "e2e:confirmation": "node scripts/e2e-confirmation.mjs"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
