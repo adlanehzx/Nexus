@@ -225,6 +225,84 @@ jobs:
       - name: Scénario complet
         run: pnpm --filter @nexus/api e2e:confirmation
 
+  backup-restore:
+    name: Sauvegarde et restauration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Une sauvegarde dont on n'a jamais tenté la restauration n'est pas une
+    # sauvegarde : on découvre son état le jour où on en a besoin. Ce job la
+    # crée puis la restaure vraiment, dans une base jetable.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+          POSTGRES_DB: nexus_backup
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexus_backup"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Installer les clients PostgreSQL et SQLite
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client sqlite3
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Un `.env` minimal : la commande lit sa configuration là où une
+      # installation réelle la lit, et non depuis des variables du job.
+      - name: Préparer une installation jetable
+        run: |
+          cat > .env <<'ENV'
+          NODE_ENV=development
+          DATABASE_URL=postgresql://nexus:nexus@127.0.0.1:5432/nexus_backup?schema=public
+          REDIS_URL=redis://127.0.0.1:6379
+          ENV
+          chmod 600 .env
+
+      - name: Appliquer les migrations
+        run: pnpm --filter @nexus/database exec prisma migrate deploy
+
+      - name: Sauvegarder
+        run: pnpm nexus backup --passphrase "${{ github.sha }}"
+
+      # Le cœur du job : restaurer pour de vrai dans une base jetable, et
+      # comparer à l'archive.
+      - name: Vérifier que l'archive est restaurable
+        run: |
+          ARCHIVE=$(ls -t backups/*.nxbk | head -1)
+          pnpm nexus backup --verify "$ARCHIVE" --passphrase "${{ github.sha }}"
+
+      - name: Refuser une archive altérée
+        run: |
+          ARCHIVE=$(ls -t backups/*.nxbk | head -1)
+          cp "$ARCHIVE" /tmp/tamper.nxbk
+          node -e 'const f="/tmp/tamper.nxbk";const fs=require("node:fs");const d=fs.readFileSync(f);d[d.length-10]^=0xff;fs.writeFileSync(f,d)'
+          if pnpm nexus backup --verify /tmp/tamper.nxbk --passphrase "${{ github.sha }}"; then
+            echo "une archive altérée a été acceptée" >&2
+            exit 1
+          fi
+
   security:
     name: Secrets et dépendances
     runs-on: ubuntu-latest
