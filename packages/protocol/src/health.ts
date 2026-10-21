@@ -1,15 +1,13 @@
 import { z } from "zod";
 
 /**
- * Contrats des sondes de santé.
+ * Health check probe contracts.
  *
- * Deux sondes, deux usages distincts — les confondre est l'erreur classique qui
- * fait redémarrer un conteneur sain parce que sa base est momentanément lente :
- *
- *  - **liveness** (`GET /health`) : le processus répond-il ? Aucune dépendance
- *    n'est interrogée. C'est la sonde que l'orchestrateur utilise pour tuer.
- *  - **readiness** (`GET /api/v1/health`) : le service peut-il traiter du trafic ?
- *    PostgreSQL et Redis sont vérifiés. C'est la sonde qui retire de la rotation.
+ * Distinct probe endpoints:
+ *  - **liveness** (`GET /health`): Is the process responsive? No external dependencies probed.
+ *    Used by process managers/orchestrators for restarts.
+ *  - **readiness** (`GET /api/v1/health`): Can the service process traffic?
+ *    PostgreSQL and Redis dependencies are checked. Used for traffic routing.
  */
 
 export const dependencyStatusSchema = z.object({
@@ -39,7 +37,7 @@ export type DependencyStatus = z.infer<typeof dependencyStatusSchema>;
 export type LivenessResponse = z.infer<typeof livenessResponseSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 
-/** Forme d'erreur unique renvoyée par l'API. `code` est un contrat stable. */
+/** Unified error envelope returned by the API. `code` is a stable contract. */
 export const errorResponseSchema = z.object({
   error: z.object({
     code: z.string(),

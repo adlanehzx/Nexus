@@ -9,36 +9,34 @@ const validEnvelope = {
   ts: "2026-09-01T10:00:00.123Z",
   seq: 42,
   channel: "run:01J8Z2K3M4",
-  payload: { delta: "bonjour" },
+  payload: { delta: "hello" },
 };
 
 describe("envelopeSchema", () => {
-  it("accepte une enveloppe complète", () => {
+  it("accepts a complete envelope", () => {
     expect(envelopeSchema.parse(validEnvelope)).toMatchObject({ type: "agent.token", seq: 42 });
   });
 
-  it("accepte une enveloppe sans seq ni channel", () => {
+  it("accepts an envelope without seq or channel", () => {
     const { seq: _seq, channel: _channel, ...minimal } = validEnvelope;
     expect(envelopeSchema.safeParse(minimal).success).toBe(true);
   });
 
-  it("refuse une version de protocole différente", () => {
-    // Le client doit être fermé avec 4400, pas recevoir des messages qu'il
-    // interprétera de travers.
+  it("rejects differing protocol version", () => {
     expect(envelopeSchema.safeParse({ ...validEnvelope, v: 2 }).success).toBe(false);
   });
 
-  it("refuse un horodatage qui n'est pas ISO 8601", () => {
+  it("rejects non-ISO 8601 timestamps", () => {
     expect(envelopeSchema.safeParse({ ...validEnvelope, ts: "01/09/2026" }).success).toBe(false);
   });
 
-  it("refuse un seq négatif", () => {
+  it("rejects negative seq values", () => {
     expect(envelopeSchema.safeParse({ ...validEnvelope, seq: -1 }).success).toBe(false);
   });
 });
 
 describe("WsCloseCode", () => {
-  it("reste dans la plage applicative 4000-4999", () => {
+  it("falls within application-reserved 4000-4999 range", () => {
     for (const code of Object.values(WsCloseCode)) {
       expect(code).toBeGreaterThanOrEqual(4000);
       expect(code).toBeLessThanOrEqual(4999);
@@ -46,8 +44,8 @@ describe("WsCloseCode", () => {
   });
 });
 
-describe("contrats de santé", () => {
-  it("valide une réponse de readiness dégradée", () => {
+describe("health probe contracts", () => {
+  it("validates degraded readiness response", () => {
     const parsed = readinessResponseSchema.parse({
       status: "degraded",
       version: "0.1.0",
@@ -62,7 +60,7 @@ describe("contrats de santé", () => {
     expect(parsed.dependencies.redis.status).toBe("down");
   });
 
-  it("exige les deux dépendances", () => {
+  it("requires all declared dependencies", () => {
     const result = readinessResponseSchema.safeParse({
       status: "ok",
       version: "0.1.0",
@@ -74,7 +72,7 @@ describe("contrats de santé", () => {
     expect(result.success).toBe(false);
   });
 
-  it("impose un correlationId dans toute réponse d'erreur", () => {
+  it("enforces correlationId presence on error responses", () => {
     const withoutId = {
       error: { code: "NOT_FOUND", message: "Resource not found.", retryable: false },
     };

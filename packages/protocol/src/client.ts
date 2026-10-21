@@ -2,37 +2,20 @@ import { z } from "zod";
 import { envelopeSchema, PROTOCOL_VERSION } from "./envelope.js";
 
 /**
- * Canal temps réel des clients.
+ * Client real-time channel.
  *
- * Le pendant de `worker.ts` pour l'autre bout du système : l'iPhone et le
- * portable parlent ici, les exécutants parlent là-bas. **Deux canaux, un seul
- * cadrage** — `envelopeSchema`, la même version, le même `id`, le même `ts`.
+ * Dedicated protocol surface for client applications (mobile, desktop, web).
+ * Uses envelopeSchema with strict separation from worker-side messages.
  *
- * La séparation n'est pas cosmétique. Un client ne doit jamais pouvoir émettre
- * une trame du canal worker : un `worker.task_result` forgé depuis un téléphone
- * ferait croire au cœur qu'une étape a réussi. Les deux canaux ont des types
- * disjoints, des schémas disjoints, et des points d'entrée disjoints.
- *
- * Règle qui gouverne tout le reste : **aucun client ne parle à un exécutant.**
- * Un client demande au cœur ; le cœur autorise, choisit, dispatche, et renvoie
- * les résultats. Il n'existe aucun message client dont la charge utile désigne
- * un worker.
+ * Fundamental invariant: clients never address workers directly.
+ * Clients communicate strictly through the core gateway.
  */
 
 export const CLIENT_CHANNEL = "client";
 
 /**
- * Poignée de main du canal client.
- *
- * **Volontairement hors de `CLIENT_TO_SERVER`.** Ce n'est pas une demande : elle
- * n'est pas routée vers le répartiteur, elle n'attend pas d'accusé, et elle est
- * la seule trame qu'une connexion non authentifiée a le droit d'émettre. La
- * garder dans la table des demandes reviendrait à autoriser un client à la
- * rejouer une fois la session ouverte, pour se réauthentifier en autre chose.
- *
- * Le `deviceId` ne prouve rien : le jeton dit *qui*, le `deviceId` dit *d'où*, et
- * le serveur vérifie que le second appartient bien au premier. Un identifiant
- * d'appareil seul n'est jamais une authentification.
+ * Client handshake message.
+ * Non-routed, non-repayable authentication frame.
  */
 export const CLIENT_HELLO = "client.hello";
 
@@ -43,13 +26,7 @@ export const clientHelloSchema = z.object({
 
 export type ClientHello = z.infer<typeof clientHelloSchema>;
 
-/**
- * Décode une poignée de main.
- *
- * Rend `undefined` sur tout ce qui n'en est pas une, sans distinguer les causes :
- * une connexion qui n'ouvre pas par un `client.hello` valide est fermée, et
- * détailler *pourquoi* renseignerait un attaquant sur ce qui manque.
- */
+/** Decodes and validates a client handshake envelope. */
 export function parseClientHello(input: unknown): ClientHello | undefined {
   const envelope = envelopeSchema.safeParse(input);
   if (!envelope.success || envelope.data.type !== CLIENT_HELLO) return undefined;
@@ -58,26 +35,18 @@ export function parseClientHello(input: unknown): ClientHello | undefined {
   return hello.success ? hello.data : undefined;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Client → serveur
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Client -> Server ─────────────────────────────────────────────────────────
 
 export const messageSendSchema = z.object({
   conversationId: z.string().min(1).nullable().default(null),
   text: z.string().min(1).max(32_000),
-  /**
-   * Appareil d'où part la demande.
-   *
-   * Le fil de routage de toute l'architecture : les événements de la tâche qui
-   * en découlera reviendront ici en priorité. Le serveur le **remplace** par
-   * l'appareil réellement authentifié — un client ne choisit pas son identité.
-   */
+  /** Request origin device ID. Populated or overridden by authenticated gateway session. */
   originClientDeviceId: z.string().min(1).optional(),
 });
 
 export const agentCancelSchema = z.object({
   runId: z.string().min(1),
-  reason: z.string().max(256).default("annulé par l'utilisateur"),
+  reason: z.string().max(256).default("cancelled by user"),
 });
 
 export const confirmationRespondSchema = z.object({
@@ -86,28 +55,25 @@ export const confirmationRespondSchema = z.object({
 });
 
 export const conversationSubscribeSchema = z.object({
-  /** `null` s'abonne à tout ce qui concerne l'utilisateur. */
+  /** Null subscribes to all user conversations and events. */
   conversationId: z.string().min(1).nullable().default(null),
 });
 
 export const taskCancelSchema = z.object({
   taskId: z.string().min(1),
-  reason: z.string().max(256).default("annulé par l'utilisateur"),
+  reason: z.string().max(256).default("cancelled by user"),
 });
 
 export const deviceListSchema = z.object({
-  /** Ne renvoyer que les exécutants. Faux = tous les appareils de l'utilisateur. */
+  /** Only return worker devices when true; all user devices when false. */
   workersOnly: z.boolean().default(false),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Serveur → client
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Server -> Client ─────────────────────────────────────────────────────────
 
 export const messageDeltaSchema = z.object({
   conversationId: z.string(),
   messageId: z.string(),
-  /** Fragment de texte. Le client concatène ; il ne reçoit jamais tout d'un coup. */
   delta: z.string(),
   done: z.boolean().default(false),
 });
@@ -127,7 +93,6 @@ export const toolStartedSchema = z.object({
   runId: z.string(),
   callId: z.string(),
   tool: z.string(),
-  /** Résumé lisible. **Jamais les arguments bruts.** */
   summary: z.string(),
   riskLevel: z.string(),
 });
@@ -168,7 +133,6 @@ export const taskCreatedSchema = z.object({
 export const taskProgressSchema = z.object({
   taskId: z.string(),
   stepId: z.string(),
-  /** Exécutant de l'étape. `null` tant qu'aucun n'a été retenu. */
   deviceId: z.string().nullable().default(null),
   percent: z.number().int().min(0).max(100),
   label: z.string().nullable().default(null),
@@ -180,14 +144,6 @@ export const taskCompletedSchema = z.object({
   durationMs: z.number().nonnegative(),
 });
 
-/**
- * Une tâche a été annulée.
- *
- * Distinct de `task.failed`, et ce n'est pas une nuance : « j'ai dit non » et
- * « ça a échoué » n'appellent ni la même relance ni le même message. Sans ce
- * type, une tâche annulée — par un refus de confirmation ou par l'utilisateur —
- * restait affichée « en cours » indéfiniment sur tous les clients.
- */
 export const taskCancelledSchema = z.object({
   taskId: z.string(),
   reason: z.string(),
@@ -214,17 +170,13 @@ export const notificationCreatedSchema = z.object({
   severity: z.enum(["info", "warning", "error"]),
 });
 
-/** Réponse à une demande client — porte le `requestId` de la demande. */
 export const clientAckSchema = z.object({
   ok: z.boolean(),
-  /** Charge utile de la réponse, propre à la demande. */
   data: z.unknown().nullable().default(null),
   error: z.object({ code: z.string(), message: z.string() }).nullable().default(null),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types de messages
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Message Types ────────────────────────────────────────────────────────────
 
 export const CLIENT_TO_SERVER = {
   messageSend: "message.send",
@@ -293,7 +245,6 @@ export type ServerEventPayload<T extends ServerToClientType> = z.infer<
 export interface ClientRequest<T extends ClientToServerType = ClientToServerType> {
   type: T;
   payload: ClientRequestPayload<T>;
-  /** Corrèle la réponse. Absent = le client ne veut pas d'accusé. */
   requestId: string | undefined;
   envelope: z.infer<typeof envelopeSchema>;
 }
@@ -302,18 +253,7 @@ export function isClientRequestType(type: string): type is ClientToServerType {
   return Object.values(CLIENT_TO_SERVER).includes(type as ClientToServerType);
 }
 
-/**
- * Décode une trame montante.
- *
- * Trois issues, et la distinction compte :
- *
- *  - `undefined` — cadrage illisible ou type inconnu. Ignoré : un client plus
- *    récent que le serveur ne doit pas faire tomber la connexion.
- *  - **levée** — type connu mais charge utile invalide. C'est une erreur de
- *    programmation ou une falsification, pas une différence de version, et
- *    l'appelant répond par un accusé négatif.
- *  - un `ClientRequest` — utilisable.
- */
+/** Parses and validates incoming client requests. */
 export function parseClientRequest(input: unknown): ClientRequest | undefined {
   const envelope = envelopeSchema.safeParse(input);
   if (!envelope.success) return undefined;
@@ -331,7 +271,7 @@ export function parseClientRequest(input: unknown): ClientRequest | undefined {
   };
 }
 
-/** Construit une trame descendante du canal client. */
+/** Constructs a downstream client-channel envelope. */
 export function clientEnvelope<T extends ServerToClientType>(
   type: T,
   payload: ServerEventPayload<T>,
@@ -349,15 +289,7 @@ export function clientEnvelope<T extends ServerToClientType>(
   };
 }
 
-/**
- * Traduit un événement `NexusEvent` vers le canal client.
- *
- * Les événements internes et les messages temps réel ne portent pas les mêmes
- * noms — `worker.task_started` décrit ce que fait un exécutant, `task.progress`
- * décrit ce que le client doit afficher. Cette table est la frontière, et elle
- * est volontairement **partielle** : tout ce qui n'y figure pas ne descend pas
- * vers les clients.
- */
+/** Translates internal NexusEvents into client-facing WebSocket frames. */
 export const EVENT_TO_CLIENT_MESSAGE: Record<string, ServerToClientType | undefined> = {
   "agent.started": SERVER_TO_CLIENT.agentStarted,
   "agent.progress": SERVER_TO_CLIENT.agentProgress,

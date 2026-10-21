@@ -1,29 +1,23 @@
 import { z } from "zod";
 
 /**
- * Événements NEXUS.
+ * NEXUS Events.
  *
- * Ils vivent dans `@nexus/protocol` — et pas dans le cœur — parce que trois
- * mondes les partagent : le cœur qui les émet, les clients qui les affichent,
- * les workers qui en produisent. Un type d'événement est un **contrat public**.
+ * Defined in `@nexus/protocol` because they are shared across:
+ * the core (emitter), clients (display/telemetry), and workers (producers).
+ * An event type is a stable public contract.
  *
- * Deux règles d'évolution, tenues :
- *
- *  1. **Versionné.** Chaque enveloppe porte `v`. Une version majeure différente
- *     fait fermer la connexion plutôt que d'être mal interprétée.
- *  2. **Additif.** On ajoute des types d'événements, jamais on n'en retire ni
- *     n'en renomme. Un client du magasin d'applications a des mois de retard —
- *     il doit pouvoir ignorer ce qu'il ne connaît pas sans casser.
+ * Evolution rules:
+ *  1. Versioned. Each envelope carries `v`. Differing major versions close the connection.
+ *  2. Additive. Event types may be added, but never removed or renamed.
  */
 
 export const EVENT_SCHEMA_VERSION = 1;
 
 /**
- * Ce qui accompagne tout événement.
+ * Common metadata present on all events.
  *
- * `originClientDeviceId` est le fil de routage : la tâche part de l'iPhone,
- * s'exécute sur le poste fixe, et ses événements reviennent à l'iPhone. Sans ce
- * champ transporté de bout en bout, il faudrait le retrouver à chaque saut.
+ * `originClientDeviceId` provides the routing thread across the distributed execution mesh.
  */
 export const eventEnvelopeSchema = z.object({
   v: z.literal(EVENT_SCHEMA_VERSION),
@@ -32,24 +26,15 @@ export const eventEnvelopeSchema = z.object({
   at: z.iso.datetime(),
   userId: z.string().min(1),
   correlationId: z.string().min(1),
-  /** Appareil d'où part la demande. Null pour un événement issu du système. */
+  /** Originating client device ID. Null for system-generated events. */
   originClientDeviceId: z.string().nullable(),
 });
 
-/**
- * Socle commun, **sans** `type` : chaque événement déclare son propre littéral.
- *
- * Le garder ici ferait fusionner `z.string()` avec un `z.literal(...)`, et le
- * type inféré retomberait sur `never` — l'union discriminée cesserait
- * silencieusement de discriminer quoi que ce soit.
- */
 const { type: _discriminator, ...baseShape } = eventEnvelopeSchema.shape;
 
 const withBase = <T extends z.ZodRawShape>(shape: T) => z.object({ ...baseShape, ...shape });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Agent — le raisonnement
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Agent Reasoning ──────────────────────────────────────────────────────────
 
 const agentEvents = [
   withBase({ type: z.literal("agent.started"), runId: z.string(), conversationId: z.string() }),
@@ -73,9 +58,7 @@ const agentEvents = [
   }),
 ] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tâches — l'exécution répartie
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Distributed Tasks ────────────────────────────────────────────────────────
 
 const taskEvents = [
   withBase({
@@ -89,17 +72,7 @@ const taskEvents = [
     type: z.literal("task.progress"),
     taskId: z.string(),
     stepId: z.string(),
-    /**
-     * Machine qui vient d'exécuter l'étape.
-     *
-     * `null` tant qu'aucune n'a été retenue — une étape refusée à
-     * l'autorisation n'atteint jamais d'exécutant. Ce champ descend jusqu'aux
-     * clients, parce qu'« en cours » sans dire *où* n'apprend rien à
-     * l'utilisateur : c'est la différence entre « ça travaille » et « le poste
-     * fixe compile pendant que je regarde mon téléphone ».
-     */
     deviceId: z.string().nullable().default(null),
-    /** Progression du plan entier, de 0 à 100. */
     percent: z.number().int().min(0).max(100),
     label: z.string().nullable(),
   }),
@@ -118,9 +91,7 @@ const taskEvents = [
   withBase({ type: z.literal("task.cancelled"), taskId: z.string(), reason: z.string() }),
 ] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Appareils
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Devices ──────────────────────────────────────────────────────────────────
 
 const deviceEvents = [
   withBase({
@@ -143,14 +114,9 @@ const deviceEvents = [
   }),
 ] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Workers — l'exécution vue depuis l'appareil
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Workers ──────────────────────────────────────────────────────────────────
 
 const workerEvents = [
-  // `device.connected` dit « le registre a vu cette machine ». `worker.connected`
-  // dit « le canal d'exécution est ouvert ». Un appareil peut être connu et
-  // joignable sans être prêt à exécuter — la distinction sert au diagnostic.
   withBase({
     type: z.literal("worker.connected"),
     deviceId: z.string(),
@@ -167,7 +133,6 @@ const workerEvents = [
     type: z.literal("worker.disconnected"),
     deviceId: z.string(),
     reason: z.string(),
-    /** Étapes interrompues par la coupure : elles seront reprises ailleurs. */
     inFlightSteps: z.number().int().nonnegative(),
   }),
   withBase({
@@ -211,9 +176,7 @@ const workerEvents = [
   }),
 ] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Confirmations et notifications
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Confirmations & Notifications ────────────────────────────────────────────
 
 const confirmationEvents = [
   withBase({
@@ -221,7 +184,6 @@ const confirmationEvents = [
     confirmationId: z.string(),
     taskId: z.string().nullable(),
     stepId: z.string().nullable(),
-    /** Capacité demandée, telle qu'elle apparaîtra dans les réglages. */
     capability: z.string().nullable(),
     action: z.string(),
     description: z.string(),
@@ -232,7 +194,6 @@ const confirmationEvents = [
     type: z.literal("confirmation.responded"),
     confirmationId: z.string(),
     decision: z.enum(["approved", "rejected", "expired"]),
-    /** Appareil qui a tranché — pas forcément celui qui a demandé. */
     decidedByDeviceId: z.string().nullable(),
   }),
 ] as const;
@@ -247,9 +208,7 @@ const notificationEvents = [
   }),
 ] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Union
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Discriminated Union ──────────────────────────────────────────────────────
 
 export const nexusEventSchema = z.discriminatedUnion("type", [
   ...agentEvents,
@@ -263,7 +222,7 @@ export const nexusEventSchema = z.discriminatedUnion("type", [
 export type NexusEvent = z.infer<typeof nexusEventSchema>;
 export type NexusEventType = NexusEvent["type"];
 
-/** Tous les types connus. Sert aux abonnements et aux tests d'exhaustivité. */
+/** All known event types for subscription routing and exhaustive test coverage. */
 export const NEXUS_EVENT_TYPES = [
   "agent.started",
   "agent.progress",
@@ -292,16 +251,14 @@ export const NEXUS_EVENT_TYPES = [
   "notification.created",
 ] as const satisfies readonly NexusEventType[];
 
-/** Famille d'un événement — sert au filtrage d'abonnement côté client. */
+/** Returns the event family (domain prefix) for client subscription filtering. */
 export function eventFamily(type: NexusEventType): string {
   return type.split(".")[0] ?? type;
 }
 
 /**
- * Valide un événement entrant.
- *
- * Un type inconnu est **ignoré**, pas rejeté : c'est ce qui permet d'ajouter des
- * événements sans casser les clients déjà déployés.
+ * Validates an incoming event. Unknown event types return undefined rather
+ * than throwing, preserving backwards compatibility across client versions.
  */
 export function parseNexusEvent(input: unknown): NexusEvent | undefined {
   const result = nexusEventSchema.safeParse(input);
