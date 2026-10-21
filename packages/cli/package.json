@@ -30,7 +30,8 @@
     "@nexus/auth": "workspace:*",
     "@nexus/config": "workspace:*",
     "@nexus/device-policy": "workspace:*",
-    "@nexus/shared": "workspace:*"
+    "@nexus/shared": "workspace:*",
+    "@nexus/voice": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

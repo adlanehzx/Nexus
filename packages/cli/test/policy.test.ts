@@ -118,3 +118,26 @@ describe("emplacement par défaut", () => {
     expect(defaultPolicyPath("/home/adlane")).toBe("/home/adlane/.nexus/device-policy.yaml");
   });
 });
+
+describe("nexus voice", () => {
+  it("place le modèle et la voix sous ~/.nexus", async () => {
+    const { voicePaths } = await import("../src/voice.js");
+    const paths = voicePaths("/home/adlane");
+    expect(paths.model).toContain("/home/adlane/.nexus/modeles");
+    expect(paths.voice).toContain("/home/adlane/.nexus/voix");
+    // Hors de `/tmp` partagé : un dossier à nous, qu'on peut purger sans se
+    // demander à qui appartient le reste.
+    expect(paths.scratch).toBe("/home/adlane/.nexus/audio-temporaire");
+  });
+
+  it("refuse une sous-commande inconnue", async () => {
+    const { voiceCommand } = await import("../src/voice.js");
+    expect(await voiceCommand(["parle"])).toBe(1);
+  });
+
+  it("refuse une durée de dictée absurde", async () => {
+    const { voiceCommand } = await import("../src/voice.js");
+    // 1 à 60 secondes : au-delà, ce n'est plus une dictée, c'est une écoute.
+    expect(await voiceCommand(["dictate", "--seconds", "600"])).toBe(1);
+  });
+});
