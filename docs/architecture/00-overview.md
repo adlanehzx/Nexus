@@ -1,32 +1,31 @@
-# 00 — Vue d'ensemble
+# 00 — Overview
 
-## 1. Contexte
+## 1. Context
 
-NEXUS est un assistant personnel IA **mono-utilisateur d'abord, multi-utilisateur par construction**.
-Il est accessible depuis un iPhone, un PC et éventuellement un navigateur, accepte du texte
-ou de la voix, répond en texte ou en voix, et — c'est le cœur du produit — **exécute des actions
-réelles** : envoyer un email, réserver, lancer des tests sur le PC, piloter un navigateur.
+NEXUS is a personal AI assistant, **single-user first, multi-user by construction**. It is reachable
+from an iPhone, a PC and optionally a browser, accepts text or voice, answers in text or voice,
+and — this is the heart of the product — **carries out real actions**: send an email, make a
+booking, run a project's tests on the PC, drive a browser.
 
-Ce dernier point est ce qui rend le projet difficile. Un chatbot qui se trompe produit une
-phrase fausse. Un agent qui se trompe supprime un fichier, envoie un email au mauvais
-destinataire ou effectue un paiement. **Toute l'architecture est organisée autour de cette
-asymétrie.**
+That last point is what makes the project hard. A chatbot that gets it wrong produces a false
+sentence. An agent that gets it wrong deletes a file, emails the wrong person, or makes a payment.
+**The whole architecture is organised around that asymmetry.**
 
-## 2. Contraintes structurantes
+## 2. Structural constraints
 
-| #   | Contrainte                                             | Conséquence architecturale                                                |
-| --- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| C1  | Le LLM n'est jamais branché directement sur les outils | Une seule frontière d'exécution : `ToolExecutor`                          |
-| C2  | Aucun accès implicite à un outil                       | Grant explicite par utilisateur × outil, deny par défaut                  |
-| C3  | Confirmation utilisateur pour les actions sensibles    | Le run doit pouvoir **se suspendre durablement** et reprendre             |
-| C4  | Aucun couplage UI ↔ outils                             | Les clients ne connaissent que l'API et le protocole WS                   |
-| C5  | Providers LLM/STT/TTS interchangeables                 | Ports & adapters, aucun SDK vendeur hors des adaptateurs                  |
-| C6  | Le backend TS n'importe jamais le code Python          | Browser Use = service réseau, contrat HTTP versionné                      |
-| C7  | Mobile en temps réel                                   | WebSocket unique multiplexé, événements typés, reprenable                 |
-| C8  | Déployable sur un VPS                                  | Docker Compose, pas de dépendance cloud managée obligatoire               |
-| C9  | Aucun secret dans le code                              | Config validée par schéma, secrets injectés, credentials chiffrés en base |
+| #   | Constraint                                       | Architectural consequence                                        |
+| --- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| C1  | The model is never wired directly to tools       | One execution boundary: `ToolExecutor`                           |
+| C2  | No implicit access to a tool                     | Explicit grant per user × tool, deny by default                  |
+| C3  | User confirmation for sensitive actions          | A run must be able to **suspend durably** and resume             |
+| C4  | No UI ↔ tool coupling                            | Clients know only the API and the WS protocol                    |
+| C5  | LLM/STT/TTS providers are interchangeable        | Ports and adapters; no vendor SDK outside an adapter             |
+| C6  | The TypeScript backend never imports Python code | Browser Use is a network service with a versioned HTTP contract  |
+| C7  | Realtime on mobile                               | One multiplexed WebSocket, typed events, resumable               |
+| C8  | Deployable on a single VPS                       | Docker Compose, no mandatory managed cloud dependency            |
+| C9  | No secret in the code                            | Schema-validated config, injected secrets, credentials encrypted |
 
-## 3. Vue système
+## 3. System view
 
 ```mermaid
 flowchart TB
@@ -40,9 +39,9 @@ flowchart TB
     RP[Reverse proxy<br/>Caddy/Traefik · TLS]
   end
 
-  subgraph Core["Backend Node/TS"]
-    API[apps/api · Fastify<br/>REST v1 + WS Gateway]
-    WK[apps/worker · BullMQ<br/>Agent Runtime]
+  subgraph Core["Node/TS backend"]
+    API[apps/api · Fastify<br/>REST v1 + WS gateway]
+    WK[apps/worker · BullMQ<br/>agent runtime]
   end
 
   subgraph Data
@@ -51,14 +50,14 @@ flowchart TB
     OBJ[(Object storage<br/>audio · artefacts)]
   end
 
-  subgraph Capabilities["Plan d'exécution des outils"]
-    MCP[MCP Servers<br/>N processus]
-    BW[Browser Worker<br/>Python · browser-use]
-    DA[Device Agents<br/>PC de l'utilisateur]
-    EXT[APIs externes<br/>Google · GitHub · ...]
+  subgraph Capabilities["Tool execution plane"]
+    MCP[MCP servers<br/>N processes]
+    BW[Browser worker<br/>Python · browser-use]
+    DA[Device agents<br/>the user's machines]
+    EXT[External APIs<br/>Google · GitHub · ...]
   end
 
-  subgraph AI["Providers remplaçables"]
+  subgraph AI["Replaceable providers"]
     LLM[LLM]
     STT[STT]
     TTS[TTS]
@@ -77,54 +76,56 @@ flowchart TB
   WK --- OBJ
 ```
 
-## 4. Les quatre plans
+## 4. The four planes
 
-L'architecture se lit sur quatre plans qu'il faut garder mentalement séparés :
+The architecture reads on four planes, and keeping them mentally separate is what makes it
+comprehensible:
 
-1. **Plan de conversation** — clients, API, WebSocket, messages. Ne sait rien des outils.
-2. **Plan de raisonnement** — Agent Runtime, Planner, LLMProvider. Ne sait rien du _comment_
-   les outils s'exécutent, seulement de leurs schémas.
-3. **Plan de capacité** — ToolRegistry, adaptateurs (MCP, Browser, Device, HTTP). Ne sait rien
-   du LLM.
-4. **Plan de gouvernance** — permissions, confirmations, audit, budgets. Traverse les trois autres
-   et peut interrompre n'importe lequel.
+1. **The conversation plane** — clients, API, WebSocket, messages. Knows nothing about tools.
+2. **The reasoning plane** — agent runtime, planner, `LLMProvider`. Knows nothing about _how_
+   tools run, only about their schemas.
+3. **The capability plane** — `ToolRegistry`, adapters (MCP, browser, device, HTTP). Knows nothing
+   about the model.
+4. **The governance plane** — permissions, confirmations, audit, budgets. It crosses the other
+   three and can interrupt any of them.
 
-Une violation de cette séparation est un défaut d'architecture, pas un détail d'implémentation.
+Violating that separation is an architectural defect, not an implementation detail.
 
-## 5. Flux de bout en bout (texte)
+## 5. End-to-end flow (text)
 
 ```
 1.  Client         POST /api/v1/agent/runs { conversationId, content }
-2.  API            authN (JWT) → authZ (conversation) → persiste Message(role=user)
-                   → crée AgentRun(status=QUEUED) → enqueue BullMQ → 202 { runId }
-3.  Client         WS: subscribe { runId }   (déjà connecté, canal unique)
-4.  Worker         charge le contexte (Memory Assembler : system + prefs + résumé + fenêtre)
-5.  Worker         ToolRegistry.listFor(user, conversation) → outils autorisés uniquement
+2.  API            authN (JWT) → authZ (conversation) → persist Message(role=user)
+                   → create AgentRun(status=QUEUED) → enqueue BullMQ → 202 { runId }
+3.  Client         WS: subscribe { runId }   (already connected, single channel)
+4.  Worker         load the context (memory assembler: system + prefs + summary + window)
+5.  Worker         ToolRegistry.listFor(user, conversation) → authorised tools only
 6.  Worker         LLMProvider.stream(messages, tools) → tokens → Redis pubsub → WS agent.token
-7.  LLM            demande tool_call { name, args }
-8.  Worker         valide args (zod) → PermissionService.check()
-       ├── DENY         → observation d'erreur réinjectée au modèle, boucle continue
-       ├── CONFIRM      → persiste Confirmation, run → WAITING_CONFIRMATION, WS confirmation.requested
-       │                  (le worker LIBÈRE le job : aucune attente bloquante)
+7.  LLM            asks for tool_call { name, args }
+8.  Worker         validate args (Zod) → PermissionService.check()
+       ├── DENY         → the refusal is re-injected as an observation; the loop continues
+       ├── CONFIRM      → persist Confirmation, run → WAITING_CONFIRMATION, WS confirmation.requested
+       │                  (the worker RELEASES the job: no blocking wait)
        └── ALLOW        → ToolExecutor.execute() → WS tool.started / tool.progress / tool.result
-9.  Worker         réinjecte l'observation, incrémente l'itération, vérifie les budgets, boucle
-10. Worker         réponse finale → Message(role=assistant) → run COMPLETED → WS run.completed
-11. Client         (si mode vocal) POST /api/v1/voice/tts → stream audio
+9.  Worker         re-inject the observation, increment the iteration, check the budgets, loop
+10. Worker         final answer → Message(role=assistant) → run COMPLETED → WS run.completed
+11. Client         (in voice mode) POST /api/v1/voice/tts → audio stream
 ```
 
-Sur confirmation utilisateur (`POST /api/v1/confirmations/:id`), l'API ré-enfile un job de
-**reprise** ; le worker recharge l'état persisté du run et poursuit exactement là où il s'était
-arrêté. C'est la raison pour laquelle la boucle agentique est un **réducteur sur un état persisté**
-et non une fonction récursive en mémoire (→ [ADR-003](../adr/ADR-003-durable-agent-loop.md)).
+On user confirmation (`POST /api/v1/confirmations/:id`), the API enqueues a **resume** job; the
+worker reloads the run's persisted state and continues exactly where it stopped. That is why the
+agent loop is a **reducer over persisted state** and not a recursive in-memory function
+(→ [ADR-003](../adr/ADR-003-durable-agent-loop.md)).
 
-## 6. Ce que nous ne construisons pas (v1)
+## 6. What we are not building (v1)
 
-Le posé explicite de ce qui est hors périmètre est aussi important que le périmètre :
+Stating what is out of scope matters as much as stating the scope:
 
-- Pas de multi-tenant B2B, pas de facturation, pas d'org/rôles complexes (le modèle prévoit
-  `User` mais l'usage v1 est personnel).
-- Pas de fine-tuning ni d'entraînement de modèle.
-- Pas de vector DB dédiée (pgvector suffit à l'échelle d'un utilisateur → [ADR-011](../adr/ADR-011-memory-pgvector.md)).
-- Pas de Kubernetes (un VPS + Compose → [ADR-015](../adr/ADR-015-deployment-compose.md)).
-- Pas d'exécution de code arbitraire non sandboxée côté serveur (le terminal s'exécute sur le
-  Device Agent de l'utilisateur, sous permission).
+- No B2B multi-tenancy, no billing, no complex org/roles model (the schema has a `User`, but v1
+  usage is personal).
+- No fine-tuning, no model training.
+- No dedicated vector database (pgvector is enough at one user's scale →
+  [ADR-011](../adr/ADR-011-memory-pgvector.md)).
+- No Kubernetes (one VPS and Compose → [ADR-015](../adr/ADR-015-deployment-compose.md)).
+- No unsandboxed arbitrary code execution on the server side: the terminal runs on the user's own
+  device agent, under permission, bounded by a local policy the user writes.
