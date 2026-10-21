@@ -15,24 +15,21 @@ import type { SessionManager } from "./session.js";
 import type { ClientAction, ConnectionState } from "./store.js";
 
 /**
- * Le canal temps réel, vu du téléphone.
+ * Real-time channel, client side.
  *
- * Un mobile perd le réseau en permanence : ascenseur, métro, passage du Wi-Fi à
- * la 5G, écran verrouillé. La reconnexion n'est donc pas un cas d'erreur, c'est
- * le régime **normal** de fonctionnement, et tout ce fichier est écrit avec ça
- * en tête.
+ * Mobile clients lose network connectivity frequently: elevators, subways,
+ * switching between Wi-Fi and mobile data, lock screen. Reconnection is therefore
+ * not an exceptional failure, but the **normal operating state**.
  *
- * Trois décisions qui en découlent :
+ * Three core decisions:
  *
- *  1. **Attente exponentielle avec bruit.** Sans bruit, l'iPhone et le portable
- *     reconnectent à la même milliseconde après une coupure du cœur et le font
- *     retomber au moment où il redémarre.
- *  2. **Aucune tentative hors ligne.** Quand le système dit que le réseau est
- *     absent, on ne compose pas dans le vide : on attend le signal de retour.
- *     Réessayer sans réseau vide la batterie et n'aboutit jamais.
- *  3. **La poignée de main est refaite en entier** après chaque coupure. Une
- *     session dont on ne sait pas si elle est encore valide n'est pas une
- *     session.
+ *  1. **Exponential backoff with jitter.** Without jitter, all clients reconnect
+ *     at the exact same millisecond after a server restart, overwhelming it.
+ *  2. **No reconnection attempts when offline.** When the OS signals offline status,
+ *     do not dial into the void: wait for the network restored signal.
+ *     Retrying without network drains battery and never succeeds.
+ *  3. **Full handshake re-executed** after each drop. A session whose validity
+ *     is unverified cannot be assumed valid.
  */
 
 export interface PendingRequest {
@@ -44,7 +41,7 @@ export interface PendingRequest {
 export interface RealtimeClientOptions {
   socket: SocketTransport;
   session: SessionManager;
-  /** URL du canal client, par exemple `wss://nexus.exemple.fr/ws/client`. */
+  /** Client WebSocket channel URL, e.g. `wss://nexus.example.com/ws/client`. */
   url: string;
   dispatch: (action: ClientAction) => void;
   network?: NetworkMonitor;
@@ -54,7 +51,7 @@ export interface RealtimeClientOptions {
   random?: () => number;
   reconnectMinMs?: number;
   reconnectMaxMs?: number;
-  /** Délai au-delà duquel une demande sans accusé est abandonnée. */
+  /** Timeout after which an unacknowledged request is aborted. */
   requestTimeoutMs?: number;
 }
 
@@ -104,9 +101,8 @@ export class RealtimeClient {
     this.#network?.onChange((online) => {
       this.#dispatch({ kind: "network", online });
 
-      // Le retour du réseau relance immédiatement, sans attendre le prochain
-      // palier d'attente : l'utilisateur vient de sortir du tunnel et regarde
-      // son écran.
+      // Network restoration triggers immediate reconnection without waiting for
+      // the backoff timer to expire: the user has just re-entered coverage and is watching.
       if (online && !this.#stopped && this.#state !== "connected") {
         this.#attempt = 0;
         void this.#connect();
@@ -128,12 +124,12 @@ export class RealtimeClient {
   }
 
   /**
-   * Arrêt délibéré.
+   * Intentional stop.
    *
-   * Les demandes en vol sont rejetées : leur réponse ne viendra jamais, et une
-   * promesse jamais résolue fige l'écran qui l'attend.
+   * In-flight requests are rejected: their response will never arrive, and an
+   * unsettled promise leaves caller UI stuck indefinitely.
    */
-  stop(reason = "arrêt demandé"): void {
+  stop(reason = "stop requested"): void {
     this.#stopped = true;
     this.#cancelReconnect();
     this.#rejectAllPending(new Error(reason));
@@ -142,19 +138,18 @@ export class RealtimeClient {
     this.#setState("offline");
   }
 
-  // ── Demandes ────────────────────────────────────────────────────────────
+  // ── Requests ────────────────────────────────────────────────────────────
 
   /**
-   * Envoie une demande et attend son accusé.
+   * Sends a request and awaits its acknowledgement.
    *
-   * Chaque demande porte un `requestId` : le serveur le renvoie dans l'accusé,
-   * ce qui permet d'avoir plusieurs demandes en vol sans les confondre. Une
-   * demande sans réponse est abandonnée au bout du délai — sinon une socket
-   * silencieuse laisserait des promesses ouvertes indéfiniment.
+   * Each request carries a `requestId`: the server returns it in the ACK,
+   * allowing multiple in-flight requests without confusion. An unacknowledged
+   * request is aborted after a timeout to prevent dangling promises on silent sockets.
    */
   request<T = unknown>(type: ClientToServerType, payload: unknown): Promise<T> {
     if (this.#state !== "connected") {
-      return Promise.reject(new Error("Pas de connexion au cœur NEXUS."));
+      return Promise.reject(new Error("No connection to NEXUS core."));
     }
 
     const requestId = this.#newId();
@@ -162,7 +157,7 @@ export class RealtimeClient {
     return new Promise<T>((resolve, reject) => {
       const timer = this.#timers.set(() => {
         this.#pending.delete(requestId);
-        reject(new Error("Le cœur NEXUS n'a pas répondu."));
+        reject(new Error("NEXUS core did not respond."));
       }, this.#requestTimeoutMs);
 
       this.#pending.set(requestId, {
@@ -177,7 +172,7 @@ export class RealtimeClient {
     });
   }
 
-  /** Envoie un message dans la conversation. */
+  /** Sends a message in the conversation. */
   sendMessage(input: { conversationId: string | null; text: string }) {
     return this.request<{ conversationId: string; messageId: string }>(
       CLIENT_TO_SERVER.messageSend,
@@ -185,11 +180,11 @@ export class RealtimeClient {
     );
   }
 
-  cancelTask(taskId: string, reason = "annulé par l'utilisateur") {
+  cancelTask(taskId: string, reason = "cancelled by user") {
     return this.request<{ cancelled: boolean }>(CLIENT_TO_SERVER.taskCancel, { taskId, reason });
   }
 
-  cancelAgentRun(runId: string, reason = "annulé par l'utilisateur") {
+  cancelAgentRun(runId: string, reason = "cancelled by user") {
     return this.request<{ cancelled: boolean }>(CLIENT_TO_SERVER.agentCancel, { runId, reason });
   }
 
@@ -201,12 +196,10 @@ export class RealtimeClient {
   }
 
   /**
-   * Liste la flotte.
+   * Lists the fleet devices.
    *
-   * La forme reprend exactement ce que le canal renvoie — nom, rôle, statut,
-   * capacités actives. Un type plus étroit que la réalité n'ajoute aucune
-   * sécurité : il oblige seulement l'appelant à écrire une conversion, où
-   * l'erreur devient invisible.
+   * Reuses the exact shape returned by the channel — name, role, status,
+   * active capabilities.
    */
   listDevices(workersOnly = false) {
     return this.request<{
@@ -218,28 +211,27 @@ export class RealtimeClient {
     return this.request(CLIENT_TO_SERVER.conversationSubscribe, { conversationId });
   }
 
-  // ── Connexion ───────────────────────────────────────────────────────────
+  // ── Connection ──────────────────────────────────────────────────────────
 
   async #connect(): Promise<void> {
-    // Composer sans réseau ne fait qu'échouer plus vite et vider la batterie.
+    // Reconnecting without network only wastes battery.
     if (this.#network?.isOnline() === false) {
       this.#setState("offline");
       return;
     }
 
-    // La poignée de main annonce **d'où** l'on parle : sans appareil rattaché,
-    // il n'y a rien à annoncer. On s'arrête donc avant même d'ouvrir la socket,
-    // et surtout **sans programmer de reconnexion** : aucun retour de réseau ne
-    // fera apparaître un appareil, et boucler dessus masquerait la vraie cause
-    // derrière un « connexion perdue » indéfiniment répété. C'est à l'appelant
-    // d'enregistrer ou de rattacher l'appareil — `SessionManager.ensureDevice`
-    // — puis de rappeler `start`.
+    // The handshake announces where requests originate: without an attached device,
+    // there is nothing to announce. We halt before opening the socket without
+    // scheduling a retry: network return will not create a device, and looping
+    // would obscure the real cause behind generic connection lost messages.
+    // The caller must register or bind the device via `SessionManager.ensureDevice`
+    // before calling `start`.
     if (this.#session.deviceId === null) {
       this.#setState("offline");
       this.#dispatch({
         kind: "error",
         code: "CLIENT_NO_DEVICE",
-        message: "Cet appareil n'est pas encore rattaché à NEXUS.",
+        message: "This device is not yet attached to NEXUS.",
         at: this.#now().toISOString(),
       });
       return;
@@ -250,15 +242,15 @@ export class RealtimeClient {
     try {
       await this.#socket.connect(this.#url);
     } catch {
-      this.#scheduleReconnect("connexion impossible");
+      this.#scheduleReconnect("connection failed");
       return;
     }
 
     this.#setState("authenticating");
 
     try {
-      // La poignée de main complète, à chaque fois. Le jeton est relu depuis la
-      // session, qui l'a peut-être rafraîchi entre-temps.
+      // Full handshake every time. The token is re-read from session, which may
+      // have refreshed it in the interim.
       this.#send(
         CLIENT_HELLO as ClientToServerType,
         {
@@ -268,11 +260,10 @@ export class RealtimeClient {
         this.#newId(),
       );
     } catch {
-      // Pas de jeton : inutile de reconnecter en boucle, il faut se reconnecter
-      // au sens de l'utilisateur.
+      // Missing token: stop retrying in a loop; user must re-authenticate.
       this.#stopped = true;
       this.#setState("offline");
-      this.#socket.close("session absente");
+      this.#socket.close("missing session");
       return;
     }
 
@@ -284,19 +275,17 @@ export class RealtimeClient {
     try {
       parsed = JSON.parse(data);
     } catch {
-      // Une trame illisible n'est pas une raison de fermer : le reste du flux
-      // est peut-être parfaitement valide.
+      // Malformed frames should not close the connection: subsequent frames
+      // may be completely valid.
       return;
     }
 
     const envelope = envelopeSchema.safeParse(parsed);
     if (!envelope.success) return;
 
-    // Une trame lisible venue du cœur est la seule preuve que la poignée de
-    // main a été acceptée. Remettre le compteur d'attente à zéro à l'ouverture
-    // de la socket, comme on le faisait, transformait un cœur qui accepte la
-    // connexion puis refuse la session en boucle de reconnexion à une seconde
-    // d'intervalle. Ici, l'attente continue de croître tant que rien n'arrive.
+    // A parseable frame from the core is proof that the handshake succeeded.
+    // Resetting backoff upon socket open would cause tight retry loops if the server
+    // accepts TCP connections but rejects handshakes.
     this.#attempt = 0;
 
     const type = envelope.data.type as ServerToClientType;
@@ -310,8 +299,8 @@ export class RealtimeClient {
     this.#dispatch({
       kind: "server",
       type,
-      // L'horodatage de l'enveloppe accompagne la charge utile : le magasin
-      // affichera l'heure du serveur, pas celle du téléphone.
+      // Envelope timestamp accompanies payload: UI displays server time,
+      // not local client time.
       payload: { ...payload, ts: envelope.data.ts },
     });
   }
@@ -331,9 +320,9 @@ export class RealtimeClient {
     }
 
     const error = payload.error as { code?: string; message?: string } | null;
-    const failure = new Error(error?.message ?? "Demande refusée.");
-    // Le code voyage avec l'erreur : l'interface distingue « permission
-    // manquante » de « le cœur n'a pas répondu ».
+    const failure = new Error(error?.message ?? "Request rejected.");
+    // Error code accompanies failure: UI distinguishes missing permission
+    // from unreachable server.
     (failure as Error & { code?: string }).code = error?.code ?? "REQUEST_FAILED";
 
     pending.reject(failure);
@@ -342,18 +331,15 @@ export class RealtimeClient {
   #onClose(reason: string, code?: number): void {
     if (this.#stopped) return;
 
-    // Les demandes en vol ne recevront jamais leur accusé.
-    this.#rejectAllPending(new Error("Connexion perdue."));
+    // In-flight requests will never receive acknowledgements.
+    this.#rejectAllPending(new Error("Connection lost."));
 
-    // Le cœur a refusé la session, pas la connexion. C'est le cas d'un poste
-    // resté ouvert toute la nuit : le jeton d'accès a expiré pendant que la
-    // socket, elle, tenait. Reconnecter avec le même jeton échouerait à chaque
-    // tentative, indéfiniment et sans rien changer.
+    // The core rejected the session, not the connection. For example, a client
+    // running overnight where the access token expired while socket stayed open.
+    // Reconnecting with the same token would fail indefinitely.
     //
-    // On le fait donc tourner **une fois** avant de réessayer. Une seule, parce
-    // qu'un rafraîchissement refusé efface la session : la tentative suivante
-    // n'aura plus de jeton du tout et s'arrêtera d'elle-même, au lieu de
-    // marteler le cœur avec un secret mort.
+    // Rotate token once before retrying. If refresh fails, session is cleared
+    // and subsequent attempts abort cleanly instead of hammering the server.
     if (code === WsCloseCode.UNAUTHENTICATED) {
       void this.#session
         .refresh()
@@ -377,7 +363,7 @@ export class RealtimeClient {
     this.#dispatch({
       kind: "error",
       code: "CONNECTION_LOST",
-      message: `Connexion perdue (${reason}). Nouvelle tentative dans ${String(
+      message: `Connection lost (${reason}). Retrying in ${String(
         Math.round(delay / 1000),
       )} s.`,
       at: this.#now().toISOString(),
@@ -391,11 +377,10 @@ export class RealtimeClient {
   }
 
   /**
-   * Attente exponentielle, plafonnée, bruitée.
+   * Exponential backoff with capped jitter.
    *
-   * Le bruit disperse les reconnexions de plusieurs appareils du même
-   * utilisateur ; le plafond évite qu'une longue coupure ne repousse la reprise
-   * à plusieurs minutes, alors que l'utilisateur est peut-être revenu.
+   * Jitter disperses reconnections across client devices; the cap ensures long
+   * outages do not delay reconnection beyond reasonable user wait times.
    */
   #backoffDelay(): number {
     const base = Math.min(this.#minMs * 2 ** this.#attempt, this.#maxMs);

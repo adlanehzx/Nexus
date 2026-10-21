@@ -1,16 +1,15 @@
 import type { SessionManager } from "./session.js";
 
 /**
- * Appels REST du client.
+ * REST API client calls.
  *
- * Toutes les requêtes passent par `SessionManager.authorizedRequest`, qui gère
- * le rafraîchissement transparent. Ce fichier ne fait que nommer les routes et
- * typer les réponses — dupliquer la logique de jeton ici la ferait diverger au
- * premier correctif.
+ * All requests route through `SessionManager.authorizedRequest`, which handles
+ * transparent token refresh. This file only specifies routes and response types —
+ * duplicating token handling here would cause divergence on the first bugfix.
  *
- * Ce que l'API sert et que le temps réel ne sert pas : **l'historique**. Le
- * canal WebSocket porte ce qui arrive maintenant ; l'API porte ce qui est arrivé
- * avant que l'application ne s'ouvre.
+ * What the REST API serves that real-time does not: **history**. The WebSocket
+ * channel carries what happens now; the API carries what happened before the
+ * application opened.
  */
 
 export interface Page<T> {
@@ -99,7 +98,7 @@ export interface ApiMemoryHit {
   score: number;
 }
 
-/** Ce que le cœur répond à « Retiens que… » ou « Oublie… ». */
+/** Response from core server to "Remember that..." or "Forget...". */
 export interface ApiMemoryCommandResult {
   recognized: boolean;
   kind: "remember" | "forget" | null;
@@ -160,24 +159,22 @@ export class ApiClient {
   }
 
   /**
-   * Transmet une instruction en langage naturel au cœur.
+   * Forwards a natural-language instruction to the core server.
    *
-   * **C'est le seul chemin par lequel un client déclenche une action.** Le
-   * client ne planifie pas et n'exécute pas : il transmet la phrase, et le
-   * cœur enchaîne planificateur → autorisation → superviseur → exécutant.
-   * Ce que cette méthode rend, c'est le plan **déjà autorisé** ; la suite
-   * arrive par le canal temps réel.
+   * **This is the only path through which a client triggers an action.** The
+   * client neither plans nor executes: it passes the instruction string, and the
+   * core orchestrates planner -> authorization -> supervisor -> worker.
+   * What this method returns is the **already authorized** plan; subsequent updates
+   * arrive via the real-time channel.
    *
-   * Le corps ne désigne aucun exécutant, aucune capacité, aucun outil. « Ouvre
-   * Chrome sur mon PC » part tel quel : c'est le sélecteur du cœur qui choisit
-   * la machine, et les permissions de l'utilisateur qui décident si elle a le
-   * droit. Un client qui composerait lui-même le plan court-circuiterait le
-   * planificateur — et deviendrait un second cœur.
+   * The request body specifies no worker, capability, or tool. "Open Chrome on my PC"
+   * is sent as-is: the core selector picks the machine, and user permissions determine
+   * whether execution is authorized. A client assembling its own plan would bypass
+   * the planner and duplicate core server responsibilities.
    *
-   * **Aucun réessai automatique.** Un délai dépassé ne dit pas si le cœur a
-   * reçu l'instruction ; renvoyer « achète ce billet » dans le doute créerait
-   * une seconde commande. L'appelant qui veut réessayer le décide, après avoir
-   * regardé ses tâches.
+   * **No automatic retry.** A timeout does not clarify whether the core received
+   * the instruction; resending "purchase this ticket" on uncertainty risks placing
+   * duplicate orders. Callers decide whether to retry after inspecting task state.
    */
   async instruct(input: {
     instruction: string;
@@ -246,12 +243,12 @@ export class ApiClient {
   }
 
   /**
-   * Crée un plan de tâche.
+   * Creates a task plan.
    *
-   * `body` ne contient **jamais** d'exécutant : il décrit des capacités
-   * requises, et le cœur choisit la machine. C'est la raison pour laquelle il
-   * n'existe pas de surcharge « exécuter sur tel appareil » — une telle méthode
-   * ferait du client l'ordonnanceur, et le cœur un simple relais.
+   * `body` **never** specifies a worker: it declares required capabilities,
+   * and the core selects the machine. This is why there is no "run on device X"
+   * overload — such an interface would turn the client into an orchestrator
+   * and reduce the core to a dumb relay.
    */
   async createTask(body: {
     title: string;
@@ -275,7 +272,7 @@ export class ApiClient {
     return this.#unwrap<ApiTask>(response.status, response.body);
   }
 
-  /** Capacités connues du cœur, tous exécutants confondus. */
+  /** Capabilities known to the core server across all workers. */
   async listCapabilities(): Promise<{ name: string; description: string; riskLevel: string }[]> {
     const response = await this.#session.authorizedRequest({
       method: "GET",
@@ -292,7 +289,7 @@ export class ApiClient {
     return this.#unwrap<{ hits: ApiMemoryHit[] }>(response.status, response.body).hits;
   }
 
-  /** Tout ce que NEXUS retient, du plus récent au plus ancien. */
+  /** All memory retained by NEXUS, from newest to oldest. */
   async listMemory(layer?: "LONG_TERM" | "PREFERENCE"): Promise<ApiMemory[]> {
     const suffix = layer === undefined ? "" : `&layer=${layer}`;
     const response = await this.#session.authorizedRequest({
@@ -303,11 +300,11 @@ export class ApiClient {
   }
 
   /**
-   * Enregistre un souvenir.
+   * Stores a memory item.
    *
-   * `acknowledgedSensitive` n'a **aucune valeur par défaut à `true`**, ici comme
-   * partout : c'est ce qui donne son sens à la règle. L'interface le passe après
-   * avoir posé la question, jamais avant.
+   * `acknowledgedSensitive` **never defaults to `true`**, here or anywhere:
+   * this enforces the sensitivity confirmation policy. The UI passes it only
+   * after prompting the user, never before.
    */
   async storeMemory(input: {
     content: string;
@@ -356,7 +353,7 @@ export class ApiClient {
     return this.#unwrap<{ forgotten: ApiMemory[] }>(response.status, response.body).forgotten;
   }
 
-  /** Efface toute la mémoire. `confirmed` est exigé — cela ne se défait pas. */
+  /** Clears all memory. `confirmed` is required — this action cannot be undone. */
   async forgetAllMemory(
     confirmed: boolean,
   ): Promise<{ forgotten: ApiMemory[]; needsConfirmation: boolean }> {
@@ -368,7 +365,7 @@ export class ApiClient {
     return this.#unwrap(response.status, response.body);
   }
 
-  /** Soumet un message au cas où ce serait « Retiens que… » ou « Oublie… ». */
+  /** Submits a message to check if it matches "Remember that..." or "Forget...". */
   async memoryCommand(
     text: string,
     options: { acknowledgedSensitive?: boolean; confirmedForgetAll?: boolean } = {},
@@ -398,11 +395,11 @@ export class ApiClient {
   }
 
   /**
-   * Extrait `data`, ou lève avec le message du serveur.
+   * Extracts `data`, or throws with the server error message.
    *
-   * Le message du serveur est déjà sûr à afficher — c'est `userMessage`, qui ne
-   * porte ni chemin ni détail interne. Le réécrire ici ferait perdre une
-   * information utile à l'utilisateur.
+   * The server message is safe to display (`userMessage`), containing no
+   * internal file paths or stack details. Rewriting it here would discard
+   * useful information.
    */
   #unwrap<T>(status: number, body: unknown): T {
     if (status >= 200 && status < 300) return (body as { data: T }).data;

@@ -2,40 +2,26 @@ import type { ApiClient } from "./api.js";
 import type { ClientAction, ClientState, TaskStatus, TaskView } from "./store.js";
 
 /**
- * Rattrapage de l'état après une reconnexion.
+ * State resynchronization after reconnection.
  *
- * ## Le problème
+ * ## The Problem
  *
- * Le canal temps réel ne rejoue rien. Une tâche qui s'achève pendant que le
- * téléphone est dans le métro voit son `task.completed` partir vers une socket
- * fermée — et à la reconnexion, l'écran affiche encore « en cours ». C'est le
- * pire des états : faux, définitif, et parfaitement crédible.
+ * The real-time channel does not replay events. A task finishing while a client
+ * is disconnected loses its `task.completed` event — leaving the UI showing "running".
  *
- * ## Ce que fait ce module
+ * ## What this module does
  *
- * Il relit, **auprès du cœur**, l'état des tâches que le client croit encore
- * actives. Le cœur est l'autorité ; le client rattrape.
+ * It re-queries the core server for the status of tasks the client believes are still active.
  *
- * Trois propriétés, et chacune répond à un piège :
+ * Key properties:
  *
- *  1. **Il ne relit que ce qui est inachevé.** Une tâche terminée ne change
- *     plus ; la relire coûterait une requête par tâche à chaque passage de
- *     tunnel.
- *  2. **Il ne crée jamais de tâche.** Le rattrapage est une *lecture*. Un
- *     rattrapage qui pourrait créer une tâche transformerait une coupure réseau
- *     en seconde commande — exactement ce qu'on veut empêcher.
- *  3. **Une tâche disparue du cœur est laissée telle quelle.** Un 404 peut être
- *     une purge d'historique comme un incident ; effacer la tâche de l'écran
- *     ferait disparaître la trace sous les yeux de l'utilisateur.
- *
- * ## Ce qu'il ne fait pas
- *
- * Il ne rejoue pas d'événements, ne reconstruit pas d'historique de messages et
- * ne réimplémente rien de la reprise côté cœur. Il lit un état et le pousse
- * dans le même réducteur que les trames temps réel.
+ *  1. **Only unfinished tasks are re-read.** Completed tasks do not change.
+ *  2. **Never creates tasks.** Resync is strictly a read operation.
+ *  3. **Tasks missing from the core are left as-is.** A 404 could be a history cleanup
+ *     or transient error; deleting the task would cause confusing UI disappearance.
  */
 
-/** Statuts pour lesquels le cœur a encore quelque chose à dire. */
+/** Task statuses that are still in progress on the core server. */
 const UNFINISHED: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
   "pending",
   "running",
@@ -46,7 +32,7 @@ export function isUnfinished(status: TaskStatus): boolean {
   return UNFINISHED.has(status);
 }
 
-/** Tâches que le client croit actives, et qu'il faut donc revérifier. */
+/** Task IDs believed to be active by the client. */
 export function unfinishedTaskIds(state: ClientState): string[] {
   return state.tasks.filter((task) => isUnfinished(task.status)).map((task) => task.id);
 }
@@ -55,30 +41,23 @@ export interface ResyncOptions {
   api: Pick<ApiClient, "getTask">;
   state: ClientState;
   dispatch: (action: ClientAction) => void;
-  /**
-   * Plafond de tâches relues en une passe.
-   *
-   * Une reconnexion après une longue absence ne doit pas déclencher cinquante
-   * requêtes d'un coup au moment précis où le cœur redémarre.
-   */
+  /** Maximum number of tasks re-queried in one pass to prevent request storms. */
   limit?: number;
 }
 
 export interface ResyncOutcome {
-  /** Tâches effectivement relues auprès du cœur. */
+  /** Tasks checked against the core server. */
   checked: number;
-  /** Tâches dont l'état affiché était périmé. */
+  /** Tasks whose displayed status was outdated and updated. */
   updated: number;
-  /** Tâches que le cœur n'a pas rendues — laissées intactes. */
+  /** Tasks that could not be reached on the core server. */
   unreachable: number;
 }
 
 /**
- * Relit l'état des tâches inachevées et corrige l'affichage.
+ * Re-queries unfinished task state and updates the client store.
  *
- * Ne lève jamais : un rattrapage qui échoue laisse l'écran tel qu'il était,
- * ce qui est exactement l'état d'avant. Faire remonter l'erreur transformerait
- * une reconnexion en message d'échec alors que la connexion vient de revenir.
+ * Never throws: failed resync leaves the screen as-is rather than displaying an error message.
  */
 export async function resyncTasks(options: ResyncOptions): Promise<ResyncOutcome> {
   const ids = unfinishedTaskIds(options.state).slice(0, options.limit ?? 20);
@@ -117,13 +96,7 @@ export async function resyncTasks(options: ResyncOptions): Promise<ResyncOutcome
   return outcome;
 }
 
-/**
- * Première erreur rencontrée dans le plan.
- *
- * Le cœur ne porte pas d'erreur au niveau de la tâche : elle vit sur l'étape
- * qui a échoué. On remonte la première, celle qui a arrêté le plan — les
- * suivantes n'ont pas eu lieu.
- */
+/** Extracts the first step error that halted execution. */
 function firstError(
   steps: readonly { error: { code: string; message: string } | null }[],
 ): TaskView["error"] {

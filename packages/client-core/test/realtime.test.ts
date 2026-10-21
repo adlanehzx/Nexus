@@ -15,12 +15,10 @@ import {
 } from "./fixtures.js";
 
 /**
- * Le canal temps réel, côté téléphone.
+ * Real-time channel, client side.
  *
- * Un mobile perd le réseau en permanence. La reconnexion n'est donc pas un cas
- * d'erreur mais le régime normal, et c'est ce que ce fichier éprouve : couper,
- * revenir, couper encore, sans jamais laisser une promesse ouverte ni composer
- * dans le vide.
+ * Mobile clients lose network connectivity continuously. Reconnection is normal operating
+ * mode: dropping, returning, dropping again, without leaving open promises or hanging.
  */
 
 interface Harness {
@@ -40,17 +38,15 @@ async function makeClient(options?: { withDevice?: boolean }): Promise<Harness> 
   http.on("POST", "/api/v1/auth/refresh", {
     status: 200,
     body: {
-      data: { accessToken: "jeton-acces-2", refreshToken: "jeton-rafraichissement-2" },
+      data: { accessToken: "access-token-2", refreshToken: "refresh-token-2" },
     },
   });
 
   const session = new SessionManager({ http, storage: new FakeSecureStorage() });
-  await session.login("alex@example.test", "un mot de passe suffisant");
+  await session.login("alex@example.test", "a sufficient password");
 
-  // Le canal client annonce **d'où** l'on parle : sans appareil rattaché, il n'y
-  // a rien à annoncer et `RealtimeClient` refuse d'ouvrir la socket. Un iPhone
-  // qui arrive ici a donc forcément déjà été rattaché — c'est ce que garantit
-  // `ensureDevice` à la connexion. Le cas contraire est éprouvé plus bas.
+  // Client channel announces where requests originate: without an attached device,
+  // RealtimeClient refuses to open the socket.
   if (options?.withDevice !== false) await session.bindDevice("device-iphone");
 
   const socket = new FakeSocket();
@@ -77,18 +73,18 @@ async function makeClient(options?: { withDevice?: boolean }): Promise<Harness> 
   return { client, socket, network, timers, http, session, actions, state: () => state };
 }
 
-describe("connexion", () => {
-  it("se connecte et annonce la session", async () => {
+describe("connection", () => {
+  it("connects and announces session", async () => {
     const h = await makeClient();
     await h.client.start();
 
     expect(h.client.state).toBe("connected");
-    // La poignée de main porte le jeton, jamais le mot de passe.
+    // Handshake carries access token, never password.
     const hello = h.socket.lastOfType("client.hello");
     expect(hello?.payload.accessToken).toBe("jeton-acces-1");
   });
 
-  it("passe par connecting puis authenticating", async () => {
+  it("transitions through connecting then authenticating", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -99,7 +95,7 @@ describe("connexion", () => {
     expect(states).toEqual(["connecting", "authenticating", "connected"]);
   });
 
-  it("programme une reconnexion si le serveur est injoignable", async () => {
+  it("schedules reconnection if server is unreachable", async () => {
     const h = await makeClient();
     h.socket.failNextConnect = true;
 
@@ -109,8 +105,7 @@ describe("connexion", () => {
     expect(h.timers.pending.size).toBe(1);
   });
 
-  it("ne compose pas dans le vide quand le réseau est absent", async () => {
-    // Réessayer sans réseau vide la batterie et n'aboutit jamais.
+  it("does not dial into the void when offline", async () => {
     const h = await makeClient();
     h.network.set(false);
 
@@ -121,21 +116,19 @@ describe("connexion", () => {
   });
 });
 
-describe("reconnexion", () => {
-  it("reprogramme après une coupure", async () => {
+describe("reconnection", () => {
+  it("reschedules after a connection drop", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    h.socket.drop("réseau mobile perdu");
+    h.socket.drop("mobile network dropped");
     await settle();
 
     expect(h.client.state).toBe("reconnecting");
     expect(h.timers.delays.some((delay) => delay >= 1_000)).toBe(true);
   });
 
-  it("refait la poignée de main complète", async () => {
-    // Une session dont on ne sait pas si elle est encore valide n'est pas une
-    // session.
+  it("re-executes full handshake", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -149,7 +142,7 @@ describe("reconnexion", () => {
     expect(h.socket.sent.filter((m) => m.type === "client.hello").length).toBeGreaterThan(before);
   });
 
-  it("espace les tentatives puis plafonne", async () => {
+  it("spaces out attempts then caps", async () => {
     const h = await makeClient();
     h.socket.failNextConnect = true;
     await h.client.start();
@@ -163,30 +156,26 @@ describe("reconnexion", () => {
     }
 
     expect(delays[0]).toBeLessThan(delays[3] ?? 0);
-    // Le plafond évite qu'une longue coupure ne repousse la reprise à plusieurs
-    // minutes alors que l'utilisateur est peut-être revenu.
     expect(Math.max(...delays)).toBeLessThanOrEqual(30_000);
   });
 
-  it("ne programme pas deux reconnexions pour deux coupures rapprochées", async () => {
+  it("does not schedule duplicate reconnections for rapid drops", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    h.socket.drop("coupure 1");
-    h.socket.drop("coupure 2");
+    h.socket.drop("drop 1");
+    h.socket.drop("drop 2");
     await settle();
 
     expect(h.timers.pending.size).toBe(1);
   });
 
-  it("relance immédiatement au retour du réseau", async () => {
-    // L'utilisateur vient de sortir du tunnel et regarde son écran : attendre le
-    // prochain palier d'attente serait absurde.
+  it("resumes immediately upon network restoration", async () => {
     const h = await makeClient();
     await h.client.start();
 
     h.network.set(false);
-    h.socket.drop("réseau perdu");
+    h.socket.drop("network lost");
     await settle();
 
     const pendingBefore = h.timers.pending.size;
@@ -197,7 +186,7 @@ describe("reconnexion", () => {
     expect(pendingBefore).toBeGreaterThan(0);
   });
 
-  it("marque l'état hors ligne dans le magasin", async () => {
+  it("records offline state in store", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -208,11 +197,11 @@ describe("reconnexion", () => {
     expect(h.state().connection).toBe("offline");
   });
 
-  it("un arrêt délibéré ne reconnecte pas", async () => {
+  it("intentional stop does not reconnect", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    h.client.stop("l'utilisateur ferme l'application");
+    h.client.stop("user closed the application");
     h.timers.flush();
     await settle();
 
@@ -220,11 +209,8 @@ describe("reconnexion", () => {
   });
 });
 
-describe("session refusée", () => {
-  it("fait tourner le jeton avant de reconnecter", async () => {
-    // Le cas d'un poste resté ouvert toute la nuit : la socket tenait, le jeton
-    // d'accès a expiré. Reconnecter avec le même jeton échouerait à chaque
-    // tentative, indéfiniment et sans rien changer.
+describe("rejected session", () => {
+  it("rotates token before reconnecting", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -234,7 +220,7 @@ describe("session refusée", () => {
     expect(h.http.countOf("POST", "/api/v1/auth/refresh")).toBe(1);
   });
 
-  it("reconnecte avec le jeton neuf", async () => {
+  it("reconnects with fresh token", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -246,24 +232,20 @@ describe("session refusée", () => {
     await settle();
 
     const hello = h.socket.lastOfType("client.hello");
-    expect(hello?.payload.accessToken).toBe("jeton-acces-2");
+    expect(hello?.payload.accessToken).toBe("access-token-2");
   });
 
-  it("ne fait pas tourner le jeton sur une simple coupure réseau", async () => {
-    // Une rotation à chaque perte de réseau ferait dix rotations par trajet en
-    // métro, et le cœur traite un jeton rejoué comme un vol.
+  it("does not rotate token on plain network drop", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    h.socket.drop("réseau mobile perdu");
+    h.socket.drop("mobile network dropped");
     await settle();
 
     expect(h.http.countOf("POST", "/api/v1/auth/refresh")).toBe(0);
   });
 
-  it("un rafraîchissement refusé n'empêche pas la reprogrammation", async () => {
-    // La session est morte, mais la machine à états ne doit pas se figer :
-    // c'est la tentative suivante, sans jeton, qui conclura proprement.
+  it("failed refresh does not prevent rescheduling", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -275,12 +257,12 @@ describe("session refusée", () => {
   });
 });
 
-describe("demandes et accusés", () => {
-  it("corrèle la réponse à la demande", async () => {
+describe("requests and acknowledgements", () => {
+  it("correlates response to request", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    const pending = h.client.sendMessage({ conversationId: null, text: "Bonjour" });
+    const pending = h.client.sendMessage({ conversationId: null, text: "Hello" });
     const sent = h.socket.lastOfType("message.send");
     expect(sent?.requestId).toBeTruthy();
 
@@ -293,7 +275,7 @@ describe("demandes et accusés", () => {
     await expect(pending).resolves.toEqual({ conversationId: "c1", messageId: "m1" });
   });
 
-  it("distingue plusieurs demandes en vol", async () => {
+  it("distinguishes multiple in-flight requests", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -303,8 +285,6 @@ describe("demandes et accusés", () => {
     const requests = h.socket.sent.filter((m) => m.type === "task.cancel");
     expect(requests).toHaveLength(2);
 
-    // Les réponses arrivent dans le désordre : sans `requestId`, elles seraient
-    // confondues.
     h.socket.deliver(
       SERVER_TO_CLIENT.ack,
       { ok: true, data: { cancelled: false }, error: null },
@@ -320,25 +300,23 @@ describe("demandes et accusés", () => {
     expect(await second).toEqual({ cancelled: false });
   });
 
-  it("rejette avec le code du serveur", async () => {
+  it("rejects with server error code", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    const pending = h.client.cancelTask("inconnue");
+    const pending = h.client.cancelTask("unknown");
     const sent = h.socket.lastOfType("task.cancel");
 
     h.socket.deliver(
       SERVER_TO_CLIENT.ack,
-      { ok: false, data: null, error: { code: "NOT_FOUND", message: "Tâche inconnue" } },
+      { ok: false, data: null, error: { code: "NOT_FOUND", message: "Unknown task" } },
       sent?.requestId,
     );
 
-    await expect(pending).rejects.toMatchObject({ message: "Tâche inconnue" });
+    await expect(pending).rejects.toMatchObject({ message: "Unknown task" });
   });
 
-  it("abandonne une demande restée sans réponse", async () => {
-    // Une socket silencieuse laisserait sinon des promesses ouvertes
-    // indéfiniment, et l'écran qui les attend figé.
+  it("times out request left without response", async () => {
     const h = await makeClient();
     await h.client.start();
 
@@ -346,63 +324,61 @@ describe("demandes et accusés", () => {
     expect(h.client.pendingRequestCount).toBe(1);
 
     h.timers.flush();
-    await expect(pending).rejects.toThrow(/n'a pas répondu/);
+    await expect(pending).rejects.toThrow(/did not respond/i);
     expect(h.client.pendingRequestCount).toBe(0);
   });
 
-  it("rejette les demandes en vol quand la connexion tombe", async () => {
+  it("rejects in-flight requests when connection drops", async () => {
     const h = await makeClient();
     await h.client.start();
 
     const pending = h.client.cancelTask("t1");
-    h.socket.drop("réseau perdu");
+    h.socket.drop("network lost");
 
-    await expect(pending).rejects.toThrow(/Connexion perdue/);
+    await expect(pending).rejects.toThrow(/Connection lost/i);
     expect(h.client.pendingRequestCount).toBe(0);
   });
 
-  it("refuse d'envoyer hors connexion", async () => {
+  it("refuses to send when disconnected", async () => {
     const h = await makeClient();
-    await expect(h.client.cancelTask("t1")).rejects.toThrow(/Pas de connexion/);
+    await expect(h.client.cancelTask("t1")).rejects.toThrow(/No connection/i);
   });
 });
 
-describe("trames entrantes", () => {
-  it("achemine un événement vers le magasin", async () => {
+describe("incoming frames", () => {
+  it("routes an event to the store", async () => {
     const h = await makeClient();
     await h.client.start();
 
     h.socket.deliver(SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
-      title: "Lancer les tests",
+      title: "Run tests",
       stepCount: 2,
       originClientDeviceId: "device-iphone",
     });
 
     await until(() => h.state().tasks.length > 0);
-    expect(h.state().tasks[0]).toMatchObject({ id: "t1", title: "Lancer les tests" });
+    expect(h.state().tasks[0]).toMatchObject({ id: "t1", title: "Run tests" });
   });
 
-  it("ignore une trame illisible sans fermer la connexion", async () => {
+  it("ignores malformed frame without dropping connection", async () => {
     const h = await makeClient();
     await h.client.start();
 
-    h.socket.deliverRaw("pas du json");
-    h.socket.deliverRaw('{"incomplet":true}');
+    h.socket.deliverRaw("not json");
+    h.socket.deliverRaw('{"incomplete":true}');
     await settle();
 
     expect(h.client.state).toBe("connected");
   });
 
-  it("porte l'horodatage du serveur, pas celui du téléphone", async () => {
-    // L'horloge d'un mobile dérive ; deux clients qui affichent des heures
-    // différentes pour le même événement donnent l'impression que le système ment.
+  it("uses server timestamp rather than client time", async () => {
     const h = await makeClient();
     await h.client.start();
 
     h.socket.deliver(SERVER_TO_CLIENT.notificationCreated, {
       notificationId: "n1",
-      title: "Tâche terminée",
+      title: "Task completed",
       body: "ok",
       severity: "info",
     });

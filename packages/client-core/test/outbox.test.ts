@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { InMemoryOutboxStore, NotQueueableError, Outbox, type OutboxEntry } from "../src/outbox.js";
 
 /**
- * Une file hors ligne est une machine à doubler les actions. Ces tests
- * l'attaquent donc par là : la clé d'idempotence, l'ordre, l'arrêt au premier
- * échec, l'expiration, et ce qu'elle refuse de garder.
+ * An offline queue can easily duplicate actions. These tests verify:
+ * idempotency keys, order preservation, stopping on first failure, expiration,
+ * and rejection of non-queueable requests.
  */
 
 const MESSAGE = {
   method: "POST" as const,
   path: "/api/v1/orchestrator/messages",
-  body: { message: "salut" },
+  body: { message: "hello" },
 };
 
 function outbox(options: { ttlMs?: number; capacity?: number; now?: () => number } = {}) {
@@ -30,29 +30,25 @@ function outbox(options: { ttlMs?: number; capacity?: number; now?: () => number
 
 const ok = () => Promise.resolve({ ok: true as const });
 
-describe("ce qui peut attendre le réseau", () => {
-  it("accepte un chemin que le serveur sait dédupliquer", async () => {
+describe("what can wait for the network", () => {
+  it("accepts a path that the server can deduplicate", async () => {
     const { queue } = outbox();
     const entry = await queue.enqueue(MESSAGE);
     expect(entry.idempotencyKey).toBeTruthy();
     expect(await queue.pending()).toHaveLength(1);
   });
 
-  it("refuse un chemin dont la clé n'est pas honorée", async () => {
-    // Si le serveur n'honore pas la clé, mettre en file **garantit** le doublon
-    // au lieu de le risquer. Refuser et le dire vaut mieux.
+  it("rejects a path whose key is not honored", async () => {
     const { queue } = outbox();
     const verdict = queue.queueable({ method: "POST", path: "/api/v1/tasks", body: {} });
     expect(verdict.ok).toBe(false);
-    expect(verdict.reason).toContain("envoi répété");
+    expect(verdict.reason).toContain("repeated requests");
     await expect(
       queue.enqueue({ method: "POST", path: "/api/v1/tasks", body: {} }),
     ).rejects.toBeInstanceOf(NotQueueableError);
   });
 
-  it("refuse une confirmation, même sur un chemin idempotent", () => {
-    // Approuver hors ligne puis envoyer trois heures plus tard, c'est approuver
-    // quelque chose qu'on n'a pas relu — et qui a peut-être changé.
+  it("rejects a confirmation, even on an idempotent path", () => {
     const { queue } = outbox();
     for (const path of [
       "/api/v1/confirmations/abc/respond",
@@ -63,28 +59,26 @@ describe("ce qui peut attendre le réseau", () => {
   });
 });
 
-describe("la clé d'idempotence", () => {
-  it("ne change pas d'une tentative à l'autre", async () => {
+describe("idempotency key", () => {
+  it("does not change across retry attempts", async () => {
     const { queue } = outbox();
     await queue.enqueue(MESSAGE);
 
     const keys: string[] = [];
     const failing = (entry: OutboxEntry) => {
       keys.push(entry.idempotencyKey);
-      return Promise.resolve({ ok: false as const, retryable: true, error: "réseau" });
+      return Promise.resolve({ ok: false as const, retryable: true, error: "network" });
     };
 
     await queue.flush(failing);
     await queue.flush(failing);
     await queue.flush(failing);
 
-    // C'est tout l'intérêt : les trois tentatives portent la même clé, donc le
-    // cœur reconnaît la répétition. Une clé générée à l'envoi serait inutile.
     expect(keys).toHaveLength(3);
     expect(new Set(keys).size).toBe(1);
   });
 
-  it("diffère entre deux entrées", async () => {
+  it("differs between distinct entries", async () => {
     const { queue } = outbox();
     const first = await queue.enqueue(MESSAGE);
     const second = await queue.enqueue(MESSAGE);
@@ -92,62 +86,57 @@ describe("la clé d'idempotence", () => {
   });
 });
 
-describe("envoi", () => {
-  it("respecte l'ordre", async () => {
+describe("sending", () => {
+  it("respects order", async () => {
     const { queue } = outbox();
-    await queue.enqueue({ ...MESSAGE, body: { message: "un" } });
-    await queue.enqueue({ ...MESSAGE, body: { message: "deux" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "one" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "two" } });
 
     const order: unknown[] = [];
     await queue.flush((entry) => {
       order.push((entry.request.body as { message: string }).message);
       return ok();
     });
-    // Deux messages envoyés à l'envers racontent une autre conversation.
-    expect(order).toEqual(["un", "deux"]);
+    expect(order).toEqual(["one", "two"]);
   });
 
-  it("s'arrête au premier échec réessayable", async () => {
+  it("stops at the first retryable failure", async () => {
     const { queue } = outbox();
-    await queue.enqueue({ ...MESSAGE, body: { message: "un" } });
-    await queue.enqueue({ ...MESSAGE, body: { message: "deux" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "one" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "two" } });
 
     let calls = 0;
     const outcome = await queue.flush(() => {
       calls += 1;
-      return Promise.resolve({ ok: false as const, retryable: true, error: "réseau" });
+      return Promise.resolve({ ok: false as const, retryable: true, error: "network" });
     });
 
-    // Continuer après un échec réseau enverrait le second message d'une suite
-    // dont le premier n'est pas passé.
     expect(calls).toBe(1);
-    expect(outcome.stoppedBy).toBe("échec");
+    expect(outcome.stoppedBy).toBe("error");
     expect(outcome.remaining).toHaveLength(2);
-    expect(outcome.remaining[0]?.lastError).toBe("réseau");
+    expect(outcome.remaining[0]?.lastError).toBe("network");
   });
 
-  it("écarte un refus définitif pour ne pas bloquer la file", async () => {
+  it("discards permanent failures to avoid blocking the queue", async () => {
     const { queue } = outbox();
-    await queue.enqueue({ ...MESSAGE, body: { message: "invalide" } });
-    await queue.enqueue({ ...MESSAGE, body: { message: "valable" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "invalid" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "valid" } });
 
     const sent: string[] = [];
     const outcome = await queue.flush((entry) => {
       const message = (entry.request.body as { message: string }).message;
-      if (message === "invalide") {
+      if (message === "invalid") {
         return Promise.resolve({ ok: false as const, retryable: false, error: "400" });
       }
       sent.push(message);
       return ok();
     });
 
-    // Un refus définitif ne sera pas meilleur demain ; le garder bloquerait
-    // toute la file derrière lui.
-    expect(sent).toEqual(["valable"]);
+    expect(sent).toEqual(["valid"]);
     expect(outcome.remaining).toHaveLength(0);
   });
 
-  it("n'envoie rien hors ligne", async () => {
+  it("does not send anything when offline", async () => {
     const { queue } = outbox();
     await queue.enqueue(MESSAGE);
     let calls = 0;
@@ -159,17 +148,15 @@ describe("envoi", () => {
       { online: false },
     );
 
-    // Une tentative sans réseau ne fait que consommer un essai et brouiller le
-    // compte.
     expect(calls).toBe(0);
-    expect(outcome.stoppedBy).toBe("hors-ligne");
+    expect(outcome.stoppedBy).toBe("offline");
     expect(outcome.remaining).toHaveLength(1);
   });
 
-  it("compte les tentatives", async () => {
+  it("counts attempts", async () => {
     const { queue } = outbox();
     await queue.enqueue(MESSAGE);
-    const fail = () => Promise.resolve({ ok: false as const, retryable: true, error: "réseau" });
+    const fail = () => Promise.resolve({ ok: false as const, retryable: true, error: "network" });
     await queue.flush(fail);
     const outcome = await queue.flush(fail);
     expect(outcome.remaining[0]?.attempts).toBe(2);
@@ -177,7 +164,7 @@ describe("envoi", () => {
 });
 
 describe("expiration", () => {
-  it("n'envoie pas une intention dont le contexte a disparu", async () => {
+  it("does not send an intention whose context has expired", async () => {
     let instant = 1_000;
     const { queue } = outbox({ now: () => instant, ttlMs: 60_000 });
     await queue.enqueue(MESSAGE);
@@ -189,14 +176,12 @@ describe("expiration", () => {
       return ok();
     });
 
-    // « Réponds à ce mail » mis en file mardi n'a aucun sens vendredi, et
-    // l'exécuter serait pire que de l'avoir perdu.
     expect(calls).toBe(0);
     expect(outcome.expired).toHaveLength(1);
     expect(outcome.remaining).toHaveLength(0);
   });
 
-  it("disparaît de la file en attente avant même d'être envoyée", async () => {
+  it("disappears from pending queue before being sent", async () => {
     let instant = 1_000;
     const { queue } = outbox({ now: () => instant, ttlMs: 60_000 });
     await queue.enqueue(MESSAGE);
@@ -206,25 +191,23 @@ describe("expiration", () => {
   });
 });
 
-describe("capacité", () => {
-  it("écarte les plus anciennes quand la file est pleine", async () => {
+describe("capacity", () => {
+  it("evicts oldest entries when full", async () => {
     const { queue } = outbox({ capacity: 2 });
-    await queue.enqueue({ ...MESSAGE, body: { message: "un" } });
-    await queue.enqueue({ ...MESSAGE, body: { message: "deux" } });
-    await queue.enqueue({ ...MESSAGE, body: { message: "trois" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "one" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "two" } });
+    await queue.enqueue({ ...MESSAGE, body: { message: "three" } });
 
     const pending = await queue.pending();
-    // Une file pleine doit perdre ce qui a le moins de chances d'avoir encore
-    // du sens.
     expect(pending.map((entry) => (entry.request.body as { message: string }).message)).toEqual([
-      "deux",
-      "trois",
+      "two",
+      "three",
     ]);
   });
 });
 
-describe("déconnexion", () => {
-  it("vide la file : elle appartient à une session", async () => {
+describe("sign out", () => {
+  it("clears the queue as it belongs to a session", async () => {
     const { queue } = outbox();
     await queue.enqueue(MESSAGE);
     await queue.clear();

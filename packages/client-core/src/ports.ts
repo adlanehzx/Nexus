@@ -1,28 +1,28 @@
 /**
- * Ce qu'une plateforme doit fournir au client NEXUS.
+ * Platform ports required by the NEXUS client.
  *
- * Cinq ports, et rien d'autre. Tout le reste — session, reconnexion, état,
- * pipeline vocal, corrélation des demandes — est du TypeScript ordinaire qui
- * tourne aussi bien sous Node que sur Hermes.
+ * Five ports, nothing more. Everything else — session, reconnection, state,
+ * voice pipeline, request correlation — is standard TypeScript that runs
+ * equally well under Node and Hermes/React Native.
  *
- * C'est ce qui rend le client **testable sans simulateur iOS**. Un écran se
- * relit ; une machine à états de reconnexion ne se relit pas, elle s'éprouve.
- * Le découpage met donc la totalité de la logique du côté vérifiable.
+ * This makes the client **testable without an iOS/Android simulator**. A screen can be
+ * reviewed visually; a reconnection state machine cannot, it must be verified under test.
+ * This separation puts all core logic on the verifiable side.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stockage des secrets
+// Secret storage
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Coffre local.
+ * Local secure storage.
  *
- * Sur iOS, c'est le trousseau — chiffré par le système, lié à l'appareil, et
- * inaccessible aux autres applications. **Jamais `AsyncStorage`** : il écrit en
- * clair dans le bac à sable de l'application, qu'une sauvegarde iTunes non
- * chiffrée exporte tel quel.
+ * On iOS, this is Keychain — encrypted by the OS, bound to the device, and
+ * inaccessible to other applications. **Never `AsyncStorage`**: it writes
+ * unencrypted plaintext in the application sandbox, which an unencrypted
+ * backup exports as-is.
  *
- * Les méthodes sont asynchrones parce que le trousseau l'est.
+ * Methods are asynchronous because Keychain is asynchronous.
  */
 export interface SecureStorage {
   get(key: string): Promise<string | undefined>;
@@ -31,21 +31,21 @@ export interface SecureStorage {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Réseau
+// Network
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Réponse HTTP, réduite à ce dont le client a besoin. */
+/** HTTP response, limited to what the client needs. */
 export interface HttpResponse {
   status: number;
   body: unknown;
 }
 
 /**
- * Client HTTP.
+ * HTTP client.
  *
- * Port plutôt qu'un appel direct à `fetch` : les tests décrivent des réponses
- * sans serveur, et une implémentation native peut ajouter l'épinglage de
- * certificat sans toucher à la logique.
+ * Modeled as a port rather than direct `fetch` calls: tests can describe serverless
+ * responses, and native implementations can add certificate pinning without
+ * modifying business logic.
  */
 export interface HttpClient {
   request(input: {
@@ -60,11 +60,10 @@ export interface HttpClient {
 export type SocketState = "idle" | "connecting" | "open" | "closed";
 
 /**
- * Socket temps réel.
+ * Real-time socket transport.
  *
- * Volontairement plus pauvre que l'API WebSocket du navigateur : `connect`,
- * `send`, `close`, deux abonnements. Le client n'a pas besoin du reste, et
- * l'implémentation React Native n'a qu'à combler ces cinq trous.
+ * Intentionally leaner than browser WebSocket API: `connect`, `send`, `close`,
+ * and two subscription callbacks. The client requires nothing else.
  */
 export interface SocketTransport {
   readonly state: SocketState;
@@ -73,54 +72,50 @@ export interface SocketTransport {
   close(reason: string): void;
   onMessage(handler: (data: string) => void): void;
   /**
-   * Fermeture, subie ou demandée.
+   * Close event, whether forced or requested.
    *
-   * Le `code` est celui de la trame de fermeture WebSocket quand la plateforme
-   * le fournit. Il ne sert pas à décorer un message : c'est lui qui distingue
-   * « le réseau a coupé » de « le cœur a refusé la session », et les deux
-   * n'appellent pas la même reprise.
+   * `code` is the WebSocket close frame code when provided by the platform.
+   * It distinguishes "network lost" from "server rejected session", which require
+   * different recovery strategies.
    */
   onClose(handler: (reason: string, code?: number) => void): void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Voix
+// Voice
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface TranscriptionResult {
   text: string;
-  /** Confiance de 0 à 1, quand la plateforme la fournit. */
+  /** Confidence score from 0 to 1, when provided by the platform. */
   confidence?: number;
 }
 
 /**
- * Reconnaissance vocale.
+ * Speech recognition.
  *
- * **Il n'existe pas d'écoute permanente.** Le port n'expose que `start` et
- * `stop` : l'utilisateur appuie, parle, relâche. Aucune méthode ne permet de
- * démarrer une écoute continue, et c'est délibéré — une API qui ne le propose
- * pas ne peut pas être détournée par inadvertance.
+ * **There is no always-on listening.** The port only exposes `start` and `stop`:
+ * the user presses, speaks, and releases. No method exists to enable continuous
+ * listening by design — an API lacking the capability cannot be inadvertently misused.
  *
- * `onPartial` sert à afficher le texte au fil de la parole ; il ne déclenche
- * jamais d'envoi.
+ * `onPartial` is used to stream text as words are spoken; it never triggers transmission.
  */
 export interface SpeechToTextProvider {
   isAvailable(): Promise<boolean>;
-  /** Demande l'autorisation micro. Refus = `false`, jamais une exception. */
+  /** Requests microphone permission. Denied = `false`, never an exception. */
   requestPermission(): Promise<boolean>;
   start(options?: { locale?: string; onPartial?: (text: string) => void }): Promise<void>;
-  /** Arrête l'écoute et rend la transcription finale. */
+  /** Stops listening and returns final transcription. */
   stop(): Promise<TranscriptionResult>;
-  /** Abandonne sans transcrire — l'utilisateur a annulé. */
+  /** Aborts listening without transcription — user cancelled. */
   cancel(): Promise<void>;
 }
 
 /**
- * Synthèse vocale.
+ * Speech synthesis.
  *
- * `speak` est **facultatif** dans le flux : la réponse s'affiche toujours, elle
- * ne se prononce que si l'utilisateur l'a demandé. Lire à voix haute dans un
- * lieu public ce qu'un assistant personnel répond est rarement souhaité.
+ * `speak` is **optional** in the flow: responses are always displayed, and only
+ * spoken aloud when requested by the user.
  */
 export interface TextToSpeechProvider {
   isAvailable(): Promise<boolean>;
@@ -130,10 +125,10 @@ export interface TextToSpeechProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Divers
+// Miscellaneous
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Minuteries injectables : les tests de reconnexion n'attendent pas réellement. */
+/** Injectable timers: reconnection tests do not actually sleep. */
 export interface TimerPort {
   set(callback: () => void, delayMs: number): unknown;
   clear(handle: unknown): void;
@@ -147,11 +142,11 @@ export const systemTimers: TimerPort = {
 };
 
 /**
- * État de la connexion réseau de l'appareil.
+ * Device network connection state.
  *
- * Un téléphone passe son temps à perdre le réseau. Distinguer « hors ligne »
- * de « le serveur ne répond pas » change ce qu'on affiche : dans le premier cas
- * l'utilisateur peut agir, dans le second non.
+ * Mobile devices frequently lose connectivity. Distinguishing "offline" from
+ * "server unreachable" dictates UI behavior: the user can take action for the former,
+ * but not the latter.
  */
 export interface NetworkMonitor {
   isOnline(): boolean;

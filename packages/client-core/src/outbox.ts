@@ -1,38 +1,33 @@
 import { AppError } from "@nexus/shared";
 
 /**
- * Mode hors ligne : ce qu'on écrit sans réseau, et ce qu'on refuse d'écrire.
+ * Offline mode: what can be queued without network connectivity, and what must be rejected.
  *
- * ## Le piège que ce module existe pour éviter
+ * ## The trap this module prevents
  *
- * Une file d'attente hors ligne est une machine à doubler les actions. Le
- * téléphone envoie « range mes mails », perd le réseau avant la réponse,
- * réessaie à la reconnexion — et la demande part deux fois. Le module de
- * rattrapage porte déjà cet avertissement : « un rattrapage qui pourrait créer
- * une tâche transformerait une coupure réseau en seconde commande ».
+ * An offline queue easily duplicates actions. The client sends "archive my emails",
+ * loses connectivity before receiving a response, and retries on reconnection —
+ * dispatching the request twice.
  *
- * Trois règles en découlent, et chacune ferme une voie de doublon.
+ * Three rules prevent duplicate actions:
  *
- * **1. Une clé d'idempotence est obligatoire, et elle naît à la mise en file.**
- * Pas à l'envoi. C'est tout l'intérêt : les trois tentatives d'une même entrée
- * portent la même clé, donc le cœur reconnaît la répétition. Une clé générée à
- * l'envoi serait différente à chaque essai, c'est-à-dire inutile.
+ * **1. An idempotency key is mandatory, generated upon enqueueing.**
+ * Not at transmission time. This ensures all attempts for an entry carry the same key,
+ * allowing the core server to recognize repetitions.
  *
- * **2. On ne met en file que ce que le serveur sait dédupliquer.** C'est une
- * limite réelle, et la nommer vaut mieux que l'ignorer : si une route n'honore
- * pas la clé, la mettre en file garantit le doublon au lieu de le risquer. La
- * file refuse donc, et le dit.
+ * **2. Only requests that the server can deduplicate are allowed.**
+ * If a route does not honor idempotency keys, queueing it guarantees duplicate execution.
+ * The queue rejects such requests explicitly.
  *
- * **3. Une entrée expire.** Une intention dont le contexte a disparu n'est plus
- * une intention : « réponds à ce mail » mis en file mardi n'a aucun sens
- * vendredi, et l'exécuter serait pire que de l'avoir perdu.
+ * **3. Queue entries expire.**
+ * An action whose context has expired should not run: "reply to this email"
+ * queued days ago no longer makes sense and could cause harm if executed late.
  *
- * ## Ce qui n'entre jamais en file
+ * ## What is never queued
  *
- * Les confirmations. Approuver hors ligne une action à risque, puis l'envoyer
- * trois heures plus tard, c'est approuver quelque chose qu'on n'a pas relu —
- * et qui a peut-être changé. Une confirmation se donne en ligne, devant ce
- * qu'elle autorise.
+ * Confirmations. Approving a high-risk action offline and sending it hours later
+ * approves something without reviewing its current state. Confirmations must be
+ * given online in view of the active request.
  */
 
 export interface OutboxRequest {
@@ -44,7 +39,7 @@ export interface OutboxRequest {
 export interface OutboxEntry {
   id: string;
   request: OutboxRequest;
-  /** Née à la mise en file. Identique à chaque tentative — c'est le principe. */
+  /** Generated upon enqueueing. Kept identical across retries. */
   idempotencyKey: string;
   createdAt: number;
   expiresAt: number;
@@ -57,7 +52,7 @@ export interface OutboxStore {
   save(entries: readonly OutboxEntry[]): Promise<void>;
 }
 
-/** Magasin en mémoire. Les clients durables fournissent le leur. */
+/** In-memory store. Persistent clients provide their own implementation. */
 export class InMemoryOutboxStore implements OutboxStore {
   #entries: OutboxEntry[] = [];
 
@@ -77,7 +72,7 @@ export class NotQueueableError extends AppError {
 
   constructor(path: string, reason: string) {
     super({
-      message: `${path} ne peut pas être mis en file : ${reason}`,
+      message: `${path} cannot be queued: ${reason}`,
       userMessage:
         "This action needs the network: NEXUS cannot hold it for later without risking doing it twice.",
       context: { path, reason },
@@ -88,27 +83,25 @@ export class NotQueueableError extends AppError {
 export interface OutboxOptions {
   store: OutboxStore;
   /**
-   * Chemins dont le serveur honore la clé d'idempotence.
+   * Request paths for which the server honors idempotency keys.
    *
-   * Liste blanche et non liste noire : une route ajoutée demain n'est pas
-   * mise en file par défaut. Se tromper dans ce sens coûte une action qu'il
-   * faut refaire en ligne ; dans l'autre, une action faite deux fois.
+   * Whitelist approach: new routes are not queued by default.
    */
   idempotentPaths: readonly string[];
   now?: () => number;
   newId?: () => string;
-  /** Durée de vie d'une entrée. Au-delà, le contexte a disparu. */
+  /** Entry time-to-live. Beyond this, context is stale. */
   ttlMs?: number;
-  /** Nombre maximal d'entrées. Au-delà, les plus anciennes sont écartées. */
+  /** Maximum queue capacity. Beyond this, oldest entries are evicted. */
   capacity?: number;
 }
 
 export interface FlushOutcome {
   sent: OutboxEntry[];
-  /** Restées en file : l'envoi s'est arrêté, ou elles n'ont pas encore été tentées. */
+  /** Entries remaining in queue: flush stopped or not yet attempted. */
   remaining: OutboxEntry[];
   expired: OutboxEntry[];
-  stoppedBy: "fin" | "échec" | "hors-ligne";
+  stoppedBy: "completed" | "error" | "offline";
 }
 
 export type OutboxSender = (
@@ -130,25 +123,24 @@ export class Outbox {
     this.#newId =
       options.newId ??
       (() => `out-${String(this.#now())}-${Math.random().toString(36).slice(2, 10)}`);
-    // Vingt-quatre heures : assez pour traverser une nuit sans réseau, trop peu
-    // pour qu'une intention devienne absurde.
+    // 24 hours: enough to bridge temporary offline periods without becoming stale.
     this.#ttlMs = options.ttlMs ?? 24 * 60 * 60_000;
     this.#capacity = options.capacity ?? 100;
   }
 
-  /** Cette requête peut-elle attendre le retour du réseau ? */
+  /** Checks if this request can wait for network restoration. */
   queueable(request: OutboxRequest): { ok: boolean; reason?: string } {
     if (isConfirmation(request.path)) {
       return {
         ok: false,
         reason:
-          "une confirmation se donne en ligne, devant ce qu'elle autorise — pas trois heures plus tard",
+          "a confirmation must be made online with current context, not hours later",
       };
     }
     if (!this.#idempotent.has(request.path)) {
       return {
         ok: false,
-        reason: "le serveur ne sait pas reconnaître un envoi répété sur ce chemin",
+        reason: "the server cannot recognize repeated requests on this path",
       };
     }
     return { ok: true };
@@ -156,14 +148,13 @@ export class Outbox {
 
   async enqueue(request: OutboxRequest): Promise<OutboxEntry> {
     const verdict = this.queueable(request);
-    if (!verdict.ok) throw new NotQueueableError(request.path, verdict.reason ?? "refusé");
+    if (!verdict.ok) throw new NotQueueableError(request.path, verdict.reason ?? "rejected");
 
     const createdAt = this.#now();
     const entry: OutboxEntry = {
       id: this.#newId(),
       request,
-      // La clé naît **ici**. Les tentatives suivantes la réutilisent, et c'est
-      // ce qui permet au cœur de reconnaître la répétition.
+      // The idempotency key is born here and reused on all subsequent retries.
       idempotencyKey: this.#newId(),
       createdAt,
       expiresAt: createdAt + this.#ttlMs,
@@ -172,10 +163,7 @@ export class Outbox {
     };
 
     const existing = await this.#store.all();
-    const kept = [...existing, entry]
-      // Les plus anciennes partent d'abord : une file pleine doit perdre ce qui
-      // a le moins de chances d'avoir encore du sens.
-      .slice(-this.#capacity);
+    const kept = [...existing, entry].slice(-this.#capacity);
     await this.#store.save(kept);
     return entry;
   }
@@ -186,11 +174,10 @@ export class Outbox {
   }
 
   /**
-   * Envoie la file, dans l'ordre, et s'arrête au premier échec réessayable.
+   * Flushes the queue in order, stopping at the first retryable error.
    *
-   * L'ordre **et** l'arrêt comptent. Deux messages envoyés à l'envers racontent
-   * une autre conversation ; et continuer après un échec réseau enverrait le
-   * second message d'une suite dont le premier n'est pas passé.
+   * Maintaining ordering and stopping on error prevents subsequent requests
+   * from being processed out of sequence.
    */
   async flush(send: OutboxSender, options: { online?: boolean } = {}): Promise<FlushOutcome> {
     const now = this.#now();
@@ -199,14 +186,12 @@ export class Outbox {
     let queue = all.filter((entry) => entry.expiresAt > now);
 
     if (options.online === false) {
-      // Rien ne part hors ligne : une tentative sans réseau ne fait que
-      // consommer un essai et brouiller le compte.
       await this.#store.save(queue);
-      return { sent: [], remaining: queue, expired, stoppedBy: "hors-ligne" };
+      return { sent: [], remaining: queue, expired, stoppedBy: "offline" };
     }
 
     const sent: OutboxEntry[] = [];
-    let stoppedBy: FlushOutcome["stoppedBy"] = "fin";
+    let stoppedBy: FlushOutcome["stoppedBy"] = "completed";
 
     while (queue.length > 0) {
       const entry = queue[0];
@@ -220,13 +205,13 @@ export class Outbox {
         continue;
       }
       if (!result.retryable) {
-        // Un refus définitif — requête invalide, droit manquant — ne sera pas
-        // meilleur demain. La garder bloquerait toute la file derrière elle.
+        // Permanent rejection (invalid request, missing permission) won't succeed later;
+        // drop it to unblock the rest of the queue.
         queue = queue.slice(1);
         continue;
       }
       queue = [{ ...attempted, lastError: result.error }, ...queue.slice(1)];
-      stoppedBy = "échec";
+      stoppedBy = "error";
       break;
     }
 
@@ -234,7 +219,7 @@ export class Outbox {
     return { sent, remaining: queue, expired, stoppedBy };
   }
 
-  /** Vide la file. Utilisé à la déconnexion : la file appartient à une session. */
+  /** Clears the queue on sign-out (queue belongs to a session). */
   async clear(): Promise<void> {
     await this.#store.save([]);
   }

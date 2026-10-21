@@ -14,10 +14,7 @@ import { VoicePipeline } from "../src/voice.js";
 import { FakeSpeechToText, FakeTextToSpeech, TestTimers } from "./fixtures.js";
 
 /**
- * Le réducteur et le pipeline vocal.
- *
- * Le réducteur est pur : une trame entre, un état sort. C'est ce qui permet de
- * décrire précisément ce que l'écran doit montrer, sans monter d'interface.
+ * Reducer and voice pipeline tests.
  */
 
 function apply(state: ClientState, type: ServerToClientType, payload: Record<string, unknown>) {
@@ -28,23 +25,21 @@ function apply(state: ClientState, type: ServerToClientType, payload: Record<str
   });
 }
 
-describe("flux de la réponse", () => {
-  it("crée le message au premier fragment", () => {
-    // Attendre un « début de flux » explicite ajouterait un aller-retour, et un
-    // fragment perdu laisserait le message invisible.
+describe("streaming response flow", () => {
+  it("creates message on first chunk", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.messageDelta, {
       conversationId: "c1",
       messageId: "m1",
-      delta: "Bon",
+      delta: "Hel",
       done: false,
     });
 
-    expect(state.messages[0]).toMatchObject({ id: "m1", content: "Bon", streaming: true });
+    expect(state.messages[0]).toMatchObject({ id: "m1", content: "Hel", streaming: true });
   });
 
-  it("concatène les fragments suivants", () => {
+  it("concatenates subsequent chunks", () => {
     let state = initialState;
-    for (const delta of ["Bon", "jour ", "Alex"]) {
+    for (const delta of ["Hel", "lo ", "Alex"]) {
       state = apply(state, SERVER_TO_CLIENT.messageDelta, {
         conversationId: "c1",
         messageId: "m1",
@@ -54,13 +49,13 @@ describe("flux de la réponse", () => {
     }
 
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]?.content).toBe("Bonjour Alex");
+    expect(state.messages[0]?.content).toBe("Hello Alex");
   });
 
-  it("clôt le flux au dernier fragment", () => {
+  it("closes stream on final chunk", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.messageDelta, {
       messageId: "m1",
-      delta: "Bonjour",
+      delta: "Hello",
       done: false,
     });
     state = apply(state, SERVER_TO_CLIENT.messageDelta, {
@@ -69,16 +64,16 @@ describe("flux de la réponse", () => {
       done: true,
     });
 
-    expect(state.messages[0]).toMatchObject({ content: "Bonjour.", streaming: false });
+    expect(state.messages[0]).toMatchObject({ content: "Hello.", streaming: false });
   });
 
-  it("garde les messages de l'utilisateur et de l'assistant séparés", () => {
+  it("keeps user and assistant messages separated", () => {
     let state = reduce(initialState, {
       kind: "localMessage",
       message: {
         id: "u1",
         role: "user",
-        content: "Ouvre Spotify",
+        content: "Open Spotify",
         streaming: false,
         createdAt: "2026-09-02T12:00:00.000Z",
         originClientDeviceId: "device-iphone",
@@ -86,7 +81,7 @@ describe("flux de la réponse", () => {
     });
     state = apply(state, SERVER_TO_CLIENT.messageDelta, {
       messageId: "a1",
-      delta: "Voilà.",
+      delta: "Done.",
       done: true,
     });
 
@@ -94,25 +89,25 @@ describe("flux de la réponse", () => {
   });
 });
 
-describe("tâches", () => {
-  it("crée une tâche", () => {
+describe("tasks", () => {
+  it("creates a task", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
-      title: "Lancer les tests",
+      title: "Run tests",
       stepCount: 3,
       originClientDeviceId: "device-iphone",
     });
 
     expect(state.tasks[0]).toMatchObject({
       id: "t1",
-      title: "Lancer les tests",
+      title: "Run tests",
       status: "pending",
       stepCount: 3,
       originClientDeviceId: "device-iphone",
     });
   });
 
-  it("suit la progression", () => {
+  it("tracks progress", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
       title: "Tests",
@@ -122,17 +117,17 @@ describe("tâches", () => {
       taskId: "t1",
       stepId: "s1",
       percent: 50,
-      label: "Clonage du dépôt",
+      label: "Cloning repository",
     });
 
     expect(state.tasks[0]).toMatchObject({
       status: "running",
       percent: 50,
-      label: "Clonage du dépôt",
+      label: "Cloning repository",
     });
   });
 
-  it("marque la réussite", () => {
+  it("records success", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
       title: "Tests",
@@ -147,9 +142,7 @@ describe("tâches", () => {
     expect(state.tasks[0]).toMatchObject({ status: "succeeded", percent: 100, durationMs: 4_200 });
   });
 
-  it("distingue une réussite partielle", () => {
-    // « Rien n'a marché » et « deux étapes sur trois ont marché » n'appellent
-    // pas la même suite.
+  it("distinguishes partial success", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
       title: "Tests",
@@ -164,7 +157,7 @@ describe("tâches", () => {
     expect(state.tasks[0]?.status).toBe("partial");
   });
 
-  it("retient l'erreur d'un échec", () => {
+  it("stores failure error details", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
       title: "Tests",
@@ -173,7 +166,7 @@ describe("tâches", () => {
     state = apply(state, SERVER_TO_CLIENT.taskFailed, {
       taskId: "t1",
       code: "PATH_NOT_ALLOWED",
-      message: "Ce chemin est en dehors des dossiers autorisés.",
+      message: "This path is outside permitted directories.",
     });
 
     expect(state.tasks[0]).toMatchObject({
@@ -182,34 +175,28 @@ describe("tâches", () => {
     });
   });
 
-  it("retient l'exécutant annoncé par la progression", () => {
-    // Sans ce champ, la vue d'une tâche reste anonyme : « en cours » sans dire
-    // où, ce qui n'apprend rien. C'est la différence entre « ça travaille » et
-    // « le poste fixe compile pendant que je regarde mon téléphone ».
+  it("retains worker reported in progress frame", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
-      title: "Compiler",
+      title: "Compile",
       stepCount: 1,
     });
     state = apply(state, SERVER_TO_CLIENT.taskProgress, {
       taskId: "t1",
       stepId: "s1",
-      deviceId: "device-fixe",
+      deviceId: "device-fixed",
       percent: 40,
       label: null,
     });
 
-    expect(state.tasks[0]?.workerDeviceId).toBe("device-fixe");
+    expect(state.tasks[0]?.workerDeviceId).toBe("device-fixed");
   });
 
-  it("n'efface pas un exécutant connu avec une progression anonyme", () => {
-    // Une étape refusée à l'autorisation n'atteint aucun exécutant et rapporte
-    // `null`. Le laisser écraser effacerait ce qui était affiché pour l'étape
-    // précédente, sous les yeux de l'utilisateur.
+  it("does not overwrite known worker with null on anonymous progress", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskProgress, {
       taskId: "t1",
       stepId: "s1",
-      deviceId: "device-portable",
+      deviceId: "device-laptop",
       percent: 30,
       label: null,
     });
@@ -221,32 +208,30 @@ describe("tâches", () => {
       label: null,
     });
 
-    expect(state.tasks[0]?.workerDeviceId).toBe("device-portable");
+    expect(state.tasks[0]?.workerDeviceId).toBe("device-laptop");
   });
 
-  it("fait apparaître une tâche connue seulement par sa progression", () => {
-    // L'iPhone était éteint quand elle a démarré : elle doit tout de même
-    // apparaître au rallumage.
+  it("creates task known only through progress updates", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.taskProgress, {
-      taskId: "t-inconnue",
+      taskId: "t-unknown",
       stepId: "s1",
       percent: 30,
-      label: "en cours",
+      label: "running",
     });
 
     expect(state.tasks).toHaveLength(1);
     expect(state.tasks[0]?.status).toBe("running");
   });
 
-  it("sépare les tâches actives des terminées", () => {
+  it("separates active and finished tasks", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t1",
-      title: "En cours",
+      title: "Running",
       stepCount: 1,
     });
     state = apply(state, SERVER_TO_CLIENT.taskCreated, {
       taskId: "t2",
-      title: "Finie",
+      title: "Done",
       stepCount: 1,
     });
     state = apply(state, SERVER_TO_CLIENT.taskCompleted, {
@@ -260,13 +245,13 @@ describe("tâches", () => {
   });
 });
 
-describe("cartes d'outil", () => {
-  it("suit un appel d'outil du début à la fin", () => {
+describe("tool calls", () => {
+  it("tracks tool call lifecycle end to end", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.toolStarted, {
       runId: "r1",
       callId: "c1",
       tool: "device.terminal.execute",
-      summary: "Lancer les tests sur le poste fixe",
+      summary: "Run tests on desktop",
       riskLevel: "HIGH",
     });
     expect(state.toolCalls[0]).toMatchObject({ status: "running", riskLevel: "HIGH" });
@@ -284,7 +269,7 @@ describe("cartes d'outil", () => {
       callId: "c1",
       tool: "device.terminal.execute",
       ok: true,
-      summary: "240 tests réussis",
+      summary: "240 tests passed",
       durationMs: 12_000,
     });
     expect(state.toolCalls[0]).toMatchObject({ status: "succeeded", percent: 100 });
@@ -292,12 +277,12 @@ describe("cartes d'outil", () => {
 });
 
 describe("confirmations", () => {
-  it("ajoute une demande", () => {
+  it("adds confirmation request", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.confirmationRequired, {
       confirmationId: "k1",
       taskId: "t1",
       capability: "terminal.execute",
-      action: "Exécuter une commande sur le poste fixe",
+      action: "Execute command on desktop",
       description: "pnpm test",
       riskLevel: "HIGH",
       expiresAt: "2026-09-02T12:10:00.000Z",
@@ -307,7 +292,7 @@ describe("confirmations", () => {
     expect(state.confirmations[0]).toMatchObject({ riskLevel: "HIGH", answered: false });
   });
 
-  it("ne duplique pas une demande rejouée après reconnexion", () => {
+  it("does not duplicate replayed confirmation requests", () => {
     const payload = {
       confirmationId: "k1",
       action: "x",
@@ -322,7 +307,7 @@ describe("confirmations", () => {
     expect(state.confirmations).toHaveLength(1);
   });
 
-  it("marque la demande comme tranchée", () => {
+  it("marks confirmation as answered", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.confirmationRequired, {
       confirmationId: "k1",
       action: "x",
@@ -332,31 +317,30 @@ describe("confirmations", () => {
     });
     state = reduce(state, { kind: "confirmationAnswered", confirmationId: "k1" });
 
-    // La carte disparaît de l'écran : un second appui ne renverra rien.
     expect(pendingConfirmations(state)).toHaveLength(0);
     expect(state.confirmations[0]?.answered).toBe(true);
   });
 });
 
 describe("notifications", () => {
-  it("ajoute la plus récente en tête", () => {
+  it("prepends most recent notification", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.notificationCreated, {
       notificationId: "n1",
-      title: "Première",
+      title: "First",
       body: "x",
       severity: "info",
     });
     state = apply(state, SERVER_TO_CLIENT.notificationCreated, {
       notificationId: "n2",
-      title: "Seconde",
+      title: "Second",
       body: "y",
       severity: "error",
     });
 
-    expect(state.notifications.map((n) => n.title)).toEqual(["Seconde", "Première"]);
+    expect(state.notifications.map((n) => n.title)).toEqual(["Second", "First"]);
   });
 
-  it("ne duplique pas une notification rejouée", () => {
+  it("does not duplicate replayed notification", () => {
     const payload = { notificationId: "n1", title: "x", body: "y", severity: "info" };
     let state = apply(initialState, SERVER_TO_CLIENT.notificationCreated, payload);
     state = apply(state, SERVER_TO_CLIENT.notificationCreated, payload);
@@ -364,7 +348,7 @@ describe("notifications", () => {
     expect(state.notifications).toHaveLength(1);
   });
 
-  it("marque comme lue", () => {
+  it("marks notification as read", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.notificationCreated, {
       notificationId: "n1",
       title: "x",
@@ -378,27 +362,28 @@ describe("notifications", () => {
       notificationId: "n1",
       at: "2026-09-02T12:05:00.000Z",
     });
+
     expect(unreadNotifications(state)).toHaveLength(0);
   });
 });
 
-describe("appareils", () => {
-  it("ajoute un appareil inconnu", () => {
+describe("devices", () => {
+  it("adds unknown device", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.deviceUpdated, {
       deviceId: "d1",
-      deviceName: "Poste fixe",
+      deviceName: "Desktop PC",
       status: "ONLINE",
       role: "WORKER",
       capabilities: ["terminal.execute"],
     });
 
-    expect(state.devices[0]).toMatchObject({ id: "d1", name: "Poste fixe", status: "ONLINE" });
+    expect(state.devices[0]).toMatchObject({ id: "d1", name: "Desktop PC", status: "ONLINE" });
   });
 
-  it("met à jour sans écraser ce que la trame ne dit pas", () => {
+  it("updates device without wiping omitted fields", () => {
     let state = apply(initialState, SERVER_TO_CLIENT.deviceUpdated, {
       deviceId: "d1",
-      deviceName: "Poste fixe",
+      deviceName: "Desktop PC",
       status: "ONLINE",
       role: "WORKER",
       capabilities: ["terminal.execute"],
@@ -406,15 +391,15 @@ describe("appareils", () => {
     state = apply(state, SERVER_TO_CLIENT.deviceUpdated, { deviceId: "d1", status: "OFFLINE" });
 
     expect(state.devices[0]).toMatchObject({
-      name: "Poste fixe",
+      name: "Desktop PC",
       status: "OFFLINE",
       capabilities: ["terminal.execute"],
     });
   });
 });
 
-describe("état de connexion", () => {
-  it("n'autorise l'interaction que connecté et en ligne", () => {
+describe("connection state", () => {
+  it("allows interaction only when connected and online", () => {
     let state = reduce(initialState, { kind: "connection", state: "connected" });
     expect(canInteract(state)).toBe(true);
 
@@ -422,11 +407,11 @@ describe("état de connexion", () => {
     expect(canInteract(state)).toBe(false);
   });
 
-  it("efface l'erreur affichée", () => {
+  it("clears displayed error", () => {
     let state = reduce(initialState, {
       kind: "error",
       code: "CONNECTION_LOST",
-      message: "Connexion perdue",
+      message: "Connection lost",
       at: "2026-09-02T12:00:00.000Z",
     });
     expect(state.lastError).not.toBeNull();
@@ -435,7 +420,7 @@ describe("état de connexion", () => {
     expect(state.lastError).toBeNull();
   });
 
-  it("laisse l'état inchangé sur une trame sans effet", () => {
+  it("leaves state unchanged on no-op frame", () => {
     const state = apply(initialState, SERVER_TO_CLIENT.agentStarted, {
       runId: "r1",
       conversationId: "c1",
@@ -443,8 +428,7 @@ describe("état de connexion", () => {
     expect(state).toEqual(initialState);
   });
 
-  it("garde l'état du réseau après une remise à zéro", () => {
-    // Se déconnecter ne fait pas réapparaître le réseau.
+  it("preserves network status upon reset", () => {
     let state = reduce(initialState, { kind: "network", online: false });
     state = reduce(state, { kind: "reset" });
 
@@ -453,7 +437,7 @@ describe("état de connexion", () => {
   });
 });
 
-describe("pipeline vocal", () => {
+describe("voice pipeline", () => {
   function makeVoice() {
     const stt = new FakeSpeechToText();
     const tts = new FakeTextToSpeech();
@@ -473,34 +457,32 @@ describe("pipeline vocal", () => {
     return { voice, stt, tts, timers, states, partials };
   }
 
-  it("écoute sur geste explicite, puis rend le texte", async () => {
+  it("listens on explicit action then returns transcription", async () => {
     const v = makeVoice();
 
     await v.voice.startListening();
     expect(v.voice.isListening).toBe(true);
 
-    expect(await v.voice.stopListening()).toBe("ouvre Spotify");
+    expect(await v.voice.stopListening()).toBe("open Spotify");
     expect(v.voice.state).toBe("idle");
   });
 
-  it("n'écoute jamais de lui-même", () => {
-    // Le port n'expose pas d'écoute continue : construire le pipeline ne doit
-    // ouvrir aucun micro.
+  it("never listens automatically", () => {
     const v = makeVoice();
     expect(v.stt.started).toBe(0);
     expect(v.voice.isListening).toBe(false);
   });
 
-  it("remonte les résultats partiels sans rien envoyer", async () => {
+  it("streams partial transcriptions without sending", async () => {
     const v = makeVoice();
     await v.voice.startListening();
-    v.stt.emitPartial("ouvre spo");
+    v.stt.emitPartial("open spo");
 
-    expect(v.partials).toEqual(["ouvre spo"]);
+    expect(v.partials).toEqual(["open spo"]);
     expect(v.stt.stopped).toBe(0);
   });
 
-  it("refuse quand l'autorisation micro manque", async () => {
+  it("rejects when microphone permission is denied", async () => {
     const v = makeVoice();
     v.stt.permitted = false;
 
@@ -510,8 +492,7 @@ describe("pipeline vocal", () => {
     expect(v.stt.started).toBe(0);
   });
 
-  it("abandonne sans transcrire à l'annulation", async () => {
-    // L'utilisateur a changé d'avis : ce qu'il a dit ne doit aller nulle part.
+  it("discards transcription upon cancellation", async () => {
     const v = makeVoice();
     await v.voice.startListening();
     await v.voice.cancelListening();
@@ -521,9 +502,7 @@ describe("pipeline vocal", () => {
     expect(v.voice.state).toBe("idle");
   });
 
-  it("ferme le micro au bout du plafond de durée", async () => {
-    // Filet de sécurité : un écran verrouillé ne doit pas laisser le micro
-    // ouvert.
+  it("stops microphone upon reaching duration cap", async () => {
     const v = makeVoice();
     await v.voice.startListening();
 
@@ -531,7 +510,7 @@ describe("pipeline vocal", () => {
     expect(v.stt.cancelled).toBe(1);
   });
 
-  it("ne rend rien pour un appui accidentel", async () => {
+  it("returns undefined for accidental tap with empty transcription", async () => {
     const v = makeVoice();
     v.stt.transcript = { text: "   " };
 
@@ -539,30 +518,26 @@ describe("pipeline vocal", () => {
     expect(await v.voice.stopListening()).toBeUndefined();
   });
 
-  it("ne lit pas à voix haute sans le demander", async () => {
-    // Lire dans un lieu public ce qu'un assistant personnel répond est rarement
-    // voulu.
+  it("does not speak aloud unless requested", async () => {
     const v = makeVoice();
-    expect(await v.voice.speak("Voilà le résultat.")).toBe(false);
+    expect(await v.voice.speak("Here is the result.")).toBe(false);
     expect(v.tts.spoken).toEqual([]);
   });
 
-  it("lit à voix haute quand l'utilisateur l'a activé", async () => {
+  it("speaks aloud when enabled by user", async () => {
     const v = makeVoice();
     v.voice.setSpeakReplies(true);
 
-    expect(await v.voice.speak("Voilà le résultat.")).toBe(true);
-    expect(v.tts.spoken).toEqual(["Voilà le résultat."]);
+    expect(await v.voice.speak("Here is the result.")).toBe(true);
+    expect(v.tts.spoken).toEqual(["Here is the result."]);
   });
 
-  it("n'échoue pas quand la synthèse refuse", async () => {
-    // La réponse est déjà affichée : faire échouer l'affichage parce que le
-    // haut-parleur refuse serait absurde.
+  it("does not fail when speech synthesis is unavailable", async () => {
     const v = makeVoice();
     v.voice.setSpeakReplies(true);
     v.tts.failNext = true;
 
-    expect(await v.voice.speak("Texte")).toBe(false);
+    expect(await v.voice.speak("Text")).toBe(false);
     expect(v.voice.state).toBe("idle");
   });
 });

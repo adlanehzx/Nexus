@@ -1,46 +1,41 @@
 import { redactText, truncate } from "@nexus/shared";
 
 /**
- * Télémétrie de crash, locale par défaut.
+ * Crash telemetry, local by default.
  *
- * ## Ce que « télémétrie » veut dire ici
+ * ## What "telemetry" means here
  *
- * Écrire la trace d'un plantage **sur la machine**, pour qu'on puisse la lire
- * après coup. Rien ne part : il n'y a pas de point de collecte, pas de clé
- * d'API, pas de requête sortante. Un rapport de crash contient des chemins de
- * fichiers, des noms de conversations, parfois des fragments de données
- * d'utilisateur — l'envoyer par défaut serait exactement le genre de décision
- * qu'un assistant personnel ne doit pas prendre à la place de son propriétaire.
+ * Writing a crash trace **on local storage** so it can be reviewed later.
+ * Nothing leaves the device: no collection endpoint, no API key, no outbound request.
+ * A crash report contains file paths, conversation names, and sometimes fragments
+ * of user data — sending it by default is a decision an AI assistant must not take
+ * on behalf of its user.
  *
- * `share()` existe pour celui qui *veut* envoyer un rapport. Il rend le texte,
- * rédigé, et c'est l'appelant qui décide quoi en faire — coller dans un ticket,
- * l'oublier. Le module n'a pas de réseau.
+ * `share()` provides formatted text when the user explicitly chooses to export it.
+ * The module itself has no network capabilities.
  *
- * ## Pourquoi un module, et pas un `try/catch`
+ * ## Why a module instead of a try/catch
  *
- * Trois choses se trompent systématiquement quand on écrit cela à la main :
+ * Three failure modes routinely happen when written ad-hoc:
  *
- *  1. **Les secrets.** Une trace contient des en-têtes, des URL avec jeton, un
- *     mot de passe passé en argument. La rédaction passe par celle du reste du
- *     dépôt, pas par un filtre maison.
- *  2. **La taille.** Un plantage en boucle écrit mille rapports et remplit le
- *     disque — c'est-à-dire qu'il transforme un bug en panne.
- *  3. **La répétition.** Cent fois la même trace n'apporte rien de plus que la
- *     première, et noie la seconde cause.
+ *  1. **Secrets.** Traces contain headers, URLs with query tokens, or credentials.
+ *     Redaction uses the central shared redact function.
+ *  2. **Size.** A repeating crash could write thousands of reports and fill the disk.
+ *  3. **Repetition.** Repeating the same trace 100 times drowns out other causes.
  */
 
 export interface CrashReport {
   id: string;
   at: number;
-  /** Nom de l'erreur, par exemple `TypeError`. */
+  /** Error name, e.g. `TypeError`. */
   kind: string;
   message: string;
   stack: string;
-  /** Version de l'application, pour savoir ce qui plantait. */
+  /** Application version to identify crash context. */
   version: string;
-  /** Combien de fois cette même trace a été vue. */
+  /** How many times this identical trace was observed. */
   occurrences: number;
-  /** Ce que faisait l'application — jamais de données d'utilisateur. */
+  /** Application execution context — never user payload data. */
   context: Record<string, string>;
 }
 
@@ -67,9 +62,9 @@ export interface CrashReporterOptions {
   version: string;
   now?: () => number;
   newId?: () => string;
-  /** Nombre de rapports conservés. Au-delà, les plus anciens partent. */
+  /** Number of reports retained before oldest are evicted. */
   capacity?: number;
-  /** Longueur maximale d'une pile. Une pile de 2 Mio n'aide personne. */
+  /** Maximum stack trace character count. */
   maxStackChars?: number;
 }
 
@@ -91,11 +86,9 @@ export class CrashReporter {
   }
 
   /**
-   * Enregistre un plantage.
+   * Records a crash.
    *
-   * Une trace déjà vue n'est pas réécrite : son compteur monte. Cent fois la
-   * même pile n'apporte rien de plus que la première, et noie la seconde cause
-   * — qui est souvent la vraie.
+   * An already seen stack increments occurrences instead of duplicating entries.
    */
   async record(error: unknown, context: Record<string, string> = {}): Promise<CrashReport> {
     const kind = error instanceof Error ? error.name : typeof error;
@@ -125,13 +118,10 @@ export class CrashReporter {
       version: this.#version,
       occurrences: 1,
       context: Object.fromEntries(
-        // Le contexte est rédigé lui aussi : c'est souvent là qu'un chemin ou
-        // une URL avec jeton se glisse.
         Object.entries(context).map(([key, value]) => [key, redactText(truncate(value, 200))]),
       ),
     };
-    // Un plantage en boucle écrirait mille rapports et remplirait le disque,
-    // c'est-à-dire transformerait un bug en panne.
+
     await this.#store.save([...reports, report].slice(-this.#capacity));
     return report;
   }
@@ -141,19 +131,18 @@ export class CrashReporter {
   }
 
   /**
-   * Rend un rapport lisible, à partager si on le décide.
+   * Formats a human-readable report, ready to share if explicitly decided.
    *
-   * Le module n'a pas de réseau : il ne peut pas envoyer, donc il ne peut pas
-   * envoyer par accident.
+   * The module has no network capabilities.
    */
   async share(id: string): Promise<string | undefined> {
     const report = (await this.#store.all()).find((candidate) => candidate.id === id);
     if (report === undefined) return undefined;
     return [
       `NEXUS ${report.version}`,
-      `${report.kind} : ${report.message}`,
-      `vu ${String(report.occurrences)} fois, dernière le ${new Date(report.at).toISOString()}`,
-      ...Object.entries(report.context).map(([key, value]) => `${key} : ${value}`),
+      `${report.kind}: ${report.message}`,
+      `seen ${String(report.occurrences)} time(s), last at ${new Date(report.at).toISOString()}`,
+      ...Object.entries(report.context).map(([key, value]) => `${key}: ${value}`),
       "",
       report.stack,
     ].join("\n");

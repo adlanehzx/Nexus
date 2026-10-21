@@ -13,13 +13,10 @@ import type {
 } from "../src/ports.js";
 
 /**
- * Doubles des cinq ports.
- *
- * Aucun réseau, aucun trousseau, aucun micro. Tout le reste — session,
- * reconnexion, réducteur, pipeline vocal — est le vrai code.
+ * Test doubles for the five ports.
  */
 
-/** Trousseau en mémoire. Retient aussi ce qui a été **effacé**. */
+/** In-memory secure storage. Also tracks removed keys. */
 export class FakeSecureStorage implements SecureStorage {
   readonly values = new Map<string, string>();
   readonly removed: string[] = [];
@@ -48,16 +45,12 @@ export interface RecordedRequest {
 }
 
 /**
- * Client HTTP scripté.
- *
- * Les réponses sont indexées par `MÉTHODE chemin`. Une file par clé permet de
- * décrire « le premier appel échoue en 401, le second réussit » — exactement ce
- * qu'il faut pour éprouver le rafraîchissement transparent.
+ * Scripted HTTP client.
  */
 export class FakeHttpClient implements HttpClient {
   readonly requests: RecordedRequest[] = [];
   readonly responses = new Map<string, HttpResponse[]>();
-  /** Rend l'appel suivant impossible — panne réseau. */
+  /** Makes next call fail with network error. */
   failNext = false;
 
   on(method: string, path: string, ...responses: HttpResponse[]): this {
@@ -77,7 +70,7 @@ export class FakeHttpClient implements HttpClient {
 
     if (this.failNext) {
       this.failNext = false;
-      return Promise.reject(new Error("réseau indisponible"));
+      return Promise.reject(new Error("network unavailable"));
     }
 
     const queue = this.responses.get(`${input.method} ${input.path}`);
@@ -85,8 +78,6 @@ export class FakeHttpClient implements HttpClient {
       return Promise.resolve({ status: 404, body: { error: { code: "NOT_FOUND" } } });
     }
 
-    // La dernière réponse reste en place : décrire un état stable ne demande
-    // pas d'en empiler autant que d'appels.
     return Promise.resolve(queue.length === 1 ? queue[0]! : queue.shift()!);
   }
 
@@ -95,14 +86,14 @@ export class FakeHttpClient implements HttpClient {
   }
 }
 
-/** Socket en mémoire. Le test joue le rôle du serveur. */
+/** In-memory socket transport where tests play the server role. */
 export class FakeSocket implements SocketTransport {
   #state: SocketState = "idle";
   #onMessage: ((data: string) => void) | undefined;
   #onClose: ((reason: string, code?: number) => void) | undefined;
 
   readonly sent: { type: string; requestId?: string; payload: Record<string, unknown> }[] = [];
-  /** Fait échouer le prochain `connect` — serveur injoignable. */
+  /** Fails next `connect` call to simulate unreachable server. */
   failNextConnect = false;
 
   get state(): SocketState {
@@ -114,7 +105,7 @@ export class FakeSocket implements SocketTransport {
     if (this.failNextConnect) {
       this.failNextConnect = false;
       this.#state = "closed";
-      return Promise.reject(new Error("connexion refusée"));
+      return Promise.reject(new Error("connection refused"));
     }
     this.#state = "open";
     return Promise.resolve();
@@ -143,7 +134,7 @@ export class FakeSocket implements SocketTransport {
     this.#onClose = handler;
   }
 
-  /** Le « serveur » pousse un message descendant. */
+  /** Pushes server-to-client message. */
   deliver(type: ServerToClientType, payload: unknown, requestId?: string): void {
     this.#onMessage?.(
       JSON.stringify(
@@ -156,22 +147,22 @@ export class FakeSocket implements SocketTransport {
     );
   }
 
-  /** Trame brute — pour éprouver ce qui est illisible. */
+  /** Raw frame delivery for malformed frame tests. */
   deliverRaw(data: string): void {
     this.#onMessage?.(data);
   }
 
-  /** Coupure subie, à l'initiative du réseau. */
-  drop(reason = "réseau perdu", code = 1006): void {
+  /** Simulates network drop. */
+  drop(reason = "network lost", code = 1006): void {
     this.close(reason, code);
   }
 
-  /** Le cœur refuse la session — jeton expiré, appareil révoqué. */
-  reject(reason = "authentification refusée"): void {
+  /** Simulates server session rejection (expired token, revoked device). */
+  reject(reason = "authentication refused"): void {
     this.close(reason, 4401);
   }
 
-  /** Rouvre la socket après une coupure, pour éprouver la reprise. */
+  /** Reopens socket after drop to test recovery. */
   reopen(): void {
     this.#state = "idle";
   }
@@ -181,7 +172,7 @@ export class FakeSocket implements SocketTransport {
   }
 }
 
-/** Réseau contrôlé. */
+/** Controlled network monitor. */
 export class FakeNetwork implements NetworkMonitor {
   #online = true;
   #handler: ((online: boolean) => void) | undefined;
@@ -200,7 +191,7 @@ export class FakeNetwork implements NetworkMonitor {
   }
 }
 
-/** Minuteries contrôlées : aucun test n'attend réellement. */
+/** Controlled timers for deterministic testing without sleeping. */
 export class TestTimers implements TimerPort {
   #next = 1;
   readonly pending = new Map<number, { callback: () => void; delayMs: number }>();
@@ -228,13 +219,13 @@ export class TestTimers implements TimerPort {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Voix
+// Voice
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class FakeSpeechToText implements SpeechToTextProvider {
   available = true;
   permitted = true;
-  transcript: TranscriptionResult = { text: "ouvre Spotify", confidence: 0.95 };
+  transcript: TranscriptionResult = { text: "open Spotify", confidence: 0.95 };
 
   started = 0;
   stopped = 0;
@@ -265,7 +256,7 @@ export class FakeSpeechToText implements SpeechToTextProvider {
     return Promise.resolve();
   }
 
-  /** Simule un résultat partiel pendant que l'utilisateur parle. */
+  /** Simulates partial transcription streaming. */
   emitPartial(text: string): void {
     this.#onPartial?.(text);
   }
@@ -284,7 +275,7 @@ export class FakeTextToSpeech implements TextToSpeechProvider {
   speak(text: string): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
-      return Promise.reject(new Error("synthèse indisponible"));
+      return Promise.reject(new Error("speech synthesis unavailable"));
     }
     this.spoken.push(text);
     return Promise.resolve();
@@ -301,7 +292,7 @@ export class FakeTextToSpeech implements TextToSpeechProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utilitaires
+// Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOKENS = {

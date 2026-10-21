@@ -2,37 +2,35 @@ import { AppError, type ErrorSeverity } from "@nexus/shared";
 import type { HttpClient, SecureStorage } from "./ports.js";
 
 /**
- * Session de l'utilisateur sur l'iPhone.
+ * User session on the device.
  *
- * Trois responsabilités, et la troisième est la moins évidente :
+ * Three responsibilities, and the third is the least obvious:
  *
- *  1. **conserver les jetons dans le trousseau**, jamais en mémoire seule ni
- *     dans un stockage en clair ;
- *  2. **rafraîchir avant expiration**, de façon transparente ;
- *  3. **ne rafraîchir qu'une fois**, même si dix requêtes échouent en même
- *     temps. Sans cette garde, l'application enverrait dix rafraîchissements
- *     concurrents, dont neuf présenteraient un jeton déjà consommé — et le
- *     serveur, qui traite un jeton rejoué comme un vol, fermerait toutes les
- *     sessions. Le bogue le plus vicieux de ce genre de client.
+ *  1. **persist tokens in secure storage**, never in memory alone or
+ *     in plaintext storage;
+ *  2. **refresh before expiration**, transparently;
+ *  3. **refresh only once**, even if ten requests fail at the same
+ *     time. Without this guard, the application would send ten concurrent
+ *     refreshes, nine of which would present an already-consumed token — and the
+ *     server, treating a replayed token as theft, would invalidate all
+ *     sessions. The most vicious bug for this kind of client.
  *
- * **Aucun secret du serveur n'est embarqué dans l'application.** Elle ne connaît
- * que l'adresse du cœur et les jetons que l'utilisateur a obtenus en se
- * connectant. Une application mobile est décompilable ; ce qui y est écrit est
- * public.
+ * **No server secrets are embedded in the client application.** It only knows
+ * the core server address and the tokens obtained upon logging in. A mobile
+ * or client application can be decompiled; what is stored there is public.
  */
 
 const ACCESS_KEY = "nexus.access";
 const REFRESH_KEY = "nexus.refresh";
 const DEVICE_KEY = "nexus.device";
 /**
- * Utilisateur pour qui l'appareil courant a été rattaché.
+ * User for whom the current device was bound.
  *
- * Conservé pour une seule raison : `nexus.device` désigne une ligne d'appareil
- * qui **appartient à un compte**. Si un second compte se connecte sur le même
- * téléphone, réutiliser cet identifiant reviendrait à parler au nom de
- * l'appareil de quelqu'un d'autre. Le cœur le refuserait — il vérifie la
- * propriété — mais le client resterait bloqué sur une poignée de main refusée
- * sans jamais comprendre pourquoi.
+ * Kept for one reason: `nexus.device` designates a device record that
+ * **belongs to an account**. If a second account logs in on the same
+ * phone, reusing this ID would mean acting on behalf of someone else's
+ * device. The core server would reject it — it verifies ownership — but the
+ * client would remain stuck in a rejected handshake without understanding why.
  */
 const USER_KEY = "nexus.user";
 
@@ -43,8 +41,8 @@ export class NotAuthenticatedError extends AppError {
 
   constructor(reason: string) {
     super({
-      message: `Session absente ou invalide : ${reason}`,
-      userMessage: "Connectez-vous pour continuer.",
+      message: `Missing or invalid session: ${reason}`,
+      userMessage: "Sign in to continue.",
       context: { reason },
     });
   }
@@ -60,7 +58,7 @@ export class LoginFailedError extends AppError {
   }
 }
 
-/** Ce qu'un appareil du compte expose et qui suffit à le reconnaître. */
+/** Summary exposed by an account device sufficient to identify it. */
 interface DeviceSummary {
   id: string;
   name: string;
@@ -70,30 +68,30 @@ interface DeviceSummary {
 }
 
 /**
- * Issue de `ensureDevice`.
+ * Result of `ensureDevice`.
  *
- * `origin` dit **ce qui s'est passé**, pas seulement ce qu'on a obtenu : une
- * interface qui vient d'enregistrer un appareil doit expliquer l'attente
- * d'approbation, alors qu'un rattachement silencieux ne doit rien afficher.
+ * `origin` indicates **what happened**, not just what was obtained: an
+ * interface that just registered a device must explain waiting for
+ * approval, whereas a silent attachment should show nothing.
  */
 export interface EnsuredDevice {
   deviceId: string;
   /**
-   * `session` : déjà rattaché, rien n'a été demandé au cœur.
-   * `existing` : une ligne du compte a été reprise.
-   * `registered` : un appareil vient d'être créé, et il est `PENDING`.
+   * `session`: already attached, nothing requested from the core server.
+   * `existing`: an existing account record was reused.
+   * `registered`: a new device was just created, and is in `PENDING` state.
    */
   origin: "session" | "existing" | "registered";
-  /** Connu seulement quand le cœur vient de le dire. */
+  /** Known only when the core server just reported it. */
   trust?: string;
 }
 
 export interface StoredSession {
   accessToken: string;
   refreshToken: string;
-  /** Appareil sous lequel ce téléphone est enregistré auprès du cœur. */
+  /** Device under which this client is registered with the core server. */
   deviceId: string | null;
-  /** Compte auquel `deviceId` se rapporte. `null` tant qu'il est inconnu. */
+  /** Account to which `deviceId` belongs. `null` while unknown. */
   userId: string | null;
 }
 
@@ -101,7 +99,7 @@ export interface SessionManagerOptions {
   http: HttpClient;
   storage: SecureStorage;
   now?: () => Date;
-  /** Appelée quand la session devient invalide et qu'il faut se reconnecter. */
+  /** Called when the session becomes invalid and re-authentication is required. */
   onSignedOut?: (reason: string) => void;
 }
 
@@ -112,10 +110,10 @@ export class SessionManager {
 
   #session: StoredSession | undefined;
   /**
-   * Rafraîchissement en cours.
+   * Refresh currently in flight.
    *
-   * C'est cette promesse partagée qui empêche dix requêtes simultanées de
-   * déclencher dix rotations concurrentes.
+   * This shared promise prevents ten concurrent requests from triggering ten
+   * simultaneous rotations.
    */
   #refreshing: Promise<string> | undefined;
 
@@ -137,7 +135,7 @@ export class SessionManager {
     return this.#session?.userId ?? null;
   }
 
-  /** Recharge la session depuis le trousseau au démarrage de l'application. */
+  /** Restores the session from secure storage on application startup. */
   async restore(): Promise<boolean> {
     const [accessToken, refreshToken, deviceId, userId] = await Promise.all([
       this.#storage.get(ACCESS_KEY),
@@ -165,7 +163,7 @@ export class SessionManager {
     });
 
     if (response.status !== 200) {
-      throw new LoginFailedError(messageOf(response.body, "Adresse ou mot de passe incorrect."));
+      throw new LoginFailedError(messageOf(response.body, "Incorrect email or password."));
     }
 
     const body = response.body as {
@@ -177,14 +175,14 @@ export class SessionManager {
 
     const userId = body.data.user?.id ?? null;
 
-    // Un identifiant d'appareil désigne une ligne qui **appartient à un
-    // utilisateur**. Le conserver en connectant quelqu'un d'autre ferait
-    // présenter au cœur un appareil qui n'est pas le sien : la poignée de main
-    // serait refusée, indéfiniment, sans que rien n'explique pourquoi.
+    // A device ID designates a record that **belongs to a user**.
+    // Retaining it when logging in as another user would cause the client
+    // to present a device that is not theirs: the handshake would be
+    // rejected indefinitely without clear explanation.
     //
-    // La comparaison n'a lieu que si les deux comptes sont connus. Un trousseau
-    // écrit par une version antérieure ne porte pas d'utilisateur ; on ne va pas
-    // détruire un rattachement valide sur une simple absence d'information.
+    // The comparison only occurs if both accounts are known. Secure storage
+    // written by an earlier version does not carry a user ID; we do not want
+    // to destroy a valid attachment simply due to missing information.
     const previousUserId = this.#session?.userId ?? null;
     const accountChanged = userId !== null && previousUserId !== null && userId !== previousUserId;
 
@@ -199,11 +197,11 @@ export class SessionManager {
   }
 
   /**
-   * Ferme la session.
+   * Ends the session.
    *
-   * Le trousseau est vidé **même si l'appel au serveur échoue**. Un utilisateur
-   * qui appuie sur « se déconnecter » dans le métro doit voir sa session
-   * disparaître de l'appareil, quoi qu'en pense le réseau.
+   * Secure storage is cleared **even if the server call fails**. A user
+   * tapping "Sign out" offline or in poor connectivity must see their session
+   * cleared from the device regardless of network status.
    */
   async logout(): Promise<void> {
     const token = this.#session?.accessToken;
@@ -218,29 +216,28 @@ export class SessionManager {
         .catch(() => undefined);
     }
 
-    await this.#clear("déconnexion demandée");
+    await this.#clear("sign-out requested");
   }
 
-  /** Jeton d'accès courant. */
+  /** Current access token. */
   accessToken(): string {
     const token = this.#session?.accessToken;
-    if (token === undefined) throw new NotAuthenticatedError("aucun jeton en mémoire");
+    if (token === undefined) throw new NotAuthenticatedError("no token in memory");
     return token;
   }
 
   /**
-   * Fait tourner le jeton, une seule fois à la fois.
+   * Rotates the token, one at a time.
    *
-   * Les appelants concurrents attendent la même promesse. C'est ce qui évite de
-   * présenter au serveur un jeton déjà consommé, qu'il interpréterait — à juste
-   * titre — comme un vol.
+   * Concurrent callers await the same promise. This prevents presenting an
+   * already-consumed token to the server, which would rightly interpret it as theft.
    */
   refresh(): Promise<string> {
     if (this.#refreshing !== undefined) return this.#refreshing;
 
     const refreshToken = this.#session?.refreshToken;
     if (refreshToken === undefined) {
-      return Promise.reject(new NotAuthenticatedError("aucun jeton de rafraîchissement"));
+      return Promise.reject(new NotAuthenticatedError("no refresh token"));
     }
 
     this.#refreshing = this.#doRefresh(refreshToken).finally(() => {
@@ -258,10 +255,10 @@ export class SessionManager {
     });
 
     if (response.status !== 200) {
-      // Le serveur a refusé : jeton expiré, révoqué, ou rejoué. Dans tous les
-      // cas la session est morte, et insister ne la ressuscitera pas.
-      await this.#clear("rafraîchissement refusé");
-      throw new NotAuthenticatedError("rafraîchissement refusé");
+      // The server rejected: token expired, revoked, or replayed. In all
+      // cases the session is dead, and retrying will not resurrect it.
+      await this.#clear("refresh rejected");
+      throw new NotAuthenticatedError("refresh rejected");
     }
 
     const body = response.body as { data: { accessToken: string; refreshToken: string } };
@@ -276,21 +273,20 @@ export class SessionManager {
   }
 
   /**
-   * Enregistre cet appareil comme client NEXUS.
+   * Registers this device as a NEXUS client.
    *
-   * La clé privée reste sur l'appareil ; seule la clé publique part. L'appareil
-   * arrive **non approuvé** : il faudra l'approuver, ce qui est le
-   * comportement voulu — un appareil qui s'auto-approuve n'apporte aucune
-   * garantie.
+   * The private key remains on the device; only the public key is sent.
+   * The device arrives as **unapproved**: it must be approved, which is the
+   * intended behavior — an auto-approving device provides no guarantees.
    *
-   * Le rôle est demandé, jamais imposé. Un poste qui exécute aussi des tâches
-   * s'annonce `BOTH`, mais c'est le cœur qui tranche : rien de ce qui est écrit
-   * ici n'élargit ce que l'appareil aura le droit de faire. La preuve en est que
-   * `grantedPermissions` part **vide** — l'appareil ne s'accorde rien.
+   * The role is requested, never imposed. A machine that also runs tasks
+   * announces `BOTH`, but the core server decides: nothing written here expands
+   * what the device is permitted to do. As evidence, `grantedPermissions` is sent
+   * **empty** — the device grants itself nothing.
    */
   async registerDevice(input: {
     name: string;
-    /** Optionnelle pour les CLIENT : seuls les WORKER signent des commandes. */
+    /** Optional for CLIENT: only WORKER devices sign commands. */
     publicKeyPem?: string;
     type?: "IPHONE" | "ANDROID" | "WINDOWS_PC" | "MAC" | "LINUX";
     platform?: "IOS" | "ANDROID" | "WINDOWS" | "MACOS" | "LINUX";
@@ -310,7 +306,7 @@ export class SessionManager {
     });
 
     if (response.status !== 201) {
-      throw new AppErrorFromResponse(response.body, "Enregistrement de l'appareil refusé.");
+      throw new AppErrorFromResponse(response.body, "Device registration rejected.");
     }
 
     const deviceId = (response.body as { data: { id: string } }).data.id;
@@ -320,53 +316,49 @@ export class SessionManager {
   }
 
   /**
-   * Rattache cette session à un appareil **déjà enregistré**.
+   * Binds this session to an **already registered** device.
    *
-   * C'est le chemin du portable Windows. Sa ligne d'appareil existe déjà : elle
-   * a été créée par le démon exécutant, qui détient la clé privée de la machine
-   * et l'a appairée en rôle `BOTH`. L'interface ne recrée donc rien — elle
-   * reprend le même identifiant, et le cœur reconnaît « ce poste » qu'il parle
-   * sur le canal client ou sur le canal worker.
+   * This is the desktop/worker path. Its device record already exists: it
+   * was created by the worker daemon, which holds the machine's private key
+   * and paired it with the `BOTH` role. The client interface therefore creates
+   * nothing — it reuses the same identifier, and the core server recognizes
+   * this host whether it speaks over the client channel or worker channel.
    *
-   * Ce rattachement **n'authentifie rien**. Il dit d'où l'on parle ; le jeton
-   * dit qui parle, et le cœur vérifie que l'appareil appartient bien au
-   * porteur du jeton. Un identifiant d'appareil seul n'a jamais été une preuve.
+   * This binding **does not authenticate anything**. It specifies where requests
+   * originate; the token specifies who is speaking, and the core server verifies
+   * that the device belongs to the token bearer. A device ID alone was never proof.
    */
   async bindDevice(deviceId: string): Promise<void> {
     await this.#persist({ ...this.#requireSession(), deviceId });
   }
 
   /**
-   * Garantit que la session parle au nom d'un appareil, sans jamais en créer
-   * deux.
+   * Ensures the session speaks on behalf of a device, without creating duplicates.
    *
-   * C'est le geste qui manquait après la connexion : le canal `/ws/client`
-   * annonce **d'où** l'on parle, et une session sans appareil n'a rien à
-   * annoncer. Le client restait alors indéfiniment « en reconnexion » alors que
-   * ni le réseau ni le jeton n'étaient en cause.
+   * This is the step needed after sign-in: the `/ws/client` channel announces
+   * **where** requests come from, and a session without a device has nothing to
+   * announce. The client would otherwise remain stuck in "reconnecting" state
+   * even though neither the network nor the token was at fault.
    *
-   * Trois chemins, dans cet ordre, et l'ordre est le fond du sujet :
+   * Three paths, in this order:
    *
-   *  1. **un appareil est déjà rattaché** — on ne demande rien, on ne vérifie
-   *     rien auprès du cœur ; c'est le cas de tous les lancements sauf le
-   *     premier, et il doit rester gratuit ;
-   *  2. **le compte possède déjà cet appareil** — réinstallation, trousseau
-   *     effacé, changement de téléphone reprenant le même nom : on se rattache à
-   *     la ligne existante. Sans ce chemin, chaque réinstallation ajouterait un
-   *     « iPhone d'Alex » de plus dans la flotte, et l'utilisateur devrait les
-   *     approuver un par un ;
-   *  3. **aucun appareil ne correspond** — alors seulement on en enregistre un.
+   *  1. **a device is already attached** — nothing is requested, nothing is
+   *     checked with the core server; this applies to all launches except the
+   *     first, and must remain zero-cost;
+   *  2. **the account already owns this device** — reinstallation, cleared
+   *     secure storage, or device replacement with the same name: rebind to the
+   *     existing record. Without this path, each reinstallation would add
+   *     another "Alex's iPhone" to the fleet, requiring manual approval each time;
+   *  3. **no device matches** — only then register a new one.
    *
-   * L'appariement se fait sur le **nom**, à rôle et type égaux. C'est le seul
-   * repère stable dont dispose un client qui vient de perdre son trousseau : il
-   * n'a plus d'identifiant, et deux téléphones distincts portent des noms
-   * distincts. Un appareil révoqué n'est jamais repris — le reprendre annulerait
-   * la révocation dans les faits.
+   * Matching is done on **name**, with matching role and type. This is the only
+   * stable reference available to a client that just lost its secure storage:
+   * it has no identifier, and distinct devices have distinct names. A revoked
+   * device is never reused — reusing it would effectively cancel the revocation.
    *
-   * Ce que cette méthode **n'accorde pas** : rien. L'appareil créé arrive
-   * `PENDING`, sans permission, et le canal temps réel restera fermé tant que
-   * l'utilisateur ne l'aura pas approuvé depuis un client déjà approuvé. C'est
-   * exactement le modèle d'autorisation existant, et il n'est pas contourné ici.
+   * What this method **does not grant**: nothing. The created device arrives in
+   * `PENDING` state without permissions, and the real-time channel remains closed
+   * until approved by an already-approved client. This preserves the authorization model.
    */
   async ensureDevice(input: {
     name: string;
@@ -395,17 +387,16 @@ export class SessionManager {
       ...(input.publicKeyPem === undefined ? {} : { publicKeyPem: input.publicKeyPem }),
     });
 
-    // Un appareil neuf n'est jamais approuvé : le dire ici évite que l'appelant
-    // ne le suppose, et lui permet d'afficher l'attente plutôt qu'une panne.
+    // A fresh device is never approved: returning it here prevents the caller
+    // from assuming approval and allows displaying the pending state.
     return { deviceId, origin: "registered", trust: "PENDING" };
   }
 
   /**
-   * Cherche parmi les appareils du compte celui qui est manifestement celui-ci.
+   * Looks up the account device that corresponds to this one.
    *
-   * Une liste illisible n'est pas une erreur fatale : on rendra `undefined`, et
-   * l'appelant enregistrera. Mieux vaut un appareil en trop qu'une connexion
-   * impossible.
+   * An unreadable list is not a fatal error: returns `undefined` so the caller
+   * can register. An extra device is preferable to an impossible connection.
    */
   async #findOwnDevice(criteria: {
     name: string;
@@ -429,8 +420,8 @@ export class SessionManager {
         typeof candidate.id === "string" &&
         candidate.name === criteria.name &&
         candidate.type === criteria.type &&
-        // Un poste annoncé `BOTH` sert aussi de client : le reprendre évite de
-        // faire apparaître deux fois la même machine dans la flotte.
+        // A machine announced as `BOTH` also serves as a client: reusing it avoids
+        // duplicating the machine in the fleet list.
         (candidate.role === criteria.role || candidate.role === "BOTH") &&
         candidate.trust !== "REVOKED"
       );
@@ -440,11 +431,11 @@ export class SessionManager {
   }
 
   /**
-   * Requête authentifiée, avec rafraîchissement transparent.
+   * Authenticated request with transparent refresh.
    *
-   * Un 401 déclenche **une** rotation puis **un** réessai. Pas de boucle : si le
-   * jeton neuf est refusé lui aussi, le problème n'est pas le jeton, et
-   * réessayer indéfiniment transformerait une erreur en tempête de requêtes.
+   * A 401 triggers **one** rotation and **one** retry. No loop: if the new
+   * token is also rejected, the issue is not token expiration, and retrying
+   * indefinitely would turn an error into a request storm.
    */
   async #authorized(input: Parameters<HttpClient["request"]>[0]) {
     const withToken = (token: string) => ({
@@ -459,13 +450,13 @@ export class SessionManager {
     return this.#http.request(withToken(refreshed));
   }
 
-  /** Exposé pour l'`ApiClient`, qui n'a pas à reproduire cette logique. */
+  /** Exposed for `ApiClient`, avoiding duplicate logic. */
   authorizedRequest(input: Parameters<HttpClient["request"]>[0]) {
     return this.#authorized(input);
   }
 
   #requireSession(): StoredSession {
-    if (this.#session === undefined) throw new NotAuthenticatedError("session absente");
+    if (this.#session === undefined) throw new NotAuthenticatedError("missing session");
     return this.#session;
   }
 
@@ -483,14 +474,12 @@ export class SessionManager {
   }
 
   /**
-   * Efface tout ce qui identifiait la session, **rattachement d'appareil
-   * compris**.
+   * Clears everything identifying the session, **including device binding**.
    *
-   * Laisser `nexus.device` derrière soi était un piège concret : le compte
-   * suivant reprenait l'appareil du précédent, le cœur refusait la poignée de
-   * main — à raison, il vérifie la propriété — et le canal restait fermé sans
-   * message compréhensible. Se déconnecter doit rendre l'appareil au néant d'où
-   * il vient : le prochain arrivant s'enregistrera, ou retrouvera le sien.
+   * Leaving `nexus.device` behind was a trap: the next account would reuse the
+   * previous device, the core server would reject the handshake (verifying ownership),
+   * and the channel would remain closed without an actionable error message.
+   * Signing out clears device binding so the next login registers or rebinds its own.
    */
   async #clear(reason: string): Promise<void> {
     this.#session = undefined;
@@ -506,7 +495,7 @@ export class SessionManager {
   }
 }
 
-/** Erreur reconstruite depuis une réponse du serveur. */
+/** Error reconstructed from a server response. */
 class AppErrorFromResponse extends AppError {
   readonly code: string;
   readonly httpStatus = 400;

@@ -2,24 +2,19 @@ import { AppError, type ErrorSeverity } from "@nexus/shared";
 import type { SpeechToTextProvider, TextToSpeechProvider } from "./ports.js";
 
 /**
- * Le pipeline vocal.
+ * Voice pipeline.
  *
- *     micro (appui) → reconnaissance → texte → NEXUS → réponse → (voix)
+ *     microphone (press) → recognition → text → NEXUS → response → (speech)
  *
- * **Il n'existe pas d'écoute permanente**, et ce n'est pas un oubli à combler
- * plus tard. Le port de reconnaissance n'expose que `start`, `stop` et `cancel` :
- * une API qui ne propose pas l'écoute continue ne peut pas être détournée par
- * inadvertance, ni par une future modification distraite.
+ * **There is no always-on listening.** Speech-to-text ports only expose `start`, `stop`, and `cancel`.
+ * An API without continuous listening capabilities cannot be inadvertently misused.
  *
- * Trois gardes découlent du même principe — le micro d'un téléphone personnel
- * n'écoute que quand son propriétaire le décide :
+ * Three core rules:
+ *  1. Listening starts only on explicit user action, never automatically;
+ *  2. Listening stops on release or duration timeout;
+ *  3. Cancellation discards the transcription without sending.
  *
- *  1. l'écoute démarre sur un **geste explicite**, jamais sur un événement ;
- *  2. elle s'arrête au relâchement, ou au plafond de durée ;
- *  3. l'annulation jette la transcription **sans l'envoyer**.
- *
- * La lecture à voix haute est **facultative** et désactivée par défaut : lire
- * dans un lieu public ce qu'un assistant personnel répond est rarement voulu.
+ * Text-to-speech output is optional and disabled by default.
  */
 
 export class MicrophoneUnavailableError extends AppError {
@@ -29,7 +24,7 @@ export class MicrophoneUnavailableError extends AppError {
 
   constructor(reason: string) {
     super({
-      message: `Micro indisponible : ${reason}`,
+      message: `Microphone unavailable: ${reason}`,
       userMessage:
         "NEXUS has no access to the microphone. Allow it in Settings → NEXUS → Microphone.",
       context: { reason },
@@ -42,13 +37,7 @@ export type VoiceState = "idle" | "listening" | "transcribing" | "speaking";
 export interface VoicePipelineOptions {
   speechToText: SpeechToTextProvider;
   textToSpeech: TextToSpeechProvider;
-  /**
-   * Durée maximale d'une écoute.
-   *
-   * Un garde-fou, pas une fonctionnalité : si l'interface oublie d'appeler
-   * `stop` — écran verrouillé, application suspendue — le micro ne doit pas
-   * rester ouvert. Trente secondes couvrent largement une phrase.
-   */
+  /** Maximum listening duration in milliseconds before automatic cutoff. */
   maxListeningMs?: number;
   locale?: string;
   setTimer?: (callback: () => void, delayMs: number) => unknown;
@@ -70,7 +59,7 @@ export class VoicePipeline {
   #state: VoiceState = "idle";
   #guardHandle: unknown;
 
-  /** La lecture à voix haute est un choix de l'utilisateur, pas un défaut. */
+  /** Speaking replies aloud is a user choice, disabled by default. */
   #speakReplies = false;
 
   constructor(options: VoicePipelineOptions) {
@@ -104,32 +93,24 @@ export class VoicePipeline {
     this.#speakReplies = enabled;
   }
 
-  /**
-   * La plateforme sait-elle transcrire ?
-   *
-   * Interrogé au démarrage pour griser le micro **avec une explication** plutôt
-   * que de le proposer et d'échouer au moment où l'utilisateur parle. Un bouton
-   * qui ne fait rien est pire qu'un bouton absent : il fait douter du reste.
-   */
+  /** Checks whether the platform supports speech transcription. */
   isSpeechAvailable(): Promise<boolean> {
     return this.#stt.isAvailable();
   }
 
   /**
-   * Démarre l'écoute, sur geste explicite de l'utilisateur.
+   * Starts listening upon explicit user action.
    *
-   * @throws {MicrophoneUnavailableError} si le matériel manque ou si
-   *   l'autorisation est refusée. Les deux cas sont distingués dans le contexte :
-   *   « pas de micro » n'appelle pas la même action que « autorisation refusée ».
+   * @throws {MicrophoneUnavailableError} if hardware is missing or permission is denied.
    */
   async startListening(): Promise<void> {
     if (this.#state === "listening") return;
 
     if (!(await this.#stt.isAvailable())) {
-      throw new MicrophoneUnavailableError("reconnaissance vocale indisponible");
+      throw new MicrophoneUnavailableError("speech recognition unavailable");
     }
     if (!(await this.#stt.requestPermission())) {
-      throw new MicrophoneUnavailableError("autorisation refusée");
+      throw new MicrophoneUnavailableError("permission denied");
     }
 
     await this.#stt.start({
@@ -139,19 +120,16 @@ export class VoicePipeline {
 
     this.#setState("listening");
 
-    // Filet de sécurité : le micro ne reste jamais ouvert parce qu'un écran
-    // s'est verrouillé au mauvais moment.
+    // Safety timeout: prevents microphone staying open if screen locks or app suspends.
     this.#guardHandle = this.#setTimer(() => {
       void this.cancelListening();
     }, this.#maxListeningMs);
   }
 
   /**
-   * Arrête l'écoute et rend le texte reconnu.
+   * Stops listening and returns recognized text.
    *
-   * Retourne `undefined` quand rien d'exploitable n'a été dit : c'est le cas
-   * ordinaire d'un appui accidentel, et envoyer une chaîne vide à l'assistant
-   * n'aurait aucun sens.
+   * Returns `undefined` if nothing actionable was transcribed.
    */
   async stopListening(): Promise<string | undefined> {
     if (this.#state !== "listening") return undefined;
@@ -169,12 +147,7 @@ export class VoicePipeline {
     }
   }
 
-  /**
-   * Abandonne l'écoute.
-   *
-   * Rien n'est transcrit, rien n'est envoyé. L'utilisateur a changé d'avis, et
-   * ce qu'il a dit ne doit aller nulle part.
-   */
+  /** Cancels listening and discards partial transcription. */
   async cancelListening(): Promise<void> {
     if (this.#state !== "listening") return;
 
@@ -183,12 +156,7 @@ export class VoicePipeline {
     this.#setState("idle");
   }
 
-  /**
-   * Lit une réponse à voix haute, si l'utilisateur l'a demandé.
-   *
-   * Ne lève pas quand la synthèse échoue : la réponse est déjà affichée, et
-   * faire échouer l'affichage parce que le haut-parleur refuse serait absurde.
-   */
+  /** Speaks response text aloud if enabled by user preferences. */
   async speak(text: string): Promise<boolean> {
     if (!this.#speakReplies) return false;
     if (!(await this.#tts.isAvailable())) return false;
@@ -206,7 +174,7 @@ export class VoicePipeline {
     }
   }
 
-  /** Interrompt la lecture — l'utilisateur veut reprendre la parole. */
+  /** Interrupts speech playback when user speaks. */
   async stopSpeaking(): Promise<void> {
     await this.#tts.stop().catch(() => undefined);
     if (this.#state === "speaking") this.#setState("idle");

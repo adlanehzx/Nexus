@@ -1,16 +1,11 @@
 import type { HttpClient, HttpResponse } from "./ports.js";
 
 /**
- * Client HTTP au-dessus de `fetch`.
+ * HTTP client built on top of `fetch`.
  *
- * Partagé par tous les clients — iPhone, poste Windows, tableau de bord. Trois
- * implémentations identiques dans trois applications finissent toujours par
- * diverger sur un détail : celle qui n'attrape pas l'erreur d'analyse JSON, ou
- * celle qui oublie le `content-type`.
- *
- * `fetch` est global dans React Native, dans un navigateur et dans Node depuis
- * la 18 : ce fichier n'a donc besoin d'aucun adaptateur de plateforme, et reste
- * à sa place dans un paquet sans dépendance.
+ * Shared across clients (desktop, mobile, dashboard).
+ * Unifying the HTTP client prevents subtle divergences such as unhandled JSON parse errors
+ * or omitted `content-type` headers.
  */
 export class FetchHttpClient implements HttpClient {
   readonly #baseUrl: string;
@@ -22,14 +17,8 @@ export class FetchHttpClient implements HttpClient {
   async request(input: Parameters<HttpClient["request"]>[0]): Promise<HttpResponse> {
     const url = `${this.#baseUrl}${input.path}`;
 
-    // `content-type: application/json` **uniquement s'il y a du JSON**.
-    //
-    // L'annoncer sur une requête sans corps n'est pas une coquetterie : le cœur
-    // le prend au mot, cherche un corps à analyser, n'en trouve pas et répond
-    // 400. Toutes les actions qui ne portent rien en tombaient — approuver un
-    // appareil, le révoquer, marquer une notification lue. C'est-à-dire, entre
-    // autres, **l'approbation dont dépend le premier iPhone** : il s'enregistre,
-    // arrive en attente, et le geste qui devait le débloquer échouait.
+    // `content-type: application/json` ONLY when a body is present.
+    // Setting `content-type` on empty requests causes servers expecting body to return 400.
     const headers = {
       ...(input.body === undefined ? {} : { "content-type": "application/json" }),
       ...input.headers,
@@ -44,26 +33,21 @@ export class FetchHttpClient implements HttpClient {
         ...(input.signal === undefined ? {} : { signal: input.signal }),
       });
     } catch (cause) {
-      // Une annulation demandée n'est pas une panne : on la laisse remonter
-      // telle quelle, sinon un écran quitté afficherait une erreur réseau.
+      // AbortError is intentional cancellation, not a network failure.
       if (cause instanceof Error && cause.name === "AbortError") throw cause;
       throw new RequestBlockedError(url, cause);
     }
 
-    // 204, page d'erreur d'un proxy, coupure en cours de corps : rien de tout
-    // cela ne doit faire échouer l'appelant sur une exception d'analyse.
+    // 204 No Content, proxy error pages, truncated stream: do not crash on JSON parse failure.
     const body: unknown = await response.json().catch(() => null);
     return { status: response.status, body };
   }
 }
 
 /**
- * Coffre volatil.
+ * In-memory volatile storage.
  *
- * Il **oublie tout** à la fermeture de l'onglet, et c'est délibéré : écrire un
- * jeton de rafraîchissement dans `localStorage` le rendrait lisible par
- * n'importe quel script de la page, pour trente jours. Se reconnecter est un
- * inconvénient ; un jeton de longue durée en clair est une faille.
+ * Cleared on process/tab exit. Used where persistent plaintext storage would be insecure.
  */
 export class VolatileStorage {
   readonly #values = new Map<string, string>();
@@ -84,17 +68,13 @@ export class VolatileStorage {
 }
 
 /**
- * Requête qui n'a jamais atteint le réseau.
+ * Request blocked before reaching the network.
  *
- * `fetch` rend le même « Failed to fetch » lapidaire pour trois causes très
- * différentes : le cœur est éteint, l'origine est refusée par CORS, ou la
- * **politique de sécurité du contenu a bloqué la connexion**. C'est la dernière
- * qui coûte le plus cher à diagnostiquer : rien n'apparaît dans le journal du
- * serveur, puisque rien n'est parti.
+ * `fetch` returns a generic "Failed to fetch" for three different causes:
+ * core server down, origin rejected by CORS, or Content Security Policy blocking.
  *
- * On nomme donc les trois pistes, avec l'adresse visée. **L'adresse n'est pas un
- * secret** — elle est inscrite dans le paquet livré — et aucun en-tête, aucun
- * jeton, aucun corps de requête n'est joint.
+ * We identify the target URL and common causes. URL contains no secrets;
+ * headers, tokens, and request body are excluded from the error message.
  */
 export class RequestBlockedError extends Error {
   readonly code = "CLIENT_REQUEST_BLOCKED";
@@ -102,9 +82,9 @@ export class RequestBlockedError extends Error {
 
   constructor(url: string, cause: unknown) {
     super(
-      `Impossible de joindre ${url}. Trois causes possibles : le cœur NEXUS ne répond pas, ` +
-        `son origine n'est pas autorisée (CORS), ou la politique de sécurité du contenu a ` +
-        `bloqué la connexion — la CSP n'autorise que https:// et wss:// hors développement.`,
+      `Unable to reach ${url}. Three possible causes: NEXUS core is unreachable, ` +
+        `origin not allowed by CORS, or Content Security Policy ` +
+        `blocked the connection — CSP permits only https:// and wss:// outside development.`,
       { cause },
     );
     this.name = "RequestBlockedError";

@@ -1,36 +1,25 @@
 import { compareVersionStrings, parseVersion } from "@nexus/shared";
 
 /**
- * Mise à jour automatique : décider, jamais appliquer.
+ * Auto-update policy: decide, never apply.
  *
- * ## La séparation
+ * ## Separation of Concerns
  *
- * Ce module lit un flux de versions et dit s'il y a quelque chose à installer.
- * Il n'installe rien, ne télécharge rien, n'exécute rien. L'application est le
- * travail de l'hôte — Tauri pour le bureau, le magasin pour le mobile — et
- * c'est lui qui possède la clé publique qui vérifie la signature du paquet.
+ * This module inspects a release feed and determines whether an update is available.
+ * It does not download, install, or execute anything. Installation is the responsibility
+ * of the application runtime (Tauri for desktop, app store for mobile), which holds
+ * the public verification keys.
  *
- * Pourquoi cette séparation : un module qui déciderait **et** appliquerait
- * serait un installeur, c'est-à-dire la pièce la plus sensible de la chaîne —
- * celle qui doit être la plus petite et la plus auditée. Celui-ci est une
- * fonction de comparaison avec des règles, et il se teste entièrement.
+ * ## Rejection Rules
  *
- * ## Les refus, qui sont le contenu réel
+ * Automated updates execute code; these security guards are central:
  *
- * Une mise à jour automatique est un canal d'exécution de code. Les règles
- * ci-dessous ne sont donc pas des garde-fous ajoutés après coup : elles sont la
- * raison d'être du module.
- *
- *  - **Sans signature, pas de mise à jour.** Un flux sans signature n'est pas
- *    un flux incomplet, c'est un flux non fiable : qui le sert peut y mettre
- *    n'importe quel binaire.
- *  - **Pas de retour en arrière.** Proposer une version plus ancienne permet de
- *    réinstaller une faille corrigée.
- *  - **Pas de changement de canal en silence.** Une installation stable ne doit
- *    pas se retrouver en bêta parce que le flux en a proposé une.
- *  - **Pas de saut de version majeure sans accord.** Une majeure peut casser
- *    une configuration ; l'installer pendant la nuit serait une mauvaise
- *    surprise au réveil.
+ *  - **No unsigned updates.** An unsigned feed is treated as untrusted.
+ *  - **No downgrades.** Older versions could reintroduce resolved vulnerabilities.
+ *  - **No silent channel transitions.** Stable installations must not switch to beta
+ *    without explicit user choice.
+ *  - **No major version bumps without explicit consent.** Major updates may alter
+ *    configuration or require manual migrations.
  */
 
 export type UpdateChannel = "stable" | "beta";
@@ -38,30 +27,28 @@ export type UpdateChannel = "stable" | "beta";
 export interface ReleaseEntry {
   version: string;
   channel: UpdateChannel;
-  /** Signature du paquet. Son absence rend la version inutilisable. */
+  /** Package signature. Its absence renders the release unusable. */
   signature: string | null;
   url: string;
   notes?: string;
-  /** Publication, en millisecondes. */
+  /** Publication timestamp in milliseconds. */
   publishedAt: number;
 }
 
 export type UpdateDecision =
-  | { kind: "aucune"; reason: string }
-  | { kind: "disponible"; release: ReleaseEntry }
-  /** Disponible, mais exige un accord explicite — majeure. */
-  | { kind: "accord-requis"; release: ReleaseEntry; reason: string }
-  | { kind: "refusée"; reason: string };
+  | { kind: "none"; reason: string }
+  | { kind: "available"; release: ReleaseEntry }
+  /** Available, but requires explicit consent — major version bump. */
+  | { kind: "consent-required"; release: ReleaseEntry; reason: string }
+  | { kind: "rejected"; reason: string };
 
 export interface UpdatePolicyOptions {
   currentVersion: string;
   channel?: UpdateChannel;
   /**
-   * Autoriser une version majeure sans demander.
+   * Allow major version upgrades without prompting.
    *
-   * Faux par défaut, et c'est le bon sens : une majeure peut demander une
-   * migration, et l'appliquer sans prévenir transforme une mise à jour en
-   * panne au réveil.
+   * Defaults to false to prevent unexpected breaking changes.
    */
   allowMajor?: boolean;
 }
@@ -78,23 +65,19 @@ export class UpdatePolicy {
   }
 
   /**
-   * Choisit, parmi un flux, la mise à jour applicable.
+   * Selects the applicable update from a release feed.
    *
-   * Le flux est une **donnée non fiable** : il vient du réseau. Chaque entrée
-   * est donc filtrée sur ses propres mérites, et une entrée malformée est
-   * ignorée plutôt que de faire échouer la décision — sans quoi un flux abîmé
-   * empêcherait toute mise à jour, y compris celle qui corrige le problème.
+   * Feed data is treated as untrusted network input. Individual entries are validated,
+   * and malformed entries are ignored so a corrupt feed item does not block valid updates.
    */
   decide(feed: readonly ReleaseEntry[]): UpdateDecision {
     const current = parseVersion(this.#current);
     if (current === undefined) {
-      return { kind: "refusée", reason: "version installée illisible" };
+      return { kind: "rejected", reason: "installed version is unparseable" };
     }
 
     const candidates = feed
       .filter((entry) => parseVersion(entry.version) !== undefined)
-      // Le canal d'abord : une installation stable ne doit pas se retrouver en
-      // bêta parce que le flux en a proposé une.
       .filter((entry) => entry.channel === this.#channel)
       .filter((entry) => {
         const order = compareVersionStrings(entry.version, this.#current);
@@ -103,22 +86,21 @@ export class UpdatePolicy {
       .sort((left, right) => compareVersionStrings(right.version, left.version) ?? 0);
 
     const best = candidates[0];
-    if (best === undefined) return { kind: "aucune", reason: "déjà à jour" };
+    if (best === undefined) return { kind: "none", reason: "already up to date" };
 
     if (best.signature === null || best.signature.length === 0) {
-      // Un flux sans signature n'est pas incomplet : il est non fiable.
-      return { kind: "refusée", reason: "version non signée" };
+      return { kind: "rejected", reason: "unsigned release" };
     }
 
     const bestVersion = parseVersion(best.version);
     if (bestVersion !== undefined && bestVersion.major > current.major && !this.#allowMajor) {
       return {
-        kind: "accord-requis",
+        kind: "consent-required",
         release: best,
-        reason: `version majeure ${best.version} : elle peut demander une migration`,
+        reason: `major version ${best.version}: migration may be required`,
       };
     }
 
-    return { kind: "disponible", release: best };
+    return { kind: "available", release: best };
   }
 }

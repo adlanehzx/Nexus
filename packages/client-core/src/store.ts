@@ -1,19 +1,16 @@
 import { SERVER_TO_CLIENT, type ServerToClientType } from "@nexus/protocol";
 
 /**
- * L'état affiché par l'iPhone.
+ * State presented by the client.
  *
- * Un **réducteur pur** : une trame entre, un nouvel état sort. Aucune requête,
- * aucun effet, aucune horloge implicite. Trois conséquences :
+ * A **pure reducer**: frame in, new state out. No requests, no side effects,
+ * no implicit timers.
  *
- *  1. il se teste entièrement, sans simulateur ni serveur ;
- *  2. rejouer une file d'événements après reconnexion produit exactement l'état
- *     qu'on aurait eu en restant connecté — c'est ce qui fait converger l'iPhone
- *     et le portable au lieu de les faire diverger ;
- *  3. une trame inconnue laisse l'état **inchangé**, plutôt que de casser.
+ *  1. Completely testable without simulators or running servers;
+ *  2. Replaying event queues after reconnection produces identical state to continuous connection;
+ *  3. Unknown frames leave state unchanged rather than throwing.
  *
- * Ce que le magasin ne fait pas : décider. Il n'annule rien, n'approuve rien,
- * n'envoie rien. Il décrit ce que le cœur a dit.
+ * The store describes what the core server reported without making decisions.
  */
 
 export type TaskStatus =
@@ -29,13 +26,13 @@ export interface TaskView {
   id: string;
   title: string;
   status: TaskStatus;
-  /** Progression du plan entier, de 0 à 100. */
+  /** Overall plan progress, from 0 to 100. */
   percent: number;
-  /** Ce que fait l'étape en cours, en clair. */
+  /** Human-readable description of current step. */
   label: string | null;
-  /** Appareil qui exécute l'étape courante, quand le cœur l'a dit. */
+  /** Device executing the current step. */
   workerDeviceId: string | null;
-  /** Appareil d'où la demande est partie. Préservé de bout en bout. */
+  /** Device where request originated. Preserved end-to-end. */
   originClientDeviceId: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -48,7 +45,7 @@ export interface ToolCallView {
   callId: string;
   runId: string;
   tool: string;
-  /** Résumé lisible. Le magasin ne reçoit jamais les arguments bruts. */
+  /** Readable summary. Raw tool arguments are not passed to store. */
   summary: string;
   riskLevel: string;
   status: "running" | "succeeded" | "failed";
@@ -61,7 +58,7 @@ export interface MessageView {
   id: string;
   role: "user" | "assistant";
   content: string;
-  /** Vrai tant que le flux n'est pas terminé. */
+  /** True while response is streaming. */
   streaming: boolean;
   createdAt: string;
   originClientDeviceId: string | null;
@@ -93,7 +90,7 @@ export interface ConfirmationView {
   description: string;
   riskLevel: string;
   expiresAt: string;
-  /** Passe à `true` dès que l'utilisateur a tranché — évite un double envoi. */
+  /** Set to `true` when user has decided — prevents duplicate actions. */
   answered: boolean;
 }
 
@@ -102,7 +99,7 @@ export type ConnectionState =
 
 export interface ClientState {
   connection: ConnectionState;
-  /** Réseau de l'appareil. Distinct de la connexion au cœur. */
+  /** Device network connectivity. Distinct from core server connection. */
   online: boolean;
   messages: MessageView[];
   tasks: TaskView[];
@@ -110,7 +107,7 @@ export interface ClientState {
   devices: DeviceView[];
   notifications: NotificationView[];
   confirmations: ConfirmationView[];
-  /** Dernière erreur affichable. Effacée par l'interface après lecture. */
+  /** Last displayable error. Cleared by UI after acknowledgement. */
   lastError: { code: string; message: string; at: string } | null;
 }
 
@@ -133,11 +130,9 @@ export type ClientAction =
   | { kind: "localMessage"; message: MessageView }
   | { kind: "devices"; devices: DeviceView[] }
   /**
-   * État d'une tâche relu auprès du cœur.
+   * Task state re-queried from core server.
    *
-   * Sert au rattrapage après reconnexion : le canal temps réel ne rejoue rien,
-   * et une tâche achevée pendant une coupure resterait affichée « en cours ».
-   * Le cœur est l'autorité ; cette action porte ce qu'il a dit.
+   * Used for resync after reconnection: real-time channel does not replay events.
    */
   | {
       kind: "taskSync";
@@ -159,11 +154,9 @@ export type ClientAction =
   | { kind: "reset" };
 
 /**
- * Applique une action.
+ * Applies an action.
  *
- * Aucune mutation : chaque branche produit un nouvel objet. C'est ce qui permet
- * à React de savoir quoi redessiner, et ce qui rend un test lisible — on compare
- * deux états, pas des effets de bord.
+ * Pure reducer: every branch returns a new object.
  */
 export function reduce(state: ClientState, action: ClientAction): ClientState {
   switch (action.kind) {
@@ -174,9 +167,8 @@ export function reduce(state: ClientState, action: ClientAction): ClientState {
       return {
         ...state,
         online: action.online,
-        // Perdre le réseau ne « déconnecte » pas au sens du cœur : la socket
-        // tombera d'elle-même. Mais l'interface doit le dire tout de suite,
-        // sinon l'utilisateur attend une réponse qui ne viendra pas.
+        // Losing network does not immediately close WebSocket connection, but
+        // UI reflects offline state immediately so user is informed.
         connection: action.online ? state.connection : "offline",
       };
 
@@ -189,18 +181,14 @@ export function reduce(state: ClientState, action: ClientAction): ClientState {
     case "taskSync": {
       const sync = action.task;
 
-      // Le statut vient du cœur, qui utilise exactement la même énumération que
-      // cet écran (`taskStatusSchema` de `@nexus/devices`). Un statut inconnu
-      // serait donc un serveur plus récent que ce client : on garde l'ancien
-      // plutôt que d'afficher un état inventé.
+      // Status originates from core server. Keep existing status if unknown.
       const status = isTaskStatus(sync.status) ? sync.status : undefined;
 
       return upsertTask(state, sync.id, (task) => ({
         ...task,
         title: sync.title.length > 0 ? sync.title : task.title,
         status: status ?? task.status,
-        // Une tâche rattrapée en état terminal est à 100 % : la dernière trame
-        // de progression, elle, n'est jamais arrivée.
+        // Completed task is set to 100%.
         percent: status !== undefined && !isActive(status) ? 100 : task.percent,
         label: status !== undefined && !isActive(status) ? null : task.label,
         stepCount: sync.stepCount > 0 ? sync.stepCount : task.stepCount,
@@ -262,9 +250,7 @@ function applyServerMessage(
 
       const existing = state.messages.find((message) => message.id === messageId);
 
-      // Le premier fragment crée le message. Attendre un « début de flux »
-      // explicite ajouterait un aller-retour pour rien, et un fragment perdu
-      // laisserait le message invisible.
+      // First delta creates message.
       if (existing === undefined) {
         return {
           ...state,
@@ -292,11 +278,11 @@ function applyServerMessage(
       };
     }
 
-    // ── Tâches ──────────────────────────────────────────────────────────
+    // ── Tasks ───────────────────────────────────────────────────────────
     case SERVER_TO_CLIENT.taskCreated:
       return upsertTask(state, str(payload, "taskId"), (task) => ({
         ...task,
-        title: str(payload, "title", "Tache"),
+        title: str(payload, "title", "Task"),
         stepCount: num(payload, "stepCount", 1),
         status: "pending",
         originClientDeviceId: asStringOrNull(payload.originClientDeviceId),
@@ -309,9 +295,7 @@ function applyServerMessage(
         status: "running",
         percent: num(payload, "percent", task.percent),
         label: asStringOrNull(payload.label) ?? task.label,
-        // On ne remplace jamais un exécutant connu par `null` : une trame de
-        // progression sans appareil — étape refusée, plan sans exécutant —
-        // effacerait sinon l'information affichée pour l'étape précédente.
+        // Do not overwrite known worker with null on intermediate progress frames.
         workerDeviceId: asStringOrNull(payload.deviceId) ?? task.workerDeviceId,
       }));
 
@@ -326,14 +310,12 @@ function applyServerMessage(
       }));
 
     case SERVER_TO_CLIENT.taskCancelled:
-      // Une tâche annulée est **terminée**, pas en échec : elle quitte la liste
-      // des actives, et l'interface ne propose pas de la relancer comme si
-      // quelque chose s'était mal passé.
+      // Cancelled task is completed, not failed.
       return upsertTask(state, str(payload, "taskId"), (task) => ({
         ...task,
         status: "cancelled",
         completedAt: nowFrom(payload),
-        label: str(payload, "reason", "annulée"),
+        label: str(payload, "reason", "cancelled"),
       }));
 
     case SERVER_TO_CLIENT.taskFailed:
@@ -343,11 +325,11 @@ function applyServerMessage(
         completedAt: nowFrom(payload),
         error: {
           code: str(payload, "code", "UNKNOWN"),
-          message: str(payload, "message", "La tâche a échoué."),
+          message: str(payload, "message", "The task failed."),
         },
       }));
 
-    // ── Outils ──────────────────────────────────────────────────────────
+    // ── Tools ───────────────────────────────────────────────────────────
     case SERVER_TO_CLIENT.toolStarted:
       return upsertToolCall(state, str(payload, "callId"), (call) => ({
         ...call,
@@ -377,8 +359,7 @@ function applyServerMessage(
     // ── Confirmations ───────────────────────────────────────────────────
     case SERVER_TO_CLIENT.confirmationRequired: {
       const id = str(payload, "confirmationId");
-      // Une demande reçue deux fois — reconnexion, file rejouée — ne doit pas
-      // produire deux cartes à approuver.
+      // Deduplicate confirmation cards.
       if (state.confirmations.some((confirmation) => confirmation.id === id)) return state;
 
       return {
@@ -399,11 +380,10 @@ function applyServerMessage(
       };
     }
 
-    // ── Appareils ───────────────────────────────────────────────────────
+    // ── Devices ─────────────────────────────────────────────────────────
     case SERVER_TO_CLIENT.deviceUpdated: {
       const id = str(payload, "deviceId");
-      // Chaque champ n'est repris que s'il est reellement present : une trame
-      // partielle ne doit pas effacer ce qu'elle ne mentionne pas.
+      // Partial updates only patch present fields.
       const name = asStringOrNull(payload.deviceName) ?? asStringOrNull(payload.name);
       const status = asStringOrNull(payload.status);
       const role = asStringOrNull(payload.role);
@@ -464,14 +444,12 @@ function applyServerMessage(
     }
 
     default:
-      // Type connu du protocole mais sans effet sur l'état — `client.ack`,
-      // `agent.started`. Ou type inconnu d'un serveur plus récent. Dans les deux
-      // cas, l'état ne bouge pas.
+      // Known protocol frames without store impact (e.g. ack) or unknown future frames.
       return state;
   }
 }
 
-/** Crée la tâche si elle est inconnue, la met à jour sinon. */
+/** Creates task if absent, updates otherwise. */
 function upsertTask(
   state: ClientState,
   taskId: string,
@@ -479,11 +457,10 @@ function upsertTask(
 ): ClientState {
   const existing = state.tasks.find((task) => task.id === taskId);
 
-  // Une tâche peut arriver par sa progression : l'iPhone était éteint quand
-  // elle a démarré. Elle doit apparaître quand même.
+  // A task can arrive through progress frames if client was offline when started.
   const base: TaskView = existing ?? {
     id: taskId,
-    title: "Tâche",
+    title: "Task",
     status: "pending",
     percent: 0,
     label: null,
@@ -538,10 +515,10 @@ function upsertToolCall(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sélecteurs
+// Selectors
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Tâches en cours ou en attente — ce que l'utilisateur regarde en premier. */
+/** Active tasks (running, pending, waiting_for_confirmation). */
 export function activeTasks(state: ClientState): TaskView[] {
   return state.tasks.filter(
     (task) =>
@@ -569,21 +546,17 @@ export function unreadNotifications(state: ClientState): NotificationView[] {
   return state.notifications.filter((notification) => notification.readAt === null);
 }
 
-/** L'application peut-elle agir ? Réseau **et** connexion au cœur. */
+/** Whether application can interact (network online AND connected to core). */
 export function canInteract(state: ClientState): boolean {
   return state.online && state.connection === "connected";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utilitaires
+// Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Lit une chaine d'une charge utile non typee.
- *
- * `String(valeur)` sur un objet donne `[object Object]` — une chaine qui a l'air
- * valide et qui s'affiche telle quelle dans l'interface. Ces accesseurs refusent
- * silencieusement ce qui n'est pas du bon type et rendent le repli.
+ * Reads string from untyped payload with fallback.
  */
 function str(payload: Record<string, unknown>, key: string, fallback = ""): string {
   const value = payload[key];
@@ -618,17 +591,13 @@ function asSeverity(value: unknown): "info" | "warning" | "error" {
 }
 
 /**
- * Horodatage porté par la trame.
- *
- * Celui du serveur, pas celui du téléphone : l'horloge d'un mobile dérive, et
- * deux clients qui affichent des heures différentes pour le même événement
- * donnent l'impression que le système ment.
+ * Extracts payload timestamp (server time).
  */
 function nowFrom(payload: Record<string, unknown>): string {
   return str(payload, "at") || str(payload, "ts") || new Date(0).toISOString();
 }
 
-/** Le cœur a-t-il renvoyé un statut que cet écran connaît ? */
+/** Checks if value matches TaskStatus. */
 function isTaskStatus(value: string): value is TaskStatus {
   return (
     value === "pending" ||
@@ -641,7 +610,7 @@ function isTaskStatus(value: string): value is TaskStatus {
   );
 }
 
-/** Une tâche active peut encore changer ; une tâche terminée, non. */
+/** Checks if status is an active (non-terminal) state. */
 function isActive(status: TaskStatus): boolean {
   return status === "pending" || status === "running" || status === "waiting_for_confirmation";
 }

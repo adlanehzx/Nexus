@@ -12,31 +12,12 @@ import {
 } from "./fixtures.js";
 
 /**
- * Le rattachement d'appareil, du côté du client.
- *
- * C'est la pièce qui manquait après la connexion, et son absence produisait le
- * symptôme le plus déroutant du projet : un iPhone qui se connecte, obtient ses
- * jetons, puis reste indéfiniment « en reconnexion » alors que le réseau va
- * bien, que le jeton est valide et que le cœur répond. La cause tenait en une
- * ligne — la poignée de main du canal client porte un identifiant d'appareil, et
- * il n'y en avait pas.
- *
- * Ce fichier éprouve les deux garanties qui en découlent :
- *
- *  - **l'idempotence** : un compte ne doit pas accumuler un appareil de plus à
- *    chaque installation ;
- *  - **l'ordre** : aucune socket ne s'ouvre avant qu'un appareil ne soit
- *    rattaché, et un échec de rattachement se voit au lieu de se déguiser en
- *    panne réseau.
- *
- * Ce qu'il vérifie aussi, et qui n'est pas accessoire : **rien de tout cela
- * n'accorde le moindre privilège**. Un client s'enregistre ; il ne s'approuve
- * pas, ne se donne pas de permission, et n'obtient pas le droit d'exécuter.
+ * Device attachment tests on client side.
  */
 
 const IPHONE = { name: "iPhone", type: "IPHONE", platform: "IOS", role: "CLIENT" } as const;
 
-/** Un appareil tel que la route `GET /devices` le rend. */
+/** A device representation as returned by `GET /devices`. */
 function device(overrides: Record<string, unknown> = {}) {
   return {
     id: "device-iphone",
@@ -67,15 +48,12 @@ function makeSession(storage = new FakeSecureStorage()) {
   return { http, storage, session: new SessionManager({ http, storage }) };
 }
 
-describe("1. connexion avec un appareil déjà rattaché", () => {
-  it("n'enregistre rien et ne consulte même pas la flotte", async () => {
-    // Le cas de tous les lancements sauf le premier. Il doit rester gratuit :
-    // interroger le cœur à chaque ouverture pour réapprendre ce que le trousseau
-    // sait déjà ajouterait un aller-retour sur le chemin critique.
+describe("1. sign in with existing attached device", () => {
+  it("registers nothing and skips querying fleet", async () => {
     const storage = new FakeSecureStorage();
     storage.values.set("nexus.access", "jeton-acces-1");
     storage.values.set("nexus.refresh", "jeton-rafraichissement-1");
-    storage.values.set("nexus.device", "device-deja-la");
+    storage.values.set("nexus.device", "device-already-there");
     storage.values.set("nexus.user", "u1");
 
     const { http, session } = makeSession(storage);
@@ -83,88 +61,83 @@ describe("1. connexion avec un appareil déjà rattaché", () => {
 
     const result = await session.ensureDevice(IPHONE);
 
-    expect(result).toEqual({ deviceId: "device-deja-la", origin: "session" });
+    expect(result).toEqual({ deviceId: "device-already-there", origin: "session" });
     expect(http.countOf("POST", "/api/v1/devices")).toBe(0);
     expect(http.countOf("GET", "/api/v1/devices?limit=100")).toBe(0);
   });
 
-  it("reprend l'appareil du compte quand le trousseau a été effacé", async () => {
-    // Réinstallation : les jetons sont neufs, l'identifiant d'appareil est
-    // perdu, mais la ligne existe toujours côté cœur. Sans ce chemin, chaque
-    // réinstallation ajouterait un « iPhone » de plus à approuver.
+  it("reuses account device when secure storage was cleared", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result).toEqual({ deviceId: "device-iphone", origin: "existing", trust: "TRUSTED" });
-    expect(http.countOf("POST", "/api/v1/devices")).toBe(0);
     expect(session.deviceId).toBe("device-iphone");
+    expect(http.countOf("POST", "/api/v1/devices")).toBe(0);
   });
 
-  it("ne reprend jamais un appareil révoqué", async () => {
-    // Reprendre une ligne révoquée annulerait la révocation dans les faits.
+  it("never reuses a revoked device", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ trust: "REVOKED" })));
-    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
+    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-new" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result.origin).toBe("registered");
-    expect(result.deviceId).toBe("device-neuf");
+    expect(result.deviceId).toBe("device-new");
+    expect(http.countOf("POST", "/api/v1/devices")).toBe(1);
   });
 
-  it("ne reprend pas l'appareil d'un autre téléphone", async () => {
-    // Deux iPhone sur le même compte restent deux appareils : les confondre
-    // ferait parler l'un au nom de l'autre.
+  it("does not reuse device belonging to a different phone", async () => {
     const { http, session } = makeSession();
-    http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ name: "iPhone de Sarah" })));
-    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
+    http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ name: "Alex's Work Phone" })));
+    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-personal" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
+    const result = await session.ensureDevice(IPHONE);
 
-    expect((await session.ensureDevice(IPHONE)).origin).toBe("registered");
+    expect(result.deviceId).toBe("device-personal");
+    expect(http.countOf("POST", "/api/v1/devices")).toBe(1);
   });
 });
 
-describe("2 et 3. connexion sans appareil : enregistrement", () => {
-  it("enregistre l'appareil et retient son identifiant", async () => {
+describe("2. registering a new device", () => {
+  it("creates device when none matches", async () => {
     const { http, storage, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
-    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
+    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-new" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     const result = await session.ensureDevice(IPHONE);
 
-    expect(result).toEqual({ deviceId: "device-neuf", origin: "registered", trust: "PENDING" });
-    expect(session.deviceId).toBe("device-neuf");
-    // Retenu dans le trousseau : le lancement suivant ne réenregistre rien.
-    expect(storage.values.get("nexus.device")).toBe("device-neuf");
+    expect(result).toEqual({ deviceId: "device-new", origin: "registered", trust: "PENDING" });
+    expect(session.deviceId).toBe("device-new");
+    expect(storage.values.get("nexus.device")).toBe("device-new");
   });
 
-  it("n'envoie aucune clé publique pour un CLIENT", async () => {
-    // L'iPhone s'authentifie par jeton, et le cœur vérifie déjà que l'appareil
-    // appartient au porteur du jeton. Une clé matérielle n'ajouterait rien — et
-    // en fabriquer une serait un mécanisme cryptographique de plus à tenir.
+  it("sends no public key for CLIENT role", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
 
     const body = http.requests.at(-1)?.body as Record<string, unknown>;
-    expect(body).not.toHaveProperty("publicKeyPem");
+    expect("publicKeyPem" in body).toBe(false);
   });
+});
 
-  it("enregistre une seule fois même si le rattachement est redemandé", async () => {
+describe("3. idempotence across multiple calls", () => {
+  it("registers only once even if attachment is called repeatedly", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
-    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
+    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-first" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
     await session.ensureDevice(IPHONE);
     await session.ensureDevice(IPHONE);
@@ -173,63 +146,57 @@ describe("2 et 3. connexion sans appareil : enregistrement", () => {
   });
 });
 
-describe("4. enregistrement refusé", () => {
-  it("remonte le message du cœur plutôt qu'une panne générique", async () => {
+describe("4. rejected registration", () => {
+  it("surfaces core server message rather than generic failure", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", {
       status: 403,
-      body: { error: { code: "DEVICE_QUOTA", message: "Trop d'appareils sur ce compte." } },
+      body: { error: { code: "DEVICE_QUOTA", message: "Too many devices on this account." } },
     });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
-    await expect(session.ensureDevice(IPHONE)).rejects.toThrow("Trop d'appareils sur ce compte.");
-    // Rien n'est retenu : réessayer doit repartir d'un état propre.
+    await expect(session.ensureDevice(IPHONE)).rejects.toThrow("Too many devices on this account.");
     expect(session.deviceId).toBeNull();
   });
 
-  it("échoue proprement quand le cœur est injoignable", async () => {
+  it("fails cleanly when core server is unreachable", async () => {
     const { http, session } = makeSession();
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     http.failNext = true;
     await expect(session.ensureDevice(IPHONE)).rejects.toThrow();
     expect(session.deviceId).toBeNull();
   });
 
-  it("enregistre malgré une liste illisible plutôt que de bloquer", async () => {
-    // Mieux vaut un appareil en trop qu'une application qui refuse de démarrer.
+  it("registers despite unreadable device list rather than blocking", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", { status: 500, body: null });
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     expect((await session.ensureDevice(IPHONE)).origin).toBe("registered");
   });
 });
 
-describe("5. appareil en attente d'approbation", () => {
-  it("annonce PENDING pour un appareil qui vient d'être créé", async () => {
-    // C'est le modèle d'autorisation existant, et il n'est pas contourné : un
-    // appareil ne s'auto-approuve pas. L'interface doit pouvoir le dire.
+describe("5. device pending approval", () => {
+  it("reports PENDING for freshly created device", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     expect((await session.ensureDevice(IPHONE)).trust).toBe("PENDING");
   });
 
-  it("reprend un appareil encore en attente sans le réenregistrer", async () => {
-    // L'utilisateur a fermé l'application avant d'approuver. Rouvrir ne doit pas
-    // créer un second appareil à approuver.
+  it("reuses pending device without re-registering", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ trust: "PENDING" })));
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result).toEqual({ deviceId: "device-iphone", origin: "existing", trust: "PENDING" });
@@ -237,7 +204,7 @@ describe("5. appareil en attente d'approbation", () => {
   });
 });
 
-describe("6. le canal n'ouvre qu'avec un appareil", () => {
+describe("6. channel only opens with bound device", () => {
   function makeRealtime(session: SessionManager) {
     const socket = new FakeSocket();
     const timers = new TestTimers();
@@ -261,9 +228,9 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     return { client, socket, timers, actions, state: () => state };
   }
 
-  it("n'ouvre aucune socket sans appareil rattaché", async () => {
+  it("opens no socket without bound device", async () => {
     const { session } = makeSession();
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -273,13 +240,9 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     expect(h.client.state).toBe("offline");
   });
 
-  it("ne programme pas de reconnexion : aucun réseau ne fera surgir un appareil", async () => {
-    // Le défaut de la première correction : la socket était ouverte puis
-    // refermée, ce qui déclenchait la reconnexion automatique. L'application
-    // affichait « connexion perdue » en boucle pour une cause que le réseau ne
-    // réparerait jamais.
+  it("does not schedule reconnection without bound device", async () => {
     const { session } = makeSession();
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -290,9 +253,9 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     );
   });
 
-  it("dit pourquoi, au lieu de laisser un écran vide", async () => {
+  it("reports descriptive error instead of empty screen", async () => {
     const { session } = makeSession();
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -300,12 +263,12 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     expect(h.state().lastError?.code).toBe("CLIENT_NO_DEVICE");
   });
 
-  it("ouvre et annonce l'appareil dès qu'il est rattaché", async () => {
+  it("opens and announces device as soon as it is bound", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
-    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
+    http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-new" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -315,19 +278,17 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     await h.client.start();
 
     expect(h.client.state).toBe("connected");
-    expect(h.socket.lastOfType("client.hello")?.payload.deviceId).toBe("device-neuf");
+    expect(h.socket.lastOfType("client.hello")?.payload.deviceId).toBe("device-new");
   });
 });
 
-describe("7. déconnexion", () => {
-  it("efface le rattachement d'appareil avec les jetons", async () => {
-    // Le laisser derrière soi était un piège : le compte suivant reprenait
-    // l'appareil du précédent et se voyait refuser la poignée de main.
+describe("7. sign out", () => {
+  it("clears device binding along with tokens", async () => {
     const { http, storage, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
     await session.logout();
 
@@ -337,14 +298,12 @@ describe("7. déconnexion", () => {
     expect(storage.values.has("nexus.device")).toBe(false);
   });
 
-  it("efface aussi quand le cœur est injoignable", async () => {
-    // Un utilisateur qui se déconnecte dans le métro doit voir sa session
-    // disparaître de l'appareil, quoi qu'en pense le réseau.
+  it("clears device binding even if server is unreachable", async () => {
     const { http, storage, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
 
     http.failNext = true;
@@ -354,65 +313,57 @@ describe("7. déconnexion", () => {
   });
 });
 
-describe("8. reconnexion et changement de compte", () => {
-  it("le même compte retrouve son appareil", async () => {
+describe("8. reconnection and account switching", () => {
+  it("same account recovers its device binding", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
     expect(session.deviceId).toBe("device-iphone");
   });
 
-  it("un autre compte n'hérite pas de l'appareil du précédent", async () => {
-    // Sans cette règle, le second compte présenterait au cœur un appareil qui ne
-    // lui appartient pas. Le cœur refuserait — il vérifie la propriété — mais le
-    // client resterait bloqué sans que rien n'explique pourquoi.
+  it("different account does not inherit previous device binding", async () => {
     const { http, storage, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
     expect(session.deviceId).toBe("device-iphone");
 
-    // La réponse porte un autre utilisateur : c'est le seul signal fiable.
-    const sarah = loginResponse({ access: "jeton-sarah", refresh: "rafraichissement-sarah" });
+    const sarah = loginResponse({ access: "token-sarah", refresh: "refresh-sarah" });
     (sarah.body as { data: { user: { id: string } } }).data.user.id = "u2";
     http.on("POST", "/api/v1/auth/login", sarah);
 
-    await session.login("sarah@exemple.fr", "mot de passe");
+    await session.login("sarah@example.test", "password");
 
     expect(session.deviceId).toBeNull();
     expect(storage.removed).toContain("nexus.device");
   });
 
-  it("ne détruit pas un rattachement valide faute d'information", async () => {
-    // Un trousseau écrit par une version antérieure ne porte pas d'utilisateur.
-    // L'absence d'information n'est pas une preuve de changement de compte.
+  it("does not destroy valid binding when user info is absent", async () => {
     const storage = new FakeSecureStorage();
     storage.values.set("nexus.access", "a");
     storage.values.set("nexus.refresh", "r");
-    storage.values.set("nexus.device", "device-historique");
+    storage.values.set("nexus.device", "device-legacy");
 
     const { session } = makeSession(storage);
     await session.restore();
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
 
-    expect(session.deviceId).toBe("device-historique");
+    expect(session.deviceId).toBe("device-legacy");
   });
 });
 
-describe("9. aucun privilège accordé au client", () => {
-  it("n'accorde aucune permission et ne demande pas le rôle exécutant", async () => {
-    // Un appareil ne décide pas de ce qu'il a le droit de faire. La preuve tient
-    // dans le corps de la requête : rôle client, permissions vides.
+describe("9. no excess privileges granted to client", () => {
+  it("grants no permissions and requests no worker role", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
 
     const body = http.requests.at(-1)?.body as { role: string; grantedPermissions: string[] };
@@ -420,27 +371,23 @@ describe("9. aucun privilège accordé au client", () => {
     expect(body.grantedPermissions).toEqual([]);
   });
 
-  it("ne s'approuve pas lui-même", async () => {
-    // Aucune requête d'approbation ne part du client : l'appareil reste PENDING
-    // jusqu'à ce qu'un client déjà approuvé l'approuve.
+  it("does not self-approve", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
 
     expect(http.requests.some((r) => r.path.includes("/trust"))).toBe(false);
   });
 
-  it("ne se réenregistre pas en exécutant", async () => {
-    // Le rôle est demandé, jamais imposé — et le rattachement automatique ne
-    // doit pas devenir un chemin détourné vers le droit d'exécuter.
+  it("does not re-register as a worker", async () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("alex@example.test", "mot de passe");
+    await session.login("alex@example.test", "password");
     await session.ensureDevice(IPHONE);
 
     const roles = http.requests
