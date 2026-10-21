@@ -11,24 +11,20 @@ import {
 } from "../src/index.js";
 
 /**
- * Serveurs MCP réels pour les tests.
+ * Real MCP test servers.
  *
- * On ne simule **pas** le protocole : les deux extrémités utilisent le SDK
- * officiel, reliées par `InMemoryTransport.createLinkedPair()`. Les cadres
- * JSON-RPC, le handshake, les schémas et les erreurs sont ceux de vrais serveurs.
- * Seul le tuyau change — et c'est le SDK qui le fournit.
+ * Uses official MCP SDK linked via `InMemoryTransport.createLinkedPair()`.
+ * Validates real JSON-RPC frames, handshake, schemas, and error responses.
  */
 
 export interface TestServerHandle {
   server: McpServer;
   clientTransport: Transport;
-  /** Coupe la connexion comme le ferait un serveur qui tombe. */
   crash: () => Promise<void>;
 }
 
 export interface TestServerOptions {
   name?: string;
-  /** Bloque `echo` jusqu'à libération — sert aux tests de délai. */
   hang?: boolean;
   withResources?: boolean;
   destructiveTool?: boolean;
@@ -36,13 +32,13 @@ export interface TestServerOptions {
 }
 
 export async function startTestServer(options: TestServerOptions = {}): Promise<TestServerHandle> {
-  const server = new McpServer({ name: options.name ?? "serveur-test", version: "1.2.3" });
+  const server = new McpServer({ name: options.name ?? "test-server", version: "1.2.3" });
 
   server.registerTool(
     "echo",
     {
-      title: "Écho",
-      description: "Renvoie le message fourni.",
+      title: "Echo",
+      description: "Returns provided message.",
       inputSchema: { message: z.string().min(1), times: z.number().int().min(1).optional() },
       annotations: { readOnlyHint: true },
     },
@@ -52,8 +48,8 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     },
   );
 
-  server.registerTool("fail", { description: "Échoue toujours.", inputSchema: {} }, () => ({
-    content: [{ type: "text", text: "quota dépassé" }],
+  server.registerTool("fail", { description: "Always fails.", inputSchema: {} }, () => ({
+    content: [{ type: "text", text: "quota exceeded" }],
     isError: true,
   }));
 
@@ -61,20 +57,18 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     server.registerTool(
       "wipe",
       {
-        description: "Supprime tout.",
+        description: "Deletes everything.",
         inputSchema: { path: z.string() },
-        // Le serveur se déclare inoffensif tout en étant destructeur : le cas
-        // exact contre lequel les annotations ne doivent jamais abaisser le risque.
         annotations: { destructiveHint: true, readOnlyHint: true },
       },
-      () => ({ content: [{ type: "text", text: "supprimé" }] }),
+      () => ({ content: [{ type: "text", text: "deleted" }] }),
     );
   }
 
   if (options.extraTool === true) {
     server.registerTool(
       "extra",
-      { description: "Outil apparu après coup.", inputSchema: {} },
+      { description: "Tool appearing dynamically.", inputSchema: {} },
       () => ({ content: [{ type: "text", text: "extra" }] }),
     );
   }
@@ -83,8 +77,8 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     server.registerResource(
       "notes",
       "test://notes/1",
-      { title: "Note", description: "Une note", mimeType: "text/plain" },
-      () => ({ contents: [{ uri: "test://notes/1", text: "contenu de la note" }] }),
+      { title: "Note", description: "A note", mimeType: "text/plain" },
+      () => ({ contents: [{ uri: "test://notes/1", text: "note content" }] }),
     );
   }
 
@@ -121,7 +115,6 @@ export interface ManagerHarness {
   sleeps: number[];
 }
 
-/** Monte un `McpManager` branché sur un transport réel injecté. */
 export function makeManager(
   configs: McpServerConfig[],
   transports: Record<string, Transport>,
@@ -137,8 +130,6 @@ export function makeManager(
     transports,
     onEvent: (event) => events.push(event),
     ...(options.now ? { now: options.now } : {}),
-    // Le backoff est enregistré, jamais attendu : on teste son calcul, pas
-    // la patience de la suite de tests.
     sleep: (ms) => {
       sleeps.push(ms);
       return Promise.resolve();

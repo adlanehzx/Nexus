@@ -12,14 +12,14 @@ import { McpSchemaError, McpToolCallError, McpUnavailableError } from "./errors.
 import { normalizeToolSchema, zodFromJsonSchema } from "./json-schema.js";
 
 /**
- * Adaptation d'un outil MCP en `ToolDefinition`.
+ * Adapts an MCP tool into a `ToolDefinition`.
  *
- * C'est la seule frontière entre MCP et le reste de NEXUS. En sortie, le cœur
- * agent voit un outil ordinaire : même contrat, mêmes permissions, mêmes
- * confirmations, même exécuteur. Il ignore jusqu'à l'existence de MCP.
+ * This is the bridge between MCP and the rest of NEXUS. To the agent core,
+ * an MCP tool behaves like any standard tool with contract, permissions,
+ * confirmations, and executor.
  */
 
-/** Sortie normalisée d'un appel MCP. */
+/** Normalized output of an MCP tool invocation. */
 export const mcpToolOutputSchema = z.object({
   text: z.string(),
   structured: z.unknown(),
@@ -28,18 +28,14 @@ export type McpToolOutput = z.infer<typeof mcpToolOutputSchema>;
 
 const MAX_DESCRIPTION_CHARS = 1_000;
 
-/** Nom canonique d'un outil MCP dans le registre. */
+/** Canonical name of an MCP tool in the registry. */
 export function mcpToolName(server: string, tool: string): string {
   return `mcp.${server}.${tool}`;
 }
 
 /**
- * Nettoie une description fournie par un serveur tiers.
- *
- * C'est une **entrée non fiable** : elle sera placée dans le prompt et peut
- * contenir une injection. On la borne, on neutralise les balises qui
- * ressembleraient à des marqueurs de prompt, et on l'annonce comme provenant du
- * serveur — le modèle est instruit de traiter ce contenu comme une donnée.
+ * Sanitizes description provided by an external MCP server.
+ * Bounded and tags sanitized to prevent prompt injection.
  */
 export function sanitizeDescription(server: string, tool: McpToolInfo): string {
   const raw = tool.description ?? tool.title ?? tool.name;
@@ -49,21 +45,14 @@ export function sanitizeDescription(server: string, tool: McpToolInfo): string {
     .trim()
     .slice(0, MAX_DESCRIPTION_CHARS);
 
-  return `[serveur MCP « ${server} », description fournie par le serveur] ${cleaned}`;
+  return `[MCP server "${server}", description provided by server] ${cleaned}`;
 }
 
 /**
- * Détermine le niveau de risque.
+ * Determines risk level for an MCP tool.
  *
- * Deux règles, dans cet ordre :
- *
- *  1. Une politique **humaine** (configuration) fait autorité. C'est le seul
- *     moyen d'abaisser le risque d'un outil MCP.
- *  2. À défaut, on part du défaut du serveur (`MEDIUM`) et les annotations du
- *     serveur ne peuvent que l'**élever**. Le SDK MCP le dit lui-même :
- *     « Clients should never make tool use decisions based on ToolAnnotations
- *     received from untrusted servers. » Un `readOnlyHint: true` venant d'un
- *     serveur compromis ne doit pas transformer une suppression en lecture.
+ * Explicit human config policy takes precedence. Otherwise default server risk
+ * is used, and tool annotations may only escalate risk.
  */
 export function resolveRisk(
   config: McpServerConfig,
@@ -85,17 +74,14 @@ export interface AdaptToolOptions {
   client: McpClient;
   config: McpServerConfig;
   tool: McpToolInfo;
-  /** Vrai si le serveur est utilisable maintenant — évalué à chaque appel. */
   isAvailable: () => boolean;
-  /** Motif d'indisponibilité, pour une erreur exploitable par l'agent. */
   unavailableReason: () => { status: string; detail?: string };
 }
 
 /**
- * Construit la `ToolDefinition` correspondant à un outil MCP.
+ * Constructs a `ToolDefinition` from an MCP tool.
  *
- * @throws {McpSchemaError} si le schéma d'entrée est inexploitable — on refuse
- *   l'outil plutôt que d'en deviner la forme.
+ * @throws {McpSchemaError} if the input schema is uninterpretable.
  */
 export function adaptMcpTool(options: AdaptToolOptions): ToolDefinition<unknown, McpToolOutput> {
   const { client, config, tool, isAvailable, unavailableReason } = options;
@@ -117,9 +103,6 @@ export function adaptMcpTool(options: AdaptToolOptions): ToolDefinition<unknown,
   const permissions = (policy?.permissions ?? config.defaultPermissions) as Permission[];
   const timeoutMs = policy?.timeoutMs ?? config.requestTimeoutMs;
 
-  // Un outil n'est rejoué automatiquement que si un humain l'a classé SAFE ou
-  // LOW. On ne se fie pas à `idempotentHint` : une reprise sur un outil qui a
-  // déjà agi produirait un doublon d'effet de bord.
   const idempotent = riskRank(risk) <= riskRank("LOW");
 
   return {
@@ -127,7 +110,6 @@ export function adaptMcpTool(options: AdaptToolOptions): ToolDefinition<unknown,
     description: sanitizeDescription(config.name, tool),
     version: "1",
     inputSchema,
-    // Le modèle reçoit le schéma d'origine du serveur, pas une traduction.
     inputJsonSchema: jsonSchema,
     outputSchema: mcpToolOutputSchema,
     riskLevel: risk,
@@ -136,11 +118,9 @@ export function adaptMcpTool(options: AdaptToolOptions): ToolDefinition<unknown,
     idempotent,
     timeoutMs,
     summarize: (input) =>
-      `${tool.title ?? tool.name} via le serveur MCP « ${config.name} » — ${JSON.stringify(input).slice(0, 200)}`,
+      `${tool.title ?? tool.name} via MCP server "${config.name}" — ${JSON.stringify(input).slice(0, 200)}`,
 
     execute: async (input, context): Promise<McpToolOutput> => {
-      // L'indisponibilité est vérifiée à l'appel, pas à l'enregistrement : un
-      // serveur peut tomber entre la découverte et l'exécution.
       if (!isAvailable()) {
         const reason = unavailableReason();
         throw new McpUnavailableError(config.name, reason.status, reason.detail);
@@ -155,7 +135,7 @@ export function adaptMcpTool(options: AdaptToolOptions): ToolDefinition<unknown,
         throw new McpToolCallError(
           config.name,
           tool.name,
-          result.text.length > 0 ? result.text : "le serveur a signalé un échec sans détail",
+          result.text.length > 0 ? result.text : "server reported failure without details",
         );
       }
 

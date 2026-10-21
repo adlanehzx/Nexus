@@ -1,26 +1,21 @@
 import { parseMcpServerConfig, type McpServerConfig } from "./config.js";
 
 /**
- * Configurations prêtes à l'emploi pour des serveurs MCP répandus.
+ * Turnkey configurations for common MCP servers.
  *
- * Elles ne sont qu'un point de départ **explicite** : chaque preset fixe une
- * politique de permission par outil, parce que le défaut sûr (`MEDIUM`, donc
- * confirmation à chaque appel) rend un serveur riche inutilisable au quotidien.
- * Abaisser le risque d'un outil est ici une décision humaine, écrite, relisible
- * — jamais une déduction faite à partir de ce que le serveur déclare de lui-même.
+ * Each preset establishes an explicit per-tool permission policy.
  */
 
 export interface GithubPresetOptions {
-  /** Référence du jeton dans le coffre, jamais sa valeur. */
+  /** Vault secret reference for the token, never its literal value. */
   tokenRef: string;
-  /** Autorise les écritures (issues, PR, commits). */
+  /** Enables write actions (issues, PRs, commits). */
   allowWrite?: boolean;
 }
 
 /**
- * Serveur MCP GitHub officiel.
- *
- * Lecture en `SAFE`, écriture laissée au défaut `MEDIUM` — donc confirmée.
+ * Official GitHub MCP server.
+ * Read actions are `SAFE`, write actions remain at default `MEDIUM` requiring confirmation.
  */
 export function githubPreset(options: GithubPresetOptions): McpServerConfig {
   const readTools = [
@@ -59,17 +54,13 @@ export function githubPreset(options: GithubPresetOptions): McpServerConfig {
 }
 
 export interface FilesystemPresetOptions {
-  /** Racines auxquelles le serveur a accès. Il n'en sort pas. */
+  /** Root directory paths the server has access to. */
   roots: string[];
   allowWrite?: boolean;
 }
 
 /**
- * Serveur MCP filesystem officiel.
- *
- * Le cloisonnement des chemins est assuré par le serveur lui-même, via ses
- * arguments : c'est plus sûr que de filtrer côté client, puisqu'il ne peut
- * physiquement pas répondre en dehors de ses racines.
+ * Official filesystem MCP server.
  */
 export function filesystemPreset(options: FilesystemPresetOptions): McpServerConfig {
   return parseMcpServerConfig({
@@ -98,7 +89,7 @@ export function filesystemPreset(options: FilesystemPresetOptions): McpServerCon
         options.allowWrite === true
           ? { risk: "LOW", permissions: ["filesystem.write"] }
           : { disabled: true },
-      // Une suppression est irréversible : confirmation renforcée, toujours.
+      // File move/delete can be irreversible: higher risk level
       move_file: { risk: "HIGH", permissions: ["filesystem.write"] },
     },
   });

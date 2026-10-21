@@ -8,15 +8,14 @@ import { generateSbom } from "./sandbox.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 /**
- * Gestionnaire des serveurs MCP.
+ * MCP Server Manager.
  *
- * Il connecte les serveurs configurés, découvre leurs outils, les adapte et les
- * enregistre dans le `ToolRegistry`. À partir de là, le cœur agent ne voit que
- * des `ToolDefinition` ordinaires — il n'a aucune notion de MCP (ADR-005).
+ * Connects configured MCP servers, discovers their tools, adapts them,
+ * and registers them into the `ToolRegistry`. The agent core consumes them as
+ * standard `ToolDefinition`s without needing specific MCP logic (ADR-005).
  *
- * Il supervise aussi : reconnexion avec backoff, disjoncteur, état de santé,
- * arrêt gracieux. Un serveur défaillant ne doit jamais faire tomber l'agent, ni
- * dégrader les autres serveurs.
+ * Handles lifecycle supervision: reconnection with exponential backoff,
+ * circuit breaker, health monitoring, and graceful shutdown.
  */
 
 export type McpServerHealthStatus =
@@ -47,7 +46,6 @@ export interface McpManagerOptions {
   configs?: McpServerConfig[];
   resolveSecret?: SecretResolver;
   onEvent?: (event: McpEvent) => void;
-  /** Transports injectés par nom de serveur — les tests parlent le vrai protocole. */
   transports?: Record<string, Transport>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -61,7 +59,6 @@ interface Connection {
   reconnectAttempts: number;
   circuitOpenUntil: number | undefined;
   reconnecting: boolean;
-  /** Vrai pendant une tentative de connexion pilotée par le gestionnaire. */
   connecting: boolean;
 }
 
@@ -93,11 +90,8 @@ export class McpManager {
   }
 
   /**
-   * Connecte tous les serveurs activés et publie leurs outils.
-   *
-   * Les serveurs sont traités **en parallèle et indépendamment** : un serveur
-   * injoignable n'empêche pas les autres de démarrer, et ne lève pas. C'est la
-   * garantie « si un MCP tombe, l'agent ne crashe pas », appliquée dès le boot.
+   * Connects all enabled servers and registers their tools.
+   * Runs servers in parallel and independently: one failed server does not block others.
    */
   async start(): Promise<McpServerHealth[]> {
     this.#shuttingDown = false;
@@ -109,7 +103,7 @@ export class McpManager {
     return this.health();
   }
 
-  /** Ajoute un serveur à chaud, sans redémarrer le backend. */
+  /** Dynamically adds an MCP server at runtime. */
   async addServer(config: McpServerConfig): Promise<McpServerHealth> {
     await this.removeServer(config.name);
     const connection = this.#addConnection(config);
@@ -117,7 +111,7 @@ export class McpManager {
     return this.#healthOf(connection);
   }
 
-  /** Retire un serveur : ses outils disparaissent du registre, la connexion se ferme. */
+  /** Removes a server: unregisters its tools and closes connection. */
   async removeServer(name: string): Promise<boolean> {
     const connection = this.#connections.get(name);
     if (connection === undefined) return false;
@@ -129,11 +123,7 @@ export class McpManager {
   }
 
   /**
-   * Re-découvre les outils.
-   *
-   * Un serveur peut faire évoluer son catalogue en cours de route (MCP prévoit
-   * une notification `tools/list_changed`). Les outils disparus sont retirés du
-   * registre, pas laissés en place à échouer.
+   * Rediscover tools dynamically.
    */
   async refreshToolList(serverName?: string): Promise<McpServerHealth[]> {
     const targets =
@@ -153,7 +143,7 @@ export class McpManager {
       : targets.map((connection) => this.#healthOf(connection));
   }
 
-  /** Force une tentative de reconnexion, disjoncteur remis à zéro. */
+  /** Forces a reconnection attempt, resetting circuit breaker. */
   async reconnect(name: string): Promise<McpServerHealth | undefined> {
     const connection = this.#connections.get(name);
     if (connection === undefined) return undefined;
@@ -166,7 +156,7 @@ export class McpManager {
     return this.#healthOf(connection);
   }
 
-  /** Arrêt gracieux : chaque serveur est fermé proprement, aucune exception ne s'échappe. */
+  /** Graceful shutdown: closes every server connection cleanly. */
   async stop(): Promise<void> {
     this.#shuttingDown = true;
     await Promise.all(
@@ -195,7 +185,6 @@ export class McpManager {
     return [...this.#connections.values()].map((connection) => generateSbom(connection.config));
   }
 
-  /** Noms des outils publiés par un serveur — diagnostic et interface de réglages. */
   toolNames(serverName: string): string[] {
     return [...(this.#connections.get(serverName)?.toolNames ?? [])];
   }
@@ -224,14 +213,9 @@ export class McpManager {
     return connection;
   }
 
-  /** Connexion + découverte. Ne lève jamais : elle enregistre l'échec. */
   async #connectAndDiscover(connection: Connection): Promise<void> {
     if (this.#isCircuitOpen(connection)) return;
 
-    // La reconnexion automatique ne s'applique qu'à une connexion qui a
-    // réellement tenu. Sans ce garde, l'échec d'une connexion initiale
-    // déclencherait une boucle de reprise en parallèle de `start()`, dont
-    // l'état de santé renvoyé deviendrait indéterministe.
     connection.connecting = true;
     try {
       await connection.client.connect();
@@ -275,8 +259,6 @@ export class McpManager {
           }) as unknown as ToolDefinition<never, unknown>,
         );
       } catch (error) {
-        // Un schéma inexploitable disqualifie l'outil, pas le serveur : les
-        // autres outils restent utilisables.
         if (!(error instanceof McpSchemaError)) throw error;
       }
     }
@@ -295,8 +277,6 @@ export class McpManager {
       }
     }
 
-    // Les outils disparus du catalogue sont retirés : mieux vaut ne plus décrire
-    // un outil au modèle que de le laisser échouer à l'appel.
     const nextNames = adapted.map((tool) => tool.name);
     const removed = connection.toolNames.filter((name) => !nextNames.includes(name));
     for (const name of removed) this.#registry.unregister(name);
@@ -317,7 +297,6 @@ export class McpManager {
       await connection.client.listResources();
       return true;
     } catch {
-      // Le serveur n'annonce pas de ressources : ce n'est pas une panne.
       return false;
     }
   }
@@ -332,12 +311,6 @@ export class McpManager {
     if (willReconnect) void this.#scheduleReconnect(connection);
   }
 
-  /**
-   * Reconnexion avec backoff exponentiel plafonné.
-   *
-   * Au-delà de `maxReconnectAttempts`, on ouvre le disjoncteur plutôt que de
-   * marteler indéfiniment un serveur mort.
-   */
   async #scheduleReconnect(connection: Connection): Promise<void> {
     if (connection.reconnecting) return;
     connection.reconnecting = true;
@@ -391,8 +364,6 @@ export class McpManager {
 
     if (connection.consecutiveFailures >= connection.config.circuitBreakerThreshold) {
       connection.circuitOpenUntil = this.#now() + connection.config.circuitBreakerResetMs;
-      // Circuit ouvert : les outils quittent le registre. Décrire au modèle un
-      // outil qui échouera à coup sûr gaspille du contexte et l'invite à réessayer.
       this.#unregisterTools(connection);
       this.#emit({
         type: "server.circuit_opened",
@@ -460,7 +431,6 @@ export class McpManager {
     };
   }
 
-  /** Description sûre des serveurs configurés — sans aucune valeur sensible. */
   describe(): Record<string, unknown>[] {
     return [...this.#connections.values()].map((connection) => describeConfig(connection.config));
   }
@@ -469,7 +439,7 @@ export class McpManager {
     try {
       this.#onEvent?.(event);
     } catch {
-      // La trace est un service rendu au gestionnaire, jamais une dépendance.
+      // Ignored
     }
   }
 }

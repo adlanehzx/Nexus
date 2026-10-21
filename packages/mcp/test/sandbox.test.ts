@@ -13,8 +13,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-describe("Isolation et Sécurité MCP (Chantier 15)", () => {
-  it("valide les binaires autorisés et rejette les commandes non autorisées", () => {
+describe("MCP Isolation and Security", () => {
+  it("validates allowed binaries and rejects unauthorized commands", () => {
     const allowed = ["node", "python3", "uv", "uvx", "docker"];
     expect(validateBinary("node", allowed)).toBe(true);
     expect(validateBinary("/usr/bin/node", allowed)).toBe(true);
@@ -24,7 +24,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
     expect(validateBinary("curl", allowed)).toBe(false);
   });
 
-  it("génère les arguments bwrap sécurisés (ro-root, tmpfs, unshare-net, mounts)", async () => {
+  it("generates hardened bwrap arguments (ro-root, tmpfs, unshare-net, mounts)", async () => {
     const config = parseMcpServerConfig({
       name: "safe-mcp",
       transport: "stdio",
@@ -42,7 +42,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
       },
     });
 
-    if (config.transport !== "stdio") throw new Error("Doit être stdio");
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
 
     const prepared = await McpSandboxManager.prepareStdio(config, {
       SECRET_TOKEN: "shh-secret",
@@ -67,7 +67,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
     expect(prepared.args.at(-1)).toBe("server.js");
   });
 
-  it("génère les options Docker avec limites de ressources et isolation réseau", async () => {
+  it("generates Docker options with resource limits and network isolation", async () => {
     const config = parseMcpServerConfig({
       name: "docker-mcp",
       transport: "stdio",
@@ -86,7 +86,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
       },
     });
 
-    if (config.transport !== "stdio") throw new Error("Doit être stdio");
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
 
     const prepared = await McpSandboxManager.prepareStdio(config, {
       API_KEY: "secret-key",
@@ -104,7 +104,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
     expect(prepared.args).toContain("API_KEY=secret-key");
   });
 
-  it("lève une erreur de sécurité McpSecurityError si la commande n'est pas autorisée", async () => {
+  it("throws McpSecurityError when command is unauthorized", async () => {
     const config = parseMcpServerConfig({
       name: "unsafe-mcp",
       transport: "stdio",
@@ -116,12 +116,12 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
       },
     });
 
-    if (config.transport !== "stdio") throw new Error("Doit être stdio");
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
 
     await expect(McpSandboxManager.prepareStdio(config, {})).rejects.toThrow(McpSecurityError);
   });
 
-  it("vérifie l'intégrité SHA-256 des paquets", () => {
+  it("verifies package SHA-256 integrity", () => {
     const content = "const x = 42;";
     const expected = createHash("sha256").update(content).digest("hex");
     const isValid = verifyPackageChecksum(content, expected);
@@ -134,7 +134,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
     expect(isInvalid).toBe(false);
   });
 
-  it("génère un SBOM conforme avec runtime, provenance et empreinte", () => {
+  it("generates conforming SBOM with runtime, provenance and checksum", () => {
     const config = parseMcpServerConfig({
       name: "github-mcp",
       transport: "stdio",
@@ -151,7 +151,7 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
     expect(sbom.verifiedAt).toBeDefined();
   });
 
-  it("exécute réellement une commande dans Bubblewrap en environnement isolé", async () => {
+  it("executes commands in isolated Bubblewrap environment", async () => {
     const config = parseMcpServerConfig({
       name: "live-bwrap-test",
       transport: "stdio",
@@ -166,13 +166,12 @@ describe("Isolation et Sécurité MCP (Chantier 15)", () => {
       },
     });
 
-    if (config.transport !== "stdio") throw new Error("Doit être stdio");
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
 
     const prepared = await McpSandboxManager.prepareStdio(config, {
       TEST_SECRET: "NEXUS_SANDBOX_OK",
     });
 
-    // Exécution réelle de bwrap sur Linux
     const { stdout } = await execFileAsync(prepared.command, prepared.args);
     expect(stdout.trim()).toBe("NEXUS_SANDBOX_OK");
   });

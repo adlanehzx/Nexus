@@ -4,12 +4,9 @@ import { ToolRegistry, ToolExecutor, type ToolContext } from "@nexus/tools";
 import { McpManager, parseMcpServerConfig, type McpEvent } from "../src/index.js";
 
 /**
- * Transport stdio réel.
+ * Real stdio transport tests.
  *
- * Ces tests lancent un **vrai processus enfant** qui parle le vrai protocole MCP
- * sur stdin/stdout. C'est le seul moyen d'éprouver ce qu'un transport en mémoire
- * ne peut pas : le `spawn`, l'isolation de l'environnement, et la mort du
- * processus serveur.
+ * Spawns a real child process speaking the MCP protocol over stdin/stdout.
  */
 
 const SERVER = fileURLToPath(new URL("./stdio-server.mjs", import.meta.url));
@@ -53,13 +50,13 @@ const context: Omit<ToolContext, "attempt"> = {
 
 const executor = new ToolExecutor({ defaultTimeoutMs: 10_000, sleep: () => Promise.resolve() });
 
-describe("transport stdio", () => {
-  it("lance le serveur, découvre ses outils et les exécute", async () => {
+describe("stdio transport", () => {
+  it("spawns server, discovers tools and executes them", async () => {
     const { manager, registry } = build();
     await manager.start();
 
     expect(manager.healthOf("local")?.status).toBe("connected");
-    expect(manager.healthOf("local")?.serverInfo?.name).toBe("serveur-stdio");
+    expect(manager.healthOf("local")?.serverInfo?.name).toBe("stdio-server");
     expect(registry.has("mcp.local.add")).toBe(true);
 
     const result = await executor.execute(
@@ -72,10 +69,10 @@ describe("transport stdio", () => {
     if (result.ok) expect((result.output as { text: string }).text).toBe("42");
   });
 
-  it("n'hérite d'aucune variable d'environnement du backend", async () => {
-    process.env.NEXUS_PARENT_ONLY = "fuite-interdite";
+  it("does not inherit backend environment variables", async () => {
+    process.env.NEXUS_PARENT_ONLY = "leak-forbidden";
     try {
-      const { manager, registry } = build({ NEXUS_TEST_SECRET: "valeur-injectee" });
+      const { manager, registry } = build({ NEXUS_TEST_SECRET: "injected-value" });
       await manager.start();
 
       const result = await executor.execute(registry.require("mcp.local.whoami"), {}, context);
@@ -87,36 +84,27 @@ describe("transport stdio", () => {
         parentLeak: string;
       };
 
-      // Ce qu'on donne explicitement passe...
-      expect(payload.secret).toBe("valeur-injectee");
-      // ...et rien d'autre. Un serveur MCP tiers ne doit pas voir les secrets
-      // applicatifs du backend simplement parce qu'ils sont dans son env.
+      expect(payload.secret).toBe("injected-value");
       expect(payload.parentLeak).toBe("(absent)");
     } finally {
       delete process.env.NEXUS_PARENT_ONLY;
     }
   });
 
-  it("détecte la mort du serveur, se reconnecte et republie ses outils", async () => {
+  it("detects server process crash, reconnects and republishes tools", async () => {
     const { manager, registry, events } = build();
     await manager.start();
     expect(manager.healthOf("local")?.status).toBe("connected");
 
-    // Le serveur répond, puis se tue : la panne survient à un instant maîtrisé.
     await executor.execute(registry.require("mcp.local.crash"), {}, context);
 
-    // On attend la **condition**, pas une durée. Une pause fixe suppose de
-    // savoir combien de temps met un processus enfant à mourir puis à renaître —
-    // ce qui dépend de la charge de la machine. Sous une suite complète, lancer
-    // un processus Node prend parfois plusieurs secondes, et le test échouait
-    // alors sur une reconnexion qui avait simplement pris son temps.
     await waitUntil(
       () => events.some((event) => event.type === "server.disconnected"),
-      "déconnexion détectée",
+      "disconnection detected",
     );
     await waitUntil(
       () => manager.healthOf("local")?.status === "connected" && registry.has("mcp.local.add"),
-      "reconnexion et republication des outils",
+      "reconnection and tool republication",
     );
 
     const result = await executor.execute(
@@ -127,8 +115,8 @@ describe("transport stdio", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("échoue proprement sur une commande inexistante", async () => {
-    const { manager, registry } = build({}, { command: "binaire-absent-xyz-123" });
+  it("fails cleanly when command does not exist", async () => {
+    const { manager, registry } = build({}, { command: "missing-binary-xyz-123" });
     const health = await manager.start();
 
     expect(health[0]?.status).toBe("failed");
@@ -137,14 +125,6 @@ describe("transport stdio", () => {
   });
 });
 
-/**
- * Attend une condition, en laissant tourner l'horloge.
- *
- * Ces tests pilotent de vrais processus enfants : leur rythme dépend de la
- * machine et de ce qui tourne à côté. Attendre une durée fixe revient à parier
- * sur cette charge, et le pari se perd quand la suite complète s'exécute en
- * parallèle.
- */
 async function waitUntil(predicate: () => boolean, label: string, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
 
@@ -153,5 +133,5 @@ async function waitUntil(predicate: () => boolean, label: string, timeoutMs = 15
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 
-  throw new Error(`condition jamais atteinte : ${label}`);
+  throw new Error(`condition not reached within timeout: ${label}`);
 }

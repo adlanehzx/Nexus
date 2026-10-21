@@ -11,12 +11,10 @@ import { McpConnectionError, McpTimeoutError } from "./errors.js";
 import { McpSandboxManager } from "./sandbox.js";
 
 /**
- * Client MCP.
+ * MCP client.
  *
- * Enveloppe fine autour du SDK officiel : elle ajoute les délais, la traduction
- * des erreurs vers notre taxonomie, la résolution des secrets au lancement, et
- * la remontée des ruptures de connexion. Elle **n'implémente pas** le protocole
- * — c'est le SDK qui s'en charge, et c'est délibéré.
+ * Thin wrapper around the official SDK adding timeouts, error taxonomy mapping,
+ * secret resolution at startup, and connection lifecycle management.
  */
 
 export type McpConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
@@ -27,11 +25,8 @@ export interface McpToolInfo {
   description?: string;
   inputSchema: unknown;
   /**
-   * Indications facultatives du serveur.
-   *
-   * Le SDK le dit explicitement : « Clients should never make tool use decisions
-   * based on ToolAnnotations received from untrusted servers. » Elles ne servent
-   * donc qu'à **élever** le risque, jamais à l'abaisser (cf. `tool-adapter.ts`).
+   * Optional server hints.
+   * Only used to raise risk, never lower it (cf. `tool-adapter.ts`).
    */
   annotations?: {
     title?: string | undefined;
@@ -51,19 +46,19 @@ export interface McpResourceInfo {
 }
 
 export interface McpCallResult {
-  /** Texte concaténé des blocs de contenu — ce que le modèle lira. */
+  /** Concatenated text from content blocks for model consumption. */
   text: string;
-  /** Contenu structuré, quand le serveur en fournit un. */
+  /** Structured output when provided by the server. */
   structured: unknown;
   isError: boolean;
 }
 
-/** Résout une référence de secret vers sa valeur. Jamais journalisée. */
+/** Resolves secret references into values. Never logged. */
 export type SecretResolver = (ref: string) => Promise<string | undefined>;
 
 export interface McpClientOptions {
   config: McpServerConfig;
-  /** Transport injecté — utilisé par les tests, qui parlent le vrai protocole. */
+  /** Injected transport for testing against real protocol implementations. */
   transport?: Transport;
   resolveSecret?: SecretResolver;
   onClose?: (error?: Error) => void;
@@ -112,8 +107,6 @@ export class McpClient {
 
     const client = new Client({ name: "nexus", version: "0.1.0" }, { capabilities: {} });
 
-    // Une rupture de connexion est un événement normal, pas une exception : le
-    // gestionnaire en est informé et décide de reconnecter.
     client.onclose = () => {
       this.#status = "disconnected";
       this.#onClose?.();
@@ -131,16 +124,15 @@ export class McpClient {
     } catch (error) {
       this.#status = "failed";
       this.#lastError = error instanceof Error ? error.message : String(error);
-      // La configuration est décrite sans ses valeurs sensibles.
       throw new McpConnectionError(this.config.name, {
-        message: `Connexion à « ${this.config.name} » impossible : ${this.#lastError}`,
+        message: `Connection to "${this.config.name}" failed: ${this.#lastError}`,
         cause: error,
         context: { transport: this.config.transport },
       });
     }
   }
 
-  /** Ferme proprement : le processus enfant reçoit son signal, pas un SIGKILL. */
+  /** Gracefully closes the client session. */
   async close(): Promise<void> {
     const client = this.#client;
     this.#client = undefined;
@@ -195,12 +187,10 @@ export class McpClient {
     );
 
     const text = result.contents
-      // Une ressource MCP porte soit `text`, soit `blob` : on ne devine pas, on
-      // teste. Un contenu binaire est annoncé, pas décodé au hasard.
       .map((entry) =>
         "text" in entry && typeof entry.text === "string"
           ? entry.text
-          : `[${entry.mimeType ?? "binaire"}] ${entry.uri}`,
+          : `[${entry.mimeType ?? "binary"}] ${entry.uri}`,
       )
       .join("\n");
 
@@ -227,8 +217,8 @@ export class McpClient {
       .map((block) => {
         const typed = block as { type?: string; text?: string; resource?: { uri?: string } };
         if (typed.type === "text" && typeof typed.text === "string") return typed.text;
-        if (typed.type === "resource") return `[ressource] ${typed.resource?.uri ?? ""}`;
-        return `[${typed.type ?? "contenu"}]`;
+        if (typed.type === "resource") return `[resource] ${typed.resource?.uri ?? ""}`;
+        return `[${typed.type ?? "content"}]`;
       })
       .join("\n");
 
@@ -252,16 +242,12 @@ export class McpClient {
   #require(): Client {
     if (this.#client === undefined || this.#status !== "connected") {
       throw new McpConnectionError(this.config.name, {
-        message: `Serveur « ${this.config.name} » non connecté`,
+        message: `Server "${this.config.name}" not connected`,
       });
     }
     return this.#client;
   }
 
-  /**
-   * Le SDK applique déjà son propre délai ; on traduit seulement son erreur en
-   * `McpTimeoutError` pour que la boucle agent la reconnaisse comme réessayable.
-   */
   async #withTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
     try {
       return await promise;
@@ -293,7 +279,6 @@ export class McpClient {
         args: prepared.args,
         env: prepared.env,
         ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
-        // La sortie d'erreur du serveur est capturée, pas déversée dans la nôtre.
         stderr: "pipe",
       });
     }
@@ -301,9 +286,6 @@ export class McpClient {
     const headers = await this.#resolveEnv(config.headers, config.headerRefs);
     const url = new URL(config.url);
 
-    // Les transports du SDK déclarent `sessionId?: string` sans `| undefined`,
-    // ce que refuse `exactOptionalPropertyTypes`. Le décalage est purement
-    // typographique : la conversion est sûre et confinée ici.
     return (config.transport === "sse"
       ? new SSEClientTransport(url, { requestInit: { headers } })
       : new StreamableHTTPClientTransport(url, {
@@ -311,13 +293,6 @@ export class McpClient {
         })) as unknown as Transport;
   }
 
-  /**
-   * Fusionne les valeurs littérales et les secrets résolus.
-   *
-   * Les secrets n'existent qu'ici, le temps du lancement. Ils ne sont ni
-   * stockés dans la configuration, ni renvoyés par `describeConfig`, ni
-   * journalisés — et le modèle ne les voit jamais.
-   */
   async #resolveEnv(
     literals: Record<string, string>,
     refs: Record<string, string>,

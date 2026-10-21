@@ -1,11 +1,11 @@
 import { AppError, type AppErrorOptions } from "@nexus/shared";
 
 /**
- * Erreurs MCP.
+ * MCP errors.
  *
- * Toutes sont exploitables par l'agent : elles portent un code stable, un
- * message sûr à afficher, et un caractère réessayable. Une panne de serveur MCP
- * ne doit jamais remonter comme une exception opaque.
+ * All MCP errors are structured for agent consumption: stable code,
+ * safe userMessage, and retryable flag. An MCP server failure must never
+ * bubble up as an opaque exception.
  */
 
 export class McpConnectionError extends AppError {
@@ -17,7 +17,7 @@ export class McpConnectionError extends AppError {
   constructor(server: string, options: Omit<AppErrorOptions, "userMessage">) {
     super({
       ...options,
-      userMessage: `Le serveur d'outils « ${server} » est injoignable.`,
+      userMessage: `The tool server "${server}" is unreachable.`,
       context: { server, ...options.context },
     });
     this.server = server;
@@ -32,7 +32,7 @@ export class McpTimeoutError extends AppError {
 
   constructor(server: string, timeoutMs: number, operation: string) {
     super({
-      message: `${operation} sur « ${server} » a dépassé ${String(timeoutMs)} ms`,
+      message: `${operation} on "${server}" exceeded ${String(timeoutMs)} ms`,
       userMessage: `The tool server "${server}" is not responding fast enough.`,
       context: { server, timeoutMs, operation },
     });
@@ -41,9 +41,8 @@ export class McpTimeoutError extends AppError {
 }
 
 /**
- * Le serveur est configuré mais indisponible : jamais connecté, tombé, ou
- * circuit ouvert. Distincte d'une erreur de connexion : c'est un **état**, pas
- * un incident ponctuel.
+ * Server is configured but unavailable (disconnected, down, circuit open).
+ * Represents a state rather than an isolated transient failure.
  */
 export class McpUnavailableError extends AppError {
   readonly code = "MCP_SERVER_UNAVAILABLE";
@@ -54,7 +53,7 @@ export class McpUnavailableError extends AppError {
 
   constructor(server: string, status: string, detail?: string) {
     super({
-      message: `Serveur MCP « ${server} » indisponible (état : ${status})${detail === undefined ? "" : ` — ${detail}`}`,
+      message: `MCP server "${server}" unavailable (status: ${status})${detail === undefined ? "" : ` — ${detail}`}`,
       userMessage: `The requested tool depends on server "${server}", which is unavailable. Try again later, or use another means.`,
       context: { server, status, detail },
     });
@@ -63,7 +62,7 @@ export class McpUnavailableError extends AppError {
   }
 }
 
-/** Le serveur a répondu, mais l'outil a signalé un échec (`isError: true`). */
+/** Server responded, but tool reported failure (`isError: true`). */
 export class McpToolCallError extends AppError {
   readonly code = "MCP_TOOL_FAILED";
   readonly httpStatus = 502;
@@ -72,7 +71,7 @@ export class McpToolCallError extends AppError {
 
   constructor(server: string, tool: string, detail: string) {
     super({
-      message: `L'outil MCP ${tool} (${server}) a échoué : ${detail}`,
+      message: `MCP tool ${tool} (${server}) failed: ${detail}`,
       userMessage: detail,
       context: { server, tool },
     });
@@ -81,7 +80,7 @@ export class McpToolCallError extends AppError {
   }
 }
 
-/** Schéma d'outil inexploitable : on refuse l'outil plutôt que de deviner. */
+/** Unparseable or unsupported tool schema. */
 export class McpSchemaError extends AppError {
   readonly code = "MCP_SCHEMA_UNSUPPORTED";
   readonly httpStatus = 500;
@@ -90,7 +89,7 @@ export class McpSchemaError extends AppError {
 
   constructor(server: string, tool: string, reason: string) {
     super({
-      message: `Schéma inexploitable pour ${tool} (${server}) : ${reason}`,
+      message: `Unsupported schema for ${tool} (${server}): ${reason}`,
       userMessage: "This tool declares a schema NEXUS cannot interpret.",
       context: { server, tool, reason },
     });
@@ -107,7 +106,7 @@ export class McpSecurityError extends AppError {
 
   constructor(server: string, reason: string) {
     super({
-      message: `Violation de sécurité sur le serveur MCP « ${server} » : ${reason}`,
+      message: `Security violation on MCP server "${server}": ${reason}`,
       userMessage: `Running MCP server "${server}" was blocked by the security policy.`,
       context: { server, reason },
     });

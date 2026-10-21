@@ -6,7 +6,7 @@ import { isStdioConfig } from "./config.js";
 import { McpSecurityError } from "./errors.js";
 
 /**
- * Valide que le binaire exécuté fait partie de la liste blanche autorisée.
+ * Validates that the executed command is in the allowed binaries whitelist.
  */
 export function validateBinary(command: string, allowedBinaries: string[]): boolean {
   const binaryName = basename(command);
@@ -16,7 +16,7 @@ export function validateBinary(command: string, allowedBinaries: string[]): bool
 }
 
 /**
- * Vérifie l'intégrité d'un contenu ou paquet par rapport à son hachage SHA-256 attendu.
+ * Verifies package or content integrity against expected SHA-256 hash.
  */
 export function verifyPackageChecksum(content: Buffer | string, expectedSha256: string): boolean {
   const buffer = typeof content === "string" ? Buffer.from(content, "utf-8") : content;
@@ -25,7 +25,7 @@ export function verifyPackageChecksum(content: Buffer | string, expectedSha256: 
 }
 
 /**
- * Vérifie l'intégrité d'un fichier sur disque par rapport à son empreinte SHA-256 attendue.
+ * Verifies file integrity on disk against expected SHA-256 hash.
  */
 export async function verifyFileChecksum(
   filePath: string,
@@ -40,8 +40,8 @@ export async function verifyFileChecksum(
 }
 
 /**
- * Génère un Software Bill of Materials (SBOM) léger attestant de la provenance et
- * de la configuration scellée du serveur MCP.
+ * Generates a lightweight Software Bill of Materials (SBOM) asserting provenance
+ * and sealed configuration for an MCP server.
  */
 export function generateSbom(config: McpServerConfig): McpSbom {
   const now = new Date().toISOString();
@@ -103,12 +103,11 @@ export interface PreparedStdioExecution {
 }
 
 /**
- * Gestionnaire du bac à sable conteneurisé (Bubblewrap / Docker / None)
- * pour les serveurs MCP stdio.
+ * Container sandbox manager (Bubblewrap / Docker / None) for stdio MCP servers.
  */
 export class McpSandboxManager {
   /**
-   * Prépare les paramètres d'exécution en appliquant l'isolation en bac à sable.
+   * Prepares execution parameters applying sandbox isolation policies.
    */
   static async prepareStdio(
     config: McpStdioConfig,
@@ -125,51 +124,51 @@ export class McpSandboxManager {
       };
     }
 
-    // 1. Validation de la commande / binaire
+    // 1. Validate binary against whitelist
     if (!validateBinary(config.command, sandbox.allowedBinaries)) {
       throw new McpSecurityError(
         config.name,
-        `La commande « ${config.command} » n'est pas autorisée par la politique de bac à sable.`,
+        `Command "${config.command}" is not allowed by sandbox policy.`,
       );
     }
 
-    // 2. Vérification de l'empreinte cryptographique si spécifiée
+    // 2. Cryptographic checksum verification if configured
     if (sandbox.verifyChecksum) {
       const verified = await verifyFileChecksum(config.command, sandbox.verifyChecksum);
       if (!verified) {
         throw new McpSecurityError(
           config.name,
-          `L'empreinte SHA-256 du fichier « ${config.command} » ne correspond pas à la somme attendue.`,
+          `SHA-256 checksum for "${config.command}" does not match expected digest.`,
         );
       }
     }
 
-    // 3. Moteur Bubblewrap (unprivileged Linux user namespace)
+    // 3. Bubblewrap engine (unprivileged Linux user namespace)
     if (sandbox.engine === "bwrap") {
       const bwrapCmd = options?.bwrapPath ?? "bwrap";
       const bwrapArgs: string[] = [];
 
-      // Système de fichiers : lecture seule sur la racine
+      // Filesystem: read-only root
       if (sandbox.readOnlyRoot) {
         bwrapArgs.push("--ro-bind", "/", "/");
       } else {
         bwrapArgs.push("--bind", "/", "/");
       }
 
-      // Pseudo-fichiers système essentiels
+      // Essential system pseudo-filesystems
       bwrapArgs.push("--dev", "/dev");
       bwrapArgs.push("--proc", "/proc");
       bwrapArgs.push("--tmpfs", "/tmp");
 
-      // Isolation réseau stricte si allowNetwork est faux
+      // Network isolation
       if (!sandbox.allowNetwork) {
         bwrapArgs.push("--unshare-net");
       }
 
-      // Isolation des espaces de noms (PIDs, IPC, UTS)
+      // Namespace isolation (PIDs, IPC, UTS)
       bwrapArgs.push("--unshare-pid", "--unshare-ipc", "--unshare-uts");
 
-      // Montages explicites
+      // Explicit bind mounts
       for (const mount of sandbox.bindMounts) {
         const host = resolve(mount.hostPath);
         const target = mount.containerPath ? resolve(mount.containerPath) : host;
@@ -180,12 +179,12 @@ export class McpSandboxManager {
         }
       }
 
-      // Répertoire courant
+      // Working directory
       if (config.cwd) {
         bwrapArgs.push("--chdir", resolve(config.cwd));
       }
 
-      // Environnement scellé (aucun héritage de l'hôte, seules les variables explicites)
+      // Clean environment: no host leakage, explicit variables only
       bwrapArgs.push("--clearenv");
       const pathValue = env.PATH ?? process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
       bwrapArgs.push("--setenv", "PATH", pathValue);
@@ -198,17 +197,17 @@ export class McpSandboxManager {
         }
       }
 
-      // Délimiteur de fin d'options bwrap
+      // End of bwrap options delimiter
       bwrapArgs.push("--", config.command, ...config.args);
 
       return {
         command: bwrapCmd,
         args: bwrapArgs,
-        env: {}, // Les variables sont injectées via --setenv
+        env: {}, // Variables injected via --setenv
       };
     }
 
-    // 3. Moteur Docker
+    // 4. Docker engine
     if (sandbox.engine === "docker") {
       const dockerCmd = options?.dockerPath ?? "docker";
       const dockerArgs: string[] = ["run", "-i", "--rm"];

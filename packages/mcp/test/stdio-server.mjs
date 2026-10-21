@@ -1,26 +1,18 @@
 #!/usr/bin/env node
 /**
- * Serveur MCP stdio réel, utilisé par les tests de transport.
- *
- * Il est lancé comme un vrai processus enfant par `StdioClientTransport` :
- * les tests de connexion, de crash et de reconnexion exercent donc le vrai
- * `spawn`, le vrai cadrage JSON-RPC sur stdin/stdout, et la vraie mort de
- * processus — pas une imitation.
- *
- * Variables d'environnement reconnues :
- *   NEXUS_TEST_CRASH_AFTER_MS  quitte brutalement après ce délai
- *   NEXUS_TEST_SECRET          valeur renvoyée par l'outil `whoami`
+ * Real stdio MCP server used for transport tests.
+ * Runs as a real child process spawned by `StdioClientTransport`.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const server = new McpServer({ name: "serveur-stdio", version: "0.0.1" });
+const server = new McpServer({ name: "stdio-server", version: "0.0.1" });
 
 server.registerTool(
   "add",
   {
-    description: "Additionne deux nombres.",
+    description: "Adds two numbers.",
     inputSchema: { a: z.number(), b: z.number() },
     annotations: { readOnlyHint: true },
   },
@@ -30,7 +22,7 @@ server.registerTool(
 server.registerTool(
   "whoami",
   {
-    description: "Renvoie le secret injecté dans l'environnement du processus.",
+    description: "Returns secret injected into process environment.",
     inputSchema: {},
   },
   () => ({
@@ -39,7 +31,6 @@ server.registerTool(
         type: "text",
         text: JSON.stringify({
           secret: process.env.NEXUS_TEST_SECRET ?? "(absent)",
-          // Sert a prouver qu aucune variable du backend n est heritee.
           parentLeak: process.env.NEXUS_PARENT_ONLY ?? "(absent)",
         }),
       },
@@ -49,14 +40,12 @@ server.registerTool(
 
 server.registerTool(
   "crash",
-  { description: "Tue le processus serveur, pour eprouver la reconnexion.", inputSchema: {} },
+  { description: "Kills server process to test reconnection.", inputSchema: {} },
   () => {
-    // On repond d abord, puis on meurt : le test controle ainsi l instant exact
-    // de la panne, au lieu de dependre d un minuteur.
     setTimeout(() => {
       process.exit(1);
     }, 10);
-    return { content: [{ type: "text", text: "au revoir" }] };
+    return { content: [{ type: "text", text: "goodbye" }] };
   },
 );
 

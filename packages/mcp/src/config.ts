@@ -2,10 +2,10 @@ import { z } from "zod";
 import { riskLevelSchema } from "@nexus/tools";
 
 /**
- * Configuration d'un serveur MCP.
+ * MCP server configuration.
  *
- * Elle vit en base (table `McpServer`) et se modifie depuis l'application :
- * ajouter un serveur ne redémarre pas le backend et ne touche pas au cœur agent
+ * Stored in the database (`McpServer` table) and dynamically updatable:
+ * adding an MCP server does not restart the backend or alter the agent core
  * (cf. ADR-005).
  */
 
@@ -13,18 +13,16 @@ export const mcpTransportSchema = z.enum(["stdio", "http", "sse"]);
 export type McpTransport = z.infer<typeof mcpTransportSchema>;
 
 /**
- * Politique de permission appliquée aux outils d'un serveur.
+ * Permission policy applied to tools provided by an MCP server.
  *
- * Deux niveaux : un défaut pour tout le serveur, et des surcharges par outil.
- * C'est **la seule** façon d'abaisser le risque d'un outil MCP — jamais une
- * annotation renvoyée par le serveur lui-même (voir `tool-adapter.ts`).
+ * Two levels: server default, and tool-level overrides.
  */
 export const mcpToolPolicySchema = z.object({
   permissions: z.array(z.string()).optional(),
   risk: riskLevelSchema.optional(),
   requiresConfirmation: z.boolean().optional(),
   timeoutMs: z.number().int().positive().optional(),
-  /** Exclut l'outil du registre sans désactiver tout le serveur. */
+  /** Excludes the tool from the registry without disabling the whole server. */
   disabled: z.boolean().optional(),
 });
 export type McpToolPolicy = z.infer<typeof mcpToolPolicySchema>;
@@ -106,50 +104,43 @@ export const mcpSbomSchema = z.object({
 export type McpSbom = z.infer<typeof mcpSbomSchema>;
 
 const baseConfig = z.object({
-  /** Identifiant court et stable ; il préfixe les outils : `mcp.<name>.<outil>`. */
+  /** Short stable identifier prefixing tools: `mcp.<name>.<tool>`. */
   name: z
     .string()
     .min(1)
     .max(40)
-    .regex(/^[a-z0-9][a-z0-9-]*$/, "minuscules, chiffres et tirets uniquement"),
+    .regex(/^[a-z0-9][a-z0-9-]*$/, "lowercase letters, numbers and hyphens only"),
   enabled: z.boolean().default(true),
 
-  /** Permissions exigées par défaut pour tout outil de ce serveur. */
+  /** Default permissions required for any tool on this server. */
   defaultPermissions: z.array(z.string()).default([]),
   /**
-   * Risque par défaut des outils découverts.
-   *
-   * `MEDIUM` — donc confirmation — parce qu'un serveur MCP tiers est du code
-   * non audité dont on ne sait pas ce qu'il fait. L'abaisser est une décision
-   * humaine, prise outil par outil.
+   * Default risk level for discovered tools.
+   * `MEDIUM` by default requiring confirmation.
    */
   defaultRisk: riskLevelSchema.default("MEDIUM"),
   toolPolicies: z.record(z.string(), mcpToolPolicySchema).default({}),
 
-  /** Délai d'établissement de la connexion et du handshake. */
+  /** Connection and handshake timeout in ms. */
   connectTimeoutMs: z.number().int().positive().default(15_000),
-  /** Délai d'un appel d'outil. */
+  /** Tool execution timeout in ms. */
   requestTimeoutMs: z.number().int().positive().default(60_000),
 
-  /** Reconnexion automatique après une chute. */
+  /** Automatic reconnection. */
   autoReconnect: z.boolean().default(true),
   maxReconnectAttempts: z.number().int().min(0).default(5),
   reconnectInitialDelayMs: z.number().int().positive().default(500),
   reconnectMaxDelayMs: z.number().int().positive().default(30_000),
-  /**
-   * Nombre d'échecs consécutifs avant ouverture du circuit. Les outils du
-   * serveur disparaissent alors du registre : un serveur défaillant ne doit pas
-   * dégrader tout l'assistant.
-   */
+  /** Consecutive failures before opening circuit breaker. */
   circuitBreakerThreshold: z.number().int().min(1).default(5),
   circuitBreakerResetMs: z.number().int().positive().default(60_000),
 
-  /** Expose aussi les ressources du serveur comme outils de lecture. */
+  /** Expose server resources as read tools. */
   exposeResources: z.boolean().default(true),
 
-  /** Politique de bac à sable conteneurisé (bwrap / docker / none). */
+  /** Container sandbox policy (bwrap / docker / none). */
   sandbox: mcpSandboxPolicySchema.default(DEFAULT_MCP_SANDBOX_POLICY),
-  /** Software Bill of Materials (SBOM) et provenance auditée. */
+  /** Software Bill of Materials (SBOM) and verified provenance. */
   sbom: mcpSbomSchema.optional(),
 });
 
@@ -157,14 +148,7 @@ const stdioConfig = baseConfig.extend({
   transport: z.literal("stdio"),
   command: z.string().min(1),
   args: z.array(z.string()).default([]),
-  /**
-   * Variables d'environnement du processus enfant.
-   *
-   * Rien n'est hérité du backend : un serveur MCP ne doit voir que ce qu'on lui
-   * donne explicitement. Les valeurs sensibles arrivent par `envRefs`, résolues
-   * au lancement depuis le coffre — elles ne sont ni stockées ici, ni
-   * journalisées.
-   */
+  /** Child process environment variables. */
   env: z.record(z.string(), z.string()).default({}),
   envRefs: z.record(z.string(), z.string()).default({}),
   cwd: z.string().optional(),
@@ -172,7 +156,7 @@ const stdioConfig = baseConfig.extend({
 
 const httpConfig = baseConfig.extend({
   transport: z.union([z.literal("http"), z.literal("sse")]),
-  url: z.string().refine((value) => URL.canParse(value), "URL invalide"),
+  url: z.string().refine((value) => URL.canParse(value), "invalid URL"),
   headers: z.record(z.string(), z.string()).default({}),
   headerRefs: z.record(z.string(), z.string()).default({}),
 });
@@ -188,19 +172,15 @@ export function isStdioConfig(config: McpServerConfig): config is McpStdioConfig
 }
 
 /**
- * Valide une configuration brute (fichier, base, interface).
- * Une configuration invalide est refusée à l'entrée, jamais à l'usage.
+ * Validates raw configuration (file, DB, UI).
  */
 export function parseMcpServerConfig(input: unknown): McpServerConfig {
   return mcpServerConfigSchema.parse(input);
 }
 
 /**
- * Représentation sûre à journaliser.
- *
- * Les valeurs d'environnement et d'en-têtes sont remplacées par leurs seules
- * clés : savoir qu'une variable existe est utile au diagnostic, connaître sa
- * valeur ne l'est jamais.
+ * Safe representation for logging.
+ * Environment and header values are redacted, keeping only keys.
  */
 export function describeConfig(config: McpServerConfig): Record<string, unknown> {
   const common = {
