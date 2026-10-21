@@ -10,55 +10,43 @@ import { voiceCommand } from "./voice.js";
 import { BROWSER_UNIT, MISSION_ENGINE_UNIT } from "./systemd.js";
 
 /**
- * `nexus` — installation, diagnostic et conduite d'une instance.
- *
- * Une CLI plutôt qu'un document d'installation, parce que la configuration
- * manuelle de NEXUS a un coût mesurable : des chemins absolus dans une unité
- * systemd, une clé éphémère qui désactive silencieusement l'authentification
- * entre services, une base en retard de migration. Chacun de ces états
- * fonctionne *presque*, et c'est ce qui les rend coûteux.
- *
- * Pas de dépendance d'analyse d'arguments : la surface est petite et stable, et
- * un `switch` lisible vaut mieux qu'une bibliothèque de plus dans un projet qui
- * en compte déjà beaucoup.
+ * `nexus` — installation, diagnostics, and management of a NEXUS instance.
  */
 
-const USAGE = `nexus — installation, diagnostic et conduite d'une instance NEXUS
+const USAGE = `nexus — installation, diagnostics, and management of a NEXUS instance
 
-  nexus doctor              diagnostique l'installation et dit ce qui manque
-  nexus setup [options]     met l'installation en conformité (idempotent)
-  nexus start [service]     démarre les services (moteur, navigateur)
-  nexus stop [service]      arrête les services
-  nexus backup [options]    sauvegarde complète, avec rotation
-  nexus restore <archive>   restaure une sauvegarde sur cette installation
+  nexus doctor              diagnoses the installation and reports issues
+  nexus setup [options]     brings installation into compliance (idempotent)
+  nexus start [service]     starts services (engine, browser)
+  nexus stop [service]      stops services
+  nexus backup [options]    complete backup with automated rotation
+  nexus restore <archive>   restores a backup onto this installation
   nexus policy [init|show|check]
-                            politique locale de cet appareil
+                            local device policy management
   nexus voice [check|dictate]
-                            dictée et synthèse locales
+                            local voice dictation and synthesis
 
-Options communes
-  --root <chemin>           installation visée, au lieu de celle qui contient
-                            le répertoire courant
+Common Options
+  --root <path>             target installation root instead of current directory
 
-Options de setup
-  --dry-run                 affiche le plan sans rien écrire
-  --rotate-keys             remplace la clé de signature existante
-  --api-url <url>           base de l'API inscrite dans l'unité systemd
+Setup Options
+  --dry-run                 preview execution plan without writing changes
+  --rotate-keys             regenerate existing persistent signing key
+  --api-url <url>           API base URL configured in systemd unit
 
-Options de backup
-  --passphrase <mot>        chiffre l'archive (AES-256-GCM, scrypt)
-  --include-secrets         inclut .env — à n'utiliser qu'avec --passphrase
-  --keep <n>                archives conservées par la rotation (défaut 7)
-  --verify <archive>        vérifie qu'une archive est restaurable, sans rien
-                            restaurer sur cette installation
+Backup Options
+  --passphrase <word>       encrypt archive (AES-256-GCM, scrypt)
+  --include-secrets         include .env — only use with --passphrase
+  --keep <n>                number of archives retained by rotation (default 7)
+  --verify <archive>        verifies archive integrity without restoring
 
-Options de restore
-  --passphrase <mot>        déchiffre l'archive
-  --yes                     confirme l'écrasement des données existantes
+Restore Options
+  --passphrase <word>       decrypts archive
+  --yes                     confirms overwriting existing databases and state
 
-Codes de sortie
-  0  tout va bien
-  1  au moins une vérification en échec, ou une action impossible
+Exit Codes
+  0  all checks passed
+  1  one or more checks failed, or operation could not be completed
 `;
 
 type Command =
@@ -73,9 +61,6 @@ async function main(argv: string[]): Promise<number> {
     return rawCommand === "help" || rawCommand === "--help" || rawCommand === "-h" ? 0 : 1;
   }
 
-  // `--root` vise une autre installation que celle qui contient le répertoire
-  // courant. Utile pour sauvegarder depuis ailleurs, et c'est ce qui permet au
-  // scénario de réinstallation de ne jamais toucher l'installation vivante.
   const explicitRoot = valueOf(rest, "--root");
   const root = explicitRoot ?? findRepositoryRoot(process.cwd());
   const paths = resolvePaths(root);
@@ -102,7 +87,7 @@ async function main(argv: string[]): Promise<number> {
 
 async function doctorCommand(paths: ReturnType<typeof resolvePaths>): Promise<number> {
   const env = readEnvFile(paths.envFile);
-  process.stdout.write(`\nNEXUS — diagnostic\n  installation : ${paths.root}\n`);
+  process.stdout.write(`\nNEXUS — diagnostics\n  installation: ${paths.root}\n`);
   const groups = await runDoctor({ paths, probes: systemProbes, env });
   process.stdout.write(`${renderReport(groups)}\n`);
   return exitCodeFor(groups);
@@ -116,8 +101,6 @@ async function setupCommand(
   const rotateKeys = args.includes("--rotate-keys");
   const apiUrl = valueOf(args, "--api-url");
 
-  // Résolu ici parce que c'est la seule partie asynchrone : le planificateur
-  // reste synchrone, donc testable sans machine.
   const pnpmPath = (await systemProbes.command("sh", ["-c", "command -v pnpm"])) ?? "pnpm";
 
   const plan = planSetup({
@@ -128,12 +111,12 @@ async function setupCommand(
     ...(apiUrl === undefined ? {} : { apiUrl }),
   });
 
-  process.stdout.write(`\nNEXUS — ${dryRun ? "plan d'installation" : "installation"}\n`);
-  process.stdout.write(`  installation : ${paths.root}\n\n`);
+  process.stdout.write(`\nNEXUS — ${dryRun ? "setup plan" : "setup"}\n`);
+  process.stdout.write(`  installation: ${paths.root}\n\n`);
 
   for (const action of plan.actions) {
     const mark = action.needed ? (dryRun ? "·" : "→") : "✓";
-    const suffix = action.needed ? "" : " (déjà en place)";
+    const suffix = action.needed ? "" : " (already configured)";
     process.stdout.write(
       `  ${mark} ${action.label}${suffix}${action.detail === undefined ? "" : `\n      ${action.detail}`}\n`,
     );
@@ -142,11 +125,11 @@ async function setupCommand(
   if (!dryRun) {
     const { applied, skipped } = applyPlan(plan);
     process.stdout.write(
-      `\n${applied.length} action(s) appliquée(s), ${skipped.length} inchangée(s)\n`,
+      `\n${applied.length} action(s) applied, ${skipped.length} unchanged\n`,
     );
     if (applied.length > 0) {
       process.stdout.write(
-        "\nRecharger systemd pour que les unités réécrites soient prises en compte :\n" +
+        "\nReload systemd user daemon to activate updated service units:\n" +
           "  systemctl --user daemon-reload && nexus start\n",
       );
     }
@@ -167,10 +150,10 @@ async function backupCommand(
   if (verifyTarget !== undefined) {
     const databaseUrl = readEnvFile(paths.envFile).DATABASE_URL;
     if (databaseUrl === undefined) {
-      process.stderr.write("DATABASE_URL absent : impossible de vérifier une restauration.\n");
+      process.stderr.write("DATABASE_URL missing: cannot verify restoration target.\n");
       return 1;
     }
-    process.stdout.write(`\nNEXUS — vérification de ${verifyTarget}\n\n`);
+    process.stdout.write(`\nNEXUS — verification of ${verifyTarget}\n\n`);
     const { checks } = await verifyBackup(verifyTarget, {
       databaseUrl,
       ...(passphrase === undefined ? {} : { passphrase }),
@@ -185,7 +168,7 @@ async function backupCommand(
   const keepRaw = valueOf(args, "--keep");
   const keep = keepRaw === undefined ? 7 : Number(keepRaw);
   if (!Number.isInteger(keep) || keep < 1) {
-    process.stderr.write("--keep attend un entier supérieur ou égal à 1.\n");
+    process.stderr.write("--keep requires an integer >= 1.\n");
     return 1;
   }
 
@@ -196,18 +179,18 @@ async function backupCommand(
     ...(passphrase === undefined ? {} : { passphrase }),
   });
 
-  process.stdout.write(`\nNEXUS — sauvegarde\n  ${outcome.path}\n\n`);
+  process.stdout.write(`\nNEXUS — backup\n  ${outcome.path}\n\n`);
   for (const entry of outcome.manifest.entries) {
     process.stdout.write(`  ✓ ${entry.name.padEnd(42)} ${formatBytes(entry.bytes)}\n`);
   }
   if (outcome.rotated.length > 0) {
     process.stdout.write(
-      `\n  ${outcome.rotated.length} archive(s) plus ancienne(s) supprimée(s)\n`,
+      `\n  ${outcome.rotated.length} older archive(s) pruned\n`,
     );
   }
   for (const warning of outcome.warnings) process.stdout.write(`\n  ! ${warning}\n`);
   process.stdout.write(
-    `\nVérifier qu'elle est restaurable :\n  nexus backup --verify ${outcome.path}\n\n`,
+    `\nVerify restorable integrity with:\n  nexus backup --verify ${outcome.path}\n\n`,
   );
   return 0;
 }
@@ -218,16 +201,13 @@ async function restoreCommand(
 ): Promise<number> {
   const archive = args.find((arg) => !arg.startsWith("-"));
   if (archive === undefined) {
-    process.stderr.write("usage : nexus restore <archive> [--passphrase <mot>] --yes\n");
+    process.stderr.write("usage: nexus restore <archive> [--passphrase <word>] --yes\n");
     return 1;
   }
   if (!args.includes("--yes")) {
-    // Une restauration écrase des données vivantes. Exiger un accord explicite
-    // plutôt qu'une question interactive : la commande reste utilisable depuis
-    // un script, et personne ne la lance par réflexe.
     process.stderr.write(
-      "La restauration remplace la base PostgreSQL et celle du moteur.\n" +
-        "Relancer avec --yes pour confirmer.\n",
+      "Restoration overwrites the PostgreSQL database and Mission Engine database.\n" +
+        "Rerun with --yes to confirm.\n",
     );
     return 1;
   }
@@ -238,18 +218,18 @@ async function restoreCommand(
     ...(passphrase === undefined ? {} : { passphrase }),
   });
 
-  process.stdout.write(`\nNEXUS — restauration de ${archive}\n\n`);
+  process.stdout.write(`\nNEXUS — restoring ${archive}\n\n`);
   for (const item of outcome.applied) process.stdout.write(`  ✓ ${item}\n`);
   for (const item of outcome.skipped) process.stdout.write(`  – ${item}\n`);
   for (const warning of outcome.warnings) process.stdout.write(`\n  ! ${warning}\n`);
-  process.stdout.write("\nPuis :\n  nexus doctor\n\n");
+  process.stdout.write("\nNext step:\n  nexus doctor\n\n");
   return 0;
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Kio`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mio`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 const UNITS: Record<string, string> = {
@@ -274,11 +254,11 @@ async function serviceCommand(action: "start" | "stop", args: string[]): Promise
 
     if (result === undefined || !expected) {
       failures += 1;
-      process.stdout.write(`  ✗ ${unit} — ${action} sans effet\n`);
+      process.stdout.write(`  ✗ ${unit} — ${action} failed\n`);
       process.stdout.write(`      → journalctl --user -u ${unit} -n 30\n`);
       continue;
     }
-    process.stdout.write(`  ✓ ${unit} — ${state.active ? "active" : "arrêtée"}\n`);
+    process.stdout.write(`  ✓ ${unit} — ${state.active ? "active" : "stopped"}\n`);
   }
   return failures > 0 ? 1 : 0;
 }

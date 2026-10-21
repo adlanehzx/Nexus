@@ -1,11 +1,11 @@
 name: nexus-activepieces
 
-# Déploiement local isolé d'Activepieces pour NEXUS.
+# Isolated local Activepieces deployment for NEXUS.
 #
-# Caractéristiques d'isolation :
-# - Boucle locale stricte 127.0.0.1 (aucune exposition réseau extérieur ni tailnet).
-# - Base de données PostgreSQL dédiée isolée ou partagée sur le réseau interne conteneur.
-# - Clés d'encryption et secrets JWT gérés en local.
+# Isolation features:
+# - Strict localhost binding 127.0.0.1 (no exposure to LAN or external network).
+# - Dedicated PostgreSQL database isolated or shared across the internal container bridge.
+# - Local encryption keys and JWT secrets.
 
 services:
   activepieces:
@@ -13,7 +13,7 @@ services:
     container_name: nexus-activepieces
     restart: unless-stopped
     ports:
-      # Boucle locale uniquement
+      # Localhost only
       - "127.0.0.1:8080:80"
     environment:
       AP_ENVIRONMENT: "production"

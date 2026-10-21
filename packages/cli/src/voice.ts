@@ -10,21 +10,10 @@ import {
 } from "@nexus/voice";
 
 /**
- * `nexus voice` — vérifier et essayer la voix locale.
+ * `nexus voice` — local voice testing and diagnostics.
  *
- * Deux commandes, et la première est la plus utile :
- *
- *   nexus voice check     ce qui manque, et le geste qui corrige
- *   nexus voice dictate   une dictée réelle, et le texte obtenu
- *
- * `check` existe parce que la voix locale a quatre dépendances externes —
- * whisper.cpp, un modèle, Piper, une voix — et que leur absence se manifeste
- * autrement : par un micro qui s'ouvre et ne rend rien. Une commande qui nomme
- * la pièce manquante remplace une demi-heure de recherche.
- *
- * `dictate` est la seule façon d'être sûr : les tests éprouvent le cycle de vie
- * avec des doublures, parce qu'aucune suite de tests ne peut brancher un micro.
- * La dictée réelle, elle, ne se vérifie qu'en parlant.
+ *   nexus voice check     diagnoses missing voice components
+ *   nexus voice dictate   runs a test dictation and prints output
  */
 
 export interface VoicePaths {
@@ -36,11 +25,9 @@ export interface VoicePaths {
 export function voicePaths(home = homedir()): VoicePaths {
   const root = join(home, ".nexus");
   return {
-    model: process.env.NEXUS_WHISPER_MODEL ?? join(root, "modeles", "ggml-base.bin"),
-    voice: process.env.NEXUS_PIPER_VOICE ?? join(root, "voix", "fr_FR-siwis-medium.onnx"),
-    // Hors de `/tmp` partagé : un dossier à nous, en 0700, qu'on peut purger
-    // sans se demander à qui appartient le reste.
-    scratch: join(root, "audio-temporaire"),
+    model: process.env.NEXUS_WHISPER_MODEL ?? join(root, "models", "ggml-base.bin"),
+    voice: process.env.NEXUS_PIPER_VOICE ?? join(root, "voices", "en_US-lessac-medium.onnx"),
+    scratch: join(root, "audio-scratch"),
   };
 }
 
@@ -52,7 +39,7 @@ function build(paths: VoicePaths) {
     clock: systemClock,
     scratch,
     modelPath: paths.model,
-    language: "fr",
+    language: "en",
   });
   const speech = new PiperSpeech({ process: systemProcess, modelPath: paths.voice });
   return { dictation, speech };
@@ -69,7 +56,7 @@ export async function voiceCommand(args: string[]): Promise<number> {
       return dictate(paths, args);
     default:
       process.stderr.write(
-        `sous-commande inconnue : ${subcommand}\nusage : nexus voice [check|dictate]\n`,
+        `unknown subcommand: ${subcommand}\nusage: nexus voice [check|dictate]\n`,
       );
       return 1;
   }
@@ -77,7 +64,7 @@ export async function voiceCommand(args: string[]): Promise<number> {
 
 async function checkVoice(paths: VoicePaths): Promise<number> {
   const { dictation, speech } = build(paths);
-  process.stdout.write("\nNEXUS — voix locale\n\n");
+  process.stdout.write("\nNEXUS — local voice\n\n");
 
   const dictationState = await dictation.availability();
   const speechState = await speech.availability();
@@ -85,24 +72,21 @@ async function checkVoice(paths: VoicePaths): Promise<number> {
   const line = (label: string, state: { ok: boolean; reason?: string; remedy?: string }) => {
     process.stdout.write(`  ${state.ok ? "✓" : "✗"} ${label.padEnd(22)}`);
     process.stdout.write(
-      state.ok ? "prête\n" : `${state.reason ?? ""}\n      → ${state.remedy ?? ""}\n`,
+      state.ok ? "ready\n" : `${state.reason ?? ""}\n      → ${state.remedy ?? ""}\n`,
     );
   };
 
-  line("dictée (whisper.cpp)", dictationState);
-  line("synthèse (Piper)", speechState);
+  line("dictation (whisper.cpp)", dictationState);
+  line("synthesis (Piper)", speechState);
 
-  process.stdout.write(`\n  modèle    ${paths.model}\n  voix      ${paths.voice}\n`);
-  process.stdout.write(`  audio     ${paths.scratch} (aucun enregistrement conservé)\n\n`);
+  process.stdout.write(`\n  model     ${paths.model}\n  voice     ${paths.voice}\n`);
+  process.stdout.write(`  audio     ${paths.scratch} (no persistent recordings kept)\n\n`);
 
   if (!dictationState.ok || !speechState.ok) {
     process.stdout.write(
-      "  Les deux sont indépendantes : la dictée fonctionne sans la synthèse,\n" +
-        "  et NEXUS n'a jamais besoin de parler pour être utilisable.\n\n",
+      "  Both systems are independent: dictation works without speech synthesis.\n\n",
     );
   }
-  // La synthèse n'est pas obligatoire : lire à voix haute est facultatif, donc
-  // son absence n'est pas un échec de l'installation.
   return dictationState.ok ? 0 : 1;
 }
 
@@ -117,11 +101,11 @@ async function dictate(paths: VoicePaths, args: string[]): Promise<number> {
   const secondsRaw = args[args.indexOf("--seconds") + 1];
   const seconds = args.includes("--seconds") ? Number(secondsRaw) : 5;
   if (!Number.isFinite(seconds) || seconds < 1 || seconds > 60) {
-    process.stderr.write("--seconds attend un nombre entre 1 et 60.\n");
+    process.stderr.write("--seconds requires a number between 1 and 60.\n");
     return 1;
   }
 
-  process.stdout.write(`\nParlez — ${String(seconds)} secondes.\n\n`);
+  process.stdout.write(`\nSpeak now — ${String(seconds)} seconds.\n\n`);
   await dictation.start({
     onPartial: (text) => {
       process.stdout.write(`  … ${text}\n`);
@@ -131,10 +115,10 @@ async function dictate(paths: VoicePaths, args: string[]): Promise<number> {
   const result = await dictation.stop();
 
   if (result.text.length === 0) {
-    process.stdout.write("\n  (rien entendu)\n\n");
+    process.stdout.write("\n  (no speech detected)\n\n");
     return 0;
   }
-  process.stdout.write(`\n  « ${result.text} »\n\n`);
+  process.stdout.write(`\n  "${result.text}"\n\n`);
 
   if (args.includes("--speak") && (await speech.isAvailable())) {
     await speech.speak(result.text);

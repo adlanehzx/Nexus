@@ -1,30 +1,25 @@
 /**
- * Cadre de diagnostic.
+ * Diagnostic reporting framework.
  *
- * Un diagnostic n'a de valeur que s'il est **cru**. Deux décisions en
- * découlent, et elles gouvernent tout ce fichier.
+ * A diagnostic is only valuable if it is trusted. Two core principles:
  *
- * D'abord, une vérification ne rend jamais un booléen : elle rend un état, un
- * constat et, quand c'est possible, le geste qui corrige. « PostgreSQL : échec »
- * oblige à chercher ; « PostgreSQL injoignable sur 127.0.0.1:15432 — lancer
- * `pnpm docker:up` » ferme la question.
+ * First, a check never yields a bare boolean: it yields a status, factual detail,
+ * and, when applicable, an actionable fix command.
  *
- * Ensuite, `warn` existe et n'est pas un `fail` déguisé. Une installation
- * personnelle sans authentification de service fonctionne ; elle est seulement
- * moins protégée qu'elle pourrait l'être. Confondre les deux conduit à l'un des
- * deux désastres habituels : un diagnostic toujours rouge, qu'on finit par
- * ignorer, ou un diagnostic toujours vert, qui ne dit rien.
+ * Second, `warn` is distinct from `fail`. An unauthenticated local setup works,
+ * but with reduced protection. Conflating the two leads either to a permanently red
+ * dashboard that gets ignored, or a permanently green one that asserts nothing.
  */
 
 export type CheckStatus = "ok" | "warn" | "fail" | "skip";
 
 export interface CheckResult {
-  /** Ce qui est vérifié, du point de vue de la personne qui lit. */
+  /** Checked item name. */
   name: string;
   status: CheckStatus;
-  /** Constat factuel : ce qu'on a trouvé, pas ce qu'on en déduit. */
+  /** Factual observation: what was inspected, not inferred. */
   detail: string;
-  /** Le geste qui corrige, quand il en existe un. */
+  /** Actionable command or instruction to remediate. */
   fix?: string;
 }
 
@@ -41,9 +36,7 @@ const MARKS: Record<CheckStatus, string> = {
 };
 
 /**
- * Compte par état.
- *
- * Séparé du rendu pour que la politique de sortie se teste sans lire du texte.
+ * Counts results by status.
  */
 export function tally(groups: CheckGroup[]): Record<CheckStatus, number> {
   const counts: Record<CheckStatus, number> = { ok: 0, warn: 0, fail: 0, skip: 0 };
@@ -54,17 +47,13 @@ export function tally(groups: CheckGroup[]): Record<CheckStatus, number> {
 }
 
 /**
- * Code de sortie du diagnostic.
- *
- * Seul un `fail` échoue. Un `warn` est une information, et faire échouer sur
- * un avertissement reviendrait à n'avoir aucun moyen de dire « ceci mérite ton
- * attention mais ne casse rien » — la distinction disparaîtrait à l'usage.
+ * Diagnostic exit code: only `fail` exits with non-zero code.
  */
 export function exitCodeFor(groups: CheckGroup[]): number {
   return tally(groups).fail > 0 ? 1 : 0;
 }
 
-/** Rend le rapport en texte. Pure : c'est ce qui la rend testable. */
+/** Pure report renderer. */
 export function renderReport(groups: CheckGroup[]): string {
   const lines: string[] = [];
 
@@ -74,8 +63,6 @@ export function renderReport(groups: CheckGroup[]): string {
     const width = Math.max(...group.results.map((result) => result.name.length));
     for (const result of group.results) {
       lines.push(`  ${MARKS[result.status]} ${result.name.padEnd(width)}  ${result.detail}`);
-      // Le geste correctif est sur sa propre ligne, indenté : on le copie sans
-      // avoir à le découper d'une phrase.
       if (result.fix !== undefined) lines.push(`${" ".repeat(width + 7)}→ ${result.fix}`);
     }
   }
@@ -83,7 +70,7 @@ export function renderReport(groups: CheckGroup[]): string {
   const counts = tally(groups);
   lines.push(
     "",
-    `${counts.ok} ok · ${counts.warn} à surveiller · ${counts.fail} en échec · ${counts.skip} non applicable`,
+    `${counts.ok} ok · ${counts.warn} warning · ${counts.fail} failed · ${counts.skip} skipped`,
   );
   return lines.join("\n");
 }

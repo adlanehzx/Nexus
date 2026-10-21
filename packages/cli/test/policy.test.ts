@@ -5,16 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadDevicePolicy } from "@nexus/device-policy";
 import { POLICY_EXAMPLE, defaultPolicyPath, policyCommand } from "../src/policy.js";
 
-/**
- * `nexus policy`.
- *
- * Le test qui compte est le premier : l'exemple produit par `init` doit être
- * **valide**. La première version ne l'était pas — une liste dont toutes les
- * entrées sont commentées vaut `null` et non `[]` — et seul le fait de lancer
- * la commande l'a montré.
- */
-
-describe("l'exemple livré", () => {
+describe("delivered policy example", () => {
   let directory: string;
   let path: string;
 
@@ -27,20 +18,19 @@ describe("l'exemple livré", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  it("se relit sans erreur", async () => {
+  it("reads back cleanly without errors", async () => {
     await writeFile(path, POLICY_EXAMPLE);
     const loaded = await loadDevicePolicy(path);
     expect(loaded.source).toBe("fichier");
   });
 
-  it("ne donne aucun accès tant qu'on ne l'a pas édité", async () => {
+  it("grants zero access until edited", async () => {
     await writeFile(path, POLICY_EXAMPLE);
     const { policy } = await loadDevicePolicy(path);
-    // Un exemple qui ouvrirait le dossier personnel serait recopié tel quel.
     expect(policy.filesystem.allow).toEqual([]);
   });
 
-  it("refuse déjà les endroits qui comptent", async () => {
+  it("denies sensitive paths by default", async () => {
     await writeFile(path, POLICY_EXAMPLE);
     const { policy } = await loadDevicePolicy(path);
     expect(policy.filesystem.deny.under).toContain("~/.ssh");
@@ -50,22 +40,20 @@ describe("l'exemple livré", () => {
     expect(policy.git.allowWrite).toBe(false);
   });
 
-  it("init écrit le fichier et refuse d'écraser sans --force", async () => {
+  it("init writes file and refuses overwrite without --force", async () => {
     expect(await policyCommand(["init", "--file", path])).toBe(0);
     const first = await readFile(path, "utf8");
     expect(first).toBe(POLICY_EXAMPLE);
 
-    await writeFile(path, `${POLICY_EXAMPLE}# édité à la main\n`);
-    // Ce fichier est la seule défense locale : le réinitialiser par mégarde
-    // remplacerait une politique réfléchie par un exemple.
+    await writeFile(path, `${POLICY_EXAMPLE}# hand edited\n`);
     expect(await policyCommand(["init", "--file", path])).toBe(1);
-    expect(await readFile(path, "utf8")).toContain("édité à la main");
+    expect(await readFile(path, "utf8")).toContain("hand edited");
 
     expect(await policyCommand(["init", "--file", path, "--force"])).toBe(0);
-    expect(await readFile(path, "utf8")).not.toContain("édité à la main");
+    expect(await readFile(path, "utf8")).not.toContain("hand edited");
   });
 
-  it("check rend 2 sur un refus, 0 sur une autorisation", async () => {
+  it("check returns 2 on denial, 0 on authorization", async () => {
     await writeFile(
       path,
       [
@@ -75,34 +63,29 @@ describe("l'exemple livré", () => {
         "    - /tmp",
         "  deny:",
         "    under:",
-        "      - /tmp/interdit",
+        "      - /tmp/forbidden",
       ].join("\n"),
     );
-    // Un refus n'est pas une erreur de la commande : on a posé une question et
-    // obtenu une réponse. Le code reflète la réponse, ce qui rend la commande
-    // utilisable dans un script de vérification.
     expect(await policyCommand(["check", "--file", path, "--path", "/tmp/ok.txt"])).toBe(0);
-    expect(await policyCommand(["check", "--file", path, "--path", "/tmp/interdit/x"])).toBe(2);
+    expect(await policyCommand(["check", "--file", path, "--path", "/tmp/forbidden/x"])).toBe(2);
   });
 
-  it("check signale un fichier cassé sans appliquer de défauts", async () => {
+  it("check reports broken file without falling back to defaults", async () => {
     await writeFile(path, "version: 1\nfilesystem:\n  allow: [a, b\n");
     expect(await policyCommand(["check", "--file", path])).toBe(1);
   });
 
-  it("show fonctionne même sans fichier, et dit que tout est refusé", async () => {
+  it("show works even without policy file and states everything is denied", async () => {
     expect(await policyCommand(["show", "--file", join(directory, "absent.yaml")])).toBe(0);
   });
 
-  it("refuse une sous-commande inconnue", async () => {
-    expect(await policyCommand(["efface", "--file", path])).toBe(1);
+  it("rejects unknown subcommand", async () => {
+    expect(await policyCommand(["delete", "--file", path])).toBe(1);
   });
 });
 
-describe("l'exemple versionné", () => {
-  it("est identique à celui que `init` écrit", async () => {
-    // Un exemple versionné se lit sans rien lancer, et c'est son intérêt. Mais
-    // une copie dérive : ce test est ce qui l'empêche de mentir.
+describe("versioned template", () => {
+  it("matches identical template written by init", async () => {
     const { fileURLToPath } = await import("node:url");
     const here = fileURLToPath(new URL(".", import.meta.url));
     const versioned = await readFile(
@@ -113,31 +96,28 @@ describe("l'exemple versionné", () => {
   });
 });
 
-describe("emplacement par défaut", () => {
-  it("vit dans ~/.nexus", () => {
+describe("default location", () => {
+  it("lives under ~/.nexus", () => {
     expect(defaultPolicyPath("/srv/nexus-user")).toBe("/srv/nexus-user/.nexus/device-policy.yaml");
   });
 });
 
 describe("nexus voice", () => {
-  it("place le modèle et la voix sous ~/.nexus", async () => {
+  it("places model and voice under ~/.nexus", async () => {
     const { voicePaths } = await import("../src/voice.js");
     const paths = voicePaths("/srv/nexus-user");
-    expect(paths.model).toContain("/srv/nexus-user/.nexus/modeles");
-    expect(paths.voice).toContain("/srv/nexus-user/.nexus/voix");
-    // Hors de `/tmp` partagé : un dossier à nous, qu'on peut purger sans se
-    // demander à qui appartient le reste.
-    expect(paths.scratch).toBe("/srv/nexus-user/.nexus/audio-temporaire");
+    expect(paths.model).toContain("/srv/nexus-user/.nexus/models");
+    expect(paths.voice).toContain("/srv/nexus-user/.nexus/voices");
+    expect(paths.scratch).toBe("/srv/nexus-user/.nexus/audio-scratch");
   });
 
-  it("refuse une sous-commande inconnue", async () => {
+  it("rejects unknown subcommand", async () => {
     const { voiceCommand } = await import("../src/voice.js");
-    expect(await voiceCommand(["parle"])).toBe(1);
+    expect(await voiceCommand(["speak"])).toBe(1);
   });
 
-  it("refuse une durée de dictée absurde", async () => {
+  it("rejects invalid dictation duration", async () => {
     const { voiceCommand } = await import("../src/voice.js");
-    // 1 à 60 secondes : au-delà, ce n'est plus une dictée, c'est une écoute.
     expect(await voiceCommand(["dictate", "--seconds", "600"])).toBe(1);
   });
 });

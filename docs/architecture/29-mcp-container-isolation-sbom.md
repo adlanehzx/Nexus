@@ -1,25 +1,25 @@
-# 29. Isolation Conteneurisée MCP, Bwrap, Contrôle Réseau et SBOM
+# 29. MCP Container Isolation, Bwrap, Network Control, and SBOM
 
-## 1. Contexte et Objectifs
+## 1. Context and Goals
 
-Les serveurs MCP (Model Context Protocol) exécutent des binaires ou runtimes locaux (`node`, `python`, `npx`, `uvx`, etc.) susceptibles d'être compromis, de contenir des dépendances vulnérables ou d'exfiltrer des données sensibles.
+MCP (Model Context Protocol) servers run local binaries and runtimes (`node`, `python`, `npx`, `uvx`, etc.) that could be compromised, contain vulnerable dependencies, or attempt to exfiltrate sensitive data.
 
-Dans NEXUS, aucun serveur MCP ne doit s'exécuter avec les privilèges complets de la machine hôte :
+In NEXUS, no MCP server may run with unrestricted privileges on the host machine:
 
-1. **Isolation par conteneur / bac à sable** : Chaque serveur MCP tourne dans son propre bac à sable Bubblewrap (`bwrap`) ou conteneur (`docker`).
-2. **Système de fichiers en lecture seule** : Racine (`/`) montée en `--ro-bind` en lecture seule stricte.
-3. **Bind mounts explicites** : Seuls les répertoires nécessaires (ex. `/workspace`) sont montés explicitement.
-4. **Filtrage réseau strict** : `--unshare-net` par défaut (`allowNetwork: false`).
-5. **Limites de ressources** : Plafonds stricts de mémoire (Mo), CPU shares, PIDs (contre les fork-bombs) et timeouts.
-6. **Étanchéité des secrets** : Environnement scellé avec `--clearenv` ; seuls les secrets résolus depuis le trousseau sécurisé (`vault://`) sont injectés explicitement au processus.
-7. **Politique d'outils et validation binaire** : Liste blanche des exécutables (`node`, `python3`, `uv`, `docker`, `bwrap`, etc.) et vérification cryptographique SHA-256 optionnelle.
-8. **SBOM et traçabilité** : Génération d'un inventaire SBOM (`McpSbom`) attestant du runtime, des dépendances, de l'horodatage et de l'empreinte cryptographique scellée.
+1. **Container / Sandbox Isolation**: Each MCP server executes in its own dedicated Bubblewrap (`bwrap`) sandbox or container (`docker`).
+2. **Read-Only Root Filesystem**: Root (`/`) mounted with `--ro-bind` as strictly read-only.
+3. **Explicit Bind Mounts**: Only explicitly declared directories (e.g., `/workspace`) are mounted.
+4. **Strict Network Filtering**: `--unshare-net` by default (`allowNetwork: false`).
+5. **Resource Limits**: Enforced memory quotas (MB), CPU shares, max PIDs (fork-bomb prevention), and execution timeouts.
+6. **Sealed Secrets**: Environment cleared via `--clearenv`; only secrets explicitly resolved from the secure vault (`vault://`) are injected into the child process.
+7. **Tool Policy and Binary Validation**: Whitelist of allowed executables (`node`, `python3`, `uv`, `docker`, `bwrap`, etc.) with optional SHA-256 cryptographic verification.
+8. **SBOM and Provenance**: Automated generation of Software Bill of Materials (`McpSbom`) recording runtime, packages, timestamp, and sealed checksum.
 
-## 2. Architecture Technique (`@nexus/mcp`)
+## 2. Technical Architecture (`@nexus/mcp`)
 
-### Bac à sable Bubblewrap (`McpSandboxManager`)
+### Bubblewrap Sandbox (`McpSandboxManager`)
 
-Bubblewrap (`/usr/bin/bwrap`) tire parti des user namespaces non privilégiés du noyau Linux pour créer un bac à sable hermétique sans aucun démon ni privilège root :
+Bubblewrap (`/usr/bin/bwrap`) leverages Linux unprivileged user namespaces to build a hermetic sandbox without requiring a root daemon:
 
 ```
 NEXUS McpClient
@@ -27,20 +27,20 @@ NEXUS McpClient
        ▼
 McpSandboxManager.prepareStdio()
        │
-       ├─► Validation liste blanche binaire (validateBinary)
-       ├─► Contrôle d'intégrité SHA-256 (verifyFileChecksum)
-       ├─► Construction arguments bwrap :
-       │     --ro-bind / / (lecture seule stricte)
+       ├─► Binary allowlist validation (validateBinary)
+       ├─► SHA-256 integrity check (verifyFileChecksum)
+       ├─► Bubblewrap argument construction:
+       │     --ro-bind / / (strict read-only root)
        │     --dev /dev --proc /proc --tmpfs /tmp
-       │     --unshare-net (isolation réseau)
+       │     --unshare-net (network namespace isolation)
        │     --unshare-pid --unshare-ipc --unshare-uts
-       │     --bind /ro-bind pour répertoires autorisés
-       │     --clearenv + injection sélective de secrets
+       │     --bind / --ro-bind for explicit directories
+       │     --clearenv + selective secret injection
        ▼
-StdioClientTransport (exécute bwrap de façon transparente)
+StdioClientTransport (launches bwrap transparently)
 ```
 
-### Schéma de Configuration (`McpSandboxPolicy`)
+### Configuration Schema (`McpSandboxPolicy`)
 
 ```typescript
 export const mcpSandboxPolicySchema = z.object({
@@ -60,17 +60,17 @@ export const mcpSandboxPolicySchema = z.object({
 
 ### Software Bill of Materials (SBOM)
 
-Le SBOM capture l'empreinte logicielle :
+The SBOM captures the software fingerprint:
 
-- `serverName` : Nom du serveur MCP.
-- `runtime` : `node`, `python`, `container`, etc.
-- `packages` : Liste des packages et sources (`npm`, `pypi`, `oci`).
-- `verifiedAt` : Timestamp ISO.
-- `checksum` : Empreinte SHA-256 canonique scellée.
+- `serverName`: MCP server identifier.
+- `runtime`: `node`, `python`, `container`, etc.
+- `packages`: List of packages and package managers (`npm`, `pypi`, `oci`).
+- `verifiedAt`: ISO timestamp.
+- `checksum`: Sealed canonical SHA-256 fingerprint.
 
-## 3. Audit et Diagnostics
+## 3. Audit and Diagnostics
 
-Via le gestionnaire MCP :
+Via the MCP manager:
 
-- `mcpManager.getSbom(name)` : Récupère le SBOM d'un serveur.
-- `mcpManager.listSboms()` : Liste l'inventaire SBOM de tous les serveurs enregistrés.
+- `mcpManager.getSbom(name)`: Retrieves the SBOM for a specific server.
+- `mcpManager.listSboms()`: Lists the SBOM inventory across all registered servers.

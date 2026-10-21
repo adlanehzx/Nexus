@@ -1,25 +1,23 @@
 #!/usr/bin/env bash
 #
-# Critère de réussite de la priorité 0 : réinstaller NEXUS sur une machine vide
-# et retrouver ses missions, ses conversations et ses agents.
+# Priority 0 success criterion: reinstall NEXUS on a blank machine and
+# recover its missions, conversations, and agents.
 #
-# Deux temps, dont le second est le seul qui compte :
+# Two stages:
 #
-#   A. une installation *source* est peuplée — un compte, une conversation avec
-#      ses messages, des profils d'agents, une mission dans la base du moteur —
-#      puis sauvegardée. Elle est **synthétique** : un répertoire qui contient
-#      exactement ce que la sauvegarde lit. Jamais le dépôt courant : écrire
-#      dans la base vivante du moteur pour fabriquer un jeu d'essai serait
-#      inacceptable, et c'est à cela que sert `--root` ;
+#   A. A *source* installation is seeded — user account, conversation with
+#      messages, agent profiles, mission in engine database — then backed up.
+#      It is **synthetic**: a directory containing only what the backup reads.
+#      Never the current repo: writing into the live engine database to create
+#      a test dataset would be unacceptable; this is what `--root` is for.
 #
-#   B. une installation *vierge* est créée par `git clone` : aucun `.env`,
-#      aucun `dist`, aucun `var`, aucune sauvegarde. On y déroule l'installation
-#      complète — dépendances, construction, `nexus setup`, migrations — on
-#      restaure, et on vérifie ce qu'on devait retrouver.
+#   B. A *blank* installation is created via `git archive`: no `.env`,
+#      no `dist`, no `var`, no backup. Full setup is executed — dependencies,
+#      build, `nexus setup`, migrations — then restored and verified.
 #
-# Le clone est ce qui donne sa valeur au test. Réutiliser le répertoire courant
-# en effaçant quelques fichiers laisserait traîner tout ce qu'on a oublié, et
-# c'est précisément ce qu'on veut prouver absent.
+# The archive extraction gives the test its value. Reusing the current directory
+# while deleting a few files would leave lingering artifacts, which is precisely
+# what we want to prove absent.
 #
 #   DATABASE_PASSWORD=... scripts/blank-machine-restore.sh
 
@@ -28,15 +26,15 @@ set -euo pipefail
 HOST="${DATABASE_HOST:-127.0.0.1}"
 PORT="${DATABASE_PORT:-15432}"
 USER_NAME="${DATABASE_USER:-nexus}"
-PASSWORD="${DATABASE_PASSWORD:?DATABASE_PASSWORD est requis}"
+PASSWORD="${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}"
 SOURCE_DB="${SOURCE_DB:-nexus_blank_source}"
 TARGET_DB="${TARGET_DB:-nexus_blank_target}"
-PASSPHRASE="${BACKUP_PASSPHRASE:-phrase-du-scenario}"
+PASSPHRASE="${BACKUP_PASSPHRASE:-scenario-passphrase}"
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
-SOURCE="$WORK/installation-source"
-BLANK="$WORK/machine-vide"
+SOURCE="$WORK/source-installation"
+BLANK="$WORK/blank-machine"
 
 ADMIN_URL="postgresql://$USER_NAME:$PASSWORD@$HOST:$PORT/postgres"
 SOURCE_URL="postgresql://$USER_NAME:$PASSWORD@$HOST:$PORT/$SOURCE_DB"
@@ -60,7 +58,7 @@ expect_at_least() {
   if [ "$2" -ge "$3" ]; then
     step "✓ $1" "$2"
   else
-    fail "$1" "attendu ≥ $3, obtenu $2"
+    fail "$1" "expected >= $3, got $2"
   fi
 }
 
@@ -71,14 +69,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-printf '\nNEXUS — réinstallation sur une machine vide\n\n'
+printf '\nNEXUS — reinstallation on a blank machine\n\n'
 
 # ─────────────────────────────────────────────────────────────────────────────
-printf 'A. Installation source\n'
+printf 'A. Source installation\n'
 
 psql "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$SOURCE_DB\"" >/dev/null
 psql "$ADMIN_URL" -q -c "CREATE DATABASE \"$SOURCE_DB\"" >/dev/null
-step "✓ base source créée" "$SOURCE_DB"
+step "✓ source database created" "$SOURCE_DB"
 
 mkdir -p "$SOURCE/services/mission-engine/var" \
   "$SOURCE/services/mission-engine/config" \
@@ -93,84 +91,70 @@ printf '{ "name": "nexus-source-scenario", "version": "1.0.0", "private": true }
   printf 'REDIS_URL=redis://127.0.0.1:6379\n'
 } > "$SOURCE/.env"
 chmod 600 "$SOURCE/.env"
-step "✓ installation source synthétique" "sans toucher au dépôt courant"
+step "✓ synthetic source installation" "isolated from current repo"
 
 ( cd "$REPO" && DATABASE_URL="$SOURCE_URL?schema=public" \
   pnpm --filter @nexus/database exec prisma migrate deploy >/dev/null )
-step "✓ migrations appliquées" "source"
+step "✓ migrations applied" "source"
 
-# Données applicatives en SQL direct : le scénario éprouve la sauvegarde et la
-# restauration, pas l'API — un semis qui passerait par elle échouerait pour des
-# raisons sans rapport.
+# Seed data via direct SQL
 psql "$SOURCE_URL" -q -f "$REPO/scripts/blank-machine-seed.sql" >/dev/null
-step "✓ compte, conversation et messages semés" "2 messages"
+step "✓ account, conversation, and messages seeded" "2 messages"
 
-# La mission passe par le dépôt du moteur : c'est lui qui connaît son schéma,
-# et un INSERT à la main deviendrait faux à la première migration.
 ( cd "$REPO/services/mission-engine" \
   && .venv/bin/python "$REPO/scripts/blank-machine-seed.py" \
     "$SOURCE/services/mission-engine/var/nexus-engine-production.db" >/dev/null )
-step "✓ mission semée dans le moteur" "1 mission"
+step "✓ mission seeded in engine" "1 mission"
 
-# Les profils d'agents : la pièce qu'on oublie, et sans laquelle une base
-# restaurée ne sait plus router une tâche.
-printf '{"codex":{"command":"codex","args":["--json"],"marqueur":"scenario"}}\n' \
+# Agent profiles and engine runtime settings
+printf '{"codex":{"command":"codex","args":["--json"],"marker":"scenario"}}\n' \
   > "$SOURCE/services/agent/config/profiles.production.json"
-printf '{"task_timeout_seconds":1800,"marqueur":"scenario"}\n' \
+printf '{"task_timeout_seconds":1800,"marker":"scenario"}\n' \
   > "$SOURCE/services/mission-engine/config/runtime-settings.json"
-step "✓ profils et réglages semés" "marqueur scenario"
+step "✓ profiles and settings seeded" "scenario marker"
 
 mkdir -p "$WORK/archives"
 ( cd "$REPO" && HOME="$WORK/home-source" node packages/cli/dist/index.js backup \
   --root "$SOURCE" --passphrase "$PASSPHRASE" --keep 50 >/dev/null )
 cp "$(ls -t "$SOURCE"/backups/*.nxbk | head -1)" "$WORK/archives/scenario.nxbk"
-step "✓ sauvegarde créée" "$(du -h "$WORK/archives/scenario.nxbk" | cut -f1)"
+step "✓ backup created" "$(du -h "$WORK/archives/scenario.nxbk" | cut -f1)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-printf '\nB. Machine vide\n'
+printf '\nB. Blank machine\n'
 
-# `git archive` plutôt que `git clone` : il extrait exactement les fichiers
-# **suivis** à HEAD, ce qui est la meilleure définition d'une machine vide — et
-# il fonctionne sur un dépôt en HEAD détaché, ce qui est le cas d'un checkout de
-# CI, là où `clone` peut refuser faute de branche. L'absence de `.git` est un
-# bonus : une copie déployée sans historique doit rester une installation
-# valide, et le scénario le vérifie du même coup.
 mkdir -p "$BLANK"
 git -C "$REPO" archive --format=tar HEAD | tar -x -C "$BLANK"
-step "✓ copie neuve des fichiers suivis" "git archive HEAD"
+step "✓ clean extraction of tracked files" "git archive HEAD"
 
 for absent in .env backups services/mission-engine/var packages/cli/dist node_modules .git; do
   if [ -e "$BLANK/$absent" ]; then
-    fail "le clone devrait être vierge" "$absent est présent"
+    fail "clean extraction check" "$absent is present"
   fi
 done
-step "✓ ni .env, ni dist, ni données, ni dépendances, ni .git" "copie vierge"
+step "✓ no .env, dist, data, dependencies, or .git" "clean clone"
 
 ( cd "$BLANK" && pnpm install --frozen-lockfile --silent >/dev/null 2>&1 )
-step "✓ dépendances installées" "pnpm install --frozen-lockfile"
+step "✓ dependencies installed" "pnpm install --frozen-lockfile"
 
 ( cd "$BLANK" && pnpm build --concurrency 2 >/dev/null 2>&1 )
-step "✓ construction" "pnpm build"
+step "✓ build" "pnpm build"
 
 psql "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$TARGET_DB\"" >/dev/null
 psql "$ADMIN_URL" -q -c "CREATE DATABASE \"$TARGET_DB\"" >/dev/null
 
-# `nexus setup` sur une installation nue : c'est lui qui crée le `.env`, génère
-# la clé persistante, dépose la clé publique et écrit l'unité systemd.
+# `nexus setup` creates .env, generates keys, writes systemd unit
 ( cd "$BLANK" && HOME="$WORK/home-blank" node packages/cli/dist/index.js setup >/dev/null )
 if [ -f "$BLANK/.env" ]; then
-  step "✓ nexus setup a créé .env" "mode $(stat -c '%a' "$BLANK/.env")"
+  step "✓ nexus setup created .env" "mode $(stat -c '%a' "$BLANK/.env")"
 else
-  fail "nexus setup" ".env absent"
+  fail "nexus setup" ".env missing"
 fi
 if grep -q "BEGIN PRIVATE KEY" "$BLANK/.env"; then
-  step "✓ clé de signature persistante générée" "Ed25519"
+  step "✓ persistent signing key generated" "Ed25519"
 else
-  fail "clé de signature" "absente du .env généré"
+  fail "signing key" "missing from generated .env"
 fi
 
-# La base cible est l'unique valeur que le scénario impose à l'installation :
-# `setup` en a généré une locale, qui ne peut pas exister ici.
 ( cd "$BLANK" && node -e '
 const fs = require("node:fs");
 const url = process.argv[1];
@@ -183,80 +167,58 @@ fs.writeFileSync(".env", after);
 
 ( cd "$BLANK" && DATABASE_URL="$TARGET_URL?schema=public" \
   pnpm --filter @nexus/database exec prisma migrate deploy >/dev/null )
-step "✓ migrations appliquées" "machine vide"
+step "✓ migrations applied" "blank machine"
 
 ( cd "$BLANK" && HOME="$WORK/home-blank" node packages/cli/dist/index.js restore \
   "$WORK/archives/scenario.nxbk" --passphrase "$PASSPHRASE" --yes >/dev/null )
-step "✓ restauration" "nexus restore"
+step "✓ restore" "nexus restore"
 
 # ─────────────────────────────────────────────────────────────────────────────
-printf '\nC. Ce qu'"'"'on devait retrouver\n'
+printf '\nC. Post-restore verification\n'
 
 count() { psql "$TARGET_URL" -t -A -c "$1" | tr -d '[:space:]'; }
 
-expect_at_least "comptes" "$(count 'SELECT count(*) FROM users')" 1
+expect_at_least "accounts" "$(count 'SELECT count(*) FROM users')" 1
 expect_at_least "conversations" "$(count 'SELECT count(*) FROM conversations')" 1
 expect_at_least "messages" "$(count 'SELECT count(*) FROM messages')" 2
 
 TITLE="$(psql "$TARGET_URL" -t -A -c \
   "SELECT title FROM conversations WHERE id='22222222-2222-7222-8222-222222222222'")"
-if [ "$TITLE" = "Conversation à retrouver" ]; then
-  step "✓ titre de la conversation" "$TITLE"
+if [ "$TITLE" = "Conversation to recover" ]; then
+  step "✓ conversation title" "$TITLE"
 else
-  fail "titre de la conversation" "obtenu « $TITLE »"
+  fail "conversation title" "got '$TITLE'"
 fi
 
 ENGINE="$BLANK/services/mission-engine/var/nexus-engine-production.db"
 if [ -f "$ENGINE" ]; then
-  expect_at_least "missions dans le moteur" "$(sqlite3 "$ENGINE" 'SELECT count(*) FROM missions')" 1
+  expect_at_least "missions in engine" "$(sqlite3 "$ENGINE" 'SELECT count(*) FROM missions')" 1
   MISSION="$(sqlite3 "$ENGINE" \
-    "SELECT title FROM missions WHERE external_key='scenario-machine-vide'")"
-  if [ "$MISSION" = "Mission a retrouver" ]; then
-    step "✓ mission retrouvée par sa clé externe" "$MISSION"
+    "SELECT title FROM missions WHERE external_key='scenario-blank-machine'")"
+  if [ "$MISSION" = "Mission to recover" ]; then
+    step "✓ mission recovered by external key" "$MISSION"
   else
-    fail "mission retrouvée" "obtenu « $MISSION »"
+    fail "recovered mission" "got '$MISSION'"
   fi
 else
-  fail "base du moteur" "absente après restauration"
+  fail "engine database" "missing after restore"
 fi
 
-if grep -q '"marqueur":"scenario"' \
+if grep -q '"marker":"scenario"' \
   "$BLANK/services/agent/config/profiles.production.json" 2>/dev/null; then
-  step "✓ profils d'agents restaurés" "marqueur retrouvé"
+  step "✓ agent profiles restored" "scenario marker found"
 else
-  fail "profils d'agents" "non restaurés"
+  fail "agent profiles" "not restored"
 fi
 
-if grep -q '"marqueur":"scenario"' \
+if grep -q '"marker":"scenario"' \
   "$BLANK/services/mission-engine/config/runtime-settings.json" 2>/dev/null; then
-  step "✓ réglages du moteur restaurés" "marqueur retrouvé"
+  step "✓ engine settings restored" "scenario marker found"
 else
-  fail "réglages du moteur" "non restaurés"
+  fail "engine settings" "not restored"
 fi
 
-# Le diagnostic doit tourner sur l'installation restaurée. Il peut signaler des
-# échecs — et on les nomme plutôt que de les supposer : affirmer « services non
-# démarrés » sans l'avoir lu serait exactement le genre de certitude que ce
-# scénario existe pour remplacer par une mesure.
-#
-# La liste des échecs tolérés est fermée, et chacun a sa raison. Elle sépare
-# deux questions que `doctor` pose ensemble : l'installation est-elle
-# **conforme**, et les services tournent-ils. Ce scénario répond de la première.
-# Il ne démarre aucun service, donc les sondes de disponibilité ne peuvent rien
-# apprendre ici ; les exiger vertes rendrait le résultat dépendant de ce qui
-# tourne sur la machine — c'est précisément ce qui a fait diverger le poste de
-# développement, où le moteur et Redis tournent, et le runner, où non.
-#
-#   Redis, Mission Engine  services non démarrés : disponibilité, pas conformité
-#   (chemins)              les unités systemd sont globales à la session
-#                          utilisateur, pas propres à une installation ; vue de
-#                          la copie, l'unité installée désigne une autre racine,
-#                          et `doctor` a raison de le dire
-#
-# Tout le reste reste bloquant, et c'est là que vit la valeur de l'étape :
-# PostgreSQL injoignable, une migration en retard, une clé de signature absente
-# ou une clé publique désaccordée feraient échouer le scénario.
-TOLERATED='Redis|Mission Engine|\(chemins\)'
+TOLERATED='Redis|Mission Engine|\(paths\)|\(chemins\)'
 DOCTOR_OUT="$WORK/doctor.txt"
 ( cd "$BLANK" && HOME="$WORK/home-blank" node packages/cli/dist/index.js doctor \
     > "$DOCTOR_OUT" 2>&1 ) || true
@@ -266,12 +228,12 @@ OBSERVED="$(grep -c '✗' "$DOCTOR_OUT" || true)"
 UNEXPECTED="$(grep '✗' "$DOCTOR_OUT" | grep -Evc "$TOLERATED" || true)"
 
 if [ "$UNEXPECTED" -gt 0 ]; then
-  fail "nexus doctor" "$UNEXPECTED échec(s) hors de la liste tolérée"
+  fail "nexus doctor" "$UNEXPECTED failure(s) outside tolerated list"
 elif [ "$OBSERVED" -eq 0 ]; then
-  step "✓ nexus doctor" "aucune vérification en échec"
+  step "✓ nexus doctor" "no failed checks"
 else
-  step "✓ nexus doctor" "$OBSERVED échec(s), tous dans la liste tolérée"
+  step "✓ nexus doctor" "$OBSERVED failure(s), all within tolerated list"
 fi
 
-printf '\n%d étapes, %d échec(s)\n\n' "$steps" "$failures"
+printf '\n%d steps, %d failure(s)\n\n' "$steps" "$failures"
 [ "$failures" -eq 0 ]

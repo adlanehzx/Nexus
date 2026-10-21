@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-# Installe un worker NEXUS conteneurisé sur Linux, NAS et Raspberry Pi.
-# Le ticket n'est jamais écrit : il est seulement transmis au processus
-# d'appairage, puis le conteneur définitif ne reçoit que l'identité locale.
+# Installs a containerized NEXUS worker on Linux, NAS, and Raspberry Pi.
+# The token is never persisted to disk: it is passed solely to the pairing
+# process, after which the final container receives only its local identity.
 
 IMAGE="${NEXUS_WORKER_IMAGE:-ghcr.io/adlanehzx/nexus/worker:latest}"
 DATA_DIR="${NEXUS_WORKER_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/nexus-worker}"
@@ -11,7 +11,7 @@ WORKSPACE="${NEXUS_WORKSPACE:-$HOME/NEXUS}"
 NAME="${NEXUS_WORKER_NAME:-$(hostname)}"
 
 usage() {
-  echo "Usage: $0 <URL_NEXUS> <TICKET> [DOSSIER_AUTORISE]" >&2
+  echo "Usage: $0 <NEXUS_URL> <TOKEN> [ALLOWED_WORKSPACE]" >&2
   exit 2
 }
 
@@ -21,15 +21,15 @@ PAIRING_TOKEN="$2"
 [ "$#" -lt 3 ] || WORKSPACE="$3"
 
 command -v docker >/dev/null 2>&1 || {
-  echo "Docker est requis sur cette machine." >&2
+  echo "Docker is required on this machine." >&2
   exit 1
 }
 
 mkdir -p "$DATA_DIR" "$WORKSPACE"
 chmod 700 "$DATA_DIR"
 
-# Une politique explicite évite qu'un changement de HOME dans l'image fasse
-# chercher un autre fichier et donne l'impression que le worker est cassé.
+# An explicit policy prevents a HOME change inside the image from looking up
+# a different file and giving the impression that the worker is broken.
 if [ ! -e "$DATA_DIR/device-policy.yaml" ]; then
   cat > "$DATA_DIR/device-policy.yaml" <<'POLICY'
 version: 1
@@ -54,7 +54,7 @@ POLICY
 fi
 
 if [ -e "$DATA_DIR/worker.env" ] || [ -e "$DATA_DIR/device.key" ]; then
-  echo "Une identité NEXUS existe déjà dans $DATA_DIR ; rien n'a été remplacé." >&2
+  echo "A NEXUS identity already exists in $DATA_DIR; nothing was replaced." >&2
   exit 1
 fi
 
@@ -88,5 +88,5 @@ docker run -d \
   "$IMAGE"
 
 unset PAIRING_TOKEN
-echo "Worker installé. Approuvez '$NAME' dans NEXUS > Appareils."
-echo "Dossier accessible au worker : $WORKSPACE"
+echo "Worker installed. Approve '$NAME' in NEXUS > Devices."
+echo "Directory accessible to worker: $WORKSPACE"

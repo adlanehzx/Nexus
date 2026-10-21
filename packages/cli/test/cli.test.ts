@@ -17,19 +17,6 @@ import { applyPlan, planSetup } from "../src/setup.js";
 import { runDoctor } from "../src/doctor.js";
 import { hostAndPort, parseUnitShow, type Probes } from "../src/probes.js";
 
-/**
- * Tests de la CLI d'installation.
- *
- * Ce qui est éprouvé ici est tout ce qui doit être vrai **sans machine** : la
- * lecture d'un `.env`, le rendu d'une unité, la détection d'un chemin étranger,
- * le plan d'installation et sa relance. Les sondes réseau et `systemctl` sont
- * remplacées, parce qu'un test qui dépend d'un PostgreSQL vivant ne dit plus
- * rien de la logique qu'il prétend vérifier.
- *
- * Le soin porte surtout sur deux propriétés que l'outil promet : relancer
- * `setup` ne change rien quand tout va bien, et il ne détruit jamais une clé.
- */
-
 function workspace(): string {
   const root = mkdtempSync(join(tmpdir(), "nexus-cli-"));
   writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
@@ -40,8 +27,8 @@ const PAIR = generateKeyPairSync("ed25519");
 const PRIVATE_PEM = PAIR.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 const PUBLIC_PEM = PAIR.publicKey.export({ type: "spki", format: "pem" }).toString();
 
-describe("localisation de l'installation", () => {
-  it("remonte jusqu'à la racine de l'espace de travail", () => {
+describe("installation location resolution", () => {
+  it("traverses upwards to the workspace root", () => {
     const root = workspace();
     const nested = join(root, "services", "api", "src");
     mkdirSync(nested, { recursive: true });
@@ -49,27 +36,26 @@ describe("localisation de l'installation", () => {
     expect(findRepositoryRoot(nested)).toBe(root);
   });
 
-  it("échoue clairement quand il n'y a pas d'installation", () => {
+  it("fails informatively when outside a valid installation", () => {
     const orphan = mkdtempSync(join(tmpdir(), "nexus-orphan-"));
     expect(() => findRepositoryRoot(orphan)).toThrow(/pnpm-workspace/);
   });
 
-  it("dérive tous les chemins de la racine, sans rien coder en dur", () => {
+  it("derives all installation paths from root without hardcoding", () => {
     const paths = resolvePaths("/opt/nexus", "/home/someone");
 
     expect(paths.missionEngine).toBe("/opt/nexus/services/mission-engine");
     expect(paths.agentRunner).toBe("/opt/nexus/services/agent/dist/cli.js");
-    // Hors du dépôt : une clé n'a rien à faire dans un arbre versionné.
     expect(paths.publicKeyFile).toBe("/home/someone/.config/nexus/api-public.pem");
   });
 });
 
-describe("lecture et écriture de .env", () => {
-  it("lit les valeurs, ignore commentaires et lignes vides", () => {
+describe(".env file parsing and manipulation", () => {
+  it("reads variables while ignoring comments and blank lines", () => {
     const root = workspace();
     writeFileSync(
       join(root, ".env"),
-      ["# commentaire", "", "NODE_ENV=development", "API_PORT=3000", "#DISABLED=1"].join("\n"),
+      ["# comment", "", "NODE_ENV=development", "API_PORT=3000", "#DISABLED=1"].join("\n"),
     );
 
     expect(readEnvFile(join(root, ".env"))).toEqual({
@@ -78,84 +64,73 @@ describe("lecture et écriture de .env", () => {
     });
   });
 
-  it("restaure les sauts de ligne échappés d'une valeur entre guillemets", () => {
+  it("restores escaped newlines inside quoted values", () => {
     const root = workspace();
-    // La clé vient de `generateKeyPairSync`, jamais d'un littéral : un en-tête
-    // PEM écrit en dur dans une source est signalé par le scanner de secrets,
-    // et il a raison de ne pas savoir distinguer un exemple d'une vraie clé.
     writeFileSync(join(root, ".env"), `AUTH_SIGNING_KEY="${PRIVATE_PEM.replace(/\n/g, "\\n")}"\n`);
 
-    // Sans cette restitution, la clé relue serait sur une seule ligne et
-    // illisible par `createPrivateKey`.
     const reread = readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY ?? "";
     expect(reread).toContain("\n");
     expect(() => createPrivateKey(reread)).not.toThrow();
   });
 
-  it("rend un objet vide quand le fichier n'existe pas, sans lever", () => {
+  it("returns empty record when file is missing without throwing", () => {
     expect(readEnvFile(join(workspace(), "absent"))).toEqual({});
   });
 
-  it("remplace une valeur existante sans toucher au reste", () => {
+  it("replaces existing variable without modifying unrelated entries", () => {
     const before = "NODE_ENV=development\nAPI_PORT=3000\n";
     const after = upsertEnvValue(before, "API_PORT", "4000");
 
     expect(after).toBe("NODE_ENV=development\nAPI_PORT=4000\n");
   });
 
-  it("réveille une ligne commentée plutôt que d'en ajouter une seconde", () => {
-    // C'est là que la documentation attend la valeur : en ajouter une à la fin
-    // laisserait le commentaire donner l'impression qu'elle n'est pas définie.
+  it("uncomments existing commented variable line in-place", () => {
     const after = upsertEnvValue("# AUTH_SIGNING_KEY=\n", "AUTH_SIGNING_KEY", "abc");
 
     expect(after).toBe("AUTH_SIGNING_KEY=abc\n");
     expect(after).not.toContain("#");
   });
 
-  it("protège par des guillemets une valeur multiligne", () => {
+  it("quotes multiline values", () => {
     const after = upsertEnvValue("", "AUTH_SIGNING_KEY", PRIVATE_PEM);
 
     expect(after).toContain('"');
-    // Une seule ligne, donc : les sauts de ligne de la clé sont échappés, sans
-    // quoi le fichier serait illisible par un chargeur de `.env`.
     expect(after.split("\n")).toHaveLength(2);
   });
 
-  it("distingue une clé persistante d'une clé absente", () => {
+  it("distinguishes persistent key from absent key", () => {
     expect(hasPersistentSigningKey({ AUTH_SIGNING_KEY: PRIVATE_PEM })).toBe(true);
     expect(hasPersistentSigningKey({})).toBe(false);
-    expect(hasPersistentSigningKey({ AUTH_SIGNING_KEY: "pas-une-clé" })).toBe(false);
+    expect(hasPersistentSigningKey({ AUTH_SIGNING_KEY: "not-a-pem-key" })).toBe(false);
   });
 });
 
-describe("rapport", () => {
+describe("diagnostic report", () => {
   const groups = [
     {
-      title: "Groupe",
-      results: [ok("a", "va bien"), warn("b", "à surveiller", "le geste"), skip("c", "sans objet")],
+      title: "Group",
+      results: [ok("a", "healthy"), warn("b", "warning", "remedy"), skip("c", "skipped")],
     },
   ];
 
-  it("compte par état", () => {
+  it("tallies results by status", () => {
     expect(tally(groups)).toEqual({ ok: 1, warn: 1, fail: 0, skip: 1 });
   });
 
-  it("n'échoue que sur un échec, jamais sur un avertissement", () => {
-    // Si un avertissement faisait échouer, la distinction disparaîtrait à
-    // l'usage : tout deviendrait soit bloquant, soit silencieux.
+  it("only exits with failure on fail status", () => {
     expect(exitCodeFor(groups)).toBe(0);
-    expect(exitCodeFor([{ title: "x", results: [fail("d", "cassé")] }])).toBe(1);
+    expect(exitCodeFor([{ title: "x", results: [fail("d", "broken")] }])).toBe(1);
   });
 
-  it("affiche le geste correctif sur sa propre ligne", () => {
+  it("displays actionable remedy on dedicated line", () => {
     const rendered = renderReport(groups);
 
-    expect(rendered).toContain("→ le geste");
-    expect(rendered).toContain("1 ok · 1 à surveiller · 0 en échec · 1 non applicable");
+    expect(rendered).toContain("→ remedy");
+    expect(rendered).toContain("1 ok · 1 warning · 0 failed · 1 skipped");
   });
 });
 
-describe("unité systemd", () => {
+describe("systemd service unit generation", () => {
   const paths = resolvePaths("/opt/nexus", "/home/someone");
   const base = {
     paths,
@@ -164,17 +139,15 @@ describe("unité systemd", () => {
     apiUrl: "http://127.0.0.1:3000",
   };
 
-  it("n'écrit aucun chemin hors de l'installation", () => {
+  it("contains no paths outside the current installation root", () => {
     const unit = renderMissionEngineUnit(base);
 
-    // Le défaut que cette CLI existe pour supprimer : l'unité versionnée
-    // portait une dizaine de chemins absolus propres à une machine.
-    expect(unit).not.toContain("/home/alice/ancien-nexus");
+    expect(unit).not.toContain("/home/alice/former-nexus");
     expect(unit).toContain("WorkingDirectory=/opt/nexus/services/mission-engine");
     expect(unit).toContain("ExecStartPre=/usr/bin/pnpm --dir /opt/nexus");
   });
 
-  it("n'active l'authentification entrante que si une clé est déployée", () => {
+  it("only enables inbound auth when public key is deployed", () => {
     expect(renderMissionEngineUnit(base)).toContain("INACTIVE");
     expect(renderMissionEngineUnit(base)).not.toContain("NEXUS_ENGINE_API_PUBLIC_KEY_FILE=");
 
@@ -182,23 +155,23 @@ describe("unité systemd", () => {
     expect(secured).toContain("Environment=NEXUS_ENGINE_API_PUBLIC_KEY_FILE=/key.pem");
   });
 
-  it("repère les chemins d'une installation déplacée", () => {
+  it("detects paths belonging to relocated installation", () => {
     const stale = renderMissionEngineUnit({
       ...base,
-      paths: resolvePaths("/ancien/emplacement/nexus", "/home/someone"),
+      paths: resolvePaths("/old/location/nexus", "/home/someone"),
     });
 
     const strays = foreignPaths(stale, "/opt/nexus");
     expect(strays.length).toBeGreaterThan(0);
-    expect(strays.some((path) => path.startsWith("/ancien/emplacement"))).toBe(true);
+    expect(strays.some((path) => path.startsWith("/old/location"))).toBe(true);
   });
 
-  it("ne signale pas les chemins système légitimes", () => {
+  it("does not flag legitimate system binaries", () => {
     expect(foreignPaths(renderMissionEngineUnit(base), "/opt/nexus")).toEqual([]);
   });
 });
 
-describe("plan d'installation", () => {
+describe("nexus setup", () => {
   function setupIn(root: string, options: Partial<Parameters<typeof planSetup>[0]> = {}) {
     return planSetup({
       paths: resolvePaths(root, join(root, "home")),
@@ -210,7 +183,7 @@ describe("plan d'installation", () => {
     });
   }
 
-  it("génère une clé quand il n'y en a pas, et la relance ne la touche plus", () => {
+  it("generates signing key on clean install, idempotent on subsequent runs", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n");
 
@@ -218,29 +191,25 @@ describe("plan d'installation", () => {
     const first = readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY;
     expect(first).toContain("BEGIN PRIVATE KEY");
 
-    // L'idempotence est la propriété qui rend la commande utilisable : on la
-    // relance après chaque modification, et elle ne doit rien casser.
     const second = setupIn(root);
     applyPlan(second);
     expect(readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY).toBe(first);
     expect(second.actions.filter((action) => action.needed)).toHaveLength(0);
   });
 
-  it("ne remplace une clé que sur demande explicite, et le dit", () => {
+  it("only rotates signing key on explicit request with warning", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n");
     applyPlan(setupIn(root));
     const before = readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY;
 
     const rotation = setupIn(root, { rotateKeys: true });
-    // L'avertissement compte autant que l'action : remplacer la clé invalide
-    // les sessions et désaccorde toute clé publique déjà déployée.
     expect(rotation.warnings.join(" ")).toMatch(/sessions/);
     applyPlan(rotation);
     expect(readEnvFile(join(root, ".env")).AUTH_SIGNING_KEY).not.toBe(before);
   });
 
-  it("restreint le fichier de secrets à son propriétaire", () => {
+  it("restricts permissions of secrets file to owner", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n", { mode: 0o644 });
 
@@ -248,7 +217,7 @@ describe("plan d'installation", () => {
     expect((statSync(join(root, ".env")).mode & 0o777).toString(8)).toBe("600");
   });
 
-  it("dépose une clé publique qui correspond à la clé privée", () => {
+  it("deploys public key corresponding to persistent private key", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), `AUTH_SIGNING_KEY="${PRIVATE_PEM.replace(/\n/g, "\\n")}"\n`);
 
@@ -260,7 +229,7 @@ describe("plan d'installation", () => {
     );
   });
 
-  it("écrit l'unité avec les chemins de cette installation", () => {
+  it("writes systemd unit with installation paths", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n");
     const paths = resolvePaths(root, join(root, "home"));
@@ -272,12 +241,12 @@ describe("plan d'installation", () => {
     expect(foreignPaths(unit, root)).toEqual([]);
   });
 
-  it("crée .env depuis l'exemple quand il manque", () => {
+  it("creates .env from template example when missing", () => {
     const root = workspace();
     writeFileSync(join(root, ".env.example"), "NODE_ENV=development\n");
 
     const plan = setupIn(root);
-    expect(plan.actions[0]?.label).toContain("créer .env");
+    expect(plan.actions[0]?.label).toContain("create .env");
     applyPlan(plan);
     expect(readEnvFile(join(root, ".env")).NODE_ENV).toBe("development");
   });
@@ -309,7 +278,7 @@ describe("plan d'installation", () => {
     expect((statSync(paths.agentRegistry).mode & 0o777).toString(8)).toBe("600");
   });
 
-  it("génère une URL PostgreSQL avec un mot de passe aléatoire, et prévient", () => {
+  it("generates PostgreSQL URL with random password and warns caller", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n");
 
@@ -318,27 +287,24 @@ describe("plan d'installation", () => {
 
     const url = readEnvFile(join(root, ".env")).DATABASE_URL ?? "";
     expect(url).toMatch(/^postgresql:\/\/nexus:.+@127\.0\.0\.1:15432\/nexus$/);
-    // Le mot de passe ne sert à rien si la base ne l'adopte pas : le dire est
-    // la moitié du travail.
     expect(plan.warnings.join(" ")).toMatch(/docker compose/);
   });
 });
 
-describe("sondes", () => {
-  it("applique le port par défaut du schéma", () => {
+describe("diagnostic probes", () => {
+  it("applies protocol default ports", () => {
     expect(hostAndPort("postgresql://u:p@localhost/db")).toEqual({ host: "localhost", port: 5432 });
     expect(hostAndPort("redis://127.0.0.1")).toEqual({ host: "127.0.0.1", port: 6379 });
     expect(hostAndPort("https://example.test")).toEqual({ host: "example.test", port: 443 });
     expect(hostAndPort("http://127.0.0.1:18100")).toEqual({ host: "127.0.0.1", port: 18100 });
   });
 
-  it("rend undefined sur une URL illisible plutôt que de lever", () => {
-    expect(hostAndPort("pas une url")).toBeUndefined();
+  it("returns undefined for invalid URLs without throwing", () => {
+    expect(hostAndPort("not a url")).toBeUndefined();
   });
 });
 
-describe("diagnostic", () => {
-  /** Sondes remplacées : tout est joignable, rien n'est installé. */
+describe("nexus doctor", () => {
   function probesFor(overrides: Partial<Probes> = {}): Probes {
     return {
       tcp: () => Promise.resolve(true),
@@ -348,7 +314,7 @@ describe("diagnostic", () => {
     };
   }
 
-  it("échoue quand .env est absent, et dit quoi faire", async () => {
+  it("fails when .env is absent and points to fix", async () => {
     const root = workspace();
     const groups = await runDoctor({
       paths: resolvePaths(root, join(root, "home")),
@@ -361,7 +327,7 @@ describe("diagnostic", () => {
     expect(envCheck?.fix).toContain("nexus setup");
   });
 
-  it("signale une clé éphémère comme à surveiller, pas comme une panne", async () => {
+  it("flags ephemeral signing key as warning rather than failure", async () => {
     const root = workspace();
     const groups = await runDoctor({
       paths: resolvePaths(root, join(root, "home")),
@@ -369,15 +335,13 @@ describe("diagnostic", () => {
       env: { NODE_ENV: "development" },
     });
 
-    const security = groups.find((group) => group.title === "Sécurité");
-    const key = security?.results.find((result) => result.name === "clé de signature");
-    // Une installation personnelle sans clé persistante fonctionne : la
-    // classer en échec rendrait le diagnostic rouge en permanence.
+    const security = groups.find((group) => group.title === "Security");
+    const key = security?.results.find((result) => result.name === "signing key");
     expect(key?.status).toBe("warn");
     expect(key?.fix).toContain("nexus setup");
   });
 
-  it("détecte une clé publique déployée qui ne correspond plus", async () => {
+  it("detects deployed public key that does not match signing key", async () => {
     const root = workspace();
     const paths = resolvePaths(root, join(root, "home"));
     mkdirSync(join(root, "home", ".config", "nexus"), { recursive: true });
@@ -393,14 +357,12 @@ describe("diagnostic", () => {
       env: { NODE_ENV: "development", AUTH_SIGNING_KEY: PRIVATE_PEM },
     });
 
-    const security = groups.find((group) => group.title === "Sécurité");
-    const deployed = security?.results.find((result) => result.name === "clé publique déployée");
-    // Le cas sournois : tous les appels entrants échouent sur une erreur de
-    // signature, sans que rien ne nomme le désaccord lui-même.
+    const security = groups.find((group) => group.title === "Security");
+    const deployed = security?.results.find((result) => result.name === "deployed public key");
     expect(deployed?.status).toBe("fail");
   });
 
-  it("signale une base en retard de migration comme un échec", async () => {
+  it("reports pending PostgreSQL migrations as failure", async () => {
     const root = workspace();
     const groups = await runDoctor({
       paths: resolvePaths(root, join(root, "home")),
@@ -415,13 +377,13 @@ describe("diagnostic", () => {
       env: { NODE_ENV: "development", DATABASE_URL: "postgresql://u:p@127.0.0.1:15432/nexus" },
     });
 
-    const data = groups.find((group) => group.title === "Données et services");
-    const migrations = data?.results.find((result) => result.name === "migrations PostgreSQL");
+    const data = groups.find((group) => group.title === "Data and services");
+    const migrations = data?.results.find((result) => result.name === "PostgreSQL migrations");
     expect(migrations?.status).toBe("fail");
     expect(migrations?.fix).toContain("migrate deploy");
   });
 
-  it("signale une unité systemd absente sans faire échouer le diagnostic", async () => {
+  it("reports missing systemd unit as warning without failing overall run", async () => {
     const root = workspace();
     const groups = await runDoctor({
       paths: resolvePaths(root, join(root, "home")),
@@ -429,16 +391,13 @@ describe("diagnostic", () => {
       env: { NODE_ENV: "development" },
     });
 
-    const systemd = groups.find((group) => group.title === "Services systemd");
+    const systemd = groups.find((group) => group.title === "Systemd services");
     expect(systemd?.results.every((result) => result.status !== "fail")).toBe(true);
   });
 });
 
-describe("état d'une unité systemd", () => {
-  it("lit les propriétés par nom, et non par position", () => {
-    // La sortie réelle de `systemctl show` : l'ordre n'est pas celui des `-p`
-    // demandés. Une lecture positionnelle prenait ici `ActiveState` pour
-    // `UnitFileState`, et rapportait une unité active comme arrêtée.
+describe("systemd unit state parsing", () => {
+  it("parses properties by key name rather than position", () => {
     const output = [
       "LoadState=loaded",
       "ActiveState=active",
@@ -454,7 +413,7 @@ describe("état d'une unité systemd", () => {
     });
   });
 
-  it("rend un état vide pour une unité inconnue", () => {
+  it("yields empty state for unknown unit", () => {
     expect(parseUnitShow("LoadState=not-found\nActiveState=inactive\nFragmentPath=")).toEqual({
       installed: false,
       enabled: false,
@@ -464,12 +423,8 @@ describe("état d'une unité systemd", () => {
   });
 });
 
-describe("chemins d'une unité portable", () => {
-  it("ne reproche pas à une unité d'utiliser les spécificateurs systemd", () => {
-    // L'unité du navigateur est écrite avec `%h`, résolu par systemd au
-    // chargement : elle est donc déjà portable. La signaler reviendrait à
-    // reprocher à une unité d'être bien écrite — et c'était un faux positif
-    // observé sur l'installation réelle.
+describe("portable systemd unit paths", () => {
+  it("allows standard systemd specifiers", () => {
     const portable = [
       "[Service]",
       "Environment=XDG_CONFIG_HOME=%h/.local/share/nexus/browser-xdg/config",
@@ -480,19 +435,16 @@ describe("chemins d'une unité portable", () => {
     expect(foreignPaths(portable, "/opt/nexus")).toEqual([]);
   });
 
-  it("signale malgré tout un chemin absolu d'une autre installation", () => {
-    const stale = "WorkingDirectory=/ailleurs/nexus/services/mission-engine";
+  it("flags absolute paths from different installation directories", () => {
+    const stale = "WorkingDirectory=/other/nexus/services/mission-engine";
 
-    expect(foreignPaths(stale, "/opt/nexus")).toEqual(["/ailleurs/nexus/services/mission-engine"]);
+    expect(foreignPaths(stale, "/opt/nexus")).toEqual(["/other/nexus/services/mission-engine"]);
   });
 });
 
-describe("permissions du fichier de secrets", () => {
-  it("les vérifie même sans clé de signature persistante", async () => {
+describe("secrets file permissions", () => {
+  it("verifies permissions even in absence of persistent key", async () => {
     const root = workspace();
-    // Cas d'une installation neuve : pas encore de clé, mais le `.env` porte
-    // déjà le mot de passe PostgreSQL. Ne vérifier les permissions qu'après la
-    // clé laissait passer le cas le plus courant.
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n", { mode: 0o644 });
 
     const groups = await runDoctor({
@@ -505,8 +457,8 @@ describe("permissions du fichier de secrets", () => {
       env: { NODE_ENV: "development" },
     });
 
-    const security = groups.find((group) => group.title === "Sécurité");
-    const permissions = security?.results.find((result) => result.name === "permissions de .env");
+    const security = groups.find((group) => group.title === "Security");
+    const permissions = security?.results.find((result) => result.name === ".env permissions");
     expect(permissions?.status).toBe("warn");
     expect(permissions?.fix).toContain("chmod 600");
   });

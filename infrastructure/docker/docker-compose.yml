@@ -1,11 +1,11 @@
 name: nexus
 
-# Pile de développement local : PostgreSQL, Redis et l'API.
+# Local development stack: PostgreSQL, Redis, and API.
 #
-# Lancement depuis la racine du dépôt :
-#   pnpm docker:up          (équivaut à docker compose -f infrastructure/docker/docker-compose.yml up -d)
+# Launch from the repository root:
+#   pnpm docker:up          (equivalent to docker compose -f infrastructure/docker/docker-compose.yml up -d)
 #
-# Les chemins sont relatifs à CE fichier ; la racine du monorepo est donc ../..
+# Paths are relative to THIS file; repository root is ../..
 
 services:
   postgres:
@@ -16,26 +16,22 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-nexus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-nexus}
-      # Le classement C rend les tris déterministes entre machines et versions.
-      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=fr-FR --encoding=UTF8"
+      # C collation ensures deterministic sorting across machines and versions.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US --encoding=UTF8"
     ports:
-      # Boucle locale uniquement. Publié sur toutes les interfaces, l'entrepôt
-      # devenait joignable depuis le tailnet — vérifié : un `Test-NetConnection`
-      # sur l'IP Tailscale du poste ouvrait la connexion. Aucun client, aucun
-      # worker ne parle à la base : ils passent par le Core, qui la joint par le
-      # réseau Docker sous le nom `postgres`. Seuls les outils locaux —
-      # migrations Prisma, Studio — ont l'usage du port publié.
+      # Localhost loopback only. Published across all interfaces, the database
+      # would become accessible on LAN/tailnet. No client or worker connects to
+      # the database directly: they communicate via the Core, which connects over
+      # the internal Docker bridge under the hostname `postgres`. Only local tools
+      # (Prisma migrations, Studio) use this published port.
       #
-      # 15432 et non 5432 : sur ce poste, `127.0.0.1:5432` est déjà pris par le
-      # relais WSL, qui publie le PostgreSQL d'une distribution. Réclamer le
-      # même port échoue au démarrage, et le partager rendrait indéterminée la
-      # base que joint `DATABASE_URL`.
+      # Port 15432 instead of 5432 to avoid collision if 5432 is already bound locally.
       - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      # `pg_isready` seul répond « prêt » avant la fin de l'initialisation :
-      # on interroge donc réellement la base cible.
+      # `pg_isready` alone may report ready before full initialization:
+      # we explicitly probe the target database.
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus} -d ${POSTGRES_DB:-nexus}"]
       interval: 5s
       timeout: 5s
@@ -47,13 +43,10 @@ services:
     image: redis:7-alpine
     container_name: nexus-redis
     restart: unless-stopped
-    # AOF `everysec` : les files de jobs survivent à un redémarrage sans payer
-    # le prix d'un fsync par écriture.
+    # AOF `everysec`: job queues survive restarts without the cost of fsync on every write.
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
-      # Même raison que pour Postgres, et le motif est pire ici : Redis n'a pas
-      # de mot de passe dans cette configuration. Un port ouvert sur le tailnet
-      # donnait la file de jobs à qui la demandait.
+      # Localhost loopback only: Redis has no authentication password in local dev.
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
@@ -119,8 +112,8 @@ services:
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
-      # Noms de services Docker, pas localhost : à l'intérieur du réseau, chaque
-      # conteneur est joignable par son nom.
+      # Docker service hostnames, not localhost: within the bridge network, containers
+      # reach each other by service name.
       DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
       REDIS_URL: redis://redis:6379
       BROWSER_WORKER_URL: http://browser-worker:8100
@@ -128,8 +121,8 @@ services:
       SEARXNG_URL: ${SEARXNG_URL:-}
       SEARXNG_TIMEOUT_MS: ${SEARXNG_TIMEOUT_MS:-15000}
     ports:
-      # Le Core n'est pas un service LAN : l'accès distant passe uniquement par
-      # Tailscale Serve, qui reverse-proxyifie ensuite vers cette boucle locale.
+      # Core API is not exposed to LAN: remote access is reverse-proxied through
+      # Tailscale Serve to this localhost loopback.
       - "127.0.0.1:${API_PORT:-3000}:3000"
     volumes:
       - nexus-models:/var/lib/nexus/models
@@ -141,7 +134,7 @@ services:
       - /tmp:size=256m,mode=1777
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    # L'arrêt gracieux dispose du délai qu'il annonce, plus une marge.
+    # Graceful shutdown includes safety margin beyond timeout.
     stop_grace_period: 15s
     networks: [nexus]
 
@@ -253,8 +246,7 @@ services:
     networks: [nexus]
 
   searxng:
-    # Digest multi-architecture vérifié le 2026-10-20. SEARXNG_IMAGE permet une
-    # mise à jour explicite sans rendre les installations existantes variables.
+    # Multi-arch pinned digest for reproducibility. SEARXNG_IMAGE allows explicit upgrades.
     image: ${SEARXNG_IMAGE:-docker.io/searxng/searxng@sha256:5ed0323b5f5f8701264ef65e239a2bd83cb57098f2b971fa30bf79c06eeae271}
     container_name: nexus-searxng
     restart: unless-stopped
@@ -267,8 +259,7 @@ services:
     expose:
       - "8080"
     ports:
-      # L'API lancée directement sur l'hôte utilise cette boucle locale. Rien
-      # n'est publié sur le LAN ou le tailnet.
+      # Localhost loopback only: API running on host connects here.
       - "127.0.0.1:${SEARXNG_PORT:-18080}:8080"
     healthcheck:
       test:
@@ -290,23 +281,21 @@ services:
       dockerfile: infrastructure/docker/browser-worker.Dockerfile
     container_name: nexus-browser-worker
     restart: unless-stopped
-    # Profil optionnel : l'image embarque Chromium (~1,5 Go) et n'a pas à
-    # démarrer pour travailler sur l'API. Lancement : pnpm docker:browser
+    # Optional profile: image packages Chromium (~1.5 GB). Launch with: pnpm docker:browser
     profiles: [browser]
     environment:
-      # Le worker refuse de démarrer sans un vrai jeton (validation au boot) :
-      # inutile de dupliquer le garde ici, il bloquerait toute la pile.
+      # Browser worker requires a token (validated at startup).
       BROWSER_WORKER_AUTH_TOKEN: ${BROWSER_WORKER_TOKEN:-}
       BROWSER_WORKER_LLM_API_KEY: ${LLM_API_KEY:-}
       BROWSER_WORKER_LLM_MODEL: ${BROWSER_WORKER_LLM_MODEL:-claude-sonnet-4-5}
       BROWSER_WORKER_HEADLESS: "true"
       BROWSER_WORKER_MAX_SESSIONS: ${BROWSER_WORKER_MAX_SESSIONS:-3}
       BROWSER_WORKER_LOG_LEVEL: ${LOG_LEVEL:-info}
-    # AUCUN port publié : le worker n'est joignable que depuis le réseau interne.
-    # Il visite du contenu hostile par définition et ne doit jamais être exposé.
+    # NO published ports: worker is reachable only from internal Docker network.
+    # It visits untrusted web content and must never be exposed externally.
     expose:
       - "8100"
-    # Chromium a besoin de mémoire partagée ; 64 Mo par défaut le font planter.
+    # Chromium requires shared memory; 64MB default causes crashes on complex pages.
     shm_size: 1gb
     mem_limit: 2g
     security_opt:

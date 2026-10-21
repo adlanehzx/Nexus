@@ -1,9 +1,7 @@
-"""Sème une mission dans une base de Mission Engine.
+"""Seeds a mission in a Mission Engine database.
 
-Passe par le dépôt du moteur plutôt que par des `INSERT` écrits à la main :
-c'est lui qui connaît son schéma, et du SQL recopié ici deviendrait faux à la
-première migration — en silence, puisque le scénario vérifierait alors une
-mission qu'il aurait lui-même mal écrite.
+Uses the engine repository rather than handcrafted INSERT statements:
+the repository maintains schema knowledge, preventing divergence during migrations.
 """
 
 import sys
@@ -19,14 +17,14 @@ def main() -> None:
     repository.register_profile("codex", "profile-codex")
     repository.submit(
         {
-            "external_key": "scenario-machine-vide",
-            "title": "Mission a retrouver",
+            "external_key": "scenario-blank-machine",
+            "title": "Mission to recover",
             "workspace": "/tmp/workspace",
             "tasks": [
                 {
-                    "key": "une",
+                    "key": "one",
                     "profile": "codex",
-                    "instruction": "Travaille",
+                    "instruction": "Work",
                     "depends_on": [],
                 }
             ],

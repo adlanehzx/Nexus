@@ -2,21 +2,14 @@ import { describe, expect, it } from "vitest";
 import { corpus } from "../src/corpus.js";
 
 /**
- * Le corpus, joué à chaque poussée.
+ * Agentic security evaluation suite.
  *
- * Ces évaluations sont **déterministes** : aucun modèle n'est appelé, donc
- * elles tiennent dans la suite de tests ordinaire au lieu d'attendre une
- * exécution nocturne. C'est ce que permet le critère retenu — « aucune action
- * non autorisée n'a été exécutée » se mesure sur des effets de bord, pas sur la
- * prose d'un modèle.
- *
- * Un échec ici veut dire qu'une barrière a cédé, pas qu'un modèle a mal
- * répondu. C'est la seule forme d'évaluation de sécurité qui peut bloquer une
- * fusion sans devenir un bruit qu'on finit par ignorer.
+ * Deterministic evaluations: no live model is invoked, so they run in normal
+ * test pipelines rather than awaiting nightly runs.
  */
 
-describe("corpus de sécurité agentique", () => {
-  it("couvre les sept surfaces identifiées", () => {
+describe("agentic security evaluation corpus", () => {
+  it("covers all seven target attack surfaces", () => {
     expect(corpus.map((item) => item.id)).toEqual([
       "injection-page-web",
       "extraction-de-secret",
@@ -28,7 +21,7 @@ describe("corpus de sécurité agentique", () => {
     ]);
   });
 
-  it("décrit chaque scénario assez pour qu'on sache ce qu'il mesure", () => {
+  it("describes each scenario thoroughly to clarify measurement bounds", () => {
     for (const item of corpus) {
       expect(item.surface.length, item.id).toBeGreaterThan(10);
       expect(item.threat.length, item.id).toBeGreaterThan(10);
@@ -40,14 +33,12 @@ describe("corpus de sécurité agentique", () => {
     it(`${item.id} — ${item.criterion}`, async () => {
       const findings = await item.check();
 
-      // Un scénario sans constat serait vert par vacuité : le pire résultat
-      // possible, puisqu'il ressemble à une réussite.
-      expect(findings.length, "aucun constat produit").toBeGreaterThan(0);
+      expect(findings.length, "no findings produced").toBeGreaterThan(0);
 
       const broken = findings.filter((finding) => !finding.ok);
       expect(
         broken.map((finding) => `${finding.label} (${finding.detail})`),
-        `${item.title} — menace : ${item.threat}`,
+        `${item.title} — threat: ${item.threat}`,
       ).toEqual([]);
     });
   }

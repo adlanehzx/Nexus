@@ -3,24 +3,20 @@ import { createConnection } from "node:net";
 import { promisify } from "node:util";
 
 /**
- * Sondes élémentaires.
+ * Elementary system probes.
  *
- * Chacune répond à une question et rend un constat, jamais une exception : un
- * diagnostic qui s'arrête à la première panne ne diagnostique rien. On veut la
- * liste complète de ce qui manque, en un passage.
- *
- * Elles sont regroupées ici pour que les vérifications puissent être testées
- * en les remplaçant, sans toucher à la machine.
+ * Each probe returns an observation, never throws: diagnostics must not abort
+ * on the first error. We need the full comprehensive report in a single pass.
  */
 
 const run = promisify(execFile);
 
 export interface Probes {
-  /** Un port accepte-t-il une connexion TCP ? */
+  /** Checks if a TCP port accepts incoming connections. */
   tcp(host: string, port: number, timeoutMs?: number): Promise<boolean>;
-  /** Réponse HTTP d'une URL, ou `undefined` si injoignable. */
+  /** HTTP response or undefined if unreachable. */
   http(url: string, timeoutMs?: number): Promise<{ status: number; body: string } | undefined>;
-  /** Sortie d'une commande, ou `undefined` si elle échoue ou n'existe pas. */
+  /** Command output or undefined if execution fails. */
   command(file: string, args: string[], timeoutMs?: number): Promise<string | undefined>;
 }
 
@@ -58,7 +54,7 @@ export const systemProbes: Probes = {
   },
 };
 
-/** Décompose une URL en hôte et port, en appliquant le port par défaut du schéma. */
+/** Decomposes a URL into host and port, applying protocol defaults. */
 export function hostAndPort(url: string): { host: string; port: number } | undefined {
   try {
     const parsed = new URL(url);
@@ -78,13 +74,7 @@ export function hostAndPort(url: string): { host: string; port: number } | undef
   }
 }
 
-/**
- * État d'une unité systemd utilisateur.
- *
- * Trois questions distinctes, parce que les réponses se combinent mal : une
- * unité peut être installée et arrêtée, active sans être activée au démarrage,
- * ou absente alors que le processus tourne — lancé à la main.
- */
+/** State of a systemd user unit. */
 export interface UnitState {
   installed: boolean;
   enabled: boolean;
@@ -93,13 +83,7 @@ export interface UnitState {
 }
 
 /**
- * Lit la sortie `KEY=value` de `systemctl show`.
- *
- * Et non `--value`, qui ne rend que les valeurs : systemd les ordonne **à sa
- * façon**, pas dans l'ordre des `-p` demandés. Une lecture positionnelle
- * marche donc par accident et casse en silence — ici elle lisait `ActiveState`
- * à la place de `UnitFileState`, et rapportait toute unité active comme
- * arrêtée et non activée.
+ * Parses KEY=value output from `systemctl show`.
  */
 export function parseUnitShow(output: string): UnitState {
   const values = new Map<string, string>();

@@ -1,37 +1,37 @@
-# 31. Traitement Documentaire Avancé (Docling, PDF, OCR et Mémoire)
+# 31. Advanced Document Processing (Docling, PDF, OCR, and Memory)
 
-## 1. Contexte et Objectifs
+## 1. Context and Goals
 
-Pour que les agents NEXUS puissent analyser des documents professionnels complexes et formuler des réponses étayées sans hallucination, le traitement documentaire fournit :
+To enable NEXUS agents to analyze complex enterprise documents and produce verifiable responses without hallucination, document processing provides:
 
-1. **Multi-formats universel** : Ingestion native des fichiers PDF (`.pdf`), Word (`.docx`), PowerPoint (`.pptx`), Markdown (`.md`) et texte brut (`.txt`).
-2. **Support Docling & Fallback Local** :
-   - Détection et délégation transparente à Docling si configuré.
-   - Moteur local haute fidélité utilisant `pdftotext` (conservation du layout et pagination) et OCR `tesseract` en cas de document numérisé ou page scannée sans couche texte.
-   - Extraction des fichiers Office (Word, PowerPoint) via inspection structurée XML (`word/document.xml`, `ppt/slides/slide*.xml`).
-3. **Extraction structurée des tableaux** :
-   - Détection automatique et conversion des tableaux en représentations matricielles `{ headers, rows }` et Markdown.
-4. **Découpage hiérarchique (Hierarchical Chunking)** :
-   - Découpage par section et page avec conservation de l'arbre parent (ex: `H1 > H2`).
-   - Génération de citations stables et opposables : `doc://<documentId>/page/<pageNumber>#<sectionSlug>`.
-   - Libellé humain : `Rapport_Securite.pdf (Page 3, § 2.1 Audit réseau)`.
-5. **Injection dans la mémoire NEXUS (`@nexus/memory`)** :
-   - `DocumentMemoryBridge` injecte les fragments avec leurs balises de citations opposables dans la mémoire longue durée (`LONG_TERM`, `SEMANTIC`).
+1. **Universal Multi-Format Support**: Native ingestion of PDF (`.pdf`), Word (`.docx`), PowerPoint (`.pptx`), Markdown (`.md`), and plaintext (`.txt`).
+2. **Docling Integration & High-Fidelity Local Fallback**:
+   - Automatic detection and delegation to Docling when available.
+   - High-fidelity local engine using `pdftotext` (layout-preserving pagination) and `tesseract` OCR for scanned documents lacking a text layer.
+   - Office file parsing (Word, PowerPoint) via structured XML inspection (`word/document.xml`, `ppt/slides/slide*.xml`).
+3. **Structured Table Extraction**:
+   - Automated detection and parsing of tables into matrix representations `{ headers, rows }` and Markdown tables.
+4. **Hierarchical Chunking**:
+   - Structured chunking by section and page, preserving parent hierarchy (e.g. `H1 > H2`).
+   - Verifiable and stable citation anchors: `doc://<documentId>/page/<pageNumber>#<sectionSlug>`.
+   - Human-readable citation label: `Security_Report.pdf (Page 3, § 2.1 Network Audit)`.
+5. **NEXUS Memory Injection (`@nexus/memory`)**:
+   - `DocumentMemoryBridge` injects structured chunks and citations directly into long-term semantic memory (`LONG_TERM`, `SEMANTIC`).
 
-## 2. Architecture Technique (`@nexus/documents`)
+## 2. Technical Architecture (`@nexus/documents`)
 
 ```
-Fichier (.pdf, .docx, .pptx, .md)
+Document File (.pdf, .docx, .pptx, .md)
             │
             ▼
     detectDocumentFormat()
             │
-            ├─► Docling (si disponible)
-            └─► Moteur Local :
+            ├─► Docling (when configured)
+            └─► Local Engine:
                   ├─ pdftotext (-layout + form feed \x0c)
-                  ├─ OCR Tesseract (fallback si < 20 car.)
+                  ├─ Tesseract OCR (fallback when < 20 chars)
                   ├─ Office XML (document.xml / slide*.xml)
-                  └─ TablesExtractor (tableaux markdown / matriciels)
+                  └─ TablesExtractor (markdown & matrix tables)
             │
             ▼
       ParsedDocument
@@ -40,19 +40,19 @@ Fichier (.pdf, .docx, .pptx, .md)
      DocumentChunker (Hierarchical Chunking)
             │
             ▼
-     DocumentChunk[] (avec citations doc://<id>/page/<n>#<section>)
+     DocumentChunk[] (with citations doc://<id>/page/<n>#<section>)
             │
             ▼
-  DocumentMemoryBridge
+   DocumentMemoryBridge
             │
             ▼
-  NEXUS MemoryService (Mémoire sémantique LONG_TERM avec provenance)
+   NEXUS MemoryService (LONG_TERM semantic memory with provenance)
 ```
 
-## 3. Outils Natifs pour les Agents NEXUS
+## 3. Native Agent Tools
 
-| Outil                       | Domaine                           | Niveau de Risque | Description                                                                         |
-| --------------------------- | --------------------------------- | ---------------- | ----------------------------------------------------------------------------------- |
-| `document.parse`            | `filesystem.read`                 | `SAFE`           | Extrait le texte, métadonnées, pages et sections                                    |
-| `document.extract_tables`   | `filesystem.read`                 | `SAFE`           | Extrait tous les tableaux structurés (en-têtes et lignes)                           |
-| `document.ingest_to_memory` | `filesystem.read`, `memory.write` | `MEDIUM`         | Découpe le document et injecte les fragments indexés avec citations dans la mémoire |
+| Tool                        | Domain                            | Risk Level | Description                                                                    |
+| --------------------------- | --------------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| `document.parse`            | `filesystem.read`                 | `SAFE`     | Extracts text, metadata, pages, and sections                                   |
+| `document.extract_tables`   | `filesystem.read`                 | `SAFE`     | Extracts all structured tables (headers and rows)                              |
+| `document.ingest_to_memory` | `filesystem.read`, `memory.write` | `MEDIUM`   | Chunks document and injects indexed fragments with citations into NEXUS memory |

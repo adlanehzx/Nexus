@@ -1,38 +1,38 @@
-# 32. Automatisation Locale Activepieces et Actions SaaS
+# 32. Activepieces Local Automation and SaaS Actions
 
-## 1. Contexte et Objectifs
+## 1. Context and Goals
 
-Activepieces offre à NEXUS un écosystème de centaines de connecteurs SaaS prêts à l'emploi (Slack, Discord, Notion, Stripe, GitHub, Airtable, etc.) orchestrables localement :
+Activepieces provides NEXUS with an ecosystem of hundreds of turnkey SaaS connectors (Slack, Discord, Notion, Stripe, GitHub, Airtable, etc.) orchestrable on local infrastructure:
 
-1. **Déploiement local isolé** :
-   - Déploiement conteneurisé via `infrastructure/docker/docker-compose.activepieces.yml`.
-   - Boucle locale stricte `127.0.0.1:8080` sans aucune exposition extérieure ni fuite sur Tailscale.
-   - Secrets et clés API résolus dynamiquement depuis le trousseau sécurisé NEXUS (`vault://nexus/...`).
-2. **Pont NEXUS → Activepieces (`@nexus/activepieces`)** :
-   - `ActivepiecesBridgeClient` assure la communication avec l'API REST locale d'Activepieces et ses webhooks.
-   - Déclenchement de flux (flows) synchrone ou asynchrone avec suivi d'exécution (`pollRun`).
-   - Exécution ciblée d'actions sur n'importe quelle pièce SaaS enregistrée.
-3. **Gating de sécurité et confirmation humaine obligatoire** :
-   - Toute action externe irréversible (envoi de message public Slack/Discord, débit financier Stripe, suppression de ressource, etc.) déclenche **OBLIGATOIREMENT** une demande de confirmation humaine avec résumé clair de l'action.
-   - Les actions de pure consultation (lecture de pages, listage de bases) restent directes sans blocage.
-4. **Réinjection des résultats dans les missions NEXUS** :
-   - Les sorties structurées (identifiants d'objets distants, données extraites) sont retournées directement aux agents et missions sous forme de `ToolResult`.
+1. **Isolated Local Deployment**:
+   - Containerized deployment via `infrastructure/docker/docker-compose.activepieces.yml`.
+   - Strict localhost loopback `127.0.0.1:8080` with no external exposition or Tailscale routing.
+   - Secrets and API credentials resolved dynamically from the secure NEXUS vault (`vault://nexus/...`).
+2. **NEXUS → Activepieces Bridge (`@nexus/activepieces`)**:
+   - `ActivepiecesBridgeClient` coordinates with the local Activepieces REST API and webhook endpoints.
+   - Synchronous or asynchronous flow triggering with execution tracking (`pollRun`).
+   - Direct action execution against any registered SaaS piece.
+3. **Security Gating and Mandatory Human Confirmation**:
+   - Any irreversible external action (public message broadcast, Stripe financial charge, resource deletion) **MANDATORILY** triggers a human confirmation request with clear action preview.
+   - Read-only actions (querying records, listing databases) proceed without blocking.
+4. **Result Ingestion into NEXUS Missions**:
+   - Structured outputs (remote object identifiers, extracted data) are returned directly to agents and missions as `ToolResult`.
 
-## 2. Outils Natifs pour les Agents NEXUS
+## 2. Native Tools for NEXUS Agents
 
-| Outil                         | Domaine            | Niveau de Risque | Confirmation Humaine                    | Description                                                   |
-| ----------------------------- | ------------------ | ---------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `activepieces.list_flows`     | `terminal.execute` | `SAFE`           | Non                                     | Liste les flux d'automatisation locaux disponibles            |
-| `activepieces.trigger_flow`   | `terminal.execute` | `HIGH`           | Conditionnelle (`isSensitive`)          | Déclenche un flux complet via webhook ou identifiant          |
-| `activepieces.execute_action` | `terminal.execute` | `HIGH`           | **Dynamique / Obligatoire si sensible** | Exécute une action SaaS directe (Slack, Stripe, Notion, etc.) |
-| `activepieces.get_run`        | `terminal.execute` | `SAFE`           | Non                                     | Interroge l'état et la sortie d'un run                        |
+| Tool                          | Domain             | Risk Level | Human Confirmation                | Description                                                |
+| ----------------------------- | ------------------ | ---------- | --------------------------------- | ---------------------------------------------------------- |
+| `activepieces.list_flows`     | `terminal.execute` | `SAFE`     | No                                | Lists available local automation flows                     |
+| `activepieces.trigger_flow`   | `terminal.execute` | `HIGH`     | Conditional (`isSensitive`)       | Triggers a full flow via webhook or ID                     |
+| `activepieces.execute_action` | `terminal.execute` | `HIGH`     | **Dynamic / Mandatory if scoped** | Executes a direct SaaS action (Slack, Stripe, Notion, etc.)|
+| `activepieces.get_run`        | `terminal.execute` | `SAFE`     | No                                | Queries status and output of a specific run                |
 
-## 3. Déploiement Local Isolé
+## 3. Isolated Local Deployment
 
-Pour démarrer la pile locale Activepieces isolée :
+To start the isolated local Activepieces stack:
 
 ```bash
 docker compose -f infrastructure/docker/docker-compose.activepieces.yml up -d
 ```
 
-L'interface et l'API sont confinées à l'adresse de bouclage `http://127.0.0.1:8080`.
+The UI and API are bound strictly to localhost loopback `http://127.0.0.1:8080`.

@@ -1,40 +1,38 @@
-# Politique locale de cet appareil — éditée par vous, jamais par NEXUS.
+# Local device policy — edited by you, never by NEXUS.
 #
-# C'est le seul endroit où la machine se protège du cœur : si le serveur est
-# compromis, c'est ce fichier qui empêche ce poste de devenir une machine
-# ouverte. NEXUS ne l'écrit pas, et aucune commande ne le modifie.
+# This is the sole boundary protecting this host from the Core: if the server
+# is compromised, this file prevents this machine from becoming exposed.
+# NEXUS never overwrites this file, and no automated command alters it.
 #
-# Après chaque modification :
-#   nexus policy check --path ~/un/chemin/a/verifier
+# After each edit:
+#   nexus policy check --path ~/path/to/verify
 version: 1
 
 filesystem:
-  # Racines accessibles. Rien n'est accessible en dehors.
+  # Accessible workspace roots. Nothing is accessible outside these.
   #
-  # Volontairement VIDE : cet exemple ne donne aucun accès tant que vous n'avez
-  # pas choisi. Un exemple qui ouvrirait votre dossier personnel serait recopié
-  # tel quel, et c'est ainsi qu'un exemple devient une faille.
+  # Intentionally EMPTY: this example provides zero access until you define roots.
+  # An example opening the home directory by default would risk being adopted verbatim.
   #
-  # Remplacez par vos racines, par exemple :
+  # Replace with your roots, for example:
   #   allow:
-  #     - ~/projets
+  #     - ~/projects
   #     - ~/Documents/nexus
   allow: []
 
-  # Les refus gagnent, même sous une racine autorisée. C'est l'intérêt :
-  # autoriser large, exclure précisément.
+  # Denials take precedence, even within allowed roots.
   deny:
-    # Tout ce qui est sous ces dossiers.
+    # All files under these directories.
     under:
       - ~/.ssh
       - ~/.aws
       - ~/.gnupg
       - ~/.config/nexus
-    # Tout chemin traversant un de ces dossiers, où qu'il soit.
+    # Path segments matching anywhere in path.
     segments:
       - node_modules
       - .git
-    # Noms de fichiers. Une seule étoile, en fin de nom.
+    # File name patterns. Single trailing asterisk supported.
     names:
       - .env*
       - id_rsa
@@ -44,36 +42,29 @@ filesystem:
   maxFileSizeMb: 20
 
 exec:
-  # allowlist : seuls les exécutables ci-dessous (vide = liste par défaut du
-  #             worker, volontairement courte).
-  # disabled  : aucune exécution de processus, quoi que le cœur demande.
-  #
-  # Il n'y a pas de mode « demander » : une confirmation est une décision
-  # humaine, et elle se prend sur la surface où vous êtes — pas sur une machine
-  # qui n'a pas d'écran.
+  # allowlist: only executables listed below (empty = worker default list).
+  # disabled:  no process execution, regardless of Core requests.
   mode: allowlist
   allowedExecutables:
     - git
     - node
     - pnpm
     - python
-  # L'environnement du worker n'est jamais transmis en bloc : il contient le
-  # chemin de la clé privée de cet appareil.
+  # Worker environment is never forwarded wholesale.
   allowedEnv:
     - PATH
     - HOME
     - LANG
-  # Vide = les racines autorisées ci-dessus.
+  # Empty = allowed roots above.
   workdirRoots: []
   timeoutSec: 300
 
 git:
-  # Autorise pull / checkout / commit / clone.
+  # Allows pull / checkout / commit / clone.
   allowWrite: false
 
 docker:
-  # Par défaut : consultation seule. Élargir est une décision — l'accès au
-  # démon Docker équivaut à un accès administrateur.
+  # Read-only inspection by default. Broadening requires intentional decision.
   allowedSubcommands:
     - ps
     - images
@@ -81,7 +72,5 @@ docker:
     - inspect
 
 network:
-  # Sortie réseau du worker lui-même. Il parle au cœur, et c'est tout : une
-  # capacité qui a besoin du réseau passe par le cœur, où la permission et la
-  # confirmation existent.
+  # Outbound network for the worker process itself.
   egress: deny

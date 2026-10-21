@@ -1,17 +1,12 @@
-# NEXUS sur Kubernetes / k3s
+# NEXUS on Kubernetes / k3s
 
-Cette cible déploie le **plan de contrôle** : dashboard, API, PostgreSQL et
-Redis. Les agents ACP et les workers restent sur les machines où leurs comptes
-sont authentifiés. Un téléphone n'est jamais un nœud Kubernetes.
+This deployment targets the **control plane**: dashboard, API, PostgreSQL, and Redis. ACP agents and workers remain on the machines where their accounts and subscriptions are authenticated. A phone or laptop is never a Kubernetes node.
 
-## Installation k3s
+## k3s Installation
 
-1. Utiliser une release publiée, ou construire les images avec `pnpm k8s:images`
-   puis adapter leurs noms dans `kustomization.yaml` pour le registre de k3s.
-   Les manifests épinglent `v1.0.0` et ne suivent jamais implicitement `latest`.
-2. Copier `secret.example.yaml` en `secret.yaml`, générer les valeurs et garder
-   ce fichier hors de Git.
-3. Appliquer dans cet ordre :
+1. Use a published release, or build images locally with `pnpm k8s:images` and adjust their names in `kustomization.yaml` for your k3s registry. Manifests pin `v1.0.0` and never implicitly track `latest`.
+2. Copy `secret.example.yaml` to `secret.yaml`, generate secrets, and keep this file out of Git.
+3. Apply in order:
 
 ```sh
 kubectl apply -f infrastructure/kubernetes/namespace.yaml
@@ -21,21 +16,10 @@ kubectl -n nexus rollout status deployment/nexus-api
 kubectl -n nexus port-forward service/nexus-dashboard 8080:8080
 ```
 
-La migration Prisma est un init-container : l'API ne devient jamais prête avant
-que le schéma soit à jour. Le Mission Engine local doit être exposé en **HTTPS privé** (Tailscale Serve est
-adapté), puis `MISSION_CONTROL_URL` doit être renseigné dans `config.yaml`.
-Kubernetes ne reçoit jamais les jetons Codex, Claude ou Google.
+Prisma migrations run in an init-container: the API deployment only becomes ready once the database schema is fully up to date. The local Mission Engine must be exposed over **private HTTPS** (Tailscale Serve is recommended), with `MISSION_CONTROL_URL` populated in `config.yaml`. Kubernetes never receives Codex, Claude, or Google API credentials.
 
-Les réglages modifiables depuis le dashboard et les journaux utilisent le PVC
-`api-state`. Le déploiement API est volontairement limité à une réplique avec
-une stratégie `Recreate` : passer à plusieurs répliques exige d'abord de migrer
-ces fichiers vers PostgreSQL ou un stockage transactionnel partagé.
+Dashboard settings and logs use the `api-state` PVC. The API deployment is intentionally configured with a single replica and `Recreate` strategy: scaling to multiple replicas requires migrating state files to PostgreSQL or shared transactional storage.
 
-Pour une adresse permanente, copiez `ingress.example.yaml` en `ingress.yaml`,
-remplacez le domaine et le secret TLS, puis appliquez-le séparément. Cette
-ressource reste volontairement hors de `kustomization.yaml` : déployer un faux
-domaine ou du HTTP distant rendrait l'appairage inutilisable.
+For a permanent domain, copy `ingress.example.yaml` to `ingress.yaml`, configure the domain and TLS secret, and apply separately. This resource is intentionally excluded from `kustomization.yaml` to prevent invalid remote hostnames or unencrypted HTTP from breaking device pairing.
 
-Pour une machine unique, Docker Compose reste la cible recommandée. Kubernetes
-devient utile pour plusieurs serveurs Linux permanents, pas pour les postes et
-téléphones intermittents.
+For single-machine setups, Docker Compose remains the recommended target. Kubernetes is intended for persistent multi-node Linux infrastructure.

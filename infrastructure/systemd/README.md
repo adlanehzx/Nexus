@@ -1,22 +1,15 @@
-# Unités systemd
+# Systemd Units
 
-`nexus-browser.service` est versionnée telle quelle : elle n'utilise que des
-spécificateurs systemd (`%h`, `%t`), donc elle est portable sans modification.
+`nexus-browser.service` is versioned as-is: it only uses standard systemd specifiers (`%h`, `%t`), making it portable across systems without modification.
 
-`nexus-mission-engine.service` ne l'est plus. Elle portait une dizaine de
-chemins absolus propres à une machine — `/home/alice/projets/nexus` — ce
-qui la rendait inutilisable ailleurs et faisait du déplacement du dossier une
-panne silencieuse : le service démarrait sur l'ancien emplacement, ou pas du
-tout, sans que rien ne le dise.
+`nexus-mission-engine.service` is generated dynamically. It previously contained machine-specific absolute paths, making it brittle across installations and causing silent failures when moving directories.
 
-Elle est désormais **produite** à partir de l'installation détectée :
+It is now **generated** dynamically based on the detected installation root:
 
 ```sh
-nexus setup          # écrit ~/.config/systemd/user/nexus-mission-engine.service
+nexus setup          # writes ~/.config/systemd/user/nexus-mission-engine.service
 systemctl --user daemon-reload
 nexus start
 ```
 
-Le gabarit vit dans `packages/cli/src/systemd.ts`, avec ses raisons. `nexus
-doctor` signale une unité dont les chemins ne correspondent plus à
-l'installation courante — c'est la panne que ce changement existe pour fermer.
+The template is defined in `packages/cli/src/systemd.ts`. `nexus doctor` validates that installed unit paths match the current repository location, preventing silent path mismatch failures.

@@ -1,103 +1,103 @@
-# 33 — Unified external notifications
+# 33 — Unified External Notifications
 
-Décrit l'architecture du sous-système de notifications externes de NEXUS, couvrant le bureau Linux, le push mobile sans clé et les webhooks vers les messageries.
+Describes the architecture of the NEXUS external notification subsystem, covering Linux desktop notifications, zero-cost mobile push, and chat webhooks.
 
-Paquets : [`@nexus/notifications`](../../packages/notifications), [`services/api`](../../services/api).
+Packages: [`@nexus/notifications`](../../packages/notifications), [`services/api`](../../services/api).
 
 ---
 
-## 1. Principes d'architecture
+## 1. Architectural Principles
 
-Les notifications sont **produites au centre**, jamais de façon décentralisée par chaque client.
+Notifications are **produced centrally**, never decentralised across individual clients.
 
 ```
-Événements NEXUS (Fin de tâche, ConfirmationBroker, Alertes)
+NEXUS Events (Task completion, ConfirmationBroker, Alerts)
   │
   ▼
 NotificationService (services/api)
   │
-  ├── 1. Persistance PostgreSQL (NotificationStore)
-  ├── 2. Diffusion WebSocket temps-réel (EventRouter)
+  ├── 1. PostgreSQL persistence (NotificationStore)
+  ├── 2. Real-time WebSocket broadcasting (EventRouter)
   │
   ▼
 NotificationDispatcher (@nexus/notifications)
   │
-  ├── Évaluation Plages Silencieuses (isQuietHours, bypass si urgent)
-  ├── Regroupement & Anti-inondation (NotificationThrottler)
+  ├── Quiet Hours evaluation (isQuietHours, urgent bypass)
+  ├── Aggregation & Rate limiting (NotificationThrottler)
   │
   ├──▶ DesktopChannel (Linux notify-send)
   ├──▶ NtfyChannel (Mobile push via HTTP ntfy.sh)
   └──▶ WebhookChannel (Discord / Telegram / Apprise / Generic)
 ```
 
-Ce découplage garantit :
+This decoupling guarantees:
 
-1. **Cohérence globale** : Tous les canaux reçoivent la même information avec le même niveau de gravité.
-2. **Résilience et non-bloquage** : La panne ou la lenteur d'un service externe (coupure réseau, indisponibilité de serveur ntfy) n'interrompt jamais l'agent ni la tâche en cours.
-3. **Zéro secret exposé** : Les jetons d'accès aux webhooks ou aux topics privés sont référencés par `vault://nexus/...` et résolus en mémoire vive sans fuite dans les journaux.
-
----
-
-## 2. Canaux de diffusion
-
-### 2.1 Bureau Linux (`DesktopChannel`)
-
-- Utilise `/usr/bin/notify-send` en sous-processus.
-- Mappe les priorités sur les urgences freedesktop (`low`, `normal`, `critical`).
-- Sélectionne les icônes standards du système (`dialog-information`, `dialog-warning`, `dialog-error`).
-- Tolérant aux contextes headless : n'émet pas d'exception fatale si aucun serveur d'affichage (Wayland/X11) n'est disponible.
-
-### 2.2 Mobile Push gratuit (`NtfyChannel`)
-
-- Utilise le protocole standard HTTP [ntfy](https://ntfy.sh) en appel `POST`.
-- Fonctionne sur le service public gratuit `https://ntfy.sh` comme sur une instance privée auto-hébergée.
-- Envoie des en-têtes structurés :
-  - `Title` : Titre de l'alerte.
-  - `Priority` : Niveau 1 (min) à 5 (urgent).
-  - `Tags` : Marqueurs thématiques et visuels.
-  - `Click` : URL cliquable redirigeant vers la ressource NEXUS.
-  - `Actions` : Bouton d'action direct (`view, Ouvrir, <url>`).
-- Supporte l'authentification Bearer optionnelle pour les sujets restreints.
-
-### 2.3 Webhooks externes (`WebhookChannel`)
-
-- Support multi-plateformes avec rendu dédié :
-  - **Discord** : Embed structuré avec coloration sémantique par gravité et horodatage.
-  - **Telegram** : Message HTML formaté avec balises `<b>`, liens directs et échappement strict des caractères spéciaux.
-  - **Apprise** : Payload compatible avec le micro-serveur universel Apprise.
-  - **Generic** : Format JSON extensible comprenant toutes les métadonnées de l'événement.
+1. **Global Consistency**: Every channel receives identical information with consistent severity levels.
+2. **Resilience and Non-blocking Execution**: External service outages or network latency (e.g. ntfy server downtime) never interrupt running agents or tasks.
+3. **Zero Secret Disclosure**: Webhook credentials and private topics are referenced via `vault://nexus/...` and resolved purely in memory without log leaks.
 
 ---
 
-## 3. Politiques de diffusion
+## 2. Notification Channels
 
-### 3.1 Plages silencieuses (_Quiet Hours_)
+### 2.1 Linux Desktop (`DesktopChannel`)
 
-- Plage horaire configurable (ex. `22:00` - `08:00`) avec définition explicite du fuseau horaire (ex. `Europe/Paris`).
-- Prise en charge automatique du franchissement de minuit.
-- **Règle de contournement** : Les alertes de niveau `urgent` ou `high` (notamment les confirmations requises pour débloquer un agent) franchissent les plages silencieuses lorsque `allowUrgent` est activé, tandis que les notifications informatives ordinaires sont mises en sourdine.
+- Executes `/usr/bin/notify-send` via child process.
+- Maps internal priorities to freedesktop urgency levels (`low`, `normal`, `critical`).
+- Selects standard system icons (`dialog-information`, `dialog-warning`, `dialog-error`).
+- Headless-tolerant: skips silently without throwing fatal errors if no Wayland/X11 display is available.
 
-### 3.2 Regroupement et anti-inondation (_Throttling_)
+### 2.2 Free Mobile Push (`NtfyChannel`)
 
-- Un agent générant des alertes répétées peut saturer l'attention de l'utilisateur.
-- `NotificationThrottler` applique un fenêtrage glissant (30 secondes par défaut) basé sur une clé `groupKey` (par ex. `task-<taskId>` ou `confirmation-<id>`).
-- Seule la première notification est transmise immédiatement ; les suivantes sont agrégées et le décompte des messages supprimés est rapporté lors de l'expiration de la fenêtre.
+- Uses the standard HTTP [ntfy](https://ntfy.sh) protocol via `POST` requests.
+- Operates on the public free tier `https://ntfy.sh` or private self-hosted instances.
+- Sends structured HTTP headers:
+  - `Title`: Notification header.
+  - `Priority`: Urgency level 1 (min) to 5 (urgent).
+  - `Tags`: Visual and category badges.
+  - `Click`: Deep link URL directing the user to the relevant NEXUS resource.
+  - `Actions`: Inline action buttons (`view, Open, <url>`).
+- Supports optional Bearer authentication for restricted topics.
 
-### 3.3 Liens d'action directs (_Click-Through Links_)
+### 2.3 External Webhooks (`WebhookChannel`)
 
-- Toute fin de tâche génère un lien profond vers son onglet :
+- Multi-platform formatting:
+  - **Discord**: Rich embed with semantic color-coding and timestamp.
+  - **Telegram**: HTML formatted message with `<b>` tags, direct links, and special character escaping.
+  - **Apprise**: Payload schema compatible with universal Apprise instances.
+  - **Generic**: Extensible JSON schema containing full event metadata.
+
+---
+
+## 3. Delivery Policies
+
+### 3.1 Quiet Hours
+
+- Configurable time window (e.g. `22:00` - `08:00`) with explicit timezone support (e.g. `Europe/Paris`).
+- Handles midnight transitions automatically.
+- **Urgent Bypass Rule**: Alerts flagged with `urgent` or `high` priority (such as human confirmations required to unblock waiting agents) bypass quiet hours when `allowUrgent` is enabled, while routine updates are silenced.
+
+### 3.2 Throttling and Deduplication
+
+- Prevents notification spam from rapid agent loops.
+- `NotificationThrottler` enforces a sliding window (default 30 seconds) grouped by `groupKey` (e.g. `task-<taskId>` or `confirmation-<id>`).
+- The initial alert is delivered immediately; subsequent alerts within the window are aggregated and reported when the window expires.
+
+### 3.3 Direct Deep Links
+
+- Task completions include direct links:
   `${dashboardBaseUrl}/dashboard?tab=tasks&taskId=<taskId>`
-- Toute demande de confirmation humaine génère un lien d'approbation instantanée :
+- Human confirmations provide instant approval links:
   `${dashboardBaseUrl}/dashboard?tab=confirmations&id=<confirmationId>`
 
 ---
 
-## 4. Administration et supervision
+## 4. Administration and Health Checks
 
-Les routes administratives suivantes permettent de piloter le sous-système depuis le dashboard :
+The following administrative endpoints manage external notifications from the dashboard:
 
-| Méthode | Route                                    | Description                                        |
-| ------- | ---------------------------------------- | -------------------------------------------------- |
-| `GET`   | `/api/v1/dashboard/notifications/config` | Lecture de la configuration des canaux externes    |
-| `PUT`   | `/api/v1/dashboard/notifications/config` | Enregistrement et mise à jour dynamique des canaux |
-| `POST`  | `/api/v1/dashboard/notifications/test`   | Émission d'un test réel et rapport de livraison    |
+| Method  | Route                                    | Description                                           |
+| ------- | ---------------------------------------- | ----------------------------------------------------- |
+| `GET`   | `/api/v1/dashboard/notifications/config` | Reads current external channel configuration          |
+| `PUT`   | `/api/v1/dashboard/notifications/config` | Updates external channels dynamically                 |
+| `POST`  | `/api/v1/dashboard/notifications/test`   | Dispatches a live test notification and returns stats |
