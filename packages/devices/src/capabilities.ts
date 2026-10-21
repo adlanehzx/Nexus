@@ -1,20 +1,15 @@
 import type { DeviceCapability, DeviceType } from "./types.js";
 
 /**
- * Catalogue des capacités.
+ * Capability catalog.
  *
- * Il **documente** ce qui existe et alimente l'interface de réglages ; il ne
- * **restreint** pas ce qu'un worker peut déclarer. Un worker enregistre les
- * capacités qu'il possède réellement, y compris des capacités que le cœur ne
- * connaît pas — c'est ce qui rend le système extensible sans redéploiement.
- *
- * La conséquence à retenir : `getDevicesByCapability("truc.machin")` fonctionne
- * pour une capacité absente de ce fichier. Le catalogue est une aide, pas une
- * porte.
+ * Documents standard capability namespaces and seeds configuration UI;
+ * it does not restrict what workers may dynamically declare. Workers register
+ * whatever capabilities they possess, including capabilities unknown to the Core.
  */
 
 export const CAPABILITIES = {
-  // Poste de travail — Windows, macOS, Linux
+  // Workstation — Windows, macOS, Linux
   terminalExecute: "terminal.execute",
   filesystemRead: "filesystem.read",
   filesystemWrite: "filesystem.write",
@@ -35,7 +30,7 @@ export const CAPABILITIES = {
   androidUiScreenshot: "android.ui.screenshot",
   androidNotification: "android.notification",
 
-  // Client — capacités de restitution, pas d'exécution
+  // Client display/audio capabilities
   notificationPush: "notification.push",
   voicePlayback: "voice.playback",
 } as const;
@@ -43,12 +38,7 @@ export const CAPABILITIES = {
 export type KnownCapability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
 
 /**
- * Capacités **suggérées** à l'appairage, par type d'appareil.
- *
- * Aucune n'est accordée d'office : un worker déclare ce qu'il sait faire, et
- * l'utilisateur autorise ce qu'il veut. Ces listes ne servent qu'à pré-remplir
- * l'écran d'appairage — supposer qu'un poste Windows sait tout faire serait
- * exactement l'hypothèse que ce système refuse.
+ * Suggested capabilities presented during pairing by device type.
  */
 export const SUGGESTED_CAPABILITIES: Record<DeviceType, readonly string[]> = {
   WINDOWS_PC: [
@@ -92,18 +82,15 @@ export const SUGGESTED_CAPABILITIES: Record<DeviceType, readonly string[]> = {
 };
 
 /**
- * Permission requise pour exercer une capacité.
+ * Resolves required permission corresponding to a capability.
  *
- * Identité par défaut : la capacité `terminal.execute` exige la permission
- * `terminal.execute`. Ce n'est pas une simplification paresseuse — c'est ce qui
- * permet à `PermissionService` de travailler sans traduction, et à
- * l'utilisateur de lire dans ses réglages exactement ce qu'il autorise.
+ * Identity by default: capability `terminal.execute` requires permission `terminal.execute`.
  */
 export function permissionForCapability(capability: string): string {
   return capability;
 }
 
-/** L'appareil déclare-t-il cette capacité, et est-elle active ? */
+/** Checks whether device advertises and enables the required capability. */
 export function hasCapability(
   capabilities: readonly DeviceCapability[],
   required: string,
@@ -111,7 +98,7 @@ export function hasCapability(
   return capabilities.some((c) => c.enabled && c.name === required);
 }
 
-/** Capacités requises absentes de l'appareil. */
+/** Returns list of required capabilities not advertised or enabled by device. */
 export function missingCapabilities(
   capabilities: readonly DeviceCapability[],
   required: readonly string[],
@@ -120,11 +107,9 @@ export function missingCapabilities(
 }
 
 /**
- * Fusionne une déclaration de capacités.
+ * Merges declared capabilities.
  *
- * Le worker fait autorité : les capacités absentes de la nouvelle déclaration
- * disparaissent. Un worker qui perd Docker doit cesser d'être choisi pour des
- * tâches Docker, pas conserver une capacité fantôme.
+ * Worker advertisement is authoritative: unadvertised capabilities are dropped.
  */
 export function mergeCapabilities(declared: readonly DeviceCapability[]): DeviceCapability[] {
   const byName = new Map<string, DeviceCapability>();

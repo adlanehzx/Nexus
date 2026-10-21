@@ -17,16 +17,15 @@ import {
 } from "./tasks.js";
 
 /**
- * Exécution d'un plan de tâche sur plusieurs appareils.
+ * Executes a task plan across multiple devices.
  *
- * Le chemin imposé par l'architecture, dans cet ordre :
+ * Execution sequence:
  *
- *     autorisation → capacités requises → sélection → dispatch → événements
+ *     authorization -> required capabilities -> device selection -> dispatch -> events
  *
- * Aucun client n'ouvre jamais de connexion vers un worker. Un client demande au
- * cœur, le cœur choisit et dispatche, les résultats reviennent par le cœur.
- * `WorkerTransport` est le seul point de contact avec un exécutant, et c'est un
- * port : le WebSocket réel s'y branchera sans rien changer ici.
+ * Clients never establish direct connections to workers. Clients submit requests
+ * to Core, Core selects and dispatches to workers, and results route back through Core.
+ * `WorkerTransport` is the abstraction boundary for worker communication.
  */
 
 export interface WorkerDispatch {
@@ -36,41 +35,35 @@ export interface WorkerDispatch {
   tool: string;
   arguments: unknown;
   timeoutMs: number;
-  /** Capacité exercée — le worker refuse ce qu'il n'a pas enregistré. */
+  /** Invoked capability — worker rejects unadvertised capabilities. */
   capability: string;
   signal: AbortSignal;
   onProgress: (progress: { percent?: number; label?: string }) => void;
 }
 
-/** Ce que le journal d'exécution garde à la place d'un résultat sensible. */
-export const SENSITIVE_RESULT_PLACEHOLDER = "[RÉSULTAT SENSIBLE — NON CONSERVÉ]";
+/** Placeholder stored in audit log in place of sensitive result data. */
+export const SENSITIVE_RESULT_PLACEHOLDER = "[SENSITIVE RESULT — NOT RETAINED]";
 
 export interface WorkerResult {
   ok: boolean;
   result?: unknown;
   /**
-   * Le résultat ne doit pas entrer dans le journal d'exécution.
+   * Result must not be written to disk or preserved in execution logs.
    *
-   * Il est transmis au client qui l'a demandé, et s'arrête là. Pensé pour ce
-   * qu'aucune rédaction ne peut nettoyer — une capture d'écran de téléphone,
-   * par exemple : masquer un mot à l'intérieur d'une image n'a pas de sens.
+   * Returned directly to the requesting client and dropped from persistence.
    */
   sensitiveResult?: boolean;
   error?: { code: string; message: string; retryable: boolean };
 }
 
-/** Transport vers un worker. Implémenté par le WebSocket en phase suivante. */
+/** Transport adapter to worker. */
 export interface WorkerTransport {
   dispatch(input: WorkerDispatch): Promise<WorkerResult>;
   cancel(deviceId: string, taskId: string, stepId: string): Promise<void>;
 }
 
 /**
- * Décision humaine sur une étape sensible.
- *
- * Le port est volontairement minimal : il reçoit la demande, il rend un verdict.
- * L'attente réelle — carte affichée sur l'iPhone, notification push, expiration
- * — est l'affaire de l'implémentation, pas du coordinateur.
+ * Human confirmation gate for sensitive actions.
  */
 export interface ConfirmationGate {
   request(input: {
@@ -122,17 +115,11 @@ export class InMemoryTaskStore implements TaskStore {
   }
 
   /**
-   * Les derniers plans d'un utilisateur, du plus récent au plus ancien.
-   *
-   * Hors du port `TaskStore` : le coordinateur n'en a pas besoin, il exécute un
-   * plan qu'on lui donne. C'est l'assemblage du contexte qui s'en sert, pour que
-   * le modèle sache ce qui vient de se passer plutôt que de le redemander.
+   * Returns recent plans for a user, sorted newest first.
    */
   listByUser(userId: string, limit = 20): Promise<TaskPlan[]> {
     const mine = [...this.#plans.values()].filter((plan) => plan.userId === userId);
 
-    // `createdAt` est une chaîne ISO : la comparaison lexicographique est donc
-    // chronologique, et évite de construire deux `Date` par comparaison.
     mine.sort((left, right) => (left.createdAt < right.createdAt ? 1 : -1));
 
     return Promise.resolve(mine.slice(0, limit).map((plan) => structuredClone(plan)));
@@ -157,7 +144,7 @@ export interface TaskCoordinatorOptions {
   transport: WorkerTransport;
   store?: TaskStore;
   confirmations?: ConfirmationGate;
-  /** Risque à partir duquel une confirmation humaine est exigée. */
+  /** Risk threshold triggering human confirmation. */
   confirmationThreshold?: RiskLevel;
   confirmationTtlMs?: number;
   now?: () => Date;
@@ -165,7 +152,7 @@ export interface TaskCoordinatorOptions {
 }
 
 export interface ExecuteOptions {
-  /** Permissions de l'utilisateur, en plus de celles propres à l'appareil. */
+  /** User permissions, evaluated alongside device capabilities. */
   userPermissions?: readonly string[];
   signal?: AbortSignal;
 }
@@ -200,8 +187,7 @@ export class TaskCoordinator {
   }
 
   /**
-   * Reconstruit l'état du coordinateur après un redémarrage.
-   * Doit être appelé lors du démarrage de l'application.
+   * Recovers coordinator state after system restart.
    */
   async recover(): Promise<void> {
     const activePlans = await this.#store.listActive();
@@ -209,7 +195,7 @@ export class TaskCoordinator {
     for (const plan of activePlans) {
       let requiresSave = false;
 
-      // We process the steps to fail any that were "running" (security rule).
+      // Fail any steps that were in-flight when restart occurred
       for (const step of plan.steps) {
         if (step.status === "running") {
           step.status = "failed";
@@ -223,32 +209,14 @@ export class TaskCoordinator {
         }
       }
 
-      // If we modified steps, we need to update the plan status
       if (requiresSave) {
-        // Evaluate the overall plan status.
-        // A running plan with a failed step becomes partial/failed.
         if (plan.status === "running") {
           const hasPending = plan.steps.some((s) => s.status === "pending" || s.status === "ready");
           plan.status = hasPending ? "partial" : "failed";
           plan.completedAt = this.#now().toISOString();
         }
         await this.#store.save(plan);
-      } else if (plan.status === "waiting_for_confirmation") {
-        // We need to re-register the confirmation requirement.
-        // Currently ConfirmationBroker handles runtime requests, but how to rehydrate?
-        // If the ConfirmationBroker is memory-only, we might just leave the task in "waiting_for_confirmation"
-        // and let the client re-fetch it and confirm it. But if the client is not aware...
-        // Actually, for simplicity, we just keep it waiting.
       }
-
-      // Tasks that are pending or running (with no currently active/running steps)
-      // will be naturally re-evaluated if we just let the event router or the next heartbeat
-      // trigger them. But wait, `TaskCoordinator` uses EventRouter to listen for device events.
-      // Do we need to actively push them to a queue here?
-      // In a real system, the Coordinator would loop over `ready` steps and assign them.
-      // We can emit a synthetic event or just call an internal evaluation loop if one exists.
-      // Wait, how does TaskCoordinator execute a plan?
-      // It calls `this.#evaluate(plan)`! We can just call it for active plans.
 
       if (plan.status === "pending" || plan.status === "running") {
         void this.execute(plan).catch((error: unknown) => {
@@ -261,11 +229,9 @@ export class TaskCoordinator {
   }
 
   /**
-   * Exécute un plan jusqu'à son terme.
+   * Executes a task plan to completion.
    *
-   * Les étapes prêtes partent **en parallèle** : rien n'oblige à sérialiser deux
-   * étapes indépendantes sur deux appareils différents. La dépendance est la
-   * seule contrainte d'ordre.
+   * Independent ready steps execute concurrently across available devices.
    */
   async execute(plan: TaskPlan, options: ExecuteOptions = {}): Promise<TaskPlan> {
     let current: TaskPlan = {
@@ -284,12 +250,11 @@ export class TaskCoordinator {
 
     for (;;) {
       if (options.signal?.aborted === true) {
-        current = await this.#cancel(current, "annulé par l'utilisateur");
+        current = await this.#cancel(current, "cancelled by user");
         return current;
       }
 
-      // Les étapes dont une dépendance a échoué ne s'exécuteront jamais : les
-      // marquer tout de suite évite qu'un plan reste « en cours » sans fin.
+      // Mark blocked steps skipped immediately
       const blocked = blockedSteps(current);
       if (blocked.length > 0) {
         current = this.#patch(current, blocked, {
@@ -309,14 +274,11 @@ export class TaskCoordinator {
       current = { ...current, status: derivePlanStatus(current) };
       await this.#store.save(current);
 
-      const dernier = results[results.length - 1];
+      const latest = results[results.length - 1];
       await this.#emit(current, "task.progress", {
         taskId: current.id,
-        stepId: dernier?.id ?? ready[0]?.id ?? "",
-        // L'exécutant retenu accompagne la progression : c'est la seule
-        // occasion de le dire aux clients, et sans lui leur vue d'une tâche
-        // reste anonyme jusqu'au bout.
-        deviceId: dernier?.selectedDeviceId ?? null,
+        stepId: latest?.id ?? ready[0]?.id ?? "",
+        deviceId: latest?.selectedDeviceId ?? null,
         percent: planProgress(current),
         label: null,
       });
@@ -335,20 +297,20 @@ export class TaskCoordinator {
     if (status === "succeeded" || status === "partial") {
       await this.#emit(current, "task.completed", { taskId: current.id, status, durationMs });
     } else if (status === "cancelled") {
-      await this.#emit(current, "task.cancelled", { taskId: current.id, reason: "annulé" });
+      await this.#emit(current, "task.cancelled", { taskId: current.id, reason: "cancelled" });
     } else {
       const failed = current.steps.find((step) => step.error !== null);
       await this.#emit(current, "task.failed", {
         taskId: current.id,
         code: failed?.error?.code ?? "TASK_FAILED",
-        message: failed?.error?.message ?? "La tâche a échoué.",
+        message: failed?.error?.message ?? "Task failed.",
       });
     }
 
     return current;
   }
 
-  /** Sélection, confirmation, dispatch, reprise — pour une seule étape. */
+  /** Step execution pipeline: selection, confirmation, dispatch, failover. */
   async #runStep(plan: TaskPlan, step: TaskStep, options: ExecuteOptions): Promise<TaskStep> {
     const excluded: string[] = [];
     let attempt = 0;
@@ -357,7 +319,7 @@ export class TaskCoordinator {
     while (attempt < step.retry.attempts) {
       attempt += 1;
 
-      // 1. Sélection. Aucun nom d'appareil ici : capacités requises seulement.
+      // 1. Capability-based selection
       let selection;
       try {
         selection = await this.#selector.select({
@@ -370,7 +332,7 @@ export class TaskCoordinator {
         });
       } catch (error) {
         const reason =
-          error instanceof NoEligibleWorkerError ? error.userMessage : "Aucun appareil disponible.";
+          error instanceof NoEligibleWorkerError ? error.userMessage : "No device available.";
         return {
           ...step,
           status: "failed",
@@ -382,10 +344,7 @@ export class TaskCoordinator {
 
       const device = selection.device;
 
-      // 2. Le worker doit avoir enregistré la capacité exercée. Le sélecteur l'a
-      //    déjà vérifié ; on le revérifie parce que l'appareil a pu changer
-      //    entre-temps, et parce qu'une seule ligne évite une exécution non
-      //    autorisée.
+      // 2. Re-verify registered capability on candidate device
       const capability = step.requiredCapabilities[0] ?? step.tool;
       const fresh = await this.#registry.requireDevice(device.id);
       if (!hasCapability(fresh.capabilities, capability)) {
@@ -400,7 +359,7 @@ export class TaskCoordinator {
         };
       }
 
-      // 3. Confirmation humaine, routée vers l'appareil d'origine.
+      // 3. Human confirmation
       if (this.#needsConfirmation(step.riskLevel)) {
         const decision = await this.#confirm(plan, step, capability);
         if (decision !== "approved") {
@@ -414,15 +373,15 @@ export class TaskCoordinator {
               code: decision === "expired" ? "CONFIRMATION_EXPIRED" : "CONFIRMATION_REJECTED",
               message:
                 decision === "expired"
-                  ? "La demande de confirmation a expiré."
-                  : "Tu as refusé cette action.",
+                  ? "Confirmation request expired."
+                  : "Action rejected by user.",
               retryable: false,
             },
           };
         }
       }
 
-      // 4. Dispatch.
+      // 4. Dispatch
       const startedAt = this.#now();
       last = {
         ...step,
@@ -492,12 +451,7 @@ export class TaskCoordinator {
         startedAt: startedAt.toISOString(),
         completedAt: completedAt.toISOString(),
         durationMs,
-        // Un enregistrement d'exécution est un journal d'audit : il doit dire ce
-        // qui a été demandé. Les arguments y entrent donc, mais rédigés — un mot
-        // de passe passé à `terminal.execute` ne survit pas à cette ligne.
         input: redact(step.arguments),
-        // Un résultat déclaré sensible ne laisse qu'une mention : l'appel est
-        // tracé, sa charge utile ne l'est pas.
         result:
           result.sensitiveResult === true ? SENSITIVE_RESULT_PLACEHOLDER : (result.result ?? null),
         error: result.error ?? null,
@@ -525,7 +479,7 @@ export class TaskCoordinator {
         stepId: step.id,
         deviceId: device.id,
         code: result.error?.code ?? "WORKER_FAILED",
-        message: result.error?.message ?? "Échec de l'exécution.",
+        message: result.error?.message ?? "Execution failed.",
         retryable: result.error?.retryable ?? false,
       });
 
@@ -535,7 +489,7 @@ export class TaskCoordinator {
         completedAt: completedAt.toISOString(),
         error: result.error ?? {
           code: "WORKER_FAILED",
-          message: "Échec de l'exécution.",
+          message: "Execution failed.",
           retryable: false,
         },
       };
@@ -543,9 +497,6 @@ export class TaskCoordinator {
       const canRetry = (result.error?.retryable ?? false) && attempt < step.retry.attempts;
       if (!canRetry) return last;
 
-      // Basculer d'appareil plutôt que de réessayer sur celui qui vient
-      // d'échouer : si c'est le worker qui est en cause, réessayer chez lui ne
-      // sert à rien.
       if (step.retry.failoverToAnotherDevice) excluded.push(device.id);
     }
 
@@ -556,13 +507,6 @@ export class TaskCoordinator {
     return this.#confirmations !== undefined && riskRank(risk) >= riskRank(this.#threshold);
   }
 
-  /**
-   * Demande une confirmation et la route vers l'appareil d'origine.
-   *
-   * L'événement part vers **tous** les clients — l'iPhone peut approuver une
-   * action lancée depuis le portable — mais l'origine est marquée pour que
-   * l'interface la mette en avant là où l'utilisateur regarde.
-   */
   async #confirm(
     plan: TaskPlan,
     step: TaskStep,
@@ -649,7 +593,6 @@ export class TaskCoordinator {
     };
   }
 
-  /** Tout événement porte l'origine : c'est le fil qui ramène au bon client. */
   async #emit(
     plan: TaskPlan,
     type: NexusEventType,

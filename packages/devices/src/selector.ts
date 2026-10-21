@@ -4,35 +4,30 @@ import type { DeviceRegistry } from "./registry.js";
 import { canAcceptTasks, isOperational, type Device } from "./types.js";
 
 /**
- * Sélection de l'exécutant.
+ * Worker selection engine.
  *
- * La règle qui gouverne ce fichier : **jamais de nom d'appareil dans le code**.
- * Pas de « si la tâche parle de Docker, prendre le poste fixe ». Le chemin est
- * toujours le même :
+ * Rule: never hardcode device names in logic. Selection flows through:
  *
- *     capacités requises → workers compatibles → filtres durs → score → choix
+ *     required capabilities -> compatible workers -> hard security filters -> scoring -> selection
  *
- * Les filtres durs sont des questions de sécurité et ne se négocient pas. Le
- * score, lui, n'est qu'une préférence : entre deux workers également légitimes,
- * il choisit le plus disponible.
+ * Hard filters enforce invariant security requirements. Scoring breaks ties between
+ * eligible workers based on load, availability, and preferences.
  */
 
 export interface SelectionRequest {
   userId: string;
   requiredCapabilities: readonly string[];
-  /** Permissions accordées à l'utilisateur, en plus de celles de l'appareil. */
+  /** User permissions evaluated alongside device permissions. */
   userPermissions?: readonly string[];
-  /** Choix explicite de l'utilisateur — respecté s'il reste éligible. */
+  /** Explicit user choice, respected if eligible. */
   preferredDeviceId?: string;
-  /** Appareils écartés, par exemple après un échec sur l'un d'eux. */
+  /** Excluded device IDs, e.g. after a task attempt failed on one. */
   excludeDeviceIds?: readonly string[];
-  /** Contraintes de la tâche : type ou plateforme imposés. */
+  /** Task constraints: imposed platform or hardware requirements. */
   constraints?: {
-    // `| undefined` explicite : sous `exactOptionalPropertyTypes`, une contrainte
-    // venue d'un schéma Zod arrive avec cette forme.
     deviceTypes?: readonly Device["type"][] | undefined;
     platforms?: readonly Device["platform"][] | undefined;
-    /** Refuse un appareil sur batterie — utile pour une tâche longue. */
+    /** Reject workers running on battery power for intensive tasks. */
     requireMainsPower?: boolean | undefined;
   };
 }
@@ -46,30 +41,30 @@ export interface ScoredCandidate {
 export interface SelectionResult {
   device: Device;
   score: number;
-  /** Candidats évalués, du meilleur au moins bon — diagnostic et repli. */
+  /** Evaluated candidate devices ordered best to worst. */
   candidates: ScoredCandidate[];
-  /** Pourquoi chaque appareil écarté l'a été. */
+  /** Rejection diagnostic explanations for ineligible devices. */
   rejected: { deviceId: string; name: string; reason: string }[];
 }
 
 export interface DeviceSelectorOptions {
   registry: DeviceRegistry;
-  /** Poids du score. Ajustables sans toucher à la logique. */
+  /** Configurable scoring weights. */
   weights?: Partial<typeof DEFAULT_WEIGHTS>;
 }
 
 const DEFAULT_WEIGHTS = {
-  /** Un choix explicite de l'utilisateur domine tout le reste. */
+  /** Explicit user preference dominates all other factors. */
   preference: 1_000,
-  /** Un worker sans tâche en cours passe devant un worker occupé. */
+  /** Idle workers without active tasks prioritized over busy ones. */
   availability: 300,
-  /** Charge processeur et mémoire. */
+  /** CPU and memory capacity. */
   health: 200,
-  /** Latence mesurée au dernier battement de cœur. */
+  /** Round-trip latency measured on latest heartbeat. */
   latency: 150,
-  /** Sur secteur plutôt que sur batterie. */
+  /** Mains-powered workers preferred over battery-powered. */
   mainsPower: 100,
-  /** Capacités superflues : un worker spécialisé est préféré à un généraliste. */
+  /** Specialized workers preferred over generalist workstations. */
   specialization: 50,
 };
 
@@ -83,10 +78,9 @@ export class DeviceSelector {
   }
 
   /**
-   * Choisit le meilleur worker, ou lève en expliquant pourquoi aucun ne convient.
+   * Selects the optimal worker, or throws with detailed diagnostic reasons.
    *
-   * @throws {NoEligibleWorkerError} avec le détail de chaque rejet — c'est ce
-   *   message que l'agent relaie à l'utilisateur.
+   * @throws {NoEligibleWorkerError}
    */
   async select(request: SelectionRequest): Promise<SelectionResult> {
     const result = await this.trySelect(request);
@@ -94,13 +88,13 @@ export class DeviceSelector {
       const rejected = await this.#explain(request);
       throw new NoEligibleWorkerError(
         request.requiredCapabilities,
-        rejected.map((r) => `${r.name} : ${r.reason}`),
+        rejected.map((r) => `${r.name}: ${r.reason}`),
       );
     }
     return result;
   }
 
-  /** Variante sans exception : `undefined` quand aucun worker ne convient. */
+  /** Safe variant returning `undefined` when no workers match criteria. */
   async trySelect(request: SelectionRequest): Promise<SelectionResult | undefined> {
     const devices = await this.#registry.listDevices(request.userId);
     const candidates: ScoredCandidate[] = [];
@@ -124,50 +118,46 @@ export class DeviceSelector {
     return { device: best.device, score: best.score, candidates, rejected };
   }
 
-  /** Tous les workers éligibles, ordonnés. Sert au repli après un échec. */
+  /** Returns all eligible workers ordered by score for failover. */
   async listEligible(request: SelectionRequest): Promise<ScoredCandidate[]> {
     return (await this.trySelect(request))?.candidates ?? [];
   }
 
   /**
-   * Filtres durs. Chacun est une question de sécurité, pas de préférence.
-   *
-   * L'ordre est celui du diagnostic : on répond d'abord « ce n'est pas un
-   * exécutant », puis « il est hors ligne », puis « il n'est pas autorisé ».
+   * Hard filters.
    */
   #reject(device: Device, request: SelectionRequest): string | undefined {
     if (request.excludeDeviceIds?.includes(device.id) === true) {
       return "excluded for this task";
     }
 
-    // 1. Rôle. Un client n'exécute rien — sauf s'il est explicitement BOTH.
+    // 1. Operating role: client devices without worker role cannot execute tasks
     if (!canAcceptTasks(device.role)) {
       return `role ${device.role}: this device is a client, not an executor`;
     }
 
-    // 2. Révocation, avant toute autre chose.
+    // 2. Revocation status
     if (device.trust === "REVOKED" || device.revokedAt !== null) {
       return "device revoked";
     }
 
-    // 3. Confiance. Un appareil appairé mais non approuvé n'exécute rien.
+    // 3. Trust state
     if (device.trust !== "TRUSTED") {
       return "device not approved yet";
     }
 
-    // 4. Disponibilité réelle : en ligne ET session authentifiée ouverte.
+    // 4. Online and authenticated
     if (!isOperational(device)) {
       return device.status === "ONLINE" ? "session not authenticated" : "offline";
     }
 
-    // 5. Capacités déclarées.
+    // 5. Declared capabilities
     const missing = missingCapabilities(device.capabilities, request.requiredCapabilities);
     if (missing.length > 0) {
       return `missing capability: ${missing.join(", ")}`;
     }
 
-    // 6. Permissions. Une capacité déclarée n'est pas une autorisation :
-    //    l'appareil sait le faire, encore faut-il que ce soit permis.
+    // 6. Granted permissions
     const granted = new Set([...device.grantedPermissions]);
     const unauthorized = request.requiredCapabilities.filter(
       (capability) => !isPermitted(granted, permissionForCapability(capability)),
@@ -176,12 +166,12 @@ export class DeviceSelector {
       return `permission not granted: ${unauthorized.join(", ")}`;
     }
 
-    // 7. Saturation.
+    // 7. Concurrency capacity
     if (device.health.activeTasks >= device.health.maxConcurrentTasks) {
       return `already busy (${String(device.health.activeTasks)} task(s) running)`;
     }
 
-    // 8. Contraintes de la tâche.
+    // 8. Task constraints
     const constraints = request.constraints;
     if (constraints?.deviceTypes !== undefined && !constraints.deviceTypes.includes(device.type)) {
       return `type ${device.type} does not match the constraint`;
@@ -203,38 +193,34 @@ export class DeviceSelector {
 
     if (request.preferredDeviceId === device.id) {
       score += weights.preference;
-      reasons.push("choisi explicitement par l'utilisateur");
+      reasons.push("explicitly selected by user");
     }
 
     const capacity = device.health.maxConcurrentTasks;
     const free = Math.max(0, capacity - device.health.activeTasks) / capacity;
     score += free * weights.availability;
-    if (device.health.activeTasks === 0) reasons.push("aucune tâche en cours");
+    if (device.health.activeTasks === 0) reasons.push("no active tasks");
 
     const cpuFree = 1 - (device.health.cpuLoad ?? 0.5);
     score += cpuFree * weights.health;
 
     if (device.health.latencyMs !== undefined) {
-      // 0 ms vaut le poids plein, 500 ms et au-delà ne valent rien.
       const latencyScore = Math.max(0, 1 - device.health.latencyMs / 500);
       score += latencyScore * weights.latency;
     }
 
     if (device.health.onBattery === false) {
       score += weights.mainsPower;
-      reasons.push("sur secteur");
+      reasons.push("mains powered");
     }
 
-    // À égalité par ailleurs, le worker le plus spécialisé gagne : mobiliser un
-    // poste polyvalent pour une tâche qu'un appareil dédié sait faire le rend
-    // indisponible pour ce que lui seul peut faire.
     const extra = device.capabilities.length - request.requiredCapabilities.length;
     score += Math.max(0, 1 - extra / 20) * weights.specialization;
 
     return { device, score: Math.round(score), reasons };
   }
 
-  /** Motifs de rejet, y compris pour les appareils sans capacité requise. */
+  /** Generates rejection explanations for devices. */
   async #explain(request: SelectionRequest): Promise<SelectionResult["rejected"]> {
     const devices = await this.#registry.listDevices(request.userId);
     const rejected: SelectionResult["rejected"] = [];
@@ -249,7 +235,7 @@ export class DeviceSelector {
   }
 }
 
-/** Un joker de domaine (`terminal.*`) ou global (`*`) couvre la permission. */
+/** Domain wildcard (`terminal.*`) or global wildcard (`*`) satisfies required permission. */
 function isPermitted(granted: ReadonlySet<string>, required: string): boolean {
   if (granted.has("*") || granted.has(required)) return true;
 

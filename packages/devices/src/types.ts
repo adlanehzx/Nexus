@@ -1,26 +1,20 @@
 import { z } from "zod";
 
 /**
- * Modèle d'appareil.
+ * Device domain model.
  *
- * Un principe gouverne ce fichier : **le cœur ne connaît aucun appareil par son
- * nom**. Il ne connaît que des rôles, des types et des capacités. « L'iPhone
- * d'Alex » n'existe nulle part dans le code — il existe une ligne en base dont
- * le rôle est `CLIENT` et le type `IPHONE`. Ajouter un appareil est une écriture
- * en base, jamais un `if`.
+ * Core invariant: Core does not identify devices by hardware names.
+ * It reasons over roles, device types, and declared capabilities.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rôles
+// Roles
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ce qu'un appareil a le droit d'être.
+ * Device operating roles.
  *
- * `BOTH` n'est pas une commodité : le portable Windows est réellement les deux à
- * la fois — on y discute avec NEXUS, et il exécute des tâches. Le distinguer d'un
- * `WORKER` importe, parce qu'un client ne doit jamais être sélectionné comme
- * exécutant s'il n'a pas explicitement ce rôle.
+ * `BOTH`: device functions as user interface (client) and task execution host (worker).
  */
 export const deviceRoleSchema = z.enum(["CLIENT", "WORKER", "BOTH"]);
 export type DeviceRole = z.infer<typeof deviceRoleSchema>;
@@ -34,16 +28,13 @@ export function canReceiveEvents(role: DeviceRole): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types et plateformes
+// Types and Platforms
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Nature de l'appareil.
+ * Device type categorization.
  *
- * `BROWSER_WORKER` y figure parce que Browser Use est un exécutant à part
- * entière du point de vue du sélecteur — il a des capacités, un état de santé,
- * une disponibilité — tout en n'étant pas un appareil physique. Le distinguer
- * évite qu'il apparaisse dans une liste d'appareils de l'utilisateur.
+ * `BROWSER_WORKER`: represents headless browser execution worker.
  */
 export const deviceTypeSchema = z.enum([
   "IPHONE",
@@ -58,41 +49,39 @@ export type DeviceType = z.infer<typeof deviceTypeSchema>;
 export const devicePlatformSchema = z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]);
 export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
 
-/** Un appareil physique appartient à un humain ; un worker de service, non. */
+/** Distinguishes physical human-associated hardware from headless service workers. */
 export function isPhysicalDevice(type: DeviceType): boolean {
   return type !== "BROWSER_WORKER";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// État
+// State
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const deviceStatusSchema = z.enum(["ONLINE", "OFFLINE", "DEGRADED", "REVOKED"]);
 export type DeviceStatus = z.infer<typeof deviceStatusSchema>;
 
 /**
- * Confiance accordée à l'appareil.
+ * Trust lifecycle state.
  *
- * Distincte du statut : un appareil peut être en ligne et non fiable. Un
- * appareil fraîchement appairé est `PENDING` — il ne reçoit aucune tâche tant
- * qu'un humain ne l'a pas approuvé.
+ * Freshly paired devices start in `PENDING` until explicit administrator approval.
  */
 export const trustStateSchema = z.enum(["PENDING", "TRUSTED", "REVOKED"]);
 export type TrustState = z.infer<typeof trustStateSchema>;
 
 export const deviceHealthSchema = z.object({
-  /** Charge processeur observée, de 0 à 1. */
+  /** CPU load average from 0 to 1. */
   cpuLoad: z.number().min(0).max(1).optional(),
   memoryFreeMb: z.number().nonnegative().optional(),
   diskFreeMb: z.number().nonnegative().optional(),
   batteryPercent: z.number().min(0).max(100).optional(),
-  /** Sur batterie : un worker sur secteur est préférable pour une tâche longue. */
+  /** Running on battery power: plugged-in workers preferred for long operations. */
   onBattery: z.boolean().optional(),
-  /** Aller-retour mesuré au dernier battement de cœur. */
+  /** Measured round-trip latency on last heartbeat. */
   latencyMs: z.number().nonnegative().optional(),
-  /** Tâches en cours sur cet appareil. */
+  /** Currently active tasks running on this device. */
   activeTasks: z.number().int().nonnegative().default(0),
-  /** Au-delà, l'appareil refuse de nouvelles tâches. */
+  /** Maximum task concurrency limit. */
   maxConcurrentTasks: z.number().int().positive().default(1),
   reportedAt: z.string().optional(),
 });
@@ -101,52 +90,40 @@ export type DeviceHealth = z.infer<typeof deviceHealthSchema>;
 export const DEFAULT_HEALTH: DeviceHealth = { activeTasks: 0, maxConcurrentTasks: 1 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Capacités
+// Capabilities
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Capacité déclarée par un appareil.
+ * Advertised worker capability.
  *
- * Le nom partage l'espace des permissions (`domaine.action`) : c'est
- * intentionnel. Une **capacité** dit ce qu'un appareil sait faire, une
- * **permission** dit ce que l'utilisateur autorise. Les deux doivent être
- * réunies pour qu'une action ait lieu, et les nommer pareil rend la relation
- * lisible dans les journaux comme dans l'interface.
+ * Follows `domain.action` namespace matching permission definitions.
  */
 export const deviceCapabilitySchema = z.object({
-  name: z.string().regex(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/, "forme attendue : domaine.action"),
+  name: z.string().regex(/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/, "expected format: domain.action"),
   version: z.string().default("1"),
-  /** Description destinée au modèle quand la capacité devient un outil. */
+  /** Capability description exposed to LLM when projected as an agent tool. */
   description: z.string().default(""),
-  /** Schéma JSON des arguments, tel que le worker le déclare. */
+  /** JSON schema of accepted parameters. */
   inputSchema: z.record(z.string(), z.unknown()).optional(),
-  /** Le worker peut refuser une capacité sans se désenregistrer entièrement. */
+  /** Toggles individual capabilities without deregistering device. */
   enabled: z.boolean().default(true),
   metadata: z.record(z.string(), z.string()).default({}),
 });
 export type DeviceCapability = z.infer<typeof deviceCapabilitySchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Identifiants
+// Credentials
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Secret d'authentification d'un appareil.
+ * Cryptographic device credential record.
  *
- * On ne stocke jamais la valeur : une clé publique Ed25519 pour les appareils
- * appairés, ou l'empreinte d'un jeton pour les workers de service. `rotatedAt`
- * et `expiresAt` rendent la rotation observable.
+ * Only public keys or hashes are stored; raw private secrets are never persisted.
  */
 export const deviceCredentialSchema = z.object({
   id: z.string().min(1),
   deviceId: z.string().min(1),
-  /**
-   * `ECDSA_P256_PUBLIC_KEY` existe parce que le magasin de clés d'Android ne
-   * gère pas Ed25519 : c'est la seule courbe qui permette une clé d'appareil
-   * non extractible sur un téléphone.
-   */
   kind: z.enum(["ED25519_PUBLIC_KEY", "ECDSA_P256_PUBLIC_KEY", "SERVICE_TOKEN_HASH"]),
-  /** Clé publique, ou empreinte du jeton. Jamais un secret en clair. */
   material: z.string().min(1),
   createdAt: z.date(),
   rotatedAt: z.date().nullable().default(null),
@@ -156,7 +133,7 @@ export const deviceCredentialSchema = z.object({
 export type DeviceCredential = z.infer<typeof deviceCredentialSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Appareil
+// Device
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const deviceSchema = z.object({
@@ -170,23 +147,18 @@ export const deviceSchema = z.object({
   trust: trustStateSchema,
   capabilities: z.array(deviceCapabilitySchema).default([]),
   health: deviceHealthSchema.default(DEFAULT_HEALTH),
-  /**
-   * Permissions accordées **à cet appareil**, en plus de celles de
-   * l'utilisateur. Un même utilisateur peut autoriser `terminal.execute` sur son
-   * poste fixe et le refuser sur son portable.
-   */
+  /** Device-specific permissions granted in addition to user-level permissions. */
   grantedPermissions: z.array(z.string()).default([]),
   agentVersion: z.string().nullable().default(null),
   metadata: z.record(z.string(), z.string()).default({}),
   lastSeenAt: z.date().nullable().default(null),
   pairedAt: z.date(),
   revokedAt: z.date().nullable().default(null),
-  /** Vrai tant qu'une session authentifiée est ouverte. */
+  /** True while authenticated session is active. */
   authenticated: z.boolean().default(false),
 });
 export type Device = z.infer<typeof deviceSchema>;
 
-/** Ce qu'il faut pour enregistrer un appareil ; le reste a des valeurs par défaut. */
 export interface RegisterDeviceInput {
   id?: string;
   userId: string;
@@ -198,33 +170,26 @@ export interface RegisterDeviceInput {
   grantedPermissions?: string[];
   metadata?: Record<string, string>;
   agentVersion?: string;
-  /** Un appareil arrive `PENDING` : la confiance se donne, elle ne se suppose pas. */
   trust?: TrustState;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Session d'appareil
+// Device Session
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Session authentifiée d'un appareil connecté.
- *
- * Un identifiant d'appareil ne suffit jamais à s'authentifier : il est public,
- * il apparaît dans les journaux et dans l'interface. Une session naît d'un
- * challenge signé et porte un jeton à durée limitée, rotatif.
+ * Authenticated active device session.
  */
 export const deviceSessionSchema = z.object({
   id: z.string().min(1),
   deviceId: z.string().min(1),
   userId: z.string().min(1),
-  /** Empreinte du jeton de session. La valeur n'est rendue qu'une fois. */
   tokenHash: z.string().min(1),
   issuedAt: z.date(),
   expiresAt: z.date(),
   lastHeartbeatAt: z.date(),
   rotatedFromId: z.string().nullable().default(null),
   revokedAt: z.date().nullable().default(null),
-  /** Capacités négociées à l'ouverture — bornées par celles de l'appareil. */
   capabilities: z.array(z.string()).default([]),
   remoteAddress: z.string().nullable().default(null),
 });
@@ -234,7 +199,7 @@ export function isSessionActive(session: DeviceSession, now: Date): boolean {
   return session.revokedAt === null && session.expiresAt.getTime() > now.getTime();
 }
 
-/** Un appareil utilisable maintenant : en ligne, de confiance, authentifié. */
+/** Operational check: device is online, trusted, not revoked, and actively authenticated. */
 export function isOperational(device: Device): boolean {
   return (
     device.status === "ONLINE" &&

@@ -13,11 +13,7 @@ import {
 } from "./types.js";
 
 /**
- * Port de persistance des appareils.
- *
- * Le registre ne connaît pas la base : l'implémentation Prisma arrivera avec le
- * service, sans toucher à cette logique. Même raison que pour `AgentRunStore` —
- * ce qui se teste sans PostgreSQL se teste vraiment.
+ * Device persistence store port.
  */
 export interface DeviceStore {
   save(device: Device): Promise<void>;
@@ -30,8 +26,6 @@ export class InMemoryDeviceStore implements DeviceStore {
   readonly #devices = new Map<string, Device>();
 
   save(device: Device): Promise<void> {
-    // Copie défensive : un appelant qui muterait son objet après coup
-    // corromprait silencieusement l'état enregistré.
     this.#devices.set(device.id, structuredClone(device));
     return Promise.resolve();
   }
@@ -68,7 +62,7 @@ export type DeviceChange =
 
 export interface DeviceRegistryOptions {
   store?: DeviceStore;
-  /** Au-delà, un appareil sans battement de cœur passe hors ligne. */
+  /** Timeout after which an unresponsive device is marked offline. */
   heartbeatTimeoutMs?: number;
   now?: () => Date;
   newId?: () => string;
@@ -76,11 +70,9 @@ export interface DeviceRegistryOptions {
 }
 
 /**
- * Registre des appareils.
+ * Device registry.
  *
- * Source de vérité sur qui existe, ce qu'il sait faire, et s'il est utilisable.
- * Il ne décide rien : c'est `DeviceSelector` qui choisit. Cette séparation
- * compte — le registre répond à « qu'existe-t-il ? », le sélecteur à « lequel ? ».
+ * Authoritative record of registered devices, advertised capabilities, and operational health.
  */
 export class DeviceRegistry {
   readonly #store: DeviceStore;
@@ -97,14 +89,12 @@ export class DeviceRegistry {
     this.#onChange = options.onChange;
   }
 
-  // ── Cycle de vie ────────────────────────────────────────────────────────
+  // ── Lifecycle ───────────────────────────────────────────────────────────
 
   /**
-   * Enregistre un appareil.
+   * Registers a new device record.
    *
-   * Il arrive **hors ligne et non fiable** : la confiance se donne, elle ne se
-   * suppose pas. Un appareil fraîchement appairé ne reçoit aucune tâche avant
-   * qu'un humain l'ait approuvé.
+   * Devices start offline in `PENDING` trust state until human approval.
    */
   async registerDevice(input: RegisterDeviceInput): Promise<Device> {
     const now = this.#now();
@@ -142,7 +132,7 @@ export class DeviceRegistry {
     return true;
   }
 
-  /** Mise à jour partielle. L'identité et le propriétaire ne changent jamais. */
+  /** Partial update; id, userId, and pairedAt remain immutable. */
   async updateDevice(
     id: string,
     patch: Partial<Omit<Device, "id" | "userId" | "pairedAt">>,
@@ -169,7 +159,7 @@ export class DeviceRegistry {
     return devices.map((device) => this.#withFreshStatus(device));
   }
 
-  // ── Requêtes par rôle ───────────────────────────────────────────────────
+  // ── Role Queries ────────────────────────────────────────────────────────
 
   async getClientDevices(userId: string): Promise<Device[]> {
     return (await this.listDevices(userId)).filter((device) => canReceiveEvents(device.role));
@@ -188,12 +178,7 @@ export class DeviceRegistry {
   }
 
   /**
-   * Appareils déclarant **toutes** les capacités demandées.
-   *
-   * Aucun filtre de rôle ni de statut ici : la question posée est « qui sait
-   * faire ça ? », pas « qui peut le faire maintenant ? ». Le sélecteur applique
-   * les filtres d'éligibilité — les mélanger rendrait le diagnostic impossible
-   * (« pourquoi cet appareil n'apparaît-il pas ? »).
+   * Queries devices declaring all specified capabilities.
    */
   async getDevicesByCapability(userId: string, required: readonly string[]): Promise<Device[]> {
     const devices = await this.listDevices(userId);
@@ -202,13 +187,10 @@ export class DeviceRegistry {
     );
   }
 
-  // ── État ────────────────────────────────────────────────────────────────
+  // ── State ───────────────────────────────────────────────────────────────
 
   /**
-   * Battement de cœur : l'appareil est vivant.
-   *
-   * Passe l'appareil en ligne s'il ne l'était pas. Un appareil révoqué reste
-   * révoqué — un battement de cœur ne rend pas la confiance.
+   * Records heartbeat activity from a device.
    */
   async updateHeartbeat(id: string, health?: Partial<DeviceHealth>): Promise<Device> {
     const device = await this.requireDevice(id);
@@ -252,7 +234,7 @@ export class DeviceRegistry {
     return updated;
   }
 
-  /** Marque la session comme ouverte ou close. */
+  /** Sets active authentication state for device. */
   async setAuthenticated(id: string, authenticated: boolean): Promise<Device> {
     const device = await this.requireDevice(id);
     const previous = device.status;
@@ -278,7 +260,7 @@ export class DeviceRegistry {
     return updated;
   }
 
-  // ── Confiance ───────────────────────────────────────────────────────────
+  // ── Trust Management ────────────────────────────────────────────────────
 
   async trustDevice(id: string): Promise<Device> {
     const device = await this.requireDevice(id);
@@ -293,8 +275,6 @@ export class DeviceRegistry {
   async revokeTrust(id: string): Promise<Device> {
     const device = await this.requireDevice(id);
     const previous = device.trust;
-    // La confiance retirée ramène en attente, pas à la révocation : c'est
-    // réversible sans réappairage.
     const updated: Device = { ...device, trust: "PENDING", authenticated: false };
 
     await this.#store.save(updated);
@@ -303,11 +283,7 @@ export class DeviceRegistry {
   }
 
   /**
-   * Révocation définitive.
-   *
-   * L'appareil reste en base — l'historique des tâches y renvoie — mais il ne
-   * peut plus rien exécuter ni se reconnecter. Seul un réappairage complet le
-   * remet en service.
+   * Permanently revokes device credentials and marks revoked.
    */
   async revokeDevice(id: string): Promise<Device> {
     const device = await this.requireDevice(id);
@@ -325,14 +301,8 @@ export class DeviceRegistry {
     return updated;
   }
 
-  // ── Interne ─────────────────────────────────────────────────────────────
+  // ── Internal ────────────────────────────────────────────────────────────
 
-  /**
-   * Un appareil silencieux depuis trop longtemps est hors ligne, même si sa
-   * dernière écriture disait le contraire. Sans cela, un worker débranché
-   * brutalement resterait éligible jusqu'à sa prochaine écriture — c'est-à-dire
-   * jamais.
-   */
   #withFreshStatus(device: Device): Device {
     if (device.status !== "ONLINE") return device;
     if (device.lastSeenAt === null) return { ...device, status: "OFFLINE" };
@@ -347,7 +317,7 @@ export class DeviceRegistry {
     try {
       this.#onChange?.(change);
     } catch {
-      // La trace est un service rendu au registre, jamais une dépendance.
+      // Ignore notification failures
     }
   }
 }

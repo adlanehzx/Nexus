@@ -233,7 +233,7 @@ describe("poignée de main", () => {
 
     expect(payload.accepted).toEqual(["terminal.execute"]);
     expect(payload.rejected).toEqual([
-      { name: "nimportequoi", reason: "définition de capacité invalide" },
+      { name: "nimportequoi", reason: "invalid capability definition" },
     ]);
   });
 });

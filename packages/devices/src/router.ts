@@ -9,22 +9,16 @@ import type { DeviceRegistry } from "./registry.js";
 import { canReceiveEvents, type Device } from "./types.js";
 
 /**
- * Routage et synchronisation des événements.
+ * Event routing and device synchronization.
  *
- * Deux règles produisent tout le comportement attendu :
+ * Routing semantics:
+ * 1. Origin client receives first to maximize UI responsiveness.
+ * 2. All client devices belonging to the user receive synchronization events.
  *
- *  1. **L'appareil d'origine est prioritaire** — il reçoit d'abord, parce que
- *     c'est là que l'utilisateur regarde.
- *  2. **Tous les clients de l'utilisateur reçoivent quand même.** Une tâche
- *     lancée depuis le portable est visible sur l'iPhone, et réciproquement.
- *
- * La synchronisation passe **exclusivement par le centre**. Aucun client ne
- * parle à un autre : pas de pair-à-pair, pas d'état partagé hors du backend.
- * C'est ce qui garantit qu'un iPhone rallumé après deux heures voit le même état
- * que le portable resté connecté.
+ * Synchronization routes strictly through Core. No direct peer-to-peer communication.
  */
 
-/** Un canal ouvert vers un client connecté. */
+/** Channel to a connected client. */
 export interface ClientConnection {
   deviceId: string;
   userId: string;
@@ -33,21 +27,15 @@ export interface ClientConnection {
 
 export interface DeliveryReport {
   event: NexusEvent;
-  /** Clients qui ont réellement reçu l'événement. */
+  /** Client device IDs that received the event directly. */
   deliveredTo: string[];
-  /** Clients connus mais déconnectés — l'événement les attend en file. */
+  /** Registered client devices currently offline; event queued in memory backlog. */
   queuedFor: string[];
-  /** Vrai si l'appareil d'origine était joignable. */
+  /** True if originating client device was reachable. */
   originReached: boolean;
 }
 
-/**
- * File d'attente d'un client déconnecté.
- *
- * Bornée : un iPhone éteint une semaine ne doit pas faire enfler la mémoire.
- * Au-delà, les plus anciens événements sont perdus — un client qui revient de
- * loin resynchronise son état complet plutôt que de rejouer l'historique.
- */
+/** In-memory delivery queue options for offline devices. */
 export interface PendingQueueOptions {
   maxPerDevice?: number;
 }
@@ -57,7 +45,7 @@ export interface EventRouterOptions {
   queue?: PendingQueueOptions;
   now?: () => Date;
   newId?: () => string;
-  /** Journalisation d'audit. Reçoit l'événement **déjà validé**. */
+  /** Audit notification callback. Receives validated event. */
   onPublished?: (report: DeliveryReport) => void;
 }
 
@@ -66,7 +54,6 @@ export interface EmitInput {
   userId: string;
   correlationId: string;
   originClientDeviceId?: string | null;
-  /** Charge utile propre au type d'événement. */
   payload: Record<string, unknown>;
 }
 
@@ -87,13 +74,10 @@ export class EventRouter {
     this.#onPublished = options.onPublished;
   }
 
-  // ── Connexions ──────────────────────────────────────────────────────────
+  // ── Connections ─────────────────────────────────────────────────────────
 
   /**
-   * Attache un client connecté et lui livre ce qu'il a manqué.
-   *
-   * C'est ici que se joue la synchronisation : un iPhone qui se reconnecte
-   * reçoit immédiatement les événements survenus pendant son absence.
+   * Attaches client connection and flushes queued backlog.
    */
   async attach(connection: ClientConnection): Promise<NexusEvent[]> {
     this.#connections.set(connection.deviceId, connection);
@@ -120,11 +104,7 @@ export class EventRouter {
   // ── Publication ─────────────────────────────────────────────────────────
 
   /**
-   * Construit, valide et diffuse un événement.
-   *
-   * La validation n'est pas une formalité : un événement mal formé qui atteint
-   * un client mobile y provoque une erreur de désérialisation, loin de sa cause.
-   * On le refuse ici, là où la pile est encore lisible.
+   * Constructs, validates, and broadcasts an event to user's client devices.
    */
   async emit(input: EmitInput): Promise<DeliveryReport> {
     const event = nexusEventSchema.parse({
@@ -141,7 +121,7 @@ export class EventRouter {
     return this.publish(event);
   }
 
-  /** Diffuse un événement déjà construit. */
+  /** Broadcasts a pre-constructed event. */
   async publish(event: NexusEvent): Promise<DeliveryReport> {
     const clients = await this.#registry.getClientDevices(event.userId);
     const targets = this.#orderTargets(clients, event.originClientDeviceId);
@@ -161,8 +141,6 @@ export class EventRouter {
         await connection.send(event);
         deliveredTo.push(device.id);
       } catch {
-        // Un envoi qui échoue vaut une déconnexion : on met en file et on
-        // détache, plutôt que de perdre l'événement en silence.
         this.detach(device.id);
         this.#enqueue(device.id, event);
         queuedFor.push(device.id);
@@ -180,17 +158,13 @@ export class EventRouter {
     try {
       this.#onPublished?.(report);
     } catch {
-      // L'audit ne doit pas faire échouer une diffusion.
+      // Audit handler errors must not fail dispatch
     }
     return report;
   }
 
   /**
-   * Diffuse à **un seul** appareil, sans mise en file.
-   *
-   * Réservé à ce qui n'a de sens que pour son destinataire immédiat — la
-   * réponse à une commande, par exemple. Tout ce qui décrit l'état de NEXUS
-   * passe par `publish`, sinon les clients divergent.
+   * Dispatches direct event to a single device without queueing.
    */
   async sendTo(deviceId: string, event: NexusEvent): Promise<boolean> {
     const connection = this.#connections.get(deviceId);
@@ -205,17 +179,12 @@ export class EventRouter {
     }
   }
 
-  /** Événements en attente pour un appareil — diagnostic et tests. */
+  /** Returns pending queue for a device (testing and diagnostics). */
   pendingFor(deviceId: string): readonly NexusEvent[] {
     return this.#pending.get(deviceId) ?? [];
   }
 
-  /**
-   * Ordonne les destinataires : l'origine d'abord.
-   *
-   * L'utilisateur regarde l'appareil depuis lequel il a lancé la demande ; c'est
-   * lui qui doit réagir en premier, même de quelques millisecondes.
-   */
+  /** Orders targets prioritizing originating client. */
   #orderTargets(clients: readonly Device[], originId: string | null): Device[] {
     const eligible = clients.filter((device) => canReceiveEvents(device.role));
     if (originId === null) return eligible;
@@ -229,8 +198,6 @@ export class EventRouter {
     const queue = this.#pending.get(deviceId) ?? [];
     queue.push(event);
 
-    // File bornée : un appareil éteint longtemps resynchronisera son état
-    // complet plutôt que de rejouer un historique interminable.
     if (queue.length > this.#maxPerDevice) queue.splice(0, queue.length - this.#maxPerDevice);
     this.#pending.set(deviceId, queue);
   }

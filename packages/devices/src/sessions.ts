@@ -5,16 +5,14 @@ import type { DeviceRegistry } from "./registry.js";
 import { isSessionActive, type DeviceCredential, type DeviceSession } from "./types.js";
 
 /**
- * Sessions d'appareil authentifiées.
+ * Authenticated device sessions.
  *
- * **Un identifiant d'appareil n'authentifie rien.** Il est public : il apparaît
- * dans l'interface, dans les journaux, dans les événements. L'authentification
- * repose sur un challenge signé par une clé privée qui ne quitte jamais
- * l'appareil, et débouche sur un jeton de session à durée limitée.
+ * Device IDs are public identifiers that do not authenticate.
+ * Authentication relies on signing a challenge nonce with a private key
+ * that never leaves the device, yielding a time-limited session token.
  *
- * Ce module fournit le mécanisme. Le transport — WebSocket, HTTP — s'y branche
- * sans le connaître : c'est ce qui permet de le tester intégralement sans
- * ouvrir de connexion.
+ * Transports (WebSocket, HTTP) connect to this service through clean ports,
+ * enabling comprehensive testing without establishing live network sockets.
  */
 
 export interface Challenge {
@@ -27,7 +25,7 @@ export interface Challenge {
 export interface AuthenticateInput {
   deviceId: string;
   nonce: string;
-  /** Signature du nonce par la clé privée de l'appareil, en base64. */
+  /** Signature of the challenge nonce by device private key, base64-encoded. */
   signature: string;
   capabilities?: readonly string[];
   remoteAddress?: string;
@@ -35,11 +33,11 @@ export interface AuthenticateInput {
 
 export interface IssuedSession {
   session: DeviceSession;
-  /** Rendu **une seule fois**. Seule son empreinte est conservée. */
+  /** Single-use bearer token returned once upon issuance. Only its SHA-256 hash is persisted. */
   token: string;
 }
 
-/** Vérifie une signature. Injectable : les tests n'ont pas à faire de crypto. */
+/** Signature verification function. Pluggable to decouple unit tests from crypto. */
 export type SignatureVerifier = (
   publicKeyMaterial: string,
   nonce: string,
@@ -47,11 +45,9 @@ export type SignatureVerifier = (
 ) => boolean;
 
 /**
- * Vérificateur Ed25519 par défaut.
+ * Default Ed25519 signature verifier.
  *
- * `publicKeyMaterial` est une clé publique au format PEM SPKI. Toute erreur —
- * clé mal formée, signature illisible — vaut un refus : on ne cherche pas à
- * distinguer les causes d'échec côté appelant.
+ * Expects SPKI PEM public key. Malformed keys or unparseable signatures fail safely.
  */
 export const ed25519Verifier: SignatureVerifier = (publicKeyMaterial, nonce, signature) => {
   try {
@@ -67,20 +63,14 @@ export const ed25519Verifier: SignatureVerifier = (publicKeyMaterial, nonce, sig
 };
 
 /**
- * Vérificateur ECDSA P-256, en SHA-256.
+ * ECDSA P-256 signature verifier with SHA-256.
  *
- * Il existe pour une raison précise : **le magasin de clés d'Android ne gère pas
- * Ed25519.** Un appareil Android qui veut une clé protégée par le matériel — non
- * extractible, éventuellement dans l'enclave — n'a que la courbe P-256 à sa
- * disposition. Le choix est donc entre une clé Ed25519 logicielle et une clé
- * ECDSA adossée au matériel ; la seconde résiste à l'extraction, la première non.
+ * Android Keystore historically lacked support for Ed25519. Android devices
+ * requiring hardware-backed, non-extractable keys in Secure Enclave / TEE use
+ * NIST P-256 curves.
  *
- * La signature est attendue au format DER, celui que produit
- * `Signature.getInstance("SHA256withECDSA")` côté Android.
- *
- * Ce n'est pas un second système d'authentification : le challenge, la session,
- * la rotation et l'anti-rejeu sont exactement les mêmes. Seule change la
- * primitive de vérification, qui était déjà un port.
+ * Signature format expects DER encoding as emitted by Android's
+ * `Signature.getInstance("SHA256withECDSA")`.
  */
 export const ecdsaP256Verifier: SignatureVerifier = (publicKeyMaterial, nonce, signature) => {
   try {
@@ -95,7 +85,7 @@ export const ecdsaP256Verifier: SignatureVerifier = (publicKeyMaterial, nonce, s
   }
 };
 
-/** Vérificateur correspondant au type de secret enregistré pour l'appareil. */
+/** Resolves verifier matching registered device credential type. */
 export function verifierForCredential(kind: DeviceCredential["kind"]): SignatureVerifier {
   return kind === "ECDSA_P256_PUBLIC_KEY" ? ecdsaP256Verifier : ed25519Verifier;
 }
@@ -140,11 +130,11 @@ export interface DeviceSessionServiceOptions {
   registry: DeviceRegistry;
   store?: DeviceSessionStore;
   verifier?: SignatureVerifier;
-  /** Durée de vie d'un jeton de session. Court : la rotation est bon marché. */
+  /** Session token lifetime. */
   sessionTtlMs?: number;
-  /** Validité d'un challenge. Court aussi : il ne sert qu'une fois. */
+  /** Challenge nonce validity window. */
   challengeTtlMs?: number;
-  /** Écart d'horloge toléré sur un horodatage de requête. */
+  /** Tolerated clock skew on request timestamps. */
   clockSkewMs?: number;
   now?: () => Date;
   newId?: () => string;
@@ -164,9 +154,9 @@ export class DeviceSessionService {
   readonly #now: () => Date;
   readonly #newId: () => string;
 
-  /** Challenges en cours, consommés à la première utilisation. */
+  /** Active challenges, consumed on first verification. */
   readonly #challenges = new Map<string, Challenge>();
-  /** Nonces déjà vus — protection contre le rejeu. */
+  /** Seen nonces for replay prevention. */
   readonly #usedNonces = new Map<string, number>();
 
   constructor(options: DeviceSessionServiceOptions) {
@@ -181,16 +171,14 @@ export class DeviceSessionService {
   }
 
   /**
-   * Émet un challenge pour un appareil.
+   * Issues a cryptographic challenge for a device.
    *
-   * Aucun secret partagé de longue durée ne transite : l'appareil prouve qu'il
-   * détient sa clé privée en signant ce nonce. Un jeton dérobé dans un journal
-   * ne suffit donc pas à se faire passer pour lui.
+   * Proves device private key possession without transmitting shared secrets.
    */
   async createChallenge(deviceId: string): Promise<Challenge> {
     const device = await this.#registry.requireDevice(deviceId);
     if (device.trust === "REVOKED" || device.revokedAt !== null) {
-      throw new DeviceAuthenticationError(deviceId, "appareil révoqué");
+      throw new DeviceAuthenticationError(deviceId, "device revoked");
     }
 
     const now = this.#now();
@@ -207,49 +195,45 @@ export class DeviceSessionService {
   }
 
   /**
-   * Vérifie la signature et ouvre une session.
+   * Verifies challenge signature and opens an authenticated session.
    *
-   * Les capacités négociées sont **bornées par celles de l'appareil** : un
-   * worker qui prétendrait à une capacité non enregistrée n'obtient que
-   * l'intersection. Il ne peut pas s'accorder de pouvoirs en se connectant.
+   * Negotiated capabilities are bounded by the device's registered capability set.
    */
   async authenticate(input: AuthenticateInput, credentialMaterial: string): Promise<IssuedSession> {
     const now = this.#now();
     const device = await this.#registry.requireDevice(input.deviceId);
 
     if (device.trust === "REVOKED" || device.revokedAt !== null) {
-      throw new DeviceAuthenticationError(input.deviceId, "appareil révoqué");
+      throw new DeviceAuthenticationError(input.deviceId, "device revoked");
     }
     if (device.trust !== "TRUSTED") {
-      throw new DeviceAuthenticationError(input.deviceId, "appareil pas encore approuvé");
+      throw new DeviceAuthenticationError(input.deviceId, "device not yet approved");
     }
 
     const challenge = this.#challenges.get(input.nonce);
     if (challenge === undefined) {
       throw new ReplayRejectedError({
-        message: `Nonce inconnu ou déjà consommé pour ${input.deviceId}`,
+        message: `Nonce unknown or already consumed for ${input.deviceId}`,
         context: { deviceId: input.deviceId },
       });
     }
-    // Consommé quoi qu'il arrive : un nonce ne sert qu'une fois, même si la
-    // signature est fausse. Sinon un attaquant pourrait le forcer.
     this.#challenges.delete(input.nonce);
 
     if (challenge.deviceId !== input.deviceId) {
       throw new ReplayRejectedError({
-        message: "Nonce émis pour un autre appareil",
+        message: "Nonce issued for a different device",
         context: { deviceId: input.deviceId },
       });
     }
     if (challenge.expiresAt.getTime() <= now.getTime()) {
       throw new ReplayRejectedError({
-        message: "Challenge expiré",
+        message: "Challenge expired",
         context: { deviceId: input.deviceId },
       });
     }
 
     if (!this.#verify(credentialMaterial, input.nonce, input.signature)) {
-      throw new DeviceAuthenticationError(input.deviceId, "signature invalide");
+      throw new DeviceAuthenticationError(input.deviceId, "invalid signature");
     }
 
     const declared = new Set(device.capabilities.filter((c) => c.enabled).map((c) => c.name));
@@ -281,11 +265,9 @@ export class DeviceSessionService {
   }
 
   /**
-   * Résout un jeton en session active.
+   * Resolves bearer token to active device session.
    *
-   * Retourne `undefined` plutôt que de lever : un jeton périmé est un cas
-   * ordinaire, pas un incident. L'appelant renvoie 401 et l'appareil se
-   * réauthentifie.
+   * Returns `undefined` if invalid or expired.
    */
   async resolve(token: string): Promise<DeviceSession | undefined> {
     const session = await this.#store.findByTokenHash(hashToken(token));
@@ -293,7 +275,6 @@ export class DeviceSessionService {
     if (!isSessionActive(session, this.#now())) return undefined;
 
     const device = await this.#registry.getDevice(session.deviceId);
-    // Une révocation prend effet immédiatement, même sur une session ouverte.
     if (device?.trust !== "TRUSTED" || device.revokedAt !== null) {
       return undefined;
     }
@@ -301,15 +282,14 @@ export class DeviceSessionService {
   }
 
   /**
-   * Rotation du jeton.
+   * Rotates session token.
    *
-   * L'ancienne session est révoquée dans le même mouvement : à aucun moment deux
-   * jetons ne sont valides pour le même appareil.
+   * Previous token is revoked atomically during rotation.
    */
   async rotate(currentToken: string): Promise<IssuedSession> {
     const current = await this.resolve(currentToken);
     if (current === undefined) {
-      throw new DeviceAuthenticationError("inconnu", "jeton de session invalide ou expiré");
+      throw new DeviceAuthenticationError("unknown", "invalid or expired session token");
     }
 
     const now = this.#now();
@@ -339,7 +319,7 @@ export class DeviceSessionService {
     return updated;
   }
 
-  /** Ferme une session. L'appareil repasse hors ligne. */
+  /** Revokes a session, marking device unauthenticated if no active sessions remain. */
   async revokeSession(sessionId: string): Promise<void> {
     const session = await this.#store.get(sessionId);
     if (session === undefined) return;
@@ -348,7 +328,7 @@ export class DeviceSessionService {
     await this.#registry.setAuthenticated(session.deviceId, false);
   }
 
-  /** Ferme toutes les sessions d'un appareil — utilisé à la révocation. */
+  /** Revokes all active sessions for a device. */
   async revokeAllForDevice(deviceId: string): Promise<number> {
     const sessions = await this.#store.listByDevice(deviceId);
     const now = this.#now();
@@ -365,11 +345,7 @@ export class DeviceSessionService {
   }
 
   /**
-   * Protection contre le rejeu d'une requête signée.
-   *
-   * Deux conditions : l'horodatage tient dans la fenêtre tolérée, et le
-   * `requestId` n'a jamais été vu. La fenêtre borne aussi la mémoire — au-delà,
-   * un identifiant ne peut plus être rejoué de toute façon.
+   * Validates signed request timestamp and unique nonce.
    */
   assertNotReplayed(requestId: string, timestamp: Date): void {
     const now = this.#now().getTime();
@@ -377,14 +353,14 @@ export class DeviceSessionService {
 
     if (drift > this.#clockSkewMs) {
       throw new ReplayRejectedError({
-        message: `Horodatage hors fenêtre (${String(Math.round(drift / 1000))} s d'écart)`,
+        message: `Timestamp outside accepted window (${String(Math.round(drift / 1000))} s drift)`,
         context: { requestId },
       });
     }
 
     if (this.#usedNonces.has(requestId)) {
       throw new ReplayRejectedError({
-        message: "Identifiant de requête déjà utilisé",
+        message: "Request ID already used",
         context: { requestId },
       });
     }
@@ -393,7 +369,7 @@ export class DeviceSessionService {
     this.#pruneExpired(this.#now());
   }
 
-  /** Comparaison de jetons en temps constant. */
+  /** Constant-time token comparison helper. */
   static tokensMatch(a: string, b: string): boolean {
     const left = Buffer.from(a);
     const right = Buffer.from(b);

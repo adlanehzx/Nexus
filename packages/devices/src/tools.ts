@@ -8,20 +8,17 @@ import type { WorkerTransport } from "./coordinator.js";
 import type { RiskLevel } from "@nexus/tools";
 
 /**
- * Pont capacité d'appareil → `ToolDefinition`.
+ * Device capability bridge -> `ToolDefinition`.
  *
- * **On ne crée pas un second système d'outils.** Une capacité devient un outil
- * ordinaire du `ToolRegistry` existant, exactement comme le fait `McpManager`.
- * Conséquence directe : permissions, confirmations, validation d'arguments,
- * délais, reprises et journal d'audit s'appliquent sans une ligne de code
- * supplémentaire.
+ * Capabilities map directly into standard tools within the existing `ToolRegistry`.
+ * Permissions, human confirmation requirements, argument validation, and audit
+ * logging apply uniformly.
  *
- * L'agent ne voit donc jamais d'appareil. Il voit `device.terminal.execute` et
- * ignore lequel de ses trois ordinateurs l'exécutera — c'est le sélecteur qui
- * tranche, au moment de l'appel, sur des capacités.
+ * The LLM only sees generic tools like `device.terminal.execute` without needing
+ * to know which host executes it. The selector dynamically routes requests to capable workers.
  */
 
-/** Risque par défaut d'une capacité, quand rien de plus précis n'est déclaré. */
+/** Default risk level for capabilities when not explicitly configured. */
 const CAPABILITY_RISK: Record<string, RiskLevel> = {
   "filesystem.read": "SAFE",
   "process.list": "SAFE",
@@ -32,11 +29,7 @@ const CAPABILITY_RISK: Record<string, RiskLevel> = {
   "android.ui.scroll": "LOW",
   "filesystem.write": "MEDIUM",
   "browser.interact": "MEDIUM",
-  // Se connecter engage l'identite de l'utilisateur sur un site tiers.
   "browser.login": "HIGH",
-  // Un achat est irreversible et engage financierement. Sans cette ligne il
-  // retomberait sur le defaut HIGH, et un deploiement qui n'exige une
-  // confirmation qu'au niveau CRITICAL laisserait passer un paiement.
   "browser.purchase": "CRITICAL",
   "android.ui.click": "MEDIUM",
   "android.ui.input": "MEDIUM",
@@ -45,8 +38,6 @@ const CAPABILITY_RISK: Record<string, RiskLevel> = {
   "docker.execute": "HIGH",
   "process.start": "HIGH",
   "process.stop": "HIGH",
-  // Une commande shell arbitraire est ce qui se rapproche le plus d'un accès
-  // total à la machine : elle ne descend jamais sous HIGH par défaut.
   "terminal.execute": "HIGH",
 };
 
@@ -62,15 +53,15 @@ const deviceToolOutputSchema = z.object({
 type DeviceToolOutput = z.infer<typeof deviceToolOutputSchema>;
 
 export interface DeviceToolSpec {
-  /** Capacité exercée, par exemple `terminal.execute`. */
+  /** Capability name, e.g. `terminal.execute`. */
   capability: string;
   description: string;
-  /** Schéma des arguments transmis au worker. */
+  /** Schema of arguments forwarded to the worker. */
   inputSchema: z.ZodType<Record<string, unknown>>;
   inputJsonSchema?: Record<string, unknown>;
   riskLevel?: RiskLevel;
   timeoutMs?: number;
-  /** Capacités supplémentaires exigées de l'exécutant. */
+  /** Additional capabilities required from the worker. */
   alsoRequires?: string[];
 }
 
@@ -78,22 +69,18 @@ export interface DeviceToolsOptions {
   registry: DeviceRegistry;
   selector: DeviceSelector;
   transport: WorkerTransport;
-  /** Permissions de l'utilisateur, consultées à la sélection. */
+  /** User permissions evaluated at selection time. */
   userPermissions?: () => readonly string[];
   specs: DeviceToolSpec[];
 }
 
-/** Nom canonique d'un outil d'appareil dans le registre. */
+/** Canonical tool name in the tool registry. */
 export function deviceToolName(capability: string): string {
   return `device.${capability}`;
 }
 
 /**
- * Construit les outils d'appareil pour le `ToolRegistry`.
- *
- * Un outil par capacité, pas un par appareil : le modèle choisit *ce qu'il veut
- * faire*, jamais *où*. C'est ce qui empêche l'agent de développer des préférences
- * matérielles et ce qui rend un appareil remplaçable sans rien changer au prompt.
+ * Builds device tools for the `ToolRegistry`.
  */
 export function createDeviceTools(options: DeviceToolsOptions): ToolDefinition<never, unknown>[] {
   return options.specs.map(
@@ -110,18 +97,14 @@ function makeTool(
 
   return {
     name: deviceToolName(spec.capability),
-    description: `${spec.description} NEXUS choisit lui-même l'appareil capable de le faire ; ne demande pas un appareil en particulier.`,
+    description: `${spec.description} NEXUS automatically selects an eligible device; do not request a specific device.`,
     version: "1",
     inputSchema: spec.inputSchema,
     ...(spec.inputJsonSchema ? { inputJsonSchema: spec.inputJsonSchema } : {}),
     outputSchema: deviceToolOutputSchema,
     riskLevel: risk,
-    // La permission porte le nom de la capacité : ce que l'utilisateur lit dans
-    // ses réglages est exactement ce que l'appareil exerce.
     requiredPermissions: required.map(permissionForCapability) as Permission[],
     requiresConfirmation: risk !== "SAFE" && risk !== "LOW",
-    // Une action d'appareil n'est jamais rejouée seule : on ne peut pas savoir
-    // si la première tentative a déjà supprimé le fichier.
     idempotent: risk === "SAFE",
     timeoutMs: spec.timeoutMs ?? 300_000,
     summarize: (input) => `${spec.capability} — ${JSON.stringify(input).slice(0, 160)}`,
@@ -134,11 +117,8 @@ function makeTool(
       });
 
       const device = selection.device;
-      context.onProgress({ label: `Exécution sur ${device.name}` });
+      context.onProgress({ label: `Executing on ${device.name}` });
 
-      // Revérification juste avant l'appel : l'appareil a pu perdre la capacité
-      // entre la sélection et le dispatch. Une ligne, contre une exécution non
-      // autorisée.
       const fresh = await options.registry.requireDevice(device.id);
       if (!fresh.capabilities.some((c) => c.enabled && c.name === spec.capability)) {
         throw new CapabilityNotRegisteredError(device.id, spec.capability);
@@ -163,7 +143,7 @@ function makeTool(
 
       if (!result.ok) {
         throw new NoEligibleWorkerError(required, [
-          result.error?.message ?? `l'exécution a échoué sur ${device.name}`,
+          result.error?.message ?? `execution failed on ${device.name}`,
         ]);
       }
 
@@ -173,17 +153,13 @@ function makeTool(
 }
 
 /**
- * Jeu d'outils de base, dérivé du catalogue de capacités.
- *
- * Volontairement restreint : chaque outil ajouté élargit ce que l'agent peut
- * tenter. On en ajoute quand un worker sait réellement le faire, pas « au cas
- * où ».
+ * Standard device tool specifications.
  */
 export function standardDeviceToolSpecs(): DeviceToolSpec[] {
   return [
     {
       capability: "terminal.execute",
-      description: "Exécute une commande dans un terminal sur un ordinateur de l'utilisateur.",
+      description: "Executes a command in a terminal on the user's computer.",
       inputSchema: z.object({
         command: z.string().min(1),
         cwd: z.string().optional(),
@@ -191,8 +167,8 @@ export function standardDeviceToolSpecs(): DeviceToolSpec[] {
       inputJsonSchema: {
         type: "object",
         properties: {
-          command: { type: "string", description: "Commande à exécuter" },
-          cwd: { type: "string", description: "Répertoire de travail" },
+          command: { type: "string", description: "Command to execute" },
+          cwd: { type: "string", description: "Working directory" },
         },
         required: ["command"],
       },
@@ -200,7 +176,7 @@ export function standardDeviceToolSpecs(): DeviceToolSpec[] {
     },
     {
       capability: "filesystem.read",
-      description: "Lit un fichier sur un ordinateur de l'utilisateur.",
+      description: "Reads a file on the user's computer.",
       inputSchema: z.object({ path: z.string().min(1) }),
       inputJsonSchema: {
         type: "object",
@@ -211,7 +187,7 @@ export function standardDeviceToolSpecs(): DeviceToolSpec[] {
     },
     {
       capability: "filesystem.write",
-      description: "Écrit un fichier sur un ordinateur de l'utilisateur.",
+      description: "Writes a file on the user's computer.",
       inputSchema: z.object({
         path: z.string().min(1),
         content: z.string(),
@@ -225,7 +201,7 @@ export function standardDeviceToolSpecs(): DeviceToolSpec[] {
     },
     {
       capability: "android.notification",
-      description: "Envoie une notification sur le téléphone Android de l'utilisateur.",
+      description: "Sends a notification to the user's Android device.",
       inputSchema: z.object({
         title: z.string().min(1),
         body: z.string(),

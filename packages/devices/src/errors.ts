@@ -1,11 +1,11 @@
 import { AppError, type AppErrorOptions } from "@nexus/shared";
 
 /**
- * Erreurs du plan appareil.
+ * Device plane errors.
  *
- * Elles suivent la taxonomie de `@nexus/shared` : code stable, message sûr à
- * afficher, caractère réessayable. Un échec de sélection n'est pas une panne —
- * c'est une observation que l'agent doit pouvoir relayer à l'utilisateur.
+ * Follows the taxonomy in `@nexus/shared`: stable error code, safe user message,
+ * retryability flag. A device selection failure is an observation the agent can relay,
+ * not a crash.
  */
 
 export class DeviceNotFoundError extends AppError {
@@ -15,7 +15,7 @@ export class DeviceNotFoundError extends AppError {
 
   constructor(deviceId: string) {
     super({
-      message: `Appareil inconnu : ${deviceId}`,
+      message: `Unknown device: ${deviceId}`,
       userMessage: "This device is not registered.",
       context: { deviceId },
     });
@@ -24,11 +24,10 @@ export class DeviceNotFoundError extends AppError {
 }
 
 /**
- * Aucun worker ne peut exécuter l'étape.
+ * No eligible worker can execute the step.
  *
- * `reasons` détaille pourquoi chaque candidat a été écarté : c'est ce que
- * l'agent relaie à l'utilisateur, et c'est la différence entre « je n'ai pas pu »
- * et « ton poste fixe est hors ligne, allume-le ou autorise ton portable ».
+ * `reasons` details why each candidate device was excluded: this is what the agent
+ * relays to the user so they can understand how to resolve it (e.g. power on host).
  */
 export class NoEligibleWorkerError extends AppError {
   readonly code = "NO_ELIGIBLE_WORKER";
@@ -39,7 +38,7 @@ export class NoEligibleWorkerError extends AppError {
 
   constructor(requiredCapabilities: readonly string[], reasons: readonly string[]) {
     super({
-      message: `Aucun worker éligible pour ${requiredCapabilities.join(", ")}`,
+      message: `No eligible worker for ${requiredCapabilities.join(", ")}`,
       userMessage:
         reasons.length > 0
           ? `No device can do this: ${reasons.join("; ")}.`
@@ -51,7 +50,7 @@ export class NoEligibleWorkerError extends AppError {
   }
 }
 
-/** L'appareil ne déclare pas la capacité demandée. */
+/** The device does not declare the required capability. */
 export class CapabilityNotRegisteredError extends AppError {
   readonly code = "CAPABILITY_NOT_REGISTERED";
   readonly httpStatus = 403;
@@ -60,7 +59,7 @@ export class CapabilityNotRegisteredError extends AppError {
 
   constructor(deviceId: string, capability: string) {
     super({
-      message: `L'appareil ${deviceId} ne déclare pas la capacité ${capability}`,
+      message: `Device ${deviceId} does not advertise capability ${capability}`,
       userMessage: "This device cannot do this action.",
       context: { deviceId, capability },
     });
@@ -76,7 +75,7 @@ export class DeviceRevokedError extends AppError {
 
   constructor(deviceId: string) {
     super({
-      message: `Appareil révoqué : ${deviceId}`,
+      message: `Device revoked: ${deviceId}`,
       userMessage: "This device was revoked and can no longer run anything.",
       context: { deviceId },
     });
@@ -91,15 +90,15 @@ export class DeviceAuthenticationError extends AppError {
 
   constructor(deviceId: string, reason: string, context: Record<string, unknown> = {}) {
     super({
-      message: `Authentification refusée pour ${deviceId} : ${reason}`,
-      userMessage: "L'appareil n'a pas pu s'authentifier.",
+      message: `Authentication rejected for ${deviceId}: ${reason}`,
+      userMessage: "This device could not authenticate.",
       context: { deviceId, reason, ...context },
     });
     this.deviceId = deviceId;
   }
 }
 
-/** Rejeu détecté, ou horodatage hors de la fenêtre acceptée. */
+/** Replay detected or timestamp outside accepted window. */
 export class ReplayRejectedError extends AppError {
   readonly code = "DEVICE_REPLAY_REJECTED";
   readonly httpStatus = 401;
@@ -109,7 +108,7 @@ export class ReplayRejectedError extends AppError {
   }
 }
 
-/** Le plan référence une étape inexistante, ou décrit un cycle. */
+/** The plan references a non-existent step or contains a cycle. */
 export class InvalidTaskPlanError extends AppError {
   readonly code = "INVALID_TASK_PLAN";
   readonly httpStatus = 400;
@@ -117,10 +116,11 @@ export class InvalidTaskPlanError extends AppError {
 
   constructor(details: readonly string[]) {
     super({
-      message: `Plan de tâche invalide : ${details.join(" ; ")}`,
+      message: `Invalid task plan: ${details.join("; ")}`,
       userMessage: "This task plan is inconsistent.",
       context: { details },
     });
     this.details = details;
   }
 }
+

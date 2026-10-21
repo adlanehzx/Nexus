@@ -16,89 +16,77 @@ import type { EventRouter } from "./router.js";
 import type { WorkerDispatch, WorkerResult, WorkerTransport } from "./coordinator.js";
 
 /**
- * Passerelle vers les exécutants.
+ * Worker gateway.
  *
- * C'est **l'implémentation de `WorkerTransport`** déclaré par le coordinateur.
- * Rien d'autre n'a changé côté cœur : `TaskCoordinator`, `DeviceSelector` et
- * `TaskPlan` ignorent qu'un vrai worker existe désormais.
+ * Implements `WorkerTransport` declared by the coordinator.
+ * Everything else remains unchanged Core-side: `TaskCoordinator`, `DeviceSelector`
+ * and `TaskPlan` do not need to know whether a worker is local or remote.
  *
- * Le sens de la connexion est le point important. Le worker ouvre la connexion
- * vers le cœur ; le cœur ne sait pas joindre une machine Windows. Il répond sur
- * un canal déjà ouvert. Conséquence directe : aucune redirection de port, aucune
- * machine exposée, et un worker derrière un réseau domestique ou un partage de
- * connexion mobile fonctionne sans configuration.
+ * Connection direction is the critical architectural invariant. The worker initiates
+ * connections to the Core; the Core cannot reach into worker machines. It responds
+ * across the pre-established channel. Direct consequence: zero port forwarding, no
+ * exposed attack surface, and workers behind residential NAT or mobile tethering
+ * function without specialized network configuration.
  *
- * La passerelle ne connaît pas le WebSocket : elle parle à `WorkerConnection`,
- * un port. Le transport réel s'y branchera sans toucher une ligne d'ici.
+ * The gateway does not know about WebSockets directly: it talks to `WorkerConnection`,
+ * a port abstraction. Concrete transports bind to it without modifying this logic.
  */
 
 /**
- * Challenges qu'une même socket peut réclamer.
+ * Maximum challenges a single socket can request.
  *
- * Trois suffisent à couvrir une reprise après un challenge expiré. Au-delà,
- * c'est un abus : chaque nonce est retenu une minute, et l'appel précède toute
- * authentification.
+ * Three challenges comfortably accommodate reconnection attempts after an expired challenge.
+ * Beyond three, it represents abusive behavior: each nonce is tracked for one minute,
+ * and challenge requests precede authentication.
  */
 const MAX_HELLO_PER_CONNECTION = 3;
 
-/** Canal ouvert par un exécutant. */
+/** Channel opened by a worker. */
 export interface WorkerConnection {
   /**
-   * Identité de la **socket**, attribuée par le transport.
+   * Socket identifier, assigned by transport.
    *
-   * Distincte de `deviceId`, et c'est tout l'objet de ce champ. `deviceId` est
-   * *annoncé* par le pair dans sa première trame : il est public, et il ne
-   * prouve rien. `connectionId` désigne la connexion physique, que la passerelle
-   * associe à un appareil **une fois la signature vérifiée**, et jamais avant.
+   * Distinct from `deviceId`: `deviceId` is claimed by the peer in its initial handshake
+   * frame and is public. `connectionId` identifies the physical connection, which the
+   * gateway associates with a verified device only after cryptographic validation.
    *
-   * Sans cette distinction, une socket qui se contente d'annoncer l'identifiant
-   * d'un appareil est traitée comme cet appareil.
+   * Without this separation, an unauthenticated socket claiming an existing `deviceId`
+   * could masquerade as that device.
    */
   connectionId: string;
-  /** Ce que le pair prétend être. Sert à adresser la réponse, à rien d'autre. */
+  /** What the peer claims to be. Used to address responses, nothing else. */
   deviceId: string;
   send(envelope: Envelope): void | Promise<void>;
   close(code: number, reason: string): void | Promise<void>;
-  /** Adresse distante, pour la trace de session. Jamais journalisée seule. */
+  /** Remote IP address for session audit traces. Never logged in isolation. */
   remoteAddress?: string;
 }
 
 /**
- * Fournit le matériel cryptographique d'un appareil.
+ * Provides cryptographic credentials for a device.
  *
- * Port séparé du registre : une clé publique n'a pas la même durée de vie ni le
- * même cycle de révocation qu'un appareil, et le jour où elles vivront dans un
- * coffre, seul ce port changera.
+ * Separated from the registry: public keys have distinct lifecycles and revocation
+ * policies from device metadata, allowing future backing by specialized secret vaults.
  */
 export interface DeviceCredentialProvider {
-  /** Clé publique PEM de l'appareil, ou `undefined` s'il n'en a pas. */
+  /** Device PEM public key, or `undefined` if none registered. */
   publicKeyFor(deviceId: string): Promise<string | undefined>;
 }
 
 /**
- * Enregistrement et retrait des clés d'appareils.
+ * Registration and removal of device public keys.
  *
- * Séparé de `DeviceCredentialProvider` à dessein : la passerelle ne fait que
- * **lire**, et un type en lecture seule l'empêche d'écrire par accident. Les
- * routes, elles, ont besoin d'écrire, et un seul des deux rôles doit pouvoir le
- * faire.
- *
- * L'interface existe aussi pour une raison moins noble et plus utile : sans
- * elle, les appels d'écriture passaient par `"set" in provider` suivi d'une
- * conversion de type. Une capacité qu'on obtient en contournant le système de
- * types n'est vérifiée par personne — et c'est ainsi qu'une révocation peut
- * oublier de retirer la clé sans qu'aucune compilation ne s'en plaigne.
+ * Distinct from `DeviceCredentialProvider`: the gateway requires read-only access,
+ * and a read-only interface prevents unintended writes. Registration routes require
+ * write capabilities, enforcing least-privilege interfaces.
  */
 export interface DeviceCredentialStore extends DeviceCredentialProvider {
   set(deviceId: string, publicKeyPem: string): Promise<void> | void;
   /**
-   * Retire la clé d'un appareil.
+   * Removes a device's public key upon revocation.
    *
-   * Appelée à la révocation. Ce n'est pas la barrière principale — un appareil
-   * révoqué est déjà refusé sur sa confiance — mais c'est celle qui reste si un
-   * futur chemin oublie de vérifier la confiance. Retirer la clé rend la
-   * poignée de main **invérifiable**, donc impossible, indépendamment de toute
-   * autre règle.
+   * Primary defense is trust status; key deletion serves as a secondary defense-in-depth
+   * measure to render handshakes cryptographically impossible.
    */
   revoke(deviceId: string): Promise<void> | void;
 }
@@ -106,9 +94,6 @@ export interface DeviceCredentialStore extends DeviceCredentialProvider {
 export class InMemoryCredentialProvider implements DeviceCredentialStore {
   readonly #keys = new Map<string, string>();
 
-  // Rend `void` et non `this` : la forme fluide n'était utilisée nulle part, et
-  // elle empêchait cette classe de satisfaire `DeviceCredentialStore` — dont
-  // l'implémentation PostgreSQL, elle, est forcément asynchrone.
   set(deviceId: string, publicKeyPem: string): void {
     this.#keys.set(deviceId, publicKeyPem);
   }
@@ -136,11 +121,11 @@ export interface WorkerGatewayOptions {
   registry: DeviceRegistry;
   sessions: DeviceSessionService;
   credentials: DeviceCredentialProvider;
-  /** Facultatif : sans routeur, la passerelle n'émet pas d'événements. */
+  /** Optional: without router, gateway does not emit pub/sub events. */
   router?: EventRouter;
   now?: () => Date;
   newId?: () => string;
-  /** Marge ajoutée au délai de l'étape avant que le cœur abandonne. */
+  /** Grace period added to step timeout before Core aborts. */
   dispatchGraceMs?: number;
 }
 
@@ -157,15 +142,14 @@ export class WorkerGateway implements WorkerTransport {
   readonly #pending = new Map<string, PendingStep>();
 
   /**
-   * Connexions authentifiées : `connectionId` → `deviceId`.
+   * Authenticated connections: `connectionId` -> `deviceId`.
    *
-   * La seule source de vérité sur « qui parle ». Tout ce qui suit la poignée de
-   * main s'y réfère ; `connection.deviceId` n'est plus consulté pour décider de
-   * quoi que ce soit.
+   * Authoritative mapping of authenticated sockets. Referenced after handshake;
+   * unauthenticated `connection.deviceId` is never trusted for authorization.
    */
   readonly #authenticated = new Map<string, string>();
 
-  /** Challenges réclamés par connexion. Voir `MAX_HELLO_PER_CONNECTION`. */
+  /** Tracked challenge requests per connection. See `MAX_HELLO_PER_CONNECTION`. */
   readonly #helloCount = new Map<string, number>();
 
   constructor(options: WorkerGatewayOptions) {
@@ -178,14 +162,13 @@ export class WorkerGateway implements WorkerTransport {
     this.#graceMs = options.dispatchGraceMs ?? 5_000;
   }
 
-  // ── Poignée de main ─────────────────────────────────────────────────────
+  // ── Handshake ──────────────────────────────────────────────────────────
 
   /**
-   * Traite une trame entrante du canal worker.
+   * Handles an incoming message frame from a worker channel.
    *
-   * Point d'entrée unique : le transport réel n'aura qu'à appeler ceci. Une
-   * trame illisible ou d'un type inconnu est ignorée — un worker plus récent
-   * que le cœur ne doit pas le faire tomber.
+   * Single entry point for transport adapters. Unreadable frames or unrecognized
+   * message types are dropped safely to prevent protocol drift crashes.
    */
   async handleMessage(connection: WorkerConnection, raw: unknown): Promise<void> {
     const message = parseWorkerMessage(raw);
@@ -214,27 +197,24 @@ export class WorkerGateway implements WorkerTransport {
         await this.#onResult(connection, message.payload as WorkerPayload<"worker.task_result">);
         return;
       default:
-        // Les messages descendants n'ont rien à faire ici.
         return;
     }
   }
 
   async #onHello(connection: WorkerConnection, payload: WorkerPayload<"worker.hello">) {
-    // Chaque challenge est un nonce retenu une minute. Sans plafond, une seule
-    // socket suffit à faire enfler la mémoire du cœur — et l'appel précède
-    // toute authentification, donc n'importe qui peut le faire.
+    // Each challenge allocates a nonce retained for one minute. Capping requests per connection
+    // prevents memory exhaustion from unauthenticated clients.
     const seen = (this.#helloCount.get(connection.connectionId) ?? 0) + 1;
     this.#helloCount.set(connection.connectionId, seen);
 
     if (seen > MAX_HELLO_PER_CONNECTION) {
       throw new DeviceAuthenticationError(
         payload.deviceId,
-        "trop de challenges demandés sur une même connexion",
+        "too many challenges requested on the same connection",
       );
     }
 
-    // Un `deviceId` ne prouve rien : il est public. On répond par un challenge,
-    // et rien d'autre n'est accordé tant qu'il n'est pas signé.
+    // A `deviceId` claim is public and untrusted. Reply with a signed challenge nonce.
     const challenge = await this.#sessions.createChallenge(payload.deviceId);
     await this.#send(connection, WORKER_MESSAGE.challenge, {
       nonce: challenge.nonce,
@@ -250,7 +230,7 @@ export class WorkerGateway implements WorkerTransport {
 
     const publicKey = await this.#credentials.publicKeyFor(payload.deviceId);
     if (publicKey === undefined) {
-      throw new DeviceAuthenticationError(payload.deviceId, "aucune clé publique enregistrée");
+      throw new DeviceAuthenticationError(payload.deviceId, "no public key registered");
     }
 
     const { session, token } = await this.#sessions.authenticate(
@@ -266,12 +246,11 @@ export class WorkerGateway implements WorkerTransport {
       publicKey,
     );
 
-    // C'est **ici**, et nulle part ailleurs, qu'une socket devient un appareil.
+    // Register authenticated association
     this.#authenticated.set(connection.connectionId, session.deviceId);
     this.#connections.set(session.deviceId, connection);
 
-    // Le jeton ne traverse ce point qu'une fois. Il n'est ni journalisé, ni
-    // replacé dans un événement, ni conservé ailleurs que dans son empreinte.
+    // Tokens pass through only once; never logged or broadcasted in event streams
     await this.#send(connection, WORKER_MESSAGE.session, {
       sessionId: session.id,
       token,
@@ -283,17 +262,16 @@ export class WorkerGateway implements WorkerTransport {
     await this.#emit("worker.connected", device.userId, {
       deviceId: device.id,
       deviceName: device.name,
-      workerVersion: device.agentVersion ?? "inconnu",
+      workerVersion: device.agentVersion ?? "unknown",
     });
   }
 
   /**
-   * Enregistre les capacités déclarées.
+   * Registers declared capabilities.
    *
-   * Le worker fait autorité sur ce qu'il *sait* faire ; le cœur reste
-   * autoritaire sur ce qu'il a le *droit* de faire. Une capacité déclarée mais
-   * non accordée en permission est acceptée ici et refusée à l'exécution — deux
-   * questions distinctes qu'on ne mélange pas.
+   * The worker is authoritative on what it can execute; the Core is authoritative
+   * on what it is permitted to execute. Declared capabilities without user permissions
+   * are registered here and rejected during task authorization.
    */
   async #onRegister(connection: WorkerConnection, payload: WorkerPayload<"worker.register">) {
     const deviceId = this.#requireAuthenticated(connection);
@@ -304,16 +282,14 @@ export class WorkerGateway implements WorkerTransport {
     for (const declared of payload.capabilities) {
       const parsed = deviceCapabilitySchema.safeParse(declared);
       if (!parsed.success) {
-        rejected.push({ name: declared.name, reason: "définition de capacité invalide" });
+        rejected.push({ name: declared.name, reason: "invalid capability definition" });
         continue;
       }
       capabilities.push(parsed.data);
       accepted.push(parsed.data.name);
     }
 
-    // Relevé **avant** la mise à jour : c'est la différence qui intéresse les
-    // clients, pas la liste. Un worker qui réannonce à l'identique — cas normal
-    // après une reconnexion — ne doit pas produire d'événement.
+    // Capture previous state before updating to avoid duplicate event emissions
     const previous = ((await this.#registry.getDevice(deviceId))?.capabilities ?? [])
       .map((capability) => capability.name)
       .sort();
@@ -335,10 +311,7 @@ export class WorkerGateway implements WorkerTransport {
       maxConcurrentTasks: device.health.maxConcurrentTasks,
     });
 
-    // Le mécanisme par lequel un worker signale qu'il sait faire autre chose
-    // qu'il y a une minute. Sur Android, c'est la règle et non l'exception :
-    // l'utilisateur désactive le service d'accessibilité et trois capacités
-    // disparaissent.
+    // Notify clients if advertised capabilities changed dynamically
     if (previous.join("|") !== current.join("|")) {
       await this.#emit("device.capabilities_changed", device.userId, {
         deviceId: device.id,
@@ -358,7 +331,7 @@ export class WorkerGateway implements WorkerTransport {
     });
   }
 
-  // ── Connexion ───────────────────────────────────────────────────────────
+  // ── Connection Management ────────────────────────────────────────────────
 
   isConnected(deviceId: string): boolean {
     return this.#connections.has(deviceId);
@@ -369,24 +342,10 @@ export class WorkerGateway implements WorkerTransport {
   }
 
   /**
-   * Le canal s'est fermé.
+   * Transport-level connection detachment.
    *
-   * Les étapes en vol sont résolues **réessayables** : la machine a disparu,
-   * mais la tâche n'a pas échoué au sens métier. Le coordinateur peut la
-   * reprendre ailleurs — c'est exactement ce que fait `failoverToAnotherDevice`.
-   * Les laisser en attente les ferait expirer beaucoup plus tard, pour rien.
-   */
-  /**
-   * Une socket se ferme.
-   *
-   * Point d'entrée du transport. Le détachement complet — mise hors ligne,
-   * révocation des sessions, abandon des étapes en vol — n'a lieu que si la
-   * connexion **était authentifiée**, et seulement pour l'appareil auquel elle
-   * était liée.
-   *
-   * Sans cette condition, annoncer l'identifiant public d'un appareil puis
-   * raccrocher suffit à le mettre hors ligne et à révoquer ses sessions : une
-   * socket et un identifiant, pour couper une machine de la flotte.
+   * Only triggers offline marking and step failover if the connection was authenticated
+   * and matches the currently active socket for the device.
    */
   async detachConnection(connectionId: string, reason: string): Promise<void> {
     this.#helloCount.delete(connectionId);
@@ -396,14 +355,13 @@ export class WorkerGateway implements WorkerTransport {
 
     this.#authenticated.delete(connectionId);
 
-    // Une connexion plus récente a pu prendre la place : on ne détache pas
-    // l'appareil sur la fermeture d'une socket qu'il a déjà remplacée.
+    // Prevent disconnecting newer superseded connection
     if (this.#connections.get(deviceId)?.connectionId !== connectionId) return;
 
     await this.detach(deviceId, reason);
   }
 
-  /** Connexion authentifiée pour cette socket, s'il y en a une. */
+  /** Authenticated device ID for this socket connection, if any. */
   authenticatedDeviceId(connectionId: string): string | undefined {
     return this.#authenticated.get(connectionId);
   }
@@ -420,7 +378,7 @@ export class WorkerGateway implements WorkerTransport {
         ok: false,
         error: {
           code: "WORKER_DISCONNECTED",
-          message: `L'exécutant s'est déconnecté (${reason}).`,
+          message: `Worker disconnected (${reason}).`,
           retryable: true,
         },
       });
@@ -442,11 +400,9 @@ export class WorkerGateway implements WorkerTransport {
   // ── WorkerTransport ─────────────────────────────────────────────────────
 
   /**
-   * Envoie une étape à un exécutant et attend son verdict.
+   * Dispatches a step execution order to a connected worker and awaits resolution.
    *
-   * Trois façons d'en sortir, toutes traitées : le worker répond, le délai
-   * expire, ou le coordinateur annule. Aucune ne laisse d'entrée en suspens dans
-   * la table — une fuite ici retiendrait une promesse pour toujours.
+   * Handled paths: worker response, timeout expiration, or coordinator cancellation.
    */
   dispatch(input: WorkerDispatch): Promise<WorkerResult> {
     const connection = this.#connections.get(input.deviceId);
@@ -455,7 +411,7 @@ export class WorkerGateway implements WorkerTransport {
         ok: false,
         error: {
           code: "WORKER_UNAVAILABLE",
-          message: "L'exécutant n'est pas connecté.",
+          message: "Worker is not connected.",
           retryable: true,
         },
       });
@@ -467,7 +423,7 @@ export class WorkerGateway implements WorkerTransport {
         ok: false,
         error: {
           code: "STEP_ALREADY_RUNNING",
-          message: "Cette étape est déjà en cours sur un exécutant.",
+          message: "This step is already running on a worker.",
           retryable: false,
         },
       });
@@ -487,7 +443,7 @@ export class WorkerGateway implements WorkerTransport {
         cleanup();
         settle({
           ok: false,
-          error: { code: "STEP_CANCELLED", message: "Étape annulée.", retryable: false },
+          error: { code: "STEP_CANCELLED", message: "Step cancelled.", retryable: false },
         });
       };
 
@@ -498,7 +454,7 @@ export class WorkerGateway implements WorkerTransport {
           ok: false,
           error: {
             code: "STEP_TIMEOUT",
-            message: "L'exécutant n'a pas répondu dans le délai imparti.",
+            message: "Worker did not respond within allotted timeout.",
             retryable: true,
           },
         });
@@ -536,7 +492,7 @@ export class WorkerGateway implements WorkerTransport {
           ok: false,
           error: {
             code: "WORKER_UNREACHABLE",
-            message: "L'ordre n'a pas pu être transmis.",
+            message: "Command could not be transmitted.",
             retryable: true,
           },
         });
@@ -551,7 +507,7 @@ export class WorkerGateway implements WorkerTransport {
     await this.#send(connection, WORKER_MESSAGE.taskCancel, {
       taskId,
       stepId,
-      reason: "annulée par NEXUS",
+      reason: "cancelled by NEXUS",
     }).catch(() => undefined);
 
     const device = await this.#registry.getDevice(deviceId);
@@ -560,12 +516,12 @@ export class WorkerGateway implements WorkerTransport {
         taskId,
         stepId,
         deviceId,
-        reason: "annulée par NEXUS",
+        reason: "cancelled by NEXUS",
       });
     }
   }
 
-  // ── Retours du worker ───────────────────────────────────────────────────
+  // ── Worker Responses ────────────────────────────────────────────────────
 
   #onProgress(connection: WorkerConnection, payload: WorkerPayload<"worker.task_progress">): void {
     const deviceId = this.#requireAuthenticated(connection);
@@ -587,8 +543,7 @@ export class WorkerGateway implements WorkerTransport {
     const deviceId = this.#requireAuthenticated(connection);
     const key = stepKey(payload.taskId, payload.stepId);
     const pending = this.#pending.get(key);
-    // Un résultat sans étape en attente est le cas normal après un délai
-    // dépassé : le worker a fini juste trop tard. On l'ignore sans bruit.
+    // Late results after timeout expiration are discarded safely
     if (pending === undefined) return Promise.resolve();
 
     this.#assertOwnsStep(pending, deviceId, payload.taskId, payload.stepId);
@@ -601,7 +556,7 @@ export class WorkerGateway implements WorkerTransport {
             ok: false,
             error: payload.error ?? {
               code: "WORKER_ERROR",
-              message: "Échec sans détail.",
+              message: "Failure without details.",
               retryable: false,
             },
           },
@@ -609,47 +564,30 @@ export class WorkerGateway implements WorkerTransport {
     return Promise.resolve();
   }
 
-  // ── Gardes ──────────────────────────────────────────────────────────────
+  // ── Guards ──────────────────────────────────────────────────────────────
 
-  /**
-   * L'appareil auquel cette **socket** est liée.
-   *
-   * Rien de ce qui suit la poignée de main ne lit `connection.deviceId` : il est
-   * annoncé par le pair, donc contrôlé par lui. Une connexion qui n'a pas signé
-   * son challenge n'a pas d'appareil, et l'exception ferme la socket — l'ignorer
-   * en silence laisserait l'attaquant réessayer indéfiniment.
-   */
   #requireAuthenticated(connection: WorkerConnection): string {
     const deviceId = this.#authenticated.get(connection.connectionId);
     if (deviceId === undefined) {
       throw new DeviceAuthenticationError(
         connection.deviceId,
-        "trame reçue sur une connexion non authentifiée",
+        "frame received on unauthenticated connection",
       );
     }
     return deviceId;
   }
 
-  /**
-   * L'étape a-t-elle bien été confiée à cet exécutant ?
-   *
-   * C'est la frontière entre machines. Sans elle, le téléphone Android — la
-   * machine la moins digne de confiance de la flotte — peut prétendre avoir
-   * exécuté une étape confiée au poste fixe, et injecter le résultat de son
-   * choix dans la boucle de l'agent. Une authentification qui ne dit pas *pour
-   * quoi* on est authentifié ne sépare rien.
-   */
   #assertOwnsStep(pending: PendingStep, deviceId: string, taskId: string, stepId: string): void {
     if (pending.deviceId === deviceId) return;
 
     throw new DeviceAuthenticationError(
       deviceId,
-      "réponse pour une étape confiée à un autre exécutant",
+      "response for a step assigned to another worker",
       { taskId, stepId, dispatchedTo: pending.deviceId },
     );
   }
 
-  // ── Interne ─────────────────────────────────────────────────────────────
+  // ── Internal ────────────────────────────────────────────────────────────
 
   async #send<T extends WorkerMessageType>(
     connection: WorkerConnection,
@@ -684,7 +622,7 @@ function stepKey(taskId: string, stepId: string): string {
   return `${taskId}:${stepId}`;
 }
 
-/** Santé déclarée par un worker → santé du modèle d'appareil. */
+/** Converts worker health report to device model health format. */
 function toDeviceHealth(health: WorkerHealth): Partial<DeviceHealth> {
   return {
     ...(health.cpuLoad === undefined ? {} : { cpuLoad: health.cpuLoad }),

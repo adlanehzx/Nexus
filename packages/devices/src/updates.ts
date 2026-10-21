@@ -1,71 +1,38 @@
 /**
- * Versions des exécutants, et pourquoi NEXUS ne les met pas à jour lui-même.
+ * Worker version tracking.
  *
- * ## La décision
+ * The Core observes and verifies worker versions; it does not perform remote updates.
+ * Remote push update capabilities would equate to arbitrary remote code execution,
+ * violating local host isolation invariants.
  *
- * Le cœur **constate** la version d'un worker ; il ne la change pas. Il n'y a
- * pas de canal « installe cette version », et ce n'est pas un manque à combler.
- *
- * Un tel canal serait de l'exécution de code à distance, par construction : le
- * cœur dirait à une machine de télécharger puis de lancer quelque chose. Or
- * tout le plan appareil repose sur l'hypothèse inverse — la politique locale
- * existe précisément « pour que si le cœur est compromis, le poste ne devienne
- * pas une machine ouverte ». Une mise à jour poussée rendrait cette phrase
- * fausse, et rendrait inutile tout le reste : refus par défaut, confiance
- * explicite, capacités déclarées.
- *
- * Mettre à jour reste donc un geste **local** : gestionnaire de paquets,
- * installeur, ou `git pull` suivi d'un redémarrage du service. Ce que le cœur
- * apporte, c'est de savoir **qu'il faut le faire** — ce qui est le vrai manque,
- * parce qu'un worker en retard de six mois ne se signale pas tout seul.
- *
- * ## Ce que ce module fait
- *
- * Comparer deux versions, et qualifier l'écart. Rien de plus, et c'est
- * volontairement sans effet de bord : une fonction pure se teste sur ses cas
- * limites, qui sont nombreux dès qu'on compare des numéros de version.
+ * Updates are performed locally via package managers, installers, or git commands.
+ * This module compares reported versions against expected releases to provide update advice.
  */
 
 export type WorkerUpdateStatus =
-  /** Même version que celle attendue. */
+  /** Matches expected version. */
   | "a-jour"
-  /** En retard : une version plus récente est attendue. */
+  /** Behind: a newer release is expected. */
   | "en-retard"
-  /** En avance — développement local, ou déploiement partiel en cours. */
+  /** Ahead: local development or staged rollout. */
   | "en-avance"
-  /** Version absente ou illisible, ou aucune version attendue n'est configurée. */
+  /** Version absent, unparseable, or no expected version configured. */
   | "inconnu";
 
-// La lecture et la comparaison de versions vivent dans `@nexus/shared` : deux
-// implémentations, c'est deux occasions de se tromper — et celle qui se trompe
-// décide quand même de mettre à jour.
 export { compareVersions, parseVersion, type SemanticVersion } from "@nexus/shared";
 
-// Réexporté ci-dessus pour les appelants, importé ici pour l'usage local : un
-// `export … from` ne met rien dans la portée du module.
 import { compareVersions, parseVersion } from "@nexus/shared";
 
 export interface UpdateAdvice {
   status: WorkerUpdateStatus;
   current: string | null;
   expected: string | null;
-  /**
-   * Ce qu'il faut faire, en une phrase, ou `null` s'il n'y a rien à faire.
-   *
-   * Porté par l'avis plutôt que construit par l'interface : « en retard » sans
-   * geste associé oblige chaque surface à réinventer la phrase, et à se tromper
-   * en laissant croire qu'un bouton pourrait mettre à jour.
-   */
+  /** Actionable guidance for administrators, or `null` if no action needed. */
   action: string | null;
 }
 
 /**
- * Qualifie l'écart entre la version d'un worker et celle attendue.
- *
- * `expected` absent rend `inconnu` sans rien reprocher : une installation qui
- * n'a pas déclaré de version attendue n'est pas en faute, elle n'a simplement
- * pas d'avis à donner. Inventer « à jour » dans ce cas serait affirmer ce qu'on
- * ne sait pas.
+ * Evaluates version difference between reported worker version and expected version.
  */
 export function updateAdvice(
   current: string | null | undefined,
@@ -82,7 +49,7 @@ export function updateAdvice(
       action:
         expectedVersion === undefined
           ? null
-          : "Version de l'exécutant inconnue : vérifiez qu'il démarre et qu'il s'enregistre.",
+          : "Worker version unknown: verify that it boots and registers.",
     };
   }
 
@@ -92,14 +59,12 @@ export function updateAdvice(
     return {
       ...shown,
       status: "en-avance",
-      action: "Cet exécutant est plus récent que la version attendue par le cœur.",
+      action: "This worker is newer than the expected version configured on Core.",
     };
   }
   return {
     ...shown,
     status: "en-retard",
-    // Le geste est local, et la phrase le dit. NEXUS ne met pas à jour un
-    // poste : il n'a pas de canal pour cela, et c'est délibéré.
-    action: `Mettez à jour cet exécutant sur sa machine (version attendue ${expected ?? "?"}), puis redémarrez son service.`,
+    action: `Update this worker on its host machine (expected version ${expected ?? "?"}), then restart its service.`,
   };
 }

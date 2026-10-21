@@ -5,18 +5,13 @@ import { InvalidTaskPlanError } from "./errors.js";
 import { deviceTypeSchema, devicePlatformSchema } from "./types.js";
 
 /**
- * Plan de tâche multi-appareils.
+ * Multi-device task execution plan.
  *
- * À ne pas confondre avec `AgentRun` de `@nexus/agent-core` : celui-là décrit un
- * **raisonnement** (observer, réfléchir, appeler un outil), celui-ci décrit une
- * **exécution répartie** (le poste fixe clone le dépôt, le portable lance les
- * tests, l'Android notifie). Un run agent peut produire un plan de tâche ; le
- * plan peut s'exécuter sans agent. Les fusionner rendrait l'un ou l'autre
- * illisible.
+ * Distinct from `AgentRun` in `@nexus/agent-core`: an agent run describes LLM reasoning
+ * turns, whereas a task plan describes distributed execution across devices.
  *
- * Le champ qui traverse tout : `originClientDeviceId`. La tâche part de
- * l'iPhone, s'exécute sur le poste fixe, et ses résultats reviennent à l'iPhone.
- * Ce n'est pas une métadonnée décorative — c'est le fil de routage.
+ * `originClientDeviceId` identifies the initiating client device so results, progress,
+ * and confirmation prompts route back to the originating user interface.
  */
 
 export const taskStatusSchema = z.enum([
@@ -26,14 +21,14 @@ export const taskStatusSchema = z.enum([
   "succeeded",
   "failed",
   "cancelled",
-  /** Le plan s'est arrêté avant la fin, mais des étapes ont abouti. */
+  /** Stopped before final completion, but some steps succeeded. */
   "partial",
 ]);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
 export const stepStatusSchema = z.enum([
   "pending",
-  /** Dépendances satisfaites, en attente d'un exécutant. */
+  /** Dependencies fulfilled, awaiting worker dispatch. */
   "ready",
   "assigned",
   "running",
@@ -55,25 +50,25 @@ export const TERMINAL_STEP_STATUSES: readonly StepStatus[] = [
 export const stepRetryPolicySchema = z.object({
   attempts: z.number().int().min(1).max(5).default(1),
   backoffMs: z.number().int().nonnegative().default(1_000),
-  /** Réessayer sur un autre appareil si le premier échoue. */
+  /** Retry on an alternative worker if primary candidate fails. */
   failoverToAnotherDevice: z.boolean().default(false),
 });
 export type StepRetryPolicy = z.infer<typeof stepRetryPolicySchema>;
 
 export const taskStepSchema = z.object({
   id: z.string().min(1),
-  /** Lisible par un humain : c'est ce que l'interface affiche. */
+  /** Human-readable description displayed in UI. */
   description: z.string().min(1),
-  /** Le sélecteur ne connaît que ça — jamais un nom d'appareil. */
+  /** Required capabilities for selector matching. */
   requiredCapabilities: z.array(z.string()).min(1),
-  /** Outil du registre à invoquer sur l'exécutant. */
+  /** Registry tool name to invoke on worker. */
   tool: z.string().min(1),
   arguments: z.unknown(),
-  /** Identifiants d'étapes qui doivent aboutir avant celle-ci. */
+  /** Step IDs that must succeed before this step executes. */
   dependsOn: z.array(z.string()).default([]),
-  /** Renseigné par le sélecteur au moment de l'exécution, jamais par le planner. */
+  /** Assigned worker device ID, populated at execution time. */
   selectedDeviceId: z.string().nullable().default(null),
-  /** Préférence explicite de l'utilisateur, respectée si l'appareil est éligible. */
+  /** Optional preferred device ID, respected if eligible. */
   preferredDeviceId: z.string().nullable().default(null),
   constraints: z
     .object({
@@ -105,15 +100,9 @@ export const taskPlanSchema = z.object({
   id: z.string().min(1),
   userId: z.string().min(1),
   title: z.string().min(1),
-  /**
-   * Appareil d'où part la demande.
-   *
-   * Conservé pendant toute la vie de la tâche, quels que soient les appareils
-   * qui l'exécutent. Les événements et les confirmations lui reviennent en
-   * priorité.
-   */
+  /** Client device where request originated. */
   originClientDeviceId: z.string().min(1),
-  /** Run agent à l'origine du plan, s'il y en a un. */
+  /** Originating agent run ID, if any. */
   runId: z.string().nullable().default(null),
   conversationId: z.string().nullable().default(null),
   correlationId: z.string().min(1),
@@ -126,7 +115,7 @@ export const taskPlanSchema = z.object({
 });
 export type TaskPlan = z.infer<typeof taskPlanSchema>;
 
-/** Une tentative d'exécution d'une étape sur un appareil donné. */
+/** Execution audit record of a step attempt on a specific device. */
 export const taskExecutionSchema = z.object({
   id: z.string().min(1),
   taskId: z.string().min(1),
@@ -137,7 +126,7 @@ export const taskExecutionSchema = z.object({
   startedAt: z.string(),
   completedAt: z.string().nullable().default(null),
   durationMs: z.number().nonnegative().nullable().default(null),
-  /** Arguments **rédigés** : une exécution est un journal d'audit. */
+  /** Redacted input arguments. */
   input: z.unknown().nullable().default(null),
   result: z.unknown().nullable().default(null),
   error: z
@@ -148,7 +137,7 @@ export const taskExecutionSchema = z.object({
 export type TaskExecution = z.infer<typeof taskExecutionSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Construction et validation
+// Construction and Validation
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface TaskStepInput {
@@ -179,11 +168,9 @@ export interface CreateTaskPlanInput {
 }
 
 /**
- * Construit un plan et le valide.
+ * Constructs and validates a task execution plan.
  *
- * @throws {InvalidTaskPlanError} si une dépendance pointe dans le vide, si un
- *   identifiant est dupliqué, ou si le graphe contient un cycle. Mieux vaut
- *   refuser un plan incohérent que le découvrir bloqué à la troisième étape.
+ * @throws {InvalidTaskPlanError} If duplicate IDs, missing dependency targets, or cycles are found.
  */
 export function createTaskPlan(input: CreateTaskPlanInput): TaskPlan {
   const now = input.now ?? (() => new Date());
@@ -227,27 +214,27 @@ export function createTaskPlan(input: CreateTaskPlanInput): TaskPlan {
   return plan;
 }
 
-/** Vérifie l'unicité des identifiants, l'existence des dépendances, l'absence de cycle. */
+/** Validates step ID uniqueness, dependency existence, and acyclicity. */
 export function validateTaskPlan(plan: TaskPlan): void {
   const problems: string[] = [];
   const ids = new Set<string>();
 
   for (const step of plan.steps) {
-    if (ids.has(step.id)) problems.push(`identifiant d'étape dupliqué : ${step.id}`);
+    if (ids.has(step.id)) problems.push(`duplicate step ID: ${step.id}`);
     ids.add(step.id);
   }
 
   for (const step of plan.steps) {
     for (const dependency of step.dependsOn) {
       if (!ids.has(dependency)) {
-        problems.push(`l'étape ${step.id} dépend de ${dependency}, qui n'existe pas`);
+        problems.push(`step ${step.id} depends on nonexistent step: ${dependency}`);
       }
-      if (dependency === step.id) problems.push(`l'étape ${step.id} dépend d'elle-même`);
+      if (dependency === step.id) problems.push(`step ${step.id} depends on itself`);
     }
   }
 
   const cycle = findCycle(plan.steps);
-  if (cycle !== undefined) problems.push(`cycle de dépendances : ${cycle.join(" → ")}`);
+  if (cycle !== undefined) problems.push(`dependency cycle detected: ${cycle.join(" -> ")}`);
 
   if (problems.length > 0) throw new InvalidTaskPlanError(problems);
 }
@@ -284,10 +271,7 @@ function findCycle(steps: readonly TaskStep[]): string[] | undefined {
 }
 
 /**
- * Étapes exécutables maintenant : en attente, dépendances toutes abouties.
- *
- * Renvoie un **ensemble**, pas une étape : deux étapes sans dépendance mutuelle
- * peuvent partir en parallèle sur deux appareils différents.
+ * Returns executable steps whose dependencies have all completed successfully.
  */
 export function readySteps(plan: TaskPlan): TaskStep[] {
   const byId = new Map(plan.steps.map((step) => [step.id, step]));
@@ -300,10 +284,7 @@ export function readySteps(plan: TaskPlan): TaskStep[] {
 }
 
 /**
- * Étapes définitivement bloquées : une dépendance a échoué ou été annulée.
- *
- * Les marquer `skipped` plutôt que de les laisser en attente évite qu'un plan
- * reste éternellement « en cours » après un échec.
+ * Returns blocked steps whose dependencies failed, were cancelled, or were skipped.
  */
 export function blockedSteps(plan: TaskPlan): TaskStep[] {
   const byId = new Map(plan.steps.map((step) => [step.id, step]));
@@ -323,7 +304,7 @@ export function blockedSteps(plan: TaskPlan): TaskStep[] {
   );
 }
 
-/** Statut global déduit de celui des étapes. */
+/** Computes overall plan status based on constituent step states. */
 export function derivePlanStatus(plan: TaskPlan): TaskStatus {
   const statuses = plan.steps.map((step) => step.status);
 
@@ -335,12 +316,10 @@ export function derivePlanStatus(plan: TaskPlan): TaskStatus {
   const finished = statuses.every((status) => TERMINAL_STEP_STATUSES.includes(status));
   if (!finished) return statuses.every((status) => status === "pending") ? "pending" : "running";
 
-  // Tout est terminé sans que tout ait réussi : partiel s'il reste des acquis,
-  // échec sinon. L'utilisateur doit savoir ce qui a été fait malgré tout.
   return statuses.includes("succeeded") ? "partial" : "failed";
 }
 
-/** Progression de 0 à 100, pour l'interface. */
+/** Progress percentage (0 to 100) for UI display. */
 export function planProgress(plan: TaskPlan): number {
   const done = plan.steps.filter((step) => TERMINAL_STEP_STATUSES.includes(step.status)).length;
   return Math.round((done / plan.steps.length) * 100);
