@@ -32,6 +32,21 @@ export interface PathPolicyOptions {
   /** Chemins refusés même s'ils tombent sous une racine autorisée. */
   deniedPaths?: readonly string[];
   /**
+   * Segments refusés où qu'ils apparaissent, en plus de ceux codés en dur.
+   *
+   * Les refus intégrés couvrent les secrets du système ; ceux-ci viennent de la
+   * politique locale, donc de l'utilisateur, qui seul sait que son dossier
+   * `~/clients` ne doit jamais être lu.
+   */
+  deniedSegments?: readonly string[];
+  /**
+   * Noms de fichiers refusés, avec au plus une `*` en fin.
+   *
+   * C'est le cas que les refus par dossier ne couvrent pas : un `.env` traîne
+   * dans *chaque* projet, sous une racine qu'on veut par ailleurs autoriser.
+   */
+  deniedNames?: readonly string[];
+  /**
    * Résolution des liens. Par défaut, `fs.realpath` avec repli sur le parent
    * existant — un fichier à créer n'a pas encore de chemin réel.
    */
@@ -75,11 +90,21 @@ const RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(\.[^.]*
 export class PathPolicy {
   readonly #roots: string[];
   readonly #denied: string[];
+  readonly #deniedSegments: string[];
+  readonly #deniedNames: string[];
   readonly #realpath: RealPathResolver;
 
   constructor(options: PathPolicyOptions) {
     this.#roots = options.allowedRoots.map(normalize);
     this.#denied = [...ALWAYS_DENIED, ...(options.deniedPaths ?? [])].map(normalize);
+    // Les refus de la politique s'**ajoutent** à ceux intégrés : une politique
+    // locale peut fermer davantage, jamais ouvrir ce que le worker refuse de
+    // lui-même. C'est ce qui permet de la laisser éditer sans crainte.
+    this.#deniedSegments = [
+      ...DENIED_SEGMENTS,
+      ...(options.deniedSegments ?? []).map((segment) => segment.toLowerCase()),
+    ];
+    this.#deniedNames = (options.deniedNames ?? []).map((name) => name.toLowerCase());
     this.#realpath = options.realpath ?? ((candidate) => Promise.resolve(candidate));
   }
 
@@ -144,9 +169,20 @@ export class PathPolicy {
     }
 
     const lowered = resolved.toLowerCase();
-    for (const segment of DENIED_SEGMENTS) {
-      if (lowered.split(/[\\/]/).includes(segment)) {
+    const segments = lowered.split(/[\\/]/);
+    for (const segment of this.#deniedSegments) {
+      if (segments.includes(segment)) {
         throw new PathNotAllowedError(requested, "emplacement contenant des secrets");
+      }
+    }
+
+    const name = segments.at(-1) ?? "";
+    for (const pattern of this.#deniedNames) {
+      const matches = pattern.endsWith("*")
+        ? name.startsWith(pattern.slice(0, -1))
+        : name === pattern;
+      if (matches) {
+        throw new PathNotAllowedError(requested, `nom refusé par la politique locale (${pattern})`);
       }
     }
 

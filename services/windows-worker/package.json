@@ -26,6 +26,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@nexus/device-policy": "workspace:*",
     "@nexus/devices": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",

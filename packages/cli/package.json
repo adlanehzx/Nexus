@@ -29,6 +29,7 @@
   "dependencies": {
     "@nexus/auth": "workspace:*",
     "@nexus/config": "workspace:*",
+    "@nexus/device-policy": "workspace:*",
     "@nexus/shared": "workspace:*"
   },
   "devDependencies": {
