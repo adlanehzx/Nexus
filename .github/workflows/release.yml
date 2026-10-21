@@ -1,0 +1,201 @@
+# Paquets installables, pour les trois bureaux et pour Android.
+#
+# Déclenché par une étiquette ou à la main, et **pas** à chaque poussée :
+# construire Tauri sur trois systèmes coûte une dizaine de minutes par système,
+# ce qui transformerait chaque commit en quart d'heure d'attente. La
+# vérification qui doit tourner en continu est ailleurs — le job
+# `desktop-compile` du CI principal, qui compile la coquille sous Linux et
+# attrape la classe d'erreur la plus fréquente : une dépendance déclarée pour
+# une seule plateforme.
+#
+# **Aucun secret n'est requis.** Sans certificat ni keystore, les paquets sont
+# produits non signés : utilisables localement, refusés par SmartScreen et par
+# Android. C'est délibéré — un pipeline qui ne tourne qu'avec des secrets ne se
+# teste jamais, et on ne découvre qu'il est cassé que le jour de la publication.
+name: Paquets
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      signer:
+        description: "Signer les paquets (exige les secrets correspondants)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Bureau — ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      # `fail-fast: false` : un échec sur macOS ne doit pas priver de
+      # l'AppImage, qui est peut-être la seule dont on a besoin aujourd'hui.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux (AppImage, deb)
+            bundles: appimage,deb
+          - os: windows-latest
+            label: Windows (MSI, NSIS)
+            bundles: msi,nsis
+          - os: macos-latest
+            label: macOS (dmg)
+            bundles: dmg
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      # Dépendances système de WebKitGTK. Sans elles, la compilation échoue sur
+      # une erreur de `pkg-config` qui ne nomme pas le paquet manquant.
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libsecret-1-dev
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Build du monorepo
+        run: pnpm build
+
+      - name: Construire les paquets
+        run: pnpm --filter @nexus/desktop exec tauri build --bundles ${{ matrix.bundles }}
+        env:
+          # Signature de code Windows. Absents, le paquet est produit non signé.
+          # Les secrets ne sont jamais écrits dans un fichier du dépôt.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Signature et notarisation macOS, mêmes règles.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Dire ce qui a été produit, et si c'est signé
+        shell: bash
+        run: |
+          echo "## Paquets — ${{ matrix.label }}" >> "$GITHUB_STEP_SUMMARY"
+          find apps/desktop/src-tauri/target/release/bundle -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.msi' -o -name '*.exe' -o -name '*.dmg' \) \
+            -printf '%f\t%s octets\n' 2>/dev/null \
+            | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY" || true
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] && [ -z "${APPLE_CERTIFICATE:-}" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Paquets NON SIGNÉS** : aucun secret de signature fourni." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-desktop-${{ runner.os }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/**/*.deb
+            apps/desktop/src-tauri/target/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/release/bundle/**/*-setup.exe
+            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
+          if-no-files-found: error
+
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Installer les dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Build du monorepo
+        run: pnpm build
+
+      # Le keystore arrive par un secret encodé en base64 et n'est écrit que
+      # dans le répertoire de travail du runner, jamais dans le dépôt. Sans lui,
+      # Gradle produit un APK non signé — ce qui prouve la chaîne de
+      # construction sans prouver la signature, et c'est dit comme tel.
+      - name: Déposer le keystore, s'il existe
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/nexus-release.jks"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Construire l'APK
+        working-directory: services/android-worker/android
+        env:
+          NEXUS_KEYSTORE_PATH: ${{ runner.temp }}/nexus-release.jks
+          NEXUS_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NEXUS_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          NEXUS_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # Une seule commande dans les deux cas : c'est le build Gradle qui
+        # décide, en lisant l'environnement. Deux chemins d'appel voudraient
+        # dire deux comportements à maintenir, et celui qu'on n'exerce pas est
+        # celui qui casse.
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Dire si l'APK est signé
+        run: |
+          echo "## Android" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.keystore.outputs.present }}" = "true" ]; then
+            echo "- APK **signé** avec le keystore fourni." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- APK **NON SIGNÉ** : aucun keystore fourni. Non installable sur un téléphone." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          find . -name '*.apk' -printf '  - %f\t%s octets\n' >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-android-apk
+          path: services/android-worker/android/**/*.apk
+          if-no-files-found: error
