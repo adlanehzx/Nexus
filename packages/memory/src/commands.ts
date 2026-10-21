@@ -19,12 +19,12 @@ export type MemoryCommand =
  * Supports both French and English commands.
  */
 const REMEMBER_PATTERNS: RegExp[] = [
-  /^\s*(?:retiens|souviens[- ]toi|rappelle[- ]toi|m[ée]morise|note)\b[\s:,]*(?:que|ceci|cela|ça)?[\s:,]*(.+)$/is,
+  /^\s*(?:retiens|souviens[- ]toi|rappelle[- ]toi|m[\u00e9e]morise|note)\b[\s:,]*(?:que|ceci|cela|\u00e7a)?[\s:,]*(.+)$/is,
   /^\s*(?:remember|memorize|note)\b[\s:,]*(?:that|this|the\s+following)?[\s:,]*(.+)$/is,
 ];
 
 const FORGET_PATTERNS: RegExp[] = [
-  /^\s*(?:oublie|efface|supprime)\b[\s:,]*(?:que|ceci|cela|ça)?[\s:,]*(.+)$/is,
+  /^\s*(?:oublie|efface|supprime)\b[\s:,]*(?:que|ceci|cela|\u00e7a)?[\s:,]*(.+)$/is,
   /^\s*(?:forget|erase|delete)\b[\s:,]*(?:that|this|about)?[\s:,]*(.+)$/is,
 ];
 
@@ -32,7 +32,7 @@ const FORGET_PATTERNS: RegExp[] = [
  * Patterns requesting a total memory wipe ("forget all").
  */
 const FORGET_ALL_PATTERNS: RegExp[] = [
-  /^\s*(?:oublie|efface|supprime)\s+(?:tout|toute\s+(?:ta|la)\s+m[ée]moire|mes\s+souvenirs)\b/i,
+  /^\s*(?:oublie|efface|supprime)\s+(?:tout|toute\s+(?:ta|la)\s+m[\u00e9e]moire|mes\s+souvenirs)\b/i,
   /^\s*(?:forget|erase|delete)\s+(?:everything|all(?:\s+(?:my|your))?\s*(?:memor(?:y|ies))?)\b/i,
 ];
 

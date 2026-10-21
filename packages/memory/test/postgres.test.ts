@@ -46,7 +46,7 @@ describePostgres("PostgresMemoryProvider", () => {
   });
 
   it("persists records across provider instances and lists them with an empty query", async () => {
-    const stored = await provider.store({ userId, kind: "SEMANTIC", content: "Préfère le train" });
+    const stored = await provider.store({ userId, kind: "SEMANTIC", content: "Prefers trains" });
     const reloaded = new PostgresMemoryProvider({ prisma });
 
     const hits = await reloaded.search({ userId, query: "" });
@@ -55,8 +55,8 @@ describePostgres("PostgresMemoryProvider", () => {
   });
 
   it("supports lexical search and multiple independent records", async () => {
-    await provider.store({ userId, kind: "SEMANTIC", content: "Préfère le train" });
-    await provider.store({ userId, kind: "EPISODIC", content: "Visité Lyon en mai" });
+    await provider.store({ userId, kind: "SEMANTIC", content: "Prefers trains" });
+    await provider.store({ userId, kind: "EPISODIC", content: "Visited Lyon in May" });
 
     const hits = await provider.search({ userId, query: "train" });
 
@@ -69,7 +69,7 @@ describePostgres("PostgresMemoryProvider", () => {
     const stored = await provider.store({
       userId,
       kind: "SEMANTIC",
-      content: "J'aime le vélo",
+      content: "I like cycling",
       sourceRunId,
       sourceUri: "https://example.test/source",
       extractedAt: new Date("2026-10-20T10:00:00Z"),
@@ -77,7 +77,7 @@ describePostgres("PostgresMemoryProvider", () => {
 
     const hits = await new PostgresMemoryProvider({ prisma }).search({
       userId,
-      query: "J'adore la bicyclette",
+      query: "I love cycling",
     });
 
     expect(hits[0]?.record.id).toBe(stored.id);
@@ -94,30 +94,30 @@ describePostgres("PostgresMemoryProvider", () => {
     const train = await provider.store({
       userId,
       kind: "SEMANTIC",
-      content: "Voyage habituel en train",
+      content: "Regular travel by train",
     });
-    await provider.store({ userId, kind: "SEMANTIC", content: "Cuisine italienne" });
+    await provider.store({ userId, kind: "SEMANTIC", content: "Italian cuisine" });
 
-    const hits = await provider.search({ userId, query: "train de nuit", limit: 1 });
+    const hits = await provider.search({ userId, query: "night train", limit: 1 });
 
     expect(hits[0]?.record.id).toBe(train.id);
     expect(hits[0]?.record.embeddingModel).toBe("test-neural-384");
   });
 
   it("persists updates and supersession", async () => {
-    const previous = await provider.store({ userId, kind: "SEMANTIC", content: "Habite à Lyon" });
-    const current = await provider.update({ userId, id: previous.id, content: "Habite à Paris" });
+    const previous = await provider.store({ userId, kind: "SEMANTIC", content: "Lives in Lyon" });
+    const current = await provider.update({ userId, id: previous.id, content: "Lives in Paris" });
 
     expect(current?.supersedesId).toBe(previous.id);
 
-    const history = await provider.search({ userId, query: "habite", includeSuperseded: true });
+    const history = await provider.search({ userId, query: "lives", includeSuperseded: true });
     const old = history.find((hit) => hit.record.id === previous.id)?.record;
     expect(old?.supersededById).toBe(current?.id);
     expect(old?.validUntil).not.toBeNull();
   });
 
   it("persists deletion", async () => {
-    const stored = await provider.store({ userId, kind: "SEMANTIC", content: "À oublier" });
+    const stored = await provider.store({ userId, kind: "SEMANTIC", content: "To forget" });
 
     expect(await provider.delete({ userId, id: stored.id })).toBe(true);
     expect(await new PostgresMemoryProvider({ prisma }).search({ userId, query: "" })).toEqual([]);
@@ -135,12 +135,12 @@ describePostgres("PostgresMemoryProvider", () => {
     const other = await provider.store({
       userId: otherUserId,
       kind: "SEMANTIC",
-      content: "Secret utilisateur autre",
+      content: "Other user secret",
     });
 
     try {
       expect(await provider.search({ userId, query: "secret" })).toEqual([]);
-      expect(await provider.update({ userId, id: other.id, content: "détourné" })).toBeUndefined();
+      expect(await provider.update({ userId, id: other.id, content: "hijacked" })).toBeUndefined();
       expect(await provider.delete({ userId, id: other.id })).toBe(false);
     } finally {
       await prisma.user.delete({ where: { id: otherUserId } });

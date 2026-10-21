@@ -81,7 +81,7 @@ describe("remember", () => {
     const { service, provider } = makeService();
 
     await expect(
-      service.remember({ userId: USER_ID, content: "J'ai été diagnostiqué diabétique" }),
+      service.remember({ userId: USER_ID, content: "I was diagnosed with diabetes in 2020" }),
     ).rejects.toThrow(SensitiveMemoryNeedsConsentError);
 
     expect(provider.size).toBe(0);
@@ -92,7 +92,7 @@ describe("remember", () => {
 
     const record = await service.remember({
       userId: USER_ID,
-      content: "J'ai été diagnostiqué diabétique",
+      content: "I was diagnosed with diabetes in 2020",
       acknowledgedSensitive: true,
     });
 
@@ -233,16 +233,16 @@ describe("explicit commands", () => {
   it("executes remember command", async () => {
     const { service } = makeService();
 
-    const outcome = await service.handleCommand(USER_ID, "Retiens que je préfère le train");
+    const outcome = await service.handleCommand(USER_ID, "Remember that I prefer trains");
 
-    expect(outcome?.stored?.content).toBe("je préfère le train");
+    expect(outcome?.stored?.content).toBe("I prefer trains");
     expect(outcome?.message).toContain("Noted");
   });
 
   it("user-dictated memories carry higher importance than inferences", async () => {
     const { service } = makeService();
 
-    const outcome = await service.handleCommand(USER_ID, "Retiens que je préfère le train");
+    const outcome = await service.handleCommand(USER_ID, "Remember that I prefer trains");
 
     expect(outcome?.stored?.origin).toBe("USER");
     expect(outcome?.stored?.importance).toBeGreaterThan(0.5);
@@ -250,9 +250,9 @@ describe("explicit commands", () => {
 
   it("executes forget command", async () => {
     const { service } = makeService();
-    await service.remember({ userId: USER_ID, content: "j'habite à Lyon" });
+    await service.remember({ userId: USER_ID, content: "I live in Lyon" });
 
-    const outcome = await service.handleCommand(USER_ID, "Oublie que j'habite à Lyon");
+    const outcome = await service.handleCommand(USER_ID, "Forget that I live in Lyon");
 
     expect(outcome?.forgotten?.forgotten).toHaveLength(1);
     expect(outcome?.message).toContain("Forgotten");
@@ -262,7 +262,7 @@ describe("explicit commands", () => {
     const { service } = makeService();
 
     await expect(
-      service.handleCommand(USER_ID, "Retiens que mon mot de passe est Tr0ub4dor3xy"),
+      service.handleCommand(USER_ID, "Remember that my password is Tr0ub4dor3xy"),
     ).rejects.toThrow(SensitiveMemoryRefusedError);
   });
 

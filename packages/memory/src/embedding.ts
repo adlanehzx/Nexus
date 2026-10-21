@@ -178,6 +178,11 @@ const ALIASES: Readonly<Record<string, string>> = {
   voiture: "auto",
   automobile: "auto",
   velo: "bicyclette",
+  love: "like",
+  prefer: "like",
+  bicycling: "cycling",
+  bicycle: "cycling",
+  bike: "cycling",
 };
 
 function normalizeVector(vector: number[]): number[] {

@@ -52,14 +52,14 @@ const FORBIDDEN: { category: string; pattern: RegExp }[] = [
   {
     category: "cle-api",
     pattern: new RegExp(
-      `\\b(cl[ée]\\s+(d')?api|api\\s*key|token\\s+d'acc[èe]s|access\\s+token|jeton)\\b[^.]{0,40}?${ANNONCE}`,
+      `\\b(cl[\u00e9e]\\s+(d')?api|api\\s*key|token\\s+d'acc[\u00e8e]s|access\\s+token|jeton)\\b[^.]{0,40}?${ANNONCE}`,
       "i",
     ),
   },
   {
     category: "phrase-de-recuperation",
     pattern:
-      /\b(seed\s+phrase|phrase\s+de\s+r[ée]cup[ée]ration|mn[ée]monique|recovery\s+phrase)\b/i,
+      /\b(seed\s+phrase|phrase\s+de\s+r[\u00e9e]cup[\u00e9e]ration|mn[\u00e9e]monique|recovery\s+phrase)\b/i,
   },
   {
     category: "cryptogramme",
@@ -100,22 +100,22 @@ const PERSONAL: { category: string; pattern: RegExp }[] = [
   {
     category: "sante",
     pattern:
-      /\b(diagnosti|maladie|traitement|ordonnance|m[ée]dicament|allergi|d[ée]pressi|cancer|diab[èe]t|s[ée]roposit|grossesse|handicap|th[ée]rapi|psychiatr|hospitalis|sympt[ôo]me|chimioth[ée]rapi|illness|disease|treatment|prescription|medication|allergy|depression|diabetes|pregnancy|disability|therapy|psychiatry|hospital|symptom|chemotherapy)/i,
+      /\b(diagnosti|maladie|traitement|ordonnance|m[\u00e9e]dicament|allergi|d[\u00e9e]pressi|cancer|diab[\u00e8e]t|s[\u00e9e]roposit|grossesse|handicap|th[\u00e9e]rapi|psychiatr|hospitalis|sympt[\u00f4o]me|chimioth[\u00e9e]rapi|illness|disease|treatment|prescription|medication|allergy|depression|diabetes|pregnancy|disability|therapy|psychiatry|hospital|symptom|chemotherapy)/i,
   },
   {
     category: "finance",
     pattern:
-      /\b(iban|bic|swift|num[ée]ro\s+de\s+compte|account\s+number|rib|salaire|salary|revenu|income|dette|debt|cr[ée]dit\s+immobilier|mortgage|d[ée]couvert|overdraft)\b/i,
+      /\b(iban|bic|swift|num[\u00e9e]ro\s+de\s+compte|account\s+number|rib|salaire|salary|revenu|income|dette|debt|cr[\u00e9e]dit\s+immobilier|mortgage|d[\u00e9e]couvert|overdraft)\b/i,
   },
   {
     category: "identite",
     pattern:
-      /\b(num[ée]ro\s+de\s+s[ée]curit[ée]\s+sociale|social\s+security|nir|passeport|passport|carte\s+d'identit[ée]|id\s+card|permis\s+de\s+conduire|driver'?s\s+license)\b/i,
+      /\b(num[\u00e9e]ro\s+de\s+s[\u00e9e]curit[\u00e9e]\s+sociale|social\s+security|nir|passeport|passport|carte\s+d'identit[\u00e9e]|id\s+card|permis\s+de\s+conduire|driver'?s\s+license)\b/i,
   },
   {
     category: "adresse",
     pattern:
-      /\b\d{1,4}\s+(rue|avenue|boulevard|impasse|all[ée]e|chemin|place|street|road|lane|drive|way)\s+[a-zà-ÿ0-9]/i,
+      /\b\d{1,4}\s+(rue|avenue|boulevard|impasse|all[\u00e9e]e|chemin|place|street|road|lane|drive|way)\s+[a-z\u00e0-\u00ff0-9]/i,
   },
   {
     category: "orientation-croyance",

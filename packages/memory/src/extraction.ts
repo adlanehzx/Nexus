@@ -101,19 +101,19 @@ export class ControlledMemoryExtractor {
 
 function isDurableFirstPersonFact(text: string): boolean {
   if (text.length < 8 || text.length > 500 || text.endsWith("?")) return false;
-  return /\b(?:je|j'|mon|ma|mes|nous|i|my|we|our)\s*(?:prefere|préfère|aime|adore|travaille|habite|utilise|veux|souhaite|suis|ai|prefer|like|love|work|live|use|want|wish|am|have)\b/i.test(
+  return /\b(?:je|j'|mon|ma|mes|nous|i|my|we|our)\s*(?:prefere|pr[\u00e9e]f[\u00e8e]re|aime|adore|travaille|habite|utilise|veux|souhaite|suis|ai|prefer|like|love|work|live|use|want|wish|am|have)\b/i.test(
     text,
   );
 }
 
 function isPreference(text: string): boolean {
-  return /\b(?:prefere|préfère|aime|adore|veux|souhaite|toujours|jamais|prefer|like|love|want|wish|always|never)\b/i.test(
+  return /\b(?:prefere|pr[\u00e9e]f[\u00e8e]re|aime|adore|veux|souhaite|toujours|jamais|prefer|like|love|want|wish|always|never)\b/i.test(
     text,
   );
 }
 
 function inferKind(text: string): MemoryKind {
-  if (/\b(?:toujours|jamais|quand|procédure|procedure|always|never|when)\b/i.test(text)) {
+  if (/\b(?:toujours|jamais|quand|proc[\u00e9e]dure|procedure|always|never|when)\b/i.test(text)) {
     return "PROCEDURAL";
   }
   if (/\b(?:hier|aujourd'hui|demain|la semaine|en \d{4}|yesterday|today|tomorrow|last week|next week|in \d{4})\b/i.test(text)) {

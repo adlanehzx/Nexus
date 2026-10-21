@@ -18,12 +18,12 @@ describe("semantic memory", () => {
     const memory = new InMemoryMemoryProvider({
       embeddings: new LocalHashEmbeddingProvider({ dimensions: 128 }),
     });
-    await memory.store({ userId: "u1", kind: "SEMANTIC", content: "J'aime le vélo" });
-    await memory.store({ userId: "u1", kind: "SEMANTIC", content: "Je travaille à Lyon" });
+    await memory.store({ userId: "u1", kind: "SEMANTIC", content: "I like cycling" });
+    await memory.store({ userId: "u1", kind: "SEMANTIC", content: "Works in Lyon" });
 
-    const hits = await memory.search({ userId: "u1", query: "J'adore la bicyclette" });
+    const hits = await memory.search({ userId: "u1", query: "I love bicycling" });
 
-    expect(hits[0]?.record.content).toBe("J'aime le vélo");
+    expect(hits[0]?.record.content).toBe("I like cycling");
     expect(hits[0]?.score).toBeGreaterThan(0);
   });
 
@@ -32,7 +32,7 @@ describe("semantic memory", () => {
     const first = await memory.store({
       userId: "u1",
       kind: "SEMANTIC",
-      content: "  Préfère   le train ",
+      content: "  Prefers   train ",
       sourceRunId: "run-1",
       sourceConversationId: "conversation-1",
       sourceMessageId: "message-1",
@@ -40,7 +40,7 @@ describe("semantic memory", () => {
       extractedAt: new Date("2026-10-20T10:00:00Z"),
     });
 
-    expect(first.contentHash).toBe(memoryContentHash("préfère le train"));
+    expect(first.contentHash).toBe(memoryContentHash("prefers train"));
     expect(first.sourceRunId).toBe("run-1");
     expect(first.sourceUri).toBe("https://example.test/source");
     expect(first.embeddingModel).toMatch(/^nexus-hash-v1-/);
@@ -50,8 +50,8 @@ describe("semantic memory", () => {
     const provider = new InMemoryMemoryProvider();
     const service = new MemoryService({ provider });
 
-    const first = await service.remember({ userId: "u1", content: "Préfère le train" });
-    const duplicate = await service.remember({ userId: "u1", content: "  préfère  le train " });
+    const first = await service.remember({ userId: "u1", content: "Prefers train" });
+    const duplicate = await service.remember({ userId: "u1", content: "  prefers  train " });
 
     expect(duplicate.id).toBe(first.id);
     expect(provider.size).toBe(1);
@@ -62,7 +62,7 @@ describe("semantic memory", () => {
     const service = new MemoryService({ provider });
     const extractor = new ControlledMemoryExtractor();
     const candidates = extractor.extract({
-      text: "J'aime voyager en train. Voici sk-test-12345678901234567890. Quelle heure est-il ?",
+      text: "I love traveling by train. Here is sk-test-12345678901234567890. What time is it?",
       sourceRunId: "run-1",
     });
 
@@ -82,11 +82,11 @@ describe("semantic memory", () => {
 
   it("plans consolidation and only deletes explicitly approved groups", async () => {
     const provider = new InMemoryMemoryProvider();
-    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "Préfère le train" });
+    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "Prefers train" });
     await provider.store({
       userId: "u1",
       kind: "SEMANTIC",
-      content: " préfère  le train ",
+      content: " prefers  train ",
       importance: 0.9,
     });
     const consolidator = new MemoryConsolidator(provider);
@@ -101,8 +101,8 @@ describe("semantic memory", () => {
 describe("token-aware context", () => {
   it("enforces the injected exact token counter independently from the char budget", async () => {
     const provider = new InMemoryMemoryProvider();
-    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "premier souvenir" });
-    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "deuxième souvenir" });
+    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "first memory" });
+    await provider.store({ userId: "u1", kind: "SEMANTIC", content: "second memory" });
     const exactWords: TokenCounter = {
       count: (text) => text.trim().split(/\s+/).filter(Boolean).length,
     };
@@ -116,7 +116,7 @@ describe("token-aware context", () => {
     const assembled = await assembler.assemble({
       userId: "u1",
       conversationId: "c1",
-      query: "souvenir",
+      query: "memory",
       model: "test-exact",
     });
     const longTerm = assembled.sections.find((section) => section.name === "longTerm")!;

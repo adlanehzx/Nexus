@@ -11,12 +11,12 @@ import { parseMemoryCommand } from "../src/commands.js";
 
 describe("prohibited content", () => {
   const secrets = [
-    "Mon mot de passe est correctchevalbatteriea grafe",
-    "Le mot de passe du wifi : Tr0ub4dor&3xy",
-    "Ma clé API est sk-abcdefghijklmnopqrstuvwx",
+    "My password is correcthorsebatterystaple",
+    "Wifi password: Tr0ub4dor&3xy",
+    "Ma cl\u00e9 API est sk-abcdefghijklmnopqrstuvwx",
     "password=hunter2hunter2",
     "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
-    "Ma phrase de récupération : witch collapse practice feed",
+    "Ma phrase de r\u00e9cup\u00e9ration : witch collapse practice feed",
   ];
 
   for (const content of secrets) {
@@ -27,7 +27,7 @@ describe("prohibited content", () => {
 
   it("rejects credit card number", () => {
     // 4539 1488 0343 6467 passes Luhn check.
-    expect(classify("Ma carte : 4539 1488 0343 6467").verdict).toBe("FORBIDDEN");
+    expect(classify("My card: 4539 1488 0343 6467").verdict).toBe("FORBIDDEN");
   });
 
   it("does not reject arbitrary long digit sequences", () => {
@@ -35,7 +35,7 @@ describe("prohibited content", () => {
   });
 
   it("explains refusal without reproducing secret content", () => {
-    const verdict = classify("Mon mot de passe est Tr0ub4dor3xy");
+    const verdict = classify("My password is Tr0ub4dor3xy");
 
     expect(verdict.explanation).toContain("password manager");
     expect(verdict.explanation).not.toContain("Tr0ub4dor3xy");
@@ -45,10 +45,10 @@ describe("prohibited content", () => {
 
 describe("content requiring explicit consent", () => {
   const personal = [
-    ["sante", "J'ai été diagnostiqué diabétique en 2019"],
-    ["finance", "Mon IBAN est celui du compte joint"],
-    ["identite", "Mon numéro de sécurité sociale figure sur la fiche"],
-    ["adresse", "J'habite 12 rue des Lilas"],
+    ["sante", "I was diagnosed with diabetes in 2019"],
+    ["finance", "My IBAN is the joint account one"],
+    ["identite", "My social security number is on the form"],
+    ["adresse", "12 rue des Lilas"],
   ] as const;
 
   for (const [category, content] of personal) {
@@ -61,9 +61,9 @@ describe("content requiring explicit consent", () => {
   }
 
   it("names categories without quoting sensitive content", () => {
-    const verdict = classify("J'ai été diagnostiqué diabétique");
+    const verdict = classify("I was diagnosed with diabetes");
 
-    expect(verdict.explanation).not.toContain("diabétique");
+    expect(verdict.explanation).not.toContain("diabetes");
     expect(verdict.explanation).toContain("sante");
   });
 });
@@ -85,7 +85,7 @@ describe("ordinary content", () => {
 
 describe("safe preview", () => {
   it("masks secret in preview", () => {
-    const preview = safePreview("Ma clé est sk-abcdefghijklmnopqrstuvwx et voilà", 200);
+    const preview = safePreview("My key is sk-abcdefghijklmnopqrstuvwx and more", 200);
 
     expect(preview).not.toContain("sk-abcdefghijklmnopqrstuvwx");
     expect(preview).toContain("[REDACTED]");
@@ -100,14 +100,14 @@ describe("safe preview", () => {
 
 describe("remember command", () => {
   const forms = [
-    "Retiens que je préfère le train",
-    "retiens : je préfère le train",
-    "Souviens-toi que je préfère le train",
-    "Rappelle-toi que je préfère le train",
-    "Mémorise que je préfère le train",
-    "Note que je préfère le train",
-    "Remember that je préfère le train",
-    "Remember this: je préfère le train",
+    "Retiens que I prefer trains",
+    "retiens : I prefer trains",
+    "Souviens-toi que I prefer trains",
+    "Rappelle-toi que I prefer trains",
+    "M\u00e9morise que I prefer trains",
+    "Note que I prefer trains",
+    "Remember that I prefer trains",
+    "Remember this: I prefer trains",
   ];
 
   for (const form of forms) {
@@ -115,26 +115,26 @@ describe("remember command", () => {
       const command = parseMemoryCommand(form);
 
       expect(command?.kind).toBe("remember");
-      expect(command).toMatchObject({ content: "je préfère le train" });
+      expect(command).toMatchObject({ content: "I prefer trains" });
     });
   }
 
   it("removes trailing punctuation", () => {
-    expect(parseMemoryCommand("Retiens que X.")).toMatchObject({ content: "X" });
+    expect(parseMemoryCommand("Remember that X.")).toMatchObject({ content: "X" });
   });
 });
 
 describe("forget command", () => {
   it("recognizes a target", () => {
-    expect(parseMemoryCommand("Oublie que j'habite à Lyon")).toEqual({
+    expect(parseMemoryCommand("Forget that I live in Lyon")).toEqual({
       kind: "forget",
-      target: "j'habite à Lyon",
+      target: "I live in Lyon",
       all: false,
     });
   });
 
   it("distinguishes total purge", () => {
-    for (const form of ["Oublie tout", "Efface toute ta mémoire", "Forget everything"]) {
+    for (const form of ["Oublie tout", "Efface toute ta m\u00e9moire", "Forget everything"]) {
       expect(parseMemoryCommand(form)).toEqual({ kind: "forget", target: "", all: true });
     }
   });
