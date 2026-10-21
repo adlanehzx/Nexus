@@ -102,13 +102,14 @@ function byName(tools: ToolDefinition<never, unknown>[], name: string) {
   return tool;
 }
 
-const context: Omit<ToolContext, "attempt" | "onProgress"> = {
+const context: Omit<ToolContext, "attempt"> = {
   runId: "run-1",
   userId: "user-1",
   conversationId: "conv-1",
   correlationId: "corr-1",
   signal: new AbortController().signal,
   idempotencyKey: "run-1:0:browser.read:abc",
+  onProgress: vi.fn(),
 };
 
 const executor = new ToolExecutor({ defaultTimeoutMs: 5_000, sleep: () => Promise.resolve() });
