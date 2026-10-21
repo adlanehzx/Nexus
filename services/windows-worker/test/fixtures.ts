@@ -11,6 +11,7 @@ import {
   type DeviceRole,
   type WorkerConnection,
 } from "@nexus/devices";
+import { WORKER_MESSAGE } from "@nexus/protocol";
 import type { Envelope, NexusEvent } from "@nexus/protocol";
 import type { WorkerConfig } from "../src/config.js";
 import { type LocalCapabilityRegistry } from "@nexus/worker-core";
@@ -320,6 +321,8 @@ export interface WorkerHarness {
   timers: TestTimers;
   connectWorker(): Promise<void>;
   attachClient(): Promise<void>;
+  /** Coupe la liaison des deux côtés, comme une socket qui se ferme. */
+  dropLink(reason?: string): Promise<void>;
 }
 
 /** Minuteries contrôlées : pas d'attente réelle dans les tests de reprise. */
@@ -356,13 +359,38 @@ export interface HarnessOptions {
   config?: Partial<WorkerConfig>;
   /** Approuver l'appareil. Faux pour éprouver le refus d'un appareil en attente. */
   trusted?: boolean;
+  /** Durée de vie d'une session d'appareil. Courte dans les tests de coupure. */
+  sessionTtlMs?: number;
+  /**
+   * Ouvrir une **nouvelle connexion** à chaque poignée de main.
+   *
+   * Hors de ce drapeau, le harnais réutilise un seul identifiant de connexion,
+   * ce qui est plus simple et convient à la quasi-totalité des tests — certains
+   * s'appuient même dessus pour rejouer une trame sur *la même* connexion.
+   *
+   * Mais la passerelle plafonne le nombre de challenges par connexion, en
+   * garde-fou mémoire. Un scénario qui enchaîne les reprises épuise donc ce
+   * plafond et donne l'illusion d'un worker incapable de se reconnecter. Les
+   * tests de coupure longue activent ce drapeau pour modéliser ce que fait le
+   * vrai transport : une socket neuve par reconnexion.
+   */
+  rotateConnections?: boolean;
   seed?: (fixture: { runner: FakeProcessRunner; fileSystem: FakeFileSystem }) => void;
 }
 
 export async function makeHarness(options: HarnessOptions = {}): Promise<WorkerHarness> {
   const registry = new DeviceRegistry();
   const credentials = new InMemoryCredentialProvider();
-  const sessions = new DeviceSessionService({ registry });
+  // Pas d'horloge injectée, et c'est une leçon de ce scénario : avancer la
+  // seule horloge du cœur crée un écart avec celle du worker, qui signe ses
+  // trames avec la sienne — et la passerelle refuse alors la poignée de main
+  // pour dérive d'horloge. Ce refus est correct. Une coupure longue s'éprouve
+  // donc avec une durée de session **courte** et du vrai temps qui passe, pas
+  // en déplaçant une horloge.
+  const sessions = new DeviceSessionService({
+    registry,
+    ...(options.sessionTtlMs === undefined ? {} : { sessionTtlMs: options.sessionTtlMs }),
+  });
   const router = new EventRouter({ registry });
   const gateway = new WorkerGateway({ registry, sessions, credentials, router });
   const selector = new DeviceSelector({ registry });
@@ -444,18 +472,51 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<WorkerH
 
   // Câblage du canal : ce que le worker envoie arrive à la passerelle, ce que la
   // passerelle envoie arrive au worker. Mêmes enveloppes que sur le fil.
-  const connection: WorkerConnection = {
-    connectionId: `conn-${device.id}`,
-    deviceId: device.id,
-    send: (envelope: Envelope) => {
-      link.deliver(envelope);
-    },
-    close: () => {
-      link.drop("fermé par le cœur");
-    },
-    remoteAddress: "192.0.2.10",
+  //
+  // **Une connexion par poignée de main.** Une reconnexion ouvre une nouvelle
+  // socket, donc un nouvel identifiant de connexion, et la passerelle détache
+  // l'ancienne comme le ferait la fermeture du WebSocket.
+  //
+  // Ce détail a de l'importance : la passerelle plafonne le nombre de
+  // challenges par connexion — un garde-fou mémoire, puisque l'appel précède
+  // toute authentification. Un harnais qui réutiliserait le même identifiant
+  // épuiserait ce plafond au bout de quelques reprises et donnerait l'illusion
+  // d'un worker incapable de se reconnecter. C'est précisément ce qui s'est
+  // produit en écrivant les scénarios de coupure longue.
+  let generation = 0;
+  const newConnection = (): WorkerConnection => {
+    generation += 1;
+    return {
+      // La première connexion garde l'identifiant historique `conn-<appareil>` :
+      // des tests construisent cette valeur à la main pour rejouer une trame
+      // **sur la même connexion**, et la suffixer les ferait parler à une autre.
+      connectionId:
+        generation === 1 ? `conn-${device.id}` : `conn-${device.id}-${String(generation)}`,
+      deviceId: device.id,
+      send: (envelope: Envelope) => {
+        link.deliver(envelope);
+      },
+      close: () => {
+        link.drop("fermé par le cœur");
+      },
+      remoteAddress: "192.0.2.10",
+    };
   };
-  link.outbound = (envelope) => gateway.handleMessage(connection, envelope);
+  let connection = newConnection();
+
+  let hellos = 0;
+  link.outbound = async (envelope) => {
+    if (options.rotateConnections === true && envelope.type === WORKER_MESSAGE.hello) {
+      hellos += 1;
+      // Le premier `hello` utilise la connexion déjà créée ; chaque suivant est
+      // une nouvelle socket, donc on ferme l'ancienne côté cœur d'abord.
+      if (hellos > 1) {
+        await gateway.detachConnection(connection.connectionId, "socket fermée");
+        connection = newConnection();
+      }
+    }
+    await gateway.handleMessage(connection, envelope);
+  };
 
   const clientEvents: NexusEvent[] = [];
 
@@ -487,6 +548,21 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<WorkerH
       await until(() => worker.state === "ready" || worker.state === "reconnecting");
     },
 
+    /**
+     * Coupe la liaison **des deux côtés**, comme une socket qui se ferme.
+     *
+     * `link.drop()` seul ne ferme que le côté worker : le cœur continue de
+     * croire l'appareil en ligne et lui confie des tâches qui n'arrivent
+     * jamais. En production, la fermeture du WebSocket appelle
+     * `detachConnection` — c'est ce que cette méthode reproduit, et son absence
+     * a d'abord fait croire à un défaut du produit alors que le défaut était
+     * dans le harnais.
+     */
+    async dropLink(reason = "réseau perdu") {
+      await gateway.detachConnection(connection.connectionId, reason);
+      link.drop(reason);
+    },
+
     async attachClient() {
       await router.attach({
         deviceId: IPHONE.id,
@@ -505,10 +581,29 @@ export async function settle(rounds = 12): Promise<void> {
 }
 
 /** Attend qu'une condition devienne vraie, sans horloge réelle. */
-export async function until(predicate: () => boolean, rounds = 200): Promise<boolean> {
+/**
+ * Attend qu'une condition devienne vraie.
+ *
+ * Deux corrections par rapport à la première version, et toutes deux ont failli
+ * faire passer des tests pour de mauvaises raisons :
+ *
+ *  1. **Le prédicat est attendu.** Un prédicat `async` rend une promesse, et une
+ *     promesse est toujours vraie : `until(async () => faux)` réussissait
+ *     immédiatement. Le test continuait alors sur un état qu'il croyait acquis.
+ *  2. **L'épuisement lève.** Rendre `false` laisse l'appelant poursuivre sans
+ *     rien remarquer, et l'échec apparaît plus loin sous une forme qui ne
+ *     désigne pas sa cause. Un test qui ne peut pas échouer franchement ne
+ *     mesure rien.
+ */
+export async function until(
+  predicate: () => boolean | Promise<boolean>,
+  rounds = 200,
+): Promise<true> {
   for (let index = 0; index < rounds; index += 1) {
-    if (predicate()) return true;
-    await Promise.resolve();
+    if (await predicate()) return true;
+    // Une boucle qui ne rendrait la main qu'aux micro-tâches ne verrait jamais
+    // aboutir ce qui dépend d'une minuterie.
+    await new Promise((resolve) => setTimeout(resolve, 1));
   }
-  return predicate();
+  throw new Error(`condition jamais atteinte après ${String(rounds)} tours`);
 }

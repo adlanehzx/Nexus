@@ -283,6 +283,55 @@ POST /api/v1/devices/pair              (ticket seul)  → appareil PENDING
 Les deux routes sont limitées en débit. Sur `/devices/pair` ce n'est pas du
 confort : c'est ce qui rend le tâtonnement d'un code inutile.
 
+## 7 quater. Coupures longues
+
+Une coupure de trois secondes ne prouve rien : tout survit à trois secondes. Ce
+qui casse un worker, c'est l'absence **prolongée** — le portable fermé une
+nuit, le Wi-Fi coupé pendant une réunion, le cœur redémarré pour une migration.
+
+`services/windows-worker/test/long-outage.test.ts` éprouve six propriétés, sur
+le vrai chemin : vraie passerelle, vraies sessions, vrai worker, canal en
+mémoire.
+
+| ce qui est vérifié                                          | pourquoi ça compte                                                                                                                 |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| la reprise refait une **poignée de main complète**          | le jeton de session est expiré ; le découvrir au premier dispatch serait le découvrir au pire moment                               |
+| l'appareil repasse **en ligne et de confiance**             | une coupure n'est pas une faute : la confiance n'a pas à être redonnée                                                             |
+| un plan s'exécute après la reprise                          | c'est la seule preuve que la reprise est complète, et non seulement « connectée »                                                  |
+| l'attente **croît et plafonne**                             | sans croissance, un cœur qui redémarre se fait retomber par ses propres workers ; sans plafond, un worker oublié attend des heures |
+| le **nonce** d'avant ne sert plus après                     | sinon une trame capturée pendant la coupure deviendrait une session valide après elle                                              |
+| une tâche confiée pendant la coupure **échoue franchement** | un plan « en cours » indéfiniment est la pire réponse : personne ne sait s'il faut attendre ou réessayer                           |
+
+### Ce que l'écriture de ces tests a appris
+
+Quatre choses, et aucune n'était un défaut du produit — mais chacune aurait pu
+passer pour tel, et deux rendaient les tests **incapables d'échouer**.
+
+**On ne simule pas une coupure longue en avançant l'horloge du serveur.** Le
+worker signe ses trames avec sa propre horloge, et la passerelle refuse une
+poignée de main dont l'horodatage dérive trop. Avancer l'horloge du cœur de dix
+heures faisait donc échouer la reprise — pour dérive d'horloge, un refus
+parfaitement correct, mais qui n'est pas le sujet. Les scénarios utilisent donc
+une durée de session **courte** et du vrai temps qui passe.
+
+**Une reconnexion ouvre une nouvelle socket.** La passerelle plafonne le nombre
+de challenges par connexion, en garde-fou mémoire — l'appel précède toute
+authentification. Un harnais qui réutilisait le même identifiant épuisait ce
+plafond au bout de quelques reprises et donnait l'illusion d'un worker
+incapable de se reconnecter.
+
+**Fermer le canal côté worker ne suffit pas.** Le cœur ne l'apprend que par la
+fermeture de la socket, qui appelle `detachConnection`. Sans cela, il croit
+l'appareil en ligne et lui confie des tâches qui n'arriveront jamais. Le
+harnais a donc `dropLink()`, qui coupe les deux côtés comme le fait une vraie
+socket.
+
+**`until` ne pouvait pas échouer.** Il rendait `false` à l'épuisement au lieu de
+lever, donc l'appelant continuait sur un état qu'il croyait acquis ; et un
+prédicat `async` rend une promesse, toujours vraie, donc `until(async () =>
+faux)` réussissait immédiatement. Les deux sont corrigés : le prédicat est
+attendu, et l'épuisement lève.
+
 ## 8. Le pont vers l'agent : pas de second système d'outils
 
 Une capacité devient un `ToolDefinition` ordinaire du `ToolRegistry` existant,
