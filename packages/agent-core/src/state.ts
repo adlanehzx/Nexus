@@ -3,15 +3,10 @@ import type { LlmMessage, ToolCallBlock, TokenUsage } from "@nexus/llm";
 import { type riskLevelSchema } from "@nexus/tools";
 
 /**
- * États d'un run.
+ * Execution run statuses.
  *
- * `waiting_for_confirmation` est un état de première classe, pas un drapeau :
- * un run peut y rester dix minutes sans immobiliser de processus, et la reprise
- * repart exactement de là (cf. ADR-003).
- *
- * `incomplete` l'est tout autant. Quand un budget s'épuise, l'agent DOIT rendre
- * ce qu'il a appris et ce qui reste à faire — un agent qui s'arrête sans rien
- * dire est un défaut produit, pas un cas limite.
+ * `waiting_for_confirmation` represents a first-class paused state.
+ * `incomplete` indicates termination due to budget constraints with partial output.
  */
 export const agentStatusSchema = z.enum([
   "pending",
@@ -38,7 +33,7 @@ export const stopReasonSchema = z.enum([
 ]);
 export type StopReason = z.infer<typeof stopReasonSchema>;
 
-/** Une exécution d'outil, telle qu'elle apparaît dans la trace du run. */
+/** Tool execution record for audit traces. */
 export interface ToolUsageRecord {
   toolCallId: string;
   name: string;
@@ -46,7 +41,7 @@ export interface ToolUsageRecord {
   status: "success" | "failed" | "denied" | "rejected" | "skipped";
   durationMs: number;
   attempts: number;
-  /** Arguments **rédigés** — jamais de secret dans la trace. */
+  /** Redacted arguments — secrets must never leak into trace records. */
   input: unknown;
   errorCode?: string;
 }
@@ -59,10 +54,7 @@ export interface RecordedError {
 }
 
 /**
- * Enregistrement d'observabilité d'un run.
- *
- * C'est le contrat de traçabilité demandé : qui, quoi, quand, combien
- * d'itérations, quels outils, quelles erreurs, quels jetons.
+ * Observability record of an agent run.
  */
 export interface AgentRunRecord {
   runId: string;
@@ -78,54 +70,37 @@ export interface AgentRunRecord {
   errors: RecordedError[];
   usage: TokenUsage;
   model: string;
-  /** Réponse finale rendue à l'utilisateur, y compris en cas de résultat partiel. */
+  /** Final response delivered to user, including partial output on limits. */
   response: string | null;
-  /**
-   * Mission qui a demandé ce run, ou `null` pour un run lancé par une personne.
-   *
-   * Sans ce lien, une assertion de mission ne serait scopée que par
-   * propriétaire : elle ouvrirait aussi les runs issus des conversations
-   * privées du compte. La portée se vérifie donc ici, et non sur la seule
-   * identité de l'appelant.
-   */
+  /** Associated mission external key or null for user-initiated conversations. */
   missionExternalKey: string | null;
-  /** Run source lorsqu'il s'agit d'un rejeu d'analyse sans outils. */
+  /** Source run ID when this run is an analysis replay without tools. */
   replayOfRunId?: string | null;
-  /** Nombre de bascules explicites vers une nouvelle tentative ou un autre agent. */
+  /** Explicit fallback count to alternative agents or retry configurations. */
   fallbackCount?: number;
 }
 
 /**
- * État complet et **sérialisable** d'un run.
- *
- * Tout ce qui est nécessaire pour reprendre après une suspension figure ici. La
- * boucle est une fonction de cet état ; l'implémentation en mémoire d'aujourd'hui
- * et l'implémentation PostgreSQL de demain manipulent le même objet.
+ * Complete serializable state of an agent execution run.
  */
 export interface AgentState {
   record: AgentRunRecord;
-  /** Transcript courant envoyé au modèle. */
+  /** Current conversation transcript presented to the model. */
   messages: LlmMessage[];
-  /** Appel en attente d'un accord humain, le cas échéant. */
+  /** Pending tool call awaiting human authorization. */
   pendingConfirmation: {
     confirmationId: string;
     call: ToolCallBlock;
-    /** Autres appels du même tour, à traiter une fois celui-ci résolu. */
+    /** Remaining tool calls in the current turn to execute upon authorization. */
     remainingCalls: ToolCallBlock[];
   } | null;
   consecutiveToolFailures: number;
   toolCallCount: number;
-  /** Signatures `nom:hash(arguments)` déjà vues — détection de boucle. */
+  /** Set of seen `name:hash(arguments)` call signatures for loop detection. */
   callSignatures: string[];
-  /** Échéance absolue du délai global, en millisecondes epoch. */
+  /** Absolute epoch deadline in milliseconds. */
   deadlineAt: number;
-  /**
-   * Instant de mise en attente d'une confirmation.
-   *
-   * Le temps passé à attendre un humain est rendu à l'échéance lors de la
-   * reprise : le délai global mesure le travail de l'agent, pas la réflexion de
-   * l'utilisateur.
-   */
+  /** Timestamp when execution suspended waiting for human confirmation. */
   suspendedAt: number | null;
 }
 

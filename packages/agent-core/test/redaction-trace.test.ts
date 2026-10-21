@@ -4,11 +4,11 @@ import { REDACTED } from "@nexus/shared";
 import type { ToolDefinition } from "@nexus/tools";
 import { callTurn, makeHarness } from "./fixtures.js";
 
-describe("secrets dans la trace d'un run", () => {
-  it("ne consigne jamais les arguments sensibles d'un outil", async () => {
+describe("run trace secret redaction", () => {
+  it("never logs sensitive tool arguments", async () => {
     const loginTool: ToolDefinition<{ user: string; password: string }, { ok: boolean }> = {
       name: "site.login",
-      description: "Se connecte à un site.",
+      description: "Logs into a website.",
       inputSchema: z.object({ user: z.string(), password: z.string() }),
       outputSchema: z.object({ ok: z.boolean() }),
       riskLevel: "SAFE",
@@ -20,7 +20,7 @@ describe("secrets dans la trace d'un run", () => {
     const h = makeHarness({
       turns: [
         callTurn("site.login", { user: "example", password: "hunter2" }),
-        { kind: "final", text: "Connecté." },
+        { kind: "final", text: "Connected." },
       ],
       tools: [loginTool] as unknown as ToolDefinition<never, unknown>[],
     });
@@ -29,8 +29,6 @@ describe("secrets dans la trace d'un run", () => {
 
     expect(record.toolsUsed[0]?.input).toEqual({ user: "example", password: REDACTED });
     expect(JSON.stringify(record)).not.toContain("hunter2");
-    // Les événements sont destinés à être journalisés et transmis : ils sont
-    // soumis à la même règle.
     expect(JSON.stringify(h.events)).not.toContain("hunter2");
   });
 });

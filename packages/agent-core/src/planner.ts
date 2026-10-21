@@ -12,12 +12,9 @@ import type { ToolDefinition } from "@nexus/tools";
 import type { AgentContext } from "./context.js";
 
 /**
- * Décision du planificateur.
+ * Planner decision output.
  *
- * Elle est dérivée des **blocs structurés** renvoyés par le fournisseur —
- * jamais d'une analyse du texte. Un agent qui devine des appels d'outils avec
- * des expressions régulières est un agent qui finira par exécuter une action
- * hallucinée : la seule source d'un appel d'outil est un bloc `tool_call`.
+ * Derived strictly from structured tool call blocks emitted by LLM provider.
  */
 export type AgentDecision =
   | { kind: "final"; text: string; message: LlmMessage }
@@ -30,11 +27,9 @@ export interface PlannerOptions {
 }
 
 /**
- * Planificateur.
+ * Agent planner.
  *
- * Il traduit l'état du contexte en un appel au modèle, et la réponse du modèle
- * en une décision typée. C'est le seul endroit du cœur agent qui parle au LLM,
- * et il ne connaît que le port `LLMProvider` : aucun SDK n'entre ici.
+ * Bridges the context state to LLM completions, interpreting completions into typed decisions.
  */
 export class Planner {
   readonly #llm: LLMProvider;
@@ -49,13 +44,11 @@ export class Planner {
     return this.#llm.model;
   }
 
-  /** Traduit les outils autorisés en descriptions destinées au modèle. */
+  /** Converts authorized tools into LLM tool specifications. */
   static toolSpecs(tools: readonly ToolDefinition<never, unknown>[]): LlmToolSpec[] {
     return tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      // Un outil découvert dynamiquement porte le schéma JSON du serveur ;
-      // pour un outil natif, on le dérive du schéma Zod.
       inputSchema: tool.inputJsonSchema ?? toolInputJsonSchema(tool.inputSchema),
     }));
   }
@@ -81,9 +74,6 @@ export class Planner {
       ...(response.providerBlocks !== undefined ? { providerBlocks: response.providerBlocks } : {}),
     };
 
-    // On se fie aux blocs, pas au `stopReason` : un fournisseur peut renvoyer
-    // `end_turn` tout en ayant émis des appels d'outils. La présence d'un bloc
-    // `tool_call` est le seul critère qui compte.
     if (calls.length > 0) {
       return { decision: { kind: "tool_calls", calls, text, message }, response };
     }

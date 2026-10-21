@@ -24,41 +24,22 @@ export interface AgentLoopDeps {
   confirmations: ConfirmationService;
   events: AgentEventEmitter;
   policy: ExecutionPolicy;
-  /** Injectée pour rendre les tests de délai déterministes. */
   now?: () => number;
 }
 
-/**
- * Issue d'un passage dans la boucle.
- *
- * `suspended` n'est pas un échec : c'est l'état normal d'un agent qui attend un
- * accord humain. Le worker est libéré, l'état est persisté, la reprise repart
- * exactement d'ici.
- */
 export type LoopOutcome =
   | { kind: "terminal"; state: AgentState }
   | { kind: "suspended"; state: AgentState; confirmation: ConfirmationRequest };
 
-/** Ce que fait la boucle d'un appel d'outil donné. */
 type CallOutcome =
   | { kind: "continue" }
   | { kind: "suspend"; confirmation: ConfirmationRequest }
   | { kind: "stop"; stopReason: StopReason };
 
 /**
- * Boucle agentique.
+ * Core agent loop.
  *
- * observer → raisonner → décider → autoriser → exécuter → observer → continuer.
- *
- * Deux propriétés valent d'être soulignées, parce qu'elles conditionnent tout
- * le reste :
- *
- *  1. **Un appel d'outil ne vient que d'un bloc structuré.** Aucun texte n'est
- *     analysé pour en déduire une action.
- *  2. **Un échec n'est pas un plantage.** Outil inconnu, arguments invalides,
- *     permission refusée, exécution ratée : tout redevient une observation que
- *     le modèle peut traiter au tour suivant. La boucle ne s'arrête que sur un
- *     budget épuisé, une annulation, ou une panne du fournisseur.
+ * Sequence: observe -> reason -> decide -> authorize -> execute -> observe -> continue.
  */
 export class AgentLoop {
   readonly #deps: AgentLoopDeps;
@@ -76,7 +57,7 @@ export class AgentLoop {
     state.record.model = planner.model;
 
     for (;;) {
-      // ── Gardes de boucle ────────────────────────────────────────────────
+      // ── Loop Guards ──────────────────────────────────────────────────────
       if (signal.aborted) return this.#finish(state, context, "cancelled");
       if (this.#now() >= state.deadlineAt) return this.#finish(state, context, "global_timeout");
       if (state.record.iterations >= policy.maxIterations) {
@@ -94,7 +75,7 @@ export class AgentLoop {
         at: new Date(this.#now()).toISOString(),
       });
 
-      // ── Raisonner ───────────────────────────────────────────────────────
+      // ── Reason ───────────────────────────────────────────────────────────
       let decision;
       try {
         const result = await planner.decide(context, signal);
@@ -121,7 +102,7 @@ export class AgentLoop {
       context.addAssistantMessage(decision.message);
       state.messages = context.snapshot();
 
-      // ── Réponse finale ? ────────────────────────────────────────────────
+      // ── Final Answer ─────────────────────────────────────────────────────
       if (decision.kind === "final") {
         state.record.response = decision.text;
         events.emit({
@@ -133,7 +114,7 @@ export class AgentLoop {
         return this.#finish(state, context, "final_answer");
       }
 
-      // ── Appels d'outils ─────────────────────────────────────────────────
+      // ── Tool Calls ───────────────────────────────────────────────────────
       const outcome = await this.#processCalls(state, context, decision.calls, signal);
       state.messages = context.snapshot();
 
@@ -148,13 +129,6 @@ export class AgentLoop {
     }
   }
 
-  /**
-   * Traite une série d'appels séquentiellement.
-   *
-   * Séquentiel et non parallèle : deux appels du même tour peuvent avoir des
-   * effets de bord qui interagissent, et une confirmation au milieu doit
-   * suspendre le reste plutôt que de laisser filer les suivants.
-   */
   async #processCalls(
     state: AgentState,
     context: AgentContext,
@@ -179,7 +153,6 @@ export class AgentLoop {
     return { kind: "continue" };
   }
 
-  /** Un appel : résoudre, valider, autoriser, exécuter, observer. */
   async #processCall(
     state: AgentState,
     context: AgentContext,
@@ -188,15 +161,14 @@ export class AgentLoop {
   ): Promise<CallOutcome> {
     const { registry, permissions, confirmations, policy, events } = this.#deps;
 
-    // 1. L'outil existe-t-il ? Un nom halluciné devient une observation, pas
-    //    une exception : le modèle peut corriger au tour suivant.
+    // 1. Tool existence check.
     const tool = registry.get(call.name);
     if (tool === undefined) {
       this.#observeFailure(
         state,
         context,
         call,
-        `Outil inconnu : « ${call.name} ». Outils disponibles : ${registry
+        `Unknown tool: "${call.name}". Available tools: ${registry
           .list()
           .map((t) => t.name)
           .join(", ")}.`,
@@ -205,28 +177,26 @@ export class AgentLoop {
       return { kind: "continue" };
     }
 
-    // 2. Budget d'appels d'outils.
+    // 2. Tool call budget check.
     if (state.toolCallCount >= policy.maxToolCalls) {
       return { kind: "stop", stopReason: "max_tool_calls" };
     }
 
-    // 3. Validation des arguments. On la fait ici — et pas seulement dans
-    //    l'exécuteur — parce que `requiresConfirmation` et l'aperçu de la carte
-    //    de confirmation ont besoin d'arguments typés.
+    // 3. Arguments validation.
     const parsed = tool.inputSchema.safeParse(call.arguments);
     if (!parsed.success) {
       this.#observeFailure(
         state,
         context,
         call,
-        `Arguments invalides pour « ${call.name} » : ${formatIssues(parsed.error.issues)}. Corrige-les et réessaie.`,
+        `Invalid arguments for "${call.name}": ${formatIssues(parsed.error.issues)}. Fix them and retry.`,
         { status: "failed", errorCode: "TOOL_INPUT_INVALID", riskLevel: tool.riskLevel },
       );
       return { kind: "continue" };
     }
     const input = parsed.data;
 
-    // 4. Anti-boucle : le même outil, les mêmes arguments, encore et encore.
+    // 4. Repetitive loop detection.
     const signature = `${call.name}:${hashPayload(parsed.data)}`;
     const seen = state.callSignatures.filter((s) => s === signature).length;
     if (seen >= policy.maxIdenticalToolCalls) {
@@ -234,7 +204,7 @@ export class AgentLoop {
         state,
         context,
         call,
-        `Tu as déjà appelé « ${call.name} » ${String(seen)} fois avec exactement les mêmes arguments. Change d'approche ou réponds avec ce que tu sais.`,
+        `You have already called "${call.name}" ${String(seen)} times with identical arguments. Change your approach or respond with what you know.`,
         { status: "skipped", errorCode: "TOOL_LOOP_DETECTED", riskLevel: tool.riskLevel },
       );
       return { kind: "continue" };
@@ -243,9 +213,7 @@ export class AgentLoop {
 
     const toolContext = this.#toolContext(state, call, signal);
 
-    // 5. Autorisation.
-    // L'évaluation des permissions n'exécute rien : elle n'a pas de progression
-    // à publier, d'où le canal inerte.
+    // 5. Authorization check.
     const decision = await permissions.check(tool, input, {
       ...toolContext,
       attempt: 1,
@@ -265,7 +233,7 @@ export class AgentLoop {
         state,
         context,
         call,
-        `Action refusée : ${decision.reason} Explique-le à l'utilisateur ; ne réessaie pas cet outil.`,
+        `Action denied: ${decision.reason} Explain this to the user; do not retry this tool.`,
         { status: "denied", errorCode: "PERMISSION_DENIED", riskLevel: tool.riskLevel },
       );
       return { kind: "continue" };
@@ -278,9 +246,6 @@ export class AgentLoop {
         tool: tool.name,
         toolCallId: call.id,
         action: tool.summarize?.(input) ?? `${tool.name}`,
-        // L'aperçu est construit à partir des arguments VALIDÉS, jamais d'un
-        // résumé produit par le modèle : c'est ce qui garantit que l'utilisateur
-        // approuve ce qui va réellement se passer.
         description: truncate(JSON.stringify(redact(parsed.data), null, 2), 2_000),
         riskLevel: decision.riskLevel,
         payload: parsed.data,
@@ -296,15 +261,11 @@ export class AgentLoop {
       return { kind: "suspend", confirmation };
     }
 
-    // 6. Exécution.
+    // 6. Execution.
     await this.#executeAndObserve(state, context, tool, call, signal);
     return { kind: "continue" };
   }
 
-  /**
-   * Exécute un appel déjà autorisé et réinjecte le résultat.
-   * Utilisée par la boucle et par la reprise après confirmation.
-   */
   async executeApproved(
     state: AgentState,
     context: AgentContext,
@@ -313,7 +274,7 @@ export class AgentLoop {
   ): Promise<void> {
     const tool = this.#deps.registry.get(call.name);
     if (tool === undefined) {
-      this.#observeFailure(state, context, call, `Outil inconnu : « ${call.name} ».`, {
+      this.#observeFailure(state, context, call, `Unknown tool: "${call.name}".`, {
         status: "failed",
         errorCode: "TOOL_NOT_FOUND",
         riskLevel: "SAFE",
@@ -345,9 +306,6 @@ export class AgentLoop {
 
     const result = await executor.execute(tool, call.arguments, {
       ...toolContext,
-      // La progression d'un outil long remonte telle quelle : c'est ce qui
-      // permettra à l'interface de montrer ce que fait le navigateur, plutôt
-      // qu'un sablier.
       onProgress: (progress) => {
         events.emit({
           type: "tool.progress",
@@ -400,7 +358,6 @@ export class AgentLoop {
     context.addToolResult(call, result.summaryForModel, !result.ok);
   }
 
-  /** Enregistre un échec qui n'a pas atteint l'exécuteur et le réinjecte. */
   #observeFailure(
     state: AgentState,
     context: AgentContext,
@@ -428,8 +385,6 @@ export class AgentLoop {
       message: observation,
       iteration: state.record.iterations,
     });
-    // Un refus de permission ne compte pas comme une panne : il n'a pas
-    // vocation à déclencher la limite d'échecs consécutifs.
     if (meta.status === "failed") state.consecutiveToolFailures += 1;
 
     context.addToolResult(call, observation, true);
@@ -460,7 +415,6 @@ export class AgentLoop {
     });
   }
 
-  /** Clôt le run et fixe la réponse rendue à l'utilisateur. */
   #finish(state: AgentState, context: AgentContext, stopReason: StopReason): LoopOutcome {
     state.messages = context.snapshot();
     state.record.stopReason = stopReason;
@@ -474,16 +428,14 @@ export class AgentLoop {
         break;
       case "cancelled":
         state.record.status = "cancelled";
-        state.record.response ??= "Tâche annulée.";
+        state.record.response ??= "Task cancelled.";
         break;
       case "provider_error":
       case "internal_error":
         state.record.status = "failed";
-        state.record.response ??= "Je n'ai pas pu terminer : le service de génération a échoué.";
+        state.record.response ??= "I could not complete the task: the model generation service failed.";
         break;
       default:
-        // Budget épuisé. L'agent DOIT dire ce qu'il a fait et ce qui reste —
-        // s'arrêter en silence est un défaut produit, pas un cas limite.
         state.record.status = "incomplete";
         state.record.response = this.#partialSummary(state, stopReason);
         break;
@@ -502,31 +454,30 @@ export class AgentLoop {
 
   #partialSummary(state: AgentState, stopReason: StopReason): string {
     const reasons: Record<string, string> = {
-      max_iterations: "j'ai atteint le nombre maximal d'étapes",
-      max_tool_calls: "j'ai atteint le nombre maximal d'actions",
-      global_timeout: "le délai imparti est écoulé",
-      tool_failure_limit: "trop d'outils ont échoué d'affilée",
-      confirmation_rejected: "tu as refusé l'action demandée",
-      confirmation_expired: "la demande de confirmation a expiré",
+      max_iterations: "maximum step limit reached",
+      max_tool_calls: "maximum tool call limit reached",
+      global_timeout: "allocated time elapsed",
+      tool_failure_limit: "too many consecutive tool failures",
+      confirmation_rejected: "the requested action was rejected",
+      confirmation_expired: "the confirmation request expired",
     };
-    const why = reasons[stopReason] ?? "je me suis arrêté avant la fin";
+    const why = reasons[stopReason] ?? "stopped before completion";
 
     const succeeded = state.record.toolsUsed.filter((t) => t.status === "success");
     const failed = state.record.toolsUsed.filter((t) => t.status !== "success");
 
-    const parts = [`Je n'ai pas pu terminer : ${why}.`];
+    const parts = [`I could not complete the task: ${why}.`];
     if (succeeded.length > 0) {
-      parts.push(`Effectué : ${succeeded.map((t) => t.name).join(", ")}.`);
+      parts.push(`Completed: ${succeeded.map((t) => t.name).join(", ")}.`);
     }
     if (failed.length > 0) {
       parts.push(
-        `En échec : ${failed.map((t) => `${t.name} (${t.errorCode ?? "erreur"})`).join(", ")}.`,
+        `Failed: ${failed.map((t) => `${t.name} (${t.errorCode ?? "error"})`).join(", ")}.`,
       );
     }
-    // Le dernier texte du modèle porte souvent l'essentiel de ce qu'il a appris.
     const lastText = lastAssistantText(state);
     if (lastText !== undefined && lastText.trim().length > 0) {
-      parts.push(`Ce que j'ai trouvé : ${truncate(lastText.trim(), 800)}`);
+      parts.push(`Findings: ${truncate(lastText.trim(), 800)}`);
     }
     return parts.join(" ");
   }
@@ -547,6 +498,6 @@ function lastAssistantText(state: AgentState): string | undefined {
 
 function formatIssues(issues: readonly { path: PropertyKey[]; message: string }[]): string {
   return issues
-    .map((issue) => `${issue.path.map(String).join(".") || "(racine)"} — ${issue.message}`)
-    .join(" ; ");
+    .map((issue) => `${issue.path.map(String).join(".") || "(root)"} — ${issue.message}`)
+    .join("; ");
 }

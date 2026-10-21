@@ -1,36 +1,25 @@
 import type { RiskLevel, RetryPolicy } from "@nexus/tools";
 
 /**
- * Politique d'exécution.
- *
- * Ce sont des **données**, pas des constantes compilées : « surveille ce
- * déploiement » et « quel temps fait-il » n'ont pas le même profil de budget.
- * Une politique voyage avec le run et peut être ajustée par appel.
+ * Execution policy budgets and constraints.
  */
 export interface ExecutionPolicy {
-  /** Nombre maximal d'aller-retours avec le modèle. */
+  /** Maximum number of model reasoning iterations. */
   maxIterations: number;
-  /** Délai global du run, tout compris sauf l'attente d'une confirmation. */
+  /** Global run timeout in ms, excluding human confirmation latency. */
   globalTimeoutMs: number;
-  /** Délai par tentative d'outil, si l'outil n'en déclare pas. */
+  /** Default timeout per tool attempt when unspecified by tool definition. */
   defaultToolTimeoutMs: number;
   retry: RetryPolicy;
-  /**
-   * Après N échecs d'outil consécutifs, on arrête : le modèle tourne en rond et
-   * chaque itération coûte de l'argent sans rapprocher du but.
-   */
+  /** Maximum consecutive tool failures allowed before aborting loop. */
   maxConsecutiveToolFailures: number;
-  /**
-   * Anti-boucle : nombre de fois qu'un même outil peut être appelé avec des
-   * arguments identiques. Au-delà, l'appel est refusé avec une observation
-   * explicite plutôt que réexécuté.
-   */
+  /** Maximum identical tool invocations with identical arguments allowed. */
   maxIdenticalToolCalls: number;
-  /** Nombre maximal d'appels d'outils sur l'ensemble du run. */
+  /** Maximum total tool invocations across the run. */
   maxToolCalls: number;
-  /** Risque maximal exécuté sans confirmation humaine. */
+  /** Maximum risk level executed without human confirmation. */
   autoApproveMaxRisk: RiskLevel;
-  /** Jetons alloués à une réponse du modèle. */
+  /** Token budget per model completion. */
   maxTokensPerCall: number;
 }
 

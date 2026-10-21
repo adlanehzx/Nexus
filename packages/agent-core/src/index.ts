@@ -1,8 +1,8 @@
 export * from "./policy.js";
 export * from "./state.js";
 export * from "./events.js";
-// La rédaction vit dans @nexus/shared : workers et clients en ont besoin
-// autant que le cœur agent. Réexportée ici pour les appelants existants.
+// Redaction lives in @nexus/shared: workers and clients need it as much as
+// the agent core. Re-exported here for existing callers.
 export { REDACTED, redact, truncate } from "@nexus/shared";
 export * from "./context.js";
 export * from "./planner.js";

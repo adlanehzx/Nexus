@@ -3,14 +3,10 @@ import type { TokenUsage } from "@nexus/llm";
 import type { AgentStatus, StopReason } from "./state.js";
 
 /**
- * Événements de trace.
+ * Agent trace events.
  *
- * Ils décrivent ce que l'agent fait pendant qu'il le fait. En phase 1 ils
- * alimenteront le WebSocket ; ici ils servent déjà à la journalisation et aux
- * assertions de test.
- *
- * Tout ce qui traverse un événement est **déjà rédigé** : un événement est
- * destiné à être journalisé et transmis, il ne doit jamais porter de secret.
+ * Emits real-time progression telemetry consumed by WebSockets and logging sinks.
+ * All event payloads are pre-redacted: secrets must never leak into traces.
  */
 export type AgentEvent =
   | { type: "run.started"; runId: string; conversationId: string; at: string }
@@ -73,10 +69,9 @@ export type AgentEvent =
 export type AgentEventHandler = (event: AgentEvent) => void;
 
 /**
- * Émetteur d'événements.
+ * Event emitter for agent telemetry.
  *
- * Un abonné qui lève une exception ne doit pas faire échouer le run : la trace
- * est un service rendu au run, jamais une dépendance dont il dépend.
+ * Handler exceptions are caught and swallowed to prevent logging failures from aborting runs.
  */
 export class AgentEventEmitter {
   readonly #handlers = new Set<AgentEventHandler>();
@@ -93,7 +88,7 @@ export class AgentEventEmitter {
       try {
         handler(event);
       } catch {
-        // Volontairement ignoré : voir la note ci-dessus.
+        // Ignored by design: logging errors must not fail the run.
       }
     }
   }

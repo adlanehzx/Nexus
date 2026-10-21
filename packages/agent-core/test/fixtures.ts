@@ -13,17 +13,12 @@ import { AgentOrchestrator, InMemoryAgentRunStore, type AgentEvent } from "../sr
 import type { ExecutionPolicy } from "../src/policy.js";
 
 /**
- * Outils réels utilisés par les tests.
- *
- * Ce ne sont pas des bouchons : ce sont des outils qui font vraiment ce qu'ils
- * annoncent (renvoyer une valeur, échouer, ignorer leur signal…). Seul le modèle
- * — la vraie frontière externe — est scripté. Tout le reste du chemin, de la
- * validation des arguments à la réinjection de l'observation, s'exécute.
+ * Real tools used across integration tests.
  */
 
 export const weatherTool: ToolDefinition<{ city: string }, { city: string; celsius: number }> = {
   name: "weather.get",
-  description: "Donne la température actuelle d'une ville.",
+  description: "Returns the current temperature of a city.",
   inputSchema: z.object({ city: z.string().min(1) }),
   outputSchema: z.object({ city: z.string(), celsius: z.number() }),
   riskLevel: "SAFE",
@@ -34,7 +29,7 @@ export const weatherTool: ToolDefinition<{ city: string }, { city: string; celsi
 
 export const calendarListTool: ToolDefinition<{ day: string }, { events: string[] }> = {
   name: "calendar.list",
-  description: "Liste les événements d'une journée.",
+  description: "Lists calendar events for a given day.",
   inputSchema: z.object({ day: z.string().min(1) }),
   outputSchema: z.object({ events: z.array(z.string()) }),
   riskLevel: "SAFE",
@@ -43,7 +38,7 @@ export const calendarListTool: ToolDefinition<{ day: string }, { events: string[
   execute: () => Promise.resolve({ events: ["Dentiste 14h"] }),
 };
 
-/** Nécessite une confirmation : effet de bord réel et visible par un tiers. */
+/** Requires human confirmation due to external side-effects. */
 export function makeEmailTool(): {
   tool: ToolDefinition<{ to: string; subject: string; body: string }, { messageId: string }>;
   sent: { to: string; subject: string; body: string }[];
@@ -53,7 +48,7 @@ export function makeEmailTool(): {
     sent,
     tool: {
       name: "email.send",
-      description: "Envoie un email.",
+      description: "Sends an email.",
       inputSchema: z.object({
         to: z.string().min(3),
         subject: z.string(),
@@ -63,7 +58,7 @@ export function makeEmailTool(): {
       riskLevel: "HIGH",
       requiredPermissions: ["email.send"],
       requiresConfirmation: true,
-      summarize: (input) => `Envoyer un email à ${input.to}`,
+      summarize: (input) => `Send an email to ${input.to}`,
       execute: (input) => {
         sent.push(input);
         return Promise.resolve({ messageId: `msg-${String(sent.length)}` });
@@ -72,10 +67,10 @@ export function makeEmailTool(): {
   };
 }
 
-/** Le risque dépend du chemin : hors zone de travail, confirmation exigée. */
+/** Risk dynamically determined by file path. */
 export const fileWriteTool: ToolDefinition<{ path: string; content: string }, { bytes: number }> = {
   name: "filesystem.write",
-  description: "Écrit un fichier.",
+  description: "Writes a file.",
   inputSchema: z.object({ path: z.string().min(1), content: z.string() }),
   outputSchema: z.object({ bytes: z.number() }),
   riskLevel: "MEDIUM",
@@ -84,7 +79,7 @@ export const fileWriteTool: ToolDefinition<{ path: string; content: string }, { 
   execute: (input) => Promise.resolve({ bytes: input.content.length }),
 };
 
-/** Échoue de façon transitoire `failures` fois, puis réussit. */
+/** Fails transiently `failures` times before succeeding. */
 export function makeFlakyTool(failures: number): {
   tool: ToolDefinition<{ url: string }, { status: number }>;
   attempts: () => number;
@@ -94,7 +89,7 @@ export function makeFlakyTool(failures: number): {
     attempts: () => attempts,
     tool: {
       name: "flaky.fetch",
-      description: "Appelle une API instable.",
+      description: "Calls an unstable API.",
       inputSchema: z.object({ url: z.string() }),
       outputSchema: z.object({ status: z.number() }),
       riskLevel: "LOW",
@@ -113,26 +108,22 @@ export function makeFlakyTool(failures: number): {
   };
 }
 
-/** Échec définitif : rien ne sert de réessayer. */
+/** Permanent failure. */
 export const brokenTool: ToolDefinition<Record<string, never>, { ok: boolean }> = {
   name: "broken.tool",
-  description: "Échoue systématiquement.",
+  description: "Fails systematically.",
   inputSchema: z.object({}),
   outputSchema: z.object({ ok: z.boolean() }),
   riskLevel: "SAFE",
   requiredPermissions: [],
   requiresConfirmation: false,
-  execute: () => Promise.reject(new Error("disque plein")),
+  execute: () => Promise.reject(new Error("disk full")),
 };
 
-/**
- * Ignore délibérément son `AbortSignal`.
- * C'est le cas qui prouve que le délai est imposé par l'exécuteur, et non
- * poliment respecté par l'outil.
- */
+/** Ignores abort signal to verify executor timeout enforcement. */
 export const hangingTool: ToolDefinition<Record<string, never>, { ok: boolean }> = {
   name: "slow.task",
-  description: "Ne se termine jamais.",
+  description: "Never completes.",
   inputSchema: z.object({}),
   outputSchema: z.object({ ok: z.boolean() }),
   riskLevel: "SAFE",
@@ -142,27 +133,25 @@ export const hangingTool: ToolDefinition<Record<string, never>, { ok: boolean }>
   execute: () => new Promise(() => undefined),
 };
 
-/** Renvoie une sortie non conforme à son propre schéma. */
+/** Returns output violating declared schema. */
 export const badOutputTool: ToolDefinition<Record<string, never>, { count: number }> = {
   name: "bad.output",
-  description: "Renvoie une sortie non conforme.",
+  description: "Returns invalid output format.",
   inputSchema: z.object({}),
   outputSchema: z.object({ count: z.number() }),
   riskLevel: "SAFE",
   requiredPermissions: [],
   requiresConfirmation: false,
-  execute: () => Promise.resolve({ count: "beaucoup" } as unknown as { count: number }),
+  execute: () => Promise.resolve({ count: "many" } as unknown as { count: number }),
 };
 
 export const dangerousTool: ToolDefinition<{ command: string }, { exitCode: number }> = {
   name: "terminal.execute",
-  description: "Exécute une commande shell.",
+  description: "Executes a shell command.",
   inputSchema: z.object({ command: z.string().min(1) }),
   outputSchema: z.object({ exitCode: z.number() }),
   riskLevel: "CRITICAL",
   requiredPermissions: ["terminal.execute"],
-  // Même déclaré sans confirmation, CRITICAL en impose une : un outil ne peut
-  // pas s'auto-dispenser d'un accord sur une action irréversible.
   requiresConfirmation: false,
   execute: () => Promise.resolve({ exitCode: 0 }),
 };
@@ -174,7 +163,6 @@ export interface Harness {
   store: InMemoryAgentRunStore;
   confirmations: ConfirmationService;
   events: AgentEvent[];
-  /** Délais de backoff demandés, dans l'ordre — sans jamais attendre réellement. */
   sleeps: number[];
   run: (message?: string) => ReturnType<AgentOrchestrator["run"]>;
 }
@@ -196,11 +184,7 @@ function makePermissions(granted: string[], autoApproveMaxRisk: "SAFE" | "LOW" |
 }
 
 /**
- * Monte un moteur complet.
- *
- * Seuls le modèle (scripté) et l'horloge de backoff (enregistrée, jamais
- * attendue) sont remplacés. Registre, permissions, confirmations, exécuteur,
- * boucle, magasin d'états : tout est réel.
+ * Constructs test harness with real components except scripted LLM.
  */
 export function makeHarness(options: HarnessOptions): Harness {
   const llm = new ScriptedLLMProvider(options.turns);
@@ -225,8 +209,6 @@ export function makeHarness(options: HarnessOptions): Harness {
       factor: 2,
       jitter: false,
     },
-    // On enregistre le délai demandé sans jamais dormir : le calcul du backoff
-    // est testé pour ce qu'il est — de l'arithmétique — pas en temps réel.
     sleep: (ms) => {
       sleeps.push(ms);
       return Promise.resolve();
@@ -254,12 +236,12 @@ export function makeHarness(options: HarnessOptions): Harness {
     confirmations,
     events,
     sleeps,
-    run: (message = "Bonjour") =>
+    run: (message = "Hello") =>
       orchestrator.run({ userId: "user-1", conversationId: "conv-1", message }),
   };
 }
 
-/** Raccourci : un tour du modèle qui appelle un outil. */
+/** Shortcut for a model turn issuing a tool call. */
 export function callTurn(name: string, args: unknown, id = `call-${name}`): ScriptedTurn {
   return { kind: "tool_calls", calls: [{ id, name, arguments: args }] };
 }

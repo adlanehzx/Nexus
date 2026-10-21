@@ -17,21 +17,21 @@ import type { ToolDefinition } from "@nexus/tools";
 const asTools = (...tools: unknown[]): ToolDefinition<never, unknown>[] =>
   tools as ToolDefinition<never, unknown>[];
 
-describe("réponse simple", () => {
-  it("répond sans appeler le moindre outil", async () => {
-    const h = makeHarness({ turns: [{ kind: "final", text: "Bonjour Alex." }] });
+describe("simple response", () => {
+  it("answers without calling any tool", async () => {
+    const h = makeHarness({ turns: [{ kind: "final", text: "Hello Alex." }] });
 
-    const { record } = await h.run("Salut");
+    const { record } = await h.run("Hi");
 
     expect(record.status).toBe("completed");
     expect(record.stopReason).toBe("final_answer");
-    expect(record.response).toBe("Bonjour Alex.");
+    expect(record.response).toBe("Hello Alex.");
     expect(record.iterations).toBe(1);
     expect(record.toolsUsed).toHaveLength(0);
     expect(record.usage.inputTokens).toBeGreaterThan(0);
   });
 
-  it("trace le run de bout en bout", async () => {
+  it("traces the run end-to-end", async () => {
     const h = makeHarness({ turns: [{ kind: "final", text: "ok" }] });
     const { record } = await h.run();
 
@@ -50,7 +50,7 @@ describe("réponse simple", () => {
     ]);
   });
 
-  it("conserve le modèle réellement sélectionné et les bascules du routeur", async () => {
+  it("preserves the selected model and router fallbacks", async () => {
     const h = makeHarness({
       turns: [{ kind: "final", text: "ok", fallbackCount: 2 }],
     });
@@ -62,35 +62,35 @@ describe("réponse simple", () => {
   });
 });
 
-describe("appel d'outil", () => {
-  it("exécute l'outil et réinjecte son résultat au modèle", async () => {
+describe("tool calling", () => {
+  it("executes the tool and feeds its result back to the model", async () => {
     const h = makeHarness({
       turns: [
         callTurn("weather.get", { city: "Paris" }),
-        { kind: "final", text: "Il fait 21 °C à Paris." },
+        { kind: "final", text: "It is 21 °C in Paris." },
       ],
     });
 
-    const { record } = await h.run("Quel temps à Paris ?");
+    const { record } = await h.run("What is the weather in Paris?");
 
     expect(record.status).toBe("completed");
     expect(record.iterations).toBe(2);
     expect(record.toolsUsed).toHaveLength(1);
     expect(record.toolsUsed[0]).toMatchObject({ name: "weather.get", status: "success" });
 
-    // Le second appel au modèle doit contenir l'observation de l'outil : c'est
-    // ce qui distingue une vraie boucle d'un simple appel unique.
+    // The second call to the model must contain the tool observation: this
+    // is what distinguishes a real agent loop from a single one-shot call.
     const secondRequest = h.llm.requests[1];
     const toolResult = secondRequest?.messages.at(-1);
     expect(toolResult?.role).toBe("tool");
     expect(JSON.stringify(toolResult?.content)).toContain("21");
   });
 
-  it("n'expose au modèle que les outils autorisés", async () => {
+  it("exposes only authorized tools to the model", async () => {
     const h = makeHarness({
       turns: [{ kind: "final", text: "ok" }],
       tools: asTools(weatherTool, calendarListTool),
-      permissions: [], // calendar.read non accordée
+      permissions: [], // calendar.read not granted
     });
 
     await h.run();
@@ -99,7 +99,7 @@ describe("appel d'outil", () => {
     expect(exposed).toEqual(["weather.get"]);
   });
 
-  it("décrit les outils par un JSON Schema dérivé de Zod", async () => {
+  it("describes tools via JSON Schema derived from Zod", async () => {
     const h = makeHarness({ turns: [{ kind: "final", text: "ok" }] });
     await h.run();
 
@@ -111,8 +111,8 @@ describe("appel d'outil", () => {
   });
 });
 
-describe("appels d'outils multiples", () => {
-  it("exécute plusieurs appels d'un même tour, dans l'ordre", async () => {
+describe("multiple tool calls", () => {
+  it("executes multiple calls in a single turn in order", async () => {
     const h = makeHarness({
       turns: [
         {
@@ -122,7 +122,7 @@ describe("appels d'outils multiples", () => {
             { id: "c2", name: "calendar.list", arguments: { day: "2026-09-02" } },
           ],
         },
-        { kind: "final", text: "Voilà." },
+        { kind: "final", text: "Here you go." },
       ],
       tools: asTools(weatherTool, calendarListTool),
       permissions: ["calendar.read"],
@@ -135,12 +135,12 @@ describe("appels d'outils multiples", () => {
     expect(record.toolsUsed.every((t) => t.status === "success")).toBe(true);
   });
 
-  it("enchaîne des appels sur plusieurs itérations", async () => {
+  it("chains calls across multiple iterations", async () => {
     const h = makeHarness({
       turns: [
         callTurn("weather.get", { city: "Paris" }, "c1"),
-        callTurn("calendar.list", { day: "demain" }, "c2"),
-        { kind: "final", text: "Terminé." },
+        callTurn("calendar.list", { day: "tomorrow" }, "c2"),
+        { kind: "final", text: "Done." },
       ],
       tools: asTools(weatherTool, calendarListTool),
       permissions: ["calendar.read"],
@@ -153,29 +153,29 @@ describe("appels d'outils multiples", () => {
   });
 });
 
-describe("échec d'outil", () => {
-  it("transforme l'échec en observation et laisse l'agent conclure", async () => {
+describe("tool failure", () => {
+  it("transforms failure into observation and lets agent conclude", async () => {
     const h = makeHarness({
       turns: [
         callTurn("broken.tool", {}),
-        { kind: "final", text: "Je n'ai pas pu : le disque est plein." },
+        { kind: "final", text: "Could not proceed: disk full." },
       ],
       tools: asTools(brokenTool),
     });
 
     const { record } = await h.run();
 
-    // Un échec d'outil n'est pas une panne du run : l'agent doit pouvoir
-    // l'expliquer plutôt que de s'interrompre.
+    // A tool failure is not a run failure: the agent should be able
+    // to explain it rather than crashing.
     expect(record.status).toBe("completed");
     expect(record.toolsUsed[0]).toMatchObject({ name: "broken.tool", status: "failed" });
     expect(record.errors).toHaveLength(1);
-    expect(JSON.stringify(h.llm.requests[1]?.messages.at(-1))).toContain("Échec");
+    expect(JSON.stringify(h.llm.requests[1]?.messages.at(-1))).toContain("broken.tool");
   });
 
-  it("refuse une sortie non conforme au schéma de l'outil", async () => {
+  it("rejects output not matching tool schema", async () => {
     const h = makeHarness({
-      turns: [callTurn("bad.output", {}), { kind: "final", text: "Sortie invalide." }],
+      turns: [callTurn("bad.output", {}), { kind: "final", text: "Invalid output." }],
       tools: asTools(badOutputTool),
     });
 
@@ -185,14 +185,14 @@ describe("échec d'outil", () => {
     expect(record.errors[0]?.code).toBe("TOOL_OUTPUT_INVALID");
   });
 
-  it("s'arrête après trop d'échecs consécutifs", async () => {
+  it("stops after too many consecutive failures", async () => {
     const h = makeHarness({
       turns: [
         callTurn("broken.tool", {}, "c1"),
         callTurn("broken.tool", {}, "c2"),
         callTurn("broken.tool", {}, "c3"),
         callTurn("broken.tool", {}, "c4"),
-        { kind: "final", text: "jamais atteint" },
+        { kind: "final", text: "never reached" },
       ],
       tools: asTools(brokenTool),
       policy: { maxConsecutiveToolFailures: 2, maxIdenticalToolCalls: 99 },
@@ -202,12 +202,12 @@ describe("échec d'outil", () => {
 
     expect(record.status).toBe("incomplete");
     expect(record.stopReason).toBe("tool_failure_limit");
-    expect(record.response).toContain("En échec");
+    expect(record.response).toContain("Failed");
   });
 });
 
-describe("reprise sur erreur", () => {
-  it("réessaie un échec transitoire avec un backoff exponentiel", async () => {
+describe("error recovery", () => {
+  it("retries transient failure with exponential backoff", async () => {
     const flaky = makeFlakyTool(2);
     const h = makeHarness({
       turns: [callTurn("flaky.fetch", { url: "https://x" }), { kind: "final", text: "200." }],
@@ -218,11 +218,11 @@ describe("reprise sur erreur", () => {
 
     expect(record.toolsUsed[0]).toMatchObject({ status: "success", attempts: 3 });
     expect(flaky.attempts()).toBe(3);
-    // 100 puis 200 : la croissance exponentielle, sans jitter dans les tests.
+    // 100 then 200: exponential growth without jitter in tests.
     expect(h.sleeps).toEqual([100, 200]);
   });
 
-  it("ne réessaie jamais un échec définitif", async () => {
+  it("never retries a permanent failure", async () => {
     const h = makeHarness({
       turns: [callTurn("broken.tool", {}), { kind: "final", text: "ok" }],
       tools: asTools(brokenTool),
@@ -234,7 +234,7 @@ describe("reprise sur erreur", () => {
     expect(h.sleeps).toEqual([]);
   });
 
-  it("abandonne après avoir épuisé ses tentatives", async () => {
+  it("gives up after exhausting attempts", async () => {
     const flaky = makeFlakyTool(99);
     const h = makeHarness({
       turns: [callTurn("flaky.fetch", { url: "https://x" }), { kind: "final", text: "ko" }],
@@ -248,10 +248,10 @@ describe("reprise sur erreur", () => {
   });
 });
 
-describe("délais", () => {
-  it("interrompt un outil qui ignore son signal d'annulation", async () => {
+describe("timeouts", () => {
+  it("interrupts a tool that ignores its abort signal", async () => {
     const h = makeHarness({
-      turns: [callTurn("slow.task", {}), { kind: "final", text: "trop lent" }],
+      turns: [callTurn("slow.task", {}), { kind: "final", text: "too slow" }],
       tools: asTools(hangingTool),
     });
 
@@ -261,17 +261,17 @@ describe("délais", () => {
     expect(record.errors[0]?.code).toBe("TOOL_TIMEOUT");
   });
 
-  it("arrête le run quand le délai global est dépassé", async () => {
+  it("stops the run when global timeout is exceeded", async () => {
     let clock = 1_000_000;
     const h = makeHarness({
       turns: [
         callTurn("weather.get", { city: "Paris" }, "c1"),
         callTurn("weather.get", { city: "Lyon" }, "c2"),
-        { kind: "final", text: "jamais atteint" },
+        { kind: "final", text: "never reached" },
       ],
       policy: { globalTimeoutMs: 5_000 },
       now: () => {
-        clock += 3_000; // chaque consultation d'horloge avance de 3 s
+        clock += 3_000; // clock advances 3s each call
         return clock;
       },
     });
@@ -280,22 +280,21 @@ describe("délais", () => {
 
     expect(record.status).toBe("incomplete");
     expect(record.stopReason).toBe("global_timeout");
-    expect(record.response).toContain("délai imparti");
+    expect(record.response).toContain("allocated time elapsed");
   });
 });
 
-describe("annulation", () => {
-  it("annule un run pendant que le modèle réfléchit", async () => {
+describe("cancellation", () => {
+  it("cancels a run while the model is reasoning", async () => {
     const h = makeHarness({ turns: [{ kind: "hang" }] });
 
     const running = h.orchestrator.run({
       userId: "user-1",
       conversationId: "conv-1",
-      message: "Tâche longue",
+      message: "Long running task",
     });
 
-    // L'identifiant est publié par `run.started`, avant que `run()` ne rende la
-    // main : c'est ainsi qu'un appelant annule sa propre tâche en vol.
+    // Run ID is published by run.started before run() returns.
     await new Promise((resolve) => setImmediate(resolve));
     const started = h.events.find((e) => e.type === "run.started");
     expect(started).toBeDefined();
@@ -311,7 +310,7 @@ describe("annulation", () => {
     expect(record.toolsUsed).toHaveLength(0);
   });
 
-  it("annule un run suspendu en attente de confirmation", async () => {
+  it("cancels a run suspended waiting for confirmation", async () => {
     const email = makeEmailTool();
     const h = makeHarness({
       turns: [callTurn("email.send", { to: "a@b.c", subject: "s", body: "b" })],
@@ -332,11 +331,11 @@ describe("annulation", () => {
 });
 
 describe("permissions", () => {
-  it("refuse un outil dont la permission n'est pas accordée", async () => {
+  it("denies a tool whose permission is not granted", async () => {
     const h = makeHarness({
       turns: [
-        callTurn("calendar.list", { day: "demain" }),
-        { kind: "final", text: "Je n'ai pas accès à ton calendrier." },
+        callTurn("calendar.list", { day: "tomorrow" }),
+        { kind: "final", text: "I do not have access to your calendar." },
       ],
       tools: asTools(calendarListTool),
       permissions: [],
@@ -346,14 +345,14 @@ describe("permissions", () => {
 
     expect(record.status).toBe("completed");
     expect(record.toolsUsed[0]).toMatchObject({ status: "denied", errorCode: "PERMISSION_DENIED" });
-    expect(JSON.stringify(h.llm.requests[1]?.messages.at(-1))).toContain("refusée");
+    expect(JSON.stringify(h.llm.requests[1]?.messages.at(-1))).toContain("Action denied");
   });
 
-  it("laisse passer un outil dont la permission est accordée", async () => {
+  it("allows a tool whose permission is granted", async () => {
     const h = makeHarness({
       turns: [
-        callTurn("calendar.list", { day: "demain" }),
-        { kind: "final", text: "1 événement." },
+        callTurn("calendar.list", { day: "tomorrow" }),
+        { kind: "final", text: "1 event." },
       ],
       tools: asTools(calendarListTool),
       permissions: ["calendar.read"],
@@ -363,9 +362,9 @@ describe("permissions", () => {
     expect(record.toolsUsed[0]?.status).toBe("success");
   });
 
-  it("accepte un joker de domaine", async () => {
+  it("accepts a domain wildcard", async () => {
     const h = makeHarness({
-      turns: [callTurn("calendar.list", { day: "demain" }), { kind: "final", text: "ok" }],
+      turns: [callTurn("calendar.list", { day: "tomorrow" }), { kind: "final", text: "ok" }],
       tools: asTools(calendarListTool),
       permissions: ["calendar.*"],
     });
@@ -376,10 +375,10 @@ describe("permissions", () => {
 });
 
 describe("confirmation", () => {
-  it("suspend le run et expose la demande", async () => {
+  it("suspends the run and exposes the request", async () => {
     const email = makeEmailTool();
     const h = makeHarness({
-      turns: [callTurn("email.send", { to: "recruteur@x.com", subject: "Re", body: "Bonjour" })],
+      turns: [callTurn("email.send", { to: "recruteur@x.com", subject: "Re", body: "Hello" })],
       tools: asTools(email.tool),
       permissions: ["email.send"],
     });
@@ -393,18 +392,18 @@ describe("confirmation", () => {
     expect(confirmation).toBeDefined();
     expect(confirmation?.tool).toBe("email.send");
     expect(confirmation?.riskLevel).toBe("HIGH");
-    expect(confirmation?.action).toBe("Envoyer un email à recruteur@x.com");
-    // L'aperçu montre le contenu exact, pas un résumé produit par le modèle.
+    expect(confirmation?.action).toBe("Send an email to recruteur@x.com");
+    // Preview shows exact content, not an LLM hallucination.
     expect(confirmation?.description).toContain("recruteur@x.com");
     expect(confirmation?.expiresAt.getTime()).toBeGreaterThan(confirmation!.createdAt.getTime());
   });
 
-  it("exécute l'action après acceptation", async () => {
+  it("executes the action after approval", async () => {
     const email = makeEmailTool();
     const h = makeHarness({
       turns: [
-        callTurn("email.send", { to: "a@b.c", subject: "Sujet", body: "Corps" }),
-        { kind: "final", text: "Email envoyé." },
+        callTurn("email.send", { to: "a@b.c", subject: "Subject", body: "Body" }),
+        { kind: "final", text: "Email sent." },
       ],
       tools: asTools(email.tool),
       permissions: ["email.send"],
@@ -414,20 +413,20 @@ describe("confirmation", () => {
     const resumed = await h.orchestrator.resume(first.record.runId, "approved");
 
     expect(resumed.record.status).toBe("completed");
-    expect(resumed.record.response).toBe("Email envoyé.");
-    expect(email.sent).toEqual([{ to: "a@b.c", subject: "Sujet", body: "Corps" }]);
+    expect(resumed.record.response).toBe("Email sent.");
+    expect(email.sent).toEqual([{ to: "a@b.c", subject: "Subject", body: "Body" }]);
     expect(resumed.record.toolsUsed.at(-1)).toMatchObject({
       name: "email.send",
       status: "success",
     });
   });
 
-  it("n'exécute rien après un refus", async () => {
+  it("executes nothing after rejection", async () => {
     const email = makeEmailTool();
     const h = makeHarness({
       turns: [
         callTurn("email.send", { to: "a@b.c", subject: "s", body: "b" }),
-        { kind: "final", text: "D'accord, je n'envoie rien." },
+        { kind: "final", text: "Understood, sending nothing." },
       ],
       tools: asTools(email.tool),
       permissions: ["email.send"],
@@ -439,11 +438,11 @@ describe("confirmation", () => {
     expect(resumed.record.status).toBe("completed");
     expect(email.sent).toHaveLength(0);
     expect(resumed.record.toolsUsed.at(-1)?.status).toBe("rejected");
-    // Le refus est réinjecté : l'agent doit pouvoir en accuser réception.
-    expect(JSON.stringify(h.llm.requests.at(-1)?.messages.at(-1))).toContain("refusé");
+    // Rejection is reinjected: agent acknowledges it.
+    expect(JSON.stringify(h.llm.requests.at(-1)?.messages.at(-1))).toContain("rejected");
   });
 
-  it("impose une confirmation sur une action CRITICAL même si l'outil n'en demande pas", async () => {
+  it("enforces confirmation on CRITICAL action even if tool does not request it", async () => {
     const h = makeHarness({
       turns: [callTurn("terminal.execute", { command: "rm -rf /" })],
       tools: asTools(dangerousTool),
@@ -456,11 +455,11 @@ describe("confirmation", () => {
     expect(confirmation?.riskLevel).toBe("CRITICAL");
   });
 
-  it("fait dépendre la confirmation des arguments", async () => {
+  it("makes confirmation dependent on arguments", async () => {
     const h = makeHarness({
       turns: [
         callTurn("filesystem.write", { path: "/workspace/project/x.ts", content: "ok" }),
-        { kind: "final", text: "Écrit." },
+        { kind: "final", text: "Written." },
       ],
       tools: asTools(fileWriteTool),
       permissions: ["filesystem.write"],
@@ -469,12 +468,12 @@ describe("confirmation", () => {
 
     const { record } = await h.run();
 
-    // Dans la zone de travail : pas de confirmation.
+    // Inside workspace: no confirmation.
     expect(record.status).toBe("completed");
     expect(record.toolsUsed[0]?.status).toBe("success");
   });
 
-  it("demande une confirmation hors de la zone de travail", async () => {
+  it("requests confirmation outside the workspace", async () => {
     const h = makeHarness({
       turns: [callTurn("filesystem.write", { path: "/etc/hosts", content: "x" })],
       tools: asTools(fileWriteTool),
@@ -486,21 +485,21 @@ describe("confirmation", () => {
     expect(record.status).toBe("waiting_for_confirmation");
   });
 
-  it("refuse de reprendre un run qui n'attend rien", async () => {
+  it("refuses to resume a run that is not waiting for confirmation", async () => {
     const h = makeHarness({ turns: [{ kind: "final", text: "ok" }] });
     const { record } = await h.run();
 
     await expect(h.orchestrator.resume(record.runId, "approved")).rejects.toThrow(
-      /n'attend pas de confirmation/,
+      /is not waiting for confirmation/,
     );
   });
 });
 
 describe("budgets", () => {
-  it("s'arrête sur le nombre maximal d'itérations avec un résultat partiel", async () => {
+  it("stops at maximum iterations with a partial summary", async () => {
     const h = makeHarness({
       turns: Array.from({ length: 10 }, (_, i) =>
-        callTurn("weather.get", { city: `ville-${String(i)}` }, `c${String(i)}`),
+        callTurn("weather.get", { city: `city-${String(i)}` }, `c${String(i)}`),
       ),
       policy: { maxIterations: 3 },
     });
@@ -510,12 +509,12 @@ describe("budgets", () => {
     expect(record.status).toBe("incomplete");
     expect(record.stopReason).toBe("max_iterations");
     expect(record.iterations).toBe(3);
-    // Un agent qui s'arrête sans rien dire est un défaut produit.
-    expect(record.response).toContain("Effectué");
+    // An agent that stops silently is a defect.
+    expect(record.response).toContain("Completed");
     expect(record.response).toContain("weather.get");
   });
 
-  it("s'arrête sur le nombre maximal d'appels d'outils", async () => {
+  it("stops at maximum tool calls", async () => {
     const h = makeHarness({
       turns: Array.from({ length: 10 }, (_, i) =>
         callTurn("weather.get", { city: `v${String(i)}` }, `c${String(i)}`),
@@ -529,13 +528,13 @@ describe("budgets", () => {
     expect(record.toolsUsed.filter((t) => t.status === "success")).toHaveLength(2);
   });
 
-  it("bloque un outil rappelé indéfiniment avec les mêmes arguments", async () => {
+  it("blocks a tool called indefinitely with identical arguments", async () => {
     const h = makeHarness({
       turns: [
         callTurn("weather.get", { city: "Paris" }, "c1"),
         callTurn("weather.get", { city: "Paris" }, "c2"),
         callTurn("weather.get", { city: "Paris" }, "c3"),
-        { kind: "final", text: "J'arrête." },
+        { kind: "final", text: "Stopping." },
       ],
       policy: { maxIdenticalToolCalls: 2 },
     });
@@ -547,11 +546,11 @@ describe("budgets", () => {
   });
 });
 
-describe("arguments malformés", () => {
-  it("renvoie les erreurs de validation au modèle sans exécuter l'outil", async () => {
+describe("malformed arguments", () => {
+  it("returns validation errors to the model without executing the tool", async () => {
     const h = makeHarness({
       turns: [
-        callTurn("weather.get", { ville: "Paris" }), // mauvaise clé
+        callTurn("weather.get", { ville: "Paris" }), // wrong key
         callTurn("weather.get", { city: "Paris" }, "c2"),
         { kind: "final", text: "21 °C." },
       ],
@@ -568,15 +567,15 @@ describe("arguments malformés", () => {
     expect(record.toolsUsed[1]?.status).toBe("success");
 
     const observation = JSON.stringify(h.llm.requests[1]?.messages.at(-1));
-    expect(observation).toContain("Arguments invalides");
+    expect(observation).toContain("Invalid arguments");
     expect(observation).toContain("city");
   });
 
-  it("traite un nom d'outil inventé comme une observation", async () => {
+  it("treats unknown tool name as an observation", async () => {
     const h = makeHarness({
       turns: [
-        callTurn("outil.imaginaire", { x: 1 }),
-        { kind: "final", text: "Cet outil n'existe pas." },
+        callTurn("imaginary.tool", { x: 1 }),
+        { kind: "final", text: "This tool does not exist." },
       ],
     });
 
@@ -588,8 +587,8 @@ describe("arguments malformés", () => {
   });
 });
 
-describe("panne du fournisseur", () => {
-  it("termine en échec sans laisser le run en cours", async () => {
+describe("provider failure", () => {
+  it("fails cleanly without leaving the run running", async () => {
     const h = makeHarness({
       turns: [{ kind: "error", error: new Error("503 upstream") }],
     });
@@ -600,11 +599,11 @@ describe("panne du fournisseur", () => {
     expect(record.stopReason).toBe("provider_error");
     expect(record.endTime).toBeTruthy();
     expect(record.errors).toHaveLength(1);
-    expect(record.response).toContain("service de génération");
+    expect(record.response).toContain("generation service");
   });
 
-  it("échoue proprement quand le modèle est appelé plus que prévu", async () => {
-    // Script épuisé : le fournisseur scripté lève, la boucle l'attrape.
+  it("fails cleanly when model is called more times than expected", async () => {
+    // Script exhausted: scripted provider throws, loop catches it.
     const h = makeHarness({ turns: [callTurn("weather.get", { city: "Paris" })] });
 
     const { record } = await h.run();

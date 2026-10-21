@@ -2,14 +2,7 @@ import { NotFoundError } from "@nexus/shared";
 import type { AgentState } from "./state.js";
 
 /**
- * Port de persistance des runs.
- *
- * `@nexus/agent-core` ne dépend pas de la base : il reçoit ce port. C'est ce qui
- * rend la boucle testable sans PostgreSQL et rejouable sur un état en mémoire
- * (cf. ADR-003 et les règles de dépendance du monorepo).
- *
- * L'implémentation Prisma arrivera avec `services/agent`, sans toucher à la
- * boucle.
+ * Agent run persistence port.
  */
 export interface AgentRunStore {
   save(state: AgentState): Promise<void>;
@@ -22,8 +15,6 @@ export class InMemoryAgentRunStore implements AgentRunStore {
   readonly #states = new Map<string, AgentState>();
 
   save(state: AgentState): Promise<void> {
-    // Copie défensive : un appelant qui muterait son objet après coup
-    // corromprait silencieusement l'état persisté.
     this.#states.set(state.record.runId, structuredClone(state));
     return Promise.resolve();
   }
@@ -37,7 +28,7 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     const state = await this.load(runId);
     if (state === undefined) {
       throw new NotFoundError({
-        message: `Run inconnu : ${runId}`,
+        message: `Run not found: ${runId}`,
         userMessage: "This task no longer exists.",
         context: { runId },
       });
@@ -54,12 +45,7 @@ export class InMemoryAgentRunStore implements AgentRunStore {
   }
 
   /**
-   * Tous les runs retenus.
-   *
-   * Hors du port `AgentRunStore` : la boucle n'en a pas besoin, elle travaille
-   * sur un run a la fois. C'est la supervision qui s'en sert, et une methode
-   * imposee a toute implementation future du port pour un seul appelant serait
-   * une contrainte mal placee.
+   * Lists all stored runs (used for diagnostics and supervision).
    */
   listAll(): Promise<AgentState[]> {
     return Promise.resolve([...this.#states.values()].map((state) => structuredClone(state)));
