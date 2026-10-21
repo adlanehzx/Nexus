@@ -9,18 +9,13 @@ import type {
 } from "../src/sources.js";
 
 /**
- * L'assemblage du contexte.
+ * Context assembly tests.
  *
- * Six couches s'y rejoignent, et le point de ce fichier est de vérifier
- * qu'elles s'y rejoignent **sans se mélanger** : chacune garde sa section et son
- * budget, et aucune ne peut affamer les autres.
- *
- * Les quatre sources extérieures sont des doubles — c'est tout l'intérêt de les
- * avoir déclarées comme ports : l'assemblage se teste sans base, sans registre
- * d'appareils et sans coordinateur de tâches.
+ * Six layers converge without mixing: each retains its section and budget,
+ * and none can starve the others.
  */
 
-const ADLAN = "user-example";
+const USER_ID = "user-example";
 const CONVERSATION = "conv-1";
 const NOW = new Date("2026-09-03T10:00:00.000Z");
 
@@ -52,7 +47,7 @@ class FakeTasks implements TaskHistoryPort {
   tasks = [
     {
       id: "t1",
-      title: "Lancer les tests",
+      title: "Run tests",
       status: "succeeded",
       completedAt: NOW,
       deviceName: "Portable Windows",
@@ -93,23 +88,23 @@ function section(assembled: Awaited<ReturnType<ContextAssembler["assemble"]>>, n
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("séparation des couches", () => {
-  it("chaque source a sa section", async () => {
+describe("layer separation", () => {
+  it("each source has its own section", async () => {
     const { assembler, memory, shortTerm } = makeAssembler();
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Réponds en français",
+      content: "Always reply concisely",
       layer: "PREFERENCE",
     });
-    await memory.store({ userId: ADLAN, kind: "SEMANTIC", content: "Habite à Lyon" });
-    shortTerm.set(CONVERSATION, "fichier-courant", "src/auth.ts");
+    await memory.store({ userId: USER_ID, kind: "SEMANTIC", content: "Lives in Lyon" });
+    shortTerm.set(CONVERSATION, "current-file", "src/auth.ts");
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "où habite Alex",
+      query: "where does Alex live",
     });
 
     expect(assembled.sections.map((s) => s.name)).toEqual([
@@ -122,20 +117,18 @@ describe("séparation des couches", () => {
     ]);
   });
 
-  it("une préférence ne se retrouve pas parmi les souvenirs", async () => {
-    // Confondre les deux ferait disparaître une consigne permanente dès que la
-    // conversation change de sujet.
+  it("a preference is not mixed among memories", async () => {
     const { assembler, memory } = makeAssembler();
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Réponds toujours en français",
+      content: "Always reply concisely",
       layer: "PREFERENCE",
     });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "docker",
     });
@@ -144,105 +137,98 @@ describe("séparation des couches", () => {
     expect(section(assembled, "longTerm")?.lines).toEqual([]);
   });
 
-  it("les préférences remontent quel que soit le sujet", async () => {
-    // Recherchées à requête vide, précisément parce qu'une consigne permanente
-    // n'a aucune raison de ressembler au message du jour.
+  it("preferences are retrieved regardless of topic", async () => {
     const { assembler, memory } = makeAssembler();
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Réponds toujours en français",
+      content: "Always reply concisely",
       layer: "PREFERENCE",
     });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "quelle est la météo à Tokyo",
+      query: "what is the weather in Tokyo",
     });
 
-    expect(section(assembled, "preferences")?.lines[0]).toContain("français");
+    expect(section(assembled, "preferences")?.lines[0]).toContain("concisely");
   });
 
-  it("les souvenirs, eux, dépendent du sujet", async () => {
+  it("memories depend on the query topic", async () => {
     const { assembler, memory } = makeAssembler();
 
-    await memory.store({ userId: ADLAN, kind: "SEMANTIC", content: "Habite à Lyon" });
-    await memory.store({ userId: ADLAN, kind: "SEMANTIC", content: "Aime le café serré" });
+    await memory.store({ userId: USER_ID, kind: "SEMANTIC", content: "Lives in Lyon" });
+    await memory.store({ userId: USER_ID, kind: "SEMANTIC", content: "Prefers dark roast coffee" });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "où habite-t-il",
+      query: "where he lives",
     });
 
-    expect(section(assembled, "longTerm")?.lines).toEqual(["- Habite à Lyon"]);
+    expect(section(assembled, "longTerm")?.lines).toEqual(["- Lives in Lyon"]);
   });
 
-  it("signale ce qui a été déduit plutôt qu'affirmé", async () => {
-    // « L'utilisateur a dit » et « déduit d'une conversation » n'ont pas la même
-    // autorité. Le modèle doit pouvoir nuancer.
+  it("flags inferred items versus user-declared items", async () => {
     const { assembler, memory } = makeAssembler();
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Travaille sur NEXUS",
+      content: "Works on NEXUS",
       origin: "AGENT",
     });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "travaille",
+      query: "works",
     });
 
-    expect(section(assembled, "longTerm")?.lines[0]).toContain("(déduit)");
+    expect(section(assembled, "longTerm")?.lines[0]).toContain("(inferred)");
   });
 });
 
 describe("budgets", () => {
-  it("une conversation bavarde n'affame pas les préférences", async () => {
-    // Le défaut classique d'un budget global : l'historique mange tout, et les
-    // trois lignes qui changent la réponse tombent parce qu'elles arrivent en
-    // dernier.
+  it("verbose conversation does not starve preferences", async () => {
     const { assembler, memory, conversation } = makeAssembler();
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Réponds toujours en français",
+      content: "Always reply concisely",
       layer: "PREFERENCE",
     });
     conversation.turns = Array.from({ length: 200 }, (_, index) => ({
       role: "user",
-      content: `Message très bavard numéro ${String(index)} `.repeat(10),
+      content: `Very verbose message number ${String(index)} `.repeat(10),
       createdAt: NOW,
     }));
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "docker",
     });
 
-    expect(section(assembled, "preferences")?.lines[0]).toContain("français");
+    expect(section(assembled, "preferences")?.lines[0]).toContain("concisely");
   });
 
-  it("chaque section respecte son propre plafond", async () => {
+  it("each section respects its ceiling", async () => {
     const { assembler, memory } = makeAssembler({ longTerm: 60 });
 
     for (let index = 0; index < 20; index += 1) {
       await memory.store({
-        userId: ADLAN,
+        userId: USER_ID,
         kind: "SEMANTIC",
-        content: `Souvenir numéro ${String(index)} à propos du train`,
+        content: `Memory record number ${String(index)} about train travel`,
       });
     }
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "train",
     });
@@ -252,112 +238,105 @@ describe("budgets", () => {
     expect(longTerm?.dropped).toBeGreaterThan(0);
   });
 
-  it("coupe entre les lignes, jamais au milieu", async () => {
-    // Une préférence tronquée à mi-phrase peut changer de sens, et le modèle
-    // n'a aucun moyen de savoir qu'il lui manque la fin.
+  it("splits strictly between lines, never mid-sentence", async () => {
     const { assembler, memory } = makeAssembler({ preferences: 40 });
 
     await memory.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Ne jamais supprimer un fichier sans demander",
+      content: "Never delete a file without asking",
       layer: "PREFERENCE",
     });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "x",
     });
 
     const lines = section(assembled, "preferences")?.lines ?? [];
-    for (const line of lines) expect(line).toContain("sans demander");
+    for (const line of lines) expect(line).toContain("without asking");
   });
 
-  it("garde les tours les plus récents de la conversation", async () => {
-    // Ce sont eux que la question courante prolonge.
+  it("keeps most recent turns of conversation", async () => {
     const { assembler, conversation } = makeAssembler({ conversation: 60 });
 
     conversation.turns = [
-      { role: "user", content: "tout premier message", createdAt: NOW },
-      { role: "user", content: "message du milieu", createdAt: NOW },
-      { role: "user", content: "tout dernier message", createdAt: NOW },
+      { role: "user", content: "very first message", createdAt: NOW },
+      { role: "user", content: "middle message", createdAt: NOW },
+      { role: "user", content: "very last message", createdAt: NOW },
     ];
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "x",
     });
 
     const lines = section(assembled, "conversation")?.lines ?? [];
-    expect(lines.join("\n")).toContain("tout dernier message");
-    expect(lines.join("\n")).not.toContain("tout premier message");
+    expect(lines.join("\n")).toContain("very last message");
+    expect(lines.join("\n")).not.toContain("very first message");
   });
 
-  it("rend les tours dans l'ordre chronologique", async () => {
-    // Ils sont sélectionnés du plus récent au plus ancien, mais un transcript
-    // à l'envers est illisible pour un modèle comme pour un humain.
+  it("returns turns in chronological order", async () => {
     const { assembler, conversation } = makeAssembler();
 
     conversation.turns = [
-      { role: "user", content: "premier", createdAt: NOW },
+      { role: "user", content: "first", createdAt: NOW },
       { role: "assistant", content: "second", createdAt: NOW },
     ];
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "x",
     });
 
     expect(section(assembled, "conversation")?.lines).toEqual([
-      "- user : premier",
+      "- user : first",
       "- assistant : second",
     ]);
   });
 });
 
-describe("frontière entre utilisateurs", () => {
-  it("n'assemble jamais le contexte de quelqu'un d'autre", async () => {
+describe("user boundaries", () => {
+  it("never assembles another user's context", async () => {
     const { assembler, memory } = makeAssembler();
 
-    await memory.store({ userId: "user-autre", kind: "SEMANTIC", content: "Secret d'un autre" });
+    await memory.store({ userId: "other-user", kind: "SEMANTIC", content: "Secret of another" });
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "secret",
     });
 
-    expect(assembled.text).not.toContain("Secret d'un autre");
+    expect(assembled.text).not.toContain("Secret of another");
   });
 });
 
-describe("sources absentes", () => {
-  it("s'assemble sans appareils, sans tâches et sans historique", async () => {
-    // Le cœur agent peut tourner avec la seule mémoire branchée. Une source
-    // absente donne une section vide, pas une exception.
+describe("missing sources", () => {
+  it("assembles without devices, tasks, or history", async () => {
     const memory = new InMemoryMemoryProvider({ now: () => NOW });
-    await memory.store({ userId: ADLAN, kind: "SEMANTIC", content: "Habite à Lyon" });
+    await memory.store({ userId: USER_ID, kind: "SEMANTIC", content: "Lives in Lyon" });
 
     const assembled = await new ContextAssembler({ memory }).assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "habite",
+      query: "lives",
     });
 
-    expect(assembled.text).toContain("Habite à Lyon");
+    expect(assembled.text).toContain("Lives in Lyon");
     expect(section(assembled, "devices")?.lines).toEqual([]);
   });
 
-  it("ne produit aucun titre pour une section vide", async () => {
+  it("produces no header for empty sections", async () => {
     const memory = new InMemoryMemoryProvider({ now: () => NOW });
 
     const assembled = await new ContextAssembler({ memory }).assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
-      query: "rien",
+      query: "nothing",
     });
 
     expect(assembled.text).toBe("");
@@ -367,31 +346,29 @@ describe("sources absentes", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("contexte court terme", () => {
-  it("remplace une note de même clé au lieu d'en empiler deux", async () => {
-    // Deux notes contradictoires sur le fichier courant, et le modèle n'a aucun
-    // moyen de savoir laquelle est à jour.
+describe("short-term context", () => {
+  it("replaces a note with same key instead of stacking duplicates", async () => {
     const { assembler, shortTerm } = makeAssembler();
 
-    shortTerm.set(CONVERSATION, "fichier-courant", "src/auth.ts");
-    shortTerm.set(CONVERSATION, "fichier-courant", "src/memory.ts");
+    shortTerm.set(CONVERSATION, "current-file", "src/auth.ts");
+    shortTerm.set(CONVERSATION, "current-file", "src/memory.ts");
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "x",
     });
 
-    expect(section(assembled, "shortTerm")?.lines).toEqual(["- fichier-courant : src/memory.ts"]);
+    expect(section(assembled, "shortTerm")?.lines).toEqual(["- current-file : src/memory.ts"]);
   });
 
-  it("ne fuit pas d'une conversation à l'autre", async () => {
+  it("does not leak across conversations", async () => {
     const { assembler, shortTerm } = makeAssembler();
 
-    shortTerm.set("autre-conversation", "fichier-courant", "src/secret.ts");
+    shortTerm.set("other-conv", "current-file", "src/secret.ts");
 
     const assembled = await assembler.assemble({
-      userId: ADLAN,
+      userId: USER_ID,
       conversationId: CONVERSATION,
       query: "x",
     });
@@ -399,33 +376,30 @@ describe("contexte court terme", () => {
     expect(section(assembled, "shortTerm")?.lines).toEqual([]);
   });
 
-  it("s'efface avec le temps", () => {
-    // Ce qui vit le temps d'une session n'a aucune raison de lui survivre.
+  it("expires with time", () => {
     let clock = NOW;
     const shortTerm = new ShortTermContext({ ttlMs: 1_000, now: () => clock });
 
-    shortTerm.set(CONVERSATION, "fichier-courant", "src/auth.ts");
+    shortTerm.set(CONVERSATION, "current-file", "src/auth.ts");
     expect(shortTerm.list(CONVERSATION)).toHaveLength(1);
 
     clock = new Date(NOW.getTime() + 2_000);
     expect(shortTerm.list(CONVERSATION)).toEqual([]);
   });
 
-  it("reste borné", () => {
+  it("remains bounded", () => {
     const shortTerm = new ShortTermContext({ maxNotesPerConversation: 3, now: () => NOW });
 
     for (let index = 0; index < 10; index += 1) {
-      shortTerm.set(CONVERSATION, `cle-${String(index)}`, "valeur");
+      shortTerm.set(CONVERSATION, `key-${String(index)}`, "val");
     }
 
     const notes = shortTerm.list(CONVERSATION);
     expect(notes).toHaveLength(3);
-    expect(notes.map((note) => note.key)).toEqual(["cle-7", "cle-8", "cle-9"]);
+    expect(notes.map((note) => note.key)).toEqual(["key-7", "key-8", "key-9"]);
   });
 
-  it("rafraîchir une note la remet en fin de file", () => {
-    // Sans quoi la note la plus utilisée tomberait parce qu'elle avait été
-    // posée en premier.
+  it("refreshing a note puts it at the back of the queue", () => {
     const shortTerm = new ShortTermContext({ maxNotesPerConversation: 2, now: () => NOW });
 
     shortTerm.set(CONVERSATION, "a", "1");

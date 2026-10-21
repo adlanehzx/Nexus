@@ -239,7 +239,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
 function vectorLiteral(vector: readonly number[]): string {
   if (vector.some((value) => !Number.isFinite(value))) {
-    throw new TypeError("Un vecteur mémoire contient une valeur non finie.");
+    throw new TypeError("A memory vector contains a non-finite value.");
   }
   return `[${vector.join(",")}]`;
 }

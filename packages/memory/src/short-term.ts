@@ -1,30 +1,18 @@
 /**
- * Contexte court terme.
+ * Short-term working context.
  *
- * Ce qu'une conversation a établi et qui n'a **aucune raison de lui survivre** :
- * le fichier qu'on est en train de modifier, la branche sur laquelle on
- * travaille, le résultat qu'on vient d'obtenir.
+ * Ephemeral information tied to active session state (e.g. current file, git branch,
+ * immediate tool outputs) that should not pollute long-term memory.
  *
- * La distinction avec la mémoire longue durée n'est pas une nuance de durée,
- * c'est une différence de nature. Un souvenir long terme est un **fait sur
- * l'utilisateur** — il préfère le train, il travaille chez X. Une note de
- * contexte est un **état de travail** — on regarde `auth.ts`. Confondre les deux
- * remplit la mémoire longue durée de scories et fait dire à l'assistant, trois
- * semaines plus tard, qu'on travaille sur un fichier qu'on a oublié.
- *
- * D'où trois propriétés, toutes délibérées :
- *
- *  - **rien n'est persisté.** Ce magasin vit dans le processus.
- *  - **il s'efface.** Chaque note a une durée de vie ; une session abandonnée ne
- *    laisse rien derrière elle.
- *  - **il est borné.** Au-delà de N notes, les plus anciennes tombent. Le
- *    contexte d'un modèle est fini, et une note de contexte illimitée finirait
- *    par manger la place des messages.
+ * Properties:
+ *  - In-memory only (never written to persistent database);
+ *  - Time-to-live per note;
+ *  - Bounded capacity per conversation (LRU eviction).
  */
 
 export interface ShortTermNote {
   conversationId: string;
-  /** Clé stable — réécrire la même clé remplace la note plutôt que d'en ajouter. */
+  /** Stable key — setting existing key updates rather than duplicates. */
   key: string;
   value: string;
   updatedAt: Date;
@@ -32,9 +20,9 @@ export interface ShortTermNote {
 }
 
 export interface ShortTermContextOptions {
-  /** Notes conservées par conversation. Au-delà, la plus ancienne tombe. */
+  /** Maximum notes retained per conversation before evicting oldest. */
   maxNotesPerConversation?: number;
-  /** Durée de vie d'une note. */
+  /** Note time-to-live in milliseconds. */
   ttlMs?: number;
   now?: () => Date;
 }
@@ -52,11 +40,7 @@ export class ShortTermContext {
   }
 
   /**
-   * Pose ou remplace une note.
-   *
-   * La clé fait foi : réécrire `fichier-courant` remplace la valeur au lieu
-   * d'empiler deux notes contradictoires, dont le modèle n'aurait aucun moyen de
-   * savoir laquelle est à jour.
+   * Sets or updates a note under a stable key.
    */
   set(conversationId: string, key: string, value: string): ShortTermNote {
     const now = this.#now();
@@ -69,8 +53,6 @@ export class ShortTermContext {
     };
 
     const bucket = this.#notes.get(conversationId) ?? new Map<string, ShortTermNote>();
-    // La suppression préalable remet la clé en fin d'itération : une note
-    // rafraîchie ne doit pas tomber parce qu'elle avait été posée en premier.
     bucket.delete(key);
     bucket.set(key, note);
 
@@ -84,7 +66,7 @@ export class ShortTermContext {
     return note;
   }
 
-  /** Notes vivantes d'une conversation, de la plus ancienne à la plus récente. */
+  /** Active notes for a conversation, ordered from oldest to newest. */
   list(conversationId: string): ShortTermNote[] {
     const bucket = this.#notes.get(conversationId);
     if (bucket === undefined) return [];
@@ -109,7 +91,7 @@ export class ShortTermContext {
     return this.#notes.get(conversationId)?.delete(key) ?? false;
   }
 
-  /** Vide une conversation. Appelé quand elle est archivée ou fermée. */
+  /** Clears notes for a conversation when archived or closed. */
   clear(conversationId: string): void {
     this.#notes.delete(conversationId);
   }

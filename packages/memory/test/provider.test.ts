@@ -2,25 +2,20 @@ import { describe, expect, it } from "vitest";
 import { InMemoryMemoryProvider } from "../src/in-memory.js";
 
 /**
- * Le magasin de souvenirs.
+ * Memory provider tests.
  *
- * Deux propriétés dominent ce fichier, et elles sont de nature différente :
- *
- *  - **la frontière entre utilisateurs**, qui est une garantie de sécurité et
- *    n'admet aucune exception ;
- *  - **la supersession**, qui est une décision de modélisation : corriger un
- *    fait ne l'efface pas, il le date.
+ * Core properties:
+ *  - strict user boundaries without exception;
+ *  - supersession lineage: updates record new timestamps while preserving history.
  */
 
-const ADLAN = "user-example";
-const AUTRE = "user-autre";
+const USER_ID = "user-example";
+const OTHER_USER = "user-other";
 
 function makeProvider(now = new Date("2026-09-03T10:00:00.000Z")) {
   let clock = now;
   return {
     provider: new InMemoryMemoryProvider({ now: () => clock }),
-    // Propriété-fonction et non méthode : c'est une fermeture sur `clock`, elle
-    // ne dépend d'aucun `this`, et les tests la déstructurent.
     advance: (days: number) => {
       clock = new Date(clock.getTime() + days * 86_400_000);
     },
@@ -28,13 +23,13 @@ function makeProvider(now = new Date("2026-09-03T10:00:00.000Z")) {
 }
 
 describe("store", () => {
-  it("enregistre un souvenir avec ses valeurs par défaut", async () => {
+  it("stores a memory with default values", async () => {
     const { provider } = makeProvider();
 
     const record = await provider.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Alex préfère le train à l'avion",
+      content: "Alex prefers trains over planes",
     });
 
     expect(record.layer).toBe("LONG_TERM");
@@ -44,160 +39,149 @@ describe("store", () => {
     expect(record.validUntil).toBeNull();
   });
 
-  it("distingue une préférence d'un souvenir ordinaire", async () => {
-    // La couche n'est pas une étiquette : une préférence est une consigne
-    // permanente, qu'on remonte quel que soit le sujet du jour.
+  it("distinguishes preferences from ordinary memories", async () => {
     const { provider } = makeProvider();
 
     await provider.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "PROCEDURAL",
-      content: "Réponds toujours en français",
+      content: "Always reply concisely",
       layer: "PREFERENCE",
     });
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Habite à Lyon" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Lives in Lyon" });
 
     const preferences = await provider.search({
-      userId: ADLAN,
+      userId: USER_ID,
       query: "",
       layers: ["PREFERENCE"],
     });
 
     expect(preferences).toHaveLength(1);
-    expect(preferences[0]?.record.content).toBe("Réponds toujours en français");
+    expect(preferences[0]?.record.content).toBe("Always reply concisely");
   });
 
-  it("retient qui a voulu le souvenir", async () => {
+  it("records who originated the memory", async () => {
     const { provider } = makeProvider();
 
-    const deduit = await provider.store({
-      userId: ADLAN,
+    const inferred = await provider.store({
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Travaille probablement sur NEXUS",
+      content: "Probably works on NEXUS",
       origin: "AGENT",
     });
 
-    // Un fait dicté et un fait déduit n'ont pas la même autorité. L'interface
-    // et le contexte les présentent différemment.
-    expect(deduit.origin).toBe("AGENT");
+    expect(inferred.origin).toBe("AGENT");
   });
 });
 
 describe("search", () => {
-  it("trouve par chevauchement de termes", async () => {
+  it("retrieves records matching term overlap", async () => {
     const { provider } = makeProvider();
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Préfère le train" });
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Aime le café serré" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Prefers the train" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Likes dark roast coffee" });
 
-    const hits = await provider.search({ userId: ADLAN, query: "train" });
+    const hits = await provider.search({ userId: USER_ID, query: "train" });
 
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.record.content).toBe("Préfère le train");
+    expect(hits[0]?.record.content).toBe("Prefers the train");
   });
 
-  it("une requête vide parcourt tout, du plus récent au plus ancien", async () => {
-    // C'est l'écran de gestion : l'utilisateur veut voir ce que NEXUS retient
-    // de lui, sans avoir à deviner un mot-clé.
+  it("empty query traverses all records newest to oldest", async () => {
     const { provider, advance } = makeProvider();
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Premier" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "First" });
     advance(1);
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Second" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Second" });
 
-    const hits = await provider.search({ userId: ADLAN, query: "" });
+    const hits = await provider.search({ userId: USER_ID, query: "" });
 
-    expect(hits.map((hit) => hit.record.content)).toEqual(["Second", "Premier"]);
+    expect(hits.map((hit) => hit.record.content)).toEqual(["Second", "First"]);
   });
 
-  it("le plus récent devance à pertinence égale", async () => {
+  it("more recent records rank higher with equal relevance", async () => {
     const { provider, advance } = makeProvider();
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Réunion le lundi" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Meeting on Monday" });
     advance(60);
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Réunion le mardi" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Meeting on Tuesday" });
 
-    const hits = await provider.search({ userId: ADLAN, query: "réunion" });
+    const hits = await provider.search({ userId: USER_ID, query: "meeting" });
 
-    expect(hits[0]?.record.content).toBe("Réunion le mardi");
+    expect(hits[0]?.record.content).toBe("Meeting on Tuesday");
   });
 
-  it("filtre par nature de souvenir", async () => {
+  it("filters by memory kind", async () => {
     const { provider } = makeProvider();
-    await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "Habite à Lyon" });
-    await provider.store({ userId: ADLAN, kind: "EPISODIC", content: "A visité Lyon en mai" });
+    await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "Lives in Lyon" });
+    await provider.store({ userId: USER_ID, kind: "EPISODIC", content: "Visited Lyon in May" });
 
-    const hits = await provider.search({ userId: ADLAN, query: "lyon", kinds: ["EPISODIC"] });
+    const hits = await provider.search({ userId: USER_ID, query: "lyon", kinds: ["EPISODIC"] });
 
     expect(hits).toHaveLength(1);
     expect(hits[0]?.record.kind).toBe("EPISODIC");
   });
 
-  it("respecte la limite", async () => {
+  it("respects limit", async () => {
     const { provider } = makeProvider();
     for (let index = 0; index < 10; index += 1) {
-      await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: `Note ${String(index)}` });
+      await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: `Note ${String(index)}` });
     }
 
-    expect(await provider.search({ userId: ADLAN, query: "note", limit: 3 })).toHaveLength(3);
+    expect(await provider.search({ userId: USER_ID, query: "note", limit: 3 })).toHaveLength(3);
   });
 });
 
 describe("update", () => {
-  it("corriger un fait le supersède au lieu de l'écraser", async () => {
-    // « Où j'habitais l'an dernier » est une question ordinaire. Un écrasement
-    // rend toute réponse impossible, et personne ne s'en aperçoit avant qu'on
-    // la pose.
+  it("updating content supersedes rather than overwriting", async () => {
     const { provider } = makeProvider();
-    const ancien = await provider.store({
-      userId: ADLAN,
+    const old = await provider.store({
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Habite à Lyon",
+      content: "Lives in Lyon",
     });
 
-    const neuf = await provider.update({
-      userId: ADLAN,
-      id: ancien.id,
-      content: "Habite à Paris",
+    const updated = await provider.update({
+      userId: USER_ID,
+      id: old.id,
+      content: "Lives in Paris",
     });
 
-    expect(neuf?.content).toBe("Habite à Paris");
-    expect(neuf?.supersedesId).toBe(ancien.id);
-    expect(neuf?.id).not.toBe(ancien.id);
+    expect(updated?.content).toBe("Lives in Paris");
+    expect(updated?.supersedesId).toBe(old.id);
+    expect(updated?.id).not.toBe(old.id);
   });
 
-  it("le fait supersédé ne remonte plus, mais reste consultable", async () => {
+  it("superseded facts are excluded from normal search but remain queryable", async () => {
     const { provider } = makeProvider();
-    const ancien = await provider.store({
-      userId: ADLAN,
+    const old = await provider.store({
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Habite à Lyon",
+      content: "Lives in Lyon",
     });
-    await provider.update({ userId: ADLAN, id: ancien.id, content: "Habite à Paris" });
+    await provider.update({ userId: USER_ID, id: old.id, content: "Lives in Paris" });
 
-    const courant = await provider.search({ userId: ADLAN, query: "habite" });
-    expect(courant.map((hit) => hit.record.content)).toEqual(["Habite à Paris"]);
+    const current = await provider.search({ userId: USER_ID, query: "lives" });
+    expect(current.map((hit) => hit.record.content)).toEqual(["Lives in Paris"]);
 
-    const histoire = await provider.search({
-      userId: ADLAN,
-      query: "habite",
+    const history = await provider.search({
+      userId: USER_ID,
+      query: "lives",
       includeSuperseded: true,
     });
-    expect(histoire.map((hit) => hit.record.content).sort()).toEqual([
-      "Habite à Lyon",
-      "Habite à Paris",
+    expect(history.map((hit) => hit.record.content).sort()).toEqual([
+      "Lives in Lyon",
+      "Lives in Paris",
     ]);
   });
 
-  it("corriger une métadonnée s'applique sur place", async () => {
-    // Changer l'importance ne change pas ce qui est affirmé : superséder ici
-    // encombrerait l'historique de versions qui ne disent rien de neuf.
+  it("correcting metadata applies in-place", async () => {
     const { provider } = makeProvider();
     const record = await provider.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Préfère le train",
+      content: "Prefers the train",
     });
 
     const patched = await provider.update({
-      userId: ADLAN,
+      userId: USER_ID,
       id: record.id,
       importance: 0.95,
       tags: ["transport"],
@@ -209,98 +193,95 @@ describe("update", () => {
     expect(patched?.supersedesId).toBeNull();
   });
 
-  it("réécrire à l'identique ne supersède pas", async () => {
+  it("writing identical content does not supersede", async () => {
     const { provider } = makeProvider();
     const record = await provider.store({
-      userId: ADLAN,
+      userId: USER_ID,
       kind: "SEMANTIC",
-      content: "Préfère le train",
+      content: "Prefers the train",
     });
 
     const patched = await provider.update({
-      userId: ADLAN,
+      userId: USER_ID,
       id: record.id,
-      content: "Préfère le train",
+      content: "Prefers the train",
     });
 
     expect(patched?.id).toBe(record.id);
   });
 
-  it("rend undefined pour un identifiant inconnu", async () => {
+  it("returns undefined for unknown id", async () => {
     const { provider } = makeProvider();
     expect(
-      await provider.update({ userId: ADLAN, id: "inexistant", content: "x" }),
+      await provider.update({ userId: USER_ID, id: "nonexistent", content: "x" }),
     ).toBeUndefined();
   });
 });
 
 describe("delete", () => {
-  it("supprime un souvenir", async () => {
+  it("deletes a memory record", async () => {
     const { provider } = makeProvider();
-    const record = await provider.store({ userId: ADLAN, kind: "SEMANTIC", content: "À oublier" });
+    const record = await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "To forget" });
 
-    expect(await provider.delete({ userId: ADLAN, id: record.id })).toBe(true);
-    expect(await provider.search({ userId: ADLAN, query: "oublier" })).toEqual([]);
+    expect(await provider.delete({ userId: USER_ID, id: record.id })).toBe(true);
+    expect(await provider.search({ userId: USER_ID, query: "forget" })).toEqual([]);
   });
 
-  it("rend faux pour un identifiant inconnu", async () => {
+  it("returns false for unknown id", async () => {
     const { provider } = makeProvider();
-    expect(await provider.delete({ userId: ADLAN, id: "inexistant" })).toBe(false);
+    expect(await provider.delete({ userId: USER_ID, id: "nonexistent" })).toBe(false);
   });
 });
 
-describe("frontière entre utilisateurs", () => {
-  it("une recherche ne traverse jamais la frontière", async () => {
+describe("user boundaries", () => {
+  it("search never crosses user boundaries", async () => {
     const { provider } = makeProvider();
-    await provider.store({ userId: AUTRE, kind: "SEMANTIC", content: "Secret d'un autre" });
+    await provider.store({ userId: OTHER_USER, kind: "SEMANTIC", content: "Secret of another" });
 
-    expect(await provider.search({ userId: ADLAN, query: "secret" })).toEqual([]);
-    expect(await provider.search({ userId: ADLAN, query: "" })).toEqual([]);
+    expect(await provider.search({ userId: USER_ID, query: "secret" })).toEqual([]);
+    expect(await provider.search({ userId: USER_ID, query: "" })).toEqual([]);
   });
 
-  it("un identifiant deviné ne donne pas accès au souvenir d'un autre", async () => {
-    // L'identifiant est un UUID v7 : il porte un horodatage, donc une partie en
-    // est prévisible. Il ne doit jamais suffire à lui seul.
+  it("guessed id does not grant access to another user's memory", async () => {
     const { provider } = makeProvider();
     const record = await provider.store({
-      userId: AUTRE,
+      userId: OTHER_USER,
       kind: "SEMANTIC",
-      content: "Secret d'un autre",
+      content: "Secret of another",
     });
 
     expect(
-      await provider.update({ userId: ADLAN, id: record.id, content: "détourné" }),
+      await provider.update({ userId: USER_ID, id: record.id, content: "hijacked" }),
     ).toBeUndefined();
-    expect(await provider.delete({ userId: ADLAN, id: record.id })).toBe(false);
+    expect(await provider.delete({ userId: USER_ID, id: record.id })).toBe(false);
 
-    // Et le souvenir de l'autre est intact.
-    const intact = await provider.search({ userId: AUTRE, query: "secret" });
-    expect(intact[0]?.record.content).toBe("Secret d'un autre");
+    const intact = await provider.search({ userId: OTHER_USER, query: "secret" });
+    expect(intact[0]?.record.content).toBe("Secret of another");
   });
 });
 
 describe("summarize", () => {
-  it("coupe entre les phrases, pas au milieu", async () => {
+  it("splits between sentences, not mid-sentence", async () => {
     const { provider } = makeProvider();
 
-    const resume = await provider.summarize({
-      userId: ADLAN,
-      text: "Première phrase. Deuxième phrase. Troisième phrase.",
+    const summary = await provider.summarize({
+      userId: USER_ID,
+      text: "First sentence. Second sentence. Third sentence.",
       maxChars: 35,
     });
 
-    expect(resume).toBe("Première phrase. Deuxième phrase.");
+    expect(summary).toBe("First sentence. Second sentence.");
   });
 
-  it("rend un texte tronqué quand aucune phrase n'entre", async () => {
+  it("returns truncated text when no complete sentence fits", async () => {
     const { provider } = makeProvider();
 
-    const resume = await provider.summarize({
-      userId: ADLAN,
-      text: "Une phrase très longue sans ponctuation intermédiaire du tout",
+    const summary = await provider.summarize({
+      userId: USER_ID,
+      text: "A very long sentence without any punctuation whatsoever",
       maxChars: 20,
     });
 
-    expect(resume).toHaveLength(20);
+    expect(summary).toHaveLength(20);
   });
 });

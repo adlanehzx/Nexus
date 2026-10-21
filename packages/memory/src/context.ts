@@ -4,33 +4,32 @@ import type { ConversationHistoryPort, DeviceContextPort, TaskHistoryPort } from
 import { ConservativeTokenCounter, type TokenCounter } from "./tokens.js";
 
 /**
- * Assemblage du contexte.
+ * Context assembly.
  *
- * C'est ici que les six couches se rejoignent — et le point de ce module est
- * qu'elles s'y rejoignent **sans se mélanger**. Chaque source garde sa section,
- * son budget et son propriétaire ; aucune ne peut affamer les autres.
+ * This is where the six layers converge — and the core principle of this module is
+ * that they converge **without mixing**. Each source retains its own section,
+ * its budget, and its owner; none can starve the others.
  *
- * Le budget par section est la décision centrale. Un budget global unique
- * paraît plus simple et se comporte mal : une conversation longue mange tout, et
- * les préférences de l'utilisateur — trois lignes qui changent la réponse —
- * tombent en dernier parce qu'elles arrivent en dernier. Découper garantit qu'un
- * historique bavard ne fait pas oublier à NEXUS que l'utilisateur préfère le
- * train.
+ * Per-section budgeting is the central design decision. A single global budget
+ * seems simpler but behaves poorly: a long conversation consumes everything, and
+ * user preferences — three lines that alter the response —
+ * are dropped because they arrive last. Section partitioning guarantees that a
+ * verbose history will not make NEXUS forget that the user prefers the train.
  *
- * L'ordre est un ordre de **priorité**, pas de lecture : les sections servies en
- * premier sont celles qui changent la réponse même quand tout le reste manque.
+ * The order is an order of **priority**, not reading sequence: sections served
+ * first are those that alter the answer even when all else is missing.
  *
- *     1. préférences      ce que l'utilisateur a demandé une fois pour toutes
- *     2. contexte courant ce que cette session a établi
- *     3. souvenirs        ce que NEXUS sait de lui
- *     4. appareils        ce qu'il peut faire, et où
- *     5. tâches récentes  ce qui vient de se passer
- *     6. historique       le reste de la conversation
+ *     1. preferences      what the user requested once and for all
+ *     2. current context  what this session established
+ *     3. memories         what NEXUS knows about the user
+ *     4. devices          what can be done, and where
+ *     5. recent tasks     what just happened
+ *     6. history          the rest of the conversation
  *
- * **Le budget est compté en caractères, pas en tokens.** Compter des tokens
- * exigerait le tokeniseur du fournisseur, donc une dépendance au modèle dans un
- * paquet qui n'en a aucune. Le caractère est un substitut stable, et ce budget
- * est une barrière — pas une comptabilité.
+ * **Budget is counted in characters, not tokens.** Counting tokens
+ * would require the provider tokenizer, thus a model dependency in a
+ * package that has none. Characters serve as a stable proxy, and this budget
+ * is a fence — not an accounting ledger.
  */
 
 export interface ContextBudget {
@@ -43,10 +42,10 @@ export interface ContextBudget {
 }
 
 /**
- * Budget par défaut : environ 6 000 caractères.
+ * Default budget: ~6,000 characters.
  *
- * Les préférences ont peu de place parce qu'elles en demandent peu ; la
- * conversation en a le plus parce qu'elle est la seule à croître sans limite.
+ * Preferences have a smaller allocation because they require little space;
+ * conversation has the largest because it is the only one growing without bound.
  */
 export const DEFAULT_BUDGET: ContextBudget = {
   preferences: 600,
@@ -58,7 +57,12 @@ export const DEFAULT_BUDGET: ContextBudget = {
 };
 
 export type ContextSectionName =
-  "preferences" | "shortTerm" | "longTerm" | "devices" | "tasks" | "conversation";
+  | "preferences"
+  | "shortTerm"
+  | "longTerm"
+  | "devices"
+  | "tasks"
+  | "conversation";
 
 export interface ContextSection {
   name: ContextSectionName;
@@ -66,16 +70,16 @@ export interface ContextSection {
   lines: string[];
   chars: number;
   tokens: number;
-  /** Éléments écartés faute de place. Affiché nulle part, utile au diagnostic. */
+  /** Items discarded due to space limits. Not displayed, useful for diagnostics. */
   dropped: number;
 }
 
 export interface AssembledContext {
   sections: ContextSection[];
-  /** Le bloc prêt à joindre aux instructions système. */
+  /** Block ready to attach to system instructions. */
   text: string;
   chars: number;
-  /** Estimation locale ou comptage exact si l'adaptateur injecte son tokeniseur. */
+  /** Local estimate or exact count if the adapter injects its tokenizer. */
   tokens: number;
 }
 
@@ -86,7 +90,7 @@ export interface ContextAssemblerOptions {
   devices?: DeviceContextPort;
   tasks?: TaskHistoryPort;
   budget?: Partial<ContextBudget>;
-  /** Seconde barrière exprimée en tokens, indépendante de la barrière historique en caractères. */
+  /** Second fence expressed in tokens, independent of character budget fence. */
   tokenBudget?: Partial<ContextBudget>;
   tokenCounter?: TokenCounter;
 }
@@ -94,18 +98,18 @@ export interface ContextAssemblerOptions {
 export interface AssembleInput {
   userId: string;
   conversationId: string;
-  /** Le tour courant. Sert de requête pour la recherche de souvenirs. */
+  /** Current turn. Serves as query for memory retrieval. */
   query: string;
   model?: string;
 }
 
 const TITLES: Record<ContextSectionName, string> = {
-  preferences: "Préférences de l'utilisateur",
-  shortTerm: "Contexte de la session en cours",
-  longTerm: "Ce que tu sais de cet utilisateur",
-  devices: "Appareils disponibles",
-  tasks: "Tâches récentes",
-  conversation: "Plus tôt dans la conversation",
+  preferences: "User preferences",
+  shortTerm: "Current session context",
+  longTerm: "What you know about this user",
+  devices: "Available devices",
+  tasks: "Recent tasks",
+  conversation: "Earlier in the conversation",
 };
 
 export class ContextAssembler {
@@ -130,8 +134,8 @@ export class ContextAssembler {
   }
 
   async assemble(input: AssembleInput): Promise<AssembledContext> {
-    // Les six lectures partent ensemble : elles ne dépendent pas les unes des
-    // autres, et les enchaîner ajouterait leurs latences pour rien.
+    // All six reads are initiated concurrently: they do not depend on each
+    // other, and serializing them would unnecessarily compound latency.
     const [preferences, longTerm, conversation, devices, tasks] = await Promise.all([
       this.#preferences(input),
       this.#longTerm(input),
@@ -157,13 +161,12 @@ export class ContextAssembler {
     return { sections, text, chars: text.length, tokens: this.#tokens.count(text, input.model) };
   }
 
-  // ── 4. Préférences ──────────────────────────────────────────────────────
+  // ── 4. Preferences ───────────────────────────────────────────────────────
 
   async #preferences(input: AssembleInput): Promise<ContextSection> {
-    // Requête vide : **toutes** les préférences, pas celles qui ressemblent au
-    // message. Une consigne permanente vaut quel que soit le sujet du jour —
-    // « réponds toujours en français » ne doit pas disparaître parce qu'on parle
-    // de Docker.
+    // Empty query retrieves **all** preferences, not just those matching the
+    // message. A permanent instruction applies regardless of today's topic —
+    // e.g. "always answer in English" must not disappear when discussing Docker.
     const hits = await this.#options.memory.search({
       userId: input.userId,
       query: "",
@@ -181,7 +184,7 @@ export class ContextAssembler {
     );
   }
 
-  // ── 2. Contexte court terme ─────────────────────────────────────────────
+  // ── 2. Short-term context ───────────────────────────────────────────────
 
   #shortTerm(input: AssembleInput): ContextSection {
     const notes = this.#options.shortTerm?.list(input.conversationId) ?? [];
@@ -196,7 +199,7 @@ export class ContextAssembler {
     );
   }
 
-  // ── 3. Mémoire longue durée ─────────────────────────────────────────────
+  // ── 3. Long-term memory ─────────────────────────────────────────────────
 
   async #longTerm(input: AssembleInput): Promise<ContextSection> {
     const hits = await this.#options.memory.search({
@@ -208,11 +211,11 @@ export class ContextAssembler {
 
     return fit(
       "longTerm",
-      // L'origine accompagne le fait. « L'utilisateur a dit » et « déduit d'une
-      // conversation » n'ont pas la même autorité, et le modèle doit pouvoir
-      // nuancer plutôt que d'affirmer une inférence comme une certitude.
+      // Origin accompanies the fact. "User stated" vs "inferred from conversation"
+      // hold different authority, allowing the model to nuance statements rather than
+      // asserting an inference as absolute certainty.
       hits.map(
-        (hit) => `- ${hit.record.content}${hit.record.origin === "AGENT" ? " (déduit)" : ""}`,
+        (hit) => `- ${hit.record.content}${hit.record.origin === "AGENT" ? " (inferred)" : ""}`,
       ),
       this.#budget.longTerm,
       this.#tokenBudget.longTerm,
@@ -221,7 +224,7 @@ export class ContextAssembler {
     );
   }
 
-  // ── 5. Appareils ────────────────────────────────────────────────────────
+  // ── 5. Devices ──────────────────────────────────────────────────────────
 
   async #devices(input: AssembleInput): Promise<ContextSection> {
     const devices = (await this.#options.devices?.devicesFor(input.userId)) ?? [];
@@ -240,7 +243,7 @@ export class ContextAssembler {
     );
   }
 
-  // ── 6. Historique des tâches ────────────────────────────────────────────
+  // ── 6. Task history ─────────────────────────────────────────────────────
 
   async #tasks(input: AssembleInput): Promise<ContextSection> {
     const tasks =
@@ -251,7 +254,7 @@ export class ContextAssembler {
       tasks.map(
         (task) =>
           `- ${task.title} — ${task.status}` +
-          (task.deviceName === null ? "" : ` sur ${task.deviceName}`),
+          (task.deviceName === null ? "" : ` on ${task.deviceName}`),
       ),
       this.#budget.tasks,
       this.#tokenBudget.tasks,
@@ -260,7 +263,7 @@ export class ContextAssembler {
     );
   }
 
-  // ── 1. Historique de conversation ───────────────────────────────────────
+  // ── 1. Conversation history ─────────────────────────────────────────────
 
   async #conversation(input: AssembleInput): Promise<ContextSection> {
     const turns =
@@ -270,9 +273,8 @@ export class ContextAssembler {
         limit: 20,
       })) ?? [];
 
-    // Les tours les plus **récents** priment : ce sont eux que la question
-    // courante prolonge. On construit donc la liste à l'envers, puis on la
-    // remet à l'endroit une fois le budget consommé.
+    // Most recent turns take precedence as the current prompt directly extends them.
+    // Build the list backwards, then restore chronological order once budget is met.
     const lines = [...turns].reverse().map((turn) => `- ${turn.role} : ${collapse(turn.content)}`);
 
     const section = fit(
@@ -288,11 +290,10 @@ export class ContextAssembler {
 }
 
 /**
- * Remplit une section jusqu'à son budget.
+ * Fills a section up to its allocated budget.
  *
- * On coupe **entre les lignes**, jamais au milieu : une préférence tronquée à
- * mi-phrase peut changer de sens, et un modèle n'a aucun moyen de savoir qu'il
- * lui manque la fin.
+ * Cuts occur strictly between lines, never mid-sentence: a preference truncated
+ * mid-phrase can invert meaning, and a model cannot deduce missing text.
  */
 function fit(
   name: ContextSectionName,
@@ -324,7 +325,7 @@ function fit(
   };
 }
 
-/** Un tour de conversation sur une seule ligne, borné. */
+/** Formats a conversation turn into a single bounded line. */
 function collapse(content: string): string {
   const single = content.replace(/\s+/g, " ").trim();
   return single.length <= 200 ? single : `${single.slice(0, 200)}…`;

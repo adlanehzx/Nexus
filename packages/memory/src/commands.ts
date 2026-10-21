@@ -1,34 +1,22 @@
 /**
- * Commandes explicites de mémoire.
+ * Explicit memory commands.
  *
- * « Retiens que… » et « Oublie… » ne passent **pas** par le modèle. C'est une
- * décision, et elle a deux raisons :
+ * "Remember that..." and "Forget..." do NOT route through a model.
  *
- *  1. **Une commande doit être fiable.** Un utilisateur qui dit « oublie mon
- *     adresse » doit voir son adresse disparaître, pas espérer que le modèle
- *     l'ait interprété ainsi. Une reconnaissance déterministe rate parfois une
- *     formulation exotique — l'utilisateur reformule. Un modèle, lui, se trompe
- *     silencieusement, et personne ne s'en aperçoit avant des semaines.
+ * Deterministic command recognition:
+ *  1. Ensures reliable execution of user intent ("forget my address" immediately purges);
+ *  2. Is verifiable and fully testable without LLM non-determinism.
  *
- *  2. **Elle doit être vérifiable.** Ces fonctions se testent ; une intention
- *     déduite par un LLM, non.
- *
- * La reconnaissance est **ancrée au début du message** et exige l'impératif.
- * C'est ce qui distingue « Retiens que je préfère le train » d'une phrase où
- * l'utilisateur *raconte* qu'il se souvient de quelque chose : « je me souviens
- * que le train était en retard » n'est pas un ordre, et le prendre pour tel
- * remplirait la mémoire de bruit.
+ * Commands are anchored to the beginning of the message using imperative phrasing.
  */
 
 export type MemoryCommand =
-  { kind: "remember"; content: string } | { kind: "forget"; target: string; all: boolean };
+  | { kind: "remember"; content: string }
+  | { kind: "forget"; target: string; all: boolean };
 
 /**
- * Formes reconnues pour « retiens ».
- *
- * Le `que`/`this`/`ceci` est facultatif : « Retiens : rendez-vous mardi » est
- * une formulation naturelle qu'on ne peut pas refuser au motif qu'elle omet la
- * conjonction.
+ * Recognized patterns for "remember".
+ * Supports both French and English commands.
  */
 const REMEMBER_PATTERNS: RegExp[] = [
   /^\s*(?:retiens|souviens[- ]toi|rappelle[- ]toi|m[ée]morise|note)\b[\s:,]*(?:que|ceci|cela|ça)?[\s:,]*(.+)$/is,
@@ -41,10 +29,7 @@ const FORGET_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Formes qui demandent un oubli **total**.
- *
- * Distinguées parce qu'elles n'appellent pas la même confirmation : effacer un
- * souvenir se défait en le redisant, effacer toute la mémoire ne se défait pas.
+ * Patterns requesting a total memory wipe ("forget all").
  */
 const FORGET_ALL_PATTERNS: RegExp[] = [
   /^\s*(?:oublie|efface|supprime)\s+(?:tout|toute\s+(?:ta|la)\s+m[ée]moire|mes\s+souvenirs)\b/i,
@@ -52,17 +37,14 @@ const FORGET_ALL_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Reconnaît une commande de mémoire.
- *
- * Rend `undefined` pour tout le reste — c'est-à-dire pour l'immense majorité des
- * messages. Ne rien reconnaître est le comportement normal, pas un échec.
+ * Recognizes explicit memory commands.
+ * Returns `undefined` if the message is regular conversation.
  */
 export function parseMemoryCommand(text: string): MemoryCommand | undefined {
   const trimmed = text.trim();
   if (trimmed.length === 0) return undefined;
 
-  // Les formes totales passent d'abord : « oublie tout » satisfait aussi le
-  // motif général, qui en tirerait un contenu à chercher — « tout ».
+  // Check total forget patterns first to avoid capturing "all/tout" as a target substring.
   for (const pattern of FORGET_ALL_PATTERNS) {
     if (pattern.test(trimmed)) return { kind: "forget", target: "", all: true };
   }
@@ -86,12 +68,7 @@ export function parseMemoryCommand(text: string): MemoryCommand | undefined {
   return undefined;
 }
 
-/**
- * Retire la ponctuation finale.
- *
- * « Retiens que je préfère le train. » et « Retiens que je préfère le train »
- * doivent produire le même souvenir, sans quoi les redire crée un doublon.
- */
+/** Strips trailing punctuation to prevent duplicates from punctuation differences. */
 function stripTrailingPunctuation(text: string): string {
   return text.replace(/[.!?;,\s]+$/u, "");
 }

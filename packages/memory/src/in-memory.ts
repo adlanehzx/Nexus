@@ -16,15 +16,13 @@ import {
 } from "./embedding.js";
 
 /**
- * Fournisseur de mémoire en mémoire vive.
+ * In-memory memory provider.
  *
- * Ce n'est pas un bouchon de test : c'est une implémentation réelle, utilisable
- * en développement, et la référence de comportement à laquelle l'implémentation
- * pgvector de la phase 6 devra se conformer.
+ * This is not a test mock: it is a functional reference implementation for
+ * development and the behavioral baseline that the pgvector implementation conforms to.
  *
- * La recherche est lexicale (chevauchement de termes pondéré par l'importance et
- * la fraîcheur). Elle rate les paraphrases — c'est précisément ce que la
- * recherche hybride vectorielle corrigera, sans changer cette interface.
+ * Search uses hybrid scoring (lexical overlap + cosine vector similarity weighted
+ * by importance and recency).
  */
 export class InMemoryMemoryProvider implements MemoryProvider {
   readonly #records = new Map<string, MemoryRecord>();
@@ -70,11 +68,10 @@ export class InMemoryMemoryProvider implements MemoryProvider {
   }
 
   /**
-   * Corrige un souvenir.
+   * Updates an existing memory record.
    *
-   * Deux chemins, et la distinction est celle de la nature du changement :
-   * réviser ce qui est **affirmé** supersède, corriger ce qui est **annoté**
-   * s'applique sur place.
+   * Revisions to stated content supersede previous records to preserve history,
+   * while metadata updates apply in-place.
    */
   async update(input: MemoryUpdateInput): Promise<MemoryRecord | undefined> {
     const existing = this.#owned(input.userId, input.id);
@@ -114,7 +111,7 @@ export class InMemoryMemoryProvider implements MemoryProvider {
     };
     const [embedding = []] = await this.#embeddings.embed([replacement.content]);
 
-    // L'ancien n'est pas détruit : il cesse d'être vrai à partir de maintenant.
+    // The old record is not deleted: it ceases to be active starting from now.
     this.#records.set(existing.id, {
       ...existing,
       validUntil: now,
@@ -145,15 +142,14 @@ export class InMemoryMemoryProvider implements MemoryProvider {
       if (query.kinds !== undefined && !query.kinds.includes(record.kind)) continue;
       if (query.layers !== undefined && !query.layers.includes(record.layer)) continue;
 
-      // Un fait supersédé ou périmé ne remonte plus, mais reste conservé :
-      // on peut encore répondre à « où j'habitais l'an dernier ».
+      // Superseded or expired facts are excluded from standard search by default
+      // but retained for historical lineage queries.
       if (query.includeSuperseded !== true) {
         if (record.supersededById !== null) continue;
         if (record.validUntil !== null && record.validUntil.getTime() <= now) continue;
       }
 
-      // Requête vide : on parcourt. C'est l'écran de gestion, où l'utilisateur
-      // veut voir ce que NEXUS retient de lui sans deviner un mot-clé.
+      // Empty query returns recent records (used for management UI).
       if (terms.length === 0) {
         hits.push({ record, score: recency(record, now) });
         continue;
@@ -180,11 +176,9 @@ export class InMemoryMemoryProvider implements MemoryProvider {
   }
 
   /**
-   * Résumé extractif : les premières phrases jusqu'au budget.
+   * Extractive summarization: first sentences within character budget.
    *
-   * Volontairement non génératif — un `MemoryProvider` ne doit pas dépendre d'un
-   * LLM. L'implémentation de production branchera un modèle rapide derrière
-   * cette même signature.
+   * Kept non-generative to avoid LLM dependencies in the memory provider core.
    */
   summarize(input: MemorySummarizeInput): Promise<string> {
     const budget = input.maxChars ?? 500;
@@ -204,18 +198,12 @@ export class InMemoryMemoryProvider implements MemoryProvider {
     return Promise.resolve(kept.length > 0 ? kept.join(" ") : input.text.slice(0, budget));
   }
 
-  /** Nombre de souvenirs stockés — diagnostic et tests. */
+  /** Total number of stored memory records — useful for diagnostics and tests. */
   get size(): number {
     return this.#records.size;
   }
 
-  /**
-   * Récupère un enregistrement **appartenant à cet utilisateur**.
-   *
-   * Un seul endroit vérifie la propriété, et les quatre méthodes qui manipulent
-   * un identifiant passent par lui. Une vérification répétée à quatre endroits
-   * finit toujours par manquer au cinquième.
-   */
+  /** Retrieves a record scoped strictly to the given user ID. */
   #owned(userId: string, id: string): MemoryRecord | undefined {
     const record = this.#records.get(id);
     return record?.userId === userId ? record : undefined;
@@ -223,22 +211,19 @@ export class InMemoryMemoryProvider implements MemoryProvider {
 }
 
 /**
- * Fraîcheur d'un souvenir, de 0 à 1. Demi-vie de 30 jours.
- *
- * Un souvenir ancien reste pertinent, mais un souvenir récent le devance à
- * pertinence lexicale égale.
+ * Recency weight of a memory, from 0 to 1 with a 30-day half-life.
  */
 function recency(record: MemoryRecord, now: number): number {
   const ageDays = (now - record.validFrom.getTime()) / 86_400_000;
   return Math.pow(0.5, ageDays / 30);
 }
 
-/** Départage deux scores égaux. Un tri instable ferait sauter la liste à chaque rendu. */
+/** Tie-breaker for identical scores ensuring deterministic sort order. */
 function compareIds(left: MemoryHit, right: MemoryHit): number {
   return left.record.id < right.record.id ? 1 : -1;
 }
 
-/** Mots de 3 caractères ou plus, sans accents ni casse. */
+/** Extracts lowercase alphanumeric words (>= 3 chars) without diacritics. */
 function tokenize(text: string): string[] {
   return text
     .normalize("NFD")

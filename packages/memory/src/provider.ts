@@ -3,25 +3,22 @@ import type { MemoryKind, MemoryOrigin, MemoryRecord, StorableLayer } from "./ty
 export interface MemorySearchQuery {
   userId: string;
   /**
-   * Texte libre : la requête de l'utilisateur, ou un extrait du tour courant.
+   * Free text query: user question, or an excerpt from the current conversation turn.
    *
-   * **Vide = tout parcourir**, du plus récent au plus ancien. C'est ce dont a
-   * besoin l'écran de gestion de la mémoire, où l'utilisateur veut voir ce que
-   * NEXUS retient de lui sans avoir à deviner un mot-clé. Ajouter une méthode
-   * `list` séparée reviendrait à écrire deux fois le filtrage par utilisateur et
-   * par validité — c'est-à-dire à écrire deux fois la frontière de sécurité.
+   * **Empty string = scan all records**, ordered newest to oldest.
+   * Used by memory management interfaces to inspect all items without guessing search terms.
    */
   query: string;
   kinds?: readonly MemoryKind[];
   layers?: readonly StorableLayer[];
   limit?: number;
-  /** Inclut les faits supersédés ou périmés. Pour l'historique d'un fait. */
+  /** Includes superseded or expired records to trace memory item history. */
   includeSuperseded?: boolean;
 }
 
 export interface MemoryHit {
   record: MemoryRecord;
-  /** Score de pertinence normalisé dans [0, 1]. */
+  /** Normalized relevance score in [0, 1]. */
   score: number;
 }
 
@@ -38,19 +35,18 @@ export interface MemoryStoreInput {
   sourceConversationId?: string;
   sourceMessageId?: string;
   sourceUri?: string;
-  /** Date d'extraction automatique. Absente pour une commande explicite. */
+  /** Automatic extraction timestamp. Omitted for explicit user commands. */
   extractedAt?: Date;
-  /** Sensibilité déjà arbitrée par `MemoryService`. */
+  /** Sensitivity already arbitrated by `MemoryService`. */
   sensitivity?: MemoryRecord["sensitivity"];
   sensitiveCategories?: readonly string[];
 }
 
 /**
- * Ce qu'une mise à jour peut changer.
+ * Attributes modifiable during memory updates.
  *
- * `content` est à part : le modifier **supersède** l'enregistrement au lieu de
- * l'écraser (cf. `update`). Le reste est de la métadonnée, et se corrige sur
- * place.
+ * Modifying `content` supersedes the record to preserve lineage.
+ * Metadata attributes (tags, importance, confidence) update in-place.
  */
 export interface MemoryUpdateInput {
   userId: string;
@@ -65,44 +61,30 @@ export interface MemoryUpdateInput {
 
 export interface MemorySummarizeInput {
   userId: string;
-  /** Contenu à résumer — transcript de conversation, ou lot de souvenirs. */
+  /** Text content to summarize — conversation transcript or memory batch. */
   text: string;
-  /** Longueur cible du résumé. Indicative, pas contractuelle. */
+  /** Target character length for summary. Indicative rather than strict. */
   maxChars?: number;
 }
 
 /**
  * Port `MemoryProvider`.
  *
- * Le cœur agent ne connaît que cette interface : ni pgvector, ni Redis, ni
- * modèle d'embedding. Passer d'une implémentation en mémoire à PostgreSQL +
- * pgvector (phase 6) est un changement d'adaptateur, pas de la boucle.
+ * Agent core relies on this interface independently of storage backends (pgvector, SQLite, in-memory).
  *
- * **Toutes les méthodes portent `userId`, y compris celles qui reçoivent déjà un
- * identifiant d'enregistrement.** C'est redondant, et c'est voulu : un
- * identifiant devinable ne doit pas suffire à lire ou détruire le souvenir de
- * quelqu'un d'autre. La frontière est vérifiée au même endroit pour les cinq
- * méthodes, ce qui la rend impossible à oublier dans une seule.
+ * **Every method enforces `userId` scoping**, ensuring authorization checks cannot be bypassed
+ * via guessable record identifiers.
  */
 export interface MemoryProvider {
   search(query: MemorySearchQuery): Promise<MemoryHit[]>;
   store(input: MemoryStoreInput): Promise<MemoryRecord>;
   /**
-   * Corrige un souvenir.
+   * Updates an existing memory record.
    *
-   * Un changement de `content` ne modifie pas l'enregistrement : il en crée un
-   * neuf et marque l'ancien comme supersédé, en gardant le fil entre les deux.
-   * C'est ce qui permet de répondre à « où j'habitais l'an dernier » — question
-   * parfaitement ordinaire à laquelle un écrasement rend toute réponse
-   * impossible.
+   * Changing `content` creates a new record and marks the prior record superseded.
+   * Metadata adjustments apply in-place.
    *
-   * Une correction de métadonnée — importance, étiquettes — s'applique sur
-   * place : elle ne change pas ce qui est affirmé.
-   *
-   * @returns l'enregistrement courant, ou `undefined` s'il n'existe pas ou
-   *   n'appartient pas à `userId`. Les deux cas sont volontairement
-   *   indiscernables : distinguer « inconnu » de « pas à vous » indiquerait à un
-   *   curieux quels identifiants existent.
+   * @returns Current active record, or `undefined` if nonexistent or unowned by `userId`.
    */
   update(input: MemoryUpdateInput): Promise<MemoryRecord | undefined>;
   delete(input: { userId: string; id: string }): Promise<boolean>;

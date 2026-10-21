@@ -6,7 +6,7 @@ export interface DuplicateGroup {
   duplicates: readonly MemoryRecord[];
 }
 
-/** Détecte puis consolide uniquement des doublons exacts, jamais des paraphrases. */
+/** Detects and consolidates exact duplicates, never paraphrases. */
 export class MemoryConsolidator {
   readonly #provider: MemoryProvider;
 
@@ -36,7 +36,7 @@ export class MemoryConsolidator {
       });
   }
 
-  /** Applique seulement les groupes explicitement approuvés par leur canonique. */
+  /** Applies consolidation only for groups explicitly approved by canonical ID. */
   async apply(
     userId: string,
     groups: readonly DuplicateGroup[],

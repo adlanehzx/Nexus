@@ -17,7 +17,7 @@ export interface ContextArtifactStore {
   get(input: { userId: string; id: string }): Promise<ContextArtifact | undefined>;
 }
 
-/** Magasin local de développement ; la production peut fournir PostgreSQL/S3. */
+/** Local development store; production can provide PostgreSQL/S3. */
 export class InMemoryContextArtifactStore implements ContextArtifactStore {
   readonly #artifacts = new Map<string, ContextArtifact>();
 
@@ -39,8 +39,8 @@ export interface CompactedContext {
 }
 
 /**
- * Sort les gros contenus du prompt avant de les résumer. L'original reste
- * adressable comme artefact et le résumé garde une référence explicite.
+ * Offloads oversized content from prompt before summarization.
+ * The original text remains addressable as an artifact with a reference in the summary.
  */
 export class ContextCompactor {
   readonly #memory: MemoryProvider;
@@ -89,7 +89,7 @@ export class ContextCompactor {
       text: input.text,
       maxChars: Math.max(64, input.maxTokens * 3),
     });
-    const marker = `[contenu complet: artefact ${artifactId}]`;
+    const marker = `[full content: artifact ${artifactId}]`;
     const markerTokens = this.#tokens.count(marker, input.model);
     const target = Math.max(0, input.maxTokens - markerTokens);
     while (this.#tokens.count(summary, input.model) > target && summary.length > 32) {

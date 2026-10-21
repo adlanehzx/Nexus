@@ -1,13 +1,11 @@
-/** Port d'un tokeniseur exact fourni par l'adaptateur de modèle. */
+/** Port for exact tokenizer provided by model adapter. */
 export interface TokenCounter {
   count(text: string, model?: string): number;
 }
 
 /**
- * Repli local conservateur lorsqu'un fournisseur n'expose pas son tokeniseur.
- * Il compte les mots, la ponctuation et les caractères CJK séparément puis
- * applique la marge propre à la famille du modèle. Ce n'est jamais présenté
- * comme la consommation facturée : les usages réels restent ceux du provider.
+ * Conservative local fallback when provider does not expose a tokenizer.
+ * Counts words, punctuation, and CJK characters separately, applying model family margins.
  */
 export class ConservativeTokenCounter implements TokenCounter {
   count(text: string, model?: string): number {
@@ -37,7 +35,7 @@ export interface ContextWindowPlan extends ModelContextProfile {
   overflow: number;
 }
 
-/** Calcule le budget d'entrée sans coupler la mémoire à un SDK fournisseur. */
+/** Computes input budget without coupling memory package to provider SDKs. */
 export class ContextWindowPlanner {
   readonly #profiles: Readonly<Record<string, ModelContextProfile>>;
   readonly #fallback: ModelContextProfile;

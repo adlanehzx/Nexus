@@ -86,7 +86,7 @@ describePostgres("PostgresMemoryProvider", () => {
     expect(hits[0]?.record.embeddingModel).toMatch(/^nexus-hash-v1-/);
   });
 
-  it("synchronise et interroge les embeddings neuronaux dans pgvector", async () => {
+  it("synchronizes and queries neural embeddings in pgvector", async () => {
     provider = new PostgresMemoryProvider({
       prisma,
       embeddings: new TestNeuralEmbeddings(),

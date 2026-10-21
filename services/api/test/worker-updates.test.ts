@@ -81,7 +81,7 @@ describe("avec une version attendue", () => {
     expect(device.agentVersion).toBe("1.0.0");
     expect(device.update.status).toBe("en-retard");
     expect(device.update.expected).toBe("1.2.0");
-    expect(device.update.action).toMatch(/sur sa machine/);
+    expect(device.update.action).toMatch(/on its host machine/);
   });
 
   it("ne demande rien à un exécutant à jour", async () => {

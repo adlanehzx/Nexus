@@ -8,7 +8,7 @@ export interface MemoryCandidate {
   layer: StorableLayer;
   confidence: number;
   tags: readonly string[];
-  /** Une extraction n'est jamais écrite silencieusement. */
+  /** Inferred extraction is never written silently. */
   requiresReview: true;
   sensitive: boolean;
   sourceRunId?: string;
@@ -17,11 +17,12 @@ export interface MemoryCandidate {
 }
 
 /**
- * Extraction déterministe et contrôlée de faits à forte valeur.
+ * Deterministic and controlled extraction of high-value facts.
  *
- * Elle ne fait aucune écriture : le résultat est une liste de propositions à
- * afficher ou à faire approuver par une politique. Les secrets sont éliminés
- * avant même cette liste. Un extracteur LLM pourra implémenter le même contrat.
+ * Performs no writes directly: returns a list of proposed memory items for
+ * user inspection or policy approval. Prohibited secrets are filtered out
+ * before reaching this candidate list. An LLM-based extractor can implement
+ * the same contract.
  */
 export class ControlledMemoryExtractor {
   extract(input: {
@@ -38,7 +39,7 @@ export class ControlledMemoryExtractor {
     for (const raw of input.text.split(/(?<=[.!?])\s+|\n+/)) {
       const content = raw.replace(/^[-*]\s*/, "").trim();
       if (!isDurableFirstPersonFact(content)) continue;
-      const normalized = content.toLocaleLowerCase("fr");
+      const normalized = content.toLowerCase();
       if (seen.has(normalized)) continue;
 
       const verdict = classify(content);
@@ -100,17 +101,23 @@ export class ControlledMemoryExtractor {
 
 function isDurableFirstPersonFact(text: string): boolean {
   if (text.length < 8 || text.length > 500 || text.endsWith("?")) return false;
-  return /\b(?:je|j'|mon|ma|mes|nous)\s*(?:prefere|préfère|aime|adore|travaille|habite|utilise|veux|souhaite|suis|ai)\b/i.test(
+  return /\b(?:je|j'|mon|ma|mes|nous|i|my|we|our)\s*(?:prefere|préfère|aime|adore|travaille|habite|utilise|veux|souhaite|suis|ai|prefer|like|love|work|live|use|want|wish|am|have)\b/i.test(
     text,
   );
 }
 
 function isPreference(text: string): boolean {
-  return /\b(?:prefere|préfère|aime|adore|veux|souhaite|toujours|jamais)\b/i.test(text);
+  return /\b(?:prefere|préfère|aime|adore|veux|souhaite|toujours|jamais|prefer|like|love|want|wish|always|never)\b/i.test(
+    text,
+  );
 }
 
 function inferKind(text: string): MemoryKind {
-  if (/\b(?:toujours|jamais|quand|procédure|procedure)\b/i.test(text)) return "PROCEDURAL";
-  if (/\b(?:hier|aujourd'hui|demain|la semaine|en \d{4})\b/i.test(text)) return "EPISODIC";
+  if (/\b(?:toujours|jamais|quand|procédure|procedure|always|never|when)\b/i.test(text)) {
+    return "PROCEDURAL";
+  }
+  if (/\b(?:hier|aujourd'hui|demain|la semaine|en \d{4}|yesterday|today|tomorrow|last week|next week|in \d{4})\b/i.test(text)) {
+    return "EPISODIC";
+  }
   return "SEMANTIC";
 }

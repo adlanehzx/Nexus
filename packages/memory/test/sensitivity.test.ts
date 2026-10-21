@@ -3,15 +3,13 @@ import { classify, safePreview } from "../src/sensitivity.js";
 import { parseMemoryCommand } from "../src/commands.js";
 
 /**
- * La règle du silence, et les commandes explicites.
+ * Sensitivity classification and explicit commands tests.
  *
- * Ce fichier éprouve la frontière la plus délicate du système : ce qui peut être
- * retenu, ce qui exige un accord, ce qui ne doit jamais l'être. Les faux
- * positifs y sont assumés — refuser à tort coûte une reformulation, accepter à
- * tort coûte un secret dans une base.
+ * Verifies the boundary: what can be retained, what requires confirmation,
+ * and what is unconditionally prohibited.
  */
 
-describe("ce qui n'est jamais mémorisé", () => {
+describe("prohibited content", () => {
   const secrets = [
     "Mon mot de passe est correctchevalbatteriea grafe",
     "Le mot de passe du wifi : Tr0ub4dor&3xy",
@@ -21,51 +19,48 @@ describe("ce qui n'est jamais mémorisé", () => {
     "Ma phrase de récupération : witch collapse practice feed",
   ];
 
-  for (const contenu of secrets) {
-    it(`refuse : « ${contenu.slice(0, 32)}… »`, () => {
-      expect(classify(contenu).verdict).toBe("FORBIDDEN");
+  for (const content of secrets) {
+    it(`rejects: "${content.slice(0, 32)}…"`, () => {
+      expect(classify(content).verdict).toBe("FORBIDDEN");
     });
   }
 
-  it("refuse un numéro de carte", () => {
-    // 4539 1488 0343 6467 satisfait la clé de Luhn.
+  it("rejects credit card number", () => {
+    // 4539 1488 0343 6467 passes Luhn check.
     expect(classify("Ma carte : 4539 1488 0343 6467").verdict).toBe("FORBIDDEN");
   });
 
-  it("ne refuse pas une longue suite de chiffres quelconque", () => {
-    // Un numéro de commande, un ISBN, une référence de colis : autant de choses
-    // qu'un utilisateur a de bonnes raisons de vouloir retenir. La clé de Luhn
-    // est ce qui distingue.
-    expect(classify("Numéro de commande 1234567890123").verdict).toBe("ORDINARY");
+  it("does not reject arbitrary long digit sequences", () => {
+    expect(classify("Order number 1234567890123").verdict).toBe("ORDINARY");
   });
 
-  it("explique le refus sans reproduire le contenu", () => {
+  it("explains refusal without reproducing secret content", () => {
     const verdict = classify("Mon mot de passe est Tr0ub4dor3xy");
 
-    expect(verdict.explanation).toContain("gestionnaire de mots de passe");
+    expect(verdict.explanation).toContain("password manager");
     expect(verdict.explanation).not.toContain("Tr0ub4dor3xy");
     expect(verdict.categories).toContain("mot-de-passe");
   });
 });
 
-describe("ce qui exige un accord", () => {
-  const personnels = [
+describe("content requiring explicit consent", () => {
+  const personal = [
     ["sante", "J'ai été diagnostiqué diabétique en 2019"],
     ["finance", "Mon IBAN est celui du compte joint"],
     ["identite", "Mon numéro de sécurité sociale figure sur la fiche"],
     ["adresse", "J'habite 12 rue des Lilas"],
   ] as const;
 
-  for (const [categorie, contenu] of personnels) {
-    it(`classe « ${categorie} » comme personnel`, () => {
-      const verdict = classify(contenu);
+  for (const [category, content] of personal) {
+    it(`classifies "${category}" as personal`, () => {
+      const verdict = classify(content);
 
       expect(verdict.verdict).toBe("PERSONAL");
-      expect(verdict.categories).toContain(categorie);
+      expect(verdict.categories).toContain(category);
     });
   }
 
-  it("nomme les catégories sans citer le contenu", () => {
+  it("names categories without quoting sensitive content", () => {
     const verdict = classify("J'ai été diagnostiqué diabétique");
 
     expect(verdict.explanation).not.toContain("diabétique");
@@ -73,38 +68,38 @@ describe("ce qui exige un accord", () => {
   });
 });
 
-describe("ce qui passe sans cérémonie", () => {
-  const ordinaires = [
-    "Alex préfère le train à l'avion",
-    "Réunion d'équipe tous les mardis à 10 h",
-    "Le dépôt NEXUS utilise pnpm et Turborepo",
-    "Réponds toujours en français",
+describe("ordinary content", () => {
+  const ordinary = [
+    "Alex prefers trains over planes",
+    "Team sync every Tuesday at 10 AM",
+    "NEXUS repo uses pnpm and Turborepo",
+    "Always reply in English",
   ];
 
-  for (const contenu of ordinaires) {
-    it(`accepte : « ${contenu.slice(0, 30)}… »`, () => {
-      expect(classify(contenu).verdict).toBe("ORDINARY");
+  for (const content of ordinary) {
+    it(`accepts: "${content.slice(0, 30)}…"`, () => {
+      expect(classify(content).verdict).toBe("ORDINARY");
     });
   }
 });
 
-describe("aperçu masqué", () => {
-  it("masque le secret dans l'aperçu", () => {
-    const apercu = safePreview("Ma clé est sk-abcdefghijklmnopqrstuvwx et voilà", 200);
+describe("safe preview", () => {
+  it("masks secret in preview", () => {
+    const preview = safePreview("Ma clé est sk-abcdefghijklmnopqrstuvwx et voilà", 200);
 
-    expect(apercu).not.toContain("sk-abcdefghijklmnopqrstuvwx");
-    expect(apercu).toContain("[REDACTED]");
+    expect(preview).not.toContain("sk-abcdefghijklmnopqrstuvwx");
+    expect(preview).toContain("[REDACTED]");
   });
 
-  it("borne la longueur", () => {
+  it("bounds output length", () => {
     expect(safePreview("a".repeat(500), 20)).toHaveLength(21);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("commande « retiens »", () => {
-  const formes = [
+describe("remember command", () => {
+  const forms = [
     "Retiens que je préfère le train",
     "retiens : je préfère le train",
     "Souviens-toi que je préfère le train",
@@ -115,24 +110,22 @@ describe("commande « retiens »", () => {
     "Remember this: je préfère le train",
   ];
 
-  for (const forme of formes) {
-    it(`reconnaît « ${forme.slice(0, 26)}… »`, () => {
-      const commande = parseMemoryCommand(forme);
+  for (const form of forms) {
+    it(`recognizes "${form.slice(0, 26)}…"`, () => {
+      const command = parseMemoryCommand(form);
 
-      expect(commande?.kind).toBe("remember");
-      expect(commande).toMatchObject({ content: "je préfère le train" });
+      expect(command?.kind).toBe("remember");
+      expect(command).toMatchObject({ content: "je préfère le train" });
     });
   }
 
-  it("retire la ponctuation finale", () => {
-    // Sans cela, « Retiens que X. » et « Retiens que X » créeraient deux
-    // souvenirs pour la même chose.
+  it("removes trailing punctuation", () => {
     expect(parseMemoryCommand("Retiens que X.")).toMatchObject({ content: "X" });
   });
 });
 
-describe("commande « oublie »", () => {
-  it("reconnaît une cible", () => {
+describe("forget command", () => {
+  it("recognizes a target", () => {
     expect(parseMemoryCommand("Oublie que j'habite à Lyon")).toEqual({
       kind: "forget",
       target: "j'habite à Lyon",
@@ -140,31 +133,26 @@ describe("commande « oublie »", () => {
     });
   });
 
-  it("distingue l'effacement total", () => {
-    // Effacer un souvenir se défait en le redisant ; effacer la mémoire entière
-    // ne se défait pas. Les deux n'appellent pas la même confirmation.
-    for (const forme of ["Oublie tout", "Efface toute ta mémoire", "Forget everything"]) {
-      expect(parseMemoryCommand(forme)).toEqual({ kind: "forget", target: "", all: true });
+  it("distinguishes total purge", () => {
+    for (const form of ["Oublie tout", "Efface toute ta mémoire", "Forget everything"]) {
+      expect(parseMemoryCommand(form)).toEqual({ kind: "forget", target: "", all: true });
     }
   });
 });
 
-describe("ce qui n'est pas une commande", () => {
+describe("non-command messages", () => {
   const messages = [
-    "Je me souviens que le train était en retard",
-    "Peux-tu me rappeler mes rendez-vous ?",
-    "J'ai oublié mon parapluie dans le train",
-    "Il faudrait que je note ça quelque part",
-    "Quelle est la météo ?",
+    "I remember that the train was late",
+    "Can you remind me of my appointments?",
+    "I forgot my umbrella on the train",
+    "I should write that down somewhere",
+    "What is the weather?",
     "",
     "   ",
   ];
 
   for (const message of messages) {
-    it(`ignore : « ${message.trim().slice(0, 34) || "(vide)"} »`, () => {
-      // Ne rien reconnaître est le comportement **normal**. Prendre un récit
-      // pour un ordre remplirait la mémoire de bruit, et l'utilisateur ne
-      // saurait pas d'où il vient.
+    it(`ignores: "${message.trim().slice(0, 34) || "(empty)"}"`, () => {
       expect(parseMemoryCommand(message)).toBeUndefined();
     });
   }

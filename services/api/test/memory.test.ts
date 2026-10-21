@@ -75,7 +75,7 @@ describe("store", () => {
     expect(response.statusCode).toBe(422);
     const body = response.json<{ error: { code: string; message: string } }>();
     expect(body.error.code).toBe("MEMORY_SENSITIVE_REFUSED");
-    expect(body.error.message).toContain("gestionnaire de mots de passe");
+    expect(body.error.message).toContain("password manager");
   });
 
   it("le refus ne renvoie pas le secret", async () => {

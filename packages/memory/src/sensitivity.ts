@@ -1,76 +1,51 @@
 import { redactText } from "@nexus/shared";
 
 /**
- * Classification de ce qu'on s'apprête à retenir.
+ * Classification of proposed memory content.
  *
- * La règle du système est : **rien de sensible n'est mémorisé en silence.** Elle
- * se décline en trois verdicts, et la frontière entre eux est une décision, pas
- * une nuance.
+ * The core rule is: **nothing sensitive is stored silently.**
+ * This is governed by three deterministic verdicts:
  *
- *  - `FORBIDDEN` — **jamais**, quel que soit le demandeur. Mots de passe, clés
- *    d'API, jetons, phrases de récupération, numéros de carte. NEXUS n'est pas
- *    un gestionnaire de mots de passe : il n'offre ni chiffrement au repos
- *    dédié, ni rotation, ni révocation. Accepter ces contenus créerait un coffre
- *    que rien dans l'architecture ne protège comme tel. Un utilisateur qui
- *    insiste doit être renvoyé vers un vrai coffre — c'est plus utile qu'un
- *    stockage qui a l'air sûr.
+ *  - `FORBIDDEN` — **never**, regardless of request origin. Passwords, API keys,
+ *    tokens, recovery phrases, credit card numbers. NEXUS is not a password manager:
+ *    it provides neither dedicated encryption-at-rest nor key rotation or revocation.
+ *    Accepting these items creates a false sense of security. Users must be redirected
+ *    to dedicated secret stores.
  *
- *  - `PERSONAL` — **avec accord explicite**. Santé, finances, identifiants
- *    administratifs, adresse précise. Ce sont des informations légitimes à
- *    mémoriser, et un assistant qui les refuse devient inutilisable. Mais
- *    l'utilisateur doit savoir qu'il les confie : l'appelant doit passer
- *    `acknowledgedSensitive: true`, et l'interface ne le fait qu'après avoir
- *    posé la question.
+ *  - `PERSONAL` — **with explicit user agreement**. Health, finance, identity numbers,
+ *    exact street addresses. Legitimate facts to remember, but the caller must supply
+ *    `acknowledgedSensitive: true` after explicit confirmation.
  *
- *  - `ORDINARY` — le reste.
+ *  - `ORDINARY` — standard facts, preferences, and details.
  *
- * La détection est **déterministe**, jamais confiée à un modèle. Un classifieur
- * probabiliste qui se trompe une fois sur cent laisse passer un mot de passe une
- * fois sur cent ; ici, ce qui ressemble à un secret est refusé, point.
- *
- * Elle est aussi **volontairement large**. Refuser à tort coûte à l'utilisateur
- * une reformulation ; accepter à tort coûte un secret dans une base.
+ * Detection is deterministic rather than delegated to an LLM, and deliberately conservative:
+ * a false refusal costs a slight rephrase; a false acceptance leaks credentials.
  */
 
 export type SensitivityVerdict = "ORDINARY" | "PERSONAL" | "FORBIDDEN";
 
 export interface Classification {
   verdict: SensitivityVerdict;
-  /** Noms de catégories reconnues. **Jamais un extrait du contenu.** */
+  /** Recognized category slugs. Never raw content excerpts. */
   categories: string[];
-  /** Phrase affichable, destinée à l'utilisateur. */
+  /** Human-readable explanation suitable for display. */
   explanation: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Motifs
+// Patterns
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ce qui est refusé sans discussion.
- *
- * Deux familles : les **formes** reconnaissables (un numéro de carte, une phrase
- * de récupération) et les **déclarations** (« mon mot de passe est … »). La
- * seconde compte autant que la première : c'est ainsi qu'un secret arrive
- * réellement, dicté en langage naturel plutôt qu'en variable d'environnement.
+ * Connective phrasing following credential declarations.
  */
-/**
- * Ce qui, après un mot comme « mot de passe », annonce la valeur elle-même.
- *
- * Les verbes portent une limite de mot, la ponctuation non : `\b:` exigerait un
- * caractère de mot juste avant les deux-points, ce qui exclut « le mot de passe
- * du wifi : … » — soit la forme la plus naturelle qui soit.
- */
-const ANNONCE = "(?:\\b(?:est|sont|c'est|vaut)\\b|[:=])";
+const ANNONCE = "(?:\\b(?:est|sont|c'est|vaut|is|are|was)\\b|[:=])";
 
 const FORBIDDEN: { category: string; pattern: RegExp }[] = [
   {
     category: "mot-de-passe",
-    // `ANNONCE` sépare les verbes de la ponctuation : `\b` autour de « : »
-    // exigerait un caractère de mot juste avant, et raterait « le mot de passe
-    // du wifi : … » — exactement la forme la plus courante.
     pattern: new RegExp(
-      `\\b(mot\\s+de\\s+passe|motdepasse|mdp|password|passphrase|code\\s+pin|code\\s+secret)\\b[^.]{0,40}?${ANNONCE}`,
+      `\\b(mot\\s+de\\s+passe|motdepasse|mdp|password|passphrase|code\\s+pin|pin\\s+code|code\\s+secret|secret\\s+code)\\b[^.]{0,40}?${ANNONCE}`,
       "i",
     ),
   },
@@ -86,19 +61,14 @@ const FORBIDDEN: { category: string; pattern: RegExp }[] = [
     pattern:
       /\b(seed\s+phrase|phrase\s+de\s+r[ée]cup[ée]ration|mn[ée]monique|recovery\s+phrase)\b/i,
   },
-  { category: "cryptogramme", pattern: /\b(cvv|cvc|cryptogramme)\b[^.]{0,20}\d{3,4}\b/i },
+  {
+    category: "cryptogramme",
+    pattern: /\b(cvv|cvc|cryptogramme|security\s+code)\b[^.]{0,20}\d{3,4}\b/i,
+  },
 ];
 
 /**
- * Numéro de carte bancaire.
- *
- * Une expression seule dirait « treize à dix-neuf chiffres » et refuserait aussi
- * un ISBN, un numéro de commande, une référence de colis — des choses qu'un
- * utilisateur a de bonnes raisons de vouloir retenir.
- *
- * La clé de Luhn tranche : elle est vraie pour toutes les cartes émises et
- * fausse pour neuf suites de chiffres sur dix. Le test coûte huit lignes et
- * transforme une règle grossière en règle défendable.
+ * Credit card number detector backed by Luhn algorithm verification.
  */
 function looksLikeCardNumber(content: string): boolean {
   for (const candidate of content.match(/\b(?:\d[ -]?){12,18}\d\b/g) ?? []) {
@@ -125,47 +95,42 @@ function luhn(digits: string): boolean {
   return sum % 10 === 0;
 }
 
-/** Ce qui exige un accord explicite. */
+/** Content requiring explicit user acknowledgment. */
 const PERSONAL: { category: string; pattern: RegExp }[] = [
   {
     category: "sante",
     pattern:
-      // Des **radicaux**, pas des mots entiers : « diagnostiqué » ne contient
-      // pas « diagnostic », et « diabétique » ne contient pas « diabète ». Une
-      // liste de formes fléchies serait toujours incomplète, et le mot manquant
-      // serait précisément celui qu'on voulait protéger.
-      /\b(diagnosti|maladie|traitement|ordonnance|m[ée]dicament|allergi|d[ée]pressi|cancer|diab[èe]t|s[ée]roposit|grossesse|handicap|th[ée]rapi|psychiatr|hospitalis|sympt[ôo]me|chimioth[ée]rapi)/i,
+      /\b(diagnosti|maladie|traitement|ordonnance|m[ée]dicament|allergi|d[ée]pressi|cancer|diab[èe]t|s[ée]roposit|grossesse|handicap|th[ée]rapi|psychiatr|hospitalis|sympt[ôo]me|chimioth[ée]rapi|illness|disease|treatment|prescription|medication|allergy|depression|diabetes|pregnancy|disability|therapy|psychiatry|hospital|symptom|chemotherapy)/i,
   },
   {
     category: "finance",
     pattern:
-      /\b(iban|bic|swift|num[ée]ro\s+de\s+compte|rib|salaire|revenu|dette|cr[ée]dit\s+immobilier|d[ée]couvert)\b/i,
+      /\b(iban|bic|swift|num[ée]ro\s+de\s+compte|account\s+number|rib|salaire|salary|revenu|income|dette|debt|cr[ée]dit\s+immobilier|mortgage|d[ée]couvert|overdraft)\b/i,
   },
   {
     category: "identite",
     pattern:
-      /\b(num[ée]ro\s+de\s+s[ée]curit[ée]\s+sociale|nir|passeport|carte\s+d'identit[ée]|permis\s+de\s+conduire|social\s+security)\b/i,
+      /\b(num[ée]ro\s+de\s+s[ée]curit[ée]\s+sociale|social\s+security|nir|passeport|passport|carte\s+d'identit[ée]|id\s+card|permis\s+de\s+conduire|driver'?s\s+license)\b/i,
   },
   {
     category: "adresse",
-    pattern: /\b\d{1,4}\s+(rue|avenue|boulevard|impasse|all[ée]e|chemin|place)\s+[a-zà-ÿ]/i,
+    pattern:
+      /\b\d{1,4}\s+(rue|avenue|boulevard|impasse|all[ée]e|chemin|place|street|road|lane|drive|way)\s+[a-zà-ÿ0-9]/i,
   },
   {
     category: "orientation-croyance",
-    pattern: /\b(religion|croyance|orientation\s+sexuelle|parti\s+politique|syndicat)\b/i,
+    pattern:
+      /\b(religion|croyance|orientation\s+sexuelle|parti\s+politique|syndicat|belief|sexual\s+orientation|political\s+party|trade\s+union)\b/i,
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Classe un contenu candidat.
+ * Classifies candidate memory content.
  *
- * `redactText` de `@nexus/shared` sert de premier filtre : s'il modifie le
- * texte, c'est qu'il y a reconnu un secret de forme connue — jeton, clé privée,
- * URL avec identifiants. Réutiliser ce détecteur plutôt que d'en écrire un
- * second évite qu'ils divergent, et tout ce qu'on apprend à masquer dans les
- * journaux profite aussitôt à la mémoire.
+ * Uses `redactText` as a first filter: if recognized credentials, tokens, or private keys
+ * are found, the content is classified as FORBIDDEN immediately.
  */
 export function classify(content: string): Classification {
   const categories: string[] = [];
@@ -185,9 +150,9 @@ export function classify(content: string): Classification {
       verdict: "FORBIDDEN",
       categories,
       explanation:
-        "Ce contenu ressemble à un secret d'authentification ou à un moyen de paiement. " +
-        "NEXUS ne le mémorisera pas : ce n'est pas un coffre-fort, et l'y déposer donnerait " +
-        "une fausse impression de sécurité. Utilisez un gestionnaire de mots de passe.",
+        "This content resembles an authentication secret or payment method. " +
+        "NEXUS will not store it: it is not a password manager, and storing it here creates " +
+        "a false sense of security. Use a dedicated password manager.",
     };
   }
 
@@ -200,8 +165,8 @@ export function classify(content: string): Classification {
       verdict: "PERSONAL",
       categories,
       explanation:
-        `Ce souvenir touche à une information personnelle (${categories.join(", ")}). ` +
-        "NEXUS peut la retenir, mais seulement si vous le confirmez.",
+        `This memory touches upon personal information (${categories.join(", ")}). ` +
+        "NEXUS can retain it, but only if you explicitly confirm.",
     };
   }
 
@@ -209,11 +174,7 @@ export function classify(content: string): Classification {
 }
 
 /**
- * Aperçu masqué d'un contenu refusé.
- *
- * Il faut bien dire *quelque chose* à l'utilisateur — « votre demande a été
- * refusée » sans plus est inutilisable. Mais l'aperçu passe par `redactText`, et
- * la partie qui a déclenché le refus n'y figure jamais telle quelle.
+ * Masked preview of rejected content for safe user feedback.
  */
 export function safePreview(content: string, maxChars = 60): string {
   const masked = redactText(content).replace(/\s+/g, " ").trim();

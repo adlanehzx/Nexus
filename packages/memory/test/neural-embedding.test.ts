@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TransformersEmbeddingProvider } from "../src/embedding.js";
 
 describe("TransformersEmbeddingProvider", () => {
-  it("charge le modèle une seule fois et normalise les lots", async () => {
+  it("loads model once and normalizes batches", async () => {
     const first = Array.from<number>({ length: 32 }).fill(0);
     first[0] = 1;
     const second = Array.from<number>({ length: 32 }).fill(0);
@@ -17,22 +17,22 @@ describe("TransformersEmbeddingProvider", () => {
       load,
     });
 
-    await expect(provider.embed(["bonjour", "salut"])).resolves.toEqual([first, second]);
-    await provider.embed(["encore", "une fois"]);
+    await expect(provider.embed(["hello", "hi"])).resolves.toEqual([first, second]);
+    await provider.embed(["once", "again"]);
 
     expect(load).toHaveBeenCalledTimes(1);
-    expect(extractor).toHaveBeenCalledWith(["bonjour", "salut"], {
+    expect(extractor).toHaveBeenCalledWith(["hello", "hi"], {
       pooling: "mean",
       normalize: true,
     });
   });
 
-  it("refuse silencieusement aucun vecteur mal dimensionné", async () => {
+  it("rejects incorrectly sized vectors", async () => {
     const provider = new TransformersEmbeddingProvider({
       dimensions: 32,
       load: () => Promise.resolve(() => Promise.resolve({ tolist: () => [[1, 2]] })),
     });
 
-    await expect(provider.embed(["texte"])).rejects.toThrow(/32 nombres finis/);
+    await expect(provider.embed(["text"])).rejects.toThrow(/32 finite numbers/);
   });
 });

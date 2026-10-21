@@ -11,29 +11,23 @@ import type { MemoryKind, MemoryOrigin, MemoryRecord, StorableLayer } from "./ty
 import { memoryContentHash } from "./embedding.js";
 
 /**
- * Le service de mémoire.
+ * Memory service.
  *
- * `MemoryProvider` est un magasin : il range et il retrouve. Ce service est la
- * **politique** qui l'entoure, et c'est lui que l'API et le cœur agent appellent
- * — jamais le magasin directement. Trois choses n'existent qu'ici :
+ * `MemoryProvider` is a storage engine: it stores and retrieves records.
+ * This service embodies the surrounding **policy**, consumed by the API and agent core.
+ * Three responsibilities reside exclusively here:
  *
- *  1. **La règle du silence.** Rien de sensible n'est mémorisé sans que
- *     quelqu'un l'ait su. Un secret est refusé ; une information personnelle
- *     exige un accord explicite. Le magasin, lui, écrirait tout ce qu'on lui
- *     donne — c'est son rôle, et c'est pourquoi il ne doit pas être appelé nu.
+ *  1. **The silence rule.** Nothing sensitive is stored silently without user awareness.
+ *     Prohibited secrets are rejected; personal data requires explicit confirmation.
+ *     The raw store does not inspect content semantics — hence it is never called directly.
  *
- *  2. **Les commandes explicites.** « Retiens que… », « Oublie… ».
+ *  2. **Explicit natural-language commands.** "Remember that...", "Forget...".
  *
- *  3. **La frontière entre utilisateurs**, appliquée une fois, ici, plutôt que
- *     répétée dans chaque route.
- *
- * Une conséquence de forme : ce service ne connaît ni HTTP, ni WebSocket, ni
- * React. L'iPhone, le portable et l'agent l'atteignent par des chemins
- * différents et obtiennent exactement le même comportement.
+ *  3. **User boundary enforcement.** Applied centrally here rather than duplicated across routes.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Erreurs
+// Errors
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class SensitiveMemoryRefusedError extends AppError {
@@ -43,11 +37,8 @@ export class SensitiveMemoryRefusedError extends AppError {
 
   constructor(explanation: string, categories: readonly string[], preview: string) {
     super({
-      message: `Mémorisation refusée : ${categories.join(", ")}`,
+      message: `Memory storage refused: ${categories.join(", ")}`,
       userMessage: explanation,
-      // Le contexte porte les **catégories** et un aperçu masqué, jamais le
-      // contenu : une erreur finit dans un journal, et refuser de stocker un
-      // secret pour le recopier dans la trace n'aurait aucun sens.
       context: { categories: [...categories], preview },
     });
   }
@@ -60,7 +51,7 @@ export class SensitiveMemoryNeedsConsentError extends AppError {
 
   constructor(explanation: string, categories: readonly string[]) {
     super({
-      message: `Accord explicite requis : ${categories.join(", ")}`,
+      message: `Explicit consent required: ${categories.join(", ")}`,
       userMessage: explanation,
       context: { categories: [...categories] },
     });
@@ -84,22 +75,18 @@ export interface RememberInput {
   sourceUri?: string;
   extractedAt?: Date;
   /**
-   * L'utilisateur a vu la nature du contenu et l'a confirmé.
-   *
-   * **Le client ne pose ce drapeau qu'après avoir posé la question.** Le mettre
-   * par défaut viderait la règle de son sens ; c'est pourquoi il n'a pas de
-   * valeur par défaut à `true` nulle part dans le dépôt.
+   * Indicates the user has reviewed sensitive content and confirmed storage.
    */
   acknowledgedSensitive?: boolean;
 }
 
 export interface ForgetInput {
   userId: string;
-  /** Identifiant exact. Prioritaire sur `match`. */
+  /** Exact record identifier. Takes precedence over `match`. */
   id?: string;
-  /** Texte à retrouver. Le chemin de « Oublie ce que je t'ai dit sur X ». */
+  /** Text search query matching items to forget. */
   match?: string;
-  /** Efface tout. Exige `confirmed`. */
+  /** Purge all memory items. Requires `confirmed: true`. */
   all?: boolean;
   confirmed?: boolean;
 }
@@ -107,14 +94,10 @@ export interface ForgetInput {
 export interface ForgetResult {
   forgotten: MemoryRecord[];
   /**
-   * Candidats trouvés mais **non supprimés**, faute de certitude.
-   *
-   * Quand plusieurs souvenirs correspondent, on ne devine pas : on les rend, et
-   * l'utilisateur tranche. Supprimer le mauvais est irréversible ; demander
-   * coûte un aller-retour.
+   * Ambiguous candidates discovered but not purged to prevent accidental deletion.
    */
   ambiguous: MemoryRecord[];
-  /** Vrai quand un effacement total a été demandé sans confirmation. */
+  /** True when a total purge is requested without confirmation. */
   needsConfirmation: boolean;
 }
 
@@ -122,7 +105,7 @@ export interface CommandOutcome {
   command: MemoryCommand;
   stored?: MemoryRecord;
   forgotten?: ForgetResult;
-  /** Phrase affichable, destinée à l'utilisateur. */
+  /** User-facing display response. */
   message: string;
 }
 
@@ -130,11 +113,9 @@ export interface MemoryServiceOptions {
   provider: MemoryProvider;
   now?: () => Date;
   /**
-   * Journalisation d'audit.
+   * Audit log receiver.
    *
-   * Reçoit ce qui s'est passé, **jamais le contenu**. Savoir qu'un souvenir
-   * sensible a été refusé est utile ; le recopier dans le journal annulerait le
-   * refus.
+   * Receives action metadata and categories, never raw secret content.
    */
   onAudit?: (event: {
     action: "store" | "update" | "delete" | "refuse" | "consent-required";
@@ -153,21 +134,18 @@ export class MemoryService {
     this.#onAudit = options.onAudit;
   }
 
-  // ── Écriture ────────────────────────────────────────────────────────────
+  // ── Write ───────────────────────────────────────────────────────────────
 
   /**
-   * Mémorise, sous conditions.
+   * Stores a memory under policy evaluation.
    *
-   * @throws {SensitiveMemoryRefusedError} contenu qui ne doit jamais être
-   *   stocké — secret d'authentification, moyen de paiement.
-   * @throws {SensitiveMemoryNeedsConsentError} contenu personnel présenté sans
-   *   accord explicite. L'appelant montre l'explication, demande, et rappelle
-   *   avec `acknowledgedSensitive`.
+   * @throws {SensitiveMemoryRefusedError} Prohibited secrets (credentials, payment cards).
+   * @throws {SensitiveMemoryNeedsConsentError} Personal info submitted without explicit confirmation.
    */
   async remember(input: RememberInput): Promise<MemoryRecord> {
     const content = input.content.trim();
     if (content.length === 0) {
-      throw new SensitiveMemoryRefusedError("Il n'y a rien à mémoriser.", ["contenu-vide"], "");
+      throw new SensitiveMemoryRefusedError("There is nothing to remember.", ["contenu-vide"], "");
     }
 
     const verdict = classify(content);
@@ -194,9 +172,7 @@ export class MemoryService {
       throw new SensitiveMemoryNeedsConsentError(verdict.explanation, verdict.categories);
     }
 
-    // Déduplication avant écriture : elle est fondée sur l'empreinte du contenu
-    // normalisé, pas sur le score sémantique. Deux faits proches peuvent être
-    // contradictoires et doivent alors suivre le mécanisme de supersession.
+    // Deduplicate identical content hash prior to storage.
     const contentHash = memoryContentHash(content);
     const existing = await this.#provider.search({
       userId: input.userId,
@@ -232,11 +208,9 @@ export class MemoryService {
   }
 
   /**
-   * Corrige un souvenir.
+   * Updates an existing memory record.
    *
-   * Le contenu révisé repasse par la classification. Un souvenir anodin qu'on
-   * édite pour y glisser un mot de passe doit être refusé comme s'il était neuf ;
-   * ne contrôler qu'à la création laisserait la modification comme porte ouverte.
+   * Content changes re-trigger classification to prevent sneaking secrets via edits.
    */
   async update(
     input: MemoryUpdateInput & { acknowledgedSensitive?: boolean },
@@ -272,20 +246,13 @@ export class MemoryService {
     return updated;
   }
 
-  // ── Oubli ───────────────────────────────────────────────────────────────
+  // ── Forget ──────────────────────────────────────────────────────────────
 
   /**
-   * Oublie.
-   *
-   * Trois chemins, du plus sûr au plus large :
-   *
-   *  - par **identifiant** : sans ambiguïté, c'est ce que fait l'écran de
-   *    gestion ;
-   *  - par **texte** : on cherche, et on ne supprime que si la réponse est
-   *    unique. Deux candidats rendent la main à l'utilisateur plutôt que de
-   *    parier ;
-   *  - **tout**, et seulement sur confirmation explicite. Un souvenir effacé se
-   *    redit ; une mémoire entière ne se reconstitue pas.
+   * Purges memories according to specified criteria:
+   *  - by `id`: unambiguous removal;
+   *  - by `match`: search and purge only if match is unique (avoids accidental deletion);
+   *  - `all`: total wipe requiring explicit confirmation.
    */
   async forget(input: ForgetInput): Promise<ForgetResult> {
     if (input.all === true) {
@@ -312,8 +279,6 @@ export class MemoryService {
     }
 
     if (input.id !== undefined) {
-      // On relit avant de supprimer : rendre l'enregistrement effacé permet à
-      // l'interface d'afficher *ce qui* a disparu, et d'offrir de le redire.
       const found = await this.#provider.search({
         userId: input.userId,
         query: "",
@@ -339,8 +304,6 @@ export class MemoryService {
 
     if (hits.length === 0) return { forgotten: [], ambiguous: [], needsConfirmation: false };
 
-    // Une correspondance nettement meilleure que la suivante tranche ; sinon on
-    // demande. Le seuil est un choix : au-delà, deviner devient risqué.
     const best = hits[0];
     const second = hits[1];
     const clear = best !== undefined && (second === undefined || best.score - second.score >= 0.2);
@@ -361,13 +324,13 @@ export class MemoryService {
     };
   }
 
-  // ── Lecture ─────────────────────────────────────────────────────────────
+  // ── Read ────────────────────────────────────────────────────────────────
 
   search(query: MemorySearchQuery): Promise<MemoryHit[]> {
     return this.#provider.search(query);
   }
 
-  /** Tout ce que NEXUS retient, du plus récent au plus ancien. */
+  /** Lists memories ordered newest to oldest. */
   list(input: { userId: string; layer?: StorableLayer; limit?: number }): Promise<MemoryHit[]> {
     return this.#provider.search({
       userId: input.userId,
@@ -381,17 +344,12 @@ export class MemoryService {
     return this.#provider.summarize(input);
   }
 
-  // ── Commandes explicites ────────────────────────────────────────────────
+  // ── Explicit commands ───────────────────────────────────────────────────
 
   /**
-   * Exécute « Retiens que… » ou « Oublie… » s'il y en a une.
+   * Executes explicit commands ("Remember that...", "Forget...").
    *
-   * Rend `undefined` quand le message n'est pas une commande — c'est-à-dire
-   * presque toujours. L'appelant poursuit alors son traitement normal.
-   *
-   * Une commande de mémorisation traverse **exactement** la même classification
-   * qu'un appel d'API : l'utilisateur qui dicte son mot de passe se le voit
-   * refuser comme s'il l'avait saisi dans l'écran de gestion.
+   * Returns `undefined` if text is not a recognizable command.
    */
   async handleCommand(
     userId: string,
@@ -406,7 +364,6 @@ export class MemoryService {
         userId,
         content: command.content,
         origin: "USER",
-        // Ce que l'utilisateur dicte lui-même compte davantage qu'une inférence.
         importance: 0.8,
         confidence: 0.95,
         ...(options.acknowledgedSensitive === undefined
@@ -414,7 +371,7 @@ export class MemoryService {
           : { acknowledgedSensitive: options.acknowledgedSensitive }),
       });
 
-      return { command, stored, message: `C'est noté : ${stored.content}` };
+      return { command, stored, message: `Noted: ${stored.content}` };
     }
 
     const forgotten = await this.forget({
@@ -431,16 +388,16 @@ export class MemoryService {
 
 function describeForget(result: ForgetResult): string {
   if (result.needsConfirmation) {
-    return "Effacer toute la mémoire est irréversible. Confirmez pour continuer.";
+    return "Clearing all memory is irreversible. Please confirm to continue.";
   }
   if (result.ambiguous.length > 0) {
-    return `Plusieurs souvenirs correspondent (${String(result.ambiguous.length)}). Lequel dois-je oublier ?`;
+    return `Multiple memories match (${String(result.ambiguous.length)}). Which one should I forget?`;
   }
   if (result.forgotten.length === 0) {
-    return "Je n'ai rien trouvé qui corresponde.";
+    return "I found nothing matching.";
   }
   if (result.forgotten.length === 1) {
-    return `Oublié : ${result.forgotten[0]?.content ?? ""}`;
+    return `Forgotten: ${result.forgotten[0]?.content ?? ""}`;
   }
-  return `${String(result.forgotten.length)} souvenirs oubliés.`;
+  return `${String(result.forgotten.length)} memories forgotten.`;
 }

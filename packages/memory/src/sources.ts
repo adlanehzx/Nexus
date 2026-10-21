@@ -1,18 +1,9 @@
 /**
- * Les quatre couches que ce paquet **ne possède pas**.
+ * Read-only ports for data layers not owned by this package.
  *
- * L'historique de conversation appartient au magasin de conversations, les
- * appareils au registre, les tâches au magasin de plans. Les recopier ici
- * créerait une seconde vérité, qui divergerait de la première au premier écart —
- * et c'est toujours la copie qu'on finit par afficher.
- *
- * Ce sont donc des **ports en lecture seule**. `@nexus/memory` ne dépend ni de
- * `@nexus/devices` ni de l'API : il déclare ce dont il a besoin, et l'API branche
- * ses magasins dessus. Corollaire pratique : l'assemblage de contexte se teste
- * sans base, sans registre et sans coordinateur.
- *
- * Aucun de ces ports n'a de méthode d'écriture. Ce n'est pas un oubli : la
- * mémoire lit l'état du système, elle ne le modifie pas.
+ * Conversation history, device inventory, and task execution history
+ * belong to their respective domains. `@nexus/memory` accesses them
+ * via read-only ports when assembling prompt contexts.
  */
 
 export interface ConversationTurn {
@@ -23,11 +14,9 @@ export interface ConversationTurn {
 
 export interface ConversationHistoryPort {
   /**
-   * Les derniers tours d'une conversation.
+   * Recent turns from a conversation.
    *
-   * `limit` borne la lecture à la source plutôt qu'après coup : une conversation
-   * de six mois ne doit pas traverser le processus pour qu'on en garde dix
-   * lignes.
+   * `limit` caps query at the source to prevent loading unbounded history.
    */
   recentTurns(input: {
     userId: string;
@@ -46,10 +35,9 @@ export interface DeviceSummary {
 
 export interface DeviceContextPort {
   /**
-   * La flotte de l'utilisateur.
+   * User fleet summary.
    *
-   * Le modèle en a besoin pour répondre « je peux le faire sur le poste fixe »
-   * plutôt que de proposer une action qu'aucune machine ne sait exécuter.
+   * Provides available devices and capabilities so models can plan feasible steps.
    */
   devicesFor(userId: string): Promise<DeviceSummary[]>;
 }
@@ -59,11 +47,11 @@ export interface TaskSummary {
   title: string;
   status: string;
   completedAt: Date | null;
-  /** Machine qui l'a exécutée, quand elle est connue. */
+  /** Executing device name, when known. */
   deviceName: string | null;
 }
 
 export interface TaskHistoryPort {
-  /** Les dernières tâches de l'utilisateur, terminées ou en cours. */
+  /** Recent tasks for the user (both active and completed). */
   recentTasks(input: { userId: string; limit: number }): Promise<TaskSummary[]>;
 }

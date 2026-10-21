@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-/** Port remplaçable : local aujourd'hui, modèle ONNX ou service privé demain. */
+/** Replaceable port: local hashing, ONNX model, or remote private service. */
 export interface EmbeddingProvider {
   readonly model: string;
   readonly dimensions: number;
@@ -21,16 +21,15 @@ export interface TransformersEmbeddingProviderOptions {
   dimensions?: number;
   cacheDir?: string;
   localFilesOnly?: boolean;
-  /** Injection réservée aux tests : évite de télécharger un modèle dans la CI. */
+  /** Testing hook: avoids downloading models during CI. */
   load?: () => Promise<FeatureExtractor>;
 }
 
 /**
- * Embeddings neuronaux multilingues exécutés localement par ONNX.
+ * Multilingual neural embeddings executed locally via ONNX.
  *
- * Le modèle est chargé paresseusement au premier souvenir. Après son premier
- * téléchargement, `localFilesOnly` permet une exploitation entièrement hors
- * ligne. Aucun texte ne quitte la machine et aucune clé API n'est nécessaire.
+ * Lazily loaded on first memory operation. Runs completely offline once downloaded.
+ * No text leaves the machine and no API key is required.
  */
 export class TransformersEmbeddingProvider implements EmbeddingProvider {
   readonly model: string;
@@ -68,7 +67,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     });
     const values = tensor.tolist();
     if (!Array.isArray(values) || values.length !== texts.length) {
-      throw new Error("Le modèle d'embedding a renvoyé un lot de taille inattendue.");
+      throw new Error("Embedding model returned unexpected batch size.");
     }
     return values.map((value) => this.#validateVector(value));
   }
@@ -80,7 +79,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       value.some((item) => typeof item !== "number" || !Number.isFinite(item))
     ) {
       throw new Error(
-        `Le modèle d'embedding doit renvoyer ${this.dimensions} nombres finis par texte.`,
+        `Embedding model must return ${this.dimensions} finite numbers per text.`,
       );
     }
     return value as number[];
@@ -88,12 +87,10 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 }
 
 /**
- * Embeddings locaux sans modèle ni réseau.
+ * Local hashing embeddings requiring neither external models nor network access.
  *
- * Le feature hashing de mots et bigrammes n'a pas la finesse d'un modèle
- * neuronal, mais donne un signal sémantique reproductible, borné et gratuit.
- * Il constitue le repli permanent ; le port permet de brancher FastEmbed sans
- * toucher au magasin ni à l'assembleur.
+ * Feature hashing of words and bigrams provides bounded, deterministic signal
+ * that serves as zero-cost baseline fallback.
  */
 export class LocalHashEmbeddingProvider implements EmbeddingProvider {
   readonly model: string;
@@ -155,9 +152,8 @@ export function normalizeMemoryContent(content: string): string {
 }
 
 export function memoryContentHash(content: string): string {
-  // Ce n'est ni une signature ni une protection d'intégrité : seulement une
-  // clé de déduplication compatible avec md5(), disponible dans PostgreSQL sans
-  // extension. Les décisions de sécurité ne reposent jamais sur cette valeur.
+  // Deduplication key compatible with md5() in PostgreSQL.
+  // Security decisions never rely on this hash.
   const normalized = content.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
   return createHash("md5").update(normalized).digest("hex");
 }
