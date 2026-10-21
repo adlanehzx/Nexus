@@ -64,7 +64,7 @@ export class MissionControlClientError extends AppError {
   override readonly retryable = true;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Le moteur multi-agents est indisponible.", ...options });
+    super({ userMessage: "The multi-agent engine is unavailable.", ...options });
   }
 }
 
@@ -73,16 +73,15 @@ export interface MissionControlClientOptions {
   requestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
   /**
-   * Fournit le jeton de service à présenter au moteur.
+   * Provides the service token to present to the engine.
    *
-   * Une fonction et non une valeur : un jeton de service vit deux minutes, donc
-   * il doit être émis par appel. Mémoriser une chaîne à la construction du
-   * client la rendrait périmée dès le troisième appel.
+   * A function rather than a value: a service token lives for two minutes, so
+   * it must be issued per request. Caching a string at client instantiation
+   * would make it expire by the third call.
    *
-   * Facultatif, et son absence a une conséquence nette : les appels partent
-   * sans identité, et un moteur configuré pour l'exiger les refusera. C'est le
-   * comportement voulu — mieux vaut un refus franc qu'une authentification qu'on
-   * croit active.
+   * Optional, and its absence has a clear effect: requests are sent without
+   * identity, and an engine configured to require one will reject them. This is
+   * the desired behavior — an explicit rejection is better than false security.
    */
   serviceToken?: () => string;
 }
@@ -492,8 +491,8 @@ export class MissionControlClient implements MissionControlPort {
         headers: {
           accept: "application/json",
           "content-type": "application/json",
-          // Émis ici, au moment de l'appel, pour la raison expliquée sur
-          // `serviceToken` : sa durée de vie se compte en minutes.
+          // Issued here at request time for the reason described in
+          // `serviceToken`: its lifespan is measured in minutes.
           ...(this.#serviceToken === undefined
             ? {}
             : { authorization: `Bearer ${this.#serviceToken()}` }),
@@ -510,8 +509,8 @@ export class MissionControlClient implements MissionControlPort {
     }
 
     if (!response.ok) {
-      // Le corps peut contenir des données d'agents : il ne traverse ni les logs
-      // ni le message public. Le statut suffit à classer l'échec.
+      // Body may contain agent data: it should not leak into logs or
+      // public messages. HTTP status code is sufficient to categorize the failure.
       throw new MissionControlClientError({
         message: `Mission Control returned HTTP ${String(response.status)}`,
         context: { status: response.status, path },

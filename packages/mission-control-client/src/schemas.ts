@@ -33,32 +33,31 @@ export const missionTaskInputSchema = z.object({
   retry_delay_seconds: z.number().int().min(1).max(3_600).default(10),
   context_budget_chars: z.number().int().min(4_000).max(400_000).default(60_000),
   /**
-   * Exécutant de la tâche.
+   * Task executor.
    *
-   * Sans défaut, délibérément : le champ reste absent de la charge utile tant
-   * qu'on ne le demande pas, et l'empreinte de contenu des plans purement ACP
-   * est donc inchangée. Un défaut `"acp"` explicite modifierait l'empreinte de
-   * tous les plans existants et casserait leur idempotence.
+   * Deliberately without default: field remains absent from payload unless
+   * requested, preserving content hashes of purely ACP plans. An explicit
+   * "acp" default would alter hashes of existing plans and break idempotency.
    */
   agent_kind: z.enum(["acp", "agent-core"]).optional(),
 });
 
 /**
- * Identité propriétaire signée transmise au moteur.
+ * Signed owner identity passed to the engine.
  *
- * Facultative, et pas par confort : les missions créées avant son introduction
- * n'en ont pas, et le moteur doit continuer de les porter. Ce qui l'exige, c'est
- * la délégation à Agent Core — refusée sans elle.
+ * Optional, by design: missions created before its introduction
+ * do not have one, and the engine must continue supporting them. What requires
+ * it is delegation to Agent Core — rejected without it.
  */
 export const missionOwnerSchema = z.object({
   user_id: z.string().trim().min(1).max(128),
   assertion: z.string().trim().min(1).max(4_096),
   /**
-   * Expiration de l'assertion, en ISO 8601.
+   * Assertion expiration, in ISO 8601.
    *
-   * Transmise pour que le moteur la connaisse sans savoir relire le jeton : il
-   * n'a pas la clé, et c'est voulu. Facultative, comme le reste du bloc, pour
-   * les missions d'avant l'identité signée.
+   * Passed so the engine knows it without needing to inspect the token: it
+   * does not have the key, by design. Optional, like the rest of the block,
+   * for missions created before signed identity.
    */
   expires_at: z.string().datetime().optional(),
 });
@@ -144,7 +143,7 @@ function validScheduleTiming(value: {
   return (value.run_at === undefined) !== (value.cron_expression === undefined);
 }
 
-/** Surface utilisateur : aucune délégation durable ne peut être fournie par le navigateur. */
+/** User surface: no durable delegation can be provided by the browser. */
 export const publicCreateMissionScheduleSchema = z
   .object(missionScheduleFields)
   .refine(validScheduleTiming, {
@@ -152,10 +151,10 @@ export const publicCreateMissionScheduleSchema = z
   });
 
 /**
- * Contrat interne API → Mission Engine.
+ * Internal contract API -> Mission Engine.
  *
- * Le jeton opaque n'est ni un owner assertion ni un champ de mission. Il est
- * conservé à part par le scheduler et échangé juste avant chaque occurrence.
+ * The opaque token is neither an owner assertion nor a mission field. It is
+ * retained separately by the scheduler and exchanged right before each run.
  */
 export const createMissionScheduleSchema = z
   .object({

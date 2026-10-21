@@ -16,7 +16,7 @@ const account = {
 
 const schedule = {
   id: "55555555-5555-4555-8555-555555555555",
-  name: "Veille",
+  name: "Watch",
   state: "active",
   schedule_kind: "cron",
   run_at: null,
@@ -28,9 +28,9 @@ const schedule = {
   misfire_grace_seconds: 300,
   mission: {
     external_key: "nexus-owned-schedule",
-    title: "Veille",
+    title: "Watch",
     workspace: "/tmp/nexus",
-    tasks: [{ key: "watch", profile: "codex", instruction: "Veille", depends_on: [] }],
+    tasks: [{ key: "watch", profile: "codex", instruction: "Watch", depends_on: [] }],
   },
   next_run_at: "2030-01-01T07:00:00+00:00",
   last_scheduled_at: null,
@@ -39,7 +39,7 @@ const schedule = {
 };
 
 describe("MissionControlClient", () => {
-  it("refuse HTTP hors boucle locale et les credentials dans l'URL", () => {
+  it("rejects HTTP outside loopback and credentials in URL", () => {
     expect(() => new MissionControlClient({ baseUrl: "http://example.org:18100" })).toThrow(
       /loopback/i,
     );
@@ -48,7 +48,7 @@ describe("MissionControlClient", () => {
     );
   });
 
-  it("valide le contrat et transmet l'idempotency key", async () => {
+  it("validates contract and transmits idempotency key", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -66,8 +66,8 @@ describe("MissionControlClient", () => {
     });
     await client.submitResearchMission(
       {
-        objective: "Vérifier",
-        question: "Événement ?",
+        objective: "Verify",
+        question: "Event?",
         close_at: "2030-01-01T00:00:00Z",
         workspace: "/tmp/nexus",
         sources: ["https://example.org/source"],
@@ -81,7 +81,7 @@ describe("MissionControlClient", () => {
     expect((init?.headers as Record<string, string>)["idempotency-key"]).toBe("research-1");
   });
 
-  it("soumet et relit une mission ACP générique", async () => {
+  it("submits and retrieves a generic ACP mission", async () => {
     const missionId = "33333333-3333-4333-8333-333333333333";
     const fetchImpl = vi
       .fn<typeof fetch>()
@@ -124,7 +124,7 @@ describe("MissionControlClient", () => {
         external_key: "nexus-test",
         title: "Test",
         workspace: "/tmp/nexus",
-        tasks: [{ key: "final", profile: "codex", instruction: "Réponds.", depends_on: [] }],
+        tasks: [{ key: "final", profile: "codex", instruction: "Reply.", depends_on: [] }],
       },
       "generic-1",
     );
@@ -134,7 +134,7 @@ describe("MissionControlClient", () => {
     expect(fetchImpl.mock.calls[1]?.[0]).toBe(`http://localhost:18100/v1/missions/${missionId}`);
   });
 
-  it("pilote un calendrier et valide son historique", async () => {
+  it("manages schedule and validates run history", async () => {
     const run = {
       id: "66666666-6666-4666-8666-666666666666",
       schedule_id: schedule.id,
@@ -176,14 +176,14 @@ describe("MissionControlClient", () => {
     ]);
   });
 
-  it("refuse un calendrier avec run_at et cron simultanément", () => {
+  it("rejects schedule with run_at and cron simultaneously", () => {
     const client = new MissionControlClient({
       baseUrl: "http://localhost:18100",
       fetchImpl: vi.fn<typeof fetch>(),
     });
     expect(() =>
       client.createSchedule({
-        name: "Invalide",
+        name: "Invalid",
         mission: schedule.mission,
         run_at: "2030-01-01T00:00:00Z",
         cron_expression: "0 8 * * *",
@@ -191,7 +191,7 @@ describe("MissionControlClient", () => {
     ).toThrow(/exactly one/i);
   });
 
-  it("valide le registre d'agents avant de l'exposer", async () => {
+  it("validates agent registry before exposing it", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -235,7 +235,7 @@ describe("MissionControlClient", () => {
     expect(registry.configured[0]?.key).toBe("claude");
   });
 
-  it("rejette une réponse qui tenterait d'activer le trading réel", async () => {
+  it("rejects response that attempts to enable live trading", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -250,7 +250,7 @@ describe("MissionControlClient", () => {
     );
   });
 
-  it("ne propage pas le corps d'une erreur distante", async () => {
+  it("does not leak remote error body", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('{"detail":"TOKEN_SECRET"}', { status: 500 }));
