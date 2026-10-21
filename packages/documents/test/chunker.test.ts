@@ -2,52 +2,50 @@ import { describe, expect, it } from "vitest";
 import { buildCitationLabel, buildCitationUri, DocumentChunker, slugify } from "../src/chunker.js";
 import { type ParsedDocument } from "../src/types.js";
 
-describe("Découpage hiérarchique et citations documentaires", () => {
-  it("normalise un titre de section en slug pour citation", () => {
-    expect(slugify("1.1 Introduction et Contexte !")).toBe("1-1-introduction-et-contexte");
-    expect(slugify("Spécification Technique Électrique")).toBe(
-      "specification-technique-electrique",
-    );
+describe("hierarchical chunking and document citations", () => {
+  it("normalizes a section title into a slug for citation", () => {
+    expect(slugify("1.1 Introduction and Context !")).toBe("1-1-introduction-and-context");
+    expect(slugify("Technical Specification")).toBe("technical-specification");
   });
 
-  it("génère des identifiants et libellés de citation stables", () => {
-    const uri = buildCitationUri("doc-abc123", 4, "architecture-reseau");
-    expect(uri).toBe("doc://doc-abc123/page/4#architecture-reseau");
+  it("generates stable citation identifiers and labels", () => {
+    const uri = buildCitationUri("doc-abc123", 4, "network-architecture");
+    expect(uri).toBe("doc://doc-abc123/page/4#network-architecture");
 
-    const label = buildCitationLabel("Audit_Securite.pdf", 4, "Architecture Réseau");
-    expect(label).toBe("Audit_Securite.pdf (Page 4, § Architecture Réseau)");
+    const label = buildCitationLabel("Security_Audit.pdf", 4, "Network Architecture");
+    expect(label).toBe("Security_Audit.pdf (Page 4, § Network Architecture)");
   });
 
-  it("découpe un document en conservant la hiérarchie parentale des sections", () => {
+  it("chunks document while preserving section parent hierarchy", () => {
     const mockDoc: ParsedDocument = {
       id: "doc-test-1",
-      filename: "Manuel_Architecture.pdf",
+      filename: "Architecture_Manual.pdf",
       format: "pdf",
       metadata: { pageCount: 2, fileSizeBytes: 1024, sha256: "abc" },
       sections: [
         {
-          title: "Chapitre 1 : Vue d'ensemble",
+          title: "Chapter 1: Overview",
           level: 1,
           pageNumber: 1,
-          content: "Introduction générale au système NEXUS.",
+          content: "General introduction to the NEXUS system.",
           tables: [],
         },
         {
-          title: "1.1 Isolation MCP",
+          title: "1.1 MCP Isolation",
           level: 2,
           pageNumber: 1,
-          content: "L'isolation MCP repose sur Bubblewrap et les namespaces Linux.",
+          content: "MCP isolation relies on Bubblewrap and Linux namespaces.",
           tables: [],
         },
         {
-          title: "Chapitre 2 : Protocoles",
+          title: "Chapter 2: Protocols",
           level: 1,
           pageNumber: 2,
-          content: "Détail des protocoles d'échange.",
+          content: "Details on exchange protocols.",
           tables: [],
         },
       ],
-      fullText: "Contenu complet",
+      fullText: "Full content",
       tables: [],
       parserUsed: "local",
     };
@@ -57,16 +55,16 @@ describe("Découpage hiérarchique et citations documentaires", () => {
 
     expect(chunks).toHaveLength(3);
 
-    // Vérifie le chunk 1.1 et sa hiérarchie parentale conservée
+    // Verify chunk 1.1 and its preserved parent hierarchy
     const chunkSub = chunks[1];
-    expect(chunkSub?.sectionTitle).toBe("1.1 Isolation MCP");
+    expect(chunkSub?.sectionTitle).toBe("1.1 MCP Isolation");
     expect(chunkSub?.sectionHierarchy).toEqual([
-      "Chapitre 1 : Vue d'ensemble",
-      "1.1 Isolation MCP",
+      "Chapter 1: Overview",
+      "1.1 MCP Isolation",
     ]);
-    expect(chunkSub?.citationUri).toBe("doc://doc-test-1/page/1#1-1-isolation-mcp");
+    expect(chunkSub?.citationUri).toBe("doc://doc-test-1/page/1#1-1-mcp-isolation");
     expect(chunkSub?.citationLabel).toContain(
-      "Manuel_Architecture.pdf (Page 1, § 1.1 Isolation MCP)",
+      "Architecture_Manual.pdf (Page 1, § 1.1 MCP Isolation)",
     );
   });
 });

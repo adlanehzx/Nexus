@@ -1,7 +1,7 @@
 import { type DocumentTable } from "./types.js";
 
 /**
- * Convertit des en-têtes et lignes en tableau Markdown bien formaté.
+ * Converts headers and rows into a well-formatted Markdown table.
  */
 export function tableToMarkdown(headers: string[], rows: string[][]): string {
   if (headers.length === 0 && rows.length === 0) return "";
@@ -22,7 +22,7 @@ export function tableToMarkdown(headers: string[], rows: string[][]): string {
 }
 
 /**
- * Analyse et extrait un tableau Markdown depuis un bloc textuel.
+ * Parses and extracts a Markdown table from a textual block.
  */
 export function parseMarkdownTable(
   block: string,
@@ -63,7 +63,7 @@ export function parseMarkdownTable(
 }
 
 /**
- * Détecte et extrait tous les tableaux Markdown présents dans un texte libre.
+ * Detects and extracts all Markdown tables present in free text.
  */
 export function extractTablesFromText(text: string, pageNumber?: number): DocumentTable[] {
   const tables: DocumentTable[] = [];

@@ -7,7 +7,7 @@ import { DocumentMemoryBridge } from "../src/memory-bridge.js";
 import { createDocumentTools } from "../src/tools.js";
 import type { ToolContext, ToolDefinition } from "@nexus/tools";
 
-describe("Outils documentaires NEXUS", () => {
+describe("NEXUS document tools", () => {
   let tempDir: string;
 
   beforeEach(async () => {
@@ -29,7 +29,7 @@ describe("Outils documentaires NEXUS", () => {
     onProgress: vi.fn(),
   });
 
-  it("enregistre les outils avec leurs permissions et niveaux de risque", () => {
+  it("registers tools with permissions and risk levels", () => {
     const parser = new DocumentParser();
     const tools = createDocumentTools({ parser });
 
@@ -47,11 +47,11 @@ describe("Outils documentaires NEXUS", () => {
     expect(ingestTool.requiredPermissions).toContain("memory.write");
   });
 
-  it("exécute document.parse et document.extract_tables sur un fichier réel", async () => {
+  it("executes document.parse and document.extract_tables on real file", async () => {
     const filePath = join(tempDir, "document.md");
     await writeFile(
       filePath,
-      "# Titre\n\nContenu.\n\n| Col 1 | Col 2 |\n| --- | --- |\n| Val 1 | Val 2 |",
+      "# Title\n\nContent.\n\n| Col 1 | Col 2 |\n| --- | --- |\n| Val 1 | Val 2 |",
       "utf-8",
     );
 
@@ -76,9 +76,9 @@ describe("Outils documentaires NEXUS", () => {
     expect(tablesRes.tables[0]?.headers).toEqual(["Col 1", "Col 2"]);
   });
 
-  it("exécute document.ingest_to_memory et alimente le pont de mémoire", async () => {
+  it("executes document.ingest_to_memory and populates memory bridge", async () => {
     const filePath = join(tempDir, "doc-to-ingest.md");
-    await writeFile(filePath, "# Section 1\n\nInformation critique.", "utf-8");
+    await writeFile(filePath, "# Section 1\n\nCritical information.", "utf-8");
 
     const parser = new DocumentParser();
     const mockSink = vi.fn().mockResolvedValue(undefined);

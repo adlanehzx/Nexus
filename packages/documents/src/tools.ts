@@ -8,7 +8,7 @@ export const documentParseInputSchema = z.object({
   filePath: z
     .string()
     .min(1)
-    .describe("Chemin absolu du document à analyser (PDF, DOCX, PPTX, MD, TXT)"),
+    .describe("Absolute path to the document to parse (PDF, DOCX, PPTX, MD, TXT)"),
 });
 
 export const documentParseOutputSchema = z.object({
@@ -27,7 +27,7 @@ function string(): z.ZodString {
 }
 
 export const documentExtractTablesInputSchema = z.object({
-  filePath: z.string().min(1).describe("Chemin du document dont on souhaite extraire les tableaux"),
+  filePath: z.string().min(1).describe("Path to the document from which to extract tables"),
 });
 
 export const documentExtractTablesOutputSchema = z.object({
@@ -43,14 +43,14 @@ export const documentExtractTablesOutputSchema = z.object({
 });
 
 export const documentIngestInputSchema = z.object({
-  filePath: z.string().min(1).describe("Chemin du document à indexer dans la mémoire"),
+  filePath: z.string().min(1).describe("Path to the document to ingest into memory"),
   maxChunkSizeChars: z
     .number()
     .int()
     .min(200)
     .max(5000)
     .optional()
-    .describe("Taille maximale d'un fragment textuel"),
+    .describe("Maximum size of a text chunk in characters"),
 });
 
 export const documentIngestOutputSchema = z.object({
@@ -61,7 +61,7 @@ export const documentIngestOutputSchema = z.object({
 });
 
 /**
- * Crée les outils d'ingestion documentaire et de mémoire pour les agents NEXUS.
+ * Creates document ingestion and memory tools for NEXUS agents.
  */
 export function createDocumentTools(options: {
   parser: DocumentParser;
@@ -76,7 +76,7 @@ export function createDocumentTools(options: {
       name: "document.parse",
       version: "1.0.0",
       description:
-        "Extrait le texte structuré et les métadonnées d'un document (PDF, Word, PowerPoint, Markdown).",
+        "Extracts structured text and metadata from a document (PDF, Word, PowerPoint, Markdown).",
       inputSchema: documentParseInputSchema,
       outputSchema: documentParseOutputSchema,
       riskLevel: "SAFE",
@@ -84,7 +84,7 @@ export function createDocumentTools(options: {
       requiresConfirmation: false,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof documentParseInputSchema>) =>
-        `Analyse du document ${input.filePath}`,
+        `Parse document ${input.filePath}`,
       execute: async (input: z.infer<typeof documentParseInputSchema>, _context: ToolContext) => {
         const parsed = await parser.parseDocument(input.filePath);
         return {
@@ -105,7 +105,7 @@ export function createDocumentTools(options: {
       name: "document.extract_tables",
       version: "1.0.0",
       description:
-        "Extrait tous les tableaux structurés (en-têtes, colonnes et lignes) d'un document.",
+        "Extracts all structured tables (headers, columns, and rows) from a document.",
       inputSchema: documentExtractTablesInputSchema,
       outputSchema: documentExtractTablesOutputSchema,
       riskLevel: "SAFE",
@@ -113,7 +113,7 @@ export function createDocumentTools(options: {
       requiresConfirmation: false,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof documentExtractTablesInputSchema>) =>
-        `Extraction des tableaux de ${input.filePath}`,
+        `Extract tables from ${input.filePath}`,
       execute: async (
         input: z.infer<typeof documentExtractTablesInputSchema>,
         _context: ToolContext,
@@ -128,7 +128,7 @@ export function createDocumentTools(options: {
       name: "document.ingest_to_memory",
       version: "1.0.0",
       description:
-        "Découpe un document en fragments structurés avec citations de page/section et les injecte dans la mémoire sémantique NEXUS.",
+        "Chunks a document into structured fragments with page/section citations and injects them into NEXUS semantic memory.",
       inputSchema: documentIngestInputSchema,
       outputSchema: documentIngestOutputSchema,
       riskLevel: "MEDIUM",
@@ -136,10 +136,10 @@ export function createDocumentTools(options: {
       requiresConfirmation: false,
       timeoutMs: 60_000,
       summarize: (input: z.infer<typeof documentIngestInputSchema>) =>
-        `Indexation en mémoire du document ${input.filePath}`,
+        `Ingest document ${input.filePath} into memory`,
       execute: async (input: z.infer<typeof documentIngestInputSchema>, context: ToolContext) => {
         if (!memoryBridge) {
-          throw new Error("Aucun pont de mémoire n'est configuré pour l'ingestion documentaire");
+          throw new Error("No memory bridge is configured for document ingestion");
         }
 
         const parsed = await parser.parseDocument(input.filePath);

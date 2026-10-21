@@ -1,55 +1,55 @@
 import { describe, expect, it } from "vitest";
 import { extractTablesFromText, parseMarkdownTable, tableToMarkdown } from "../src/tables.js";
 
-describe("Extraction et manipulation de tableaux", () => {
-  it("analyse un tableau Markdown régulier", () => {
+describe("table extraction and manipulation", () => {
+  it("parses regular Markdown table", () => {
     const raw = `
-| Produit | Prix | Stock |
+| Product | Price | Stock |
 | --- | --- | --- |
-| NEXUS Hub | 150€ | 12 |
-| NEXUS Sensor | 45€ | 30 |
+| NEXUS Hub | 150 USD | 12 |
+| NEXUS Sensor | 45 USD | 30 |
     `.trim();
 
     const table = parseMarkdownTable(raw);
     expect(table).not.toBeNull();
-    expect(table?.headers).toEqual(["Produit", "Prix", "Stock"]);
+    expect(table?.headers).toEqual(["Product", "Price", "Stock"]);
     expect(table?.rows).toHaveLength(2);
-    expect(table?.rows[0]).toEqual(["NEXUS Hub", "150€", "12"]);
-    expect(table?.rows[1]).toEqual(["NEXUS Sensor", "45€", "30"]);
+    expect(table?.rows[0]).toEqual(["NEXUS Hub", "150 USD", "12"]);
+    expect(table?.rows[1]).toEqual(["NEXUS Sensor", "45 USD", "30"]);
   });
 
-  it("génère du Markdown aligné depuis des cellules", () => {
+  it("generates aligned Markdown from cells", () => {
     const md = tableToMarkdown(["A", "B"], [["1", "2"]]);
     expect(md).toContain("| A | B |");
     expect(md).toContain("| --- | --- |");
     expect(md).toContain("| 1 | 2 |");
   });
 
-  it("extrait tous les tableaux imbriqués dans un texte", () => {
+  it("extracts all tables embedded in text", () => {
     const doc = `
-# Rapport financier
+# Financial report
 
-Voici les ventes du premier trimestre :
+Here are the first quarter sales:
 
-| Mois | CA (€) |
+| Month | Revenue |
 | --- | --- |
-| Janvier | 10000 |
-| Février | 12000 |
+| January | 10000 |
+| February | 12000 |
 
-Et voici la répartition par canal :
+And here is the channel breakdown:
 
-| Canal | Part |
+| Channel | Share |
 | --- | --- |
 | Web | 80% |
-| Partenaires | 20% |
+| Partners | 20% |
 
-Fin du rapport.
+End of report.
     `;
 
     const tables = extractTablesFromText(doc, 3);
     expect(tables).toHaveLength(2);
-    expect(tables[0]?.headers).toEqual(["Mois", "CA (€)"]);
+    expect(tables[0]?.headers).toEqual(["Month", "Revenue"]);
     expect(tables[0]?.pageNumber).toBe(3);
-    expect(tables[1]?.headers).toEqual(["Canal", "Part"]);
+    expect(tables[1]?.headers).toEqual(["Channel", "Share"]);
   });
 });

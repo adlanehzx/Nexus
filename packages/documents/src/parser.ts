@@ -15,7 +15,7 @@ import {
 const execFileAsync = promisify(execFile);
 
 /**
- * Détecte le format du document d'après son extension et ses premiers octets.
+ * Detects document format from file extension and initial bytes.
  */
 export function detectDocumentFormat(filePath: string, buffer?: Buffer): DocumentFormat {
   const ext = extname(filePath).toLowerCase();
@@ -28,7 +28,7 @@ export function detectDocumentFormat(filePath: string, buffer?: Buffer): Documen
   if (buffer && buffer.length >= 4) {
     if (buffer.subarray(0, 4).toString() === "%PDF") return "pdf";
     if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-      // Archive ZIP (DOCX ou PPTX)
+      // ZIP archive (DOCX or PPTX)
       if (filePath.includes("ppt")) return "pptx";
       return "docx";
     }
@@ -52,7 +52,7 @@ export class DocumentParser {
   }
 
   /**
-   * Analyse un document et renvoie sa structure complète hiérarchique avec sections et tableaux.
+   * Parses a document and returns its full hierarchical structure with sections and tables.
    */
   async parseDocument(filePath: string): Promise<ParsedDocument> {
     const fileBuffer = await readFile(filePath);
@@ -62,7 +62,7 @@ export class DocumentParser {
     const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
     const docId = `doc-${sha256.slice(0, 12)}`;
 
-    // 1. Tente Docling si configuré et disponible
+    // 1. Try Docling if configured and available
     if (this.#doclingBinary) {
       try {
         const doclingResult = await this.#parseWithDocling(
@@ -75,11 +75,11 @@ export class DocumentParser {
         );
         if (doclingResult) return doclingResult;
       } catch {
-        // Fallback transparent vers le moteur local
+        // Transparent fallback to local engine
       }
     }
 
-    // 2. Moteur local multi-formats
+    // 2. Local multi-format engine
     switch (format) {
       case "pdf":
         return this.#parsePdf(filePath, docId, filename, sha256, fileStats.size);
@@ -102,7 +102,7 @@ export class DocumentParser {
   }
 
   // ==========================================
-  // PARSER DOCLING
+  // DOCLING PARSER
   // ==========================================
 
   async #parseWithDocling(
@@ -125,7 +125,7 @@ export class DocumentParser {
   }
 
   // ==========================================
-  // PARSER PDF (pdftotext + OCR fallback)
+  // PDF PARSER (pdftotext + OCR fallback)
   // ==========================================
 
   async #parsePdf(
@@ -144,7 +144,7 @@ export class DocumentParser {
       rawText = "";
     }
 
-    // pdftotext sépare chaque page par un caractère form-feed '\x0c'
+    // pdftotext separates each page with a form-feed character '\x0c'
     const rawPages = rawText.split("\x0c");
     const sections: DocumentSection[] = [];
     const allTables: DocumentTable[] = [];
@@ -154,7 +154,7 @@ export class DocumentParser {
     for (const pageContent of rawPages) {
       let pageText = pageContent.trim();
 
-      // OCR Fallback si la page est scannée ou vide (< 20 caractères)
+      // OCR Fallback if page is scanned or empty (< 20 characters)
       if (pageText.length < 20 && this.#enableOcr) {
         try {
           const ocrText = await this.#runOcrOnPdfPage(filePath, pageNum);
@@ -162,7 +162,7 @@ export class DocumentParser {
             pageText = ocrText.trim();
           }
         } catch {
-          // Si OCR indisponible, conserve le texte existant
+          // If OCR is unavailable, keep existing text
         }
       }
 
@@ -203,13 +203,13 @@ export class DocumentParser {
   }
 
   async #runOcrOnPdfPage(pdfPath: string, _pageNumber: number): Promise<string> {
-    // OCR direct via tesseract
-    const { stdout } = await execFileAsync("tesseract", [pdfPath, "stdout", "-l", "fra+eng"]);
+    // Direct OCR via tesseract
+    const { stdout } = await execFileAsync("tesseract", [pdfPath, "stdout", "-l", "eng+fra"]);
     return stdout;
   }
 
   // ==========================================
-  // PARSER DOCX (Word XML)
+  // DOCX PARSER (Word XML)
   // ==========================================
 
   async #parseDocx(
@@ -219,7 +219,7 @@ export class DocumentParser {
     sha256: string,
     fileSizeBytes: number,
   ): Promise<ParsedDocument> {
-    // Script Python autonome pour extraire le texte et les tableaux de word/document.xml
+    // Standalone Python script to extract text and tables from word/document.xml
     const pythonScript = `
 import sys, zipfile, xml.etree.ElementTree as ET
 
@@ -235,7 +235,7 @@ try:
             if texts:
                 paragraphs.append(''.join(texts))
         
-        # Extraction des tableaux
+        # Table extraction
         tables = []
         for tbl in root.findall('.//w:tbl', ns):
             rows = []
@@ -265,12 +265,12 @@ except Exception as e:
       paragraphs = data.paragraphs;
       rawTables = data.tables;
     } catch {
-      paragraphs = ["Contenu DOCX extrait"];
+      paragraphs = ["Extracted DOCX content"];
       rawTables = [];
     }
 
     const sections: DocumentSection[] = [];
-    let currentTitle = "Document principal";
+    let currentTitle = "Main document";
     let currentContent: string[] = [];
 
     for (const p of paragraphs) {
@@ -301,7 +301,7 @@ except Exception as e:
       });
     }
 
-    // Convertit les tableaux bruts
+    // Convert raw tables
     const tables: DocumentTable[] = rawTables.map((t, idx) => {
       const headers = t[0] ?? [];
       const rows = t.slice(1);
@@ -311,7 +311,7 @@ except Exception as e:
       return {
         headers,
         rows,
-        caption: `Tableau ${idx + 1}`,
+        caption: `Table ${idx + 1}`,
         pageNumber: 1,
         markdown,
       };
@@ -335,7 +335,7 @@ except Exception as e:
   }
 
   // ==========================================
-  // PARSER PPTX (PowerPoint XML)
+  // PPTX PARSER (PowerPoint XML)
   // ==========================================
 
   async #parsePptx(
@@ -362,7 +362,7 @@ try:
             xml_data = z.read(sf)
             root = ET.fromstring(xml_data)
             texts = [t.text for t in root.findall('.//a:t', ns) if t.text]
-            title = texts[0] if texts else f"Diapositive {idx + 1}"
+            title = texts[0] if texts else f"Slide {idx + 1}"
             content = " ".join(texts[1:]) if len(texts) > 1 else ""
             slides.append({'title': title, 'content': content, 'page': idx + 1})
     print(json.dumps({'slides': slides}))
@@ -378,7 +378,7 @@ except Exception as e:
       };
       slides = data.slides;
     } catch {
-      slides = [{ title: "Présentation", content: "Contenu extrait", page: 1 }];
+      slides = [{ title: "Presentation", content: "Extracted content", page: 1 }];
     }
 
     const sections: DocumentSection[] = slides.map((s) => ({
@@ -407,7 +407,7 @@ except Exception as e:
   }
 
   // ==========================================
-  // PARSER TEXTE / MARKDOWN
+  // TEXT / MARKDOWN PARSER
   // ==========================================
 
   #parseTextOrMarkdown(
@@ -422,7 +422,7 @@ except Exception as e:
     const sections: DocumentSection[] = [];
     const tables = extractTablesFromText(content, 1);
 
-    let currentTitle = "Général";
+    let currentTitle = "General";
     let currentLevel = 1;
     let currentLines: string[] = [];
 

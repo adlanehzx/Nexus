@@ -1,7 +1,7 @@
 import { type DocumentChunk, type ParsedDocument } from "./types.js";
 
 /**
- * Normalise un titre de section en fragment d'ancre d'URL sûr.
+ * Normalizes a section title into a safe URL anchor fragment.
  */
 export function slugify(text: string): string {
   return text
@@ -14,7 +14,7 @@ export function slugify(text: string): string {
 }
 
 /**
- * Construit un identifiant de citation stable au format NEXUS `doc://<id>/page/<num>#<section>`.
+ * Builds a stable citation identifier in NEXUS `doc://<id>/page/<num>#<section>` format.
  */
 export function buildCitationUri(
   documentId: string,
@@ -26,14 +26,14 @@ export function buildCitationUri(
 }
 
 /**
- * Construit un libellé de citation lisible pour l'humain et les synthèses des agents.
+ * Builds a readable citation label for humans and agent syntheses.
  */
 export function buildCitationLabel(
   filename: string,
   pageNumber: number,
   sectionTitle: string,
 ): string {
-  const cleanTitle = sectionTitle ? `§ ${sectionTitle}` : "Général";
+  const cleanTitle = sectionTitle ? `§ ${sectionTitle}` : "General";
   return `${filename} (Page ${pageNumber}, ${cleanTitle})`;
 }
 
@@ -43,8 +43,8 @@ export interface ChunkerOptions {
 }
 
 /**
- * Découpe un document analysé en fragments structurés (chunks)
- * conservant la hiérarchie contextuelle et leurs citations précises.
+ * Chunks a parsed document into structured fragments (chunks)
+ * preserving contextual hierarchy and precise citations.
  */
 export class DocumentChunker {
   readonly #maxChunkSizeChars: number;
@@ -60,7 +60,7 @@ export class DocumentChunker {
     const hierarchyTracker: string[] = [];
 
     for (const section of parsed.sections) {
-      // Ajuste la hiérarchie des titres selon le niveau
+      // Adjust header hierarchy based on level
       const level = Math.max(1, section.level);
       hierarchyTracker.splice(level - 1);
       hierarchyTracker[level - 1] = section.title;
@@ -72,7 +72,7 @@ export class DocumentChunker {
 
       const fullSectionText = section.content.trim();
 
-      // Si la section contient des tableaux, on les attache
+      // If the section contains tables, attach them
       const sectionTables = section.tables.length > 0 ? section.tables : undefined;
 
       if (fullSectionText.length <= this.#maxChunkSizeChars) {
@@ -89,7 +89,7 @@ export class DocumentChunker {
           ...(sectionTables ? { tables: sectionTables } : {}),
         });
       } else {
-        // Découpage en fenêtres avec recouvrement
+        // Sliding window chunking with overlap
         const paragraphs = fullSectionText.split("\n\n");
         let currentWindow = "";
 
@@ -110,7 +110,7 @@ export class DocumentChunker {
               citationLabel,
             });
 
-            // Recouvrement
+            // Overlap
             const overlapPart = currentWindow.slice(-this.#overlapChars);
             currentWindow = overlapPart + "\n\n" + p;
           } else {
@@ -135,18 +135,18 @@ export class DocumentChunker {
       }
     }
 
-    // Si aucun fragment n'a été produit (ex: document sans sections explicites), découpe le texte brut
+    // If no fragment was produced (e.g. document without explicit sections), chunk raw text
     if (chunks.length === 0 && parsed.fullText.trim().length > 0) {
       chunks.push({
         chunkId: `${parsed.id}-chunk-${chunks.length + 1}`,
         documentId: parsed.id,
         filename: parsed.filename,
         pageNumber: 1,
-        sectionTitle: "Document principal",
-        sectionHierarchy: ["Document principal"],
+        sectionTitle: "Main document",
+        sectionHierarchy: ["Main document"],
         content: parsed.fullText.trim().slice(0, this.#maxChunkSizeChars),
-        citationUri: buildCitationUri(parsed.id, 1, "document-principal"),
-        citationLabel: buildCitationLabel(parsed.filename, 1, "Document principal"),
+        citationUri: buildCitationUri(parsed.id, 1, "main-document"),
+        citationLabel: buildCitationLabel(parsed.filename, 1, "Main document"),
         ...(parsed.tables.length > 0 ? { tables: parsed.tables } : {}),
       });
     }

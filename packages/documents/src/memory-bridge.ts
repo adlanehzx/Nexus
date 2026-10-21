@@ -11,8 +11,8 @@ export interface DocumentIngestionResult {
 export type MemorySink = (input: RememberInput) => Promise<unknown>;
 
 /**
- * Pont d'injection des fragments documentaires et leurs citations précises
- * dans la mémoire sémantique NEXUS (`@nexus/memory`).
+ * Injection bridge for document fragments and their precise citations
+ * into NEXUS semantic memory (`@nexus/memory`).
  */
 export class DocumentMemoryBridge {
   readonly #sink: MemorySink;
@@ -26,7 +26,7 @@ export class DocumentMemoryBridge {
   }
 
   /**
-   * Injecte une liste de fragments documentaires dans la mémoire de l'utilisateur.
+   * Ingests a list of document chunks into user memory.
    */
   async ingestChunks(
     chunks: DocumentChunk[],
@@ -49,16 +49,16 @@ export class DocumentMemoryBridge {
       const header = [
         `[CITATION: ${chunk.citationUri}]`,
         `Source: ${chunk.citationLabel}`,
-        `Chemin: ${chunk.sectionHierarchy.join(" > ")}`,
+        `Path: ${chunk.sectionHierarchy.join(" > ")}`,
         "",
         chunk.content,
       ].join("\n");
 
-      // Si le fragment porte des tableaux, on les inclut lisiblement
+      // If chunk has tables, include them legibly
       let finalContent = header;
       if (chunk.tables && chunk.tables.length > 0) {
         finalContent +=
-          "\n\nTableaux associés :\n" + chunk.tables.map((t) => t.markdown).join("\n\n");
+          "\n\nAssociated tables:\n" + chunk.tables.map((t) => t.markdown).join("\n\n");
       }
 
       await this.#sink({
