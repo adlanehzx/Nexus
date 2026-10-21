@@ -165,7 +165,7 @@ describe("file loading", () => {
 
   it("returns closed policy when file does not exist", async () => {
     const loaded = await loadDevicePolicy(path);
-    expect(loaded.source).toBe("défaut");
+    expect(loaded.source).toBe("default");
     expect(loaded.policy).toEqual(CLOSED_POLICY);
   });
 
@@ -176,15 +176,15 @@ describe("file loading", () => {
         "version: 1",
         "filesystem:",
         "  allow:",
-        "    - ~/projets",
+        "    - ~/projects",
         "  deny:",
         "    under:",
         "      - ~/.ssh",
       ].join("\n"),
     );
     const loaded = await loadDevicePolicy(path);
-    expect(loaded.source).toBe("fichier");
-    expect(loaded.policy.filesystem.allow).toEqual(["~/projets"]);
+    expect(loaded.source).toBe("file");
+    expect(loaded.policy.filesystem.allow).toEqual(["~/projects"]);
     expect(loaded.policy.filesystem.deny.under).toEqual(["~/.ssh"]);
   });
 
@@ -194,14 +194,14 @@ describe("file loading", () => {
   });
 
   it("throws on schema violations", async () => {
-    await writeFile(path, ["version: 1", "filesystem:", "  cle-inconnue: true"].join("\n"));
+    await writeFile(path, ["version: 1", "filesystem:", "  unknown-key: true"].join("\n"));
     await expect(loadDevicePolicy(path)).rejects.toThrow(DevicePolicyFileError);
   });
 });
 
 describe("display formatting", () => {
   it("renders entire policy configuration", () => {
-    const text = describePolicy({ policy: policy(), source: "fichier", path: "/tmp/p.yaml" });
+    const text = describePolicy({ policy: policy(), source: "file", path: "/tmp/p.yaml" });
     for (const expected of [
       "allowed roots",
       "denied under",
@@ -221,7 +221,7 @@ describe("display formatting", () => {
   });
 
   it("indicates empty lists explicitly", () => {
-    const text = describePolicy({ policy: CLOSED_POLICY, source: "défaut", path: undefined });
+    const text = describePolicy({ policy: CLOSED_POLICY, source: "default", path: undefined });
     expect(text).toContain("none — all denied");
   });
 });

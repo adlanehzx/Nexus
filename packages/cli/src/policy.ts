@@ -158,7 +158,7 @@ async function showPolicy(path: string): Promise<number> {
   try {
     const loaded = await loadDevicePolicy(path);
     process.stdout.write(`\nNEXUS — local policy\n\n${describePolicy(loaded)}\n\n`);
-    if (loaded.source === "défaut") {
+    if (loaded.source === "default") {
       process.stdout.write(
         `  No policy file at ${path}: all operations denied.\n` +
           "  Initialize with `nexus policy init`.\n\n",
@@ -179,7 +179,7 @@ async function checkPolicy(path: string, args: string[]): Promise<number> {
   }
 
   process.stdout.write(`\nNEXUS — local policy: ${loaded.source}\n`);
-  if (loaded.source === "défaut") {
+  if (loaded.source === "default") {
     process.stdout.write(`  no policy file at ${path} — all operations denied\n`);
   }
 

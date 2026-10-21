@@ -25,7 +25,7 @@ describe("paquet Linux du worker", () => {
     await writeFile(path, `${match?.groups?.yaml ?? ""}\n`, { mode: 0o600 });
 
     const loaded = await loadDevicePolicy(path);
-    expect(loaded.source).toBe("fichier");
+    expect(loaded.source).toBe("file");
     expect(loaded.policy.filesystem.allow).toEqual(["/workspace"]);
     expect(loaded.policy.exec.allowedExecutables).toEqual(["git", "node"]);
     expect(loaded.policy.network.egress).toBe("deny");

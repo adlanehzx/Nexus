@@ -21,7 +21,7 @@ describe("delivered policy example", () => {
   it("reads back cleanly without errors", async () => {
     await writeFile(path, POLICY_EXAMPLE);
     const loaded = await loadDevicePolicy(path);
-    expect(loaded.source).toBe("fichier");
+    expect(loaded.source).toBe("file");
   });
 
   it("grants zero access until edited", async () => {

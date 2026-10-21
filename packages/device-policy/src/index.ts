@@ -245,8 +245,8 @@ export function checkExecutable(policy: DevicePolicy, executable: string): Polic
 
 export interface LoadedPolicy {
   policy: DevicePolicy;
-  /** Preserved source identifier for backwards compatibility. */
-  source: "fichier" | "défaut";
+  /** Source identifier: "file" if loaded from disk, "default" otherwise. */
+  source: "file" | "default";
   path: string | undefined;
 }
 
@@ -259,7 +259,7 @@ export async function loadDevicePolicy(path: string): Promise<LoadedPolicy> {
     text = await readFile(path, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { policy: CLOSED_POLICY, source: "défaut", path: undefined };
+      return { policy: CLOSED_POLICY, source: "default", path: undefined };
     }
     throw error;
   }
@@ -280,7 +280,7 @@ export async function loadDevicePolicy(path: string): Promise<LoadedPolicy> {
       ),
     );
   }
-  return { policy: parsed.data, source: "fichier", path };
+  return { policy: parsed.data, source: "file", path };
 }
 
 function describeYamlError(error: unknown): string {

@@ -155,7 +155,7 @@ describe("registre local", () => {
     const terminal = inventory.find((entry) => entry.capability.name === "terminal.execute");
 
     expect(docker?.available).toBe(false);
-    expect(docker?.reason).toMatch(/absent/);
+    expect(docker?.reason).toMatch(/missing/i);
     expect(terminal?.reason).toMatch(/configuration/);
   });
 });

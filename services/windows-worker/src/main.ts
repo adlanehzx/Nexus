@@ -51,7 +51,7 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
   const policyPath = env.WORKER_POLICY_FILE ?? defaultDevicePolicyPath();
   const loaded = await loadDevicePolicy(policyPath);
   logger.info(
-    loaded.source === "fichier"
+    loaded.source === "file"
       ? "politique locale chargée"
       : "aucune politique locale : réglages d'environnement",
     {
@@ -66,7 +66,7 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
   const { capabilities } = assembleCapabilities({
     config,
     env,
-    ...(loaded.source === "fichier" ? { devicePolicy: loaded.policy } : {}),
+    ...(loaded.source === "file" ? { devicePolicy: loaded.policy } : {}),
   });
 
   const link =
