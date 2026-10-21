@@ -1,66 +1,63 @@
 # @nexus/devices
 
-Modèle multi-appareils : registre, sélection, plans de tâches, routage
-d'événements, sessions authentifiées.
+Multi-device architecture: registry, device selection, distributed task plans, event routing,
+and cryptographically authenticated sessions.
 
-**État : cœur implémenté et testé.** 67 tests. Les exécutants concrets (worker
-Windows, automatisation Android, client iPhone) ne sont **pas** dans ce paquet —
-ils se branchent dessus.
+**Status: Core implemented and tested.** 67 tests. Physical executors (Windows worker, Android automation,
+mobile chat clients) do **not** live in this package — they attach to it over typed protocols.
 
 ---
 
-## Le principe
+## Architectural Principle
 
 ```
-                    DeviceRegistry          « qui existe, que sait-il faire »
+                    DeviceRegistry          "Who exists, what can it do"
                           │
- TaskPlan ─▶ TaskCoordinator ─▶ DeviceSelector ─▶ WorkerTransport ─▶ worker
-                    │              « lequel ? »
-                    └──▶ EventRouter ─▶ tous les clients (origine en premier)
+ TaskPlan ─▶ TaskCoordinator ─▶ DeviceSelector ─▶ WorkerTransport ─▶ Worker
+                    │              "Which device?"
+                    └──▶ EventRouter ─▶ All user clients (Originating device first)
 
- capacité ─▶ createDeviceTools ─▶ ToolDefinition ─▶ ToolRegistry ─▶ Agent
+ Capability ─▶ createDeviceTools ─▶ ToolDefinition ─▶ ToolRegistry ─▶ Agent Core
 ```
 
-**Le cœur ne connaît aucun appareil par son nom.** Il connaît des rôles, des
-types et des capacités. « L'iPhone d'Alex » est une ligne en base, jamais un
-`if`. Et il n'y a **pas de second système d'outils** : une capacité devient un
-`ToolDefinition` ordinaire, comme le fait `@nexus/mcp`.
+**The core never identifies devices by name.** It recognizes roles, hardware types, and advertised capabilities.
+Device names are database records, never hardcoded conditionals. Additionally, there is **no secondary tool system**:
+a device capability maps into a standard `ToolDefinition`, exactly mirroring the `@nexus/mcp` pattern.
 
 ---
 
-## Ajouter un appareil
+## Enrolling a Device
 
-Aucune modification de code. Trois écritures :
+Requires zero codebase modifications. Three database insertions:
 
 ```ts
 const device = await registry.registerDevice({
   userId,
-  name: "Poste fixe", // libre, jamais lu par la logique
+  name: "Primary Workstation", // Friendly label, never inspected by routing logic
   type: "WINDOWS_PC",
   platform: "WINDOWS",
-  role: "BOTH", // client ET exécutant
+  role: "BOTH", // Client interface AND task worker
   capabilities: [
     {
       name: "terminal.execute",
       version: "1",
-      description: "Shell",
+      description: "Shell Execution",
       enabled: true,
       metadata: {},
     },
-    { name: "git.execute", version: "1", description: "Git", enabled: true, metadata: {} },
+    { name: "git.execute", version: "1", description: "Git Operations", enabled: true, metadata: {} },
   ],
   grantedPermissions: ["terminal.execute", "git.execute"],
 });
 
-// Il arrive OFFLINE et PENDING : la confiance se donne, elle ne se suppose pas.
+// Enrolled in OFFLINE and PENDING state: trust is explicitly granted, never assumed.
 await registry.trustDevice(device.id);
 ```
 
-Puis l'appareil s'authentifie (voir plus bas) et envoie un battement de cœur.
-Il devient éligible à la sélection dès lors qu'il est `ONLINE`, `TRUSTED` et
-authentifié.
+The device authenticates (see below) and streams heartbeats. It becomes eligible for task selection
+once `ONLINE`, `TRUSTED`, and authenticated.
 
-Pour l'exposer à l'agent, déclarer la capacité comme outil :
+To expose device capabilities to the LLM agent:
 
 ```ts
 toolRegistry.registerAll(
@@ -75,61 +72,58 @@ toolRegistry.registerAll(
 
 ---
 
-## Rôle, type, capacité
+## Role, Type, and Capability
 
-| Axe          | Répond à              | Valeurs                                                                  |
-| ------------ | --------------------- | ------------------------------------------------------------------------ |
-| **Rôle**     | A-t-il le droit ?     | `CLIENT` · `WORKER` · `BOTH`                                             |
-| **Type**     | Qu'est-ce que c'est ? | `IPHONE` · `ANDROID` · `WINDOWS_PC` · `MAC` · `LINUX` · `BROWSER_WORKER` |
-| **Capacité** | Que sait-il faire ?   | `terminal.execute`, `filesystem.read`, `android.notification`…           |
+| Axis           | Semantics                             | Allowed Values                                                           |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| **Role**       | Is the machine authorized to execute? | `CLIENT` · `WORKER` · `BOTH`                                             |
+| **Type**       | What platform/architecture is it?     | `IPHONE` · `ANDROID` · `WINDOWS_PC` · `MAC` · `LINUX` · `BROWSER_WORKER` |
+| **Capability** | What actions can the machine perform? | `terminal.execute`, `filesystem.read`, `android.notification`…           |
 
-Un `CLIENT` n'est jamais sélectionné comme exécutant, même s'il déclare la
-capacité. Le rôle tranche avant la capacité.
+A `CLIENT` is never assigned task execution, even if it advertises capabilities. Device role takes precedence.
 
-Les capacités partagent l'espace de nommage des permissions (`domaine.action`).
-Une capacité dit ce que l'appareil _sait_ faire, une permission ce que
-l'utilisateur _autorise_ — il faut les deux.
+Capabilities share the permission namespace (`domain.action`). A capability declares what the machine
+_can_ do; a permission grant declares what the user _permits_ — both must be satisfied.
 
 ---
 
-## Sélection
+## Device Selection
 
-`DeviceSelector` filtre puis note. Les filtres, dans l'ordre du diagnostic :
-exclusions explicites, rôle, révocation, confiance, opérabilité, capacités,
-permissions, saturation, contraintes (type, plateforme, alimentation secteur).
+`DeviceSelector` filters candidates, then scores survivors. Filters run in diagnostic order:
+explicit exclusions, role check, revocation status, trust status, health, required capabilities,
+permission grants, device saturation, and constraints (type, platform, AC power).
 
-Chaque rejet est motivé — `selection.rejected` répond à « pourquoi cet appareil
-n'apparaît-il pas ? » sans instrumenter le code.
+Every rejection includes a specific reason — `selection.rejected` answers "why wasn't this device chosen?"
+without code instrumentation.
 
-Les survivants sont notés : préférence explicite (1000) ≫ disponibilité (300) >
-santé (200) > latence (150) > secteur (100) > spécialisation (50). Une
-préférence utilisateur écrase le classement, **jamais un filtre**.
+Survivors are scored: Explicit User Preference (1000) ≫ Availability (300) > Health (200) > Latency (150)
+> AC Power (100) > Specialization (50). User preferences override rankings, **never hard security filters**.
 
 ---
 
-## Plans de tâches
+## Task Plans
 
-`TaskPlan` ≠ `AgentRun`. Le run décrit un raisonnement, le plan une exécution
-répartie. Le graphe d'étapes est validé à la construction — identifiants
-dupliqués, dépendances pendantes et cycles sont refusés immédiatement.
+`TaskPlan` ≠ `AgentRun`. An agent run describes autonomous model reasoning; a task plan describes distributed
+multi-device execution. The step graph is validated at construction — duplicate IDs, dangling dependencies,
+and dependency cycles are rejected immediately.
 
 ```ts
 const plan = createTaskPlan({
   userId,
-  title: "Cloner, tester, notifier",
-  originClientDeviceId: iphone.id, // le fil de routage
+  title: "Clone, test, and notify",
+  originClientDeviceId: iphone.id, // Routing thread
   correlationId,
   steps: [
     {
       id: "clone",
-      description: "Cloner le dépôt",
+      description: "Clone repository",
       requiredCapabilities: ["git.execute"],
       tool: "device.git.execute",
       arguments: { command: "clone …" },
     },
     {
       id: "test",
-      description: "Lancer les tests",
+      description: "Run test suite",
       requiredCapabilities: ["terminal.execute"],
       tool: "device.terminal.execute",
       arguments: { command: "pnpm test" },
@@ -137,10 +131,10 @@ const plan = createTaskPlan({
     },
     {
       id: "notify",
-      description: "Notifier",
+      description: "Send push notification",
       requiredCapabilities: ["android.notification"],
       tool: "device.android.notification",
-      arguments: { title: "Tests" },
+      arguments: { title: "Tests Complete" },
       dependsOn: ["test"],
     },
   ],
@@ -149,36 +143,31 @@ const plan = createTaskPlan({
 await coordinator.execute(plan, { userPermissions });
 ```
 
-Les étapes prêtes partent **en parallèle**. Une étape dont une dépendance a
-échoué passe `skipped`, pas `failed` : elle n'a pas échoué, elle n'a jamais eu
-lieu. Le plan finit alors `partial` — statut distinct, parce que « rien n'a
-marché » et « deux étapes sur trois ont marché » n'appellent pas la même suite.
+Ready steps execute **in parallel**. Steps whose dependencies fail transition to `skipped`, not `failed`:
+they did not fail, they never ran. The overall plan marks `partial` — a distinct status indicating
+partial completion.
 
 ---
 
-## Routage des événements
+## Event Routing
 
-L'appareil d'origine reçoit **en premier** ; tous les autres clients de
-l'utilisateur reçoivent ensuite. Un client déconnecté retrouve ses événements en
-se rattachant :
+The originating client receives events **first**; all other active user sessions receive them subsequently.
+A reconnecting client retrieves missed events upon attachment:
 
 ```ts
 const backlog = await router.attach({ deviceId, userId, send });
 ```
 
-La file est **bornée** (200 par appareil). Au-delà, les plus anciens sont perdus :
-un client absent depuis une semaine resynchronise son état complet plutôt que de
-rejouer l'historique.
+The queue is **bounded** (200 events per device). Excess events are discarded: clients absent for days
+perform a full state resynchronization upon return rather than replaying large historical event logs.
 
-**Aucune synchronisation pair-à-pair.** Tout passe par le centre — c'est ce qui
-garantit que deux clients ne divergent jamais.
+**Zero peer-to-peer sync.** All traffic routes through the central server, preventing split-brain states.
 
 ---
 
-## Sécurité
+## Security
 
-- **Un identifiant d'appareil n'authentifie rien.** Il est public. Une session
-  naît d'un challenge signé Ed25519 :
+- **Device IDs Never Authenticate Traffic.** They are public strings. Sessions originate from signed Ed25519 challenges:
 
   ```ts
   const challenge = await sessions.createChallenge(deviceId);
@@ -186,43 +175,40 @@ garantit que deux clients ne divergent jamais.
     { deviceId, nonce: challenge.nonce, signature, capabilities },
     publicKeyMaterial,
   );
-  // `token` n'est rendu qu'une fois ; seule son empreinte est stockée.
+  // `token` is returned only once; only its hash is persisted at rest.
   ```
 
-- Le nonce est consommé **même quand la signature est mauvaise** — sinon il reste
-  rejouable.
-- Les capacités négociées sont **bornées par celles déclarées** : une session ne
-  peut pas s'octroyer plus que l'appareil.
-- `assertNotReplayed(requestId, timestamp)` refuse les requêtes rejouées.
-- Confiance ≠ statut. `PENDING` = en ligne, mais aucune tâche. `revokeTrust` est
-  réversible, `revokeDevice` ne l'est pas.
-- Les capacités sont **revérifiées juste avant le dispatch**.
-- **Ne sont jamais journalisés** : mots de passe, clés d'API, cookies, jetons.
-  Les enregistrements d'exécution passent les arguments par `redact`
-  (`@nexus/shared`) ; les événements ne portent aucun argument.
+- Nonces are consumed **even when signatures fail** to prevent replay attacks.
+- Negotiated capabilities are **bounded by registered capabilities**: sessions cannot claim more than
+  the device record allows.
+- `assertNotReplayed(requestId, timestamp)` rejects replayed requests.
+- Trust ≠ Status. `PENDING` = online, yet assigned zero tasks. `revokeTrust` is reversible; `revokeDevice` is permanent.
+- Capabilities are **re-verified immediately prior to task dispatch**.
+- **Never Logged**: Passwords, API tokens, cookies, private keys. Task executions sanitize arguments
+  via `@nexus/shared` `redact`; event envelopes carry zero raw arguments.
 
 ---
 
-## API
+## API Overview
 
-| Élément                     | Rôle                                                                        |
-| --------------------------- | --------------------------------------------------------------------------- |
-| `DeviceRegistry`            | Enregistrement, capacités, santé, confiance, battements de cœur             |
-| `DeviceSelector`            | `select` · `trySelect` · `listEligible`                                     |
-| `TaskCoordinator`           | Exécute un `TaskPlan` : sélection, confirmation, dispatch, reprise, bascule |
-| `EventRouter`               | `attach` · `detach` · `emit` · `publish` · `sendTo` · `pendingFor`          |
-| `DeviceSessionService`      | Challenge, authentification, rotation, révocation, anti-rejeu               |
-| `createDeviceTools`         | Capacité → `ToolDefinition` pour le `ToolRegistry`                          |
-| `DeviceStore` · `TaskStore` | Ports de persistance (implémentations mémoire fournies)                     |
+| Component                   | Purpose                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| `DeviceRegistry`            | Registration, capabilities, health probes, trust status, heartbeats              |
+| `DeviceSelector`            | `select` · `trySelect` · `listEligible`                                          |
+| `TaskCoordinator`           | Executes `TaskPlan`: selection, confirmation gates, dispatch, retry, failover    |
+| `EventRouter`               | `attach` · `detach` · `emit` · `publish` · `sendTo` · `pendingFor`               |
+| `DeviceSessionService`      | Challenges, asymmetric authentication, token rotation, revocation, anti-replay    |
+| `createDeviceTools`         | Capability → `ToolDefinition` adapters for central `ToolRegistry`                |
+| `DeviceStore` · `TaskStore` | Persistence port interfaces (in-memory implementations included)                 |
 
 ---
 
-## Diagnostic
+## Troubleshooting Diagnostics
 
-| Symptôme                       | Cause probable                                             |
-| ------------------------------ | ---------------------------------------------------------- |
-| `NoEligibleWorkerError`        | Lire `rejected` : le motif y est, appareil par appareil    |
-| L'appareil n'est jamais choisi | `trust` encore `PENDING`, ou `authenticated: false`        |
-| Il passe hors ligne tout seul  | Aucun battement de cœur depuis `heartbeatTimeoutMs` (60 s) |
-| Un client ne reçoit rien       | Rôle `WORKER` : il n'est pas destinataire d'événements     |
-| Le plan finit `partial`        | Une étape a échoué, ses dépendantes sont `skipped`         |
+| Symptom                        | Probable Cause                                                     |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `NoEligibleWorkerError`        | Check `rejected` array: lists explicit rejection reasons per device|
+| Device never selected          | `trust` still in `PENDING` state, or `authenticated: false`        |
+| Device transitions offline     | Zero heartbeats received within `heartbeatTimeoutMs` window (60s)  |
+| Client receives zero events    | Configured as `WORKER` role: workers do not receive broadcast logs |
+| Task plan finishes `partial`   | A prerequisite step failed, causing dependent steps to be skipped  |

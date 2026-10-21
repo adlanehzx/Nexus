@@ -1,26 +1,26 @@
 # NEXUS Mission Engine
 
-Moteur local durable de NEXUS. Il possède la file de missions, les dépendances,
-les leases, les reprises, le routage entre profils ACP, le contrôle qualité et
-le ledger de simulation. Les tours d'agents sont exécutés par le runtime ACP
-natif situé dans `services/agent`.
+Durable local engine for NEXUS. It manages the mission queue, task dependencies,
+leases, crash recovery, routing between ACP profiles, quality control, and the
+simulation ledger. Agent execution turns are handled by the native ACP runtime
+located in `services/agent`.
 
-Le service n'accepte aucun secret fournisseur. Les adaptateurs ACP réutilisent
-uniquement les authentifications locales de leurs CLI respectifs.
+The service accepts no provider secrets. ACP adapters strictly reuse local
+authentications from their respective CLIs.
 
-## Planification durable
+## Durable Scheduling
 
-Le scheduler stocke calendriers et occurrences dans la même base SQLite que les
-missions. Il accepte une date unique (`run_at`) ou une expression cron à cinq
-champs (`cron_expression`), toujours associée à un fuseau IANA comme
-`Europe/Paris`. Une occurrence est soumise avec une clé d'idempotence dérivée du
-calendrier et de sa date : un redémarrage entre la soumission et son
-enregistrement ne crée donc pas une seconde mission.
+The scheduler stores schedules and occurrences in the same SQLite database as
+missions. It accepts a one-off timestamp (`run_at`) or a 5-field cron expression
+(`cron_expression`), always paired with an explicit IANA timezone like
+`Europe/Paris`. An occurrence is submitted using an idempotency key derived from
+the schedule and its scheduled timestamp: a restart between submission and
+registration therefore never creates a duplicate mission.
 
 ```json
 POST /v1/schedules
 {
-  "name": "Veille quotidienne",
+  "name": "Daily Intelligence",
   "timezone": "Europe/Paris",
   "cron_expression": "0 8 * * 1-5",
   "catch_up_policy": "latest",
@@ -29,37 +29,38 @@ POST /v1/schedules
   "misfire_grace_seconds": 300,
   "mission": {
     "external_key": "daily-watch",
-    "title": "Veille quotidienne",
+    "title": "Daily Intelligence",
     "workspace": "/workspace",
     "defaults": {"profile": "codex"},
-    "tasks": [{"key": "watch", "instruction": "Produis la veille.", "depends_on": []}]
+    "tasks": [{"key": "watch", "instruction": "Produce intelligence summary.", "depends_on": []}]
   }
 }
 ```
 
-Les politiques de rattrapage sont :
+Catch-up policies include:
 
-- `skip` ignore une occurrence plus ancienne que la grâce configurée ;
-- `latest` ne rejoue que l'occurrence manquée la plus récente ;
-- `all` rejoue au maximum `max_catch_up` occurrences, les plus récentes.
+- `skip`: ignores any occurrence older than the configured grace window;
+- `latest`: only executes the most recent missed occurrence;
+- `all`: replays up to `max_catch_up` missed occurrences, starting from the most recent.
 
-`POST /v1/schedules/{id}/pause` et `/resume` contrôlent un calendrier sans
-perdre sa prochaine échéance. `GET /v1/schedules/{id}/runs` fournit l'historique
-et le lien vers chaque mission créée. `max_concurrency` borne les missions non
-terminées d'un même calendrier.
+`POST /v1/schedules/{id}/pause` and `/resume` control a schedule without losing
+its next calculated trigger time. `GET /v1/schedules/{id}/runs` provides execution
+history and links to each generated mission. `max_concurrency` caps non-terminated
+missions belonging to the same schedule.
 
-Le dispatcher est actif par défaut. Il se configure avec
-`NEXUS_ENGINE_SCHEDULER_ENABLED` et `NEXUS_ENGINE_SCHEDULER_POLL_SECONDS`.
-Une assertion propriétaire Agent Core, qui expire et ne doit pas devenir un
-secret de longue durée, reste refusée dans un calendrier. Pour une tâche
-`agent-core`, l'API fournit à la place une délégation opaque et révocable,
-liée au calendrier. Juste avant chaque occurrence, le moteur l'échange contre
-une assertion courte dont l'API recalcule la portée exacte. Le navigateur ne
-peut ni fournir ni lire cette délégation.
+The dispatcher is active by default. It can be configured using
+`NEXUS_ENGINE_SCHEDULER_ENABLED` and `NEXUS_ENGINE_SCHEDULER_POLL_SECONDS`.
+An Agent Core owner assertion, which expires and must not become a long-lived secret,
+is rejected when creating a schedule. For an `agent-core` task, the API instead
+provides an opaque and revocable schedule delegation. Immediately prior to each
+occurrence, the engine exchanges this delegation for a short-lived assertion whose
+exact scope is recalculated by the API. The browser can neither supply nor inspect
+this delegation.
 
-## Vérification
+## Verification
 
 ```bash
 uv sync --extra dev
 uv run pytest
 ```
+

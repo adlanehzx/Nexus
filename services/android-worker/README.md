@@ -1,22 +1,22 @@
 # @nexus/android-worker
 
-Exécutant Android : capacités locales contrôlées, connexion **sortante** vers le
-cœur NEXUS.
+Android worker: controlled local capabilities with an **outbound** connection to the
+NEXUS Core.
 
-**État : application Android complète et éprouvée sur émulateur.** 188 tests
-automatisés, `./gradlew assembleDebug` produit un APK, et les sept capacités ont
-été exécutées pour de vrai contre un cœur réel sur un Pixel 8 (API 36).
-**Rien n'a encore tourné sur le Redmi Note 10S** — voir §Limites.
+**Status: Complete Android application verified on emulator.** 188 automated tests,
+`./gradlew assembleDebug` builds the APK, and all seven capabilities have been verified
+against a live Core on a Pixel 8 emulator (API 36).
+**No tests have been executed on the physical Redmi Note 10S yet** — see §Known Limitations.
 
-Le Redmi Note 10S est un **exécutant**, pas un client. L'iPhone 17 et le
-portable Windows restent les interfaces NEXUS.
+The mobile phone functions strictly as a **worker**, not a client. The user drives NEXUS
+from the desktop application or browser client.
 
 ---
 
-## Le principe
+## Principle
 
 ```
-Android Worker ──(WebSocket sortant, wss://)──▶ NEXUS Core
+Android Worker ──(Outbound WebSocket, wss://)──▶ NEXUS Core
                                                    │
                                             WorkerGateway
                                                    │
@@ -25,245 +25,223 @@ Android Worker ──(WebSocket sortant, wss://)──▶ NEXUS Core
                                                  Agent
 ```
 
-Le téléphone appelle le cœur ; le cœur ne sait pas joindre un téléphone. Aucun
-port entrant, aucune redirection, aucune communication directe client → Redmi.
+The phone initiates outbound connections to the Core; the Core cannot connect to a phone.
+No inbound ports, no port forwarding, and no direct client-to-device communication.
 
-Rien n'est spécifique au Redmi : c'est une ligne en base, de type `ANDROID` et de
-rôle `WORKER`. Chercher « Redmi » dans le code ne donne rien.
-
----
-
-## Ce que le worker partage avec les autres exécutants
-
-|                                                            | Provenance                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------- |
-| Cycle de vie, poignée de main, reprise, battements de cœur | `@nexus/worker-core` — **le même code que le worker Windows** |
-| Registre de capacités, exécution d'étape, idempotence      | `@nexus/worker-core`                                          |
-| Authentification, sessions, anti-rejeu                     | `DeviceSessionService` de `@nexus/devices`, inchangé          |
-| Protocole de fil, événements                               | `@nexus/protocol`, inchangé                                   |
-
-Ce paquet n'ajoute que ce qui est propre à un téléphone : quatre ports Android,
-trois politiques, sept capacités, la santé de batterie, et la surveillance de
-disponibilité.
+Nothing in this codebase is hardcoded to a specific phone model: it operates as a standard
+device record with type `ANDROID` and role `WORKER`.
 
 ---
 
-## Contraintes Android, et ce qu'elles imposent
+## Shared Architecture with Other Workers
 
-Android n'autorise pas le contrôle à distance arbitraire. Ce worker ne cherche
-pas à contourner ce principe ; il en tire sa conception.
+|                                                    | Source                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| Lifecycle, handshake, reconnect, heartbeats        | `@nexus/worker-core` — **identical code to Windows worker**   |
+| Capability registry, step execution, idempotency   | `@nexus/worker-core`                                          |
+| Authentication, sessions, anti-replay              | `DeviceSessionService` from `@nexus/devices`, unmodified      |
+| Wire protocol, event framing                       | `@nexus/protocol`, unmodified                                 |
 
-| Capacité                | Mécanisme Android                             | Permission                                   | Accordée par                                                                        |
+This package only introduces Android-specific adaptations: four Android ports, three security
+policies, seven capabilities, battery status monitoring, and availability checks.
+
+---
+
+## Android Security Constraints
+
+Android deliberately prohibits arbitrary remote control. This worker does not attempt to
+circumvent these OS sandboxing principles; it bases its architecture upon them.
+
+| Capability              | Android Mechanism                             | Permission                                   | Granted by                                                                          |
 | ----------------------- | --------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `android.app.list`      | `queryIntentActivities`                       | `<queries>` sur `MAIN`/`LAUNCHER`            | le manifeste, sans action de l'utilisateur                                          |
-| `android.app.open`      | `getLaunchIntentForPackage` + `startActivity` | — (+ exemption de lancement en arrière-plan) | service d'accessibilité actif, ou MIUI : « fenêtres contextuelles en arrière-plan » |
-| `android.ui.click`      | `AccessibilityNodeInfo.ACTION_CLICK`          | `BIND_ACCESSIBILITY_SERVICE`                 | **l'utilisateur**, Réglages → Accessibilité                                         |
-| `android.ui.input`      | `ACTION_SET_TEXT`                             | idem                                         | idem                                                                                |
-| `android.ui.scroll`     | `ACTION_SCROLL_*` / `dispatchGesture`         | idem                                         | idem                                                                                |
-| `android.ui.screenshot` | `AccessibilityService.takeScreenshot()`       | idem + Android 11                            | idem                                                                                |
-| `android.notification`  | `NotificationManager.notify()`                | `POST_NOTIFICATIONS` (Android 13+)           | l'utilisateur, à la demande                                                         |
+| `android.app.list`      | `queryIntentActivities`                       | `<queries>` on `MAIN`/`LAUNCHER`             | App manifest, no user action required                                               |
+| `android.app.open`      | `getLaunchIntentForPackage` + `startActivity` | — (+ background start exemption)             | Active accessibility service or OEM background popup permission                     |
+| `android.ui.click`      | `AccessibilityNodeInfo.ACTION_CLICK`          | `BIND_ACCESSIBILITY_SERVICE`                 | **User**, Settings → Accessibility                                                  |
+| `android.ui.input`      | `ACTION_SET_TEXT`                             | same                                         | same                                                                                |
+| `android.ui.scroll`     | `ACTION_SCROLL_*` / `dispatchGesture`         | same                                         | same                                                                                |
+| `android.ui.screenshot` | `AccessibilityService.takeScreenshot()`       | same + Android 11+                           | same                                                                                |
+| `android.notification`  | `NotificationManager.notify()`                | `POST_NOTIFICATIONS` (Android 13+)           | User prompt upon request                                                            |
 
-### `QUERY_ALL_PACKAGES` n'est pas demandé
+### `QUERY_ALL_PACKAGES` Is Not Requested
 
-Depuis Android 11, la visibilité des paquets est filtrée. La permission globale
-existe, mais Google la restreint et elle donnerait l'inventaire logiciel complet
-— qui en dit long sur le propriétaire du téléphone. Le manifeste déclare à la
-place une requête sur les activités lançables : exactement les applications
-ouvrables, et rien d'autre.
+Since Android 11, package visibility is restricted. While a broad query permission exists,
+it requires special Google Play justification and exposes the complete software inventory of the
+device. Instead, the manifest declares an intent query matching launchable activities only:
+discovering launchable apps and nothing else.
 
-### `MediaProjection` a été écarté
+### `MediaProjection` Was Rejected
 
 |                         | `takeScreenshot()`                      | `MediaProjection`            |
 | ----------------------- | --------------------------------------- | ---------------------------- |
-| Permission              | le service d'accessibilité, déjà activé | dialogue système dédié       |
-| Portée                  | **une image, sur appel**                | un flux vidéo continu        |
-| Jeton                   | aucun                                   | valide bien après la capture |
-| Service de premier plan | non                                     | oui, permanent               |
+| Permission              | Accessibility Service (already granted) | Dedicated system dialog      |
+| Scope                   | **Single frame upon discrete call**     | Continuous video capture     |
+| Token                   | None                                    | Retained after capture       |
+| Foreground service      | No                                      | Yes, permanent notification  |
 
-`MediaProjection` donne un flux ; nous avons besoin d'une image. Le prendre
-« parce qu'il marche partout » installerait une autorisation d'enregistrement
-d'écran permanente pour un besoin ponctuel. Le prix : sous Android 10 et
-antérieur, la capacité n'est pas annoncée. Le Redmi Note 10S est livré sous
-Android 11.
+`MediaProjection` yields continuous streaming; NEXUS requires point-in-time screenshots.
+Relying on it would establish persistent screen recording privileges for intermittent needs.
+Trade-off: On Android 10 and below, screenshot capabilities cannot be advertised. Android 11+
+is required.
 
-### Ed25519 n'existe pas dans le magasin de clés d'Android
+### Ed25519 in Android Keystore
 
-Le choix se pose entre une clé Ed25519 **logicielle**, cohérente avec les autres
-appareils mais lisible par quiconque obtient les fichiers de l'application, et
-une clé **ECDSA P-256 adossée au matériel**, non extractible. On préfère la
-résistance à l'extraction à l'uniformité.
+Android Keystore historically lacked support for Ed25519 keys. The architectural choice was
+between a **software** Ed25519 key (consistent with other workers, but extractable from storage)
+or a **hardware-backed ECDSA P-256 key** in Android Keystore. NEXUS prioritizes hardware isolation
+and non-extractability.
 
-`DeviceSessionService` acceptait déjà un vérificateur injectable :
-`ecdsaP256Verifier` a été ajouté à côté d'`ed25519Verifier`, et
-`DeviceCredential.kind` gagne `ECDSA_P256_PUBLIC_KEY`. **Ce n'est pas un second
-système d'authentification** — challenge, session, rotation et anti-rejeu sont
-identiques ; seule la primitive de vérification change.
+`DeviceSessionService` supports pluggable verifiers: `ecdsaP256Verifier` sits alongside
+`ed25519Verifier`, and `DeviceCredential.kind` supports `ECDSA_P256_PUBLIC_KEY`. This is not a
+divergent authentication system: challenge generation, session tokens, rotation, and anti-replay
+logic remain identical; only the signature validation primitive differs.
 
 ---
 
-## Construire l'APK
+## Building the APK
 
-Prérequis : JDK 17, `ANDROID_HOME` renseigné. Le reste — Gradle 8.14.3, le
-greffon Android, la plateforme Android 36 — se télécharge tout seul.
+Prerequisites: JDK 17, `ANDROID_HOME` configured. Gradle 8.14.3, Android build tools, and Android
+Platform 36 download automatically.
 
 ```bash
 pnpm install
 
-# 1. Éditer `nexus.config.json` : URL du cœur, DEVICE_ID, capacités voulues.
-#    AUCUN SECRET n'y figure — la clé de l'appareil est désignée par un ALIAS
-#    dans le magasin de clés d'Android et ne quitte jamais le téléphone.
+# 1. Configure nexus.config.json: Core URL, DEVICE_ID, enabled capabilities.
+#    NO SECRETS ARE STORED HERE — the device key is referenced by an ALIAS
+#    in Android Keystore and never leaves the hardware.
 
-# 2. Construire.
+# 2. Build.
 cd services/android-worker/android
-./gradlew assembleDebug          # armeabi-v7a + arm64-v8a (téléphones)
+./gradlew assembleDebug          # armeabi-v7a + arm64-v8a (target phones)
 
-# Sur émulateur x86, préciser l'architecture :
+# For x86_64 emulators, specify architecture:
 ./gradlew assembleDebug -PreactNativeArchitectures=x86_64
 
-# 3. L'APK : app/build/outputs/apk/debug/app-debug.apk
+# 3. Output APK: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Une construction de débogage charge son JavaScript depuis Metro
-(`node node_modules/react-native/cli.js start`, puis `adb reverse tcp:8081 tcp:8081`).
-`assembleRelease` embarque le paquet ; il sort **non signé** tant qu'une clé n'est
-pas fournie hors dépôt — mieux vaut un artefact qui refuse de s'installer qu'une
-clé de signature versionnée.
+Debug builds load JavaScript from Metro (`node node_modules/react-native/cli.js start`, then
+`adb reverse tcp:8081 tcp:8081`). `assembleRelease` produces standalone bundles; output is
+unsigned until a private release keystore is provided outside the repository.
 
 ---
 
 ## Installation
 
-### APK publié (recommandé)
+### Published APK (Recommended)
 
-1. Installer l'APK **signé** de la release NEXUS.
-2. Dans le dashboard, ouvrir **Appareils**, créer un code et choisir
-   **Copier le lien Android**.
-3. Au premier lancement du worker, coller ce lien puis toucher **Appairer**.
-4. Revenir dans le dashboard et approuver l'appareil.
+1. Install the signed APK from the official NEXUS release assets.
+2. In the dashboard, open **Devices**, click **Create Pairing Code**, and select **Copy Android Link**.
+3. On first launch of the worker app, paste the pairing link and tap **Pair**.
+4. Return to the dashboard and approve the pending device.
 
-Le même APK sert à tous les téléphones : aucune URL ni aucun identifiant
-personnel n'est compilé dedans. La clé ECDSA P-256 est créée dans Android
-Keystore ; seul son certificat public est envoyé au cœur.
+The same universal APK works on all devices: no URLs or personal credentials are baked into the binary.
+The ECDSA P-256 key is generated inside Android Keystore; only the public certificate is registered
+with the Core.
 
-### Depuis les sources
+### From Source
 
 ```bash
-# 1. Enregistrer l'appareil côté cœur : type ANDROID, rôle WORKER.
-#    Le backend attribue DEVICE_ID et les permissions.
+# 1. Register device on Core: type ANDROID, role WORKER.
+#    Backend allocates DEVICE_ID and permissions.
 
-# 2. Installer l'APK sur le Redmi.
+# 2. Install APK on phone.
 
-# 3. Ouvrir NEXUS Worker. L'écran de gestion affiche la clé publique de
-#    l'appareil (ECDSA P-256, générée dans le magasin de clés au premier
-#    lancement) : la remettre au backend, puis approuver l'appareil.
+# 3. Open NEXUS Worker. Management screen displays the public key
+#    (ECDSA P-256 generated in Keystore on first launch):
+#    submit public key to backend and approve the device.
 
-# 4. Accorder les autorisations depuis l'écran de gestion :
-#    - Service d'accessibilité  → Réglages → Accessibilité → NEXUS Worker
-#    - Notifications            → Réglages → Applications → NEXUS Worker
+# 4. Grant permissions in Android Settings:
+#    - Accessibility Service -> Settings -> Accessibility -> NEXUS Worker
+#    - Notifications         -> Settings -> Apps -> NEXUS Worker
 
-# 5. Réglages spécifiques MIUI, sans lesquels le worker sera tué ou bloqué :
-#    - Autostart                                      → activer
-#    - Économiseur de batterie                        → « Aucune restriction »
-#    - Afficher les fenêtres contextuelles en arrière-plan → activer
+# 5. Disable vendor-specific battery killers (MIUI / HyperOS / Samsung):
+#    - Autostart               -> Enable
+#    - Battery Saver           -> "No restrictions"
+#    - Display popup in background -> Enable
 ```
 
-`.env.example` ne contient que des marqueurs — un test le vérifie. La clé de
-l'appareil y est désignée par un **alias**, jamais par sa valeur.
+`.env.example` contains placeholders only — verified by test. Device credentials are referenced
+strictly via keystore alias.
 
 ---
 
-## Sécurité
+## Security
 
-- **Un identifiant d'appareil n'authentifie rien.** Challenge signé à chaque
-  connexion ; la clé privée ne quitte pas le magasin de clés.
-- **Aucun point d'entrée générique.** `ports.ts` est la liste exhaustive de ce
-  que le JavaScript peut demander au système : pas d'`Intent` arbitraire, pas de
-  `runCommand`, pas d'`invoke(nom, args)`. Trois tests le vérifient sur le code
-  source.
-- **`android.app.open` n'accepte qu'un nom de paquet**, validé par forme, puis
-  filtré par une liste de refus qui l'emporte toujours sur la liste
-  d'autorisation. Réglages, installateur de paquets, portefeuilles et
-  gestionnaires de mots de passe sont fermés quoi qu'il arrive.
-- **Les clics par coordonnées sont désactivés par défaut.** Cliquer en
-  (540, 1200) touche ce qui s'y trouve, pas ce qu'on visait.
-- **Le texte saisi ne sort jamais** : ni journal, ni événement, ni résultat.
-  `android.ui.input` déclare `secretArguments: ["text"]`, ce que la rédaction
-  générique ne pouvait pas deviner d'un champ nommé `text`.
-- **Les captures ne sont ni journalisées, ni écrites sur disque, ni conservées**
-  par le cœur : la capacité déclare `sensitiveResult`, et le journal d'exécution
-  n'en garde qu'une mention. Un test vérifie qu'aucun fichier n'est écrit.
-- **Cadence de capture bornée** — la barrière contre l'enregistrement continu par
-  accumulation.
-- **Disponibilité revérifiée à chaque appel**, pas seulement au démarrage :
-  l'utilisateur peut désactiver le service d'accessibilité pendant qu'une tâche
-  tourne, et c'est son droit.
-- **Le worker ne fait pas confiance au cœur** sur ce qui est permis localement :
-  un cœur compromis ne doit pas suffire à lui faire exécuter une capacité que
-  l'utilisateur a désactivée.
+- **Device IDs never authenticate.** A fresh cryptographic challenge is signed on every connection.
+- **No generic entry points.** `ports.ts` exhaustively enumerates what JavaScript may request from
+  the Android OS: no arbitrary `Intent` broadcasting, no shell execution, no arbitrary reflection.
+- **`android.app.open` accepts package names only**, checked by format and filtered by a strict blocklist.
+  System settings, package installers, crypto wallets, and password managers are blocked unconditionally.
+- **Coordinate-based clicking is disabled by default.** Coordinate clicks hit whatever pixel is positioned
+  at the coordinates rather than semantically resolved UI elements.
+- **Input text is never logged or leaked**: `android.ui.input` declares `secretArguments: ["text"]`,
+  ensuring full redaction across logs, events, and task output.
+- **Screenshots are never persisted to disk or logged**: `sensitiveResult` ensures execution logs retain
+  only metadata references without writing image data to disk.
+- **Screen capture rate limiting** prevents continuous unauthorized video harvesting.
+- **Runtime availability checked per call**: if the user disables Accessibility mid-task, execution halts.
+- **Zero implicit trust in Core**: the worker enforces local restrictions independently of Core requests.
 
-### Ce qui n'existe pas, et ne doit pas exister
+### Excluded Capabilities by Design
 
-Lecture des notifications · enregistrement d'écran continu · micro · caméra ·
-SMS · contacts · position · `QUERY_ALL_PACKAGES`. Des tests scannent le code et
-le manifeste pour chacun.
+Notification reading · continuous video recording · microphone access · camera access · SMS ·
+contacts · location · `QUERY_ALL_PACKAGES`. Automated security tests scan code and manifest files
+to prevent accidental introduction.
 
 ---
 
-## Santé et état dégradé
+## Health and Battery States
 
-Un téléphone à 8 % de batterie reste joignable et capable, mais exécuter une
-automatisation d'interface dessus le vide et coupe le réveil du lendemain.
+A battery at 8% remains online, but UI automation would quickly drain the device and disable alarms.
 
-| Batterie                                   | État        | Effet                                                                   |
-| ------------------------------------------ | ----------- | ----------------------------------------------------------------------- |
-| > 20 %, ou en charge                       | normal      | tâches ordinaires                                                       |
-| ≤ 20 % sur batterie, ou économie d'énergie | **dégradé** | capacité annoncée réduite à 1 ; le sélecteur préfère un autre exécutant |
-| ≤ 10 % sur batterie                        | saturé      | refuse toute nouvelle tâche                                             |
+| Battery Level                      | Status     | Behavioral Effect                                                    |
+| ---------------------------------- | ---------- | -------------------------------------------------------------------- |
+| > 20%, or plugged in / charging    | Normal     | Accepts standard tasks                                               |
+| ≤ 20% on battery, or Power Saver   | **Degraded** | Advertised task capacity throttled to 1; selector prefers alternatives |
+| ≤ 10% on battery                   | Saturated  | Rejects all new tasks                                                |
 
-Rien d'autre n'est remonté : ni position, ni réseau, ni identité, ni liste
-d'applications ouvertes.
+No additional private telemetry is reported: no GPS coordinates, no Wi-Fi SSIDs, no hardware serials.
 
 ---
 
-## Liste de vérification sur appareil physique
+## Physical Hardware Verification Checklist
 
-**Aucun de ces points n'a été exécuté.** Il n'y a pas de Redmi Note 10S dans
-l'environnement de développement, et le comportement du système Android ne peut
-pas être validé par des tests unitaires. Cette liste est à dérouler sur
-l'appareil réel avant de considérer le worker opérationnel.
+**The following items require physical verification on test hardware.** Automated test suites
+verify logic via emulators; physical hardware behavior (especially vendor background execution
+restrictions) must be verified before production deployment:
 
-| #   | Vérification                               | Attendu                                                                         |
-| --- | ------------------------------------------ | ------------------------------------------------------------------------------- |
-| 1   | Installer l'APK                            | l'application se lance                                                          |
-| 2   | Appairer l'appareil auprès de NEXUS        | la clé publique s'affiche, le backend l'accepte                                 |
-| 3   | Approuver l'appareil côté cœur             | `trust` passe à `TRUSTED`                                                       |
-| 4   | Accorder les notifications                 | l'écran passe la ligne en « accordée »                                          |
-| 5   | Activer le service d'accessibilité         | idem, et les capacités d'interface apparaissent                                 |
-| 6   | Vérifier la capture                        | ligne « accordée » (Android ≥ 11)                                               |
-| 7   | Démarrer le worker                         | état « prêt »                                                                   |
-| 8   | Vérifier côté NEXUS                        | l'appareil est `ONLINE`                                                         |
-| 9   | Vérifier les capacités annoncées           | les sept, ou le sous-ensemble configuré                                         |
-| 10  | `android.app.open` sur Spotify             | l'application s'ouvre à l'écran                                                 |
-| 11  | `android.ui.screenshot`                    | une image revient sur le client, lisible                                        |
-| 12  | `android.ui.click` sur un bouton identifié | l'appui a lieu                                                                  |
-| 13  | `android.ui.input` dans un champ           | le texte apparaît ; **vérifier qu'il n'est nulle part dans les journaux**       |
-| 14  | `android.ui.scroll`                        | l'écran défile                                                                  |
-| 15  | `android.notification`                     | la notification s'affiche                                                       |
-| 16  | Désactiver le service d'accessibilité      | les trois capacités d'interface disparaissent du registre en moins d'une minute |
-| 17  | Vérifier côté client                       | un `device.capabilities_changed` est reçu                                       |
-| 18  | Réactiver le service                       | les capacités reviennent                                                        |
-| 19  | Couper le Wi-Fi et les données             | le worker passe `reconnecting`                                                  |
-| 20  | Rétablir le réseau                         | reconnexion, nouvelle poignée de main complète                                  |
-| 21  | Révoquer l'appareil côté cœur              | la session est invalidée                                                        |
-| 22  | Tenter une tâche                           | refusée ; le worker ne peut plus rien exécuter                                  |
-| 23  | Laisser la batterie descendre sous 20 %    | l'appareil passe `dégradé`                                                      |
-| 24  | Verrouiller l'écran 30 minutes             | la connexion tient (réglages MIUI appliqués)                                    |
+| #   | Step                                       | Expected Behavior                                                 |
+| --- | ------------------------------------------ | ----------------------------------------------------------------- |
+| 1   | Install APK                                | Application boots cleanly                                         |
+| 2   | Pair device with NEXUS                     | Public key renders, Core accepts registration                     |
+| 3   | Approve device in Core                     | Status transitions to `TRUSTED`                                   |
+| 4   | Grant notification permissions             | Status indicator updates to granted                               |
+| 5   | Enable Accessibility Service               | Status updates; UI capabilities register                          |
+| 6   | Verify screenshot permission               | Status updates to granted (Android 11+)                           |
+| 7   | Start worker daemon                        | Status shows "Ready"                                              |
+| 8   | Inspect Core dashboard                     | Device displays as `ONLINE`                                       |
+| 9   | Verify advertised capabilities             | All 7 capabilities reported                                       |
+| 10  | `android.app.open` (Spotify)               | Target app opens in foreground                                    |
+| 11  | `android.ui.screenshot`                    | Legible PNG image returned to client                              |
+| 12  | `android.ui.click` on identified node      | Node tap successfully dispatched                                  |
+| 13  | `android.ui.input` in text input field     | Text populated; verify absent from all logs                       |
+| 14  | `android.ui.scroll`                        | Viewport scrolls accordingly                                      |
+| 15  | `android.notification`                     | System notification displayed in tray                             |
+| 16  | Disable Accessibility Service              | 3 UI capabilities deregister from Core within 60s                 |
+| 17  | Verify client event stream                 | `device.capabilities_changed` emitted                             |
+| 18  | Re-enable Accessibility Service            | UI capabilities restored                                          |
+| 19  | Disconnect Wi-Fi and mobile data           | Worker enters `reconnecting` state                                |
+| 20  | Restore network connectivity               | Reconnects and completes full authentication handshake            |
+| 21  | Revoke device in Core                      | Active session terminated                                         |
+| 22  | Dispatch task to revoked worker            | Rejected immediately                                              |
+| 23  | Allow battery to drop below 20%            | Worker reports degraded status                                    |
+| 24  | Lock screen for 30 minutes                 | Connection sustained without OS termination                       |
 
 ---
 
-## Le canal vers le cœur
+## Transport Connection to Core
 
-Le worker dépend du port `WorkerLink` de `@nexus/worker-core`, pas du WebSocket :
+The worker depends on the `WorkerLink` port abstraction from `@nexus/worker-core`:
 
 ```ts
 export interface WorkerLink {
@@ -276,96 +254,54 @@ export interface WorkerLink {
 }
 ```
 
-Il y a `connect()`, il n'y a pas `listen()` : ce worker ne peut structurellement
-pas accepter de connexion entrante.
+The interface exposes `connect()`, not `listen()`: the worker cannot accept inbound connections.
 
-`AndroidWebSocketLink` (`src/connection/websocket-link.ts`) l'implémente sur le
-`WebSocket` de React Native — celui de la norme du navigateur, adossé à OkHttp.
-Il ouvre la socket vers `NEXUS_BACKEND_URL`, transmet les enveloppes JSON dans
-les deux sens et signale la fermeture. **Aucune logique** : authentification,
-enregistrement, dispatch, annulation, reprise et événements vivent dans
-`WorkerRuntime`, partagé avec le worker Windows.
+`AndroidWebSocketLink` (`src/connection/websocket-link.ts`) implements this over React Native's
+standard `WebSocket` client backed by OkHttp. Handshake, registration, task dispatch, cancellation,
+and event handling reside in `WorkerRuntime`, shared with the Windows worker.
 
-Trois protections lui sont propres :
+Three specific safeguards:
 
-|                           |                                                                                                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Adresse distante en clair | **refusée** — un téléphone se connecte depuis n'importe quel réseau. `localhost` et `10.0.2.2` (l'hôte vu de l'émulateur) sont les seules exceptions |
-| Délai d'établissement     | 15 s. React Native n'en applique aucun ; sans lui, un portail captif suspendrait la reprise indéfiniment                                             |
-| Trame descendante         | plafonnée à 256 Ko, et seul le texte est accepté                                                                                                     |
+| Safeguard                    | Rule                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Cleartext remote links banned| Enforced — phones connect from untrusted networks. `localhost` and `10.0.2.2` are developer exceptions|
+| Connection establishment timeout | 15s. Avoids hanging indefinitely behind captive portals                                           |
+| Inbound frame limit          | 256 KB max, text frames only                                                                         |
 
-### Épingler le cœur
+### Certificate Pinning
 
-Le worker Windows épingle la clé publique du cœur dans `checkServerIdentity`.
-**React Native n'expose pas d'équivalent** : le `WebSocket` du pont ne donne pas
-accès au certificat présenté. L'épinglage se fait donc là où Android le permet,
-dans `android/src/main/res/xml/network_security_config.xml` :
+The Windows worker pins the public key of the Core in `checkServerIdentity`. React Native's bridge
+does not expose certificate hooks directly; pinning is configured via Android's native network security
+configuration in `android/src/main/res/xml/network_security_config.xml`:
 
 ```xml
 <domain-config>
-    <domain includeSubdomains="true">nexus.exemple.fr</domain>
+    <domain includeSubdomains="true">nexus.example.com</domain>
     <pin-set expiration="2027-01-01">
-        <pin digest="SHA-256">EMPREINTE_BASE64_DE_LA_CLE_PUBLIQUE</pin>
-        <pin digest="SHA-256">EMPREINTE_DE_SECOURS</pin>
+        <pin digest="SHA-256">BASE64_PUBLIC_KEY_PIN</pin>
+        <pin digest="SHA-256">BACKUP_PIN</pin>
     </pin-set>
 </domain-config>
 ```
 
-C'est la plateforme qui applique la règle, sous la pile réseau — donc sous
-React Native, sous OkHttp, et sans qu'aucun code JavaScript puisse la contourner.
-Toujours déclarer une empreinte de secours : un épinglage sans rechange
-transforme un renouvellement de clé en réinstallation de l'APK.
+This is enforced by the operating system networking stack below OkHttp and React Native.
 
 ---
 
-## Ce qui a été réellement observé
+## Known Limitations
 
-Sur un émulateur **Pixel 8, API 36**, contre un cœur réel (vrai `WorkerGateway`,
-vrai `DeviceSessionService`, vraie vérification `ecdsaP256Verifier`) :
-
-| Étape                                         | Résultat                                                                                     |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `./gradlew assembleDebug`                     | APK produit                                                                                  |
-| Installation, lancement                       | l'écran de gestion s'affiche                                                                 |
-| Clé de l'appareil                             | ECDSA P-256 **créée dans AndroidKeyStore** au premier lancement                              |
-| Poignée de main                               | `hello` → challenge → signature du Keystore → session ouverte                                |
-| Enregistrement                                | 3 capacités d'abord, **7 après activation de l'accessibilité**, réannoncées sans redémarrage |
-| Battements                                    | continus sur 8 minutes                                                                       |
-| `android.app.list`                            | vraie liste du `PackageManager`                                                              |
-| `android.notification`                        | notification réellement postée                                                               |
-| `android.ui.screenshot`                       | PNG de 203 Ko capturé par le service d'accessibilité                                         |
-| `android.ui.scroll`                           | geste réellement dispatché                                                                   |
-| `android.ui.click` sur un élément absent      | `ANDROID_UI_NODE_NOT_FOUND`                                                                  |
-| `android.app.open` sur les Réglages           | **refusé par `AppPolicy`**                                                                   |
-| `android.ui.click` avec accessibilité éteinte | **`CAPABILITY_UNAVAILABLE`** — non annoncée, donc non choisie                                |
-
----
-
-## Limites connues
-
-1. **Aucun test n'a tourné sur un Redmi Note 10S.** Un Pixel 8 sous Android
-   d'origine ne reproduit ni MIUI, ni son autostart, ni son tueur de tâches —
-   c'est-à-dire précisément ce qui est risqué. La liste de vérification
-   ci-dessus reste à dérouler.
-2. **`WorkerActivity` et `ui/` ne sont pas couverts par le typecheck du dépôt.**
-   Ils sont compilés par Metro, avec sa propre résolution de modules. Le code
-   métier, lui, est dans `src/` et l'est intégralement.
-3. **L'épinglage du cœur n'est pas activé par défaut** : il exige l'empreinte du
-   certificat, qui dépend du déploiement. Sans lui, l'identité du cœur repose
-   sur les autorités du système — c'est un cran en dessous du worker Windows.
-4. **L'annulation est côté JavaScript.** Le pont React Native ne transporte pas
-   d'`AbortSignal` : le Kotlin ne l'observe pas. L'appui a peut-être déjà eu lieu
-   quand l'annulation arrive.
-5. **`android.app.open` peut être bloqué** par les restrictions de lancement en
-   arrière-plan, notamment sur MIUI. L'erreur le dit et indique quoi activer.
-6. **Le sondage de disponibilité est périodique** (30 s par défaut) : Android ne
-   diffuse pas l'activation d'un service d'accessibilité.
-7. **Aucun test n'a été fait sur Android < 11** : la capture n'y serait pas
-   annoncée, ce qui est le comportement voulu mais n'a pas été observé.
-8. **Le code partagé suppose Node.** `@nexus/shared` utilise `node:crypto` et
-   `Buffer`, absents du moteur JavaScript d'Android. `shim/` les traduit — l'aléa
-   vient de `java.security.SecureRandom`, jamais de `Math.random`. Ce qui n'est
-   pas implémenté lève plutôt que d'approximer.
-9. **L'architecture historique de React Native est utilisée** (`newArchEnabled=false`).
-   Elle est dépréciée et disparaîtra ; migrer demandera de réécrire le pont en
-   TurboModule.
+1. **Physical OEM testing outstanding.** Emulators do not replicate proprietary OEM background task
+   killers or autostart managers.
+2. **`WorkerActivity` and `ui/` are built via Metro**, outside default repository TypeScript typechecking.
+   Core business logic in `src/` is 100% typechecked.
+3. **Core certificate pinning is deployment-specific** and disabled in default development templates.
+4. **Cancellation occurs at JavaScript boundary.** The React Native bridge does not propagate `AbortSignal`
+   to native Accessibility threads.
+5. **`android.app.open` may encounter OEM background start restrictions.** Descriptive error messages guide
+   users on necessary permission toggles.
+6. **Availability polling is periodic** (default 30s) as Android does not broadcast Accessibility service state changes.
+7. **Android versions below 11 are unsupported for screenshots.**
+8. **Shared code polyfills Node primitives.** `@nexus/shared` utilizes `node:crypto` and `Buffer`; `shim/`
+   provides cryptographic primitives backed by `java.security.SecureRandom`.
+9. **Legacy React Native architecture** (`newArchEnabled=false`). Future upgrades will migrate bridge calls
+   to TurboModules.

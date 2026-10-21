@@ -1,23 +1,22 @@
 # Browser Worker
 
-Worker Python isolé qui pilote un navigateur via [browser-use](https://github.com/browser-use/browser-use).
+Isolated Python worker that drives a browser via [browser-use](https://github.com/browser-use/browser-use).
 
-**État : implémenté et testé.** 75 tests unitaires et d'intégration, 11 tests de
-contrat TS ↔ Python, 6 tests de communication réelle, 2 tests end-to-end sur un
-site local (optionnels).
+**Status: Implemented and tested.** 75 unit and integration tests, 11 TypeScript ↔ Python contract
+tests, 6 real-communication tests, 2 local end-to-end tests (optional).
 
 ---
 
-## Pourquoi un service séparé
+## Why a Separate Service
 
-Trois raisons, aucune négociable :
+Three non-negotiable reasons:
 
-1. **Langage.** Le backend est TypeScript, `browser-use` est Python. La frontière
-   est un contrat HTTP, jamais un binding (ADR-006).
-2. **Ressources.** Un Chromium consomme 300 Mo à 1 Go et peut planter. Il ne doit
-   pas pouvoir faire tomber l'API.
-3. **Sécurité.** Le navigateur visite du contenu hostile par définition. Il tourne
-   sans port publié, sans secret applicatif, en utilisateur non privilégié.
+1. **Language.** The backend is TypeScript; `browser-use` is Python. The boundary is an HTTP
+   contract, never an in-process binding (ADR-006).
+2. **Resources.** Chromium consumes between 300 MB and 1 GB of RAM and can crash. It must not
+   destabilize or exhaust memory on the API server.
+3. **Security.** The browser visits untrusted external content by definition. It runs without
+   publicly exposed ports, without application secrets, and under an unprivileged user account.
 
 ```
 Agent Core ─▶ BrowserWorkerClient ─▶ Browser Worker ─▶ browser-use ─▶ Chromium
@@ -28,205 +27,192 @@ Agent Core ─▶ BrowserWorkerClient ─▶ Browser Worker ─▶ browser-use �
 
 ## Installation
 
-### En local
+### Local Environment
 
 ```bash
 cd services/browser-worker
 
-python -m venv .venv                 # Python 3.11 ou plus récent
-.venv/Scripts/activate               # Windows ;  source .venv/bin/activate ailleurs
+python -m venv .venv                 # Python 3.11 or newer
+.venv/Scripts/activate               # Windows; source .venv/bin/activate on Linux/macOS
 pip install -e ".[dev]"
 python -m playwright install chromium
 
 export BROWSER_WORKER_AUTH_TOKEN=$(openssl rand -hex 32)
-export BROWSER_WORKER_LLM_API_KEY=...          # clé Anthropic
+export BROWSER_WORKER_LLM_API_KEY=...          # Anthropic API key
 
 uvicorn app.main:build --factory --port 8100
 curl http://localhost:8100/v1/health
 ```
 
-L'installation télécharge Chromium (~150 Mo) et une centaine de paquets ; comptez
-plusieurs minutes la première fois.
+Installation downloads Chromium (~150 MB) and ~100 Python packages; allow a few minutes on first run.
 
-### Avec Docker
+### With Docker
 
-Le worker est un **profil optionnel** : son image embarque Chromium (~1,5 Go) et
-n'a aucune raison de démarrer quand on travaille sur l'API.
+The worker is an **optional Docker profile**: its container image includes Chromium (~1.5 GB) and
+does not need to run during standard backend development.
 
 ```bash
-# Dans le .env à la racine :
+# In the root .env:
 BROWSER_WORKER_TOKEN=$(openssl rand -hex 32)
 LLM_API_KEY=...
 
-pnpm docker:browser        # construit et démarre le seul worker
+pnpm docker:browser        # Builds and runs only the browser worker container
 ```
 
-Aucun port n'est publié : le worker n'est joignable que depuis le réseau Docker
-interne. C'est délibéré — **ne l'exposez jamais à Internet.**
+No host port is published: the worker is reachable exclusively over the internal Docker network.
+This is deliberate — **never expose this service directly to the Internet.**
 
 ---
 
 ## Configuration
 
-Toutes les variables sont préfixées `BROWSER_WORKER_` et validées au démarrage :
-une valeur manquante empêche le boot plutôt que d'échouer à la première requête.
+All configuration variables are prefixed with `BROWSER_WORKER_` and validated at startup:
+a missing mandatory parameter prevents startup rather than failing on the first incoming request.
 
-| Variable                       | Défaut              | Rôle                                                     |
+| Variable                       | Default             | Purpose                                                  |
 | ------------------------------ | ------------------- | -------------------------------------------------------- |
-| `AUTH_TOKEN`                   | —                   | **Obligatoire**, 16 caractères minimum. Jeton de service |
-| `LLM_MODEL`                    | `claude-sonnet-4-5` | Modèle qui pilote le navigateur                          |
-| `LLM_API_KEY`                  | —                   | Clé du fournisseur                                       |
-| `HEADLESS`                     | `true`              | `false` pour voir le navigateur, utile au débogage       |
-| `MAX_SESSIONS`                 | `5`                 | Navigateurs simultanés                                   |
-| `SESSION_TTL_SECONDS`          | `600`               | Durée de vie d'une session inactive                      |
-| `DEFAULT_TASK_TIMEOUT_SECONDS` | `180`               | Délai d'une tâche                                        |
-| `ALLOW_PRIVATE_HOSTS`          | `false`             | **Tests seulement.** Autorise `127.0.0.1`                |
-| `LOG_LEVEL`                    | `INFO`              |                                                          |
+| `AUTH_TOKEN`                   | —                   | **Mandatory**, minimum 16 characters. Shared auth token  |
+| `LLM_MODEL`                    | `claude-sonnet-4-5` | Model used by browser-use to navigate                    |
+| `LLM_API_KEY`                  | —                   | Provider API key                                         |
+| `HEADLESS`                     | `true`              | Set `false` to display the UI (useful for debugging)     |
+| `MAX_SESSIONS`                 | `5`                 | Maximum simultaneous browser instances                   |
+| `SESSION_TTL_SECONDS`          | `600`               | Idle session lifetime                                    |
+| `DEFAULT_TASK_TIMEOUT_SECONDS` | `180`               | Maximum task execution timeout                           |
+| `ALLOW_PRIVATE_HOSTS`          | `false`             | **Testing only.** Allows `127.0.0.1` private addresses   |
+| `LOG_LEVEL`                    | `INFO`              | Log verbosity level                                      |
 
 ---
 
 ## API
 
-Toutes les routes exigent `Authorization: Bearer <token>`, sauf `/v1/health` —
-qui doit rester joignable même quand le jeton est mal configuré, sinon le
-diagnostic devient impossible.
+All endpoints require `Authorization: Bearer <token>`, except `/v1/health` — which remains accessible
+without credentials so that health checks and misconfiguration diagnostics can always be performed.
 
-| Verbe    | Route                     | Rôle                                          |
-| -------- | ------------------------- | --------------------------------------------- |
-| `GET`    | `/v1/health`              | État, version du protocole, sessions ouvertes |
-| `POST`   | `/v1/sessions`            | Ouvre un navigateur isolé                     |
-| `GET`    | `/v1/sessions/{id}`       | État de la session                            |
-| `DELETE` | `/v1/sessions/{id}`       | Ferme et libère                               |
-| `POST`   | `/v1/sessions/{id}/tasks` | Lance une tâche (rend la main aussitôt)       |
-| `GET`    | `/v1/tasks/{id}?since=N`  | État + événements depuis `N`                  |
-| `POST`   | `/v1/tasks/{id}/cancel`   | Annulation coopérative                        |
+| Verb     | Route                     | Purpose                                          |
+| -------- | ------------------------- | ------------------------------------------------ |
+| `GET`    | `/v1/health`              | Health status, protocol version, active sessions |
+| `POST`   | `/v1/sessions`            | Spawns an isolated browser instance              |
+| `GET`    | `/v1/sessions/{id}`       | Queries session state                            |
+| `DELETE` | `/v1/sessions/{id}`       | Closes browser and releases resources            |
+| `POST`   | `/v1/sessions/{id}/tasks` | Dispatches task (returns immediately)            |
+| `GET`    | `/v1/tasks/{id}?since=N`  | Retrieves task state + events since sequence `N` |
+| `POST`   | `/v1/tasks/{id}/cancel`   | Cooperative cancellation                         |
 
-Les événements sont numérotés (`seq`) : une reprise après coupure ne perd rien et
-ne rejoue rien. Types : `started`, `navigation`, `thinking`, `action`,
-`progress`, `result`, `error`, `finished`.
-
----
-
-## Intentions : la sécurité au bon endroit
-
-Le backend décide _ce qu'on veut faire_, le worker décide _ce qu'il est possible
-de faire_. Un backend compromis ne doit pas pouvoir transformer une lecture en
-achat.
-
-| Intention  | Outil agent        | Risque   | Confirmation | Actions retirées                    |
-| ---------- | ------------------ | -------- | ------------ | ----------------------------------- |
-| `read`     | `browser.read`     | SAFE     | non          | clic, saisie, onglets, JS, fichiers |
-| `interact` | `browser.interact` | MEDIUM   | oui          | JS, fichiers                        |
-| `login`    | `browser.login`    | HIGH     | oui          | JS, fichiers                        |
-| `purchase` | `browser.purchase` | CRITICAL | oui          | JS, fichiers                        |
-
-**`evaluate` (JavaScript arbitraire) est retirée pour toutes les intentions.**
-Elle contournerait toute restriction posée au niveau de l'interface et
-permettrait d'exfiltrer cookies et jetons. Les actions de fichier le sont aussi :
-le navigateur n'a aucune raison d'accéder au disque du worker.
-
-`interact`, `login` et `purchase` partagent le même jeu d'actions — cliquer pour
-filtrer et cliquer pour payer sont techniquement le même geste. Ce qui les sépare
-est ailleurs : permissions exigées, confirmation demandée, consigne donnée au
-modèle. C'est assumé plutôt que déguisé.
-
-L'exemple du cahier des charges se lit directement dans ce tableau :
-
-- « Va sur ce site et cherche le prix d'un billet » → `browser.read` → **aucune
-  confirmation**.
-- « Achète le billet » → `browser.purchase` → **confirmation obligatoire**, et le
-  montant exact doit figurer dans l'aperçu.
+Events are strictly sequenced (`seq`): reconnecting after a network interruption loses no events and
+replays none. Event types: `started`, `navigation`, `thinking`, `action`, `progress`, `result`,
+`error`, `finished`.
 
 ---
 
-## CAPTCHA, MFA : jamais contournés
+## Intents: Security at the Right Layer
 
-Trois lignes de défense, dans cet ordre :
+The backend decides *what the user intends to do*; the worker decides *what actions are physically permitted*.
+A compromised backend cannot unilaterally escalate a read intent into a purchase.
 
-1. **Consigne en tête de prompt**, avant les instructions de l'utilisateur :
-   ne jamais résoudre un CAPTCHA, ne jamais contourner un second facteur,
-   s'arrêter et expliquer.
-2. **Détection sur la sortie** : si le résultat mentionne une vérification
-   humaine, la tâche se termine en `needs_human`.
-3. **Statut dédié**, pas un échec : l'agent reçoit un message rédigé pour être
-   relayé tel quel à l'utilisateur, qui prend la main sur cette étape.
+| Intent     | Agent Tool         | Risk Level | Confirmation | Stripped Actions                     |
+| ---------- | ------------------ | ---------- | ------------ | ------------------------------------ |
+| `read`     | `browser.read`     | SAFE       | No           | click, input, tabs, JS eval, file ops|
+| `interact` | `browser.interact` | MEDIUM     | Yes          | JS eval, file ops                    |
+| `login`    | `browser.login`    | HIGH       | Yes          | JS eval, file ops                    |
+| `purchase` | `browser.purchase` | CRITICAL   | Yes          | JS eval, file ops                    |
 
-Le worker ne contient aucun code de résolution de CAPTCHA et n'en contiendra pas.
+**`evaluate` (arbitrary JavaScript execution) is stripped across all intents.** It would bypass
+all interface restrictions and could be exploited to exfiltrate cookies and session tokens. File operations
+are also stripped: the browser has no legitimate reason to access the worker's filesystem.
+
+`interact`, `login`, and `purchase` share identical allowed action primitives — clicking to filter results
+and clicking to purchase are physically identical browser gestures. What distinguishes them is external:
+required permissions, human confirmation requirements, and system instructions provided to the model.
+
+Example:
+
+- "Go to this website and check the ticket price" → `browser.read` → **no confirmation required**.
+- "Purchase the ticket" → `browser.purchase` → **mandatory human confirmation**, with the exact price
+  rendered in the preview modal.
 
 ---
 
-## Secrets
+## CAPTCHA and MFA: Never Automated
 
-| Règle                                   | Mise en œuvre                                                                                                                      |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Le modèle ne voit jamais un identifiant | Transmis à browser-use via `sensitive_data`, qui substitue à l'envoi                                                               |
-| Rien ne ressort                         | `redact_text()` sur la sortie, les erreurs et chaque événement, avec les valeurs connues de la tâche                               |
-| Rien n'est journalisé                   | Filtre de rédaction sur le gestionnaire racine : par nom de clé **et** par forme de valeur (`sk-…`, `ghp_…`, JWT, numéro de carte) |
-| La configuration ne fuit pas            | `describe()` ne rend que les clés, jamais les valeurs                                                                              |
+Three layers of defense, applied in sequence:
+
+1. **System Prompt Constraint**: Placed ahead of user instructions: never attempt to solve CAPTCHAs,
+   never bypass secondary authentication factors; halt immediately and describe the obstacle.
+2. **Output Detection**: If the model output indicates human intervention is required, the task transitions
+   to `needs_human`.
+3. **Dedicated Status**: Not classified as a failure: the agent receives an explanatory message formatted
+   for direct presentation to the user, allowing them to take control of the session.
+
+The worker contains zero CAPTCHA solving code and will not include any.
 
 ---
 
-## Réseau
+## Secrets Management
 
-`DomainPolicy` refuse toujours — quelle que soit la configuration — `localhost`,
-les plages privées RFC 1918, et les points de métadonnées cloud
-(`169.254.169.254`). Un agent qui visite du contenu hostile ne doit pas servir de
-relai vers l'intérieur.
+| Rule                                    | Implementation                                                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| LLM never receives raw credentials      | Passed to browser-use via `sensitive_data`, which substitutes values upon form submission                                     |
+| No secret leakage in output             | `redact_text()` applied to task output, error messages, and events, matching known sensitive task inputs                      |
+| Zero secrets logged                     | Log redaction filter on root logger: by parameter key name **and** regex pattern (`sk-...`, `ghp_...`, JWTs, credit card numbers) |
+| Configuration values never leak         | `describe()` exports parameter names and flags, never secret values                                                           |
 
-Une liste d'autorisation par session restreint la navigation ; elle est appliquée
-par `BrowserProfile`, donc par le navigateur lui-même.
+---
+
+## Network Isolation
+
+`DomainPolicy` unconditionally blocks `localhost`, RFC 1918 private subnets, and cloud metadata
+endpoints (`169.254.169.254`). An agent browsing untrusted external pages must never serve as an internal SSRF pivot.
+
+A per-session allowlist can restrict navigation to authorized hostnames, enforced at the browser engine level via `BrowserProfile`.
 
 ---
 
 ## Tests
 
 ```bash
-pytest                       # 75 tests, sans navigateur ni modèle
-pytest -m browser            # + 2 tests end-to-end (Chromium et clé LLM requis)
+pytest                       # 75 unit/integration tests without browser or LLM
+pytest -m browser            # + 2 end-to-end tests (requires Chromium and LLM key)
 ruff check . && ruff format --check .
 ```
 
-Seul le couple navigateur + modèle est remplacé (`FakeRunner`) : routes,
-authentification, sessions, politiques, événements, annulation et rédaction
-s'exécutent réellement.
+Only the browser + model runner is mocked (`FakeRunner`): API routes, authentication, sessions, policies,
+events, cancellation, and redaction logic run against real implementations.
 
-### Contrat TypeScript ↔ Python
+### TypeScript ↔ Python Contract
 
 ```bash
-pnpm --filter @nexus/browser-client contract:emit   # après toute modification du protocole
+pnpm --filter @nexus/browser-client contract:emit   # after any protocol schema change
 pytest tests/test_contract.py
 ```
 
-Le contrat est généré depuis les schémas Zod du backend et comparé aux modèles
-Pydantic : noms de champs, champs obligatoires, valeurs d'énumération, variantes
-d'événements. Une divergence casse le build, pas la production (risque R7).
+The contract schema is emitted from backend Zod definitions and validated against Python Pydantic models:
+field names, required attributes, enum values, and event variants. Schema drift breaks the CI build before
+reaching production (Risk R7).
 
-### Communication réelle
+### Real Process Communication
 
 ```bash
-NEXUS_WORKER_PYTHON=/chemin/vers/python \
+NEXUS_WORKER_PYTHON=/path/to/python \
   pnpm --filter @nexus/browser-client test
 ```
 
-Lance le vrai worker et le pilote avec le vrai client : HTTP, sérialisation,
-authentification, codes d'erreur.
+Spawns the real Python worker and drives it with the TypeScript client over HTTP: testing JSON serialization,
+token authentication, and HTTP error handling.
 
-### Exemple end-to-end
+### Local End-to-End Test
 
-`tests/test_e2e_local_site.py` sert une page de vols depuis le processus de test
-et demande à l'agent d'en extraire un prix — puis vérifie qu'une tâche `read` ne
-peut **pas** cliquer sur « Acheter », même en le lui ordonnant. Site local :
-aucun accès Internet requis, et le contenu attendu ne change pas du jour au
-lendemain.
+`tests/test_e2e_local_site.py` serves a local flight booking mock page directly from the test runner and directs
+the agent to extract flight prices — then verifies that a `read` task is strictly **prevented** from clicking
+"Purchase". Zero external internet access is required, ensuring reproducible, deterministic tests.
 
 ---
 
-## Diagnostic
+## Diagnostics
 
-| Symptôme                                       | Cause probable                                                                                                            |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `status: "degraded"` sur `/v1/health`          | `browser-use` n'est pas installé — le worker démarre quand même, pour rester diagnosticable                               |
-| Le worker refuse de démarrer                   | `BROWSER_WORKER_AUTH_TOKEN` absent ou trop court (16 caractères minimum)                                                  |
-| `BROWSER_SESSION_BUSY`                         | Limite de sessions atteinte, ou une tâche tourne déjà dans cette session                                                  |
-| Chromium plante en conteneur                   | `shm_size` insuffisant — 1 Go est configuré dans le compose                                                               |
-| Journal : « actions restreintes introuvables » | Mise à jour de browser-use avec des actions renommées. **À corriger sans délai** : une restriction d'intention est tombée |
+| Symptom                                | Likely Cause                                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `status: "degraded"` on `/v1/health`   | `browser-use` is not installed — worker boots in degraded mode to remain diagnostic-friendly                                |
+| Worker refuses to start                | `BROWSER_WORKER_AUTH_TOKEN` missing or under 16 characters                                                                  |
+| `BROWSER_SESSION_BUSY`                 | Session limit reached, or a task is already running in the selected session                                                 |
+| Chromium crashes in container          | Insufficient shared memory (`shm_size`) — minimum 1 GB configured in compose                                                |
+| Log: "restricted actions not found"    | Upstream browser-use update modified action names. **Resolve immediately**: an intent restriction may be rendered inactive |

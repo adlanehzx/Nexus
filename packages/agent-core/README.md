@@ -1,80 +1,76 @@
 # @nexus/agent-core
 
-Moteur d'agent : reçoit une demande utilisateur, produit une réponse finale, en
-utilisant dynamiquement les outils disponibles — sous permissions.
+Agent execution engine: ingests user requests, produces final answers, and dynamically invokes available
+tools under explicit permission policies.
 
-**État : implémenté et testé.** 43 tests dans ce paquet, 37 dans `@nexus/tools`.
+**Status: Implemented and thoroughly tested.** 43 unit tests in this package, 37 in `@nexus/tools`.
 
 ---
 
-## Le contrat en une phrase
+## Core Contract
 
-> Le modèle ne peut rien faire d'autre qu'émettre du texte et **demander**
-> l'exécution d'un outil. Un appel d'outil ne provient jamais que d'un bloc
-> structuré renvoyé par le fournisseur — aucun texte n'est analysé pour en
-> déduire une action.
+> The model can do nothing other than emit text tokens and **request** tool executions. A tool call
+> originates strictly from structured blocks emitted by provider adapters — zero prose text is scraped
+> to infer tool actions.
 
-## Pièces
+## Package Architecture
 
-| Pièce               | Rôle                                                              | Fichier               |
-| ------------------- | ----------------------------------------------------------------- | --------------------- |
-| `AgentOrchestrator` | Cycle de vie : créer, reprendre, annuler, tracer                  | `src/orchestrator.ts` |
-| `AgentLoop`         | La boucle elle-même : observer → raisonner → autoriser → exécuter | `src/loop.ts`         |
-| `AgentContext`      | Ce que le modèle voit : système, souvenirs, transcript            | `src/context.ts`      |
-| `AgentState`        | État sérialisable d'un run — la base de la suspension             | `src/state.ts`        |
-| `Planner`           | Traduit l'état en appel LLM, et la réponse en décision typée      | `src/planner.ts`      |
-| `ExecutionPolicy`   | Budgets et garde-fous, sous forme de **données**                  | `src/policy.ts`       |
-| `AgentRunStore`     | Port de persistance (implémentation mémoire fournie)              | `src/store.ts`        |
-| `AgentEventEmitter` | Trace en direct : itérations, outils, confirmations               | `src/events.ts`       |
-| `redact`            | Masquage des secrets avant toute journalisation                   | `src/redaction.ts`    |
+| Component           | Role                                                                    | Source File           |
+| ------------------- | ----------------------------------------------------------------------- | --------------------- |
+| `AgentOrchestrator` | Run lifecycle management: create, resume, cancel, trace                | `src/orchestrator.ts` |
+| `AgentLoop`         | Core execution loop: observe → reason → authorize → execute             | `src/loop.ts`         |
+| `AgentContext`      | Model prompt context: system prompt, memories, conversation transcript  | `src/context.ts`      |
+| `AgentState`        | Serializable run state — the foundation of durable suspension           | `src/state.ts`        |
+| `Planner`           | Translates state into LLM calls, and outputs into typed decisions       | `src/planner.ts`      |
+| `ExecutionPolicy`   | Execution budgets and safeguards defined as **data**                    | `src/policy.ts`       |
+| `AgentRunStore`     | Persistence port interface (in-memory implementation included)          | `src/store.ts`        |
+| `AgentEventEmitter` | Real-time observability: iterations, tool calls, confirmation prompts   | `src/events.ts`       |
+| `redact`            | Credential masking applied prior to logging and tracing                 | `src/redaction.ts`    |
 
-Le plan de capacité — `ToolRegistry`, `ToolExecutor`, `PermissionService`,
-`ConfirmationService`, `ToolDefinition` — vit dans [`@nexus/tools`](../tools).
-`agent-core` ne dépend ni de la base de données, ni de MCP, ni d'un SDK de
-fournisseur (ADR-003, ADR-004).
+The capability plane — `ToolRegistry`, `ToolExecutor`, `PermissionService`, `ConfirmationService`,
+`ToolDefinition` — lives in [`@nexus/tools`](../tools).
+`agent-core` depends neither on databases, nor on MCP, nor on vendor SDKs (ADR-003, ADR-004).
 
-## Boucle
+## Execution Loop
 
 ```
         ┌──────────────────────────────────────────────────────────┐
         ▼                                                          │
-  gardes ─▶ raisonner ─▶ décision ─┬─ réponse finale ─▶ COMPLETED   │
-  budget    (LLM)                  │                               │
-  délai                            └─ appels d'outils              │
-  annulation                              │                        │
-  échecs                                  ▼                        │
-                                    résoudre l'outil                │
-                                    valider les arguments (Zod)     │
-                                    anti-boucle                     │
-                                    PermissionService               │
-                                      ├─ DENY    ─▶ observation ────┤
-                                      ├─ CONFIRM ─▶ WAITING_FOR_    │
-                                      │            CONFIRMATION     │
-                                      │            (worker libéré)  │
-                                      └─ ALLOW   ─▶ ToolExecutor ───┘
+   guards ─▶ reason ─▶ decision ─┬─ final answer ─▶ COMPLETED      │
+   budget     (LLM)              │                                 │
+   timeout                       └─ tool calls                     │
+   cancellation                            │                       │
+   failures                                ▼                       │
+                                    resolve tool                   │
+                                    validate arguments (Zod)       │
+                                    anti-loop check                │
+                                    PermissionService              │
+                                      ├─ DENY    ─▶ observation ───┤
+                                      ├─ CONFIRM ─▶ WAITING_FOR_   │
+                                      │            CONFIRMATION    │
+                                      │            (worker freed)  │
+                                      └─ ALLOW   ─▶ ToolExecutor ──┘
                                                    timeout · retry ·
                                                    backoff · validation
 ```
 
-**Un échec n'est pas un plantage.** Outil inconnu, arguments invalides,
-permission refusée, exécution ratée, sortie non conforme : tout redevient une
-observation que le modèle traite au tour suivant. La boucle ne s'arrête que sur
-un budget épuisé, une annulation, ou une panne du fournisseur.
+**An execution failure is not an unhandled crash.** Unknown tools, invalid argument schemas, denied
+permissions, failed executions, and schema mismatches all become observations fed back to the model on
+the next iteration. The loop terminates strictly on exhausted budgets, cancellations, or provider outages.
 
-## États
+## States
 
 `pending → running → { completed | incomplete | failed | cancelled }`,
-avec `waiting_for_confirmation` comme état réel entre les deux.
+with `waiting_for_confirmation` as an explicit suspended state.
 
-`incomplete` est de première classe : quand un budget s'épuise, l'agent **doit**
-dire ce qu'il a fait et ce qui reste. Un agent qui s'arrête en silence est un
-défaut produit, pas un cas limite.
+`incomplete` is a first-class state: when budgets are hit, the agent **must** synthesize what it
+accomplished and what remains. An agent halting in silence is a product defect.
 
-`stopReason` précise : `final_answer`, `max_iterations`, `max_tool_calls`,
-`global_timeout`, `tool_failure_limit`, `cancelled`, `confirmation_rejected`,
-`confirmation_expired`, `provider_error`, `internal_error`.
+`stopReason` values: `final_answer`, `max_iterations`, `max_tool_calls`, `global_timeout`,
+`tool_failure_limit`, `cancelled`, `confirmation_rejected`, `confirmation_expired`, `provider_error`,
+`internal_error`.
 
-## Utilisation
+## Usage Example
 
 ```ts
 import { AgentOrchestrator } from "@nexus/agent-core";
@@ -98,19 +94,18 @@ orchestrator.on((event) => logger.info(event));
 const { record, confirmation } = await orchestrator.run({
   userId: "user-1",
   conversationId: "conv-1",
-  message: "Regarde mes emails et dis-moi lesquels sont importants",
+  message: "Check my unread emails and highlight important ones",
 });
 
 if (record.status === "waiting_for_confirmation") {
-  // `confirmation` porte l'aperçu exact à montrer à l'utilisateur.
+  // `confirmation` holds the exact payload preview to present to the user
   const resumed = await orchestrator.resume(record.runId, "approved");
 }
 ```
 
-### Annuler en vol
+### In-Flight Cancellation
 
-Le `runId` est publié par l'événement `run.started`, émis **avant** que `run()`
-ne rende la main, et l'état est persisté dès ce moment :
+The `runId` is emitted via `run.started` **before** `run()` yields control, with state persisted immediately:
 
 ```ts
 orchestrator.on((e) => {
@@ -119,9 +114,9 @@ orchestrator.on((e) => {
 await orchestrator.cancel(currentRunId);
 ```
 
-## Observabilité
+## Observability
 
-Chaque run produit un `AgentRunRecord` :
+Every run produces an immutable `AgentRunRecord`:
 
 ```ts
 {
@@ -134,53 +129,36 @@ Chaque run produit un `AgentRunRecord` :
 }
 ```
 
-**Aucun secret n'y figure.** Les arguments d'outil passent par `redact()` avant
-d'entrer dans la trace comme dans les événements : masquage par nom de clé
-(`password`, `apiKey`, `authorization`…) **et** par forme de valeur (`sk-…`,
-`ghp_…`, JWT), parce qu'un secret finit toujours par se retrouver dans un champ
-innocemment nommé.
+**Zero raw credentials appear in records.** Tool arguments pass through `redact()` before entering
+traces and event streams: key name masking (`password`, `apiKey`, `authorization`…) **and** pattern
+matching (`sk-…`, `ghp_…`, JWT tokens).
 
-## Budgets
+## Budgets and Thresholds
 
-| Garde-fou                    | Défaut                           | Au dépassement                      |
-| ---------------------------- | -------------------------------- | ----------------------------------- |
-| `maxIterations`              | 12                               | `incomplete` + synthèse             |
-| `globalTimeoutMs`            | 180 000                          | `incomplete`                        |
-| `maxToolCalls`               | 25                               | `incomplete`                        |
-| `maxConsecutiveToolFailures` | 3                                | `incomplete`                        |
-| `maxIdenticalToolCalls`      | 2                                | appel refusé, observation explicite |
-| `defaultToolTimeoutMs`       | 30 000                           | `TOOL_TIMEOUT`, réessayable         |
-| `retry`                      | 3 tentatives, backoff ×2, jitter | échec définitif                     |
-| `autoApproveMaxRisk`         | `LOW`                            | au-dessus : confirmation            |
+| Safeguard                    | Default Value                    | Trigger Behavior                             |
+| ---------------------------- | -------------------------------- | -------------------------------------------- |
+| `maxIterations`              | 12                               | `incomplete` + synthesis                     |
+| `globalTimeoutMs`            | 180,000                          | `incomplete`                                 |
+| `maxToolCalls`               | 25                               | `incomplete`                                 |
+| `maxConsecutiveToolFailures` | 3                                | `incomplete`                                 |
+| `maxIdenticalToolCalls`      | 2                                | Tool call denied, explicit observation added |
+| `defaultToolTimeoutMs`       | 30,000                           | `TOOL_TIMEOUT`, retryable                    |
+| `retry`                      | 3 attempts, 2x backoff + jitter  | Terminal failure on exhaustion               |
+| `autoApproveMaxRisk`         | `LOW`                            | Above this tier: requires confirmation       |
 
-Le temps passé à attendre une confirmation est **rendu au budget** : le délai
-global mesure le travail de l'agent, pas la réflexion de l'utilisateur.
+Time spent awaiting human confirmation is **restored to the budget**: wall-clock limits measure agent
+compute duration, not human deliberation delays.
 
-## Ce qui est testé
+## Test Suite Coverage
 
-Le modèle est la seule frontière remplacée (`ScriptedLLMProvider`), plus
-l'horloge de backoff — enregistrée, jamais attendue. Registre, permissions,
-confirmations, exécuteur, boucle et magasin d'états s'exécutent réellement.
+The LLM is the only mocked boundary (`ScriptedLLMProvider`), alongside backoff clock timers — recorded
+without thread sleep delays for exact assertions. Registries, permissions, confirmations, executors,
+loops, and state stores run real code.
 
-réponse simple · appel d'outil · appels multiples (même tour et sur plusieurs
-itérations) · échec d'outil · sortie non conforme · limite d'échecs consécutifs ·
-retry avec backoff exponentiel · pas de retry sur échec définitif · pas de retry
-sur outil non idempotent · délai d'outil imposé à un outil qui ignore son signal ·
-délai global · annulation en vol · annulation d'un run suspendu · permission
-refusée · joker de domaine · filtrage des outils exposés au modèle · confirmation
-demandée / acceptée / refusée · CRITICAL toujours confirmé · confirmation
-dépendante des arguments · empreinte des arguments (anti « bait and switch ») ·
-expiration · max iterations · max tool calls · anti-boucle · arguments malformés ·
-outil inventé · panne du fournisseur · rédaction des secrets.
-
-## Ce qui n'est pas encore là
-
-- **Persistance durable** : `InMemoryAgentRunStore` est réel et complet, mais un
-  redémarrage perd les runs. L'implémentation Prisma arrive avec `services/agent`
-  et ne touchera pas la boucle — c'est tout l'intérêt du port.
-- **Streaming vers le client** : `LLMProvider.stream()` existe et l'adaptateur
-  Anthropic l'implémente ; la boucle utilise `generate()`. Le branchement sur le
-  WebSocket est en phase 1.
-- **Compaction du contexte** : phase 6.
-- **Écriture en mémoire longue** : le rappel (`memory.search`) est câblé ;
-  l'extraction post-run est en phase 6.
+Covers: simple responses · tool calls · batch tool calls across turns · execution failures · invalid output
+schemas · consecutive failure caps · exponential backoff retries · non-retryable terminal errors · non-idempotent
+tool safety · hard timeouts on tools ignoring abort signals · global run timeouts · in-flight cancellation ·
+canceling suspended runs · permission denials · domain wildcard grants · registry pre-filtering ·
+confirmation requests / approvals / rejections · CRITICAL mandatory confirmation · argument-dependent risk ·
+payload hash integrity (anti-bait-and-switch) · expiration · iteration limits · tool call ceilings ·
+anti-loop triggers · malformed payloads · hallucinated tools · provider outages · credential redaction.

@@ -1,26 +1,27 @@
-# Dépendances et services tiers
+# Third-Party Dependencies and Services
 
-Le code propre à NEXUS est distribué sous `AGPL-3.0-or-later`. Chaque dépendance conserve sa
-propre licence ; `pnpm licenses list --prod` produit l'inventaire exact de l'arbre JavaScript de la
-version installée et les fichiers `uv.lock` figent les arbres Python.
+NEXUS project code is distributed under `AGPL-3.0-or-later`. Each dependency retains its own
+license; `pnpm licenses list --prod` produces the exact inventory of the JavaScript dependency tree
+for the installed version, and `uv.lock` files pin Python dependency trees.
 
-## Dépendances distribuées
+## Distributed Dependencies
 
-L'arbre JavaScript contient principalement des composants MIT, Apache-2.0, ISC et BSD, ainsi que
-des composants MPL-2.0, EPL-2.0, LGPL-3.0-or-later et des licences doubles. Ces licences ne sont
-pas remplacées par la licence NEXUS. Les images et paquets publiés incluent un SBOM SPDX pour
-identifier chaque composant et sa version.
+The JavaScript tree primarily contains MIT, Apache-2.0, ISC, and BSD components, as well as
+MPL-2.0, EPL-2.0, LGPL-3.0-or-later, and dual-licensed components. These licenses are not replaced
+by the NEXUS license. Published container images and release packages include an SPDX SBOM to
+identify each component and its exact version.
 
-## Services optionnels séparés
+## Separate Optional Services
 
-Browser Use, SearXNG, Grafana, Loki, Tempo, Prometheus, PostgreSQL/pgvector et les serveurs MCP
-sont lancés comme processus ou conteneurs distincts. Ils ne deviennent pas du code NEXUS et
-restent soumis à leurs licences respectives, y compris lorsqu'une licence copyleft ou AGPL
-s'applique au service. Leur activation est optionnelle via les profils Docker ou la configuration.
+Browser Use, SearXNG, Grafana, Loki, Tempo, Prometheus, PostgreSQL/pgvector, and MCP servers run as
+separate processes or containers. They do not become NEXUS code and remain subject to their respective
+licenses, including when a copyleft or AGPL license applies to that service. Their activation is optional
+via Docker Compose profiles or configuration flags.
 
-Les CLI ACP (Codex, Claude Code, Antigravity et leurs adaptateurs) ne sont ni redistribuées ni
-vendues par ce dépôt. L'utilisateur les installe et s'authentifie auprès de leur fournisseur selon
-leurs propres conditions. NEXUS ne transforme pas un abonnement en droit de redistribution.
+ACP CLIs (Codex, Claude Code, Antigravity, and their adapters) are neither redistributed nor sold by
+this repository. Users install them and authenticate with their respective providers under their own
+terms of service. NEXUS does not convert an existing personal subscription into any redistribution right.
 
-Avant une release, l'inventaire doit être revu et toute licence inconnue ou non commerciale doit
-bloquer la publication.
+Prior to any release, the license inventory must be audited, and any unknown or non-commercial license
+must block publication.
+

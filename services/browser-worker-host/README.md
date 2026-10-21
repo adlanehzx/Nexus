@@ -1,131 +1,124 @@
 # @nexus/browser-worker-host
 
-Raccorde **Browser Use au WorkerGateway de NEXUS**. C'est le troisième exécutant
-de la flotte, après le worker Windows (phase 7) et le worker Android (phase 8),
-et il utilise exactement le même runtime.
+Connects **Browser Use to the NEXUS WorkerGateway**. It serves as the third worker
+in the fleet, following the Windows worker (Phase 7) and the Android worker (Phase 8),
+utilizing the exact same underlying runtime.
 
-**État : implémenté et testé.** 55 tests, dont 4 de bout en bout contre le vrai
-worker Python.
+**Status: Implemented and tested.** 55 tests, including 4 end-to-end tests against
+the real Python worker.
 
 ---
 
-## Le problème que ce paquet résout
+## The Problem Solved by This Package
 
-Le worker Browser Use existait déjà — un service Python complet, avec ses
-sessions, ses politiques d'intention et ses 75 tests — mais il vivait **à côté**
-de NEXUS plutôt que dedans :
+The Browser Use worker already existed — a full Python service with session management,
+intent policies, and 75 tests — but lived **adjacent to** NEXUS rather than within it:
 
-|                                 | Avant                     | Maintenant                            |
-| ------------------------------- | ------------------------- | ------------------------------------- |
-| Authentification auprès du cœur | jeton de service statique | **signature d'un défi Ed25519**       |
-| Identité                        | aucune                    | un appareil du registre, révocable    |
-| Session                         | aucune                    | `DeviceSessionService`, avec rotation |
-| Capacités                       | non annoncées             | **annoncées et enregistrées**         |
-| Sélection                       | jamais choisi par le cœur | `DeviceSelector`, sur capacités       |
-| Permissions                     | hors du modèle            | `browser.*`, comme toute capacité     |
-| Confirmations                   | outil isolé               | `ConfirmationBroker`, par risque      |
-| Santé, disponibilité            | invisibles                | battements et sondes                  |
+|                               | Before                        | Now                                      |
+| ----------------------------- | ----------------------------- | ---------------------------------------- |
+| Core authentication           | Static service token          | **Ed25519 challenge signature**          |
+| Identity                      | None                          | Registered device in registry, revocable |
+| Session                       | None                          | `DeviceSessionService`, with rotation    |
+| Capabilities                  | Not advertised                | **Advertised and registered**            |
+| Selection                     | Never selected by Core        | `DeviceSelector`, capability-matched     |
+| Permissions                   | Outside permission model      | `browser.*`, standard capability names   |
+| Human confirmations           | Isolated custom tool          | `ConfirmationBroker`, risk-tiered        |
+| Health & availability         | Invisible                     | Heartbeats and probes                    |
 
-Le type `BROWSER_WORKER` existait dans `@nexus/devices` depuis l'origine, avec
-ce commentaire : « Browser Use est un exécutant à part entière du point de vue
-du sélecteur ». Rien ne l'implémentait. C'est ce que fait ce paquet.
+The `BROWSER_WORKER` device type existed in `@nexus/devices` since inception, with the
+comment: "Browser Use is a full-fledged worker from the selector's perspective". Nothing
+implemented it. That is what this package delivers.
 
 ---
 
 ## Architecture
 
 ```
-Utilisateur → Agent → plan → capacités requises → autorisation
-                                                      │
-                                              WorkerGateway
-                                                      │
-                                     session authentifiée (Ed25519)
-                                                      │
-                                       @nexus/browser-worker-host
-                                                      │  HTTP, contrat versionné
-                                        services/browser-worker (Python)
-                                                      │
-                                            browser-use → Chromium
+User → Agent → Plan → Required Capabilities → Authorization
+                                                  │
+                                          WorkerGateway
+                                                  │
+                                 Authenticated Session (Ed25519)
+                                                  │
+                                    @nexus/browser-worker-host
+                                                  │  HTTP, versioned contract
+                                     services/browser-worker (Python)
+                                                  │
+                                         browser-use → Chromium
 ```
 
-**Deux processus, deux raisons.** Un Chromium qui plante ne doit pas emporter la
-session avec le cœur, et le processus qui visite du contenu hostile ne doit pas
-détenir la clé de l'appareil. La frontière est un contrat HTTP, jamais un
-binding (ADR-006).
+**Two processes, two rationales.** A Chromium crash must never terminate the Core session,
+and the process browsing untrusted web content must not hold the host device key. The
+boundary is an explicit HTTP contract, never an in-process binding (ADR-006).
 
-**Ce paquet ne pilote aucun navigateur.** Il traduit des capacités NEXUS en
-appels au worker Python. Tout le cycle de vie — poignée de main, enregistrement,
-battements, dispatch, annulation, reprise — vient de `@nexus/worker-core`, sans
-une ligne dupliquée.
-
----
-
-## Capacités
-
-Une capacité **par intention**, jamais une capacité générique. C'est ce qui
-permet au reste de NEXUS de faire son travail sans rien savoir du navigateur :
-lire un prix et payer sont techniquement le même clic, mais ce ne sont pas les
-mêmes actes.
-
-| Capacité           | Intention  | Risque       | Confirmation\* | Ce que le worker Python retire      |
-| ------------------ | ---------- | ------------ | -------------- | ----------------------------------- |
-| `browser.navigate` | `read`     | **LOW**      | non            | clic, saisie, onglets, JS, fichiers |
-| `browser.interact` | `interact` | **MEDIUM**   | oui            | JS, fichiers                        |
-| `browser.login`    | `login`    | **HIGH**     | oui            | JS, fichiers                        |
-| `browser.purchase` | `purchase` | **CRITICAL** | oui            | JS, fichiers                        |
-
-\* au seuil par défaut (`MEDIUM`).
-
-Le nom de la capacité **est** le nom de la permission :
-`permissionForCapability` est l'identité, et l'utilisateur lit dans ses réglages
-exactement ce qu'il autorise.
-
-**L'intention n'est pas déclarative.** Le worker Python restreint réellement les
-actions disponibles (`app/policies.py`) : un `browser.navigate` ne peut pas
-cliquer, même si le modèle le lui demande, et `evaluate` — du JavaScript
-arbitraire — est retiré pour **toutes** les intentions.
-
-### Pourquoi la politique n'est pas ici
-
-Le cœur décide _ce qu'on veut faire_, le worker décide _ce qu'il est possible de
-faire_. Un cœur compromis ne doit pas pouvoir transformer une lecture en achat.
-Dupliquer la politique dans l'hôte donnerait deux politiques qui divergent — et
-c'est toujours la plus permissive qui gagne. Un test vérifie qu'aucune règle
-d'action n'est réimplémentée ici.
+**This package does not directly control a browser.** It translates NEXUS capabilities into
+calls to the Python worker. The entire lifecycle — handshake, registration, heartbeats,
+task dispatch, cancellation, resumption — comes from `@nexus/worker-core`, with zero duplicated
+code.
 
 ---
 
-## Sessions navigateur
+## Capabilities
 
-**Une session par tâche NEXUS.**
+One capability **per intent**, never a generic catch-all capability. This allows the rest
+of NEXUS to operate without needing browser-specific knowledge: reading a price and paying
+for an order are technically identical clicks, but entirely distinct semantic actions.
 
-- Les **étapes d'une même tâche** la réutilisent : « connecte-toi puis
-  commande » perdrait sa connexion entre les deux étapes autrement.
-- **Deux tâches ne la partagent jamais** : une tâche qui s'est connectée à une
-  banque ne doit pas laisser sa session ouverte à la suivante, qui visitera
-  peut-être un site hostile.
+| Capability         | Intent     | Risk Level   | Confirmation\* | What the Python worker removes        |
+| ------------------ | ---------- | ------------ | -------------- | ------------------------------------- |
+| `browser.navigate` | `read`     | **LOW**      | No             | click, input, tabs, JS eval, file ops |
+| `browser.interact` | `interact` | **MEDIUM**   | Yes            | JS eval, file ops                     |
+| `browser.login`    | `login`    | **HIGH**     | Yes            | JS eval, file ops                     |
+| `browser.purchase` | `purchase` | **CRITICAL** | Yes            | JS eval, file ops                     |
 
-Le cloisonnement entre utilisateurs est un cran au-dessus : le registre lie
-chaque appareil à un `userId` à l'appairage, et un exécutant navigateur n'y
-échappe pas.
+\* At default threshold (`MEDIUM`).
 
-À l'arrêt, les navigateurs sont fermés — un Chromium oublié survit au processus.
+The capability name **is** the permission name: `permissionForCapability` is identity-based,
+and users see exactly what they authorize in their settings.
+
+**Intents are enforced, not merely declarative.** The Python worker actively restricts
+available actions (`app/policies.py`): `browser.navigate` cannot execute clicks even if the
+LLM requests it, and `evaluate` — arbitrary JavaScript execution — is stripped for **all**
+intents.
+
+### Why Policy Enforcement Belongs in the Worker
+
+The Core decides *what is intended*; the worker decides *what is physically permitted*.
+A compromised Core must not be able to escalate a read intent into a purchase. Duplicating
+the enforcement policy in the host would lead to divergence — and the more permissive policy
+always wins. A test asserts that no action restriction rules are reimplemented here.
+
+---
+
+## Browser Sessions
+
+**One session per NEXUS task.**
+
+- **Steps within the same task** reuse the session: "log in, then place an order" would otherwise
+  lose authentication between consecutive steps.
+- **Two separate tasks never share a session**: a task that logged into banking services must never
+  leave its active browser session accessible to a subsequent task that may visit untrusted pages.
+
+User isolation is enforced one layer above: the device registry binds each device to a `userId`
+upon pairing, and browser workers adhere strictly to this model.
+
+On shutdown, browsers are cleanly terminated — orphaned Chromium processes do not outlive the host.
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Le worker Python doit tourner (voir services/browser-worker/README.md).
+# 1. The Python worker must be running (see services/browser-worker/README.md).
 
-# 2. Enregistrer l'exécutant côté cœur : type BROWSER_WORKER, rôle WORKER.
-#    Le cœur attribue DEVICE_ID et les permissions.
+# 2. Register the worker on the Core: type BROWSER_WORKER, role WORKER.
+#    The Core generates DEVICE_ID and grants permissions.
 
-# 3. Générer la clé de l'appareil et déposer sa moitié publique au registre :
+# 3. Generate the device keypair and register the public half in the registry:
 openssl genpkey -algorithm ed25519 -out device.pem
 openssl pkey -in device.pem -pubout
 
-# 4. Copier .env.example en .env et renseigner.
+# 4. Copy .env.example to .env and configure.
 
 pnpm --filter @nexus/browser-worker-host build
 node -e "import('@nexus/browser-worker-host').then(m => m.runBrowserWorkerHost())"
@@ -133,60 +126,54 @@ node -e "import('@nexus/browser-worker-host').then(m => m.runBrowserWorkerHost()
 
 ---
 
-## Sécurité
+## Security
 
-| Propriété                          | Mise en œuvre                                                     |
-| ---------------------------------- | ----------------------------------------------------------------- |
-| Pas de secret partagé avec le cœur | signature d'un défi ; la clé ne circule jamais                    |
-| Deux liens, deux secrets           | le jeton du worker Python ne franchit jamais la frontière du cœur |
-| Aucune connexion entrante          | `connect()` existe, `listen()` n'existe pas — vérifié par un test |
-| Aucune exécution de commande       | ni `child_process`, ni `exec` — vérifié sur tout le source        |
-| Un seul accès disque               | la clé de l'appareil, dans `link.ts` — vérifié sur tout le source |
-| Aucune capacité générique          | quatre capacités nommées, rien qui prenne une action en argument  |
-| URL restreintes à `http`/`https`   | `javascript:`, `file:`, `data:` refusés avant de voyager          |
-| Liaison distante en clair          | refusée, vers le cœur **et** vers le worker Python                |
-| Secrets hors des journaux          | `describeConfig()` ne rend que des noms et des présences          |
-| CAPTCHA, MFA                       | jamais contournés — `BROWSER_NEEDS_HUMAN`, non réessayable        |
-| Chaîne de pensée du modèle         | tronquée à 120 caractères dans la progression                     |
+| Property                       | Implementation                                                     |
+| ------------------------------ | ------------------------------------------------------------------ |
+| No shared secrets with Core    | Ed25519 challenge signing; private key never traverses network     |
+| Two links, two secrets         | Python worker token never crosses into Core boundary               |
+| No inbound listening ports     | `connect()` exists, `listen()` does not — verified by test         |
+| No process execution           | Neither `child_process` nor `exec` — verified across entire source |
+| Single disk access             | Device private key in `link.ts` — verified across entire source    |
+| No generic capabilities        | Four explicitly named capabilities, none accept arbitrary actions  |
+| URL scheme restriction         | Only `http`/`https`; `javascript:`, `file:`, `data:` rejected      |
+| Cleartext remote links banned  | Enforced for both Core connection and Python worker connection     |
+| Secrets excluded from logs     | `describeConfig()` masks values, exposing only keys and presence   |
+| CAPTCHA, MFA                   | Never bypassed — triggers `BROWSER_NEEDS_HUMAN`, non-retryable     |
+| Model chain-of-thought         | Truncated to 120 characters in progress reports                    |
 
 ---
 
 ## Tests
 
 ```bash
-pnpm --filter @nexus/browser-worker-host test          # 51 tests, sans Python
+pnpm --filter @nexus/browser-worker-host test          # 51 tests, without Python
 
 NEXUS_WORKER_PYTHON=services/browser-worker/.venv/Scripts/python.exe \
-  pnpm --filter @nexus/browser-worker-host test        # + 4 tests de bout en bout
+  pnpm --filter @nexus/browser-worker-host test        # + 4 end-to-end tests
 ```
 
-Le seul double est le worker Python, et il est remplacé **au niveau HTTP** : le
-client sérialise, valide et interprète réellement les codes d'erreur. Tout le
-reste est réel — vraies clés Ed25519, vraie `WorkerGateway`, vrai
-`DeviceSessionService`, vraies enveloppes du protocole.
+The only test double is the Python worker, replaced **at the HTTP boundary**: the client
+realistically serializes requests, parses responses, and interprets status codes. Everything
+else is real — valid Ed25519 keys, real `WorkerGateway`, real `DeviceSessionService`, and
+genuine protocol envelope validation.
 
 ---
 
-## Limites connues
+## Known Limitations
 
-1. **Aucun navigateur réel n'a été piloté.** Les tests de bout en bout lancent le
-   vrai worker Python et prouvent la chaîne complète jusqu'à lui ; ils
-   n'atteignent pas `browser-use` ni Chromium, qui demandent une clé de modèle
-   et un accès réseau. Le worker Python a ses propres tests `-m browser` pour
-   cela.
-2. **`packages/browser-client` expose toujours `createBrowserTools`**, l'ancien
-   chemin direct (outils `browser.read/interact/login/purchase` appelant le
-   worker Python sans passer par le cœur). Il n'est câblé nulle part. Le chemin
-   canonique est celui de ce paquet ; retirer l'ancien est une tâche à part,
-   volontairement non faite ici pour ne pas supprimer du code testé sans
-   demande.
-3. **Trois adaptateurs de transport coexistent** — un par exécutant (`ws` +
-   épinglage TLS pour Windows, `WebSocket` de React Native pour Android,
-   `WebSocket` de Node ici). La logique, elle, n'est pas dupliquée : elle vit
-   entièrement dans `WorkerRuntime`. Les consolider dans un paquet
-   `@nexus/worker-node` est possible, mais demanderait de toucher aux phases 7
-   et 8, qui sont terminées.
-4. **Pas d'épinglage du certificat du cœur.** `NEXUS_CORE_FINGERPRINT` est lu par
-   la configuration mais le `WebSocket` de Node n'expose pas
-   `checkServerIdentity`. Cet hôte est déployé aux côtés du cœur, sur un réseau
-   interne ; le worker Windows, qui traverse Internet, l'épingle.
+1. **No real browser is driven during automated CI.** End-to-end tests launch the real Python
+   worker and prove the entire communication chain up to it; they do not invoke `browser-use`
+   or Chromium directly (which require live LLM credentials and external internet access). The
+   Python worker maintains its own `-m browser` test suite for full browser driving.
+2. **`packages/browser-client` still exports `createBrowserTools`**, the legacy direct path
+   (`browser.read/interact/login/purchase` tools calling the Python worker without Core routing).
+   It is unreferenced in default configurations. The canonical path is through this package.
+3. **Three transport adapters coexist** — one per worker type (`ws` + TLS pinning for Windows,
+   React Native `WebSocket` for Android, Node `WebSocket` here). Business logic is not duplicated:
+   it resides entirely in `WorkerRuntime`. Consolidating into `@nexus/worker-node` is possible
+   in future refactorings.
+4. **No Core certificate pinning in Node host.** `NEXUS_CORE_FINGERPRINT` is parsed by configuration,
+   but Node's default `WebSocket` client does not expose `checkServerIdentity`. This host runs
+   alongside the Core on internal infrastructure; the Windows worker, traversing public networks,
+   strictly enforces pinning.

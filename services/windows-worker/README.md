@@ -1,223 +1,206 @@
 # @nexus/windows-worker
 
-Exécutant Windows : capacités locales contrôlées, connexion **sortante** vers le
-cœur NEXUS.
+Windows worker: controlled local capabilities with an **outbound** connection to the
+NEXUS Core.
 
-**État : implémenté et testé.** 190 tests, sans qu'aucun processus ne soit lancé
-ni aucun fichier écrit sur la machine du développeur.
+**Status: Implemented and tested.** 190 tests, running without launching arbitrary
+host processes or writing temporary files on the developer's workstation.
 
-Le même binaire tourne sur le portable et sur le poste fixe. Rien dans ce paquet
-ne sait sur laquelle des deux il s'exécute.
-
----
-
-## Le principe
-
-```
-Worker Windows ──(WebSocket sortant)──▶ NEXUS Core
-                                          │
-                                    WorkerGateway  (implémente WorkerTransport)
-                                          │
-                              TaskCoordinator ◀── DeviceSelector
-                                          │
-                                       Agent
-```
-
-Le sens de la flèche est la décision d'architecture centrale. **Le worker appelle
-le cœur ; le cœur ne sait pas joindre une machine Windows.** Il répond sur une
-connexion déjà ouverte.
-
-Conséquences directes :
-
-- aucune redirection de port, aucun port entrant, aucune machine exposée ;
-- un worker derrière une box, un VPN d'entreprise ou un partage de connexion
-  mobile fonctionne sans configuration réseau ;
-- aucun client ne parle jamais à un worker : tout passe par le centre.
+The same binary runs on laptops and desktop workstations alike. Nothing in this
+package assumes or knows which specific hardware it runs on.
 
 ---
 
-## Il n'existe pas de `execute(command: string)`
+## Principle
 
-C'est la propriété que tout ce paquet défend, et un test échoue si elle
-disparaît. L'API est structurée :
+```
+Windows Worker ──(Outbound WebSocket)──▶ NEXUS Core
+                                            │
+                                      WorkerGateway  (implements WorkerTransport)
+                                            │
+                                TaskCoordinator ◀── DeviceSelector
+                                            │
+                                         Agent
+```
+
+The arrow direction is the central architectural decision. **The worker calls the
+Core; the Core cannot initiate connections to the Windows machine.** It communicates
+back across the pre-established, authenticated outbound connection.
+
+Direct benefits:
+
+- Zero port forwarding, no inbound open ports, no exposed attack surface;
+- Functions seamlessly behind residential NAT, corporate VPNs, or mobile hotspots
+  without custom network configuration;
+- Clients never talk directly to workers: everything routes through the Core.
+
+---
+
+## There Is No `execute(command: string)`
+
+This is the primary security invariant enforced by this package; automated tests
+fail if it is violated. The execution interface is strictly structured:
 
 ```jsonc
 // terminal.execute
 {
   "executable": "git",
   "args": ["status", "--porcelain"],
-  "workingDirectory": "C:\\Projets\\leynai",
+  "workingDirectory": "C:\\Projects\\nexus",
 }
 ```
 
-Trois raisons cumulatives :
+Three compounding security guarantees:
 
-1. un exécutable choisi dans une liste ne peut pas être remplacé au moyen d'un
-   `;` ou d'un `&&` ;
-2. des arguments passés en tableau ne sont jamais réinterprétés — `; rm -rf .`
-   transmis à `git` est un argument absurde, pas une commande ;
-3. `spawn` est appelé avec `shell: false`, donc il n'y a ni expansion de
-   variables, ni substitution de commande, ni glob.
+1. An executable chosen from an allowlist cannot be substituted or injected via `;` or `&&`;
+2. Arguments passed as an array are never re-evaluated by a shell — `; rm -rf .` passed
+   to `git` is an invalid git argument, not an executed shell command;
+3. `spawn` is invoked with `shell: false`, completely preventing variable expansion,
+   command substitution, and glob matching.
 
-**La sécurité vient de la forme de l'API, pas d'un filtre sur des chaînes.** Un
-filtre se contourne ; une API qui n'accepte pas de ligne de commande, non.
+**Security derives from API structure, not string sanitization filters.** String filters
+can be bypassed; an API that fundamentally rejects arbitrary command strings cannot.
 
 ---
 
 ## Installation
 
-### Installateur publié (recommandé)
+### Published Installer (Recommended)
 
-1. Installer `nexus-worker-<version>-setup.exe` depuis la release NEXUS.
-2. Dans le dashboard, ouvrir **Appareils**, saisir un nom et cliquer
-   **Créer un code**.
-3. Copier la commande PowerShell affichée et l'exécuter en administrateur.
-4. Revenir dans **Appareils** et cliquer **Approuver**.
+1. Run `nexus-worker-<version>-setup.exe` from the official NEXUS release assets.
+2. In the dashboard, navigate to **Devices**, enter a device name, and click **Create Pairing Code**.
+3. Copy the provided PowerShell pairing command and run it in an elevated Administrator prompt.
+4. Return to **Devices** in the dashboard and click **Approve**.
 
-La commande génère la clé Ed25519 sur le PC, consomme le ticket à usage unique,
-écrit `worker.env`, restreint les ACL et installe le service. Le code
-d'appairage et la clé privée ne sont jamais conservés ensemble.
+The command generates an Ed25519 keypair locally on the PC, consumes the one-time pairing ticket,
+writes `worker.env`, locks down Windows filesystem ACLs, and registers the Windows service.
+Pairing tokens and private keys are never stored together.
 
-### Depuis les sources
+### From Source
 
 ```powershell
 pnpm install
 pnpm --filter @nexus/windows-worker build
 pnpm --filter @nexus/windows-worker pair -- `
-  --api-url https://votre-nexus `
-  --token CODE_DU_DASHBOARD `
+  --api-url https://your-nexus-host `
+  --token DASHBOARD_PAIRING_CODE `
   --key-path C:\ProgramData\NEXUS\nexus-device.key `
   --env-path .env `
-  --allowed-paths C:\Projets
+  --allowed-paths C:\Projects
 pnpm --filter @nexus/windows-worker start
 ```
 
-`.env.example` ne contient que des marqueurs — un test le vérifie. La clé privée
-y est désignée par un **chemin**, jamais par sa valeur : une clé dans une
-variable d'environnement finit dans l'historique du shell, dans les journaux de
-l'ordonnanceur et dans les rapports de plantage.
+`.env.example` contains only placeholder values — verified by test. The private key is
+referenced strictly via a filesystem **path**, never an inline variable value: keys stored
+in environment variables easily leak into shell history, scheduler logs, or crash dumps.
 
 ---
 
 ## Configuration
 
-| Variable                       | Rôle                                                                                            |
-| ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `NEXUS_BACKEND_URL`            | Cœur NEXUS. Une adresse distante **doit** être en `wss://` — le worker refuse de démarrer sinon |
-| `DEVICE_ID`                    | Attribué à l'appairage. Public : il n'authentifie rien                                          |
-| `DEVICE_CREDENTIAL_PATH`       | Chemin vers la clé privée Ed25519                                                               |
-| `WORKER_ALLOWED_PATHS`         | Racines lisibles et inscriptibles. Tout le reste est refusé                                     |
-| `WORKER_CAPABILITIES`          | Capacités exposées. Vide = toutes celles réellement disponibles                                 |
-| `WORKER_ALLOWED_EXECUTABLES`   | Programmes autorisés. Vide = liste par défaut                                                   |
-| `WORKER_ALLOWED_ENV`           | Variables transmises aux processus enfants                                                      |
-| `WORKER_HEARTBEAT_INTERVAL_MS` | Défaut 20 s                                                                                     |
-| `WORKER_TASK_TIMEOUT_MS`       | Défaut 5 min                                                                                    |
-| `WORKER_MAX_CONCURRENT_TASKS`  | Au-delà, le worker refuse — le cœur choisit ailleurs                                            |
-| `WORKER_DOCKER_ALLOWED`        | Sous-commandes Docker. Défaut : consultation seule                                              |
-| `WORKER_GIT_ALLOW_WRITE`       | Autorise `pull`, `checkout`, `commit`, `clone`. Défaut : non                                    |
+| Variable                       | Purpose                                                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `NEXUS_BACKEND_URL`            | NEXUS Core URL. Remote addresses **must** use `wss://` — worker refuses to boot over insecure links  |
+| `DEVICE_ID`                    | Assigned during pairing. Public identifier: never used for authentication                           |
+| `DEVICE_CREDENTIAL_PATH`       | Filesystem path to the local Ed25519 private key                                                    |
+| `WORKER_ALLOWED_PATHS`         | Allowed root paths for read and write operations. All other paths are rejected                      |
+| `WORKER_CAPABILITIES`          | Exposed capabilities list. Empty = all locally verified capabilities                                |
+| `WORKER_ALLOWED_EXECUTABLES`   | Allowlisted executables. Empty = default safe binary list                                           |
+| `WORKER_ALLOWED_ENV`           | Whitelist of environment variables propagated to child processes                                   |
+| `WORKER_HEARTBEAT_INTERVAL_MS` | Default: 20000 (20s)                                                                                |
+| `WORKER_TASK_TIMEOUT_MS`       | Default: 300000 (5 min)                                                                             |
+| `WORKER_MAX_CONCURRENT_TASKS`  | Concurrency ceiling. When reached, worker rejects additional tasks — Core routes elsewhere         |
+| `WORKER_DOCKER_ALLOWED`        | Allowed Docker subcommands. Default: inspection only                                                |
+| `WORKER_GIT_ALLOW_WRITE`       | Allows mutating git commands (`pull`, `checkout`, `commit`, `clone`). Default: false                |
 
-Le **rôle** (`CLIENT`, `WORKER`, `BOTH`) n'y figure pas : il appartient au
-registre, côté cœur. Un worker qui déciderait lui-même de son rôle pourrait se
-l'élargir.
-
----
-
-## Capacités
-
-| Capacité                             | Risque | Notes                                                                          |
-| ------------------------------------ | ------ | ------------------------------------------------------------------------------ |
-| `terminal.execute`                   | HIGH   | Exécutable + arguments structurés. Jamais de ligne de commande                 |
-| `filesystem.read`                    | SAFE   | Borné en taille, contenu rédigé                                                |
-| `filesystem.write`                   | MEDIUM | Refuse d'écraser sans demande explicite                                        |
-| `process.list`                       | SAFE   |                                                                                |
-| `process.start`                      | HIGH   | Détaché : survit au redémarrage du worker                                      |
-| `process.stop`                       | HIGH   | **Uniquement** les processus lancés par NEXUS                                  |
-| `docker.execute`                     | HIGH   | Consultation par défaut ; `--privileged` et montage du socket toujours refusés |
-| `git.status` `git.diff` `git.branch` | SAFE   | Lecture                                                                        |
-| `git.pull` `git.clone` `git.commit`  | MEDIUM | Écriture, refusée par défaut                                                   |
-| `git.checkout`                       | HIGH   | Seule opération pouvant détruire un travail non enregistré                     |
-| `browser.open`                       | LOW    | Ouvre une page **devant l'utilisateur**. N'automatise rien                     |
-
-Sept capacités Git plutôt qu'un `git.execute` : c'est ce qui permet d'accorder
-`git.status` sans accorder `git.checkout`, et au cœur d'exiger une confirmation
-pour l'une et pas pour l'autre.
-
-`browser.open` **n'est pas un doublon de Browser Use**. Browser Use pilote un
-navigateur — lit, clique, remplit. `browser.open` affiche une page sur l'écran de
-l'utilisateur. Les confondre donnerait deux chemins d'automatisation du web dont
-l'un sans aucune des protections de l'autre.
-
-### Déclaration dynamique
-
-Une capacité n'est annoncée que si elle est **réellement disponible** (Docker
-seulement si le démon répond, Git seulement si le binaire existe) **et**
-explicitement autorisée. Annoncer ce qu'on ne peut pas honorer est pire que de
-se taire : le sélecteur choisirait cette machine et l'étape échouerait, après
-avoir écarté un exécutant capable.
+The device **role** (`CLIENT`, `WORKER`, `BOTH`) is deliberately omitted from configuration:
+it is maintained in the Core registry. A worker must never self-assign or escalate its role.
 
 ---
 
-## Sécurité
+## Capabilities
 
-- **Un identifiant d'appareil n'authentifie jamais.** Il est public. Chaque
-  connexion signe un challenge Ed25519 ; la clé privée ne quitte pas la machine.
-- **Anti-rejeu** sur l'authentification et les battements de cœur (`requestId` +
-  horodatage borné).
-- **Reconnexion sans réutilisation de jeton** : une session dont on ne sait pas
-  si elle est encore valide n'est pas une session.
-- **Chemins** : racines déclarées, résolution des liens **avant** comparaison,
-  refus des remontées, des UNC, des préfixes `\\?\`, des flux de données
-  alternatifs, des noms de périphériques réservés, et de tout emplacement
-  contenant des secrets — même sous une racine autorisée.
-- **Processus** : `process.stop` n'atteint que ce que NEXUS a lancé. Sans cette
-  règle, arrêter un serveur de développement et arrêter l'antivirus demanderaient
-  la même permission.
-- **Environnement** : jamais transmis en bloc. Liste blanche dans les deux sens.
-- **Git** : `GIT_TERMINAL_PROMPT=0` et `GIT_ASKPASS` vide — un dépôt privé échoue
-  tout de suite au lieu d'attendre une invite que personne ne verra. Le schéma
-  `ext::` est refusé : il exécute une commande au moment du clone.
-- **Rédaction** : sortie de processus, contenu de fichier lu et arguments
-  journalisés passent par `redact` / `redactText` de `@nexus/shared`. Le worker
-  reçoit les vraies valeurs ; le journal et les événements reçoivent
-  `[REDACTED]`.
-- **Ne sont jamais journalisés** : mots de passe, clés d'API, jetons d'accès et
-  de rafraîchissement, cookies, signatures, clés privées, secrets renvoyés par un
-  processus.
+| Capability                           | Risk   | Notes                                                                           |
+| ------------------------------------ | ------ | ------------------------------------------------------------------------------- |
+| `terminal.execute`                   | HIGH   | Structured executable + args. Never arbitrary command lines                     |
+| `filesystem.read`                    | SAFE   | Bounded read length, output redacted                                            |
+| `filesystem.write`                   | MEDIUM | Rejects file overwrites without explicit overwrite flag                         |
+| `process.list`                       | SAFE   | Process table inspection                                                        |
+| `process.start`                      | HIGH   | Detached execution: survives worker restart                                     |
+| `process.stop`                       | HIGH   | **Strictly limited** to processes spawned by NEXUS                              |
+| `docker.execute`                     | HIGH   | Read-only by default; `--privileged` and socket mounting are always forbidden    |
+| `git.status` `git.diff` `git.branch` | SAFE   | Read-only Git operations                                                        |
+| `git.pull` `git.clone` `git.commit`  | MEDIUM | Mutating Git operations, disabled by default                                    |
+| `git.checkout`                       | HIGH   | Only operation capable of discarding uncommitted workspace changes              |
+| `browser.open`                       | LOW    | Displays URL on the **user's active display**. Performs no automation or clicks |
+
+Seven discrete Git capabilities rather than a generic `git.execute`: this enables granting
+`git.status` without granting `git.checkout`, allowing the Core to require confirmation for the
+latter but not the former.
+
+`browser.open` **is not a duplicate of Browser Use**. Browser Use automates a headless or managed
+browser (reads, clicks, inputs). `browser.open` presents a URL in the user's default browser window
+on their screen. Conflating them would create an unconstrained automation vector without safeguards.
+
+### Dynamic Capability Advertisement
+
+A capability is only advertised if it is **actually available** on the host (Docker only if the
+daemon responds, Git only if the executable is detected in PATH) **and** explicitly permitted by
+configuration. Advertising unfulfillable capabilities degrades routing: the selector would choose
+the host only for the execution to fail, bypassing other capable nodes.
 
 ---
 
-## Cycle de vie
+## Security
+
+- **Device IDs never authenticate.** They are public identifiers. Every connection signs an
+  Ed25519 challenge; the private key never leaves the host.
+- **Anti-replay protection** on authentication challenges and heartbeats (`requestId` + bounded timestamp).
+- **Session reconnection without token reuse**: reconnection always completes a fresh cryptographic handshake.
+- **Path sandboxing**: Declared directory roots, symlink resolution **before** path boundary comparison,
+  rejection of directory traversal (`..`), UNC paths, `\\?\` prefixes, NTFS alternate data streams (ADS),
+  reserved DOS device names, and paths containing credential files — even when located inside allowed roots.
+- **Process containment**: `process.stop` only controls processes spawned by NEXUS. Without this rule,
+  terminating a dev server and stopping system security software would share the same permission.
+- **Environment filtering**: Child process environments are never inherited en bloc; whitelists apply in both directions.
+- **Git safeguards**: `GIT_TERMINAL_PROMPT=0` and empty `GIT_ASKPASS` — unauthenticated private repos fail immediately
+  instead of hanging indefinitely on interactive prompts. The `ext::` transport protocol is unconditionally blocked,
+  preventing arbitrary command execution during clone.
+- **Redaction**: Process stdout/stderr, read file contents, and logged arguments pass through `redact` / `redactText`
+  from `@nexus/shared`. The worker executes real values; logs and event streams record `[REDACTED]`.
+- **Never logged**: Passwords, API keys, access and refresh tokens, cookies, cryptographic signatures, private keys,
+  and sensitive secrets returned by child processes.
+
+---
+
+## Lifecycle
 
 ```
 start → connect → hello → challenge → authenticate → session
       → register → heartbeat ⇄ receive/execute → shutdown
 ```
 
-Une coupure à n'importe quel point ramène à `connect`, avec attente
-exponentielle **et bruit**. Le bruit n'est pas un raffinement : sans lui, tous
-les workers d'un utilisateur reconnectent à la même milliseconde et refont
-tomber le cœur au moment où il redémarre.
+A network drop at any point resets state to `connect`, with exponential backoff **and jitter**.
+Jitter is essential: without it, multiple fleet workers reconnect in lockstep, overwhelming the Core upon restart.
 
-À l'arrêt, les étapes en cours sont annulées et leur échec est remonté **avant**
-la fermeture du canal — sinon le coordinateur attendrait un résultat pendant
-toute la durée du délai avant de comprendre qu'il n'arrivera pas.
+On graceful shutdown, active tasks are cancelled and reported as failed **before** closing the transport channel —
+preventing the task coordinator from hanging until task timeout expiration.
 
 ---
 
-## Chaîne de validation d'une étape
+## Step Execution Pipeline
 
 ```
-capacité connue → capacité disponible → schéma d'arguments → capacité libre
-  → politique locale → exécution sous délai → progression → résultat
+Known capability → Available capability → Arguments schema validation → Capability concurrency slot
+  → Local host policy → Timeout-bounded execution → Progress reporting → Final result
 ```
 
-Elle s'arrête au premier refus. Un ordre qui n'a pas traversé les quatre
-premières étapes n'atteint jamais le système d'exploitation.
+Validation halts at the first rejection. Any instruction that fails the initial four validation stages
+never reaches the operating system.
 
-Le cœur a déjà vérifié les permissions et obtenu les confirmations. Le worker
-revérifie quand même ce qui le concerne : il est le dernier à savoir ce qui est
-réellement possible **sur cette machine**, et un cœur compromis ne doit pas
-suffire à lui faire faire n'importe quoi.
+While the Core validates user permissions and human confirmations, the worker independently re-verifies
+its own constraints: it remains the final authority on what is physically permitted on the host, ensuring
+that a compromised Core cannot issue arbitrary system calls.
 
 ---
 
@@ -227,17 +210,16 @@ suffire à lui faire faire n'importe quoi.
 pnpm --filter @nexus/windows-worker test
 ```
 
-`ProcessRunner` et `FileSystemPort` sont des ports, remplacés par des doubles en
-mémoire. Toute la chaîne — politiques, délais, annulation, rédaction — est
-éprouvée sans lancer un processus. Le reste est réel : vraies clés Ed25519,
-vraies signatures, vrai `DeviceSessionService`, vraie `WorkerGateway`, vrai
-`TaskCoordinator`, vraies enveloppes validées par les schémas du protocole.
+`ProcessRunner` and `FileSystemPort` are ports, mocked with in-memory test doubles during automated runs.
+The entire execution pipeline — policies, timeouts, cancellation, redaction — is verified without spawning
+live processes. All other components run real code: Ed25519 keys, cryptographic signatures, genuine
+`DeviceSessionService`, `WorkerGateway`, and `TaskCoordinator`.
 
 ---
 
-## Brancher le WebSocket réel
+## WebSocket Link Architecture
 
-Le worker ne dépend pas du WebSocket : il dépend du port `WorkerLink`.
+The worker does not depend directly on WebSockets: it depends on the `WorkerLink` port abstraction:
 
 ```ts
 export interface WorkerLink {
@@ -250,34 +232,27 @@ export interface WorkerLink {
 }
 ```
 
-Il y a `connect()`, il n'y a pas `listen()` : ce worker ne peut
-structurellement pas accepter de connexion entrante.
+The interface exposes `connect()`, not `listen()`: the worker is architecturally unable to accept inbound connections.
 
-Côté cœur, la passerelle attend un `WorkerConnection` (`send`, `close`) et un
-point d'entrée unique, `WorkerGateway.handleMessage(connection, trame)`.
+On the Core side, `WorkerGateway` expects a `WorkerConnection` (`send`, `close`) and handles messages through
+a single entry point: `WorkerGateway.handleMessage(connection, frame)`.
 
-L'adaptateur réel est `WebSocketLink` (`src/connection/websocket-link.ts`). Il se
-réduit à ce qu'annonçait ce paragraphe : ouvrir la socket vers
-`NEXUS_BACKEND_URL`, transmettre les enveloppes JSON dans les deux sens, signaler
-la fermeture. Aucune logique — elle était déjà écrite et éprouvée de bout en bout
-avec `LoopbackLink`, l'autre implémentation du même port.
+The real network adapter is `WebSocketLink` (`src/connection/websocket-link.ts`): opening the socket to
+`NEXUS_BACKEND_URL`, routing JSON envelopes bidirectionally, and signaling disconnection. Core logic resides in
+`WorkerRuntime` and was verified using `LoopbackLink`.
 
-Deux refus y sont inscrits :
+Two strict rules enforced:
 
-- **une adresse distante en clair est rejetée.** Le challenge signé authentifie la
-  machine, il ne chiffre pas ce qui suit ; en clair, les consignes d'exécution
-  envoyées à ce poste seraient lisibles et modifiables par qui se trouve sur le
-  chemin ;
-- **aucune trame de plus de 256 Ko.** Au-delà, ce n'est plus une consigne, c'est
-  un transfert — et un plafond côté client évite qu'un cœur compromis n'épuise la
-  mémoire de la machine.
+- **Cleartext remote connections are rejected.** Signed challenges authenticate the machine but do not encrypt
+  subsequent traffic; over unencrypted connections, execution commands would be readable and modifiable in transit.
+- **Maximum frame size capped at 256 KB.** Data exceeding 256 KB represents bulk transfer rather than task instructions,
+  and client-side limits protect against memory exhaustion from malicious or rogue servers.
 
 ---
 
-## Carte de visite locale
+## Local State Card
 
-Au démarrage, le démon dépose son état **public** dans `WORKER_STATE_PATH`
-(`%ProgramData%\\NEXUS\\worker\\device.json` par défaut) :
+On boot, the daemon writes its **public** state to `WORKER_STATE_PATH` (`%ProgramData%\\NEXUS\\worker\\device.json` by default):
 
 ```json
 {
@@ -288,24 +263,21 @@ Au démarrage, le démon dépose son état **public** dans `WORKER_STATE_PATH`
 }
 ```
 
-Un seul lecteur : l'interface NEXUS installée sur la même machine, qui a besoin de
-savoir quel appareil ce poste est pour se reconnaître dans la liste que le cœur
-lui renvoie — sans quoi elle créerait un second « Portable » fantôme.
+The sole reader is the local NEXUS desktop UI, which reads this identifier to correlate itself in the device list
+returned by the Core, avoiding duplicate device entries.
 
-Ce fichier **n'accorde rien**. Il ne contient ni chemin de clé, ni racines
-autorisées, ni URL du cœur, et il n'existe aucun canal de commande entre
-l'interface et le démon. C'est une carte de visite en lecture seule ; un
-identifiant d'appareil seul n'a jamais été une authentification.
+This file **grants no permissions**. It contains no private keys, no allowed paths, and no Core credentials, and
+no IPC control channel exists between the desktop UI and daemon. It serves purely as a read-only local identifier.
 
 ---
 
-## Diagnostic
+## Diagnostics
 
-| Symptôme                         | Cause probable                                                                                                        |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Le worker reste `authenticating` | Clé publique absente côté cœur, ou appareil encore `PENDING`                                                          |
-| Le worker reste `reconnecting`   | `NEXUS_BACKEND_URL` injoignable ; regarder `tentative` dans le journal                                                |
-| `CAPABILITY_UNAVAILABLE`         | Trois causes distinctes, le contexte de l'erreur les sépare : non implémentée, non autorisée localement, outil absent |
-| `PATH_NOT_ALLOWED`               | Le motif exact est dans `context.reason`                                                                              |
-| `WORKER_SATURATED`               | `WORKER_MAX_CONCURRENT_TASKS` atteint ; réessayable ailleurs                                                          |
-| Docker n'apparaît pas            | Le démon ne répond pas : la sonde a échoué et la capacité n'est pas annoncée                                          |
+| Symptom                         | Likely Cause                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Worker stuck in `authenticating`| Public key missing on Core, or device still in `PENDING` status                                     |
+| Worker stuck in `reconnecting`  | `NEXUS_BACKEND_URL` unreachable; inspect `attempt` count in logs                                    |
+| `CAPABILITY_UNAVAILABLE`        | Three distinct causes distinguishable via error context: unimplemented, locally disabled, or missing binary |
+| `PATH_NOT_ALLOWED`              | Specific rejection reason detailed in `context.reason`                                              |
+| `WORKER_SATURATED`              | `WORKER_MAX_CONCURRENT_TASKS` reached; retryable on alternative worker                              |
+| Docker capability absent        | Docker daemon is not running: health probe failed, capability withheld                              |

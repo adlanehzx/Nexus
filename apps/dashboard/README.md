@@ -1,109 +1,103 @@
-# Tableau de bord NEXUS
+# NEXUS Dashboard
 
-Supervision de tout le système. **Lecture seule, réservé aux administrateurs.**
+Supervision interface for the entire system. **Read-only, reserved for administrators.**
 
 ```
 apps/dashboard  ──▶  /api/v1/dashboard/*  ──▶  requireAdmin  ──▶  DashboardService
-   (React)                                        (rôle lu                (lectures)
-                                                dans le magasin)
+   (React)                                       (role read               (reads)
+                                                from store)
 ```
 
-## Douze sections
+## Twelve Sections
 
-| Section        | Ce qu'on y voit                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Vue d'ensemble | appareils en ligne, exécutants actifs, tâches en cours et en échec, activité récente, santé |
-| Appareils      | rôle, plateforme, statut, capacités, dernier battement, santé, confiance, permissions       |
-| Exécutants     | l'état déclaré **et** l'état réel du canal, la charge, les capacités                        |
-| Tâches         | plan, étapes, exécutants retenus, progression, journal d'exécution, résultats, erreurs      |
-| Runs agent     | statut, actions, outils, progression, résultat, erreurs, métriques                          |
-| Outils         | catalogue, risque, permissions requises, autorisé ou non                                    |
-| MCP            | serveurs, état, outils publiés, circuit, dernière erreur                                    |
-| Browser Use    | configuré, joignable, santé rapportée                                                       |
-| Mémoire        | volumes par couche, origine et sensibilité ; souvenirs récents                              |
-| Notifications  | non lues, gravité, contenu                                                                  |
-| Sécurité       | confiance des appareils, permissions effectives, événements                                 |
-| Journaux       | dernières lignes retenues, filtrables par niveau et par texte                               |
+| Section       | What is displayed                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| Overview      | online devices, active workers, running and failed tasks, recent activity, system health    |
+| Devices       | role, platform, status, capabilities, last heartbeat, health, trust, effective permissions |
+| Workers       | declared **and** actual channel state, load, capabilities                                  |
+| Tasks         | plan, steps, assigned workers, progress, execution log, results, errors                    |
+| Agent Runs    | status, actions, tools, progress, result, errors, metrics                                  |
+| Tools         | catalog, risk levels, required permissions, authorization status                           |
+| MCP           | servers, state, published tools, circuit breaker, last error                               |
+| Browser Use   | configured, reachable, reported health status                                              |
+| Memory        | volumes by tier, provenance and sensitivity, recent memories                               |
+| Notifications | unread count, severity, message contents                                                   |
+| Security      | device trust levels, effective permissions, security events                                |
+| Logs          | retained log lines, filterable by log level and text query                                 |
 
-## Trois règles
+## Three Invariant Rules
 
-### 1. Le raisonnement du modèle ne sort pas
+### 1. Model Chain of Thought Is Never Exposed
 
-Un run d'agent porte son transcript complet et les blocs opaques du fournisseur
-(`LlmMessage.providerBlocks`). Ils existent pour être rejoués au tour suivant, pas pour
-être lus.
+An agent run contains its complete transcript and opaque provider blocks (`LlmMessage.providerBlocks`).
+These exist to be replayed in subsequent turns, not to be read by users or operators.
 
-La garantie est obtenue **par construction** : `projectAgentRun` ne lit que
-`AgentRunRecord` — jamais `AgentState.messages`. On ne peut pas oublier de masquer un
-champ auquel on n'accède pas. Le schéma Zod de la réponse ferme la porte une seconde
-fois : même si la projection changeait, un champ non déclaré ne serait pas sérialisé.
+This guarantee is enforced **by construction**: `projectAgentRun` reads only from `AgentRunRecord` —
+never from `AgentState.messages`. One cannot forget to redact a field that is never queried. The
+Zod response schema seals the boundary a second time: even if the projection changed, an undeclared
+field would not be serialized.
 
-Ce qui sort : **statut, action, outil, progression, résultat, erreur, métriques.**
+What is exposed: **status, action, tool, progress, result, error, metrics.**
 
-Éprouvé par un run dont chaque champ interdit porte une chaîne reconnaissable, cherchée
-ensuite dans la réponse JSON entière (`services/api/test/dashboard.test.ts`), et par une
-vérification structurelle côté client (`test/exposure.test.ts`).
+Proven by a test run where every forbidden field carries a recognizable canary string, subsequently
+searched across the full JSON response (`services/api/test/dashboard.test.ts`), and reinforced by
+client-side structural validation (`test/exposure.test.ts`).
 
-### 2. Douze sections, une seule garde
+### 2. Twelve Sections, Single Security Guard
 
-Chaque route porte `requireAdmin`. Il n'existe pas de sous-ensemble « moins sensible »
-ouvert à un client ordinaire : une vue partielle du système est encore une vue du
-système, et découper la garde créerait douze occasions de se tromper au lieu d'une.
+Every route requires `requireAdmin`. There is no "less sensitive" subset accessible to regular clients:
+a partial view of the infrastructure is still a view of the infrastructure, and splitting access guards
+would multiply security surface areas.
 
-Le rôle est lu **dans le magasin, pas dans le jeton**. Inscrit dans le jeton d'accès, il
-resterait valide un quart d'heure après une rétrogradation. La session est déjà consultée
-à chaque requête ; une lecture de plus est négligeable, et c'est ce qui fait qu'un retrait
-de droits prend effet immédiatement.
+The role is resolved **from the persistent store, not from the access token**. If embedded in an access
+token, revoked permissions would remain active for up to 15 minutes. Sessions are already checked on
+every request; an additional store lookup is negligible and guarantees immediate revocation.
 
-Le refus ne s'annonce pas : un compte ordinaire reçoit « La ressource demandée n'existe
-pas », pas « il faut être administrateur ». La surface d'administration n'a pas à se
-signaler à qui n'y a pas droit.
+Access denials are discreet: an ordinary account receives "Resource not found" (404), not "Admin role
+required" (403). The administrative surface is not advertised to unprivileged users.
 
-### 3. Lecture seule
+### 3. Read-Only Operations
 
-Aucune route ni méthode de client n'écrit. Superviser et administrer sont deux surfaces ;
-mettre une action destructrice dans un écran qu'on consulte machinalement est une mauvaise
-idée qui ne se remarque qu'une fois. Approuver un appareil, révoquer, annuler une tâche
-restent sur les routes existantes, avec leurs propres contrôles.
+No dashboard route or client method performs mutations. Supervision and administration are distinct
+surfaces; putting destructive actions into a dashboard frequently consulted in passing invites costly
+accidents. Device approvals, revocations, and task cancellations remain on their respective dedicated
+routes with their own granular controls.
 
-## Portée
+## Scopes
 
-Deux portées, délibérément distinctes :
+Two scopes are intentionally differentiated:
 
-- **ce qui appartient à quelqu'un** — appareils, tâches, souvenirs, notifications, runs —
-  est lu pour le compte de l'administrateur, jamais pour tous les comptes. Le rôle `ADMIN`
-  ouvre la supervision de l'infrastructure ; il n'a jamais eu vocation à donner accès aux
-  conversations d'autrui ;
-- **ce qui n'appartient à personne** — serveurs MCP, worker navigateur, catalogue
-  d'outils, journaux — est global.
+- **Per-user resources** — devices, tasks, memories, notifications, runs — are queried on behalf of the
+  administrator, never dumped globally across all accounts. The `ADMIN` role grants infrastructure
+  supervision; it was never intended to expose other users' private conversations.
+- **System-level resources** — MCP servers, browser worker, tool catalog, logs — are global.
 
-## « Non configuré » n'est pas « en panne »
+## "Unconfigured" Is Not "Degraded"
 
-Un serveur MCP qu'on n'a jamais branché n'est pas en panne. Le peindre en rouge enverrait
-chercher un incident qui n'existe pas. `unconfigured` est donc un niveau de santé à part
-entière, gris, et il ne compte pas dans la santé globale — s'il n'y a _que_ du
-non-configuré, la réponse est « inconnu », ce qui vaut mieux qu'un vert qui ne repose sur
-rien.
+An unconfigured MCP server that has never been set up is not failing. Displaying it in red would trigger
+investigations into nonexistent incidents. `unconfigured` is therefore treated as a distinct status
+level, displayed in gray, and excluded from global health score calculations — if all services are
+unconfigured, the system reports "unknown", which is far more truthful than reporting an ungrounded green.
 
-## Développement
+## Development
 
 ```bash
 pnpm --filter @nexus/dashboard dev     # http://localhost:5274
 ```
 
-`VITE_NEXUS_URL` pointe vers le cœur. **Aucun secret n'est embarqué** : le tableau de bord
-se connecte comme n'importe quel client, et c'est le rôle du compte qui lui ouvre les
-sections.
+`VITE_NEXUS_URL` points to the NEXUS Core. **No secrets are bundled**: the dashboard authenticates
+like any regular client, and account roles unlock access to dashboard sections.
 
-Les jetons vivent **en mémoire** et disparaissent au rechargement. Un tableau de bord
-d'administration est précisément l'endroit où l'on ne veut pas d'un jeton de longue durée
-lisible par n'importe quel script de la page.
+Authentication tokens reside **only in memory** and are cleared on page reload. An administrative
+dashboard is the last place where long-lived tokens should be stored in browser storage accessible to
+page scripts.
 
-## Le premier compte
+## The First Account
 
-`InMemoryUserStore` donne le rôle `ADMIN` au **premier compte créé** — il faut bien que
-quelqu'un puisse ouvrir le tableau de bord sur une installation neuve. Les suivants sont
-des comptes ordinaires.
+`InMemoryUserStore` automatically assigns the `ADMIN` role to the **first registered account** —
+allowing initial configuration on a fresh installation. Subsequent registrations are standard accounts.
 
-> **Conséquence à ne pas oublier :** une installation exposée doit fermer l'inscription dès
-> le premier compte créé. Sinon, le premier venu devient administrateur.
+> **Important Deployment Note:** Any publicly exposed deployment must disable open registration
+> immediately after creating the initial administrative account. Otherwise, arbitrary visitors could
+> register and gain administrative privileges.
+

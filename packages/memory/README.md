@@ -1,185 +1,168 @@
 # @nexus/memory
 
-La mémoire persistante utilise par défaut un modèle multilingue ONNX local
-(`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions) et pgvector/HNSW.
-Aucun texte n'est envoyé à un service distant et aucune clé API n'est requise.
+Persistent memory defaults to an on-device local multilingual ONNX model
+(`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions) with pgvector/HNSW indexes.
+Zero text is transmitted to external cloud services and zero API keys are required.
 
-Au premier usage, le modèle est téléchargé dans le cache configuré par
-`MEMORY_EMBEDDING_CACHE_DIR`. Après ce téléchargement, définir
-`MEMORY_EMBEDDING_LOCAL_ONLY=true` garantit un fonctionnement hors ligne. Le
-backend déterministe historique reste disponible avec
-`MEMORY_EMBEDDING_BACKEND=hash`, notamment pour les environnements très
-contraints ; ses vecteurs ne sont pas écrits dans la colonne pgvector 384D.
+Upon initial invocation, the model is downloaded to the directory configured by
+`MEMORY_EMBEDDING_CACHE_DIR`. Following this initial download, configuring
+`MEMORY_EMBEDDING_LOCAL_ONLY=true` guarantees strictly offline operation. The deterministic
+hash backend remains available via `MEMORY_EMBEDDING_BACKEND=hash` for resource-constrained
+environments; its vectors are not written to the 384D pgvector column.
 
-Six choses portent le nom de « mémoire ». Les confondre est la première erreur possible
-dans ce domaine, et ce paquet existe pour l'empêcher.
+Six distinct mechanisms are often referred to as "memory". Conflating them is the most common
+architectural mistake in agent design, which this package is designed to prevent:
 
-| #   | Couche                     | Propriétaire                                  | Disparaît quand                    |
+| #   | Layer                      | Owner                                         | Eviction Policy                    |
 | --- | -------------------------- | --------------------------------------------- | ---------------------------------- |
-| 1   | Historique de conversation | `ConversationStore` (API)                     | jamais — archivé                   |
-| 2   | Contexte court terme       | `ShortTermContext` **ici**                    | à l'expiration, ou avec la session |
-| 3   | Mémoire longue durée       | `MemoryProvider` **ici**                      | quand l'utilisateur oublie         |
-| 4   | Préférences                | `MemoryProvider` **ici**, couche `PREFERENCE` | quand elles changent               |
-| 5   | Appareils                  | `DeviceRegistry` (`@nexus/devices`)           | à la révocation                    |
-| 6   | Historique des tâches      | `TaskStore` (`@nexus/devices`)                | à la purge                         |
+| 1   | Conversation History       | `ConversationStore` (API)                     | Indefinite — user archived         |
+| 2   | Short-Term Working Context | `ShortTermContext` **here**                   | On TTL expiration or session close |
+| 3   | Long-Term Memory           | `MemoryProvider` **here**                     | Upon explicit user deletion        |
+| 4   | User Preferences           | `MemoryProvider` **here**, `PREFERENCE` tier  | When modified or superseded        |
+| 5   | Device Fleet Metadata      | `DeviceRegistry` (`@nexus/devices`)           | Upon device revocation             |
+| 6   | Task Execution History     | `TaskStore` (`@nexus/devices`)                | Upon scheduled purge               |
 
-**Seules 2, 3 et 4 vivent ici.** Les trois autres ont déjà un propriétaire dans le
-système. Les recopier créerait une seconde vérité, qui divergerait de la première au
-premier écart — et c'est toujours la copie qu'on finit par afficher. `sources.ts` les
-déclare donc comme des **ports en lecture seule**, que l'API branche sur les vrais
-magasins.
+**Only layers 2, 3, and 4 reside in this package.** The other three maintain explicit owners elsewhere
+in the architecture. Duplicating them would create split-brain state that drifts over time.
+`sources.ts` declares them as **read-only ports** that the API wires to genuine repositories.
 
-Conséquence pratique : l'assemblage de contexte se teste sans base, sans registre
-d'appareils et sans coordinateur de tâches.
+Practical benefit: Context assembly is tested without a live database, device registry, or task coordinator.
 
 ---
 
-## La règle du silence
+## The Rule of Silence
 
-> **Rien de sensible n'est mémorisé sans que quelqu'un l'ait su.**
+> **Nothing sensitive is remembered without explicit awareness.**
 
-Trois verdicts, et la frontière entre eux est une décision, pas une nuance :
+Three deterministic classifications:
 
-| Verdict     | Ce que c'est                                                                 | Ce qui se passe                                        |
-| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `FORBIDDEN` | mots de passe, clés d'API, jetons, phrases de récupération, cartes bancaires | **refusé, toujours**                                   |
-| `PERSONAL`  | santé, finances, identité, adresse, croyances                                | stocké **si** l'appelant passe `acknowledgedSensitive` |
-| `ORDINARY`  | le reste                                                                     | stocké                                                 |
+| Verdict       | Scope                                                                        | System Behavior                                       |
+| ------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `FORBIDDEN`   | Passwords, API tokens, session keys, recovery seed phrases, payment cards   | **Always rejected**                                   |
+| `PERSONAL`    | Health, financial balances, legal identity, home address, personal beliefs   | Stored **only if** caller sets `acknowledgedSensitive`|
+| `ORDINARY`    | General user facts, technical preferences, working notes                     | Stored normally                                       |
 
-`FORBIDDEN` n'a **pas de dérogation utilisateur**. NEXUS n'est pas un gestionnaire de
-mots de passe : il n'offre ni chiffrement au repos dédié, ni rotation, ni révocation.
-Accepter ces contenus créerait un coffre que rien dans l'architecture ne protège comme
-tel — et un utilisateur qui croit son secret en sécurité est plus exposé qu'un
-utilisateur à qui l'on a dit non.
+`FORBIDDEN` has **zero user override exemptions**. NEXUS is not a password manager: it does not
+provide hardware-backed encryption at rest, automatic rotation, or zero-knowledge revocation.
+Accepting credential payloads would create a pseudo-vault unprotected by proper vault guarantees.
 
-La détection est **déterministe**, jamais confiée à un modèle. Un classifieur
-probabiliste qui se trompe une fois sur cent laisse passer un mot de passe une fois sur
-cent. Elle réutilise `redactText` de `@nexus/shared` — ce qu'on apprend à masquer dans
-les journaux profite aussitôt à la mémoire.
+Classification is **strictly deterministic**, never delegated to probabilistic models. A neural
+classifier with a 99% accuracy rate leaks a password 1% of the time. The engine reuses `redactText`
+from `@nexus/shared` — improvements to log redaction immediately protect memory ingestion.
 
-`acknowledgedSensitive` n'a **aucune valeur par défaut à `true`** nulle part dans le
-dépôt. C'est ce qui donne son sens à la règle.
+`acknowledgedSensitive` contains **zero default-to-true flags** anywhere in the repository.
 
 ---
 
-## Le service, jamais le magasin
+## Service Layer Architecture
 
 ```
-route / cœur agent  ──▶  MemoryService  ──▶  MemoryProvider
-                          (politique)         (magasin)
+Route / Agent Core  ──▶  MemoryService  ──▶  MemoryProvider
+                          (Policy Layer)      (Storage Store)
 ```
 
-`MemoryProvider` range ce qu'on lui donne — c'est son rôle. `MemoryService` décide s'il
-faut le lui donner. Court-circuiter le service, « juste pour la route de création »,
-suffirait à contourner la règle du silence : `services/api/test/memory.test.ts` le
-vérifie de bout en bout.
+`MemoryProvider` persists whatever it receives — that is its role. `MemoryService` enforces whether it
+should be persisted. Bypassing the service layer would undermine the rule of silence;
+`services/api/test/memory.test.ts` validates this guarantee end-to-end.
 
-### Les cinq méthodes
+### The Five Core Methods
 
-|             |                                                                           |
-| ----------- | ------------------------------------------------------------------------- |
-| `search`    | requête vide = tout parcourir, du plus récent au plus ancien              |
-| `store`     |                                                                           |
-| `update`    | change le **contenu** → supersède ; change une **métadonnée** → sur place |
-| `delete`    |                                                                           |
-| `summarize` | extractif, non génératif : le port ne dépend d'aucun LLM                  |
+| Method      | Semantics                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `search`    | Empty query = browse chronological entries from newest to oldest                            |
+| `store`     | Enforces sensitivity policy prior to persisting new items                                   |
+| `update`    | Modifying **content** supersedes the record; modifying **metadata** updates in place       |
+| `delete`    | Removes entry and associated vector index                                                   |
+| `summarize` | Extractive summary, non-generative: this port does not depend on LLMs                      |
 
-Toutes portent `userId`, y compris celles qui reçoivent déjà un identifiant
-d'enregistrement. C'est redondant, et c'est voulu : un identifiant devinable ne doit pas
-suffire à lire ou détruire le souvenir de quelqu'un d'autre.
+All methods require `userId`, including those accepting a record ID. This redundancy is deliberate:
+guessable UUIDs must never allow reading or deleting another tenant's memories.
 
-### Superséder plutôt qu'écraser
+### Superseding vs. Destructive Overwriting
 
-Corriger « habite à Lyon » en « habite à Paris » ne modifie pas l'enregistrement : il en
-crée un neuf et date l'ancien. « Où j'habitais l'an dernier » est une question
-ordinaire, à laquelle un écrasement rend toute réponse impossible — et personne ne s'en
-aperçoit avant qu'on la pose.
+Updating "Lives in Lyon" to "Lives in Paris" does not overwrite the record: it creates a new entry and
+timestamps the prior one. "Where did I live last year?" is a natural query that destructive overwrites
+render impossible to answer.
 
 ---
 
-## Commandes explicites
+## Explicit Commands
 
-« Retiens que… » et « Oublie… » ne passent **pas** par le modèle.
+"Remember that…" and "Forget…" do **not** route through probabilistic LLM parsing.
 
-Un utilisateur qui dit « oublie mon adresse » doit voir son adresse disparaître, pas
-espérer que le modèle l'ait interprété ainsi. Une reconnaissance déterministe rate
-parfois une formulation exotique — l'utilisateur reformule. Un modèle, lui, se trompe
-silencieusement.
+A user stating "forget my address" expects that address deleted immediately, not hoping an LLM interpreted
+the prompt correctly. Deterministic regex parsing may occasionally miss creative phrasing — which the
+user rephrases — whereas neural parsing can fail silently.
 
-La reconnaissance est **ancrée au début du message** et exige l'impératif : « je me
-souviens que le train était en retard » n'est pas un ordre.
+Recognition is **anchored to the beginning of the message** and demands an imperative syntax.
+Statements like "I remember the train was late" do not trigger memory mutation.
 
-Trois précautions à l'oubli :
+Three safeguards on forget operations:
 
-- par **identifiant** — sans ambiguïté ;
-- par **texte** — supprime seulement si la correspondance est nettement meilleure que la
-  suivante ; sinon rend les candidats et laisse l'utilisateur trancher ;
-- **tout** — exige une confirmation explicite. Un souvenir effacé se redit ; une mémoire
-  entière ne se reconstitue pas.
-
----
-
-## Recherche hybride et provenance
-
-Chaque souvenir porte désormais une empreinte du contenu normalisé, un embedding, le nom du
-modèle d'embedding et, quand ils existent, les identifiants du run, de la conversation, du
-message ou de la ressource source. Le texte source n'est pas recopié dans la provenance.
-
-`EmbeddingProvider` est le port d'extension. Le repli `LocalHashEmbeddingProvider` est local,
-déterministe et sans téléchargement. Il combine mots et bigrammes et sert un score hybride
-lexical/vectoriel. Il n'a pas la finesse d'un encodeur neuronal : FastEmbed ou pgvector peuvent
-le remplacer sans modifier `MemoryService` ni `ContextAssembler`.
-
-Le schéma PostgreSQL conserve actuellement le vecteur comme `DOUBLE PRECISION[]`. Ce choix
-maintient l'image `postgres:17-alpine` fonctionnelle et évite d'imposer une extension à toutes
-les installations. Un index pgvector sera l'optimisation de production lorsque l'image NEXUS
-l'embarquera ; le contrat applicatif est déjà indépendant du moteur.
-
-`ControlledMemoryExtractor` ne stocke jamais une inférence directement : il produit des
-candidats `requiresReview`, élimine les secrets puis `storeApproved` n'écrit que les index
-explicitement approuvés. `MemoryConsolidator` suit la même règle : plan en lecture seule, puis
-application aux groupes approuvés. La consolidation automatique de paraphrases reste interdite,
-car deux formulations proches peuvent se contredire.
-
-## Assemblage du contexte
-
-`ContextAssembler` réunit les six couches, **chacune dans sa section et son budget**.
-
-Un budget global unique paraît plus simple et se comporte mal : une conversation longue
-mange tout, et les préférences — trois lignes qui changent la réponse — tombent parce
-qu'elles arrivent en dernier. Le découpage garantit qu'un historique bavard ne fait pas
-oublier à NEXUS que l'utilisateur préfère le train.
-
-Deux barrières sont appliquées : caractères et tokens. `TokenCounter` permet à un adaptateur
-d'injecter le tokeniseur exact du modèle ; `ConservativeTokenCounter` est le repli local et
-annoncé comme estimation, jamais comme consommation facturée. `ContextWindowPlanner` réserve
-la sortie et une marge de sécurité selon le modèle.
-
-`ContextCompactor` déplace un contenu trop grand vers un `ContextArtifactStore` **avant** de le
-résumer. Le prompt reçoit le résumé et l'identifiant de l'artefact ; l'original reste récupérable
-avec une frontière `userId`. Le magasin en mémoire livré ici est destiné au développement ; le
-port attend un adaptateur PostgreSQL ou objet durable pour la production.
-
-Deux détails qui comptent :
-
-- les **préférences** sont cherchées à requête vide — une consigne permanente n'a aucune
-  raison de ressembler au message du jour ;
-- l'**origine** accompagne chaque souvenir. « L'utilisateur a dit » et « déduit d'une
-  conversation » n'ont pas la même autorité, et le modèle doit pouvoir nuancer.
+- By **ID**: Unambiguous targeted removal;
+- By **Text**: Deletes only if match confidence significantly exceeds the nearest candidate; otherwise
+  returns candidate records for interactive selection;
+- **Clear All**: Demands explicit confirmation. A forgotten fact can be re-stated; an entire wiped
+  memory store cannot be reconstructed.
 
 ---
 
-## Tests
+## Hybrid Retrieval and Provenance
 
-106 tests, sans base ni réseau, plus 5 tests PostgreSQL activés avec `DATABASE_URL`.
+Every memory record carries a normalized content hash, an embedding vector, the embedding model name,
+and source tracking metadata (runId, conversationId, messageId). Raw source message bodies are not
+duplicated into provenance fields.
 
-| Fichier                    | Couvre                                                                    |
+`EmbeddingProvider` serves as the extension port. The `LocalHashEmbeddingProvider` fallback is local,
+deterministic, and requires zero downloads. It hashes word tokens and character bigrams to compute
+hybrid lexical-vector scores. FastEmbed or pgvector can replace it without modifying `MemoryService`
+or `ContextAssembler`.
+
+The PostgreSQL schema stores dense vectors in a `DOUBLE PRECISION[]` column when operating without pgvector,
+allowing standard `postgres:17-alpine` images to run without compilation errors. An HNSW pgvector index
+acts as a drop-in production optimization; the application contract remains decoupled from storage engines.
+
+`ControlledMemoryExtractor` never persists inferred facts automatically: it generates candidate entries
+marked `requiresReview`, filters sensitive content, and invokes `storeApproved` only for approved items.
+`MemoryConsolidator` follows the same principle: read-only consolidation plans applied to approved groups.
+Automated consolidation of paraphrases remains prohibited to prevent merging subtle contradictions.
+
+## Context Window Assembly
+
+`ContextAssembler` aggregates the six layers, **each within dedicated token allocations**.
+
+A single shared token budget degrades unpredictably: a lengthy conversation history exhausts the window,
+pushing out user preferences that arrived at the end. Explicit section allocations guarantee that a long
+dialogue does not cause NEXUS to forget core user preferences.
+
+Two bounds are evaluated: character length and token counts. `TokenCounter` allows adapters to inject
+exact model tokenizers; `ConservativeTokenCounter` acts as a local fallback estimator.
+`ContextWindowPlanner` reserves output tokens and safety headroom per model specification.
+
+`ContextCompactor` relocates large outputs into `ContextArtifactStore` **before** summarizing them.
+The prompt receives the summary and artifact reference ID; original bodies remain retrievable under
+strict `userId` boundaries.
+
+Two critical implementation details:
+
+- **Preferences** are queried using an empty query string — invariant behavioral rules have no reason
+  to lexically match the active user message;
+- **Provenance** accompanies every retrieved fact. "User explicitly stated" vs. "Inferred from discussion"
+  carry different authority, allowing the reasoning model to weigh confidence appropriately.
+
+---
+
+## Test Suites
+
+106 unit tests without database or network dependencies, plus 5 PostgreSQL integration tests enabled
+when `DATABASE_URL` is configured.
+
+| Test File                  | Coverage Focus                                                            |
 | -------------------------- | ------------------------------------------------------------------------- |
-| `test/provider.test.ts`    | store, search, update, delete, supersession, frontière entre utilisateurs |
-| `test/sensitivity.test.ts` | les trois verdicts, les commandes explicites, ce qui n'en est pas une     |
-| `test/service.test.ts`     | la politique : refus, accord, oubli, ambiguïté, audit sans contenu        |
-| `test/context.test.ts`     | séparation des couches, budgets, contexte court terme                     |
-| `test/semantic.test.ts`    | hybride local, provenance, extraction, consolidation, tokens, artefacts   |
+| `test/provider.test.ts`    | Store, search, update, delete, supersession, multi-user isolation         |
+| `test/sensitivity.test.ts` | The three sensitivity tiers, explicit commands, false positive rejection  |
+| `test/service.test.ts`     | Policy enforcement: denials, consents, forget handling, audit logging    |
+| `test/context.test.ts`     | Layer separation, token budgets, short-term context handling              |
+| `test/semantic.test.ts`    | Local hybrid scoring, provenance, extraction, tokens, artifact management |
 
-Plus `services/api/test/memory.test.ts`, qui vérifie que le service est bien le seul
-chemin — ce qu'aucun test unitaire ne peut voir.
+Additionally, `services/api/test/memory.test.ts` validates that the service layer cannot be bypassed.

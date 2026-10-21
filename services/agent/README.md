@@ -1,19 +1,20 @@
 # Agent Runtime — BullMQ
 
-> **Non implémenté — prévu en phase 2.** Ce dossier réserve sa place dans la structure ;
-> il ne contient aucune implémentation fictive.
+> **Not implemented — planned for Phase 2.** This folder reserves its spot in the project structure;
+> it contains no mock implementations.
 
-## Rôle
+## Purpose
 
-Exécute les `AgentRun` : boucle observe → reason → plan → act → observe, budgets,
-annulation, reprise après confirmation, compaction du contexte.
+Executes `AgentRun` workflows: observe → reason → plan → act → observe loop, token/execution budgets,
+cancellation, resumption after human confirmation, context compaction.
 
 ## Note
 
-Séparé de l'API parce qu'un run dure de 5 à 120 secondes : le mélanger au service HTTP
-rendrait chaque déploiement destructeur et le p99 de l'API illisible (ADR-003).
+Separated from the API service because an agent run typically takes 5 to 120 seconds: mixing runs into
+the HTTP service would make every deployment destructive and obscure API p99 latency metrics (ADR-003).
 
-## Référence
+## Reference
 
-Architecture : [`docs/architecture/03-agent.md`](../../docs/architecture/03-agent.md)
-Roadmap : [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
+Architecture: [`docs/architecture/03-agent.md`](../../docs/architecture/03-agent.md)
+Roadmap: [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
+

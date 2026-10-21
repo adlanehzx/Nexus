@@ -1,84 +1,83 @@
 # @nexus/worker-core
 
-Runtime commun à tous les exécutants NEXUS : cycle de vie, registre de capacités,
-exécution d'étape, reprise.
+Shared execution runtime across all NEXUS worker nodes: connection lifecycle, capability registry,
+step execution, cancellation, and task resumption.
 
-**État : implémenté et testé.** 23 tests propres, plus 319 tests d'intégration
-via les workers Windows et Android qui l'exercent de bout en bout.
+**Status: Implemented and tested.** 23 package unit tests, plus 319 integration tests across
+Windows and Android workers exercising the runtime end-to-end.
 
 ---
 
-## Pourquoi ce paquet existe
+## Architectural Purpose
 
-Le worker Windows et le worker Android partagent tout ce qui compte : la poignée
-de main, l'enregistrement des capacités, les battements de cœur, la validation
-des arguments, les délais, l'annulation, l'idempotence, la reconnexion.
+The Windows worker and Android worker share core execution logic: challenge handshakes, capability
+registration, heartbeats, argument schema validation, timeouts, cooperative cancellation, idempotency,
+and reconnection routines.
 
-Dupliquer ce code aurait créé deux systèmes de capacités et deux cycles de vie,
-avec la garantie qu'un correctif appliqué d'un seul côté les fasse diverger. Ce
-paquet est la réponse.
+Duplicating this logic would create redundant capability registries and dual lifecycles, guaranteeing
+that fixes applied to one platform would diverge from the other. This package provides the unified foundation:
 
 ```
               @nexus/worker-core
-     (cycle de vie · registre · exécution · reprise)
-                      │
-        ┌─────────────┴─────────────┐
-        ▼                           ▼
-  services/windows-worker    services/android-worker
-    ports Node                 ports Android
+     (Lifecycle · Registry · Execution · Resumption)
+                       │
+         ┌─────────────┴─────────────┐
+         ▼                           ▼
+   services/windows-worker    services/android-worker
+     Node Ports                 Android Ports
 ```
 
 ---
 
-## Ce qu'une plateforme doit fournir
+## Platform Port Requirements
 
-Trois ports, pas un de plus :
+Platform adapters implement three specific ports:
 
-| Port               | Rôle                | Windows             | Android                      |
-| ------------------ | ------------------- | ------------------- | ---------------------------- |
-| `CredentialSigner` | Signer le challenge | fichier PEM Ed25519 | magasin de clés, ECDSA P-256 |
-| `HealthSource`     | Santé et saturation | `node:os`           | batterie, mode économie      |
-| `TimerPort`        | Minuteries          | `setTimeout`        | idem, injectable en test     |
+| Port Interface     | Responsibility                      | Windows Node Provider | Android Mobile Provider      |
+| ------------------ | ----------------------------------- | --------------------- | ---------------------------- |
+| `CredentialSigner` | Cryptographic challenge signing     | Ed25519 PEM key file  | Hardware KeyStore, NIST P-256|
+| `HealthSource`     | System health and saturation status | `node:os` metrics     | Battery level, power saver   |
+| `TimerPort`        | Task and heartbeat timers           | Native `setTimeout`   | Injected timer interface     |
 
-Tout le reste est identique.
-
----
-
-## Portabilité
-
-**Ce paquet n'importe aucune API de Node.** Il tourne sur Node _et_ sur Hermes,
-le moteur JavaScript d'Android. Une seule importation de `node:` casserait le
-bundle du worker Android, et l'erreur n'apparaîtrait qu'à l'exécution sur le
-téléphone — au pire endroit possible pour la découvrir.
-
-Un test scanne le code source pour l'empêcher.
+All remaining execution mechanics are identical.
 
 ---
 
-## API
+## Hermes and Node Portability
 
-| Élément                               | Rôle                                                                                               |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `WorkerRuntime`                       | Cycle de vie complet : connexion, authentification, enregistrement, battements, exécution, reprise |
-| `LocalCapabilityRegistry`             | Ce que cette machine sait faire, sonde comprise                                                    |
-| `LocalCapability`                     | Contrat d'une capacité : schéma, risque, sonde, exécution                                          |
-| `TaskRunner`                          | Chaîne de validation puis exécution d'une étape                                                    |
-| `WorkerLink` · `LoopbackLink`         | Port de transport, et son implémentation en mémoire                                                |
-| `Backoff`                             | Attente exponentielle avec bruit                                                                   |
-| `WorkerLogger` · `MemoryWorkerLogger` | Journalisation rédigée                                                                             |
+**This package imports zero Node.js native runtime APIs.** It executes seamlessly on Node.js _and_
+on Hermes (the React Native Android JavaScript engine). A single `node:*` import would break the Android
+worker bundle, triggering crashes on physical mobile devices.
 
-### Deux champs qui protègent
+Automated CI tests statically scan the codebase to enforce zero Node runtime imports.
+
+---
+
+## API Overview
+
+| Component                             | Role                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `WorkerRuntime`                       | Complete lifecycle: connect, authenticate, register, heartbeats, execute, resume           |
+| `LocalCapabilityRegistry`             | Machine capabilities catalog, including runtime availability probes                         |
+| `LocalCapability`                     | Capability contract: input schema, risk level, health probe, execution logic                |
+| `TaskRunner`                          | Step execution pipeline: schema parsing, timeout racing, cancellation, output validation    |
+| `WorkerLink` · `LoopbackLink`         | Transport port interface alongside its in-memory testing implementation                      |
+| `Backoff`                             | Exponential backoff calculation with upper-half jitter                                      |
+| `WorkerLogger` · `MemoryWorkerLogger` | Redacted structured logging engine                                                          |
+
+### Security Capabilities
 
 ```ts
 interface LocalCapability {
-  /** Le cœur transmet le résultat au client sans le ranger dans son journal. */
+  /** The central core transmits this result to client interfaces without persisting it in audit logs. */
   sensitiveResult?: boolean;
-  /** Champs d'arguments à masquer avant journalisation. */
+  /** Explicit argument fields to redact before persisting to logs. */
   secretArguments?: readonly string[];
 }
 ```
 
-Le premier existe pour la capture d'écran : masquer un mot à l'intérieur d'une
-image n'a pas de sens, il faut ne pas la conserver. Le second pour la saisie de
-texte : `redact` reconnaît `password` et `token`, il ne peut rien pour un champ
-légitimement nommé `text` — seule la capacité sait ce qu'il transporte.
+`sensitiveResult` protects visual artifacts like screenshots: redacting text inside a raster image
+is not viable, so raw bitmap results are omitted from long-term database logs.
+`secretArguments` handles text input fields: automated redaction filters recognize keys like `password`
+and `token`, but cannot anticipate whether a generic field named `text` carries a private secret.
+The capability specifies which parameters require redaction.
