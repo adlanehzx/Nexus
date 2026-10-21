@@ -1,8 +1,8 @@
 /**
- * Exporte le contrat en JSON Schema pour le worker Python.
+ * Exports contract as JSON Schema for the Python worker.
  *
- * C'est ce fichier que le test de contrat côté Python valide : une divergence
- * entre les deux mondes casse le build, pas la production (cf. R7).
+ * This file is validated by the contract tests on the Python side:
+ * a mismatch breaks the build, not production (see R7).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -36,4 +36,4 @@ const contract = {
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(contract, null, 2)}\n`, "utf8");
-process.stdout.write(`contrat écrit : ${out}\n`);
+process.stdout.write(`contract written: ${out}\n`);

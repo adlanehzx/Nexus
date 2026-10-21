@@ -9,24 +9,24 @@ import {
 } from "./protocol.js";
 
 /**
- * Outils `browser.*` exposés à l'agent.
+ * `browser.*` tools exposed to the agent.
  *
- * Un outil par **intention**, et non un seul outil générique. C'est ce qui
- * permet au système de permissions de faire son travail : lire le prix d'un
- * billet et acheter ce billet ne sont pas la même action, et ne peuvent pas
- * porter le même niveau de risque ni la même confirmation.
+ * One tool per **intent**, rather than a single generic tool. This is what
+ * enables the permission system to do its job: reading the price of a
+ * ticket and purchasing that ticket are not the same action, and cannot
+ * carry the same risk level or confirmation requirements.
  *
- * L'intention n'est pas déclarative : le worker restreint réellement ce que le
- * navigateur peut faire (cf. `services/browser-worker/app/policies.py`). Un
- * `browser.read` ne peut pas cliquer, même si le modèle le lui demande.
+ * The intent is not declarative: the worker genuinely restricts what the
+ * browser can do (see `services/browser-worker/app/policies.py`). A
+ * `browser.read` call cannot click, even if the model requests it.
  */
 
 const taskInputSchema = z.object({
-  /** Ce que l'agent veut obtenir, en langage naturel. */
+  /** What the agent wants to achieve, in natural language. */
   instructions: z.string().min(3).max(4_000),
-  /** Point de départ. Sans lui, l'agent doit dire dans les instructions où aller. */
+  /** Starting point. Without it, instructions must specify where to go. */
   url: z.string().optional(),
-  /** Réutilise une session ouverte — indispensable pour enchaîner les étapes. */
+  /** Reuses an open session — required for multi-step workflows. */
   sessionId: z.string().optional(),
   maxSteps: z.number().int().min(1).max(50).optional(),
 });
@@ -38,7 +38,7 @@ const taskOutputSchema = z.object({
   output: z.string(),
   steps: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
-  /** Vrai si le site exige une action humaine (CAPTCHA, MFA, 2FA). */
+  /** True if the site requires human intervention (CAPTCHA, MFA, 2FA). */
   needsHuman: z.boolean(),
   visitedUrl: z.string().nullable(),
 });
@@ -46,7 +46,7 @@ type TaskOutput = z.infer<typeof taskOutputSchema>;
 
 export interface BrowserToolsOptions {
   client: BrowserWorkerClient;
-  /** Restreint la navigation. Vivement recommandé en production. */
+  /** Restricts browsing. Highly recommended in production. */
   allowedDomains?: string[];
   prohibitedDomains?: string[];
   defaultMaxSteps?: number;
@@ -69,7 +69,7 @@ const INTENTS: IntentSpec[] = [
     risk: "SAFE",
     requiresConfirmation: false,
     description:
-      "Ouvre une page et en extrait de l'information (prix, horaires, disponibilité, contenu). LECTURE SEULE : ne clique pas, ne remplit aucun formulaire, ne se connecte à rien. Utilise-le pour toute recherche d'information sur le web.",
+      "Opens a page and extracts information (prices, schedules, availability, content). READ-ONLY: does not click, does not fill forms, does not log into anything. Use this for all web information retrieval.",
   },
   {
     name: "browser.interact",
@@ -77,7 +77,7 @@ const INTENTS: IntentSpec[] = [
     risk: "MEDIUM",
     requiresConfirmation: true,
     description:
-      "Interagit avec une page : cliquer, remplir un formulaire, filtrer, rechercher. N'effectue ni connexion ni paiement. Nécessite l'accord de l'utilisateur.",
+      "Interacts with a page: click, fill forms, filter, search. Does not log in or make payments. Requires user confirmation.",
   },
   {
     name: "browser.login",
@@ -85,7 +85,7 @@ const INTENTS: IntentSpec[] = [
     risk: "HIGH",
     requiresConfirmation: true,
     description:
-      "Se connecte à un site avec des identifiants déjà enregistrés par l'utilisateur. Ne contourne JAMAIS un CAPTCHA ni une authentification à deux facteurs : si le site en demande une, la tâche s'arrête et rend la main à l'utilisateur.",
+      "Logs into a site using credentials already registered by the user. NEVER bypasses a CAPTCHA or two-factor authentication: if the site asks for one, the task stops and yields to the user.",
   },
   {
     name: "browser.purchase",
@@ -93,11 +93,11 @@ const INTENTS: IntentSpec[] = [
     risk: "CRITICAL",
     requiresConfirmation: true,
     description:
-      "Finalise un achat ou une réservation payante. Action IRRÉVERSIBLE et engageante financièrement. À n'utiliser qu'après avoir présenté le montant exact et obtenu l'accord explicite de l'utilisateur.",
+      "Finalizes a purchase or paid booking. IRREVERSIBLE and financially binding action. Only use after presenting the exact amount and obtaining explicit user confirmation.",
   },
 ];
 
-/** Construit les outils navigateur pour le registre. */
+/** Builds browser tools for the registry. */
 export function createBrowserTools(options: BrowserToolsOptions): ToolDefinition<never, unknown>[] {
   const tools: ToolDefinition<TaskInput, TaskOutput>[] = INTENTS.map((spec) =>
     makeTaskTool(spec, options),
@@ -119,12 +119,12 @@ function makeTaskTool(
     riskLevel: spec.risk,
     requiredPermissions: INTENT_PERMISSIONS[spec.intent] as Permission[],
     requiresConfirmation: spec.requiresConfirmation,
-    // Une action de navigateur n'est jamais rejouée toute seule : on ne peut pas
-    // savoir si le premier essai a déjà cliqué sur « Payer ».
+    // A browser action is never retried automatically: we cannot know
+    // whether the first attempt already clicked on "Pay".
     idempotent: spec.intent === "read",
     timeoutMs: 15 * 60_000,
     summarize: (input) =>
-      `${spec.name} — ${input.url ?? "page courante"} : ${input.instructions.slice(0, 160)}`,
+      `${spec.name} — ${input.url ?? "current page"} : ${input.instructions.slice(0, 160)}`,
 
     execute: async (input, context): Promise<TaskOutput> => {
       const client = options.client;
@@ -148,7 +148,7 @@ function makeTaskTool(
       const instructions =
         input.url === undefined
           ? input.instructions
-          : `Va sur ${input.url}, puis : ${input.instructions}`;
+          : `Go to ${input.url}, then: ${input.instructions}`;
 
       const task = await client.runTask(
         {
@@ -187,22 +187,22 @@ function finalize(task: BrowserTask, sessionId: string, visitedUrl: string | nul
   };
 
   if (task.status === "needs_human") {
-    // On ne contourne jamais une protection : on rend la main. Le message est
-    // rédigé pour que l'agent le relaie tel quel à l'utilisateur.
+    // We never bypass protections: yield control. The message is
+    // written so the agent can relay it as-is to the user.
     return {
       ...base,
       needsHuman: true,
       output:
         task.error?.message ??
-        "Le site demande une vérification humaine (CAPTCHA ou authentification à deux facteurs). Je ne la contourne pas : prends la main sur cette étape, puis redemande-moi de continuer.",
+        "The site requires human verification (CAPTCHA or two-factor authentication). This cannot be bypassed: please complete this step manually, then ask me to continue.",
     };
   }
 
   if (task.status !== "succeeded") {
     throw new BrowserWorkerError(task.error?.code ?? "BROWSER_TASK_FAILED", {
-      message: task.error?.message ?? `Tâche navigateur terminée en ${task.status}`,
+      message: task.error?.message ?? `Browser task finished with status ${task.status}`,
       userMessage:
-        task.error?.message ?? `La navigation s'est terminée sans résultat (${task.status}).`,
+        task.error?.message ?? `Browsing finished without a result (${task.status}).`,
       retryable: task.error?.retryable ?? false,
     });
   }
@@ -210,18 +210,18 @@ function finalize(task: BrowserTask, sessionId: string, visitedUrl: string | nul
   return { ...base, needsHuman: false, output: task.output ?? "" };
 }
 
-/** Traduit un événement du worker en progression lisible par un humain. */
+/** Translates a worker event into a human-readable progress report. */
 function describeEvent(event: BrowserEvent): { label?: string; pct?: number } | undefined {
   switch (event.type) {
     case "navigation":
-      return { label: `Ouverture de ${hostOf(event.url)}` };
+      return { label: `Opening ${hostOf(event.url)}` };
     case "action":
       return { label: `${event.action}${event.target === null ? "" : ` : ${event.target}`}` };
     case "thinking":
       return { label: event.text.slice(0, 120) };
     case "progress":
       return {
-        label: `Étape ${String(event.step)}/${String(event.maxSteps)}`,
+        label: `Step ${String(event.step)}/${String(event.maxSteps)}`,
         pct: Math.round((event.step / event.maxSteps) * 100),
       };
     default:
@@ -237,7 +237,7 @@ function makeCloseTool(options: BrowserToolsOptions): ToolDefinition<never, unkn
   const tool: ToolDefinition<{ sessionId: string }, { closed: boolean }> = {
     name: "browser.close_session",
     description:
-      "Ferme une session de navigateur et libère ses ressources. À appeler quand la navigation est terminée.",
+      "Closes a browser session and frees its resources. Call when browsing is complete.",
     version: "1",
     inputSchema: z.object({ sessionId: z.string().min(1) }),
     outputSchema: z.object({ closed: z.boolean() }),

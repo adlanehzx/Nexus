@@ -1,29 +1,23 @@
 import { z } from "zod";
 
 /**
- * Contrat entre le backend TypeScript et le Browser Worker Python.
+ * Contract between TypeScript backend and Python Browser Worker.
  *
- * C'est la **seule** frontière entre les deux mondes : le backend n'importe
- * jamais de code Python, il parle à un service par HTTP (ADR-006). Ces schémas
- * sont exportés en JSON Schema (`scripts/emit-contract.ts`) et vérifiés côté
- * Python par un test de contrat — une divergence casse le build, pas la
- * production.
+ * This is the single boundary between both environments (ADR-006).
+ * Schemas are exported to JSON Schema (`scripts/emit-contract.ts`) and checked
+ * by Python contract tests.
  */
 
 export const BROWSER_PROTOCOL_VERSION = 1;
 
 /**
- * Intention déclarée d'une tâche.
- *
- * Elle porte deux choses à la fois : le niveau de risque côté agent, et la
- * **restriction réellement appliquée** côté worker. Une tâche `read` ne peut pas
- * cliquer, même si le modèle le demande — l'intention n'est pas une étiquette,
- * c'est une contrainte d'exécution.
+ * Declared task intent.
+ * Dictates risk level on agent side and strict execution constraints on worker side.
  */
 export const browserIntentSchema = z.enum(["read", "interact", "login", "purchase"]);
 export type BrowserIntent = z.infer<typeof browserIntentSchema>;
 
-/** Permissions exigées par intention. Cumulatives : `purchase` implique tout. */
+/** Permissions required per intent. Cumulative: `purchase` implies all. */
 export const INTENT_PERMISSIONS: Record<BrowserIntent, readonly string[]> = {
   read: ["browser.navigate", "browser.read"],
   interact: ["browser.navigate", "browser.read", "browser.interact"],
@@ -42,12 +36,12 @@ export const INTENT_PERMISSIONS: Record<BrowserIntent, readonly string[]> = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const createSessionRequestSchema = z.object({
-  /** Sépare les navigateurs par utilisateur : aucun état ne fuit entre comptes. */
+  /** User partition key ensuring state isolation between accounts. */
   ownerId: z.string().min(1),
-  /** Restreint la navigation. Vide = pas de restriction côté worker. */
+  /** Navigation boundaries. Empty array = unrestricted on worker side. */
   allowedDomains: z.array(z.string()).default([]),
   prohibitedDomains: z.array(z.string()).default([]),
-  /** Réutilise un profil persistant (cookies de connexion), chiffré au repos. */
+  /** Reuses persistent profile (login cookies), encrypted at rest. */
   profileId: z.string().optional(),
   headless: z.boolean().default(true),
   ttlSeconds: z.number().int().positive().max(3600).default(600),
@@ -70,11 +64,10 @@ export const sessionSchema = z.object({
 export type BrowserSession = z.infer<typeof sessionSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tâches
+// Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const runTaskRequestSchema = z.object({
-  /** Fourni par le backend : il rattache la tâche au run agent. */
   taskId: z.string().min(1),
   sessionId: z.string().min(1),
   instructions: z.string().min(1).max(4_000),
@@ -82,10 +75,8 @@ export const runTaskRequestSchema = z.object({
   maxSteps: z.number().int().positive().max(50).default(15),
   timeoutSeconds: z.number().int().positive().max(900).default(180),
   /**
-   * Identifiants de site.
-   *
-   * Le worker les remet à browser-use en `sensitive_data` : le modèle voit un
-   * marqueur, jamais la valeur. Ils ne sont ni journalisés, ni renvoyés.
+   * Site credentials passed to browser-use as `sensitive_data`.
+   * Redacted from logs and model reasoning traces.
    */
   secrets: z.record(z.string(), z.string()).default({}),
   metadata: z.record(z.string(), z.string()).default({}),
@@ -99,13 +90,13 @@ export const taskStatusSchema = z.enum([
   "failed",
   "cancelled",
   "timeout",
-  /** Le site exige une action humaine (CAPTCHA, MFA). Jamais contournée. */
+  /** Requires human intervention (CAPTCHA, MFA). */
   "needs_human",
 ]);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Événements
+// Events
 // ─────────────────────────────────────────────────────────────────────────────
 
 const eventBase = {
@@ -194,7 +185,7 @@ export const workerErrorSchema = z.object({
   }),
 });
 
-/** Codes d'erreur du worker. Contrat public : ils ne changent pas. */
+/** Worker error codes. Public API contract. */
 export const BrowserErrorCode = {
   INVALID_REQUEST: "BROWSER_INVALID_REQUEST",
   SESSION_NOT_FOUND: "BROWSER_SESSION_NOT_FOUND",

@@ -94,11 +94,7 @@ export class BrowserHarnessDriverError extends Error {
 }
 
 /**
- * Pilote natif Chromium via browser-harness (CDP local 127.0.0.1:19222).
- *
- * Aucune boucle LLM secondaire : ce pilote exécute directement les commandes
- * de navigation, d'extraction, de clic et de saisie sur le navigateur local
- * sans recourir à une clé API payante.
+ * Native Chromium driver via browser-harness (local CDP 127.0.0.1:19222).
  */
 export class BrowserHarnessDriver {
   readonly #cdpUrl: string;
@@ -113,7 +109,7 @@ export class BrowserHarnessDriver {
       !["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)
     ) {
       throw new BrowserHarnessDriverError(
-        "Le CDP de Browser Harness doit rester sur la boucle locale (127.0.0.1).",
+        "Browser Harness CDP must remain on loopback (127.0.0.1).",
         "SECURITY_CDP_LOOPBACK_REQUIRED",
       );
     }
@@ -127,7 +123,7 @@ export class BrowserHarnessDriver {
   }
 
   /**
-   * Diagnostic de santé du daemon et de Chromium.
+   * Health diagnostic for daemon and Chromium.
    */
   async doctor(): Promise<HarnessDoctorReport> {
     const { stdout } = await this.#runCli(
@@ -139,14 +135,14 @@ export class BrowserHarnessDriver {
       return JSON.parse(stdout) as HarnessDoctorReport;
     } catch {
       throw new BrowserHarnessDriverError(
-        "Rapport doctor browser-harness illisible ou invalide.",
+        "Unreadable or invalid browser-harness doctor report.",
         "INVALID_DOCTOR_REPORT",
       );
     }
   }
 
   /**
-   * Navigue vers une URL et attend la stabilisation du chargement.
+   * Navigates to a URL and waits for page load stabilization.
    */
   async navigate(url: string, options: { timeoutMs?: number } = {}): Promise<PageInfo> {
     const script = `
@@ -163,7 +159,7 @@ except Exception as e:
     const res = await this.#execPython(script, options.timeoutMs ?? this.#defaultTimeoutMs);
     if (!res.success || !res.info) {
       throw new BrowserHarnessDriverError(
-        `Échec de navigation vers ${url}: ${res.error ?? "inconnu"}`,
+        `Navigation to ${url} failed: ${res.error ?? "unknown"}`,
         "NAVIGATION_FAILED",
       );
     }
@@ -171,7 +167,7 @@ except Exception as e:
   }
 
   /**
-   * Récupère les métadonnées et dimensions de la page courante.
+   * Retrieves metadata and dimensions for current page.
    */
   async pageInfo(): Promise<PageInfo> {
     const script = `
@@ -186,7 +182,7 @@ except Exception as e:
     const res = await this.#execPython(script, 10_000);
     if (!res.success || !res.info) {
       throw new BrowserHarnessDriverError(
-        `Impossible de lire page_info: ${res.error ?? "inconnu"}`,
+        `Failed to retrieve page_info: ${res.error ?? "unknown"}`,
         "PAGE_INFO_FAILED",
       );
     }
@@ -194,7 +190,7 @@ except Exception as e:
   }
 
   /**
-   * Extrait le contenu lisible (texte, markdown ou html) en filtrant les données sensibles.
+   * Extracts readable content (text, markdown, html).
    */
   async extract(
     options: {
@@ -211,9 +207,7 @@ except Exception as e:
         const root = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : "document.body"};
         if (!root) return { found: false };
         
-        // Clone pour assainir sans polluer la vraie page
         const clone = root.cloneNode(true);
-        // Supprime les scripts, styles, iframes et champs de mot de passe
         clone.querySelectorAll('script, style, noscript, iframe, input[type="password"]').forEach(el => el.remove());
         
         let content = "";
@@ -221,7 +215,6 @@ except Exception as e:
         if (format === "html") {
             content = clone.outerHTML || clone.innerHTML || "";
         } else if (format === "markdown") {
-            // Conversion markdown basique et lisible
             const walk = (node) => {
                 if (node.nodeType === Node.TEXT_NODE) {
                     return node.textContent.replace(/\\s+/g, ' ');
@@ -253,7 +246,7 @@ try:
     clean_js = json.loads(${JSON.stringify(JSON.stringify(cleanJsCode))})
     result = js(clean_js)
     if not result or not result.get("found"):
-        print(json.dumps({"success": False, "error": "Élément introuvable pour l'extraction"}))
+        print(json.dumps({"success": False, "error": "Element not found for extraction"}))
     else:
         raw_content = result.get("content", "")
         truncated = len(raw_content) > ${maxChars}
@@ -272,7 +265,7 @@ except Exception as e:
     const res = await this.#execPython(script, 15_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Échec d'extraction: ${res.error ?? "inconnu"}`,
+        `Extraction failed: ${res.error ?? "unknown"}`,
         "EXTRACTION_FAILED",
       );
     }
@@ -286,7 +279,7 @@ except Exception as e:
   }
 
   /**
-   * Clique sur un élément ciblé par sélecteur CSS ou coordonnées (x, y).
+   * Clicks on an element targeted by CSS selector or (x, y) coordinates.
    */
   async click(target: { x: number; y: number } | { selector: string }): Promise<ClickResult> {
     let isCoords = false;
@@ -326,11 +319,10 @@ try:
         box_js = json.loads(${JSON.stringify(JSON.stringify(boxJsCode))})
         pos = js(box_js)
         if not pos or not pos.get("visible"):
-            print(json.dumps({"success": False, "error": f"Sélecteur '{sel}' introuvable ou invisible"}))
+            print(json.dumps({"success": False, "error": f"Selector '{sel}' not found or invisible"}))
             import sys; sys.exit(0)
         click_at_xy(int(pos["x"]), int(pos["y"]))
     
-    # Attend la stabilisation éventuelle
     wait_for_load()
     info = page_info()
     print(json.dumps({
@@ -346,7 +338,7 @@ except Exception as e:
     const res = await this.#execPython(script, 15_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Échec du clic: ${res.error ?? "inconnu"}`,
+        `Click failed: ${res.error ?? "unknown"}`,
         "CLICK_FAILED",
       );
     }
@@ -359,7 +351,7 @@ except Exception as e:
   }
 
   /**
-   * Saisit du texte dans un champ ciblé par son sélecteur.
+   * Types text into a targeted input element.
    */
   async type(
     target: string | { selector: string },
@@ -394,7 +386,7 @@ except Exception as e:
     const res = await this.#execPython(script, 15_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Échec de la saisie: ${res.error ?? "inconnu"}`,
+        `Type failed: ${res.error ?? "unknown"}`,
         "TYPE_FAILED",
       );
     }
@@ -406,7 +398,7 @@ except Exception as e:
   }
 
   /**
-   * Capture une capture d'écran de l'onglet actif.
+   * Takes a screenshot of active tab.
    */
   async screenshot(): Promise<ScreenshotResult> {
     const script = `
@@ -425,7 +417,7 @@ except Exception as e:
     const res = await this.#execPython(script, 15_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Échec de la capture d'écran: ${res.error ?? "inconnu"}`,
+        `Screenshot failed: ${res.error ?? "unknown"}`,
         "SCREENSHOT_FAILED",
       );
     }
@@ -436,7 +428,7 @@ except Exception as e:
   }
 
   /**
-   * Crée un nouvel onglet Chromium et retourne son identifiant unique de cible (`targetId`).
+   * Creates a new Chromium tab and returns its unique targetId.
    */
   async createTab(url = "about:blank"): Promise<string> {
     const script = `
@@ -450,7 +442,7 @@ except Exception as e:
     const res = await this.#execPython(script, 10_000);
     if (!res.success || !res.targetId) {
       throw new BrowserHarnessDriverError(
-        `Impossible de créer un onglet: ${res.error ?? "inconnu"}`,
+        `Failed to create tab: ${res.error ?? "unknown"}`,
         "TAB_CREATE_FAILED",
       );
     }
@@ -458,7 +450,7 @@ except Exception as e:
   }
 
   /**
-   * Bascule sur un onglet existant par son identifiant de cible.
+   * Switches to an existing tab by targetId.
    */
   async switchTab(targetId: string): Promise<void> {
     const script = `
@@ -472,14 +464,14 @@ except Exception as e:
     const res = await this.#execPython(script, 10_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Impossible de basculer sur l'onglet ${targetId}: ${res.error}`,
+        `Failed to switch to tab ${targetId}: ${res.error}`,
         "TAB_SWITCH_FAILED",
       );
     }
   }
 
   /**
-   * Ferme un onglet par son identifiant de cible.
+   * Closes a tab by targetId.
    */
   async closeTab(targetId: string): Promise<void> {
     const script = `
@@ -493,14 +485,14 @@ except Exception as e:
     const res = await this.#execPython(script, 10_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Impossible de fermer l'onglet ${targetId}: ${res.error}`,
+        `Failed to close tab ${targetId}: ${res.error}`,
         "TAB_CLOSE_FAILED",
       );
     }
   }
 
   /**
-   * Liste tous les onglets ouverts dans Chromium.
+   * Lists all open tabs in Chromium.
    */
   async listTabs(): Promise<TabSummary[]> {
     const script = `
@@ -521,39 +513,35 @@ except Exception as e:
     const res = await this.#execPython(script, 10_000);
     if (!res.success) {
       throw new BrowserHarnessDriverError(
-        `Impossible de lister les onglets: ${res.error ?? "inconnu"}`,
+        `Failed to list tabs: ${res.error ?? "unknown"}`,
         "TAB_LIST_FAILED",
       );
     }
     return res.tabs ?? [];
   }
 
-  /**
-   * Exécute un script Python arbitraire via le CLI browser-harness sur l'entrée standard.
-   */
   async #execPython(script: string, timeoutMs: number): Promise<ExecPythonResponse> {
     const { stdout } = await this.#runCli([], script, timeoutMs);
     const trimmed = stdout.trim();
     if (!trimmed) {
       throw new BrowserHarnessDriverError(
-        "Aucune sortie reçue du processus browser-harness.",
+        "No output received from browser-harness process.",
         "NO_OUTPUT",
       );
     }
-    // Si la sortie contient plusieurs lignes, le JSON final se trouve sur la dernière ligne
     const lines = trimmed
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
     const lastLine = lines[lines.length - 1];
     if (!lastLine) {
-      throw new BrowserHarnessDriverError("Sortie vide reçue de browser-harness.", "EMPTY_OUTPUT");
+      throw new BrowserHarnessDriverError("Empty output received from browser-harness.", "EMPTY_OUTPUT");
     }
     try {
       return JSON.parse(lastLine) as ExecPythonResponse;
     } catch {
       throw new BrowserHarnessDriverError(
-        `Réponse JSON invalide de browser-harness: ${trimmed.slice(0, 300)}`,
+        `Invalid JSON response from browser-harness: ${trimmed.slice(0, 300)}`,
         "INVALID_JSON_OUTPUT",
       );
     }
@@ -577,7 +565,7 @@ except Exception as e:
         child.kill("SIGTERM");
         reject(
           new BrowserHarnessDriverError(
-            "Délai d'exécution dépassé pour browser-harness.",
+            "Execution timeout exceeded for browser-harness.",
             "TIMEOUT",
           ),
         );
@@ -605,7 +593,7 @@ except Exception as e:
         if (exitCode !== 0 && args[0] !== "doctor") {
           reject(
             new BrowserHarnessDriverError(
-              `Le processus browser-harness s'est terminé avec le code ${exitCode}. ${stderr.slice(0, 300)}`,
+              `browser-harness process exited with code ${exitCode}. ${stderr.slice(0, 300)}`,
               "PROCESS_EXIT_ERROR",
             ),
           );

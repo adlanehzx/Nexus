@@ -4,9 +4,9 @@ import { BrowserWorkerClient, createBrowserTools, INTENT_PERMISSIONS } from "../
 import type { BrowserEvent, BrowserTask } from "../src/protocol.js";
 
 /**
- * Le worker est remplacé par un `fetch` scripté : c'est la vraie frontière
- * externe. Le client, les outils, l'exécuteur et la validation s'exécutent
- * réellement, et le contrat HTTP est vérifié tel qu'il part sur le réseau.
+ * Worker is stubbed with a scripted `fetch`: this is the real external
+ * boundary. Client, tools, executor, and validation run for real,
+ * and the HTTP contract is verified exactly as emitted onto the wire.
  */
 
 interface Route {
@@ -19,7 +19,7 @@ function makeFetch(routes: Route[]) {
   const calls: { method: string; url: string; body: unknown; headers: Headers }[] = [];
 
   const impl: typeof fetch = (input, init) => {
-    // `fetch` accepte trois formes d'entrée ; le client n'en émet qu'une.
+    // `fetch` accepts three input forms; client emits only one.
     const url = typeof input === "string" ? input : (input as Request).url;
     const method = init?.method ?? "GET";
     const rawBody = init?.body;
@@ -89,16 +89,16 @@ function makeTools(finalTask?: BrowserTask) {
   const { impl, calls } = makeFetch(standardRoutes(finalTask));
   const client = new BrowserWorkerClient({
     baseUrl: "http://browser-worker:8100",
-    token: "jeton-interne",
+    token: "internal-token",
     fetchImpl: impl,
   });
-  const tools = createBrowserTools({ client, allowedDomains: ["vols.test"] });
+  const tools = createBrowserTools({ client, allowedDomains: ["flights.test"] });
   return { tools, calls, client };
 }
 
 function byName(tools: ToolDefinition<never, unknown>[], name: string) {
   const tool = tools.find((t) => t.name === name);
-  if (tool === undefined) throw new Error(`outil absent : ${name}`);
+  if (tool === undefined) throw new Error(`tool not found: ${name}`);
   return tool;
 }
 
@@ -113,8 +113,8 @@ const context: Omit<ToolContext, "attempt" | "onProgress"> = {
 
 const executor = new ToolExecutor({ defaultTimeoutMs: 5_000, sleep: () => Promise.resolve() });
 
-describe("catalogue d'outils", () => {
-  it("expose une intention par outil, pas un outil générique", () => {
+describe("tool catalog", () => {
+  it("exposes one intent per tool rather than a generic tool", () => {
     const { tools } = makeTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "browser.close_session",
@@ -125,7 +125,7 @@ describe("catalogue d'outils", () => {
     ]);
   });
 
-  it("gradue le risque selon l'intention", () => {
+  it("scales risk level by intent", () => {
     const { tools } = makeTools();
     expect(byName(tools, "browser.read").riskLevel).toBe("SAFE");
     expect(byName(tools, "browser.interact").riskLevel).toBe("MEDIUM");
@@ -133,41 +133,38 @@ describe("catalogue d'outils", () => {
     expect(byName(tools, "browser.purchase").riskLevel).toBe("CRITICAL");
   });
 
-  it("ne demande de confirmation que pour ce qui agit", () => {
+  it("only requests confirmation for mutating or sensitive actions", () => {
     const { tools } = makeTools();
-    // « Cherche le prix d'un billet » ne dérange pas l'utilisateur…
     expect(byName(tools, "browser.read").requiresConfirmation).toBe(false);
-    // …« achète le billet » si.
     expect(byName(tools, "browser.purchase").requiresConfirmation).toBe(true);
     expect(byName(tools, "browser.login").requiresConfirmation).toBe(true);
     expect(byName(tools, "browser.interact").requiresConfirmation).toBe(true);
   });
 
-  it("exige des permissions cumulatives", () => {
+  it("requires cumulative permissions", () => {
     const { tools } = makeTools();
     expect(byName(tools, "browser.read").requiredPermissions).toEqual(INTENT_PERMISSIONS.read);
     expect(byName(tools, "browser.purchase").requiredPermissions).toEqual(
       INTENT_PERMISSIONS.purchase,
     );
-    // Acheter suppose de pouvoir naviguer, lire, interagir et se connecter.
+    // Purchasing entails navigating, reading, interacting, and logging in.
     expect(byName(tools, "browser.purchase").requiredPermissions).toContain("browser.navigate");
   });
 
-  it("ne rejoue automatiquement que la lecture", () => {
+  it("only automatically retries read actions", () => {
     const { tools } = makeTools();
-    // On ne peut pas savoir si le premier essai a déjà cliqué sur « Payer ».
     expect(byName(tools, "browser.read").idempotent).toBe(true);
     expect(byName(tools, "browser.purchase").idempotent).toBe(false);
   });
 });
 
-describe("exécution", () => {
-  it("ouvre une session, lance la tâche et rend le résultat", async () => {
+describe("execution", () => {
+  it("opens a session, runs task, and returns result", async () => {
     const { tools, calls } = makeTools();
 
     const result = await executor.execute(
       byName(tools, "browser.read"),
-      { url: "https://vols.test", instructions: "Trouve le prix" },
+      { url: "https://flights.test", instructions: "Find the price" },
       context,
     );
 
@@ -180,42 +177,41 @@ describe("exécution", () => {
     }
 
     const create = calls.find((c) => c.url.endsWith("/v1/sessions"));
-    expect(create?.body).toMatchObject({ ownerId: "user-1", allowedDomains: ["vols.test"] });
+    expect(create?.body).toMatchObject({ ownerId: "user-1", allowedDomains: ["flights.test"] });
 
     const run = calls.find((c) => c.url.includes("/tasks"));
     expect(run?.body).toMatchObject({ intent: "read" });
-    // L'URL est fusionnée dans les instructions : le worker reçoit une consigne
-    // unique, pas deux champs à réconcilier.
+    // URL is merged into instructions
     expect(String((run?.body as { instructions: string }).instructions)).toContain(
-      "https://vols.test",
+      "https://flights.test",
     );
   });
 
-  it("authentifie chaque appel", async () => {
+  it("authenticates each call", async () => {
     const { tools, calls } = makeTools();
-    await executor.execute(byName(tools, "browser.read"), { instructions: "Lis la page" }, context);
+    await executor.execute(byName(tools, "browser.read"), { instructions: "Read the page" }, context);
 
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
-      expect(call.headers.get("authorization")).toBe("Bearer jeton-interne");
+      expect(call.headers.get("authorization")).toBe("Bearer internal-token");
       expect(call.headers.get("x-browser-protocol-version")).toBe("1");
     }
   });
 
-  it("réutilise une session fournie plutôt que d'en ouvrir une", async () => {
+  it("reuses provided session instead of opening a new one", async () => {
     const { tools, calls } = makeTools();
 
     await executor.execute(
       byName(tools, "browser.read"),
-      { instructions: "suite", sessionId: "bs_existante" },
+      { instructions: "next", sessionId: "bs_existing" },
       context,
     );
 
     expect(calls.some((c) => c.url.endsWith("/v1/sessions") && c.method === "POST")).toBe(false);
-    expect(calls.some((c) => c.url.includes("bs_existante/tasks"))).toBe(true);
+    expect(calls.some((c) => c.url.includes("bs_existing/tasks"))).toBe(true);
   });
 
-  it("publie la progression pendant la navigation", async () => {
+  it("streams progress during browsing", async () => {
     const events: BrowserEvent[] = [
       {
         type: "navigation",
@@ -223,7 +219,7 @@ describe("exécution", () => {
         sessionId: "bs_1",
         seq: 1,
         ts: "2026-09-01T10:00:01Z",
-        url: "https://vols.test/recherche",
+        url: "https://flights.test/search",
         title: null,
       },
       {
@@ -242,30 +238,29 @@ describe("exécution", () => {
 
     await executor.execute(
       byName(tools, "browser.read"),
-      { instructions: "Lis la page" },
+      { instructions: "Read the page" },
       {
         ...context,
         onProgress,
       },
     );
 
-    // L'utilisateur doit voir ce que fait le navigateur, pas un sablier.
     const labels = onProgress.mock.calls.map(([p]) => (p as { label?: string }).label);
-    expect(labels).toContain("Ouverture de vols.test");
-    expect(labels).toContain("Étape 3/15");
+    expect(labels).toContain("Opening flights.test");
+    expect(labels).toContain("Step 3/15");
     expect(onProgress.mock.calls.at(-1)?.[0]).toMatchObject({ pct: 20 });
   });
 });
 
-describe("protections humaines", () => {
-  it("rend la main au lieu de contourner un CAPTCHA", async () => {
+describe("human guardrails", () => {
+  it("yields control instead of bypassing CAPTCHA", async () => {
     const { tools } = makeTools(
       task({
         status: "needs_human",
         output: null,
         error: {
           code: "BROWSER_HUMAN_INTERVENTION_REQUIRED",
-          message: "Le site demande une vérification humaine.",
+          message: "The site requires human verification.",
           retryable: false,
         },
       }),
@@ -273,33 +268,32 @@ describe("protections humaines", () => {
 
     const result = await executor.execute(
       byName(tools, "browser.login"),
-      { instructions: "connecte-toi" },
+      { instructions: "log in" },
       context,
     );
 
-    // Ce n'est pas un échec : c'est un résultat que l'agent doit relayer.
     expect(result.ok).toBe(true);
     if (result.ok) {
       const output = result.output as { needsHuman: boolean; output: string };
       expect(output.needsHuman).toBe(true);
-      expect(output.output).toContain("vérification humaine");
+      expect(output.output).toContain("human verification");
     }
   });
 });
 
-describe("échecs", () => {
-  it("remonte une erreur exploitable quand la tâche échoue", async () => {
+describe("failures", () => {
+  it("reports an actionable error when task fails", async () => {
     const { tools } = makeTools(
       task({
         status: "failed",
         output: null,
-        error: { code: "BROWSER_TASK_FAILED", message: "page introuvable", retryable: true },
+        error: { code: "BROWSER_TASK_FAILED", message: "page not found", retryable: true },
       }),
     );
 
     const result = await executor.execute(
       byName(tools, "browser.read"),
-      { instructions: "Lis la page" },
+      { instructions: "Read the page" },
       context,
     );
 
@@ -310,7 +304,7 @@ describe("échecs", () => {
     }
   });
 
-  it("traite un worker injoignable comme une panne réessayable", async () => {
+  it("handles unreachable worker as a retryable failure", async () => {
     const client = new BrowserWorkerClient({
       baseUrl: "http://browser-worker:8100",
       token: "x",
@@ -320,7 +314,7 @@ describe("échecs", () => {
 
     const result = await executor.execute(
       byName(tools, "browser.read"),
-      { instructions: "Lis la page" },
+      { instructions: "Read the page" },
       context,
     );
 
@@ -331,12 +325,12 @@ describe("échecs", () => {
     }
   });
 
-  it("valide les arguments avant d'appeler le worker", async () => {
+  it("validates arguments before calling the worker", async () => {
     const { tools, calls } = makeTools();
 
     const result = await executor.execute(
       byName(tools, "browser.read"),
-      { url: 42, instructions: "Lis la page" },
+      { url: 42, instructions: "Read the page" },
       context,
     );
 

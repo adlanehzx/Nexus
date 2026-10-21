@@ -22,11 +22,11 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
 
   // ── 1. browser.navigate ───────────────────────────────────────────────────
   const navigateInputSchema = z.object({
-    url: z.string().min(1).describe("URL HTTP ou HTTPS complète vers laquelle naviguer"),
+    url: z.string().min(1).describe("Full HTTP or HTTPS URL to navigate to"),
     sessionId: z
       .string()
       .optional()
-      .describe("Identifiant de session de navigation (par défaut l'identifiant du run courant)"),
+      .describe("Browser session identifier (defaults to current run identifier)"),
   });
 
   const navigateOutputSchema = z.object({
@@ -44,27 +44,26 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   > = {
     name: "browser.navigate",
     description:
-      "Navigue vers une URL web sécurisée (http ou https). Ouvre ou réutilise l'onglet dédié de la session, " +
-      "attend la fin du chargement complet et prend une capture d'écran horodatée. Ne navigue jamais vers file:, chrome:, " +
-      "ou des adresses IP locales protégées (SSRF).",
+      "Navigates to a secure web URL (http or https). Opens or reuses the dedicated session tab, " +
+      "waits for load completion and captures a timestamped screenshot. Never navigates to file:, chrome:, " +
+      "or private loopback/SSRF-protected IP addresses.",
     riskLevel: "SAFE",
     requiredPermissions: ["browser.navigate"],
     requiresConfirmation: false,
     inputSchema: navigateInputSchema,
     outputSchema: navigateOutputSchema,
-    summarize: (input) => `Navigation vers ${input.url}`,
+    summarize: (input) => `Navigate to ${input.url}`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
       policy.assertUrlSafe(input.url);
 
-      context.onProgress({ pct: 10, label: `Ouverture de session pour ${input.url}` });
+      context.onProgress({ pct: 10, label: `Opening session for ${input.url}` });
       await sessionManager.getOrCreateSession(sessionId);
       sessionManager.recordAction(sessionId);
 
-      context.onProgress({ pct: 40, label: `Chargement de ${input.url}` });
+      context.onProgress({ pct: 40, label: `Loading ${input.url}` });
       const info = await driver.navigate(input.url);
 
-      // Détection immédiate d'intervention humaine (CAPTCHA, MFA, etc.)
       const check = policy.detectHumanIntervention(info);
       if (check.required) {
         sessionManager.suspendForHumanIntervention(sessionId, check.reason!, info.url);
@@ -74,7 +73,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
       let screenshotArtifactId: string | undefined;
       if (captureScreenshotsOnNavigate) {
         try {
-          context.onProgress({ pct: 80, label: "Capture d'écran de confirmation" });
+          context.onProgress({ pct: 80, label: "Capturing confirmation screenshot" });
           const shot = await driver.screenshot();
           const artifact = await sessionManager.saveScreenshotArtifact(
             sessionId,
@@ -83,11 +82,11 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
           );
           screenshotArtifactId = artifact.id;
         } catch {
-          // La capture d'écran est non bloquante si la navigation a réussi
+          // Screenshot capture failure is non-blocking
         }
       }
 
-      context.onProgress({ pct: 100, label: `Page chargée : ${info.title}` });
+      context.onProgress({ pct: 100, label: `Page loaded: ${info.title}` });
       return {
         url: info.url,
         title: info.title,
@@ -102,21 +101,19 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     selector: z
       .string()
       .optional()
-      .describe("Sélecteur CSS optionnel pour n'extraire qu'un conteneur spécifique du DOM"),
+      .describe("Optional CSS selector to extract only a specific DOM container"),
     format: z
       .enum(["text", "markdown", "html"])
       .default("markdown")
-      .describe(
-        "Format de sortie : 'markdown' (lisible et structuré), 'text' (brut), ou 'html' (structure brute)",
-      ),
+      .describe("Output format: 'markdown', 'text', or 'html'"),
     maxCharacters: z
       .number()
       .int()
       .min(100)
       .max(50_000)
       .default(12_000)
-      .describe("Nombre maximum de caractères à extraire pour protéger le contexte du modèle"),
-    sessionId: z.string().optional().describe("Identifiant de session de navigation"),
+      .describe("Maximum character count to extract"),
+    sessionId: z.string().optional().describe("Browser session identifier"),
   });
 
   const extractOutputSchema = z.object({
@@ -133,27 +130,26 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   > = {
     name: "browser.extract",
     description:
-      "Extrait le contenu lisible (texte ou markdown épuré) de la page active. Supprime automatiquement les scripts, " +
-      "styles et champs de mot de passe pour ne renvoyer que l'information utile. Outil de LECTURE SEULE, idempotent.",
+      "Extracts readable content (text or sanitized markdown) from active page. Strips scripts, " +
+      "styles, and password fields. READ-ONLY and idempotent.",
     riskLevel: "SAFE",
     requiredPermissions: ["browser.navigate"],
     requiresConfirmation: false,
     inputSchema: extractInputSchema,
     outputSchema: extractOutputSchema,
-    summarize: (input) => `Extraction du contenu (${input.format ?? "markdown"})`,
+    summarize: (input) => `Extract content (${input.format ?? "markdown"})`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
       await sessionManager.getOrCreateSession(sessionId);
       sessionManager.recordAction(sessionId);
 
-      context.onProgress({ pct: 50, label: "Extraction du contenu de la page" });
+      context.onProgress({ pct: 50, label: "Extracting page content" });
       const result = await driver.extract({
         selector: input.selector ?? undefined,
         format: input.format,
         maxChars: input.maxCharacters,
       });
 
-      // Vérifie si le contenu extrait indique un blocage de type CAPTCHA/MFA
       const check = policy.detectHumanIntervention(
         { url: result.url, title: result.title, w: 0, h: 0, sx: 0, sy: 0, pw: 0, ph: 0 },
         result.content,
@@ -165,7 +161,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
 
       context.onProgress({
         pct: 100,
-        label: `Extraction terminée (${result.content.length} caractères)`,
+        label: `Extraction completed (${result.content.length} characters)`,
       });
       return result;
     },
@@ -177,17 +173,17 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
       .union([
         z
           .string()
-          .describe("Sélecteur CSS de l'élément à cliquer (ex: 'button.submit', '#confirm')"),
+          .describe("CSS selector of target element (e.g. 'button.submit', '#confirm')"),
         z
           .object({ x: z.number(), y: z.number() })
-          .describe("Coordonnées pixels (x, y) dans le viewport"),
+          .describe("Pixel coordinates (x, y) within viewport"),
       ])
-      .describe("Cible du clic"),
-    sessionId: z.string().optional().describe("Identifiant de session de navigation"),
+      .describe("Click target"),
+    sessionId: z.string().optional().describe("Browser session identifier"),
     waitLoad: z
       .boolean()
       .default(true)
-      .describe("Attend la fin du chargement éventuel déclenché par le clic"),
+      .describe("Wait for page load triggered by click"),
   });
 
   const clickOutputSchema = z.object({
@@ -204,8 +200,8 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   > = {
     name: "browser.click",
     description:
-      "Clique sur un élément de la page via son sélecteur CSS ou ses coordonnées pixel. " +
-      "Attend la stabilisation réseau ou le rechargement de page consécutif.",
+      "Clicks an element on the page via CSS selector or pixel coordinates. " +
+      "Waits for network stabilization or subsequent page load.",
     riskLevel: "MEDIUM",
     requiredPermissions: ["browser.interact"],
     requiresConfirmation: false,
@@ -213,19 +209,18 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     outputSchema: clickOutputSchema,
     summarize: (input) =>
       typeof input.target === "string"
-        ? `Clic sur '${input.target}'`
-        : `Clic aux coordonnées (${input.target.x}, ${input.target.y})`,
+        ? `Click on '${input.target}'`
+        : `Click at coordinates (${input.target.x}, ${input.target.y})`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
       await sessionManager.getOrCreateSession(sessionId);
       sessionManager.recordAction(sessionId);
 
-      context.onProgress({ pct: 30, label: "Exécution du clic" });
+      context.onProgress({ pct: 30, label: "Executing click" });
       const targetParam =
         typeof input.target === "string" ? { selector: input.target } : input.target;
       const res = await driver.click(targetParam);
 
-      // Si l'URL a changé, validation de sécurité sur la nouvelle URL
       if (res.newUrl && res.newUrl !== "about:blank") {
         policy.assertUrlSafe(res.newUrl);
       }
@@ -241,10 +236,10 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
         );
         screenshotArtifactId = artifact.id;
       } catch {
-        // Optionnel
+        // Optional
       }
 
-      context.onProgress({ pct: 100, label: "Clic effectué" });
+      context.onProgress({ pct: 100, label: "Click executed" });
       return {
         clicked: true as const,
         target: res.target,
@@ -260,11 +255,11 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     target: z
       .string()
       .min(1)
-      .describe("Sélecteur CSS du champ de saisie (ex: 'input[name=\"q\"]', '#search')"),
-    text: z.string().describe("Texte à saisir dans l'élément"),
-    submit: z.boolean().default(false).describe("Appuie sur la touche Entrée après la saisie"),
-    clear: z.boolean().default(true).describe("Efface le contenu existant avant de saisir"),
-    sessionId: z.string().optional().describe("Identifiant de session de navigation"),
+      .describe("CSS selector of input field (e.g. 'input[name=\"q\"]', '#search')"),
+    text: z.string().describe("Text to type into element"),
+    submit: z.boolean().default(false).describe("Press Enter after typing"),
+    clear: z.boolean().default(true).describe("Clear existing text before typing"),
+    sessionId: z.string().optional().describe("Browser session identifier"),
   });
 
   const typeOutputSchema = z.object({
@@ -279,34 +274,34 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   > = {
     name: "browser.type",
     description:
-      "Saisit du texte dans un champ de formulaire ciblé par son sélecteur CSS. " +
-      "Peut optionnellement effacer au préalable et valider avec Entrée.",
+      "Types text into a form input targeted by CSS selector. " +
+      "Can clear input first and submit with Enter.",
     riskLevel: "MEDIUM",
     requiredPermissions: ["browser.interact"],
     requiresConfirmation: false,
     inputSchema: typeInputSchema,
     outputSchema: typeOutputSchema,
-    summarize: (input) => `Saisie de ${input.text.length} caractères dans '${input.target}'`,
+    summarize: (input) => `Type ${input.text.length} characters into '${input.target}'`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
       await sessionManager.getOrCreateSession(sessionId);
       sessionManager.recordAction(sessionId);
 
-      context.onProgress({ pct: 40, label: `Saisie de texte dans ${input.target}` });
+      context.onProgress({ pct: 40, label: `Typing text into ${input.target}` });
       const res = await driver.type(input.target, input.text, {
         submit: input.submit,
         clear: input.clear,
       });
 
-      context.onProgress({ pct: 100, label: "Saisie terminée" });
+      context.onProgress({ pct: 100, label: "Typing completed" });
       return res;
     },
   };
 
   // ── 5. browser.screenshot ─────────────────────────────────────────────────
   const screenshotInputSchema = z.object({
-    fullPage: z.boolean().default(false).describe("Capture la page entière (si disponible)"),
-    sessionId: z.string().optional().describe("Identifiant de session de navigation"),
+    fullPage: z.boolean().default(false).describe("Capture entire scrollable page"),
+    sessionId: z.string().optional().describe("Browser session identifier"),
   });
 
   const screenshotOutputSchema = z.object({
@@ -323,26 +318,26 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   > = {
     name: "browser.screenshot",
     description:
-      "Prend une capture d'écran de l'onglet actif et l'enregistre de manière persistante comme artefact de la mission.",
+      "Captures a screenshot of the active tab and persists it as a mission artifact.",
     riskLevel: "SAFE",
     requiredPermissions: ["browser.navigate"],
     requiresConfirmation: false,
     inputSchema: screenshotInputSchema,
     outputSchema: screenshotOutputSchema,
-    summarize: () => "Capture d'écran de la page",
+    summarize: () => "Page screenshot",
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
       await sessionManager.getOrCreateSession(sessionId);
       sessionManager.recordAction(sessionId);
 
-      context.onProgress({ pct: 30, label: "Capture de la page Chromium" });
+      context.onProgress({ pct: 30, label: "Capturing Chromium page" });
       const shot = await driver.screenshot();
       const info = await driver.pageInfo();
 
-      context.onProgress({ pct: 80, label: "Sauvegarde de l'artefact persistant" });
+      context.onProgress({ pct: 80, label: "Saving persistent artifact" });
       const artifact = await sessionManager.saveScreenshotArtifact(sessionId, shot.filePath, info);
 
-      context.onProgress({ pct: 100, label: "Capture d'écran disponible" });
+      context.onProgress({ pct: 100, label: "Screenshot available" });
       return {
         artifactId: artifact.id,
         fileName: artifact.fileName,

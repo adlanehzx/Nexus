@@ -50,7 +50,7 @@ export class QuotaExceededError extends Error {
 }
 
 /**
- * Gestionnaire d'isolation des sessions navigateur par mission et de leurs artefacts.
+ * Manages per-mission browser session isolation and artifacts.
  */
 export class BrowserSessionManager {
   readonly #driver: BrowserHarnessDriver;
@@ -83,16 +83,15 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Obtient ou alloue un onglet Chromium dédié pour une session donnée.
+   * Retrieves or allocates a dedicated Chromium tab for a given session.
    */
   async getOrCreateSession(sessionId: string): Promise<NativeBrowserSession> {
     const existing = this.#sessions.get(sessionId);
     if (existing) {
-      // Vérification du quota de temps
       const now = Date.now();
       if (now - existing.createdAt > existing.maxDurationMs) {
         throw new QuotaExceededError(
-          `Délai maximal de session navigateur dépassé (${Math.round(existing.maxDurationMs / 1000)}s).`,
+          `Maximum browser session duration exceeded (${Math.round(existing.maxDurationMs / 1000)}s).`,
         );
       }
       try {
@@ -100,12 +99,10 @@ export class BrowserSessionManager {
         existing.lastActiveAt = now;
         return existing;
       } catch {
-        // L'onglet a pu être fermé manuellement par l'utilisateur
         this.#sessions.delete(sessionId);
       }
     }
 
-    // Alloue un nouvel onglet dédié
     const targetId = await this.#driver.createTab();
     const session: NativeBrowserSession = {
       sessionId,
@@ -121,7 +118,7 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Enregistre une action sur la session et vérifie les quotas.
+   * Records an action on the session and checks quotas.
    */
   recordAction(sessionId: string): void {
     const session = this.#sessions.get(sessionId);
@@ -132,20 +129,20 @@ export class BrowserSessionManager {
 
     if (session.actionCount > session.maxActions) {
       throw new QuotaExceededError(
-        `Quota maximal d'actions navigateur dépassé pour cette session (${session.maxActions} actions max). ` +
-          "La session est interrompue pour éviter une boucle de navigation infinie.",
+        `Maximum browser action quota exceeded for this session (${session.maxActions} actions max). ` +
+          "Session interrupted to prevent infinite loops.",
       );
     }
 
     if (session.lastActiveAt - session.createdAt > session.maxDurationMs) {
       throw new QuotaExceededError(
-        `Quota maximal de temps navigateur dépassé pour cette session (${Math.round(session.maxDurationMs / 1000)}s max).`,
+        `Maximum browser session duration exceeded for this session (${Math.round(session.maxDurationMs / 1000)}s max).`,
       );
     }
   }
 
   /**
-   * Marque la session comme suspendue en attente d'intervention humaine.
+   * Suspends session pending human intervention.
    */
   suspendForHumanIntervention(sessionId: string, reason: string, pageUrl: string): void {
     const session = this.#sessions.get(sessionId);
@@ -158,7 +155,7 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Reprend une session après intervention humaine.
+   * Resumes session following human intervention.
    */
   resumeAfterHumanIntervention(sessionId: string): void {
     const session = this.#sessions.get(sessionId);
@@ -168,7 +165,7 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Persiste une capture d'écran comme artefact durable de la mission.
+   * Persists a screenshot as a mission artifact.
    */
   async saveScreenshotArtifact(
     sessionId: string,
@@ -199,7 +196,7 @@ export class BrowserSessionManager {
   }
 
   /**
-   * Ferme l'onglet de la session et libère les ressources.
+   * Closes session tab and releases resources.
    */
   async closeSession(sessionId: string): Promise<void> {
     const session = this.#sessions.get(sessionId);
@@ -208,14 +205,14 @@ export class BrowserSessionManager {
     try {
       await this.#driver.closeTab(session.targetId);
     } catch {
-      // Ignorer si l'onglet est déjà fermé
+      // Ignored if already closed
     } finally {
       this.#sessions.delete(sessionId);
     }
   }
 
   /**
-   * Ferme toutes les sessions actives.
+   * Closes all active sessions.
    */
   async closeAllSessions(): Promise<void> {
     const sessionIds = Array.from(this.#sessions.keys());

@@ -15,11 +15,11 @@ import {
 } from "./protocol.js";
 
 /**
- * Client du Browser Worker.
+ * Browser Worker client.
  *
- * Le backend TypeScript ne connaît le worker Python qu'à travers ce fichier : un
- * contrat HTTP versionné, jamais un import (ADR-006). Le worker n'est joignable
- * que sur le réseau interne — il n'est jamais exposé à Internet.
+ * The TypeScript backend only interacts with the Python worker through this file: a
+ * versioned HTTP contract, never a direct import (ADR-006). The worker is reachable
+ * only on the internal network — it is never exposed to the Internet.
  */
 
 export class BrowserWorkerError extends AppError {
@@ -36,7 +36,7 @@ export class BrowserWorkerError extends AppError {
 
 export interface BrowserWorkerClientOptions {
   baseUrl: string;
-  /** Jeton de service. Présenté à chaque appel ; jamais journalisé. */
+  /** Service token. Presented on each call; never logged. */
   token: string;
   requestTimeoutMs?: number;
   fetchImpl?: typeof fetch;
@@ -44,10 +44,10 @@ export interface BrowserWorkerClientOptions {
 
 export interface WaitOptions {
   signal?: AbortSignal;
-  /** Appelé à chaque nouvel événement, dans l'ordre. */
+  /** Invoked on each new event, in order. */
   onEvent?: (event: BrowserEvent) => void;
   pollIntervalMs?: number;
-  /** Garde-fou côté client, indépendant de celui du worker. */
+  /** Client-side guardrail, independent of the worker's timeout. */
   maxWaitMs?: number;
 }
 
@@ -95,7 +95,7 @@ export class BrowserWorkerClient {
     );
   }
 
-  /** Démarre la tâche. Rend la main immédiatement : la tâche est asynchrone. */
+  /** Starts the task. Returns immediately: the task is asynchronous. */
   async runTask(request: RunTaskRequest, signal?: AbortSignal): Promise<BrowserTask> {
     return taskSchema.parse(
       await this.#request(
@@ -107,7 +107,7 @@ export class BrowserWorkerClient {
     );
   }
 
-  /** État d'une tâche, avec les événements survenus depuis `sinceSeq`. */
+  /** State of a task, with events that occurred since `sinceSeq`. */
   async getStatus(taskId: string, sinceSeq = -1, signal?: AbortSignal): Promise<BrowserTask> {
     const query = sinceSeq >= 0 ? `?since=${String(sinceSeq)}` : "";
     return taskSchema.parse(
@@ -127,14 +127,14 @@ export class BrowserWorkerClient {
   }
 
   /**
-   * Suit une tâche jusqu'à son terme, en publiant ses événements au fil de l'eau.
+   * Follows a task until completion, streaming its events as they arrive.
    *
-   * Scrutation plutôt que flux : le worker garde les événements numérotés, donc
-   * une reprise après coupure ne perd rien — et une connexion longue n'est pas
-   * nécessaire pour un service interne.
+   * Polling rather than streaming: the worker keeps numbered events, so
+   * resuming after a disconnection loses nothing — and a long-lived connection is not
+   * necessary for an internal service.
    *
-   * L'annulation du signal annule **aussi la tâche côté worker** : sans cela, un
-   * navigateur continuerait de cliquer alors que l'utilisateur a coupé.
+   * Cancelling the signal also cancels **the task on the worker side**: without this,
+   * a browser would continue clicking even after the user has cancelled.
    */
   async waitForTask(taskId: string, options: WaitOptions = {}): Promise<BrowserTask> {
     const interval = options.pollIntervalMs ?? 500;
@@ -146,7 +146,7 @@ export class BrowserWorkerClient {
       if (options.signal?.aborted === true) {
         await this.cancelTask(taskId).catch(() => undefined);
         throw new BrowserWorkerError("BROWSER_TASK_CANCELLED", {
-          message: `Tâche ${taskId} annulée`,
+          message: `Task ${taskId} cancelled`,
           userMessage: "Browsing was cancelled.",
         });
       }
@@ -163,8 +163,8 @@ export class BrowserWorkerClient {
       if (Date.now() > deadline) {
         await this.cancelTask(taskId).catch(() => undefined);
         throw new BrowserWorkerError("BROWSER_TASK_TIMEOUT", {
-          message: `Tâche ${taskId} sans réponse au-delà du délai client`,
-          userMessage: "La navigation a pris trop de temps.",
+          message: `Task ${taskId} timed out on client side`,
+          userMessage: "Browsing timed out.",
           retryable: true,
         });
       }
@@ -187,8 +187,8 @@ export class BrowserWorkerClient {
       response = await this.#fetch(`${this.#baseUrl}${path}`, {
         method,
         headers: {
-          // Le worker refuse tout appel non authentifié : il n'est pas public,
-          // mais on ne compte pas sur la seule topologie réseau.
+          // The worker rejects any unauthenticated call: it is not public,
+          // but we do not rely solely on network topology.
           authorization: `Bearer ${this.#token}`,
           "content-type": "application/json",
           "x-browser-protocol-version": String(BROWSER_PROTOCOL_VERSION),
@@ -199,15 +199,15 @@ export class BrowserWorkerClient {
     } catch (error) {
       if (signal?.aborted === true) {
         throw new BrowserWorkerError("BROWSER_TASK_CANCELLED", {
-          message: "Appel au Browser Worker annulé",
+          message: "Call to Browser Worker cancelled",
           userMessage: "The operation was cancelled.",
           cause: error,
         });
       }
-      // Worker éteint, réseau coupé : réessayable, et surtout pas fatal pour l'agent.
+      // Worker offline, network interrupted: retryable, and not fatal for the agent.
       throw new BrowserWorkerError("BROWSER_WORKER_UNAVAILABLE", {
-        message: `Browser Worker injoignable : ${error instanceof Error ? error.message : String(error)}`,
-        userMessage: "Le service de navigation est indisponible.",
+        message: `Browser Worker unreachable: ${error instanceof Error ? error.message : String(error)}`,
+        userMessage: "The browsing service is unavailable.",
         retryable: true,
         cause: error,
       });
@@ -228,7 +228,7 @@ export class BrowserWorkerClient {
         });
       }
       throw new BrowserWorkerError("BROWSER_WORKER_ERROR", {
-        message: `HTTP ${String(response.status)} du Browser Worker`,
+        message: `HTTP ${String(response.status)} from Browser Worker`,
         userMessage: "The browsing service failed.",
         retryable: response.status >= 500,
       });
@@ -248,7 +248,7 @@ export function isTerminal(status: BrowserTask["status"]): boolean {
   );
 }
 
-/** Valide un événement reçu — le worker est un service distinct, pas un ami. */
+/** Validates a received event — the worker is a separate service, not a trusted friend. */
 export function parseBrowserEvent(input: unknown): BrowserEvent {
   return browserEventSchema.parse(input);
 }

@@ -19,7 +19,7 @@ describe("BrowserSecurityPolicy", () => {
     );
   });
 
-  it("refuse strictement les protocoles non autorisés et dangereux", () => {
+  it("strictly rejects unauthorized and dangerous protocols", () => {
     const policy = new BrowserSecurityPolicy();
     expect(() => policy.assertUrlSafe("file:///etc/passwd")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("chrome://inspect")).toThrowError(BrowserSecurityError);
@@ -27,7 +27,7 @@ describe("BrowserSecurityPolicy", () => {
     expect(() => policy.assertUrlSafe("data:text/html,test")).toThrowError(BrowserSecurityError);
   });
 
-  it("bloque les accès SSRF et adresses privées par défaut", () => {
+  it("blocks SSRF and private addresses by default", () => {
     const policy = new BrowserSecurityPolicy({ allowLocalhost: false });
     expect(() => policy.assertUrlSafe("http://127.0.0.1:8080")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://localhost:3000")).toThrowError(BrowserSecurityError);
@@ -38,12 +38,12 @@ describe("BrowserSecurityPolicy", () => {
     expect(() => policy.assertUrlSafe("http://10.0.0.1")).toThrowError(BrowserSecurityError);
   });
 
-  it("autorise localhost lorsque le mode local/test est expressément activé", () => {
+  it("allows localhost when local/test mode is explicitly enabled", () => {
     const policy = new BrowserSecurityPolicy({ allowLocalhost: true });
     expect(policy.assertUrlSafe("http://127.0.0.1:8080").toString()).toBe("http://127.0.0.1:8080/");
   });
 
-  it("interdit le téléchargement de fichiers exécutables potentiellement dangereux", () => {
+  it("prohibits downloading potentially dangerous executable files", () => {
     const policy = new BrowserSecurityPolicy();
     expect(() => policy.assertUrlSafe("https://example.com/installer.exe")).toThrowError(
       BrowserSecurityError,
@@ -59,7 +59,7 @@ describe("BrowserSecurityPolicy", () => {
     );
   });
 
-  it("détecte les pages nécessitant une intervention humaine (CAPTCHA / MFA)", () => {
+  it("detects pages requiring human intervention (CAPTCHA / MFA)", () => {
     const policy = new BrowserSecurityPolicy();
     const pageWithCaptcha = {
       url: "https://example.com/login",
@@ -73,7 +73,7 @@ describe("BrowserSecurityPolicy", () => {
     };
     const res = policy.detectHumanIntervention(pageWithCaptcha);
     expect(res.required).toBe(true);
-    expect(res.reason).toContain("vérification humaine");
+    expect(res.reason).toContain("human verification");
   });
 });
 
@@ -119,7 +119,7 @@ describe("BrowserSessionManager & Quotas", () => {
     } as unknown as BrowserHarnessDriver;
   });
 
-  it("alloue un nouvel onglet pour une nouvelle session et le réutilise", async () => {
+  it("allocates a new tab for a new session and reuses it", async () => {
     const manager = new BrowserSessionManager({
       driver: mockDriver,
       artifactsDirectory: "/tmp/nexus-test-artifacts",
@@ -129,14 +129,14 @@ describe("BrowserSessionManager & Quotas", () => {
     expect(s1.targetId).toBe("tab-123");
     expect(createTabMock).toHaveBeenCalledTimes(1);
 
-    // Réutilisation
+    // Reuse
     const s1Again = await manager.getOrCreateSession("session-A");
     expect(s1Again.targetId).toBe("tab-123");
     expect(switchTabMock).toHaveBeenCalledWith("tab-123");
     expect(createTabMock).toHaveBeenCalledTimes(1);
   });
 
-  it("bloque la session dès que le quota d'actions est dépassé", async () => {
+  it("blocks session as soon as action quota is exceeded", async () => {
     const manager = new BrowserSessionManager({
       driver: mockDriver,
       defaultMaxActions: 3,
@@ -150,7 +150,7 @@ describe("BrowserSessionManager & Quotas", () => {
     expect(() => manager.recordAction("mission-1")).toThrowError(QuotaExceededError);
   });
 
-  it("gère l'état suspendu pour intervention humaine", async () => {
+  it("handles suspended state for human intervention", async () => {
     const manager = new BrowserSessionManager({ driver: mockDriver });
     await manager.getOrCreateSession("mission-2");
 
@@ -185,7 +185,7 @@ describe("createNativeBrowserTools", () => {
   const extractMock = vi.fn().mockResolvedValue({
     url: "https://example.com",
     title: "Example Domain",
-    content: "Bienvenue sur Example Domain",
+    content: "Welcome to Example Domain",
     format: "markdown",
     truncated: false,
   });
@@ -234,7 +234,7 @@ describe("createNativeBrowserTools", () => {
       artifactsDirectory: "/tmp/nexus-test-artifacts",
     });
 
-    // Mock saveScreenshotArtifact pour éviter d'écrire sur le disque dans ce test
+    // Mock saveScreenshotArtifact to avoid writing to disk in this test
     vi.spyOn(manager, "saveScreenshotArtifact").mockResolvedValue({
       id: "art-12345",
       sessionId: "run-test",
@@ -258,7 +258,7 @@ describe("createNativeBrowserTools", () => {
     };
   });
 
-  it("fournit les 5 outils natifs avec les permissions et niveaux de risque corrects", () => {
+  it("provides all 5 native tools with correct permissions and risk levels", () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     expect(tools.map((t) => t.name)).toEqual([
       "browser.navigate",
@@ -277,7 +277,7 @@ describe("createNativeBrowserTools", () => {
     expect(click.requiredPermissions).toEqual(["browser.interact"]);
   });
 
-  it("exécute browser.navigate avec succès", async () => {
+  it("executes browser.navigate successfully", async () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     const navigate = tools.find((t) => t.name === "browser.navigate")!;
 
@@ -291,7 +291,7 @@ describe("createNativeBrowserTools", () => {
     expect(navigateMock).toHaveBeenCalledWith("https://example.com");
   });
 
-  it("intercepte les URL non sécurisées dans browser.navigate", async () => {
+  it("intercepts insecure URLs in browser.navigate", async () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     const navigate = tools.find((t) => t.name === "browser.navigate")!;
 
@@ -300,7 +300,7 @@ describe("createNativeBrowserTools", () => {
     );
   });
 
-  it("exécute browser.extract en lecture seule", async () => {
+  it("executes browser.extract in read-only mode", async () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     const extract = tools.find((t) => t.name === "browser.extract")!;
 
@@ -308,7 +308,7 @@ describe("createNativeBrowserTools", () => {
     expect(res).toEqual({
       url: "https://example.com",
       title: "Example Domain",
-      content: "Bienvenue sur Example Domain",
+      content: "Welcome to Example Domain",
       format: "markdown",
       truncated: false,
     });
@@ -319,7 +319,7 @@ describe("createNativeBrowserTools", () => {
     });
   });
 
-  it("exécute browser.click et browser.type", async () => {
+  it("executes browser.click and browser.type", async () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     const click = tools.find((t) => t.name === "browser.click")!;
     const type = tools.find((t) => t.name === "browser.type")!;
@@ -348,7 +348,7 @@ describe("createNativeBrowserTools", () => {
     });
   });
 
-  it("lève une HumanInterventionRequiredError si un défi CAPTCHA est détecté", async () => {
+  it("throws HumanInterventionRequiredError if a CAPTCHA challenge is detected", async () => {
     const tools = createNativeBrowserTools({ sessionManager: manager });
     const navigate = tools.find((t) => t.name === "browser.navigate")!;
 

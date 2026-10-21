@@ -21,7 +21,7 @@ export class HumanInterventionRequiredError extends Error {
   readonly reason: string;
   readonly pageUrl: string;
   constructor(reason: string, pageUrl: string) {
-    super(`Intervention humaine requise sur ${pageUrl} : ${reason}`);
+    super(`Human intervention required on ${pageUrl}: ${reason}`);
     this.name = "HumanInterventionRequiredError";
     this.reason = reason;
     this.pageUrl = pageUrl;
@@ -66,18 +66,15 @@ const CAPTCHA_OR_MFA_KEYWORDS = [
   "turnstile",
   "cloudflare challenge",
   "verify you are human",
-  "vérifiez que vous êtes un humain",
   "two-factor authentication",
-  "authentification à deux facteurs",
   "enter verification code",
-  "code de vérification",
   "security check",
   "robot check",
   "human verification",
 ];
 
 /**
- * Politique de sécurité pour la navigation web native dans NEXUS.
+ * Security policy for native web browsing in NEXUS.
  */
 export class BrowserSecurityPolicy {
   readonly #allowLocalhost: boolean;
@@ -95,67 +92,67 @@ export class BrowserSecurityPolicy {
   }
 
   /**
-   * Valide une URL avant navigation.
-   * Lève une BrowserSecurityError si l'URL est interdite ou suspecte.
+   * Validates a URL before navigation.
+   * Throws BrowserSecurityError if URL is prohibited.
    */
   assertUrlSafe(rawUrl: string): URL {
     let parsed: URL;
     try {
       parsed = new URL(rawUrl);
     } catch {
-      throw new BrowserSecurityError(`URL syntaxiquement invalide : ${rawUrl}`, "INVALID_URL");
+      throw new BrowserSecurityError(`Syntactically invalid URL: ${rawUrl}`, "INVALID_URL");
     }
 
-    // 1. Schémas autorisés
+    // 1. Permitted schemes
     if (FORBIDDEN_SCHEMES.has(parsed.protocol)) {
       throw new BrowserSecurityError(
-        `Schéma d'URL interdit pour la navigation (${parsed.protocol}). Seuls http: et https: sont autorisés.`,
+        `Forbidden URL scheme for navigation (${parsed.protocol}). Only http: and https: are allowed.`,
         "FORBIDDEN_SCHEME",
       );
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new BrowserSecurityError(
-        `Protocole non supporté : ${parsed.protocol}. Seuls http: et https: sont autorisés.`,
+        `Unsupported protocol: ${parsed.protocol}. Only http: and https: are allowed.`,
         "UNSUPPORTED_PROTOCOL",
       );
     }
 
-    // 2. Protection contre les téléchargements dangereux dès l'URL
+    // 2. Dangerous download prevention
     const pathname = parsed.pathname.toLowerCase();
     for (const ext of DANGEROUS_DOWNLOAD_EXTENSIONS) {
       if (pathname.endsWith(ext)) {
         throw new BrowserSecurityError(
-          `Téléchargement de fichier exécutable interdit (${ext}). NEXUS refuse l'acquisition de fichiers exécutables.`,
+          `Executable file download forbidden (${ext}). NEXUS refuses acquisition of executables.`,
           "FORBIDDEN_EXECUTABLE_DOWNLOAD",
         );
       }
     }
 
-    // 3. Protection SSRF & boucles locales
+    // 3. SSRF & loopback protection
     const hostname = parsed.hostname.toLowerCase();
     if (!this.#allowLocalhost) {
       for (const pattern of PRIVATE_IP_PATTERNS) {
         if (pattern.test(hostname)) {
           throw new BrowserSecurityError(
-            `Navigation vers une adresse privée ou locale interdite (${hostname}) pour des raisons de sécurité SSRF.`,
+            `Navigation to private or loopback address forbidden (${hostname}) for SSRF security.`,
             "SSRF_LOOPBACK_FORBIDDEN",
           );
         }
       }
     }
 
-    // 4. Domaines refusés
+    // 4. Denied domains
     if (this.#deniedDomains && this.#deniedDomains.has(hostname)) {
       throw new BrowserSecurityError(
-        `Accès au domaine ${hostname} explicitement refusé par la politique.`,
+        `Access to domain ${hostname} explicitly denied by policy.`,
         "DOMAIN_DENIED",
       );
     }
 
-    // 5. Domaines restreints
+    // 5. Allowed domains whitelist
     if (this.#allowedDomains && !this.#allowedDomains.has(hostname)) {
       throw new BrowserSecurityError(
-        `Domaine ${hostname} non autorisé par la liste blanche.`,
+        `Domain ${hostname} not permitted by whitelist.`,
         "DOMAIN_NOT_ALLOWED",
       );
     }
@@ -164,7 +161,7 @@ export class BrowserSecurityPolicy {
   }
 
   /**
-   * Analyse une page pour détecter les besoins d'intervention humaine (CAPTCHA, MFA, login).
+   * Evaluates page info to detect need for human intervention (CAPTCHA, MFA, login).
    */
   detectHumanIntervention(info: PageInfo, sampleText = ""): { required: boolean; reason?: string } {
     const haystack = `${info.title} ${sampleText}`.toLowerCase();
@@ -172,7 +169,7 @@ export class BrowserSecurityPolicy {
       if (haystack.includes(keyword)) {
         return {
           required: true,
-          reason: `Détection d'un défi de sécurité ou vérification humaine ('${keyword}').`,
+          reason: `Detected security challenge or human verification check ('${keyword}').`,
         };
       }
     }

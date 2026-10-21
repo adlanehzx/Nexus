@@ -4,22 +4,20 @@ import { fileURLToPath } from "node:url";
 import { BrowserWorkerClient, BrowserWorkerError } from "../src/index.js";
 
 /**
- * Communication réelle TypeScript ↔ Python.
+ * Real TypeScript <-> Python communication.
  *
- * Lance le vrai worker FastAPI dans un processus séparé et le pilote avec le
- * vrai client : HTTP, sérialisation, authentification, codes d'erreur. C'est la
- * seule façon de vérifier que les deux mondes se comprennent — le test de
- * contrat compare des schémas, celui-ci compare des comportements.
+ * Spawns the real FastAPI worker in a separate process and controls it with the
+ * real client: HTTP, serialization, authentication, error codes.
+ * Contract tests compare schemas, while this suite verifies live runtime behavior.
  *
- * Activation :
- *   NEXUS_WORKER_PYTHON=/chemin/vers/python pnpm --filter @nexus/browser-client test
+ * Activation:
+ *   NEXUS_WORKER_PYTHON=/path/to/python pnpm --filter @nexus/browser-client test
  *
- * Ignoré sans cette variable : la chaîne Python n'est pas requise pour
- * travailler côté TypeScript.
+ * Skipped if this environment variable is absent.
  */
 
 const PYTHON = process.env.NEXUS_WORKER_PYTHON;
-const TOKEN = "jeton-integration-suffisamment-long";
+const TOKEN = "integration-token-sufficiently-long";
 const PORT = 8137;
 const BASE_URL = `http://127.0.0.1:${String(PORT)}`;
 
@@ -43,10 +41,10 @@ async function waitForHealth(timeoutMs = 60_000): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  throw new Error(`le worker n'a pas démarré : ${String(lastError)}`);
+  throw new Error(`Worker failed to start: ${String(lastError)}`);
 }
 
-suite("communication TypeScript ↔ Python", () => {
+suite("TypeScript <-> Python communication", () => {
   beforeAll(async () => {
     worker = spawn(
       PYTHON!,
@@ -80,20 +78,19 @@ suite("communication TypeScript ↔ Python", () => {
     worker?.kill();
   });
 
-  it("lit la santé du worker et sa version de protocole", async () => {
+  it("reads worker health and protocol version", async () => {
     const health = await client.health();
 
     expect(health.protocolVersion).toBe(1);
     expect(["ok", "degraded"]).toContain(health.status);
-    // Le schéma Zod valide la réponse Pydantic : les deux mondes s'accordent
-    // sur la forme, pas seulement sur les noms.
+    // Zod schema validates Pydantic response shape and types
     expect(typeof health.openSessions).toBe("number");
   });
 
-  it("crée, lit et ferme une session", async () => {
+  it("creates, retrieves, and closes a session", async () => {
     const session = await client.createSession({
       ownerId: "user-integration",
-      allowedDomains: ["exemple.test"],
+      allowedDomains: ["example.test"],
     });
 
     expect(session.sessionId).toMatch(/^bs_/);
@@ -107,44 +104,43 @@ suite("communication TypeScript ↔ Python", () => {
     await expect(client.getSession(session.sessionId)).rejects.toBeInstanceOf(BrowserWorkerError);
   });
 
-  it("refuse un jeton invalide", async () => {
-    const intrus = new BrowserWorkerClient({ baseUrl: BASE_URL, token: "mauvais-jeton-long" });
+  it("rejects an invalid token", async () => {
+    const intruder = new BrowserWorkerClient({ baseUrl: BASE_URL, token: "wrong-token-long" });
 
-    await expect(intrus.createSession({ ownerId: "u" })).rejects.toThrow();
+    await expect(intruder.createSession({ ownerId: "u" })).rejects.toThrow();
   });
 
-  it("renvoie des codes d'erreur que le TypeScript reconnaît", async () => {
-    // Le contrat d'erreur traverse aussi la frontière : le backend s'appuie
-    // dessus pour distinguer le réessayable du définitif.
+  it("returns error codes recognized by TypeScript", async () => {
+    // Error contract crosses boundary to distinguish retryable from fatal
     try {
-      await client.getSession("bs_inexistante");
-      expect.unreachable("aurait dû échouer");
+      await client.getSession("bs_nonexistent");
+      expect.unreachable("should have failed");
     } catch (error) {
       expect(error).toBeInstanceOf(BrowserWorkerError);
       expect((error as BrowserWorkerError).code).toBe("BROWSER_SESSION_NOT_FOUND");
     }
   });
 
-  it("rejette une session inconnue au lancement d'une tâche", async () => {
+  it("rejects an unknown session when running a task", async () => {
     await expect(
       client.runTask({
         taskId: "t-integration",
-        sessionId: "bs_inexistante",
-        instructions: "Lis la page d'accueil",
+        sessionId: "bs_nonexistent",
+        instructions: "Read the home page",
         intent: "read",
       }),
     ).rejects.toBeInstanceOf(BrowserWorkerError);
   });
 
-  it("applique la limite de sessions et la rend lisible", async () => {
+  it("enforces session concurrency limits", async () => {
     const opened: string[] = [];
     try {
       for (let i = 0; i < 5; i += 1) {
-        opened.push((await client.createSession({ ownerId: "user-limite" })).sessionId);
+        opened.push((await client.createSession({ ownerId: "user-limit" })).sessionId);
       }
-      const extra = await client.createSession({ ownerId: "user-limite" });
+      const extra = await client.createSession({ ownerId: "user-limit" });
       opened.push(extra.sessionId);
-      expect.unreachable("la limite aurait dû s'appliquer");
+      expect.unreachable("limit should have been enforced");
     } catch (error) {
       expect((error as BrowserWorkerError).code).toBe("BROWSER_SESSION_BUSY");
     } finally {
