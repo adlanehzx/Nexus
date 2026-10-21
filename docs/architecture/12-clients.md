@@ -108,3 +108,102 @@ Contraintes propres : CSP stricte, tokens en mémoire + refresh en cookie `HttpO
 On ne tente **pas** de partager les composants d'UI entre React Native et le web
 (`react-native-web` ajoute une couche de compromis pour un gain faible sur trois écrans). On
 partage la logique, on réécrit la présentation.
+
+## Mode hors ligne, mise à jour, télémétrie de crash
+
+### Mode hors ligne : ce qu'on refuse de garder
+
+Une file d'attente hors ligne est une machine à doubler les actions. Le
+téléphone envoie « range mes mails », perd le réseau avant la réponse, réessaie
+à la reconnexion — et la demande part deux fois. Le module de rattrapage porte
+déjà cet avertissement : « un rattrapage qui pourrait créer une tâche
+transformerait une coupure réseau en seconde commande ».
+
+Trois règles, et chacune ferme une voie de doublon.
+
+**La clé d'idempotence naît à la mise en file, pas à l'envoi.** Les trois
+tentatives d'une même entrée portent donc la même clé, et le cœur reconnaît la
+répétition. Une clé générée à l'envoi serait différente à chaque essai,
+c'est-à-dire inutile.
+
+**On ne met en file que ce que le serveur sait dédupliquer.** C'est une limite
+réelle — une seule route honore `Idempotency-Key` aujourd'hui — et la nommer
+vaut mieux que l'ignorer : sur une route qui ne l'honore pas, mettre en file
+_garantit_ le doublon au lieu de le risquer. La file refuse, et le dit. La liste
+est blanche, pas noire : une route ajoutée demain n'est pas mise en file par
+défaut, parce que se tromper dans ce sens coûte une action à refaire, et dans
+l'autre une action faite deux fois.
+
+**Une entrée expire** — vingt-quatre heures. Une intention dont le contexte a
+disparu n'est plus une intention : « réponds à ce mail » mis en file mardi n'a
+aucun sens vendredi, et l'exécuter serait pire que de l'avoir perdu.
+
+Et ce qui n'entre **jamais** en file : les confirmations. Approuver hors ligne
+une action à risque puis l'envoyer trois heures plus tard, c'est approuver
+quelque chose qu'on n'a pas relu — et qui a peut-être changé. Une confirmation
+se donne en ligne, devant ce qu'elle autorise.
+
+L'envoi respecte l'ordre et s'arrête au premier échec réessayable : deux
+messages envoyés à l'envers racontent une autre conversation, et continuer
+après un échec réseau enverrait le second message d'une suite dont le premier
+n'est pas passé. Un refus **définitif**, lui, est écarté — il ne sera pas
+meilleur demain, et le garder bloquerait toute la file derrière lui.
+
+### Mise à jour automatique : décider, jamais appliquer
+
+`UpdatePolicy` lit un flux de versions et dit s'il y a quelque chose à
+installer. Il n'installe rien, ne télécharge rien, n'exécute rien — c'est le
+travail de l'hôte (Tauri pour le bureau, le magasin pour le mobile), qui
+possède la clé publique vérifiant la signature du paquet.
+
+Un module qui déciderait **et** appliquerait serait un installeur, c'est-à-dire
+la pièce la plus sensible de la chaîne : celle qui doit être la plus petite et
+la plus auditée. Celui-ci est une fonction de comparaison avec des règles, et il
+se teste entièrement — y compris le fait qu'il n'expose aucune méthode
+d'installation.
+
+Les refus sont le contenu réel :
+
+| refus               | raison                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| version non signée  | un flux sans signature n'est pas incomplet, il est non fiable : qui le sert peut y mettre n'importe quel binaire |
+| retour en arrière   | permettrait de réinstaller une faille corrigée                                                                   |
+| changement de canal | une installation stable ne doit pas se retrouver en bêta parce que le flux en a proposé une                      |
+| version majeure     | peut demander une migration ; l'appliquer pendant la nuit serait une mauvaise surprise au réveil                 |
+
+Le flux est une donnée non fiable : chaque entrée est filtrée sur ses propres
+mérites, et une entrée malformée est **ignorée** plutôt que de faire échouer la
+décision — sans quoi un flux abîmé empêcherait toute mise à jour, y compris
+celle qui corrige le problème.
+
+### Télémétrie de crash : locale, et sans réseau
+
+Écrire la trace d'un plantage **sur la machine**. Rien ne part : pas de point
+de collecte, pas de clé d'API, aucune requête sortante. Un rapport de crash
+contient des chemins de fichiers, des noms de conversations, parfois des
+fragments de données — l'envoyer par défaut serait exactement la décision qu'un
+assistant personnel ne doit pas prendre à la place de son propriétaire.
+
+`share()` rend le texte, rédigé, et l'appelant en fait ce qu'il veut. Le module
+n'a pas de réseau, donc il ne peut pas envoyer par accident, et un test le
+vérifie.
+
+Trois choses se trompent systématiquement quand on écrit cela à la main, et sont
+donc traitées ici :
+
+- **les secrets** — la rédaction passe par celle du reste du dépôt, pas par un
+  filtre maison, et couvre le message, la pile _et_ le contexte, où une URL avec
+  jeton se glisse souvent ;
+- **la taille** — un plantage en boucle écrirait mille rapports et remplirait le
+  disque, c'est-à-dire transformerait un bug en panne ;
+- **la répétition** — cent fois la même pile n'apporte rien de plus que la
+  première, et noie la seconde cause, qui est souvent la vraie. Le compteur
+  monte, la liste ne s'allonge pas.
+
+### Ce qui reste à faire
+
+- **Une seule route honore `Idempotency-Key`.** Le mode hors ligne est donc
+  limité à l'envoi de messages. Étendre la déduplication côté serveur est ce qui
+  élargira la file, et non une modification du client.
+- **Aucune surface n'affiche encore la file ni les rapports de crash.** Les
+  modules et leurs tests existent ; les écrans restent à faire.

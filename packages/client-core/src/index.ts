@@ -7,3 +7,6 @@ export * from "./api.js";
 export * from "./http.js";
 export * from "./resync.js";
 export * from "./transport.js";
+export * from "./outbox.js";
+export * from "./updater.js";
+export * from "./crash.js";
