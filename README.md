@@ -3,10 +3,10 @@
 Assistant personnel IA multi-appareils — iPhone, PC, web — capable d'exécuter des actions
 réelles : envoyer un email, réserver un vol, lancer les tests d'un projet, piloter un navigateur.
 
-> **État : phase 0 terminée, cœur agent implémenté.** Le monorepo, l'API et le **moteur d'agent**
-> (boucle, outils, permissions, confirmations, annulation, traçage) sont en place et vérifiés —
-> 124 tests. Restent l'authentification, le WebSocket et les clients : voir
-> [docs/ROADMAP.md](docs/ROADMAP.md).
+> **État : alpha locale fonctionnelle.** Le Core, le Mission Engine durable, les agents ACP,
+> l'authentification, le dashboard, les permissions, la mémoire vectorielle et l'observabilité
+> sont intégrés et testés. Les clients distribués, le packaging public et certaines
+> intégrations externes restent expérimentaux : voir [docs/ROADMAP.md](docs/ROADMAP.md).
 
 **Principe directeur** — le LLM ne peut rien faire d'autre qu'émettre du texte et _demander_
 l'exécution d'un outil. Toute capacité réelle passe par le registre d'outils, est filtrée par le
@@ -36,7 +36,7 @@ npm install -g pnpm@11.25.0
 ## 2. Installation
 
 ```bash
-git clone <url> nexus && cd nexus
+git clone https://github.com/adlanehzx/Nexus.git nexus && cd nexus
 cp .env.example .env         # les valeurs par défaut suffisent en local
 pnpm install
 pnpm docker:up               # postgres + redis + api

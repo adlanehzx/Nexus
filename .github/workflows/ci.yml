@@ -24,6 +24,7 @@ on:
     branches: ["**"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -84,6 +85,9 @@ jobs:
       # chaque modification de réglage. Voir `.prettierignore`.
       - name: Format
         run: pnpm format:check
+
+      - name: Hygiène de publication
+        run: pnpm release:check
 
   mission-engine:
     name: Mission Engine (Python)

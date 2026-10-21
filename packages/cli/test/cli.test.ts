@@ -169,7 +169,7 @@ describe("unité systemd", () => {
 
     // Le défaut que cette CLI existe pour supprimer : l'unité versionnée
     // portait une dizaine de chemins absolus propres à une machine.
-    expect(unit).not.toContain("/home/adlane");
+    expect(unit).not.toContain("/home/alice/ancien-nexus");
     expect(unit).toContain("WorkingDirectory=/opt/nexus/services/mission-engine");
     expect(unit).toContain("ExecStartPre=/usr/bin/pnpm --dir /opt/nexus");
   });
@@ -185,7 +185,7 @@ describe("unité systemd", () => {
   it("repère les chemins d'une installation déplacée", () => {
     const stale = renderMissionEngineUnit({
       ...base,
-      paths: resolvePaths("/ancien/emplacement/nexus-audit", "/home/someone"),
+      paths: resolvePaths("/ancien/emplacement/nexus", "/home/someone"),
     });
 
     const strays = foreignPaths(stale, "/opt/nexus");
@@ -454,11 +454,9 @@ describe("chemins d'une unité portable", () => {
   });
 
   it("signale malgré tout un chemin absolu d'une autre installation", () => {
-    const stale = "WorkingDirectory=/ailleurs/nexus-audit/services/mission-engine";
+    const stale = "WorkingDirectory=/ailleurs/nexus/services/mission-engine";
 
-    expect(foreignPaths(stale, "/opt/nexus")).toEqual([
-      "/ailleurs/nexus-audit/services/mission-engine",
-    ]);
+    expect(foreignPaths(stale, "/opt/nexus")).toEqual(["/ailleurs/nexus/services/mission-engine"]);
   });
 });
 
