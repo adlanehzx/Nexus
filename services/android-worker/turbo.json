@@ -1,0 +1,25 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "vitest.config.ts",
+        "shim/**",
+        "index.js",
+        "nexus.config.json",
+        "app.json",
+        "babel.config.cjs",
+        "metro.config.cjs",
+        "android/**/*.kts",
+        "android/**/*.xml",
+        "android/gradle.properties",
+        "android/src/**"
+      ],
+      "outputs": []
+    }
+  }
+}

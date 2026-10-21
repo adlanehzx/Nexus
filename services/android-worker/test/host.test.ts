@@ -196,18 +196,56 @@ describe("surface native", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("aucun secret versionné", () => {
-  it("ni clé de signature, ni mot de passe dans la configuration Gradle", () => {
-    const fichiers = [
+  const gradle = () =>
+    [
       path.join(ROOT, "android", "app", "build.gradle.kts"),
       path.join(ROOT, "android", "build.gradle.kts"),
       path.join(ROOT, "android", "settings.gradle.kts"),
       path.join(ROOT, "android", "gradle.properties"),
-    ];
+    ].map((fichier) => ({ fichier, contenu: readFileSync(fichier, "utf8") }));
 
-    for (const fichier of fichiers) {
-      const contenu = readFileSync(fichier, "utf8");
-      expect(contenu).not.toMatch(/storePassword|keyPassword|storeFile\s*=|KEYSTORE_PASSWORD/);
+  it("aucune valeur de signature en littéral", () => {
+    // La version précédente interdisait les **identifiants**
+    // (`storePassword`, `keyPassword`, `storeFile`). C'était trop large : signer
+    // une publication exige de nommer ces propriétés Gradle, et la règle
+    // interdisait donc la seule façon correcte de signer en même temps que la
+    // mauvaise.
+    //
+    // Ce qui doit être interdit est la **valeur** : un mot de passe ou un chemin
+    // de keystore écrit en clair dans un fichier versionné. Lire
+    // `System.getenv(...)` est au contraire exactement ce qu'on veut.
+    for (const { fichier, contenu } of gradle()) {
+      expect(contenu, fichier).not.toMatch(
+        /(storePassword|keyPassword|storeFile|keyAlias)\s*=\s*"[^"]/,
+      );
+      // Un mot de passe déposé dans `gradle.properties` serait la voie la plus
+      // naturelle, et la pire : ce fichier est versionné.
+      expect(contenu, fichier).not.toMatch(/^[A-Za-z_]*(?:KEYSTORE|KEY)_PASSWORD\s*=/m);
     }
+  });
+
+  it("la signature vient de l'environnement, et de rien d'autre", () => {
+    const app = gradle().find((entry) =>
+      entry.fichier.endsWith(path.join("app", "build.gradle.kts")),
+    );
+    expect(app).toBeDefined();
+    const contenu = app?.contenu ?? "";
+
+    // L'assertion positive compte autant que l'interdiction : sans elle, un
+    // jour quelqu'un câblerait la signature sur un fichier local du dépôt, ce
+    // qui ne déclencherait aucune des règles ci-dessus.
+    for (const variable of [
+      "NEXUS_KEYSTORE_PATH",
+      "NEXUS_KEYSTORE_PASSWORD",
+      "NEXUS_KEY_ALIAS",
+      "NEXUS_KEY_PASSWORD",
+    ]) {
+      expect(contenu, variable).toContain(`System.getenv("${variable}")`);
+    }
+
+    // Et sans keystore complet, l'APK n'est pas signé : un artefact qui refuse
+    // de s'installer vaut mieux qu'une clé versionnée.
+    expect(contenu).toMatch(/signingConfig\s*=\s*if\s*\(signingReady\)/);
   });
 
   it("le fichier de réglages embarqué ne contient qu'un alias de clé", () => {
