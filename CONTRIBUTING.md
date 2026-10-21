@@ -10,9 +10,20 @@ The project is written in **English** — code, comments, documentation, user-fa
 test names. Issues and pull requests are accepted in English or French; maintainer replies will be
 in English so the thread stays useful to everyone.
 
-Part of the codebase predates this rule and is still in French. It is being translated. If you
-touch such a file, translating the lines you touch is welcome; translating the whole file in the
-same pull request is not, because it buries your actual change in a diff nobody can review.
+Part of the codebase predates this rule and is still in French. It is being translated, and the
+remaining volume is measurable rather than vague:
+
+```sh
+pnpm translation:status                 # how much is left, by area
+pnpm translation:status --files docs     # the remaining files in one area, largest first
+```
+
+If you touch such a file, translating the lines you touch is welcome; translating the whole file in
+the same pull request is not, because it buries your actual change in a diff nobody can review.
+
+The queue is ordered by who reads what. Entry doors first — they are done. Then user-facing strings
+— also done. Then the architecture documents, then code comments package by package, and test names
+last: no outside reader sees them, and renaming one can break a test filter in CI.
 
 ## Environment
 
