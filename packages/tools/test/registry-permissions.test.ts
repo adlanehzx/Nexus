@@ -11,7 +11,7 @@ import type { ToolContext, ToolDefinition } from "../src/definition.js";
 function makeTool(overrides: Partial<ToolDefinition<{ x?: string }, unknown>> = {}) {
   return {
     name: "test.tool",
-    description: "Outil de test.",
+    description: "Test tool.",
     inputSchema: z.object({ x: z.string().optional() }),
     outputSchema: z.unknown(),
     riskLevel: "SAFE",
@@ -34,7 +34,7 @@ const context: ToolContext = {
 };
 
 describe("ToolRegistry", () => {
-  it("enregistre, retrouve et supprime un outil", () => {
+  it("registers, retrieves, and unregisters tools", () => {
     const registry = new ToolRegistry();
     const tool = makeTool();
 
@@ -51,32 +51,30 @@ describe("ToolRegistry", () => {
     expect(registry.get("test.tool")).toBeUndefined();
   });
 
-  it("refuse un doublon silencieux", () => {
+  it("rejects silent duplicates", () => {
     const registry = new ToolRegistry();
     registry.register(makeTool());
 
-    // Avec plusieurs sources d'outils, un remplacement silencieux serait une
-    // source de bugs très pénible à diagnostiquer.
     expect(() => registry.register(makeTool())).toThrow(ConflictError);
     expect(() => registry.register(makeTool(), { replace: true })).not.toThrow();
   });
 
-  it("lève une erreur explicite sur `require` d'un outil absent", () => {
-    expect(() => new ToolRegistry().require("absent")).toThrow(ToolNotFoundError);
+  it("throws explicit error when requiring missing tool", () => {
+    expect(() => new ToolRegistry().require("missing")).toThrow(ToolNotFoundError);
   });
 
-  it("ne liste que les outils dont les permissions sont couvertes", () => {
+  it("lists only tools whose required permissions are covered", () => {
     const registry = new ToolRegistry();
-    registry.register(makeTool({ name: "libre", requiredPermissions: [] }));
+    registry.register(makeTool({ name: "free", requiredPermissions: [] }));
     registry.register(makeTool({ name: "cal", requiredPermissions: ["calendar.read"] }));
     registry.register(makeTool({ name: "mail", requiredPermissions: ["email.send"] }));
 
-    expect(registry.listAllowed([]).map((t) => t.name)).toEqual(["libre"]);
-    expect(registry.listAllowed(["calendar.read"]).map((t) => t.name)).toEqual(["libre", "cal"]);
-    expect(registry.listAllowed(["*"]).map((t) => t.name)).toEqual(["libre", "cal", "mail"]);
+    expect(registry.listAllowed([]).map((t) => t.name)).toEqual(["free"]);
+    expect(registry.listAllowed(["calendar.read"]).map((t) => t.name)).toEqual(["free", "cal"]);
+    expect(registry.listAllowed(["*"]).map((t) => t.name)).toEqual(["free", "cal", "mail"]);
   });
 
-  it("notifie les abonnés d'un changement de catalogue", () => {
+  it("notifies listeners on registry mutations", () => {
     const registry = new ToolRegistry();
     const listener = vi.fn();
     const off = registry.onChange(listener);
@@ -94,18 +92,18 @@ describe("ToolRegistry", () => {
 });
 
 describe("permissions", () => {
-  it("couvre une permission exacte", () => {
+  it("covers exact permissions", () => {
     expect(permissionCovers("calendar.read", "calendar.read")).toBe(true);
     expect(permissionCovers("calendar.read", "calendar.write")).toBe(false);
   });
 
-  it("couvre un domaine entier par joker", () => {
+  it("covers domain wildcards", () => {
     expect(permissionCovers("calendar.*", "calendar.write")).toBe(true);
     expect(permissionCovers("calendar.*", "email.send")).toBe(false);
     expect(permissionCovers("*", "terminal.execute")).toBe(true);
   });
 
-  it("liste ce qui manque", () => {
+  it("identifies missing permissions", () => {
     expect(missingPermissions(["calendar.read"], ["calendar.read", "email.send"])).toEqual([
       "email.send",
     ]);
@@ -113,14 +111,15 @@ describe("permissions", () => {
   });
 });
 
-describe("niveaux de risque", () => {
-  it("est une échelle ordonnée", () => {
+describe("risk levels", () => {
+  it("forms an ordered risk rank scale", () => {
     expect(riskRank("SAFE")).toBeLessThan(riskRank("LOW"));
+    expect(riskRank("LOW")).toBeLessThan(riskRank("MEDIUM"));
     expect(riskRank("MEDIUM")).toBeLessThan(riskRank("HIGH"));
     expect(riskRank("HIGH")).toBeLessThan(riskRank("CRITICAL"));
   });
 
-  it("ne remonte que vers le haut", () => {
+  it("escalates upwards strictly", () => {
     expect(maxRisk("SAFE", "HIGH")).toBe("HIGH");
     expect(maxRisk("CRITICAL", "LOW")).toBe("CRITICAL");
     expect(riskAtLeast("MEDIUM", "LOW")).toBe(true);
@@ -136,43 +135,43 @@ describe("PermissionService", () => {
       ...options,
     });
 
-  it("autorise un outil SAFE sans permission requise", async () => {
+  it("authorizes SAFE tool without required permissions", async () => {
     const decision = await service([]).check(makeTool(), {}, context);
     expect(decision.effect).toBe("allow");
   });
 
-  it("refuse par défaut quand une permission manque", async () => {
+  it("denies by default when permission is missing", async () => {
     const tool = makeTool({ requiredPermissions: ["email.send"] });
     const decision = await service([]).check(tool, {}, context);
 
     expect(decision).toMatchObject({ effect: "deny", missing: ["email.send"] });
   });
 
-  it("impose une confirmation au-dessus du seuil d'auto-approbation", async () => {
+  it("enforces confirmation above auto-approve threshold", async () => {
     const tool = makeTool({ riskLevel: "MEDIUM" });
     const decision = await service([]).check(tool, {}, context);
 
     expect(decision).toMatchObject({ effect: "confirm", riskLevel: "MEDIUM" });
   });
 
-  it("impose toujours une confirmation sur CRITICAL, même si l'outil s'en dispense", async () => {
+  it("always enforces confirmation on CRITICAL actions", async () => {
     const tool = makeTool({ riskLevel: "CRITICAL", requiresConfirmation: false });
     const decision = await service([]).check(tool, {}, context);
 
     expect(decision).toMatchObject({ effect: "confirm", riskLevel: "CRITICAL" });
   });
 
-  it("évalue `requiresConfirmation` sur les arguments", async () => {
+  it("evaluates dynamic confirmation on arguments", async () => {
     const tool = makeTool({
       riskLevel: "SAFE",
-      requiresConfirmation: (input) => input.x === "dangereux",
+      requiresConfirmation: (input) => input.x === "dangerous",
     });
 
     expect((await service([]).check(tool, { x: "ok" }, context)).effect).toBe("allow");
-    expect((await service([]).check(tool, { x: "dangereux" }, context)).effect).toBe("confirm");
+    expect((await service([]).check(tool, { x: "dangerous" }, context)).effect).toBe("confirm");
   });
 
-  it("refuse tout au-dessus de SAFE en mode lecture seule", async () => {
+  it("denies actions above SAFE in read-only mode", async () => {
     const readOnly = service(["*"], { readOnly: true });
 
     expect((await readOnly.check(makeTool({ riskLevel: "SAFE" }), {}, context)).effect).toBe(
@@ -181,9 +180,7 @@ describe("PermissionService", () => {
     expect((await readOnly.check(makeTool({ riskLevel: "LOW" }), {}, context)).effect).toBe("deny");
   });
 
-  it("fait primer le refus de permission sur la confirmation", async () => {
-    // L'ordre d'évaluation est le contrat : une action non autorisée ne doit
-    // même pas être proposée à l'utilisateur.
+  it("prioritizes permission denial over confirmation requirement", async () => {
     const tool = makeTool({ riskLevel: "CRITICAL", requiredPermissions: ["terminal.execute"] });
     const decision = await service([]).check(tool, {}, context);
 

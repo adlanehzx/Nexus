@@ -4,12 +4,10 @@ import { ConflictError, NotFoundError, uuidv7 } from "@nexus/shared";
 import { riskLevelSchema, type RiskLevel } from "./risk.js";
 
 /**
- * Demande de confirmation humaine.
+ * Human confirmation request.
  *
- * `payloadHash` lie la décision aux arguments **exacts** : si l'agent modifie ne
- * serait-ce qu'un caractère après l'accord, l'exécution est refusée. C'est la
- * protection contre le « bait and switch », où un modèle ferait approuver une
- * action anodine pour en exécuter une autre.
+ * `payloadHash` binds decisions to exact arguments: preventing bait-and-switch attacks
+ * where an agent alters arguments after user approval.
  */
 export const confirmationStatusSchema = z.enum(["pending", "approved", "rejected", "expired"]);
 export type ConfirmationStatus = z.infer<typeof confirmationStatusSchema>;
@@ -19,11 +17,8 @@ export const confirmationRequestSchema = z.object({
   runId: z.string().min(1),
   userId: z.string().min(1),
   tool: z.string().min(1),
-  /** L'appel d'outil concerné, pour rattacher la reprise. */
   toolCallId: z.string().min(1),
-  /** Résumé court et impératif : « Envoyer un email à x@y.z ». */
   action: z.string().min(1),
-  /** Aperçu fidèle, construit à partir des arguments validés. */
   description: z.string(),
   riskLevel: riskLevelSchema,
   payloadHash: z.string().length(64),
@@ -60,7 +55,7 @@ export class InMemoryConfirmationStore implements ConfirmationStore {
   }
 }
 
-/** Empreinte stable des arguments : les clés sont triées récursivement. */
+/** Stable payload hash: sorts keys recursively. */
 export function hashPayload(payload: unknown): string {
   return createHash("sha256").update(stableStringify(payload)).digest("hex");
 }
@@ -88,23 +83,15 @@ export interface CreateConfirmationInput {
 
 export interface ConfirmationServiceOptions {
   store?: ConfirmationStore;
-  /** Durée de validité par défaut. */
   ttlMs?: number;
-  /**
-   * TTL réduit pour les actions irréversibles : une confirmation critique qui
-   * traîne dix minutes n'a plus de sens, le contexte a changé.
-   */
   criticalTtlMs?: number;
   now?: () => Date;
   newId?: () => string;
 }
 
 /**
- * Service de confirmation.
- *
- * Il ne bloque jamais : créer une demande rend la main immédiatement. C'est la
- * boucle agent qui se suspend, en persistant son état — un run peut attendre dix
- * minutes sans immobiliser de processus.
+ * Human confirmation management service.
+ * Requests are non-blocking; the agent execution loop suspends its state.
  */
 export class ConfirmationService {
   readonly #store: ConfirmationStore;
@@ -151,19 +138,13 @@ export class ConfirmationService {
     return this.#expireIfDue(request);
   }
 
-  /**
-   * Enregistre la décision de l'utilisateur.
-   *
-   * Une demande expirée n'est **jamais** auto-approuvée, et une demande déjà
-   * tranchée ne peut pas l'être une seconde fois : c'est ce qui empêche le rejeu
-   * d'une approbation.
-   */
+  /** Resolves confirmation request with human decision. */
   async resolve(id: string, decision: "approved" | "rejected"): Promise<ConfirmationRequest> {
     const existing = await this.#store.get(id);
     if (!existing) {
       throw new NotFoundError({
-        message: `Confirmation inconnue : ${id}`,
-        userMessage: "Cette demande de confirmation n'existe plus.",
+        message: `Unknown confirmation: ${id}`,
+        userMessage: "This confirmation request no longer exists.",
         context: { confirmationId: id },
       });
     }
@@ -171,11 +152,11 @@ export class ConfirmationService {
     const current = await this.#expireIfDue(existing);
     if (current.status !== "pending") {
       throw new ConflictError({
-        message: `Confirmation déjà ${current.status} : ${id}`,
+        message: `Confirmation already ${current.status}: ${id}`,
         userMessage:
           current.status === "expired"
-            ? "Cette demande a expiré. Relance l'action si tu la veux toujours."
-            : "Cette demande a déjà reçu une réponse.",
+            ? "This confirmation request expired. Please rerun the action if you still want it."
+            : "This request has already been answered.",
         context: { confirmationId: id, status: current.status },
       });
     }
@@ -189,10 +170,7 @@ export class ConfirmationService {
     return resolved;
   }
 
-  /**
-   * Vérifie qu'une confirmation approuvée porte bien sur ces arguments-ci.
-   * Toute divergence annule l'autorisation.
-   */
+  /** Verifies that approved confirmation matches the exact intended tool arguments. */
   matchesPayload(request: ConfirmationRequest, payload: unknown): boolean {
     return request.payloadHash === hashPayload(payload);
   }

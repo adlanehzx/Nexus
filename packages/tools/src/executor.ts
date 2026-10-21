@@ -9,7 +9,7 @@ import {
   normalizeToolError,
 } from "./errors.js";
 
-/** Politique de reprise. Le jitter évite que N runs réessaient en même temps. */
+/** Retry policy. Jitter prevents thundering herd problem. */
 export interface RetryPolicy {
   attempts: number;
   initialDelayMs: number;
@@ -26,7 +26,7 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   jitter: true,
 };
 
-/** Délai avant la tentative n° `attempt` (1 = première reprise). */
+/** Calculates delay before retry attempt n (1 = first retry). */
 export function backoffDelay(
   attempt: number,
   policy: RetryPolicy,
@@ -34,18 +34,14 @@ export function backoffDelay(
 ): number {
   const exponential = policy.initialDelayMs * Math.pow(policy.factor, attempt - 1);
   const capped = Math.min(exponential, policy.maxDelayMs);
-  // Jitter « full » : uniformément réparti sur [capped/2, capped]. Il conserve
-  // la croissance exponentielle tout en désynchronisant les clients.
   return policy.jitter ? Math.round(capped / 2 + random() * (capped / 2)) : Math.round(capped);
 }
 
 export interface ToolExecutorOptions {
   defaultTimeoutMs?: number;
   retry?: RetryPolicy;
-  /** Injecté pour rendre les tests de backoff déterministes et instantanés. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
-  /** Taille maximale de la projection renvoyée au modèle. */
   maxSummaryChars?: number;
   onAttempt?: (event: {
     toolName: string;
@@ -55,13 +51,6 @@ export interface ToolExecutorOptions {
   }) => void;
 }
 
-/**
- * Promesse qui rejette dès que le signal est abandonné.
- *
- * Indispensable : un outil qui ignore son `AbortSignal` ne rendrait jamais la
- * main. On fait donc courir son exécution contre le signal, plutôt que de lui
- * faire confiance pour s'arrêter.
- */
 function rejectOnAbort(signal: AbortSignal): { promise: Promise<never>; dispose: () => void } {
   let dispose: () => void = () => undefined;
   const promise = new Promise<never>((_resolve, reject) => {
@@ -77,13 +66,10 @@ function rejectOnAbort(signal: AbortSignal): { promise: Promise<never>; dispose:
       signal.removeEventListener("abort", onAbort);
     };
   });
-  // Personne n'attend cette promesse si l'exécution gagne la course : on neutralise
-  // le rejet non géré qui serait signalé au processus.
   promise.catch(() => undefined);
   return { promise, dispose };
 }
 
-/** Marqueur interne : traduit ensuite en annulation ou en délai dépassé. */
 class AbortError extends Error {
   constructor() {
     super("aborted");
@@ -99,29 +85,17 @@ const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
       reject(new Error("aborted"));
       return;
     }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(new Error("aborted"));
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("aborted"));
+      },
+      { once: true },
+    );
   });
 
-/**
- * Exécuteur d'outils — la frontière d'exécution unique.
- *
- * Aucun chemin ne contourne ce pipeline :
- *   valider l'entrée → exécuter sous délai → réessayer si transitoire →
- *   valider la sortie → normaliser pour le modèle.
- *
- * Les permissions et les confirmations sont évaluées **en amont** par la boucle
- * agent : l'exécuteur ne reçoit que des appels déjà autorisés. Cette séparation
- * évite qu'un futur appelant contourne l'autorisation en appelant directement
- * l'exécuteur — il ne saurait pas quoi lui passer.
- */
 export class ToolExecutor {
   readonly #defaultTimeoutMs: number;
   readonly #retry: RetryPolicy;
@@ -142,61 +116,59 @@ export class ToolExecutor {
   async execute<I, O>(
     tool: ToolDefinition<I, O>,
     rawInput: unknown,
-    partialContext: Omit<ToolContext, "attempt" | "onProgress"> & {
-      onProgress?: ToolContext["onProgress"];
-    },
+    context: Omit<ToolContext, "attempt">,
   ): Promise<ToolResult<O>> {
     const startedAt = performance.now();
-    // Un outil ne doit jamais avoir à tester si le canal existe.
-    const context = { ...partialContext, onProgress: partialContext.onProgress ?? noop };
 
-    // 1. Validation des arguments. Un échec ici n'est jamais réessayé : il est
-    //    renvoyé au modèle, qui peut corriger ses arguments au tour suivant.
-    const parsed = tool.inputSchema.safeParse(rawInput);
-    if (!parsed.success) {
-      const error = new ToolInputValidationError(tool.name, parsed.error.issues);
-      return this.#failure(tool.name, error, startedAt, 1);
+    if (context.signal.aborted) {
+      return this.#failure(tool.name, new ToolCancelledError(tool.name), startedAt, 0);
     }
-    const input = parsed.data;
 
-    const maxAttempts = Math.max(1, tool.retry?.attempts ?? this.#retry.attempts);
-    // Un outil non idempotent n'est jamais rejoué automatiquement : on ne peut
-    // pas savoir si le premier appel a déjà eu son effet de bord.
-    const attemptsAllowed = tool.idempotent === false ? 1 : maxAttempts;
+    const parsedInput = tool.inputSchema.safeParse(rawInput);
+    if (!parsedInput.success) {
+      return this.#failure(
+        tool.name,
+        new ToolInputValidationError(tool.name, parsedInput.error.issues),
+        startedAt,
+        0,
+      );
+    }
+    const input = parsedInput.data;
 
-    let attempt = 0;
+    const maxAttempts =
+      tool.idempotent === false ? 1 : (tool.retry?.attempts ?? this.#retry.attempts);
+
     let lastError: AppError | undefined;
+    let attempt = 0;
 
-    while (attempt < attemptsAllowed) {
+    while (attempt < maxAttempts) {
       attempt += 1;
-
-      if (context.signal.aborted) {
-        return this.#failure(tool.name, new ToolCancelledError(tool.name), startedAt, attempt);
-      }
+      const attemptContext: ToolContext = {
+        ...context,
+        attempt,
+        onProgress: context.onProgress ?? noop,
+      };
 
       try {
-        const output = await this.#runOnce(tool, input, { ...context, attempt });
+        const rawOutput = await this.#runOnce(tool, input, attemptContext);
 
-        // 2. Validation de la sortie. Une sortie non conforme est un bug de
-        //    l'outil : on ne la propage pas au modèle telle quelle.
-        const validated = tool.outputSchema.safeParse(output);
-        if (!validated.success) {
-          const error = new ToolOutputValidationError(tool.name, validated.error.issues);
-          return this.#failure(tool.name, error, startedAt, attempt);
+        const parsedOutput = tool.outputSchema.safeParse(rawOutput);
+        if (!parsedOutput.success) {
+          throw new ToolOutputValidationError(tool.name, parsedOutput.error.issues);
         }
 
         return {
           ok: true,
           toolName: tool.name,
-          output: validated.data,
-          summaryForModel: this.#summarize(validated.data),
+          output: parsedOutput.data,
+          summaryForModel: this.#summarize(parsedOutput.data),
           metrics: { durationMs: Math.round(performance.now() - startedAt), attempts: attempt },
         };
       } catch (error) {
         const appError = this.#toAppError(error, tool.name);
         lastError = appError;
 
-        const isLastAttempt = attempt >= attemptsAllowed;
+        const isLastAttempt = attempt >= maxAttempts;
         const shouldRetry = appError.retryable && !isLastAttempt && !context.signal.aborted;
         const delay = shouldRetry ? backoffDelay(attempt, this.#retry, this.#random) : undefined;
 
@@ -220,12 +192,9 @@ export class ToolExecutor {
     );
   }
 
-  /** Une tentative, sous contrainte de délai et d'annulation. */
   async #runOnce<I, O>(tool: ToolDefinition<I, O>, input: I, context: ToolContext): Promise<O> {
     const timeoutMs = tool.timeoutMs ?? this.#defaultTimeoutMs;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    // On combine les deux signaux mais on garde les originaux : c'est ce qui
-    // permet de distinguer « annulé par l'utilisateur » de « délai dépassé ».
     const combined = AbortSignal.any([context.signal, timeoutSignal]);
     const abort = rejectOnAbort(combined);
 
@@ -235,8 +204,6 @@ export class ToolExecutor {
         abort.promise,
       ]);
     } catch (error) {
-      // L'ordre compte : une annulation utilisateur prime sur un délai dépassé
-      // survenu au même instant — c'est l'intention de l'utilisateur qui gagne.
       if (context.signal.aborted) throw new ToolCancelledError(tool.name);
       if (timeoutSignal.aborted) throw new ToolTimeoutError(tool.name, timeoutMs);
       throw error;
@@ -247,9 +214,6 @@ export class ToolExecutor {
 
   #toAppError(error: unknown, toolName: string): AppError {
     if (error instanceof AppError) return error;
-    // Une erreur brute est considérée comme NON réessayable. C'est à l'outil de
-    // déclarer un échec transitoire, via `RetryableToolError` — réessayer par
-    // défaut enverrait deux fois le même email.
     return new ToolExecutionError(toolName, {
       message: error instanceof Error ? error.message : String(error),
       userMessage: "The tool failed.",
@@ -269,7 +233,7 @@ export class ToolExecutor {
       ok: false,
       toolName,
       error: normalized,
-      summaryForModel: `Échec de ${toolName} (${normalized.code}) : ${normalized.message}`,
+      summaryForModel: `Failed: ${toolName} (${normalized.code}): ${normalized.message}`,
       metrics: { durationMs: Math.round(performance.now() - startedAt), attempts },
     };
   }
@@ -279,6 +243,6 @@ export class ToolExecutor {
     const safe = text ?? "null";
     return safe.length <= this.#maxSummaryChars
       ? safe
-      : `${safe.slice(0, this.#maxSummaryChars)}… [tronqué, ${String(safe.length)} caractères au total]`;
+      : `${safe.slice(0, this.#maxSummaryChars)}… [truncated, ${String(safe.length)} characters total]`;
   }
 }

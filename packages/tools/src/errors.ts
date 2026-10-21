@@ -1,14 +1,11 @@
 import { AppError, type AppErrorOptions } from "@nexus/shared";
 
 /**
- * Erreurs du plan de capacité.
+ * Capability execution errors.
  *
- * Toutes portent `retryable`, qui pilote la politique de reprise de l'exécuteur.
- * Le principe : on ne réessaie que ce dont l'échec est plausiblement transitoire.
- * Des arguments invalides le resteront à la seconde tentative.
- *
- * (Pas de propriétés de constructeur ici : `erasableSyntaxOnly` les interdit —
- * elles produiraient du code à l'exécution.)
+ * Every error carries `retryable`, governing executor retry policies.
+ * Only plausibly transient failures are retried; invalid arguments will
+ * remain invalid on retry.
  */
 
 export class ToolNotFoundError extends AppError {
@@ -18,8 +15,8 @@ export class ToolNotFoundError extends AppError {
 
   constructor(toolName: string) {
     super({
-      message: `Outil inconnu : ${toolName}`,
-      userMessage: "Cet outil n'existe pas.",
+      message: `Unknown tool: ${toolName}`,
+      userMessage: "This tool does not exist.",
       context: { toolName },
     });
     this.toolName = toolName;
@@ -35,14 +32,11 @@ export class ToolInputValidationError extends AppError {
   constructor(toolName: string, issues: unknown) {
     const detail = formatValidationIssues(issues);
     super({
-      message: `Arguments invalides pour ${toolName}`,
-      // Le message NOMME les champs fautifs : c'est lui que le modèle recevra en
-      // observation, et « paramètres invalides » ne lui dirait pas quoi corriger.
-      // Seuls les chemins et les contraintes sont repris, jamais les valeurs reçues.
+      message: `Invalid arguments for ${toolName}`,
       userMessage:
         detail === undefined
-          ? "Les paramètres fournis à l'outil sont invalides."
-          : `Paramètres invalides : ${detail}`,
+          ? "Invalid arguments supplied to tool."
+          : `Invalid parameters: ${detail}`,
       context: { toolName, issues },
     });
     this.toolName = toolName;
@@ -50,24 +44,21 @@ export class ToolInputValidationError extends AppError {
   }
 }
 
-/** Met en forme des problèmes de validation Zod, sans jamais citer les valeurs. */
+/** Formats Zod validation issues without leaking user argument values. */
 function formatValidationIssues(issues: unknown): string | undefined {
   if (!Array.isArray(issues) || issues.length === 0) return undefined;
 
   const parts = issues.slice(0, 5).map((raw) => {
     const issue = raw as { path?: readonly PropertyKey[]; message?: string };
     const path = (issue.path ?? []).map(String).join(".");
-    const message = issue.message ?? "invalide";
+    const message = issue.message ?? "invalid";
     return path.length > 0 ? `${path} — ${message}` : message;
   });
 
-  return parts.join(" ; ");
+  return parts.join("; ");
 }
 
-/**
- * Sortie non conforme au schéma déclaré. C'est un bug de l'outil, jamais une
- * faute de l'appelant — et surtout pas quelque chose qu'un nouvel essai corrigera.
- */
+/** Output non-conformance with declared schema. Represents a tool defect. */
 export class ToolOutputValidationError extends AppError {
   readonly code = "TOOL_OUTPUT_INVALID";
   readonly httpStatus = 500;
@@ -76,7 +67,7 @@ export class ToolOutputValidationError extends AppError {
 
   constructor(toolName: string, issues: unknown) {
     super({
-      message: `Sortie non conforme au schéma pour ${toolName}`,
+      message: `Output does not match declared schema for ${toolName}`,
       userMessage: "The tool returned an unexpected result.",
       context: { toolName, issues },
     });
@@ -94,7 +85,7 @@ export class ToolTimeoutError extends AppError {
 
   constructor(toolName: string, timeoutMs: number) {
     super({
-      message: `L'outil ${toolName} a dépassé son délai de ${String(timeoutMs)} ms`,
+      message: `Tool ${toolName} timed out after ${String(timeoutMs)} ms`,
       userMessage: "The tool took too long to answer.",
       context: { toolName, timeoutMs },
     });
@@ -110,7 +101,7 @@ export class ToolCancelledError extends AppError {
 
   constructor(toolName: string) {
     super({
-      message: `Exécution de ${toolName} annulée`,
+      message: `Execution of ${toolName} cancelled`,
       userMessage: "The operation was cancelled.",
       context: { toolName },
     });
@@ -126,7 +117,7 @@ export class PermissionDeniedError extends AppError {
 
   constructor(toolName: string, missing: readonly string[]) {
     super({
-      message: `Permissions manquantes pour ${toolName} : ${missing.join(", ")}`,
+      message: `Missing permissions for ${toolName}: ${missing.join(", ")}`,
       userMessage: "This action is not allowed.",
       context: { toolName, missing },
     });
@@ -135,7 +126,7 @@ export class PermissionDeniedError extends AppError {
   }
 }
 
-/** Échec levé par l'outil lui-même. Réessayable seulement s'il le déclare. */
+/** Error thrown by tool itself. Retryable only if explicitly declared. */
 export class ToolExecutionError extends AppError {
   readonly code = "TOOL_EXECUTION_FAILED";
   readonly httpStatus = 502;
@@ -149,17 +140,14 @@ export class ToolExecutionError extends AppError {
   }
 }
 
-/**
- * Levée par un outil pour signaler un échec transitoire (réseau, 429, 5xx).
- * C'est le seul moyen pour un outil de demander explicitement une reprise.
- */
+/** Raised by a tool to signal a transient failure (network, 429, 5xx). */
 export class RetryableToolError extends ToolExecutionError {
   constructor(toolName: string, options: AppErrorOptions) {
     super(toolName, { ...options, retryable: true });
   }
 }
 
-/** Le résultat d'exécution attaché à un échec, normalisé pour le modèle. */
+/** Normalized failure result representation for agent models. */
 export interface NormalizedToolError {
   code: string;
   message: string;

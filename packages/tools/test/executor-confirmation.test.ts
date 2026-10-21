@@ -39,7 +39,7 @@ function makeExecutor(sleeps: number[]) {
 
 const echoTool: ToolDefinition<{ value: string }, { echoed: string }> = {
   name: "echo",
-  description: "Renvoie sa valeur.",
+  description: "Echoes input value.",
   inputSchema: z.object({ value: z.string() }),
   outputSchema: z.object({ echoed: z.string() }),
   riskLevel: "SAFE",
@@ -49,27 +49,25 @@ const echoTool: ToolDefinition<{ value: string }, { echoed: string }> = {
 };
 
 describe("backoffDelay", () => {
-  it("croît de façon exponentielle", () => {
+  it("grows exponentially", () => {
     expect(backoffDelay(1, NO_JITTER)).toBe(100);
     expect(backoffDelay(2, NO_JITTER)).toBe(200);
     expect(backoffDelay(3, NO_JITTER)).toBe(400);
   });
 
-  it("plafonne", () => {
+  it("caps at max delay", () => {
     expect(backoffDelay(10, NO_JITTER)).toBe(1_000);
   });
 
-  it("applique un jitter dans la moitié haute de l'intervalle", () => {
+  it("applies jitter in upper half of interval", () => {
     const policy = { ...NO_JITTER, jitter: true };
-    // Le jitter désynchronise les clients sans effacer la croissance : le délai
-    // reste borné par [capped/2, capped].
     expect(backoffDelay(2, policy, () => 0)).toBe(100);
     expect(backoffDelay(2, policy, () => 1)).toBe(200);
   });
 });
 
 describe("ToolExecutor", () => {
-  it("valide les arguments avant d'exécuter", async () => {
+  it("validates input arguments before execution", async () => {
     let called = false;
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
       ...echoTool,
@@ -86,7 +84,7 @@ describe("ToolExecutor", () => {
     if (!result.ok) expect(result.error.code).toBe("TOOL_INPUT_INVALID");
   });
 
-  it("valide la sortie contre le schéma déclaré", async () => {
+  it("validates output against declared schema", async () => {
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
       ...echoTool,
       execute: () => Promise.resolve({ echoed: 12 } as unknown as { echoed: string }),
@@ -98,18 +96,18 @@ describe("ToolExecutor", () => {
     if (!result.ok) expect(result.error.code).toBe("TOOL_OUTPUT_INVALID");
   });
 
-  it("renvoie la sortie validée et une projection pour le modèle", async () => {
-    const result = await makeExecutor([]).execute(echoTool, { value: "bonjour" }, baseContext());
+  it("returns validated output and projection for model", async () => {
+    const result = await makeExecutor([]).execute(echoTool, { value: "hello" }, baseContext());
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.output).toEqual({ echoed: "bonjour" });
-      expect(result.summaryForModel).toContain("bonjour");
+      expect(result.output).toEqual({ echoed: "hello" });
+      expect(result.summaryForModel).toContain("hello");
       expect(result.metrics.attempts).toBe(1);
     }
   });
 
-  it("tronque une sortie volumineuse destinée au modèle", async () => {
+  it("truncates large output destined for model summary", async () => {
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
       ...echoTool,
       execute: () => Promise.resolve({ echoed: "x".repeat(50_000) }),
@@ -118,16 +116,15 @@ describe("ToolExecutor", () => {
 
     const result = await executor.execute(tool, { value: "x" }, baseContext());
 
-    // La sortie complète reste intacte ; seule la projection est bornée.
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.output.echoed).toHaveLength(50_000);
       expect(result.summaryForModel.length).toBeLessThan(200);
-      expect(result.summaryForModel).toContain("tronqué");
+      expect(result.summaryForModel).toContain("truncated");
     }
   });
 
-  it("réessaie un échec transitoire", async () => {
+  it("retries transient failure", async () => {
     const sleeps: number[] = [];
     let attempts = 0;
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
@@ -148,7 +145,7 @@ describe("ToolExecutor", () => {
     expect(sleeps).toEqual([100, 200]);
   });
 
-  it("ne réessaie jamais un outil non idempotent", async () => {
+  it("never retries non-idempotent tool", async () => {
     const sleeps: number[] = [];
     let attempts = 0;
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
@@ -162,13 +159,12 @@ describe("ToolExecutor", () => {
 
     const result = await makeExecutor(sleeps).execute(tool, { value: "x" }, baseContext());
 
-    // On ne peut pas savoir si le premier appel a déjà produit son effet.
     expect(result.ok).toBe(false);
     expect(attempts).toBe(1);
     expect(sleeps).toEqual([]);
   });
 
-  it("impose son délai à un outil qui ignore son signal", async () => {
+  it("enforces timeout on tool that ignores its signal", async () => {
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
       ...echoTool,
       timeoutMs: 20,
@@ -182,7 +178,7 @@ describe("ToolExecutor", () => {
     if (!result.ok) expect(result.error.code).toBe("TOOL_TIMEOUT");
   });
 
-  it("distingue une annulation d'un délai dépassé", async () => {
+  it("distinguishes cancellation from timeout", async () => {
     const controller = new AbortController();
     const tool: ToolDefinition<{ value: string }, { echoed: string }> = {
       ...echoTool,
@@ -198,7 +194,7 @@ describe("ToolExecutor", () => {
     if (!result.ok) expect(result.error.code).toBe("TOOL_CANCELLED");
   });
 
-  it("n'exécute rien si le signal est déjà abandonné", async () => {
+  it("does not execute if signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort();
     let called = false;
@@ -222,7 +218,7 @@ describe("ToolExecutor", () => {
 });
 
 describe("ConfirmationService", () => {
-  const payload = { to: "a@b.c", subject: "Bonjour" };
+  const payload = { to: "a@b.c", subject: "Hello" };
 
   const makeService = (now: () => Date) =>
     new ConfirmationService({ now, ttlMs: 60_000, criticalTtlMs: 10_000 });
@@ -232,13 +228,13 @@ describe("ConfirmationService", () => {
     userId: "user-1",
     tool: "email.send",
     toolCallId: "call-1",
-    action: "Envoyer un email à a@b.c",
-    description: "…",
+    action: "Send an email to a@b.c",
+    description: "...",
     riskLevel: "HIGH" as const,
     payload,
   };
 
-  it("crée une demande en attente", async () => {
+  it("creates a pending request", async () => {
     const service = makeService(() => new Date("2026-09-01T10:00:00Z"));
     const request = await service.request(input);
 
@@ -248,15 +244,14 @@ describe("ConfirmationService", () => {
     expect(request.decidedAt).toBeNull();
   });
 
-  it("raccourcit le délai des actions irréversibles", async () => {
+  it("shortens TTL for irreversible actions", async () => {
     const service = makeService(() => new Date("2026-09-01T10:00:00Z"));
     const request = await service.request({ ...input, riskLevel: "CRITICAL" });
 
-    // Une confirmation critique qui traîne n'a plus de sens : le contexte a changé.
     expect(request.expiresAt.toISOString()).toBe("2026-09-01T10:00:10.000Z");
   });
 
-  it("enregistre une décision", async () => {
+  it("records decisions", async () => {
     const service = makeService(() => new Date("2026-09-01T10:00:00Z"));
     const request = await service.request(input);
 
@@ -265,7 +260,7 @@ describe("ConfirmationService", () => {
     expect(approved.decidedAt).not.toBeNull();
   });
 
-  it("empêche le rejeu d'une approbation", async () => {
+  it("prevents replay of an approval", async () => {
     const service = makeService(() => new Date("2026-09-01T10:00:00Z"));
     const request = await service.request(input);
     await service.resolve(request.id, "approved");
@@ -273,7 +268,7 @@ describe("ConfirmationService", () => {
     await expect(service.resolve(request.id, "approved")).rejects.toThrow(ConflictError);
   });
 
-  it("n'auto-approuve jamais une demande expirée", async () => {
+  it("never auto-approves expired requests", async () => {
     let now = new Date("2026-09-01T10:00:00Z");
     const service = makeService(() => now);
     const request = await service.request(input);
@@ -284,22 +279,20 @@ describe("ConfirmationService", () => {
     await expect(service.resolve(request.id, "approved")).rejects.toThrow(ConflictError);
   });
 
-  it("lève sur une demande inconnue", async () => {
+  it("throws on unknown confirmation request ID", async () => {
     const service = makeService(() => new Date());
-    await expect(service.resolve("inexistant", "approved")).rejects.toThrow(NotFoundError);
+    await expect(service.resolve("nonexistent", "approved")).rejects.toThrow(NotFoundError);
   });
 
-  it("lie la décision aux arguments exacts", async () => {
+  it("binds decision to exact payload arguments", async () => {
     const service = makeService(() => new Date("2026-09-01T10:00:00Z"));
     const request = await service.request(input);
 
     expect(service.matchesPayload(request, payload)).toBe(true);
-    // Un seul caractère modifié après l'accord invalide l'autorisation :
-    // c'est la protection contre le « bait and switch ».
-    expect(service.matchesPayload(request, { ...payload, to: "attaquant@x.y" })).toBe(false);
+    expect(service.matchesPayload(request, { ...payload, to: "attacker@x.y" })).toBe(false);
   });
 
-  it("produit une empreinte stable quel que soit l'ordre des clés", () => {
+  it("produces deterministic hash regardless of key ordering", () => {
     expect(hashPayload({ a: 1, b: 2 })).toBe(hashPayload({ b: 2, a: 1 }));
     expect(hashPayload({ a: 1 })).not.toBe(hashPayload({ a: 2 }));
   });
