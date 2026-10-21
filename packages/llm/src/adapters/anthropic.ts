@@ -13,25 +13,25 @@ import type {
 } from "../types.js";
 
 /**
- * Adaptateur Anthropic — le premier fournisseur concret.
+ * Anthropic adapter — the initial concrete provider.
  *
- * C'est le SEUL fichier du monorepo autorisé à importer `@anthropic-ai/sdk`
- * (cf. ADR-004). Tout ce qui en sort est traduit dans le format neutre de
- * `@nexus/llm` ; rien de spécifique au fournisseur ne remonte au cœur agent,
- * hormis `providerBlocks`, qui est opaque et seulement transporté.
+ * This is the ONLY file in the monorepo permitted to import `@anthropic-ai/sdk`
+ * (cf. ADR-004). All inputs and outputs are mapped to and from `@nexus/llm`
+ * neutral format; nothing provider-specific leaks into the agent core, except
+ * `providerBlocks` which is opaque and merely transported.
  */
 
 export interface AnthropicProviderOptions {
-  /** À défaut, le SDK résout `ANTHROPIC_API_KEY` ou un profil `ant auth login`. */
+  /** If omitted, the SDK resolves `ANTHROPIC_API_KEY` or `ant auth login` profile. */
   apiKey?: string;
   model?: string;
   maxTokens?: number;
   /**
-   * Profondeur de raisonnement. `high` est le défaut de l'API ; `xhigh` convient
-   * aux tâches agentiques longues, `low` aux classifications et au routage.
+   * Reasoning effort. `high` is the API default; `xhigh` is suitable for long
+   * agent tasks, `low` for routing and classification.
    */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
-  /** Injectable pour les tests d'intégration ; sinon construit depuis `apiKey`. */
+  /** Injectable for integration tests; otherwise constructed from `apiKey`. */
   client?: Anthropic;
   baseURL?: string;
   timeoutMs?: number;
@@ -71,8 +71,8 @@ export class AnthropicProvider implements LLMProvider {
 
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
     try {
-      // Streaming systématique : les réponses agentiques peuvent être longues,
-      // et un `max_tokens` élevé sans streaming heurte le délai HTTP du SDK.
+      // Systematic streaming: agent responses can be long, and high max_tokens
+      // without streaming triggers SDK HTTP client timeouts.
       const stream = this.#client.messages.stream(
         this.#buildParams(request),
         request.signal ? { signal: request.signal } : {},
@@ -124,7 +124,7 @@ export class AnthropicProvider implements LLMProvider {
 
       if (message.parsed_output === null || message.parsed_output === undefined) {
         throw new LLMProviderError(this.id, {
-          message: "Le modèle n'a pas produit de sortie structurée exploitable",
+          message: "The model did not produce actionable structured output",
           retryable: true,
         });
       }
@@ -155,7 +155,7 @@ export class AnthropicProvider implements LLMProvider {
       model: this.model,
       max_tokens: request.maxTokens ?? this.#maxTokens,
       messages: this.#toApiMessages(request.messages),
-      // Raisonnement adaptatif : le modèle décide quand et combien réfléchir.
+      // Adaptive thinking: model decides when and how much to deliberate.
       thinking: { type: "adaptive" },
       output_config: { effort: this.#effort },
       ...(request.system !== undefined ? { system: request.system } : {}),
@@ -176,7 +176,7 @@ export class AnthropicProvider implements LLMProvider {
     const out: Anthropic.MessageParam[] = [];
 
     for (const message of messages) {
-      if (message.role === "system") continue; // porté par le champ `system`
+      if (message.role === "system") continue; // passed via `system` parameter
 
       if (message.role === "tool") {
         out.push({
@@ -194,9 +194,8 @@ export class AnthropicProvider implements LLMProvider {
       }
 
       if (message.role === "assistant" && message.providerBlocks !== undefined) {
-        // Rejeu à l'identique des blocs du fournisseur (raisonnement, signatures).
-        // Les reconstruire depuis le format neutre les perdrait, et l'API
-        // refuserait la suite de la conversation.
+        // Replay provider blocks verbatim (thinking, signatures). Reconstructing
+        // from neutral text would drop them, causing the provider to reject.
         out.push({
           role: "assistant",
           content: message.providerBlocks as Anthropic.ContentBlock[],
@@ -240,7 +239,7 @@ export class AnthropicProvider implements LLMProvider {
           type: "tool_call",
           id: block.id,
           name: block.name,
-          // `input` est déjà désérialisé par le SDK — pas d'analyse de chaîne ici.
+          // `input` is already deserialized by SDK — no string parsing here.
           arguments: block.input,
         });
       }
@@ -285,17 +284,14 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   /**
-   * Traduit les erreurs du SDK en `LLMProviderError`.
+   * Maps SDK errors into `LLMProviderError`.
    *
-   * On distingue le transitoire (429, 5xx, réseau) du définitif (400, 401) :
-   * réessayer une requête malformée ne fait que brûler du budget.
+   * Distinguishes transient failures (429, 5xx, network) from fatal errors (400, 401).
    */
   #toProviderError(error: unknown): LLMProviderError {
     if (error instanceof LLMProviderError) return error;
 
     if (error instanceof Anthropic.APIError) {
-      // `status` est typé librement par le SDK : on le ramène explicitement à
-      // un nombre plutôt que de laisser un `any` traverser notre taxonomie.
       const rawStatus: unknown = error.status;
       const status = typeof rawStatus === "number" ? rawStatus : undefined;
       const retryable = status === undefined || status === 429 || status >= 500;
@@ -309,7 +305,7 @@ export class AnthropicProvider implements LLMProvider {
 
     if (error instanceof Error && error.name === "AbortError") {
       return new LLMProviderError(this.id, {
-        message: "Génération annulée",
+        message: "Generation cancelled",
         userMessage: "The operation was cancelled.",
         retryable: false,
         cause: error,

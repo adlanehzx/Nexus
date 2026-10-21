@@ -9,16 +9,15 @@ import type {
 } from "../types.js";
 
 /**
- * Fournisseur LLM scripté.
+ * Scripted LLM provider for tests.
  *
- * Le modèle est la seule frontière véritablement externe du cœur agent : c'est
- * lui, et lui seul, qu'on remplace pour tester. Tout le reste — boucle,
- * permissions, confirmations, exécuteur, reprises — s'exécute réellement.
+ * The model is the sole truly external boundary of the agent core: it is the
+ * only component mocked in tests. Everything else — loop, permissions,
+ * confirmations, executor, retries — runs against real implementations.
  *
- * Un tour scripté décrit ce que le modèle « décide » : répondre, appeler des
- * outils, ou échouer. Les requêtes reçues sont enregistrées, ce qui permet
- * d'affirmer *ce que le cœur a réellement envoyé* (outils exposés, transcript,
- * observations réinjectées).
+ * A scripted turn describes what the model "decides": answer, invoke tools, or
+ * fail. Recorded requests allow verifying what the core actually sent
+ * (exposed tools, transcript, reinjected observations).
  */
 
 export type ScriptedTurn =
@@ -31,12 +30,12 @@ export type ScriptedTurn =
       fallbackCount?: number;
     }
   | { kind: "error"; error: Error }
-  /** Ne résout jamais tant que le signal n'est pas abandonné : teste annulation et délais. */
+  /** Never resolves until signal is aborted: tests cancellation and timeouts. */
   | { kind: "hang" };
 
 export interface ScriptedProviderOptions {
   model?: string;
-  /** Tour utilisé quand le script est épuisé. Par défaut : une erreur explicite. */
+  /** Turn used when the script is exhausted. Defaults to an explicit error. */
   fallback?: ScriptedTurn;
 }
 
@@ -61,12 +60,12 @@ export class ScriptedLLMProvider implements LLMProvider {
     this.#fallback = options.fallback;
   }
 
-  /** Nombre d'appels reçus — le compte d'itérations du point de vue du modèle. */
+  /** Number of calls received — iteration count from the model's perspective. */
   get callCount(): number {
     return this.requests.length;
   }
 
-  /** Remplace le script restant. Utile pour piloter un scénario en deux temps. */
+  /** Replaces remaining script turns. Useful for steering scenarios dynamically. */
   setTurns(turns: ScriptedTurn[]): void {
     this.#turns = [...turns];
     this.#index = 0;
@@ -125,8 +124,8 @@ export class ScriptedLLMProvider implements LLMProvider {
   }
 
   countTokens(request: Pick<GenerateRequest, "messages" | "system" | "tools">): Promise<number> {
-    // Approximation volontairement grossière : ~4 caractères par jeton. Les
-    // tests ont besoin d'un nombre stable et monotone, pas d'un tokenizer.
+    // Intentionally simple heuristic: ~4 chars per token. Tests need a stable,
+    // monotonic count rather than an exact tokenizer.
     const size = JSON.stringify(request).length;
     return Promise.resolve(Math.ceil(size / 4));
   }
@@ -139,7 +138,7 @@ export class ScriptedLLMProvider implements LLMProvider {
     return {
       kind: "error",
       error: new LLMProviderError("scripted", {
-        message: `Script épuisé après ${String(this.#index - 1)} tour(s) : le cœur agent a appelé le modèle plus souvent que prévu.`,
+        message: `Script exhausted after ${String(this.#index - 1)} turn(s): the agent core called the model more times than expected.`,
         retryable: false,
       }),
     };
@@ -147,7 +146,7 @@ export class ScriptedLLMProvider implements LLMProvider {
 
   #hang(signal: AbortSignal | undefined): Promise<never> {
     return new Promise<never>((_resolve, reject) => {
-      if (signal === undefined) return; // ne résout jamais — volontaire
+      if (signal === undefined) return; // intentionally never resolves
       if (signal.aborted) {
         reject(new DOMException("aborted", "AbortError"));
         return;

@@ -5,19 +5,19 @@ import type { GenerateRequest, GenerateResponse, StreamChunk } from "../types.js
 import { toolInputJsonSchema } from "../json-schema.js";
 
 export interface CliProviderOptions {
-  /** Commande CLI principale (ex: 'claude', 'gemini') */
+  /** Primary CLI executable (e.g., 'claude', 'gemini') */
   command: string;
   id: string;
   model: string;
-  /** Timeout de l'exécution en ms (défaut: 60s) */
+  /** Execution timeout in ms (default: 60s) */
   timeoutMs?: number;
-  /** Arguments optionnels à préfixer (ex: ['-y', 'claude-code']) */
+  /** Optional CLI prefix arguments (e.g., ['-y', 'claude-code']) */
   argsPrefix?: string[];
 }
 
 /**
- * Fournisseur basé sur une interface CLI (ex: claude-code, gemini-cli).
- * Permet d'utiliser des modèles sans payer l'API, via les CLIs officiels locaux.
+ * Provider backed by a local CLI interface (e.g. claude-code, gemini-cli).
+ * Enables running models via official local CLI tools.
  */
 export class CliProvider implements LLMProvider {
   readonly id: string;
@@ -43,12 +43,12 @@ export class CliProvider implements LLMProvider {
 
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
     const prompt = this.#buildPrompt(request);
-    // On passe le prompt en paramètre (-p). Adaptable selon le CLI.
+    // Pass prompt via parameter (-p).
     const result = await this.#execute([...this.argsPrefix, "-p", prompt], request.signal);
     return {
       content: [{ type: "text", text: result }],
       stopReason: "end_turn",
-      usage: { inputTokens: 0, outputTokens: 0 }, // Les CLIs n'exposent pas toujours les tokens
+      usage: { inputTokens: 0, outputTokens: 0 },
       model: this.model,
     };
   }
@@ -66,9 +66,9 @@ export class CliProvider implements LLMProvider {
     const schemaJson = JSON.stringify(toolInputJsonSchema(schema), null, 2);
     const systemMsg =
       (request.system ?? "") +
-      "\n\nIMPORTANT: Tu dois ABSOLUMENT et UNIQUEMENT répondre avec un objet JSON strict correspondant exactement à ce schema:\n" +
+      "\n\nIMPORTANT: You must respond ONLY with a strict JSON object exactly matching this schema:\n" +
       schemaJson +
-      "\nNe mets AUCUN texte (ni backticks) avant ou après le JSON.";
+      "\nDo not include any text or backticks before or after the JSON.";
     const customRequest = {
       ...request,
       system: systemMsg,
@@ -84,7 +84,7 @@ export class CliProvider implements LLMProvider {
       return schema.parse(parsed);
     } catch (err: unknown) {
       throw new LLMProviderError(this.id, {
-        message: "La sortie du CLI n'a pas respecté le schéma attendu",
+        message: "CLI output did not conform to expected schema",
         cause: err,
         retryable: true,
       });
@@ -119,7 +119,7 @@ export class CliProvider implements LLMProvider {
           proc.kill("SIGTERM");
           reject(
             new LLMProviderError(this.id, {
-              message: "Timeout de " + this.timeoutMs + "ms dépassé",
+              message: "Timeout of " + this.timeoutMs + "ms exceeded",
               retryable: true,
             }),
           );
@@ -139,7 +139,7 @@ export class CliProvider implements LLMProvider {
         if (err.name === "AbortError" || err.code === "ABORT_ERR") {
           reject(
             new LLMProviderError(this.id, {
-              message: "Génération annulée",
+              message: "Generation cancelled",
               retryable: false,
               cause: err,
             }),
@@ -147,8 +147,7 @@ export class CliProvider implements LLMProvider {
         } else if (err.code === "ENOENT") {
           reject(
             new LLMProviderError(this.id, {
-              message:
-                "Provider indisponible : la commande '" + this.command + "' n'est pas trouvée",
+              message: "Provider unavailable: command '" + this.command + "' not found",
               retryable: false,
               cause: err,
             }),
@@ -156,7 +155,7 @@ export class CliProvider implements LLMProvider {
         } else {
           reject(
             new LLMProviderError(this.id, {
-              message: "Erreur CLI: " + err.message,
+              message: "CLI error: " + err.message,
               retryable: true,
               cause: err,
             }),
@@ -169,7 +168,7 @@ export class CliProvider implements LLMProvider {
         if (code !== 0) {
           reject(
             new LLMProviderError(this.id, {
-              message: "Le CLI a échoué (code " + code + "): " + stderr,
+              message: "CLI execution failed (code " + code + "): " + stderr,
               retryable: true,
             }),
           );

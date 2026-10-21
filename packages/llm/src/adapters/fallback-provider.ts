@@ -3,21 +3,21 @@ import { LLMProviderError, type LLMProvider, type ProviderCapabilities } from ".
 import type { GenerateRequest, GenerateResponse, StreamChunk } from "../types.js";
 
 /**
- * Routeur de fallback minimal.
- * Tente les providers dans l'ordre fourni.
- * Ne décide d'aucune logique métier (permissions, sécurité).
+ * Minimal fallback router.
+ * Attempts providers in sequential order.
+ * Implements no domain business logic (permissions, security).
  */
 export type FallbackStrategy = "sequential" | "random" | "fastest";
 
 export class FallbackProvider implements LLMProvider {
   readonly id = "fallback-router";
 
-  // On prend le modèle du premier provider pour satisfaire l'interface
+  // Use first provider's model to satisfy interface
   get model(): string {
     return this.providers[0]?.model ?? "unknown";
   }
 
-  // On expose les capacités de l'intersection ou du premier
+  // Expose union of provider capabilities
   get capabilities(): ProviderCapabilities {
     return {
       tools: this.providers.some((p) => p.capabilities.tools ?? false),
@@ -33,7 +33,7 @@ export class FallbackProvider implements LLMProvider {
   constructor(providers: LLMProvider[]) {
     this.providers = providers;
     if (providers.length === 0) {
-      throw new Error("FallbackProvider requiert au moins un provider.");
+      throw new Error("FallbackProvider requires at least one provider.");
     }
   }
 
@@ -49,16 +49,16 @@ export class FallbackProvider implements LLMProvider {
         };
       } catch (error) {
         lastError = error;
-        // Si l'erreur est non-retryable (ex: abort, ou credentials invalides), on arrête
+        // Non-retryable error (abort, bad auth, etc.) stops immediately
         if (error instanceof LLMProviderError && !error.retryable) {
           throw error;
         }
-        // Sinon, on continue avec le prochain
+        // Otherwise continue to next fallback
       }
     }
 
     throw new LLMProviderError(this.id, {
-      message: "Tous les providers de fallback ont échoué.",
+      message: "All fallback providers failed.",
       retryable: false,
       cause: lastError,
     });
@@ -70,13 +70,11 @@ export class FallbackProvider implements LLMProvider {
     for (const [index, provider] of this.providers.entries()) {
       try {
         const iterable = provider.stream(request);
-        // On vérifie le premier yield pour s'assurer que ça ne crash pas
         const iterator = iterable[Symbol.asyncIterator]();
         const first = await iterator.next();
 
         if (!first.done) {
           yield withFallbackCount(first.value, index);
-          // On continue de yield le reste
           while (true) {
             const next = await iterator.next();
             if (next.done) break;
@@ -93,7 +91,7 @@ export class FallbackProvider implements LLMProvider {
     }
 
     throw new LLMProviderError(this.id, {
-      message: "Tous les providers de fallback ont échoué lors du stream.",
+      message: "All fallback providers failed during streaming.",
       retryable: false,
       cause: lastError,
     });
@@ -114,7 +112,7 @@ export class FallbackProvider implements LLMProvider {
     }
 
     throw new LLMProviderError(this.id, {
-      message: "Tous les providers de fallback ont échoué pour la sortie structurée.",
+      message: "All fallback providers failed for structured output.",
       retryable: false,
       cause: lastError,
     });

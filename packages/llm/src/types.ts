@@ -1,8 +1,8 @@
 /**
- * Format neutre des messages.
+ * Neutral message format.
  *
- * Aucun type de ce fichier n'appartient à un fournisseur : c'est ce qui permet
- * à `@nexus/agent-core` de raisonner sans jamais importer de SDK (cf. ADR-004).
+ * No type in this file belongs to any provider: this allows
+ * `@nexus/agent-core` to reason without importing any SDK (cf. ADR-004).
  */
 
 export type MessageRole = "system" | "user" | "assistant" | "tool";
@@ -14,17 +14,17 @@ export interface TextBlock {
 
 export interface ToolCallBlock {
   type: "tool_call";
-  /** Identifiant émis par le fournisseur ; il rattache le résultat à l'appel. */
+  /** Identifier emitted by the provider, linking result to invocation. */
   id: string;
   name: string;
-  /** Arguments bruts, non validés. Le schéma de l'outil fait foi. */
+  /** Raw arguments, unvalidated. The tool schema is authoritative. */
   arguments: unknown;
 }
 
 export interface ToolResultBlock {
   type: "tool_result";
   toolCallId: string;
-  /** Projection bornée pour le modèle, jamais la sortie complète de l'outil. */
+  /** Bounded projection for the model, never the raw tool output. */
   content: string;
   isError: boolean;
 }
@@ -35,21 +35,21 @@ export interface LlmMessage {
   role: MessageRole;
   content: ContentBlock[];
   /**
-   * Blocs opaques propres au fournisseur (blocs de raisonnement, signatures…),
-   * rendus par l'adaptateur et rejoués tels quels au tour suivant.
+   * Opaque provider-specific blocks (reasoning blocks, signatures, etc.),
+   * returned by the adapter and replayed verbatim on subsequent turns.
    *
-   * Le cœur agent ne les lit **jamais** ; il les transporte. Sans ce canal, un
-   * modèle à raisonnement étendu perdrait ses blocs entre deux tours et le
-   * fournisseur rejetterait la requête.
+   * The agent core NEVER inspects them; it only transports them. Without this
+   * channel, extended-thinking models would lose blocks between turns and the
+   * provider would reject the conversation.
    */
   providerBlocks?: unknown;
 }
 
-/** Description d'un outil telle que le modèle la reçoit. */
+/** Description of a tool as presented to the model. */
 export interface LlmToolSpec {
   name: string;
   description: string;
-  /** JSON Schema dérivé du schéma Zod de l'outil. */
+  /** JSON Schema derived from the tool's Zod schema. */
   inputSchema: Record<string, unknown>;
 }
 
@@ -61,14 +61,14 @@ export interface TokenUsage {
 }
 
 export type StopReason =
-  "end_turn" | "tool_call" | "max_tokens" | "stop_sequence" | "refusal" | "aborted";
+  | "end_turn" | "tool_call" | "max_tokens" | "stop_sequence" | "refusal" | "aborted";
 
 export interface GenerateRequest {
   messages: LlmMessage[];
   system?: string;
   tools?: LlmToolSpec[];
   maxTokens?: number;
-  /** Options propres à un adaptateur. Jamais lues par le cœur agent. */
+  /** Adapter-specific options. Never inspected by the agent core. */
   providerOptions?: Record<string, unknown>;
   signal?: AbortSignal;
 }
@@ -79,7 +79,7 @@ export interface GenerateResponse {
   stopReason: StopReason;
   usage: TokenUsage;
   model: string;
-  /** Nombre de fournisseurs ignorés avant d'obtenir cette réponse. */
+  /** Number of fallback providers skipped before obtaining this response. */
   fallbackCount?: number;
 }
 
@@ -88,7 +88,7 @@ export type StreamChunk =
   | { type: "tool_call"; call: ToolCallBlock }
   | { type: "done"; response: GenerateResponse };
 
-/** Extrait le texte concaténé d'une liste de blocs. */
+/** Extracts concatenated text from a list of blocks. */
 export function textOf(content: readonly ContentBlock[]): string {
   return content
     .filter((block): block is TextBlock => block.type === "text")
@@ -96,7 +96,7 @@ export function textOf(content: readonly ContentBlock[]): string {
     .join("");
 }
 
-/** Extrait les appels d'outil d'une liste de blocs. */
+/** Extracts tool calls from a list of blocks. */
 export function toolCallsOf(content: readonly ContentBlock[]): ToolCallBlock[] {
   return content.filter((block): block is ToolCallBlock => block.type === "tool_call");
 }

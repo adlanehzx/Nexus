@@ -25,13 +25,8 @@ type MockProcess = ChildProcess & {
 };
 
 /**
- * Un faux processus enfant.
- *
- * Les flux sont de simples `EventEmitter` : les adaptateurs n'écoutent que
- * `data` et `close`, et rien ici n'a besoin d'un vrai `Readable`. La conversion
- * a lieu **une seule fois, sur l'objet fini** — l'affecter propriété par
- * propriété obligeait chaque flux à satisfaire `Readable` en entier, ce qui
- * n'apportait aucune garantie et refusait de compiler.
+ * Mock child process.
+ * Streams are simple EventEmitters since adapters only listen to data and close.
  */
 function createMockProcess(): MockProcess {
   return Object.assign(new EventEmitter(), {
@@ -47,7 +42,7 @@ describe("LLM Providers Phase 2", () => {
   });
 
   describe("CliProvider (Claude / Gemini)", () => {
-    test("Doit lancer la commande correctement et retourner le texte", async () => {
+    test("runs command properly and returns output text", async () => {
       const mockProc = createMockProcess();
 
       vi.mocked(spawn).mockReturnValue(mockProc);
@@ -72,7 +67,7 @@ describe("LLM Providers Phase 2", () => {
       );
     });
 
-    test("Doit throw une erreur retryable si exit code non nul", async () => {
+    test("throws retryable error on non-zero exit code", async () => {
       const mockProc = createMockProcess();
 
       vi.mocked(spawn).mockReturnValue(mockProc);
@@ -89,7 +84,7 @@ describe("LLM Providers Phase 2", () => {
       await expect(promise).rejects.toMatchObject({ retryable: true });
     });
 
-    test("Doit retourner un JSON valide via structuredOutput", async () => {
+    test("returns valid JSON via structuredOutput", async () => {
       const mockProc = createMockProcess();
 
       vi.mocked(spawn).mockReturnValue(mockProc);
@@ -100,8 +95,7 @@ describe("LLM Providers Phase 2", () => {
         schema,
       );
 
-      // Simuler une réponse JSON encapsulée dans du texte
-      mockProc.stdout.emit("data", Buffer.from('Voici le json:\n{ "result": "ok" }\nAu revoir.'));
+      mockProc.stdout.emit("data", Buffer.from('Here is the json:\n{ "result": "ok" }\nGoodbye.'));
       mockProc.emit("close", 0);
 
       const res = await promise;
@@ -110,7 +104,7 @@ describe("LLM Providers Phase 2", () => {
   });
 
   describe("LocalLLMProvider", () => {
-    test("Vérifie les propriétés", () => {
+    test("verifies provider properties", () => {
       const provider = new LocalLLMProvider({ baseURL: "http://localhost:9999" });
       expect(provider.baseURL).toBe("http://localhost:9999");
       expect(provider.id).toBe("local-llm");
@@ -118,7 +112,7 @@ describe("LLM Providers Phase 2", () => {
   });
 
   describe("FallbackProvider", () => {
-    test("Doit passer au suivant si le premier échoue (retryable)", async () => {
+    test("falls back to next provider on retryable error", async () => {
       const failingProvider: LLMProvider = {
         id: "fail",
         model: "fail",
@@ -159,7 +153,7 @@ describe("LLM Providers Phase 2", () => {
       expect(res.fallbackCount).toBe(1);
     });
 
-    test("Doit crasher directement si l'erreur n'est pas retryable", async () => {
+    test("fails immediately on non-retryable error", async () => {
       const fatalProvider: LLMProvider = {
         id: "fatal",
         model: "fatal",

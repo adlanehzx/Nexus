@@ -10,11 +10,11 @@ export interface ProviderCapabilities {
 }
 
 /**
- * Port `LLMProvider` — cf. ADR-004.
+ * `LLMProvider` port — cf. ADR-004.
  *
- * Quatre méthodes, pas une de plus. Le reste de l'application ne dépend jamais
- * d'un SDK : changer de modèle ou de fournisseur doit rester une ligne de
- * configuration, pas une réécriture.
+ * Four methods, nothing more. The rest of the application never depends on a
+ * vendor SDK: switching models or providers remains a configuration change,
+ * never a rewrite.
  */
 export interface LLMProvider {
   readonly id: string;
@@ -28,11 +28,11 @@ export interface LLMProvider {
 }
 
 /**
- * Échec côté fournisseur.
+ * Provider-side failure.
  *
- * `retryable` distingue ce qui vaut la peine d'être retenté (429, 5xx, réseau)
- * de ce qui échouera identiquement (400, clé invalide). La boucle agent s'appuie
- * dessus pour décider d'abandonner proprement plutôt que de brûler du budget.
+ * `retryable` distinguishes transient errors (429, 5xx, network) from
+ * permanent failures (400, invalid auth). The agent loop relies on this to
+ * fail cleanly rather than burning through budget.
  */
 export class LLMProviderError extends AppError {
   readonly code = "LLM_PROVIDER_ERROR";

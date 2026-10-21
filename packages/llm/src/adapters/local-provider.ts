@@ -10,8 +10,7 @@ export interface LocalLLMProviderOptions {
 }
 
 /**
- * Abstraction minimale pour un provider local (ex: Ollama, LMStudio) via API HTTP locale.
- * Permet de se connecter ultérieurement à un runtime local.
+ * Minimal abstraction for a local provider (e.g. Ollama, LMStudio) via local HTTP API.
  */
 export class LocalLLMProvider implements LLMProvider {
   readonly id = "local-llm";
@@ -28,20 +27,19 @@ export class LocalLLMProvider implements LLMProvider {
 
   constructor(options: LocalLLMProviderOptions = {}) {
     this.model = options.model ?? "local-model";
-    this.baseURL = options.baseURL ?? "http://127.0.0.1:11434"; // Defaut style Ollama
+    this.baseURL = options.baseURL ?? "http://127.0.0.1:11434"; // Default Ollama URL
     this.timeoutMs = options.timeoutMs ?? 60_000;
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
     const prompt = this.#buildPrompt(request);
 
-    // Polyfill minimal timeout si request.signal n'est pas fourni
+    // Minimal timeout polyfill if request.signal is not provided
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const signal = request.signal ?? controller.signal;
 
     try {
-      // Abstraction basée sur un standard `/api/generate`
       const res = await fetch(this.baseURL + "/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -57,7 +55,7 @@ export class LocalLLMProvider implements LLMProvider {
 
       if (!res.ok) {
         throw new LLMProviderError(this.id, {
-          message: "Le provider local a répondu avec " + res.status,
+          message: "Local provider responded with " + res.status,
           retryable: res.status >= 500 || res.status === 429,
         });
       }
@@ -74,13 +72,13 @@ export class LocalLLMProvider implements LLMProvider {
       const e = error as Error & { name?: string };
       if (e.name === "AbortError" || e.name === "TimeoutError") {
         throw new LLMProviderError(this.id, {
-          message: "Requête locale annulée ou timeout",
+          message: "Local request cancelled or timed out",
           retryable: false,
           cause: e,
         });
       }
       throw new LLMProviderError(this.id, {
-        message: "Erreur de connexion au provider local: " + e.message,
+        message: "Failed to connect to local provider: " + e.message,
         retryable: true,
         cause: e,
       });
@@ -102,7 +100,7 @@ export class LocalLLMProvider implements LLMProvider {
       ...request,
       system:
         (request.system ?? "") +
-        "\n\nIMPORTANT: Tu dois ABSOLUMENT répondre avec un JSON strict correspondant à:\n" +
+        "\n\nIMPORTANT: You must respond ONLY with strict JSON matching:\n" +
         schemaJson,
     };
 
@@ -115,7 +113,7 @@ export class LocalLLMProvider implements LLMProvider {
       return schema.parse(parsed);
     } catch (err: unknown) {
       throw new LLMProviderError(this.id, {
-        message: "Sortie JSON invalide du LLM local",
+        message: "Invalid JSON output from local LLM",
         cause: err,
         retryable: true,
       });
