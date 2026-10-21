@@ -6,10 +6,10 @@ import { NEXUS_EVENT_TYPES, nexusEventSchema, parseNexusEvent } from "@nexus/pro
 import { DESKTOP, IPHONE, USER_ID, makeHarness, setupFleet } from "./fixtures.js";
 
 /**
- * Authentification d'appareil, anti-rejeu, rotation.
+ * Device authentication, anti-replay, and session rotation.
  *
- * Le principe éprouvé ici : **un identifiant d'appareil n'authentifie rien**. Il
- * est public. Seule la possession de la clé privée fait foi.
+ * Core invariant: a device ID never authenticates itself. It is public metadata.
+ * Proof of possession of the private key is required.
  */
 
 function makeKeyPair() {
@@ -25,8 +25,8 @@ function makeService(h: ReturnType<typeof makeHarness>) {
   return new DeviceSessionService({ registry: h.registry, now: () => h.clock.now });
 }
 
-describe("authentification d'appareil", () => {
-  it("ouvre une session sur un challenge correctement signé", async () => {
+describe("device authentication", () => {
+  it("opens a session upon validly signed challenge", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const keys = makeKeyPair();
@@ -39,17 +39,16 @@ describe("authentification d'appareil", () => {
     );
 
     expect(session.deviceId).toBe(DESKTOP.id);
-    // Seule l'empreinte est conservée : le jeton n'est rendu qu'une fois.
     expect(session.tokenHash).toBe(hashToken(token));
     expect(JSON.stringify(session)).not.toContain(token);
     expect((await h.registry.requireDevice(DESKTOP.id)).authenticated).toBe(true);
   });
 
-  it("refuse une signature invalide", async () => {
+  it("rejects an invalid signature", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const keys = makeKeyPair();
-    const intrus = makeKeyPair();
+    const intruder = makeKeyPair();
     const service = makeService(h);
 
     const challenge = await service.createChallenge(DESKTOP.id);
@@ -59,14 +58,14 @@ describe("authentification d'appareil", () => {
         {
           deviceId: DESKTOP.id,
           nonce: challenge.nonce,
-          signature: intrus.signNonce(challenge.nonce),
+          signature: intruder.signNonce(challenge.nonce),
         },
         keys.publicPem,
       ),
     ).rejects.toBeInstanceOf(DeviceAuthenticationError);
   });
 
-  it("consomme le nonce, même quand la signature est fausse", async () => {
+  it("consumes nonce even when signature verification fails", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const keys = makeKeyPair();
@@ -75,12 +74,11 @@ describe("authentification d'appareil", () => {
     const challenge = await service.createChallenge(DESKTOP.id);
     await service
       .authenticate(
-        { deviceId: DESKTOP.id, nonce: challenge.nonce, signature: "invalide" },
+        { deviceId: DESKTOP.id, nonce: challenge.nonce, signature: "invalid" },
         keys.publicPem,
       )
       .catch(() => undefined);
 
-    // Sinon un attaquant pourrait forcer le même nonce autant de fois qu'il veut.
     await expect(
       service.authenticate(
         {
@@ -93,7 +91,7 @@ describe("authentification d'appareil", () => {
     ).rejects.toBeInstanceOf(ReplayRejectedError);
   });
 
-  it("refuse un challenge expiré", async () => {
+  it("rejects an expired challenge", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const keys = makeKeyPair();
@@ -114,7 +112,7 @@ describe("authentification d'appareil", () => {
     ).rejects.toBeInstanceOf(ReplayRejectedError);
   });
 
-  it("refuse d'authentifier un appareil révoqué", async () => {
+  it("refuses to authenticate a revoked device", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     await h.registry.revokeDevice(DESKTOP.id);
@@ -125,7 +123,7 @@ describe("authentification d'appareil", () => {
     );
   });
 
-  it("refuse d'authentifier un appareil pas encore approuvé", async () => {
+  it("refuses to authenticate an unapproved device", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [], trusted: [] });
     const keys = makeKeyPair();
@@ -145,7 +143,7 @@ describe("authentification d'appareil", () => {
     ).rejects.toBeInstanceOf(DeviceAuthenticationError);
   });
 
-  it("borne les capacités négociées à celles déclarées", async () => {
+  it("bounds negotiated capabilities to registered capabilities", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const keys = makeKeyPair();
@@ -157,13 +155,11 @@ describe("authentification d'appareil", () => {
         deviceId: DESKTOP.id,
         nonce: challenge.nonce,
         signature: keys.signNonce(challenge.nonce),
-        // Le worker réclame une capacité qu'il n'a jamais enregistrée.
         capabilities: ["terminal.execute", "android.notification"],
       },
       keys.publicPem,
     );
 
-    // Il ne peut pas s'accorder de pouvoirs en se connectant.
     expect(session.capabilities).toEqual(["terminal.execute"]);
   });
 });
@@ -180,16 +176,16 @@ describe("sessions", () => {
     return { service, issued };
   }
 
-  it("résout un jeton valide", async () => {
+  it("resolves a valid token", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const { service, issued } = await openSession(h);
 
     expect(await service.resolve(issued.token)).toBeDefined();
-    expect(await service.resolve("jeton-inventé")).toBeUndefined();
+    expect(await service.resolve("fabricated-token")).toBeUndefined();
   });
 
-  it("invalide un jeton expiré", async () => {
+  it("invalidates expired token", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const { service, issued } = await openSession(h);
@@ -198,7 +194,7 @@ describe("sessions", () => {
     expect(await service.resolve(issued.token)).toBeUndefined();
   });
 
-  it("invalide immédiatement les sessions d'un appareil révoqué", async () => {
+  it("immediately invalidates active sessions for revoked devices", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const { service, issued } = await openSession(h);
@@ -206,12 +202,10 @@ describe("sessions", () => {
 
     await h.registry.revokeDevice(DESKTOP.id);
 
-    // Une révocation prend effet sur une session déjà ouverte, pas à la
-    // prochaine reconnexion.
     expect(await service.resolve(issued.token)).toBeUndefined();
   });
 
-  it("fait tourner le jeton et invalide l'ancien", async () => {
+  it("rotates token and invalidates predecessor", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const { service, issued } = await openSession(h);
@@ -220,12 +214,11 @@ describe("sessions", () => {
 
     expect(rotated.token).not.toBe(issued.token);
     expect(rotated.session.rotatedFromId).toBe(issued.session.id);
-    // À aucun moment deux jetons ne sont valides pour le même appareil.
     expect(await service.resolve(issued.token)).toBeUndefined();
     expect(await service.resolve(rotated.token)).toBeDefined();
   });
 
-  it("ferme toutes les sessions d'un appareil", async () => {
+  it("terminates all sessions for a device", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP], online: [] });
     const { service, issued } = await openSession(h);
@@ -236,8 +229,8 @@ describe("sessions", () => {
   });
 });
 
-describe("anti-rejeu", () => {
-  it("refuse un identifiant de requête déjà vu", () => {
+describe("anti-replay", () => {
+  it("rejects duplicate request IDs", () => {
     const h = makeHarness();
     const service = makeService(h);
 
@@ -245,26 +238,25 @@ describe("anti-rejeu", () => {
     expect(() => service.assertNotReplayed("req-1", h.clock.now)).toThrow(ReplayRejectedError);
   });
 
-  it("refuse un horodatage hors de la fenêtre tolérée", () => {
+  it("rejects timestamps outside tolerated drift window", () => {
     const h = makeHarness();
     const service = makeService(h);
 
-    const vieux = new Date(h.clock.now.getTime() - 5 * 60_000);
-    expect(() => service.assertNotReplayed("req-2", vieux)).toThrow(ReplayRejectedError);
+    const stale = new Date(h.clock.now.getTime() - 5 * 60_000);
+    expect(() => service.assertNotReplayed("req-2", stale)).toThrow(ReplayRejectedError);
   });
 
-  it("compare les jetons en temps constant", () => {
+  it("compares tokens in constant time", () => {
     expect(DeviceSessionService.tokensMatch("abc", "abc")).toBe(true);
     expect(DeviceSessionService.tokensMatch("abc", "abd")).toBe(false);
-    // Longueurs différentes : refus sans comparaison, donc sans fuite de temps.
     expect(DeviceSessionService.tokensMatch("abc", "abcd")).toBe(false);
   });
 });
 
-describe("contrat d'événements", () => {
-  it("expose toutes les familles annoncées", () => {
-    const familles = new Set(NEXUS_EVENT_TYPES.map((t) => t.split(".")[0]));
-    expect([...familles].sort()).toEqual([
+describe("event contract", () => {
+  it("exposes all defined event families", () => {
+    const families = new Set(NEXUS_EVENT_TYPES.map((t) => t.split(".")[0]));
+    expect([...families].sort()).toEqual([
       "agent",
       "confirmation",
       "device",
@@ -274,7 +266,7 @@ describe("contrat d'événements", () => {
     ]);
   });
 
-  it("valide un événement bien formé", () => {
+  it("validates well-formed events", () => {
     const event = nexusEventSchema.parse({
       v: 1,
       id: "evt-1",
@@ -290,7 +282,7 @@ describe("contrat d'événements", () => {
     expect(event.originClientDeviceId).toBe(IPHONE.id);
   });
 
-  it("refuse une version de schéma différente", () => {
+  it("rejects differing schema versions", () => {
     const result = nexusEventSchema.safeParse({
       v: 2,
       id: "evt-1",
@@ -304,14 +296,12 @@ describe("contrat d'événements", () => {
     expect(result.success).toBe(false);
   });
 
-  it("ignore un type inconnu au lieu de lever", () => {
-    // C'est ce qui permet d'ajouter des événements sans casser un client déjà
-    // déployé sur le magasin d'applications.
+  it("ignores unknown event types gracefully", () => {
     expect(
       parseNexusEvent({
         v: 1,
         id: "e",
-        type: "quelque.chose.de.futur",
+        type: "future.unknown.event",
         at: "2026-09-02T10:00:00.000Z",
         userId: USER_ID,
         correlationId: "c",

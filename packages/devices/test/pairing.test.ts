@@ -13,9 +13,11 @@ import {
 } from "../src/pairing.js";
 
 /**
- * Ce qui est éprouvé ici est la **promesse**, pas l'implémentation : un ticket
- * ne sert qu'une fois, ne survit pas à sa durée de vie, n'est jamais au repos
- * en clair, et ne laisse pas son porteur choisir le propriétaire de l'appareil.
+ * Pairing guarantees:
+ * - One-time use tickets
+ * - Strict TTL enforcement
+ * - Secrets hashed at rest
+ * - Scanner cannot forge device owner identity
  */
 
 function makeService(options: { now?: () => Date; code?: string } = {}) {
@@ -28,35 +30,35 @@ function makeService(options: { now?: () => Date; code?: string } = {}) {
   return { store, service };
 }
 
-describe("émission d'un ticket", () => {
-  it("rend le code une seule fois et ne stocke que son empreinte", async () => {
+describe("issuing a ticket", () => {
+  it("yields the plaintext code once and stores only its hash", async () => {
     const { store, service } = makeService();
     const { ticket, code } = await service.issue({ userId: "u1" });
 
     expect(code.length).toBeGreaterThanOrEqual(40);
     expect(ticket.codeHash).toBe(hashPairingCode(code));
 
-    // Le point qui compte : le code en clair n'est nulle part dans le magasin.
+    // Plaintext code is never persisted.
     const stored = JSON.stringify(await store.listByUser("u1"));
     expect(stored).not.toContain(code);
     expect(stored).toContain(ticket.codeHash);
   });
 
-  it("porte l'identité du propriétaire, que le scanneur ne choisit pas", async () => {
+  it("carries owner identity which scanner cannot override", async () => {
     const { service } = makeService();
-    const { code } = await service.issue({ userId: "proprietaire" });
+    const { code } = await service.issue({ userId: "owner" });
     const redeemed = await service.redeem(code);
-    expect(redeemed.userId).toBe("proprietaire");
+    expect(redeemed.userId).toBe("owner");
   });
 
-  it("expire cinq minutes après son émission", async () => {
+  it("expires five minutes after issuance", async () => {
     const start = new Date("2026-10-21T10:00:00Z");
     const { service } = makeService({ now: () => start });
     const { ticket } = await service.issue({ userId: "u1" });
     expect(ticket.expiresAt.getTime() - start.getTime()).toBe(PAIRING_TICKET_TTL_MS);
   });
 
-  it("tire un code différent à chaque émission", async () => {
+  it("generates a distinct code for each issuance", async () => {
     const { service } = makeService();
     const first = await service.issue({ userId: "u1" });
     const second = await service.issue({ userId: "u1" });
@@ -65,28 +67,28 @@ describe("émission d'un ticket", () => {
   });
 });
 
-describe("usage d'un ticket", () => {
-  it("refuse un code inconnu", async () => {
+describe("ticket redemption", () => {
+  it("rejects unknown code", async () => {
     const { service } = makeService();
     await expect(service.redeem(newPairingCode())).rejects.toBeInstanceOf(
       PairingTicketInvalidError,
     );
   });
 
-  it("refuse un second usage", async () => {
+  it("rejects reuse of a consumed ticket", async () => {
     const { service } = makeService();
     const { ticket, code } = await service.issue({ userId: "u1" });
-    await service.complete(await service.redeem(code), "appareil-1");
+    await service.complete(await service.redeem(code), "device-1");
 
     await expect(service.redeem(code)).rejects.toMatchObject({
       code: "PAIRING_TICKET_INVALID",
     });
     const [summary] = await service.list(ticket.userId);
     expect(summary?.status).toBe("consumed");
-    expect(summary?.deviceId).toBe("appareil-1");
+    expect(summary?.deviceId).toBe("device-1");
   });
 
-  it("refuse un ticket périmé", async () => {
+  it("rejects expired ticket", async () => {
     let instant = new Date("2026-10-21T10:00:00Z");
     const { service } = makeService({ now: () => instant });
     const { code } = await service.issue({ userId: "u1" });
@@ -97,16 +99,14 @@ describe("usage d'un ticket", () => {
     });
   });
 
-  it("ne dit pas au porteur pourquoi son code est refusé", async () => {
+  it("returns uniform user message regardless of internal rejection reason", async () => {
     const { service } = makeService();
     const { code } = await service.issue({ userId: "u1" });
-    await service.complete(await service.redeem(code), "appareil-1");
+    await service.complete(await service.redeem(code), "device-1");
 
     const consumed = await service.redeem(code).catch((error: unknown) => error);
     const unknown = await service.redeem(newPairingCode()).catch((error: unknown) => error);
 
-    // Deux motifs distincts dans le contexte, un seul message pour le porteur :
-    // « expiré » apprendrait à qui tâtonne qu'il a touché un vrai ticket.
     expect((consumed as PairingTicketInvalidError).context).toMatchObject({ reason: "consumed" });
     expect((unknown as PairingTicketInvalidError).context).toMatchObject({ reason: "unknown" });
     expect((consumed as PairingTicketInvalidError).userMessage).toBe(
@@ -114,7 +114,7 @@ describe("usage d'un ticket", () => {
     );
   });
 
-  it("l'état d'un ticket non utilisé bascule à « expiré » sans intervention", async () => {
+  it("transitions unused tickets to expired automatically", async () => {
     let instant = new Date("2026-10-21T10:00:00Z");
     const { service } = makeService({ now: () => instant });
     await service.issue({ userId: "u1" });
@@ -125,16 +125,16 @@ describe("usage d'un ticket", () => {
   });
 });
 
-describe("nettoyage", () => {
-  it("efface les tickets consommés et périmés, garde ceux en cours", async () => {
+describe("pruning", () => {
+  it("deletes consumed and expired tickets while retaining active ones", async () => {
     let instant = new Date("2026-10-21T10:00:00Z");
     const { store, service } = makeService({ now: () => instant });
 
     const consumed = await service.issue({ userId: "u1" });
-    await service.complete(await service.redeem(consumed.code), "appareil-1");
-    await service.issue({ userId: "u1" }); // périmera
+    await service.complete(await service.redeem(consumed.code), "device-1");
+    await service.issue({ userId: "u1" }); // will expire
     instant = new Date(instant.getTime() + PAIRING_TICKET_TTL_MS + 1);
-    await service.issue({ userId: "u1" }); // encore valable
+    await service.issue({ userId: "u1" }); // still active
 
     expect(await service.prune()).toBe(2);
     expect(store.size).toBe(1);
@@ -142,37 +142,35 @@ describe("nettoyage", () => {
   });
 });
 
-describe("charge utile du QR", () => {
-  it("fait l'aller-retour", () => {
-    const payload = { apiUrl: "https://nexus.exemple.test", token: "jeton-abc" };
+describe("QR payload", () => {
+  it("roundtrips correctly", () => {
+    const payload = { apiUrl: "https://nexus.example.test", token: "token-abc" };
     expect(decodePairingPayload(encodePairingPayload(payload))).toEqual(payload);
   });
 
-  it("n'est pas une URL web", () => {
+  it("is not a standard web URL", () => {
     const text = encodePairingPayload({ apiUrl: "https://a.test", token: "t" });
     expect(text.startsWith("nexus://pair")).toBe(true);
   });
 
-  it("refuse un QR qui n'est pas un QR d'appairage", () => {
-    expect(() => decodePairingPayload("https://exemple.test/?token=t&api=https://a.test")).toThrow(
+  it("rejects non-pairing QR payloads", () => {
+    expect(() => decodePairingPayload("https://example.test/?token=t&api=https://a.test")).toThrow(
       PairingPayloadError,
     );
-    expect(() => decodePairingPayload("pas une url")).toThrow(PairingPayloadError);
-    expect(() => decodePairingPayload("nexus://autre?api=https://a.test&token=t")).toThrow(
+    expect(() => decodePairingPayload("not a url")).toThrow(PairingPayloadError);
+    expect(() => decodePairingPayload("nexus://other?api=https://a.test&token=t")).toThrow(
       PairingPayloadError,
     );
   });
 
-  it("refuse une adresse d'API qui n'est pas http(s)", () => {
-    // Le QR est une donnée : sans ce garde-fou, il choisirait où l'appareil
-    // envoie sa clé publique.
+  it("rejects non-http(s) API endpoints", () => {
     for (const api of ["file:///etc/passwd", "ftp://a.test", "javascript:alert(1)"]) {
       const text = `nexus://pair?api=${encodeURIComponent(api)}&token=t`;
       expect(() => decodePairingPayload(text), api).toThrow(PairingPayloadError);
     }
   });
 
-  it("refuse une charge utile incomplète", () => {
+  it("rejects incomplete payloads", () => {
     expect(() => decodePairingPayload("nexus://pair?api=https://a.test")).toThrow(
       PairingPayloadError,
     );
@@ -180,12 +178,11 @@ describe("charge utile du QR", () => {
   });
 });
 
-describe("comparaison de codes", () => {
-  it("reconnaît deux codes identiques et distingue les autres", () => {
+describe("pairing code comparison", () => {
+  it("matches identical codes and distinguishes different ones in constant time", () => {
     const code = newPairingCode();
     expect(pairingCodesEqual(code, code)).toBe(true);
     expect(pairingCodesEqual(code, newPairingCode())).toBe(false);
-    // Longueurs différentes : la comparaison ne doit pas lever.
-    expect(pairingCodesEqual("court", code)).toBe(false);
+    expect(pairingCodesEqual("short", code)).toBe(false);
   });
 });

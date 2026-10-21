@@ -6,11 +6,10 @@ import type { NexusEvent } from "@nexus/protocol";
 import type { WorkerDispatch, WorkerResult, WorkerTransport } from "../src/coordinator.js";
 
 /**
- * Le parc de l'utilisateur, tel que décrit par l'architecture produit.
+ * User device fleet test fixtures.
  *
- * Les noms n'apparaissent **que** dans ces fixtures. Aucun test ne dit « prends
- * le poste fixe » : ils disent « prends un appareil capable de `docker.execute` »
- * et vérifient lequel est choisi. C'est la propriété qu'on veut protéger.
+ * Device names appear exclusively in these fixtures. No test hardcodes "select the desktop";
+ * they specify required capabilities (e.g., `docker.execute`) and verify correct routing.
  */
 
 export const USER_ID = "user-example";
@@ -46,7 +45,7 @@ export const CLIENT_CAPABILITIES = ["notification.push", "voice.playback"].map((
   capability(name),
 );
 
-/** Toutes les permissions du parc — pour ne pas répéter la liste dans chaque test. */
+/** Fleet permissions bundle to avoid repetitive lists in tests. */
 export const ALL_PERMISSIONS = [
   ...WORKSTATION_CAPABILITIES.map((c) => c.name),
   ...ANDROID_CAPABILITIES.map((c) => c.name),
@@ -91,7 +90,7 @@ export const IPHONE: DeviceSpec = {
 
 export const LAPTOP: DeviceSpec = {
   id: "windows-laptop",
-  name: "Portable Windows",
+  name: "Windows Laptop",
   type: "WINDOWS_PC",
   platform: "WINDOWS",
   role: "BOTH",
@@ -100,7 +99,7 @@ export const LAPTOP: DeviceSpec = {
 
 export const DESKTOP: DeviceSpec = {
   id: "windows-desktop",
-  name: "Poste fixe Windows",
+  name: "Windows Desktop",
   type: "WINDOWS_PC",
   platform: "WINDOWS",
   role: "WORKER",
@@ -117,23 +116,17 @@ export const REDMI: DeviceSpec = {
 };
 
 export interface SetupOptions {
-  /** Appareils à enregistrer. Par défaut : le parc complet. */
+  /** Devices to register. Defaults to full fleet. */
   devices?: DeviceSpec[];
-  /** Mis en ligne et authentifiés. Par défaut : tous. */
+  /** Devices marked online and authenticated. Defaults to all. */
   online?: string[];
-  /**
-   * Appareils approuvés. Par défaut : tous.
-   *
-   * Axe **distinct** de `online` : un appareil peut être de confiance et
-   * éteint, ou allumé et pas encore approuvé. Les confondre masquerait la
-   * différence entre « hors ligne » et « pas autorisé ».
-   */
+  /** Approved devices. Defaults to all. */
   trusted?: string[];
-  /** Permissions accordées à chaque appareil. Par défaut : toutes. */
+  /** Granted permissions per device. Defaults to all. */
   permissions?: Record<string, string[]>;
 }
 
-/** Enregistre le parc et met les appareils demandés en service. */
+/** Registers device fleet and puts requested devices into service. */
 export async function setupFleet(harness: Harness, options: SetupOptions = {}): Promise<void> {
   const devices = options.devices ?? [IPHONE, LAPTOP, DESKTOP, REDMI];
   const online = options.online ?? devices.map((d) => d.id);
@@ -159,15 +152,14 @@ export async function setupFleet(harness: Harness, options: SetupOptions = {}): 
         activeTasks: 0,
         maxConcurrentTasks: 2,
         cpuLoad: 0.2,
-        // Le poste fixe est sur secteur, le portable sur batterie : c'est ce qui
-        // rend la contrainte `requireMainsPower` observable.
+        // Desktop is on AC power, laptop on battery: tests requireMainsPower constraint.
         onBattery: spec.id === DESKTOP.id ? false : true,
       });
     }
   }
 }
 
-/** Client connecté qui garde ce qu'il reçoit. */
+/** Connected client collecting received events. */
 export function makeClient(deviceId: string): ClientConnection & { received: NexusEvent[] } {
   const received: NexusEvent[] = [];
   return {
@@ -180,13 +172,11 @@ export function makeClient(deviceId: string): ClientConnection & { received: Nex
   };
 }
 
-/** Transport scriptable — la frontière réellement externe d'un worker. */
+/** Scriptable worker transport mock. */
 export class FakeTransport implements WorkerTransport {
   readonly dispatched: WorkerDispatch[] = [];
   readonly cancelled: { deviceId: string; taskId: string; stepId: string }[] = [];
-  /** Réponse par outil ; à défaut, succès. */
   responses = new Map<string, WorkerResult>();
-  /** Nombre d'échecs avant succès, par outil — pour tester les reprises. */
   failuresBeforeSuccess = new Map<string, number>();
 
   dispatch(input: WorkerDispatch): Promise<WorkerResult> {
@@ -197,11 +187,11 @@ export class FakeTransport implements WorkerTransport {
       this.failuresBeforeSuccess.set(input.tool, remaining - 1);
       return Promise.resolve({
         ok: false,
-        error: { code: "WORKER_BUSY", message: "temporairement indisponible", retryable: true },
+        error: { code: "WORKER_BUSY", message: "temporarily unavailable", retryable: true },
       });
     }
 
-    input.onProgress({ percent: 50, label: `${input.tool} en cours` });
+    input.onProgress({ percent: 50, label: `${input.tool} in progress` });
     return Promise.resolve(
       this.responses.get(input.tool) ?? { ok: true, result: { tool: input.tool } },
     );

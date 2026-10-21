@@ -14,15 +14,14 @@ import {
 } from "./fixtures.js";
 
 /**
- * Le parc, ses rôles, et ce que la sélection en fait.
+ * Fleet device roles and worker selection behavior.
  *
- * Aucun test ne nomme un appareil dans une décision : ils déclarent des
- * capacités requises et vérifient qui est retenu. Un test qui dirait « prends le
- * poste fixe » validerait précisément ce que l'architecture interdit.
+ * No test hardcodes a specific device in a selection decision: they declare
+ * required capabilities and verify which candidate is selected based on scoring.
  */
 
-describe("rôles du parc", () => {
-  it("l'iPhone est un client, jamais un exécutant", async () => {
+describe("fleet roles", () => {
+  it("iPhone is a client, never a worker", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -32,7 +31,7 @@ describe("rôles du parc", () => {
     expect(canReceiveEvents(iphone.role)).toBe(true);
   });
 
-  it("le portable Windows est les deux à la fois", async () => {
+  it("Windows laptop is both client and worker", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -42,7 +41,7 @@ describe("rôles du parc", () => {
     expect(canReceiveEvents(laptop.role)).toBe(true);
   });
 
-  it("le poste fixe est un exécutant, pas un client", async () => {
+  it("desktop is a worker, not a client", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -52,7 +51,7 @@ describe("rôles du parc", () => {
     expect(canReceiveEvents(desktop.role)).toBe(false);
   });
 
-  it("le Redmi est un exécutant Android", async () => {
+  it("Redmi is an Android worker", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -62,23 +61,23 @@ describe("rôles du parc", () => {
     expect(canAcceptTasks(redmi.role)).toBe(true);
   });
 
-  it("range les appareils par rôle", async () => {
+  it("groups devices by role", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
     const clients = (await h.registry.getClientDevices(USER_ID)).map((d) => d.id).sort();
     const workers = (await h.registry.getWorkerDevices(USER_ID)).map((d) => d.id).sort();
 
-    // Le portable figure dans les deux listes : c'est tout l'intérêt de BOTH.
+    // Laptop appears in both lists: the core purpose of BOTH.
     expect(clients).toEqual([IPHONE.id, LAPTOP.id].sort());
     expect(workers).toEqual([DESKTOP.id, LAPTOP.id, REDMI.id].sort());
   });
 });
 
-describe("sélection de l'exécutant", () => {
-  it("ne choisit jamais un client, même s'il a la capacité", async () => {
+describe("worker selection", () => {
+  it("never selects a client, even if it has the capability", async () => {
     const h = makeHarness();
-    // L'iPhone déclare `notification.push` ; le Redmi aussi sait notifier.
+    // iPhone declares notification.push; Redmi also supports notifications.
     await setupFleet(h);
 
     const selection = await h.selector.select({
@@ -87,12 +86,12 @@ describe("sélection de l'exécutant", () => {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // L'iPhone a la capacité mais le rôle CLIENT : il est écarté d'office.
+    // iPhone has capability but role CLIENT: rejected upfront.
     expect(selection.device.id).not.toBe(IPHONE.id);
     expect(selection.rejected.find((r) => r.deviceId === IPHONE.id)?.reason).toContain("client");
   });
 
-  it("accepte le portable comme exécutant parce qu'il est BOTH", async () => {
+  it("accepts laptop as worker because role is BOTH", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [IPHONE, LAPTOP] });
 
@@ -105,7 +104,7 @@ describe("sélection de l'exécutant", () => {
     expect(selection.device.id).toBe(LAPTOP.id);
   });
 
-  it("écarte un exécutant hors ligne", async () => {
+  it("filters out offline workers", async () => {
     const h = makeHarness();
     await setupFleet(h, { online: [LAPTOP.id] });
 
@@ -119,7 +118,7 @@ describe("sélection de l'exécutant", () => {
     expect(selection.rejected.find((r) => r.deviceId === DESKTOP.id)?.reason).toBe("offline");
   });
 
-  it("écarte un exécutant en ligne mais non authentifié", async () => {
+  it("filters out online but unauthenticated workers", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
     await h.registry.setAuthenticated(DESKTOP.id, false);
@@ -134,9 +133,9 @@ describe("sélection de l'exécutant", () => {
     ).rejects.toBeInstanceOf(NoEligibleWorkerError);
   });
 
-  it("écarte un exécutant non approuvé", async () => {
+  it("filters out unapproved workers", async () => {
     const h = makeHarness();
-    // Allumé et authentifié, mais la confiance n'a jamais été donnée.
+    // Powered on and authenticated, but trust was never established.
     await setupFleet(h, { devices: [DESKTOP], trusted: [] });
 
     const error = await h.selector
@@ -151,7 +150,7 @@ describe("sélection de l'exécutant", () => {
     expect((error as NoEligibleWorkerError).userMessage).toContain("not approved yet");
   });
 
-  it("écarte un exécutant dont la permission n'est pas accordée", async () => {
+  it("filters out workers whose permissions are not granted", async () => {
     const h = makeHarness();
     await setupFleet(h, {
       devices: [DESKTOP],
@@ -166,12 +165,12 @@ describe("sélection de l'exécutant", () => {
       })
       .catch((e: unknown) => e);
 
-    // La capacité existe, l'autorisation non : savoir faire n'est pas avoir le droit.
+    // Capability is present, permission is not.
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
     expect((error as NoEligibleWorkerError).userMessage).toContain("permission not granted");
   });
 
-  it("écarte un exécutant dont la capacité manque", async () => {
+  it("filters out workers missing required capabilities", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [REDMI] });
 
@@ -187,7 +186,7 @@ describe("sélection de l'exécutant", () => {
     expect((error as NoEligibleWorkerError).userMessage).toContain("missing capability");
   });
 
-  it("écarte un appareil révoqué", async () => {
+  it("filters out revoked devices", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP, LAPTOP] });
     await h.registry.revokeDevice(DESKTOP.id);
@@ -204,11 +203,11 @@ describe("sélection de l'exécutant", () => {
     );
   });
 
-  it("choisit le plus disponible entre deux exécutants équivalents", async () => {
+  it("selects the most available among equivalent workers", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [LAPTOP, DESKTOP] });
 
-    // Le portable est déjà chargé ; le poste fixe est libre.
+    // Laptop is loaded; desktop is idle.
     await h.registry.updateHealth(LAPTOP.id, {
       activeTasks: 2,
       maxConcurrentTasks: 3,
@@ -231,7 +230,7 @@ describe("sélection de l'exécutant", () => {
     expect(selection.candidates[0]?.score).toBeGreaterThan(selection.candidates[1]?.score ?? 0);
   });
 
-  it("respecte un choix explicite de l'utilisateur s'il reste éligible", async () => {
+  it("respects explicit user preference when device remains eligible", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [LAPTOP, DESKTOP] });
     await h.registry.updateHealth(LAPTOP.id, { activeTasks: 2, maxConcurrentTasks: 3 });
@@ -243,11 +242,11 @@ describe("sélection de l'exécutant", () => {
       preferredDeviceId: LAPTOP.id,
     });
 
-    // Le portable est plus chargé, mais l'utilisateur l'a demandé.
+    // Laptop has higher load, but user explicitly preferred it.
     expect(selection.device.id).toBe(LAPTOP.id);
   });
 
-  it("ignore une préférence portant sur un appareil inéligible", async () => {
+  it("ignores preferences targeting ineligible devices", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [LAPTOP, DESKTOP], online: [LAPTOP.id] });
 
@@ -258,11 +257,11 @@ describe("sélection de l'exécutant", () => {
       preferredDeviceId: DESKTOP.id,
     });
 
-    // Une préférence ne rend pas éligible un appareil hors ligne.
+    // Preference cannot make an offline device eligible.
     expect(selection.device.id).toBe(LAPTOP.id);
   });
 
-  it("écarte un exécutant saturé", async () => {
+  it("filters out saturated workers", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
     await h.registry.updateHealth(DESKTOP.id, { activeTasks: 2, maxConcurrentTasks: 2 });
@@ -278,7 +277,7 @@ describe("sélection de l'exécutant", () => {
     expect((error as NoEligibleWorkerError).userMessage).toContain("busy");
   });
 
-  it("écarte un exécutant dont le type ne respecte pas la contrainte", async () => {
+  it("filters out workers when device type does not match constraints", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -291,12 +290,12 @@ describe("sélection de l'exécutant", () => {
       })
       .catch((e: unknown) => e);
 
-    // Deux postes Windows savent le faire, mais la contrainte les exclut.
+    // Two Windows machines can do it, but constraints exclude them.
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
     expect((error as NoEligibleWorkerError).userMessage).toContain("does not match");
   });
 
-  it("écarte un appareil sur batterie quand la tâche exige le secteur", async () => {
+  it("filters out battery-powered devices when mains power is required", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [LAPTOP, DESKTOP] });
 
@@ -312,17 +311,16 @@ describe("sélection de l'exécutant", () => {
   });
 });
 
-describe("registre", () => {
-  it("trouve les appareils par capacité, sans filtrer sur le statut", async () => {
+describe("registry", () => {
+  it("finds devices by capability without filtering on status", async () => {
     const h = makeHarness();
     await setupFleet(h, { online: [] });
 
-    // La question est « qui sait faire ça ? », pas « qui peut maintenant ? ».
     const capable = await h.registry.getDevicesByCapability(USER_ID, ["docker.execute"]);
     expect(capable.map((d) => d.id).sort()).toEqual([DESKTOP.id, LAPTOP.id].sort());
   });
 
-  it("exige toutes les capacités demandées", async () => {
+  it("requires all requested capabilities", async () => {
     const h = makeHarness();
     await setupFleet(h);
 
@@ -333,7 +331,7 @@ describe("registre", () => {
     expect(capable).toHaveLength(0);
   });
 
-  it("met à jour les capacités déclarées et retire celles qui disparaissent", async () => {
+  it("updates declared capabilities and removes deprecated ones", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
 
@@ -342,25 +340,21 @@ describe("registre", () => {
     ]);
 
     const device = await h.registry.requireDevice(DESKTOP.id);
-    // Docker a disparu de la déclaration : l'appareil ne doit plus être choisi
-    // pour Docker, pas conserver une capacité fantôme.
     expect(device.capabilities.map((c) => c.name)).toEqual(["filesystem.read"]);
     expect(await h.registry.getDevicesByCapability(USER_ID, ["docker.execute"])).toHaveLength(0);
   });
 
-  it("passe hors ligne un appareil silencieux trop longtemps", async () => {
+  it("marks devices offline after heartbeat timeout", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
     expect((await h.registry.requireDevice(DESKTOP.id)).status).toBe("ONLINE");
 
     h.clock.now = new Date(h.clock.now.getTime() + 120_000);
 
-    // Sans cette expiration, un worker débranché brutalement resterait éligible
-    // jusqu'à sa prochaine écriture — c'est-à-dire jamais.
     expect((await h.registry.requireDevice(DESKTOP.id)).status).toBe("OFFLINE");
   });
 
-  it("un battement de cœur ne ressuscite pas un appareil révoqué", async () => {
+  it("heartbeat does not revive a revoked device", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
     await h.registry.revokeDevice(DESKTOP.id);
@@ -372,7 +366,7 @@ describe("registre", () => {
     expect(device.trust).toBe("REVOKED");
   });
 
-  it("retirer la confiance est réversible, la révocation ne l'est pas", async () => {
+  it("trust revocation is reversible while device revocation is permanent", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
 
@@ -386,48 +380,35 @@ describe("registre", () => {
     expect((await h.registry.requireDevice(DESKTOP.id)).revokedAt).not.toBeNull();
   });
 
-  it("un appareil arrive hors ligne et non approuvé", async () => {
+  it("initializes newly registered devices as offline and pending trust", async () => {
     const h = makeHarness();
     const device = await h.registry.registerDevice({
       userId: USER_ID,
-      name: "Nouveau",
+      name: "New Device",
       type: "LINUX",
       platform: "LINUX",
       role: "WORKER",
     });
 
-    // La confiance se donne, elle ne se suppose pas.
     expect(device.status).toBe("OFFLINE");
     expect(device.trust).toBe("PENDING");
     expect(device.authenticated).toBe(false);
   });
 });
 
-// ───────────────────────────────────────────────────────────────────────────────
-// Risque par défaut d'une capacité
-// ───────────────────────────────────────────────────────────────────────────────
-
-describe("risque par défaut", () => {
-  it("gradue les capacités du navigateur de la lecture à l'achat", () => {
-    // La progression est ce qui permet aux confirmations de faire leur travail :
-    // lire un prix ne demande rien, acheter demande un accord explicite.
+describe("default capability risk", () => {
+  it("graduates browser capabilities from read to purchase", () => {
     expect(defaultRiskFor("browser.navigate")).toBe("LOW");
     expect(defaultRiskFor("browser.interact")).toBe("MEDIUM");
     expect(defaultRiskFor("browser.login")).toBe("HIGH");
     expect(defaultRiskFor("browser.purchase")).toBe("CRITICAL");
   });
 
-  it("un achat reste CRITICAL, pas HIGH", () => {
-    // Le point précis. Le coordinateur confirme quand
-    // `riskRank(risque) >= riskRank(seuil)`. Un déploiement qui place son seuil
-    // à CRITICAL ne confirmerait pas un paiement classé HIGH — c'est-à-dire
-    // qu'il paierait sans demander.
+  it("purchase remains CRITICAL, not HIGH", () => {
     expect(defaultRiskFor("browser.purchase")).not.toBe("HIGH");
   });
 
-  it("retombe sur HIGH pour une capacité inconnue", () => {
-    // Dans le doute, on ne minimise pas : une capacité qu'on ne connaît pas
-    // pourrait tout faire.
-    expect(defaultRiskFor("quelque.chose.dinconnu")).toBe("HIGH");
+  it("falls back to HIGH for unknown capability", () => {
+    expect(defaultRiskFor("unknown.capability")).toBe("HIGH");
   });
 });

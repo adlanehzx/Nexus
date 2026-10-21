@@ -22,23 +22,19 @@ import {
 } from "./fixtures.js";
 
 /**
- * Plans multi-étapes, routage vers le client d'origine, synchronisation.
- *
- * Le scénario de référence de l'architecture produit y figure en entier :
- * le poste fixe clone un dépôt, le portable lance les tests, l'Android notifie —
- * pendant que l'iPhone, d'où part la demande, voit tout arriver.
+ * Multi-step task plans, origin-client routing, and client synchronization.
  */
 
 function planFor(originClientDeviceId: string): TaskPlan {
   return createTaskPlan({
     userId: USER_ID,
-    title: "Cloner, tester, notifier",
+    title: "Clone, test, notify",
     originClientDeviceId,
     correlationId: "corr-1",
     steps: [
       {
         id: "clone",
-        description: "Cloner le dépôt LeynAI",
+        description: "Clone repository",
         requiredCapabilities: ["git.execute"],
         tool: "device.git.execute",
         arguments: { command: "clone" },
@@ -46,7 +42,7 @@ function planFor(originClientDeviceId: string): TaskPlan {
       },
       {
         id: "test",
-        description: "Lancer les tests",
+        description: "Run test suite",
         requiredCapabilities: ["terminal.execute"],
         tool: "device.terminal.execute",
         arguments: { command: "pnpm test" },
@@ -55,7 +51,7 @@ function planFor(originClientDeviceId: string): TaskPlan {
       },
       {
         id: "notify",
-        description: "Notifier le résultat",
+        description: "Notify result",
         requiredCapabilities: ["android.notification"],
         tool: "device.android.notification",
         arguments: { title: "Tests" },
@@ -81,8 +77,8 @@ function makeCoordinator(
   });
 }
 
-describe("plan de tâche", () => {
-  it("refuse une dépendance vers une étape inexistante", () => {
+describe("task plan", () => {
+  it("rejects dependencies referencing nonexistent steps", () => {
     expect(() =>
       createTaskPlan({
         userId: USER_ID,
@@ -95,14 +91,14 @@ describe("plan de tâche", () => {
             description: "a",
             requiredCapabilities: ["x.y"],
             tool: "t",
-            dependsOn: ["fantome"],
+            dependsOn: ["phantom"],
           },
         ],
       }),
     ).toThrow(InvalidTaskPlanError);
   });
 
-  it("refuse un cycle de dépendances", () => {
+  it("rejects circular dependencies", () => {
     const error = (() => {
       try {
         createTaskPlan({
@@ -133,12 +129,11 @@ describe("plan de tâche", () => {
       return undefined;
     })();
 
-    // Mieux vaut refuser un plan incohérent que le découvrir bloqué à mi-parcours.
     expect(error).toBeInstanceOf(InvalidTaskPlanError);
     expect((error as InvalidTaskPlanError).details.join(" ")).toContain("cycle");
   });
 
-  it("ne rend prêtes que les étapes dont les dépendances ont abouti", () => {
+  it("marks as ready only steps whose dependencies have succeeded", () => {
     const plan = planFor(IPHONE.id);
     expect(readySteps(plan).map((s) => s.id)).toEqual(["clone"]);
 
@@ -149,7 +144,7 @@ describe("plan de tâche", () => {
     expect(readySteps(afterClone).map((s) => s.id)).toEqual(["test"]);
   });
 
-  it("déduit un état partiel quand tout est terminé sans tout réussir", () => {
+  it("derives partial status when all steps finish without all succeeding", () => {
     const plan = planFor(IPHONE.id);
     const mixed: TaskPlan = {
       ...plan,
@@ -160,14 +155,13 @@ describe("plan de tâche", () => {
       ],
     };
 
-    // L'utilisateur doit savoir ce qui a été fait malgré l'échec.
     expect(derivePlanStatus(mixed)).toBe("partial");
     expect(planProgress(mixed)).toBe(100);
   });
 });
 
-describe("exécution répartie", () => {
-  it("répartit les étapes selon les capacités, sans nommer d'appareil", async () => {
+describe("distributed execution", () => {
+  it("distributes steps according to capabilities without hardcoding devices", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const transport = new FakeTransport();
@@ -178,15 +172,13 @@ describe("exécution répartie", () => {
 
     expect(result.status).toBe("succeeded");
 
-    // Le clonage et les tests partent sur un poste Windows, la notification sur
-    // l'Android — parce que ce sont les seuls à déclarer ces capacités.
     const notifyDevice = transport.deviceFor("device.android.notification");
     expect(notifyDevice).toBe(REDMI.id);
     expect([DESKTOP.id, LAPTOP.id]).toContain(transport.deviceFor("device.git.execute"));
     expect([DESKTOP.id, LAPTOP.id]).toContain(transport.deviceFor("device.terminal.execute"));
   });
 
-  it("respecte l'ordre imposé par les dépendances", async () => {
+  it("respects dependency execution order", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const transport = new FakeTransport();
@@ -202,13 +194,13 @@ describe("exécution répartie", () => {
     ]);
   });
 
-  it("saute les étapes dont une dépendance a échoué", async () => {
+  it("skips steps when an upstream dependency fails", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const transport = new FakeTransport();
     transport.responses.set("device.terminal.execute", {
       ok: false,
-      error: { code: "TESTS_FAILED", message: "3 tests en échec", retryable: false },
+      error: { code: "TESTS_FAILED", message: "3 tests failed", retryable: false },
     });
 
     const result = await makeCoordinator(h, transport).execute(planFor(IPHONE.id), {
@@ -217,11 +209,10 @@ describe("exécution répartie", () => {
 
     expect(result.status).toBe("partial");
     expect(result.steps.map((s) => s.status)).toEqual(["succeeded", "failed", "skipped"]);
-    // La notification n'a jamais été dispatchée.
     expect(transport.deviceFor("device.android.notification")).toBeUndefined();
   });
 
-  it("bascule sur un autre appareil après un échec réessayable", async () => {
+  it("fails over to another device after a retryable failure", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [LAPTOP, DESKTOP] });
     const transport = new FakeTransport();
@@ -235,7 +226,7 @@ describe("exécution répartie", () => {
       steps: [
         {
           id: "clone",
-          description: "Cloner",
+          description: "Clone",
           requiredCapabilities: ["git.execute"],
           tool: "device.git.execute",
           riskLevel: "LOW",
@@ -250,11 +241,10 @@ describe("exécution répartie", () => {
 
     expect(result.status).toBe("succeeded");
     expect(transport.dispatched).toHaveLength(2);
-    // Réessayer chez celui qui vient d'échouer n'aurait servi à rien.
     expect(transport.dispatched[0]?.deviceId).not.toBe(transport.dispatched[1]?.deviceId);
   });
 
-  it("refuse d'exécuter une capacité que l'appareil n'a plus", async () => {
+  it("refuses to execute a capability a device no longer has", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [DESKTOP] });
     const transport = new FakeTransport();
@@ -267,7 +257,7 @@ describe("exécution répartie", () => {
       steps: [
         {
           id: "run",
-          description: "Lancer un conteneur",
+          description: "Launch container",
           requiredCapabilities: ["docker.execute"],
           tool: "device.docker.execute",
           riskLevel: "LOW",
@@ -275,7 +265,7 @@ describe("exécution répartie", () => {
       ],
     });
 
-    // La capacité disparaît entre la construction du plan et l'exécution.
+    // Capability is revoked between planning and execution.
     await h.registry.updateCapabilities(DESKTOP.id, []);
 
     const result = await makeCoordinator(h, transport).execute(plan, {
@@ -287,7 +277,7 @@ describe("exécution répartie", () => {
     expect(transport.dispatched).toHaveLength(0);
   });
 
-  it("échoue proprement quand un appareil révoqué était le seul candidat", async () => {
+  it("fails cleanly when the sole candidate device was revoked", async () => {
     const h = makeHarness();
     await setupFleet(h, { devices: [REDMI] });
     await h.registry.revokeDevice(REDMI.id);
@@ -295,13 +285,13 @@ describe("exécution répartie", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "notifier",
+      title: "notify",
       originClientDeviceId: IPHONE.id,
       correlationId: "c",
       steps: [
         {
           id: "notify",
-          description: "Notifier",
+          description: "Notify",
           requiredCapabilities: ["android.notification"],
           tool: "device.android.notification",
           riskLevel: "LOW",
@@ -319,8 +309,8 @@ describe("exécution répartie", () => {
   });
 });
 
-describe("client d'origine", () => {
-  it("conserve l'origine pendant toute la vie de la tâche", async () => {
+describe("origin client", () => {
+  it("preserves origin client throughout task lifecycle", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const transport = new FakeTransport();
@@ -329,12 +319,11 @@ describe("client d'origine", () => {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // La tâche s'exécute sur trois autres appareils ; l'origine ne bouge pas.
     expect(result.originClientDeviceId).toBe(IPHONE.id);
     expect(new Set(transport.dispatched.map((d) => d.deviceId)).has(IPHONE.id)).toBe(false);
   });
 
-  it("marque chaque événement de l'appareil d'origine", async () => {
+  it("tags each event with originClientDeviceId", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const iphone = makeClient(IPHONE.id);
@@ -348,7 +337,7 @@ describe("client d'origine", () => {
     expect(iphone.received.every((e) => e.originClientDeviceId === IPHONE.id)).toBe(true);
   });
 
-  it("route vers le portable quand la tâche en vient", async () => {
+  it("routes to laptop when task originates from laptop", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const laptop = makeClient(LAPTOP.id);
@@ -363,8 +352,8 @@ describe("client d'origine", () => {
   });
 });
 
-describe("synchronisation entre clients", () => {
-  it("diffuse à tous les clients, pas seulement à l'origine", async () => {
+describe("client synchronization", () => {
+  it("broadcasts to all client devices not just origin", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const iphone = makeClient(IPHONE.id);
@@ -372,19 +361,17 @@ describe("synchronisation entre clients", () => {
     await h.router.attach(iphone);
     await h.router.attach(laptop);
 
-    // Tâche lancée depuis le portable…
     await makeCoordinator(h, new FakeTransport()).execute(planFor(LAPTOP.id), {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // …l'iPhone la voit quand même.
     const iphoneTypes = iphone.received.map((e) => e.type);
     expect(iphoneTypes).toContain("task.created");
     expect(iphoneTypes).toContain("task.completed");
     expect(iphone.received).toHaveLength(laptop.received.length);
   });
 
-  it("ne diffuse jamais un événement à un exécutant pur", async () => {
+  it("never broadcasts events to pure worker devices", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const desktop = makeClient(DESKTOP.id);
@@ -394,17 +381,15 @@ describe("synchronisation entre clients", () => {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // Le poste fixe exécute ; il n'affiche rien, il ne reçoit donc rien.
     expect(desktop.received).toHaveLength(0);
   });
 
-  it("met en file pour un client déconnecté et lui livre au retour", async () => {
+  it("queues events for disconnected clients and flushes on reconnect", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const laptop = makeClient(LAPTOP.id);
     await h.router.attach(laptop);
 
-    // L'iPhone est éteint pendant l'exécution.
     await makeCoordinator(h, new FakeTransport()).execute(planFor(LAPTOP.id), {
       userPermissions: ALL_PERMISSIONS,
     });
@@ -413,13 +398,12 @@ describe("synchronisation entre clients", () => {
     const iphone = makeClient(IPHONE.id);
     const backlog = await h.router.attach(iphone);
 
-    // Il retrouve exactement le même état que le portable resté connecté.
     expect(backlog.length).toBe(laptop.received.length);
     expect(iphone.received.map((e) => e.type)).toEqual(laptop.received.map((e) => e.type));
     expect(h.router.pendingFor(IPHONE.id)).toHaveLength(0);
   });
 
-  it("livre l'appareil d'origine en premier", async () => {
+  it("delivers to origin device first", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const order: string[] = [];
@@ -437,13 +421,12 @@ describe("synchronisation entre clients", () => {
       payload: { taskId: "t1" },
     });
 
-    // L'utilisateur regarde l'appareil d'où il a lancé la demande.
     expect(order[0]).toBe(IPHONE.id);
   });
 });
 
 describe("confirmations", () => {
-  it("route la demande vers l'origine et n'exécute qu'après accord", async () => {
+  it("routes confirmation to origin device and executes only after approval", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const iphone = makeClient(IPHONE.id);
@@ -455,13 +438,13 @@ describe("confirmations", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "supprimer",
+      title: "delete",
       originClientDeviceId: IPHONE.id,
       correlationId: "c",
       steps: [
         {
           id: "rm",
-          description: "Supprimer le dossier build",
+          description: "Delete build folder",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           riskLevel: "HIGH",
@@ -483,7 +466,7 @@ describe("confirmations", () => {
     expect(required?.originClientDeviceId).toBe(IPHONE.id);
   });
 
-  it("n'exécute rien si l'utilisateur refuse", async () => {
+  it("executes nothing if user rejects confirmation", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const transport = new FakeTransport();
@@ -491,13 +474,13 @@ describe("confirmations", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "supprimer",
+      title: "delete",
       originClientDeviceId: IPHONE.id,
       correlationId: "c",
       steps: [
         {
           id: "rm",
-          description: "Supprimer",
+          description: "Delete",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           riskLevel: "HIGH",
@@ -513,7 +496,7 @@ describe("confirmations", () => {
     expect(transport.dispatched).toHaveLength(0);
   });
 
-  it("ne demande rien pour une étape à faible risque", async () => {
+  it("does not request confirmation for low-risk steps", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const request = vi.fn().mockResolvedValue("approved");
@@ -523,11 +506,10 @@ describe("confirmations", () => {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // Les trois étapes du plan sont en LOW : aucune n'atteint le seuil.
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("les deux clients voient la demande, l'un ou l'autre peut trancher", async () => {
+  it("both clients observe confirmation and either can resolve it", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const iphone = makeClient(IPHONE.id);
@@ -538,13 +520,13 @@ describe("confirmations", () => {
     const gate: ConfirmationGate = { request: vi.fn().mockResolvedValue("approved") };
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "écrire",
+      title: "write",
       originClientDeviceId: LAPTOP.id,
       correlationId: "c",
       steps: [
         {
           id: "w",
-          description: "Écrire un fichier",
+          description: "Write file",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           riskLevel: "HIGH",
@@ -556,14 +538,13 @@ describe("confirmations", () => {
       userPermissions: ALL_PERMISSIONS,
     });
 
-    // L'iPhone reçoit une demande partie du portable : il peut l'approuver.
     expect(iphone.received.some((e) => e.type === "confirmation.required")).toBe(true);
     expect(laptop.received.some((e) => e.type === "confirmation.required")).toBe(true);
   });
 });
 
-describe("secrets dans le journal d'exécution", () => {
-  it("rédige les arguments avant de les consigner", async () => {
+describe("secrets in execution log", () => {
+  it("redacts arguments before persisting to task log", async () => {
     const h = makeHarness();
     await setupFleet(h);
     const store = new InMemoryTaskStore();
@@ -571,13 +552,13 @@ describe("secrets dans le journal d'exécution", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "déployer",
+      title: "deploy",
       originClientDeviceId: IPHONE.id,
       correlationId: "c",
       steps: [
         {
           id: "deploy",
-          description: "Déployer",
+          description: "Deploy",
           requiredCapabilities: ["terminal.execute"],
           tool: "device.terminal.execute",
           arguments: { command: "deploy", apiKey: "sk-abcdefghijklmnopqrstuvwxyz" },
@@ -600,8 +581,7 @@ describe("secrets dans le journal d'exécution", () => {
     expect(executions[0]?.input).toEqual({ command: "deploy", apiKey: "[REDACTED]" });
     expect(JSON.stringify(executions)).not.toContain("sk-abcdefghijklmnopqrstuvwxyz");
 
-    // Le worker, lui, reçoit bien la valeur réelle : la rédaction protège le
-    // journal, pas l'exécution.
+    // Worker receives raw values; redaction protects logs and telemetry.
     expect(transport.dispatched[0]?.arguments).toMatchObject({
       apiKey: "sk-abcdefghijklmnopqrstuvwxyz",
     });

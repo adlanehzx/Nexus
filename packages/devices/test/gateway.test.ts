@@ -18,12 +18,10 @@ import {
 import { USER_ID } from "./fixtures.js";
 
 /**
- * La passerelle vue du cœur.
+ * Worker gateway from the core perspective.
  *
- * Elle implémente `WorkerTransport` : pour `TaskCoordinator`, rien n'a changé.
- * Ce qui est éprouvé ici, c'est ce que la passerelle garantit **en plus** — la
- * corrélation ordre/résultat, et surtout les trois façons de sortir d'un
- * dispatch sans jamais laisser une promesse en suspens.
+ * Implements WorkerTransport for TaskCoordinator. Tests order/result correlation,
+ * lifecycle handling, and dispatch resolution guarantees.
  */
 
 function keys() {
@@ -60,7 +58,7 @@ async function makeGateway(options: { trusted?: boolean } = {}): Promise<Harness
   const pair = keys();
   const device = await registry.registerDevice({
     userId: USER_ID,
-    name: "Poste Windows",
+    name: "Windows Desktop",
     type: "WINDOWS_PC",
     platform: "WINDOWS",
     role: "WORKER",
@@ -91,7 +89,7 @@ async function makeGateway(options: { trusted?: boolean } = {}): Promise<Harness
 
 let counter = 0;
 
-/** Construit une trame du canal worker à partir du nom court du message. */
+/** Builds a worker envelope from short message name. */
 function envelope(kind: keyof typeof WORKER_MESSAGE, payload: unknown): Envelope {
   counter += 1;
   return workerEnvelope(WORKER_MESSAGE[kind], payload as never, {
@@ -100,7 +98,7 @@ function envelope(kind: keyof typeof WORKER_MESSAGE, payload: unknown): Envelope
   });
 }
 
-/** Déroule la poignée de main jusqu'à l'ouverture de session. */
+/** Executes handshake through session creation. */
 async function authenticate(harness: Harness): Promise<void> {
   await harness.gateway.handleMessage(
     harness.connection,
@@ -123,8 +121,8 @@ async function authenticate(harness: Harness): Promise<void> {
   );
 }
 
-describe("poignée de main", () => {
-  it("répond au bonjour par un challenge, et rien d'autre", async () => {
+describe("handshake", () => {
+  it("responds to hello with a challenge and nothing else", async () => {
     const harness = await makeGateway();
     await harness.gateway.handleMessage(
       harness.connection,
@@ -137,11 +135,10 @@ describe("poignée de main", () => {
 
     expect(harness.received).toHaveLength(1);
     expect(harness.received[0]?.type).toBe(WORKER_MESSAGE.challenge);
-    // Le bonjour n'attache rien : un identifiant d'appareil ne prouve rien.
     expect(harness.gateway.isConnected(harness.deviceId)).toBe(false);
   });
 
-  it("ouvre une session sur signature valide", async () => {
+  it("opens session on valid signature", async () => {
     const harness = await makeGateway();
     await authenticate(harness);
 
@@ -149,7 +146,7 @@ describe("poignée de main", () => {
     expect(harness.gateway.isConnected(harness.deviceId)).toBe(true);
   });
 
-  it("n'attache pas la connexion si la signature est fausse", async () => {
+  it("does not attach connection if signature is invalid", async () => {
     const harness = await makeGateway();
     await harness.gateway.handleMessage(
       harness.connection,
@@ -170,7 +167,7 @@ describe("poignée de main", () => {
           nonce,
           signature: sign(keys().privateKeyPem, nonce),
           capabilities: [],
-          requestId: "req-faux",
+          requestId: "req-fake",
           timestamp: new Date().toISOString(),
         }),
       ),
@@ -179,14 +176,14 @@ describe("poignée de main", () => {
     expect(harness.gateway.isConnected(harness.deviceId)).toBe(false);
   });
 
-  it("refuse un appareil pas encore approuvé", async () => {
+  it("rejects an unapproved device", async () => {
     const harness = await makeGateway({ trusted: false });
     await expect(authenticate(harness)).rejects.toMatchObject({
       code: "DEVICE_UNAUTHENTICATED",
     });
   });
 
-  it("enregistre les capacités déclarées", async () => {
+  it("records declared capabilities", async () => {
     const harness = await makeGateway();
     await authenticate(harness);
 
@@ -212,7 +209,7 @@ describe("poignée de main", () => {
     expect(harness.received.at(-1)?.type).toBe(WORKER_MESSAGE.registered);
   });
 
-  it("écarte une définition de capacité malformée sans rejeter les autres", async () => {
+  it("filters out malformed capability definition without rejecting others", async () => {
     const harness = await makeGateway();
     await authenticate(harness);
 
@@ -221,8 +218,8 @@ describe("poignée de main", () => {
       envelope("register", {
         capabilities: [
           { name: "terminal.execute", version: "1", description: "", enabled: true, metadata: {} },
-          // Nom sans domaine : la forme attendue est `domaine.action`.
-          { name: "nimportequoi", version: "1", description: "", enabled: true, metadata: {} },
+          // Capability name missing domain: expected format is domain.action.
+          { name: "invalidname", version: "1", description: "", enabled: true, metadata: {} },
         ],
         health: { activeTasks: 0, maxConcurrentTasks: 1 },
       }),
@@ -233,7 +230,7 @@ describe("poignée de main", () => {
 
     expect(payload.accepted).toEqual(["terminal.execute"]);
     expect(payload.rejected).toEqual([
-      { name: "nimportequoi", reason: "invalid capability definition" },
+      { name: "invalidname", reason: "invalid capability definition" },
     ]);
   });
 });
@@ -269,7 +266,7 @@ describe("dispatch", () => {
     };
   }
 
-  it("transmet l'ordre et attend le résultat", async () => {
+  it("transmits command and awaits result", async () => {
     const harness = await ready();
     const pending = harness.gateway.dispatch(dispatchInput(harness));
 
@@ -291,16 +288,16 @@ describe("dispatch", () => {
     await expect(pending).resolves.toMatchObject({ ok: true, result: { exitCode: 0 } });
   });
 
-  it("relaie la progression", async () => {
+  it("relays progress updates", async () => {
     const harness = await ready();
     const onProgress = vi.fn();
     const pending = harness.gateway.dispatch(dispatchInput(harness, { onProgress }));
 
     await harness.gateway.handleMessage(
       harness.connection,
-      envelope("taskProgress", { taskId: "t1", stepId: "s1", percent: 40, label: "en cours" }),
+      envelope("taskProgress", { taskId: "t1", stepId: "s1", percent: 40, label: "in progress" }),
     );
-    expect(onProgress).toHaveBeenCalledWith({ percent: 40, label: "en cours" });
+    expect(onProgress).toHaveBeenCalledWith({ percent: 40, label: "in progress" });
 
     await harness.gateway.handleMessage(
       harness.connection,
@@ -316,7 +313,7 @@ describe("dispatch", () => {
     await pending;
   });
 
-  it("refuse un ordre vers un exécutant non connecté, de façon réessayable", async () => {
+  it("rejects dispatch to disconnected worker as retryable failure", async () => {
     const harness = await makeGateway();
     await expect(harness.gateway.dispatch(dispatchInput(harness))).resolves.toMatchObject({
       ok: false,
@@ -324,7 +321,7 @@ describe("dispatch", () => {
     });
   });
 
-  it("refuse de dispatcher deux fois la même étape", async () => {
+  it("refuses to dispatch the same step concurrently", async () => {
     const harness = await ready();
     const first = harness.gateway.dispatch(dispatchInput(harness));
 
@@ -347,14 +344,11 @@ describe("dispatch", () => {
     await first;
   });
 
-  it("libère l'étape quand le canal se ferme", async () => {
-    // Réessayable : la machine a disparu, la tâche n'a pas échoué au sens
-    // métier. Le coordinateur peut la reprendre ailleurs immédiatement plutôt
-    // que d'attendre l'expiration du délai.
+  it("frees step when channel disconnects", async () => {
     const harness = await ready();
     const pending = harness.gateway.dispatch(dispatchInput(harness));
 
-    await harness.gateway.detach(harness.deviceId, "câble débranché");
+    await harness.gateway.detach(harness.deviceId, "cable unplugged");
 
     await expect(pending).resolves.toMatchObject({
       ok: false,
@@ -362,7 +356,7 @@ describe("dispatch", () => {
     });
   });
 
-  it("annule sur signal et prévient l'exécutant", async () => {
+  it("cancels on signal and notifies worker", async () => {
     const harness = await ready();
     const controller = new AbortController();
     const pending = harness.gateway.dispatch(dispatchInput(harness, { signal: controller.signal }));
@@ -377,17 +371,15 @@ describe("dispatch", () => {
     expect(cancel).toContain(WORKER_MESSAGE.taskCancel);
   });
 
-  it("ignore un résultat arrivé après coup", async () => {
-    // Cas normal après un délai dépassé : le worker a fini, trop tard. On
-    // l'ignore sans bruit plutôt que de lever.
+  it("ignores late results after completion or timeout", async () => {
     const harness = await ready();
 
     await expect(
       harness.gateway.handleMessage(
         harness.connection,
         envelope("taskResult", {
-          taskId: "inconnu",
-          stepId: "inconnu",
+          taskId: "unknown",
+          stepId: "unknown",
           ok: true,
           result: null,
           error: null,
@@ -397,25 +389,25 @@ describe("dispatch", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("marque l'appareil hors ligne et ferme ses sessions au détachement", async () => {
+  it("marks device offline and terminates sessions on detachment", async () => {
     const harness = await ready();
-    await harness.gateway.detach(harness.deviceId, "arrêt");
+    await harness.gateway.detach(harness.deviceId, "shutdown");
 
     const device = await harness.registry.requireDevice(harness.deviceId);
     expect(device.status).toBe("OFFLINE");
     expect(device.authenticated).toBe(false);
   });
 
-  it("ignore une trame illisible sans tomber", async () => {
+  it("ignores unparseable messages without crashing", async () => {
     const harness = await ready();
     await expect(
-      harness.gateway.handleMessage(harness.connection, { pas: "une enveloppe" }),
+      harness.gateway.handleMessage(harness.connection, { not: "an envelope" }),
     ).resolves.toBeUndefined();
   });
 });
 
-describe("événements de cycle de vie", () => {
-  it("annonce la connexion, la disponibilité et la déconnexion", async () => {
+describe("lifecycle events", () => {
+  it("announces connection, readiness, and disconnection", async () => {
     const registry = new DeviceRegistry();
     const sessions = new DeviceSessionService({ registry });
     const credentials = new InMemoryCredentialProvider();
@@ -425,7 +417,7 @@ describe("événements de cycle de vie", () => {
     const pair = keys();
     const worker = await registry.registerDevice({
       userId: USER_ID,
-      name: "Poste",
+      name: "Desktop",
       type: "WINDOWS_PC",
       platform: "WINDOWS",
       role: "WORKER",
@@ -481,7 +473,7 @@ describe("événements de cycle de vie", () => {
         health: { activeTasks: 0, maxConcurrentTasks: 1 },
       }),
     );
-    await gateway.detach(worker.id, "arrêt");
+    await gateway.detach(worker.id, "shutdown");
 
     expect(seen).toEqual(
       expect.arrayContaining(["worker.connected", "worker.ready", "worker.disconnected"]),
