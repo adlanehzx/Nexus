@@ -29,6 +29,79 @@ export const mcpToolPolicySchema = z.object({
 });
 export type McpToolPolicy = z.infer<typeof mcpToolPolicySchema>;
 
+export const mcpBindMountSchema = z.object({
+  hostPath: z.string().min(1),
+  containerPath: z.string().optional(),
+  readOnly: z.boolean().default(true),
+});
+export type McpBindMount = z.infer<typeof mcpBindMountSchema>;
+
+export const DEFAULT_MCP_RESOURCE_LIMITS = {
+  maxMemoryMb: 512,
+  cpuShares: 1024,
+  maxPids: 64,
+  timeoutMs: 60_000,
+} as const;
+
+export const mcpResourceLimitsSchema = z.object({
+  maxMemoryMb: z.number().int().positive().default(DEFAULT_MCP_RESOURCE_LIMITS.maxMemoryMb),
+  cpuShares: z.number().int().positive().default(DEFAULT_MCP_RESOURCE_LIMITS.cpuShares),
+  maxPids: z.number().int().positive().default(DEFAULT_MCP_RESOURCE_LIMITS.maxPids),
+  timeoutMs: z.number().int().positive().default(DEFAULT_MCP_RESOURCE_LIMITS.timeoutMs),
+});
+export type McpResourceLimits = z.infer<typeof mcpResourceLimitsSchema>;
+
+export const DEFAULT_MCP_ALLOWED_BINARIES = [
+  "node",
+  "npx",
+  "python",
+  "python3",
+  "uv",
+  "uvx",
+  "docker",
+  "bwrap",
+] as const;
+
+export const DEFAULT_MCP_SANDBOX_POLICY = {
+  enabled: true,
+  engine: "bwrap" as const,
+  readOnlyRoot: true,
+  bindMounts: [] as McpBindMount[],
+  allowNetwork: false,
+  resourceLimits: DEFAULT_MCP_RESOURCE_LIMITS,
+  allowedBinaries: [...DEFAULT_MCP_ALLOWED_BINARIES] as string[],
+};
+
+export const mcpSandboxPolicySchema = z.object({
+  enabled: z.boolean().default(DEFAULT_MCP_SANDBOX_POLICY.enabled),
+  engine: z.enum(["bwrap", "docker", "none"]).default(DEFAULT_MCP_SANDBOX_POLICY.engine),
+  readOnlyRoot: z.boolean().default(DEFAULT_MCP_SANDBOX_POLICY.readOnlyRoot),
+  bindMounts: z.array(mcpBindMountSchema).default(DEFAULT_MCP_SANDBOX_POLICY.bindMounts),
+  allowNetwork: z.boolean().default(DEFAULT_MCP_SANDBOX_POLICY.allowNetwork),
+  resourceLimits: mcpResourceLimitsSchema.default(DEFAULT_MCP_RESOURCE_LIMITS),
+  allowedBinaries: z.array(z.string()).default([...DEFAULT_MCP_ALLOWED_BINARIES]),
+  verifyChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+});
+export type McpSandboxPolicy = z.infer<typeof mcpSandboxPolicySchema>;
+
+export const mcpSbomPackageSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+  integrity: z.string().optional(),
+  license: z.string().optional(),
+  source: z.string().optional(),
+});
+
+export const mcpSbomSchema = z.object({
+  serverName: z.string(),
+  version: z.string().default("1.0.0"),
+  runtime: z.string().default("node"),
+  packages: z.array(mcpSbomPackageSchema).default([]),
+  verifiedAt: z.string().datetime(),
+  checksum: z.string(),
+});
+export type McpSbom = z.infer<typeof mcpSbomSchema>;
+
 const baseConfig = z.object({
   /** Identifiant court et stable ; il préfixe les outils : `mcp.<name>.<outil>`. */
   name: z
@@ -70,6 +143,11 @@ const baseConfig = z.object({
 
   /** Expose aussi les ressources du serveur comme outils de lecture. */
   exposeResources: z.boolean().default(true),
+
+  /** Politique de bac à sable conteneurisé (bwrap / docker / none). */
+  sandbox: mcpSandboxPolicySchema.default(DEFAULT_MCP_SANDBOX_POLICY),
+  /** Software Bill of Materials (SBOM) et provenance auditée. */
+  sbom: mcpSbomSchema.optional(),
 });
 
 const stdioConfig = baseConfig.extend({

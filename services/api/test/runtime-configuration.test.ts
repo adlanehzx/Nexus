@@ -2,6 +2,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseMcpServerConfig } from "@nexus/mcp";
 import { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 
 describe("configuration administrable NEXUS", () => {
@@ -10,7 +11,7 @@ describe("configuration administrable NEXUS", () => {
     const store = new RuntimeConfigurationStore(directory);
 
     await store.saveMcp([
-      {
+      parseMcpServerConfig({
         name: "filesystem",
         enabled: false,
         transport: "stdio",
@@ -30,7 +31,7 @@ describe("configuration administrable NEXUS", () => {
         circuitBreakerThreshold: 5,
         circuitBreakerResetMs: 60_000,
         exposeResources: true,
-      },
+      }),
     ]);
     await store.saveBrowser({
       enabled: false,

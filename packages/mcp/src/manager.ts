@@ -1,9 +1,10 @@
 import type { ToolDefinition, ToolRegistry } from "@nexus/tools";
 import { McpClient, type McpConnectionStatus, type SecretResolver } from "./client.js";
-import { describeConfig, type McpServerConfig } from "./config.js";
+import { describeConfig, type McpSbom, type McpServerConfig } from "./config.js";
 import { adaptMcpResources } from "./resource-adapter.js";
 import { adaptMcpTool } from "./tool-adapter.js";
 import { McpSchemaError } from "./errors.js";
+import { generateSbom } from "./sandbox.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 /**
@@ -183,6 +184,15 @@ export class McpManager {
   healthOf(name: string): McpServerHealth | undefined {
     const connection = this.#connections.get(name);
     return connection === undefined ? undefined : this.#healthOf(connection);
+  }
+
+  getSbom(serverName: string): McpSbom | undefined {
+    const connection = this.#connections.get(serverName);
+    return connection === undefined ? undefined : generateSbom(connection.config);
+  }
+
+  listSboms(): McpSbom[] {
+    return [...this.#connections.values()].map((connection) => generateSbom(connection.config));
   }
 
   /** Noms des outils publiés par un serveur — diagnostic et interface de réglages. */

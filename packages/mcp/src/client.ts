@@ -8,6 +8,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isStdioConfig, type McpServerConfig } from "./config.js";
 import { McpConnectionError, McpTimeoutError } from "./errors.js";
+import { McpSandboxManager } from "./sandbox.js";
 
 /**
  * Client MCP.
@@ -277,14 +278,20 @@ export class McpClient {
     const config = this.config;
 
     if (isStdioConfig(config)) {
-      const env = await this.#resolveEnv(config.env, config.envRefs);
+      const resolved = await this.#resolveEnv(config.env, config.envRefs);
+      const baseEnv = { ...getDefaultEnvironment(), ...resolved };
+      const prepared = config.sandbox?.enabled
+        ? await McpSandboxManager.prepareStdio(config, baseEnv)
+        : {
+            command: config.command,
+            args: config.args,
+            env: baseEnv,
+          };
+
       return new StdioClientTransport({
-        command: config.command,
-        args: config.args,
-        // Aucun héritage de l'environnement du backend : le serveur ne voit que
-        // ce qu'on lui donne. `getDefaultEnvironment()` ne fournit que le
-        // minimum vital (PATH, HOME…), sans le moindre secret applicatif.
-        env: { ...getDefaultEnvironment(), ...env },
+        command: prepared.command,
+        args: prepared.args,
+        env: prepared.env,
         ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
         // La sortie d'erreur du serveur est capturée, pas déversée dans la nôtre.
         stderr: "pipe",
