@@ -8,7 +8,7 @@ dependencies = [
   "uvicorn[standard]>=0.40",
   "pydantic>=2.12",
   "pydantic-settings>=2.12",
-  "browser-use==0.13.8",
+  "browser-use==0.13.11",
 ]
 
 [project.optional-dependencies]
