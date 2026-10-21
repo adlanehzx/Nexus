@@ -45,7 +45,7 @@ async function makeClient(options?: { withDevice?: boolean }): Promise<Harness> 
   });
 
   const session = new SessionManager({ http, storage: new FakeSecureStorage() });
-  await session.login("adlan@exemple.fr", "un mot de passe suffisant");
+  await session.login("alex@example.test", "un mot de passe suffisant");
 
   // Le canal client annonce **d'où** l'on parle : sans appareil rattaché, il n'y
   // a rien à annoncer et `RealtimeClient` refuse d'ouvrir la socket. Un iPhone

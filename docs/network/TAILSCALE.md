@@ -1,218 +1,57 @@
-# NEXUS V1.1.0 — accès Tailscale
+# Private access with Tailscale
 
-Le transport privé est **en service** depuis le 2026-09-07 : les clients et les
-workers joignent le cœur par `https://adlane.tail9a479d.ts.net`, jamais par une
-adresse de machine. Ce document dit ce qui a été mesuré, et ce qui reste à faire.
+Tailscale can expose a local NEXUS installation to trusted devices without publishing the Core API
+to the public Internet. It is only a transport layer: NEXUS device identities, pairing, trust state,
+capabilities, permissions and confirmations still apply. Membership in a tailnet never makes a
+device trusted by NEXUS.
 
-Tailscale ne change ni les sessions, ni le protocole WebSocket, ni le
-provisioning. C'est une couche de transport : l'identité d'appareil, les états
-TRUSTED/PENDING/REVOKED, les capacités, les autorisations et les confirmations
-restent exclusivement NEXUS. **Être sur le tailnet ne rend aucun appareil
-fiable.**
-
-## État audité (2026-09-07)
-
-Tout ce qui suit a été **mesuré sur le poste**, pas déduit d'une configuration.
-
-| Point                                | État                                         | Preuve                   |
-| ------------------------------------ | -------------------------------------------- | ------------------------ |
-| Nœud Core                            | `adlane`, Windows, Tailscale actif           | `tailscale status`       |
-| MagicDNS                             | actif, suffixe `tail9a479d.ts.net`           | `tailscale dns status`   |
-| FQDN                                 | `adlane.tail9a479d.ts.net` → `100.90.176.40` | résolution vérifiée      |
-| Pare-feu hôte                        | **activé** sur les trois profils             | `Get-NetFirewallProfile` |
-| API (Core)                           | `127.0.0.1:3000` uniquement                  | `docker ps`              |
-| PostgreSQL                           | `127.0.0.1:15432` uniquement                 | `docker ps`              |
-| Redis                                | `127.0.0.1:6379` uniquement                  | `docker ps`              |
-| Worker navigateur                    | aucun port publié                            | `docker-compose.yml`     |
-| Port 3000 via IP Tailscale           | **fermé**                                    | `Test-NetConnection`     |
-| Cœur joignable en direct sur `:3000` | **non**                                      | `Test-NetConnection`     |
-| Tailscale Serve                      | **actif**, `tailnet only`                    | `tailscale serve status` |
-| Certificat                           | Let's Encrypt, `CN=adlane.tail9a479d.ts.net` | `openssl s_client`       |
-| HTTPS `/health`                      | **200**                                      | `curl` sur le FQDN       |
-| WSS `/ws/client`                     | **accepté** après approbation                | poignée de main rejouée  |
-| Tailscale Funnel                     | **désactivé**                                | aucune clé `AllowFunnel` |
-| Politique du tailnet                 | **encore ouverte**                           | `tailscale debug netmap` |
-
-Le blocage pare-feu constaté le 2026-09-06 est **levé** : les trois profils sont
-actifs. La publication Docker sur `0.0.0.0` l'est également.
-
-### Corrigé le 2026-09-07
-
-PostgreSQL et Redis étaient publiés sur `0.0.0.0`, donc **joignables depuis le
-tailnet** : `Test-NetConnection 100.90.176.40 -Port 5432` et `-Port 6379`
-ouvraient tous deux la connexion. Redis n'a pas de mot de passe dans cette
-configuration ; sa file de jobs était lisible par tout nœud du tailnet. Les deux
-sont désormais liés à la boucle locale, et la fermeture a été vérifiée.
-
-Aucun client et aucun worker ne parle à ces deux services : ils passent par le
-Core, qui les joint par le réseau Docker interne sous les noms `postgres` et
-`redis`. Le port publié ne sert qu'à l'outillage local.
-
-### Particularité du poste : le port 5432 est déjà pris
-
-`127.0.0.1:5432` est tenu par `wslrelay.exe`, qui publie les services d'une
-distribution WSL — il expose aussi `::1:80`, `::1:443` et `::1:22`. Il y a donc
-**un second PostgreSQL** sur cette machine, hors Docker. Un troisième, le
-service Windows `postgresql-x64-17`, écoute sur `5433`.
-
-Conséquence pratique : le conteneur ne peut pas prendre `127.0.0.1:5432`, et il
-est publié sur `15432`. Conséquence à vérifier : `DATABASE_URL` de `.env` pointe
-sur `localhost:5432`, c'est-à-dire **le PostgreSQL de WSL**, pas le conteneur.
-L'outillage hôte — migrations Prisma, Studio, tests d'intégration — travaille
-donc sur une autre base que celle du Core. Les deux portent les mêmes
-migrations, ce qui masque le problème au lieu de le signaler.
-
-### Serve : actif depuis le 2026-09-07
-
-Serve a été autorisé sur le tailnet, puis configuré :
-
-```powershell
-tailscale serve --bg --https=443 http://127.0.0.1:3000
-```
+## Recommended topology
 
 ```text
-https://adlane.tail9a479d.ts.net (tailnet only)
-|-- / proxy http://127.0.0.1:3000
-```
-
-Certificat émis par Let's Encrypt sur `CN=adlane.tail9a479d.ts.net`, valable du
-7 septembre au 6 décembre 2026. **Funnel reste désactivé** : la configuration ne
-contient aucune clé `AllowFunnel`, et `serve status` porte la mention
-`tailnet only`.
-
-Vérifié de bout en bout à travers `https://` et `wss://` :
-
-| Geste                                               | Résultat                      |
-| --------------------------------------------------- | ----------------------------- |
-| `GET /health` en HTTPS                              | 200, TLS valide               |
-| Inscription, enregistrement d'appareil, approbation | 201 / 201 / 200               |
-| WSS avec un appareil `PENDING`                      | refusé, code 4403             |
-| WSS avec un appareil `TRUSTED`                      | accepté, `device.list` accusé |
-
-Le Core reste inaccessible sur `100.90.176.40:3000`, comme sur les ports de
-PostgreSQL et de Redis.
-
-### Le port 443 n'est pas en conflit
-
-La crainte était fondée sur une lecture incomplète. Après activation :
-
-```text
-100.90.176.40:443              tailscaled
-fd7a:115c:a1e0::a83b:b028:443  tailscaled
-0.0.0.0:443                    vmnat        (VMware NAT Service)
-```
-
-`tailscaled` se lie **spécifiquement** aux adresses de l'interface Tailscale ;
-`vmnat` garde le générique. Windows route vers la liaison la plus précise, et
-les deux coexistent. Le service VMware n'a pas été touché, et il ne doit pas
-l'être : il assure la redirection de ports vers des machines virtuelles, sans
-rapport avec NEXUS.
-
-### Blocage restant : la politique du tailnet est encore ouverte
-
-C'est le point qui reste, et il n'est pas cosmétique. Le filtre de paquets
-réellement appliqué à ce nœud — lu par `tailscale debug netmap` — est celui de
-la politique par défaut :
-
-```json
-{
-  "Srcs": ["100.64.0.0/11", "fd7a:115c:a1e0::/48"],
-  "Dsts": [{ "Net": "0.0.0.0/0", "Ports": { "First": 0, "Last": 65535 } }],
-  "IPProto": [6, 17, 1, 58]
-}
-```
-
-Autrement dit : **tout nœud du tailnet peut joindre tout port de tout autre
-nœud**. Aucun nœud ne porte de tag. Ce qui est demandé — client et worker vers
-le Core en 443, et rien d'autre — n'est donc pas appliqué.
-
-Ce que cela change en pratique, et ce que cela ne change pas : un worker ne
-peut toujours pas joindre un autre worker **parce qu'aucun worker n'écoute sur
-un port** ; la protection est architecturale, pas réseau. La politique la
-rendrait explicite au lieu de la laisser reposer sur une propriété qu'un
-changement futur pourrait perdre.
-
-La politique ne se modifie pas depuis cette machine : le CLI ne sait pas
-l'écrire. Il faut la console d'administration, ou l'API avec un jeton
-`tskey-api-…` qui n'existe pas ici.
-
-## Cible réseau
-
-```text
-clients et workers Tailscale -- HTTPS/WSS --> nexus-core (Tailscale Serve)
+NEXUS clients and workers -- HTTPS/WSS --> Tailscale Serve
                                                 |
-                                         127.0.0.1:3000 (Core)
+                                         127.0.0.1:3000
+                                             NEXUS Core
 ```
 
-C'est **Serve**, jamais Funnel : Serve reste dans le tailnet, termine TLS avec
-un certificat Tailscale et relaie vers la boucle locale. Le Core n'écoute que
-sur `127.0.0.1:3000` — il n'est joignable qu'à travers ce relais, et le rendre
-directement accessible annulerait tout l'intérêt du montage.
+Keep the API, PostgreSQL and Redis bound to loopback. Use **Tailscale Serve**, not Funnel: Serve is
+limited to the tailnet, terminates TLS and proxies both HTTP and WebSocket traffic.
 
-## Le piège de l'en-tête `Origin`
+## Configure the Core host
 
-Le canal `/ws/client` vérifie l'origine avant la poignée de main. Une origine
-**absente** est acceptée — un démon worker n'est pas un navigateur — mais une
-origine présente et non déclarée est refusée en **403**.
+1. Install Tailscale and join the host to your tailnet.
+2. Enable MagicDNS and HTTPS certificates in the Tailscale admin console.
+3. Confirm that NEXUS listens on loopback and that its data services are not reachable from the
+   tailnet.
+4. Start the private HTTPS proxy:
 
-Or un client React Native en envoie une, et elle n'est pas évidente : elle est
-**dérivée de l'URL du socket**, `wss://` devenant `https://`. L'iPhone se
-présente donc comme `https://adlane.tail9a479d.ts.net`, qu'aucun déploiement ne
-pense à déclarer.
+```bash
+tailscale serve --bg --https=443 http://127.0.0.1:3000
+tailscale serve status
+```
 
-Le symptôme est trompeur : la connexion HTTPS fonctionne, le jeton est valide,
-l'appareil est approuvé, et le client affiche « connexion perdue » en boucle.
-Rien dans les journaux du cœur, puisque le refus a lieu avant l'authentification.
+The status must say `tailnet only`. Never enable `tailscale funnel` for a personal NEXUS instance.
+
+Set the public address that paired devices must use:
 
 ```dotenv
-CORS_ORIGINS=…,https://adlane.tail9a479d.ts.net
+PUBLIC_API_URL=https://nexus-core.example-tailnet.ts.net
+CORS_ORIGINS=https://nexus-core.example-tailnet.ts.net
 ```
 
-**À refaire à chaque changement de nom d'hôte du tailnet.** Pour vérifier sans
-téléphone, ouvrir une socket en imposant l'en-tête :
+`PUBLIC_API_URL` must be the address reachable by the device, not `localhost`. A React Native client
+derives its WebSocket `Origin` from the socket URL, so the same HTTPS origin must be present in
+`CORS_ORIGINS`.
 
-```js
-new WebSocket("wss://<fqdn>/ws/client", { origin: "https://<fqdn>" });
-```
+## Restrict the tailnet
 
-Une origine inconnue — `null`, par exemple — doit continuer d'être refusée :
-c'est ce qui ferme le détournement WebSocket inter-site.
-
-## Politique à appliquer — la dernière action qui manque
-
-À coller dans **Access controls** de la console d'administration. Deux formes,
-selon qu'on veut ou non tagger les appareils.
-
-### Forme A — sans tags, la plus simple ici
-
-Les appareils restent la propriété du compte `adlanehzx@`, et seul le Core est
-joignable, sur le seul port qui sert.
-
-```hujson
-{
-  "grants": [
-    {
-      "src": ["autogroup:member"],
-      "dst": ["100.90.176.40"],
-      "ip":  ["tcp:443"],
-    },
-  ],
-}
-```
-
-Cette politique **retire** les accès pair-à-pair : plus rien d'autre que le Core
-sur 443 n'est joignable dans le tailnet. C'est exactement ce qu'on cherche —
-worker vers worker, client vers worker, tout cela tombe.
-
-Si le nœud Core est renommé ou change d'adresse, cette règle le suit mal :
-préférer alors la forme B.
-
-### Forme B — avec tags, si la flotte grandit
+The default tailnet policy may allow every node to reach every other node. Limit clients and
+workers to TCP 443 on the Core. Tags make this policy independent of hostnames and IP addresses:
 
 ```hujson
 {
   "tagOwners": {
-    "tag:nexus-core":   ["autogroup:admin"],
+    "tag:nexus-core": ["autogroup:admin"],
     "tag:nexus-client": ["autogroup:admin"],
     "tag:nexus-worker": ["autogroup:admin"],
   },
@@ -220,68 +59,37 @@ préférer alors la forme B.
     {
       "src": ["tag:nexus-client", "tag:nexus-worker"],
       "dst": ["tag:nexus-core"],
-      "ip":  ["tcp:443"],
+      "ip": ["tcp:443"],
     },
   ],
 }
 ```
 
-**Avant d'adopter la forme B**, savoir ce qu'un tag implique : un appareil
-tagué cesse d'appartenir à un utilisateur. Il ne s'expire plus tout seul, mais
-il perd aussi l'accès que lui donnait son propriétaire. Tagger l'iPhone
-personnel n'est pas neutre. La forme A évite entièrement la question.
+A tagged device is owned by the tag instead of a user. Review Tailscale's tag semantics before
+tagging a personal phone. User-based grants are a valid alternative for a small tailnet.
 
-Aucune des deux ne contient de règle d'appareil à appareil : un Android ne peut
-donc joindre directement ni un poste Windows ni un iPhone.
+## Verify the complete path
 
-### Après application, vérifier plutôt que croire
+Do not stop after an HTTP health check. Verify all of the following from a second physical device:
 
-```powershell
-tailscale debug netmap | ConvertFrom-Json | Select -Expand PacketFilter
+1. `GET https://<core-fqdn>/health` returns 200 with a valid certificate.
+2. A newly paired NEXUS device remains `PENDING` until an administrator approves it.
+3. `/ws/client` rejects a pending or revoked device and accepts an approved device.
+4. The Core's direct API port, PostgreSQL and Redis are unreachable through the tailnet.
+5. The effective Tailscale policy exposes only the intended Core endpoint.
+
+Useful diagnostics:
+
+```bash
+tailscale status
+tailscale ip
+tailscale serve status
+tailscale debug netmap
 ```
 
-`Dsts` doit se réduire au Core et au port 443. Tant qu'on y lit `0.0.0.0/0` et
-`0-65535`, la politique n'est pas appliquée.
+Never disable the host firewall to diagnose connectivity. Revoke a lost device in NEXUS first,
+then remove it from the tailnet.
 
-## Remonter le montage depuis zéro
-
-Si le nœud est réinstallé, l'ordre compte — le dernier point en particulier.
-
-1. Console Tailscale : MagicDNS, puis **HTTPS Certificates**. L'émission publie
-   le FQDN dans les journaux Certificate Transparency ; c'est public et sans
-   remède, mais un FQDN n'est pas un secret.
-2. Vérifier que Docker publie le Core sur `127.0.0.1` **avant** d'activer Serve.
-3. `tailscale serve --bg --https=443 http://127.0.0.1:3000`, puis contrôler avec
-   `tailscale serve status` que la mention est bien `tailnet only`.
-4. Éprouver `https://<fqdn>/health` **et** `wss://<fqdn>/ws/client`. Le second
-   n'est pas garanti par le premier : un relais peut servir du HTTP sans relayer
-   la montée en WebSocket.
-5. Appliquer la politique d'accès. Sans elle, le tailnet reste ouvert de nœud à
-   nœud, quelle que soit la qualité du reste.
-
-Ne jamais exécuter `tailscale funnel`.
-
-## Ce qui reste à valider physiquement
-
-Aucun appareil distant réel n'a été connecté : le seul autre nœud du tailnet,
-`pc-alger-bougara`, est hors ligne depuis le 27 août 2026. Toutes les
-vérifications HTTPS et WSS ci-dessus ont été faites **depuis le nœud Core
-lui-même**, à travers son nom Tailscale et son certificat public — ce qui
-éprouve le relais, le certificat et la montée en WebSocket, mais **pas** le
-routage entre deux nœuds ni le comportement d'un iPhone sur 5G.
-
-Tant qu'un second appareil ne s'est pas connecté, le multi-appareil physique
-n'est pas validé.
-
-## Onboarding, révocation et dépannage
-
-- Ajouter chaque appareil au tailnet, puis effectuer son provisioning NEXUS
-  habituel : Tailscale ne rend pas un appareil NEXUS fiable.
-- Révoquer d'abord dans NEXUS si l'appareil ne doit plus exécuter ; retirer ou
-  expirer ensuite le nœud Tailscale et son tag dans la console.
-- Vérifier `tailscale status`, `tailscale ip`, `tailscale serve status`, puis
-  les Grants. Ne jamais désactiver le firewall pour diagnostiquer.
-
-Références : [Grants](https://tailscale.com/docs/reference/syntax/grants),
-[HTTPS certificates](https://tailscale.com/docs/how-to/set-up-https-certificates),
+References: [Grants](https://tailscale.com/docs/reference/syntax/grants),
+[HTTPS certificates](https://tailscale.com/docs/how-to/set-up-https-certificates), and
 [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Contrats rÃ©seau : enveloppes WebSocket, DTO d'API, codes d'erreur",
+  "description": "WebSocket envelopes, API DTOs and error-code contracts",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

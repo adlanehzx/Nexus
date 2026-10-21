@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Client typÃ© du Browser Worker et outils browser.* pour l'agent",
+  "description": "Typed Browser Worker client and browser tools for agents",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -46,7 +46,7 @@ import { BrowserWorkerHost } from "../src/worker.js";
  * comportement de `browser-use` et de Chromium eux-mêmes.
  */
 
-export const USER_ID = "user-adlan";
+export const USER_ID = "user-example";
 export const DEVICE_ID = "device-browser";
 
 // ─────────────────────────────────────────────────────────────────────────────

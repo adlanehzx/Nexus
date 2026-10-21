@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Chargement et validation de la configuration d'environnement",
+  "description": "Environment configuration loading and validation",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

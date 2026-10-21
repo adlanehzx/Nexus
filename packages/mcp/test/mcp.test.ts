@@ -471,11 +471,11 @@ describe("configurations prêtes à l'emploi", () => {
   });
 
   it("confie le cloisonnement des chemins au serveur lui-même", () => {
-    const config = filesystemPreset({ roots: ["/home/adlan/dev"] });
+    const config = filesystemPreset({ roots: ["/workspace/project"] });
 
     // Le serveur ne peut physiquement pas répondre hors de ses racines : c'est
     // plus solide qu'un filtrage côté client.
-    expect(config.transport === "stdio" ? config.args : []).toContain("/home/adlan/dev");
+    expect(config.transport === "stdio" ? config.args : []).toContain("/workspace/project");
     expect(config.toolPolicies.write_file?.disabled).toBe(true);
     expect(config.toolPolicies.move_file?.risk).toBe("HIGH");
   });

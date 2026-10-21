@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Ingestion documentaire multi-formats (Docling, PDF, Word, PowerPoint, OCR, découpage structuré et citations)",
+  "description": "Multi-format document ingestion with Docling, OCR, structured chunking and citations",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

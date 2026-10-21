@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Contrats d'authentification : claims, sessions, appairage d'appareil",
+  "description": "Authentication contracts, sessions and device pairing",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

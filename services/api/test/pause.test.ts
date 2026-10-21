@@ -41,7 +41,7 @@ async function register(harness: ApiHarness): Promise<string> {
   const response = await harness.app.inject({
     method: "POST",
     url: "/api/v1/auth/register",
-    payload: { email: "adlan@exemple.fr", displayName: "Adlane", password: PASSWORD },
+    payload: { email: "alex@example.test", displayName: "Alex", password: PASSWORD },
   });
   expect(response.statusCode).toBe(201);
   return response.json<{ data: { tokens: { accessToken: string } } }>().data.tokens.accessToken;

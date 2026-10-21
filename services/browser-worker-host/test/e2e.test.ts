@@ -52,7 +52,7 @@ let python: ChildProcess | undefined;
 /** Requete de session minimale, telle que le worker Python l'attend. */
 function createSessionRequest() {
   return {
-    ownerId: "user-adlan",
+    ownerId: "user-example",
     allowedDomains: [],
     prohibitedDomains: [],
     headless: true,
@@ -130,7 +130,7 @@ suite("bout en bout avec le worker Python réel", () => {
 
     const device = await registry.registerDevice({
       id: config.deviceId,
-      userId: "user-adlan",
+      userId: "user-example",
       name: "Exécutant navigateur",
       type: "BROWSER_WORKER",
       platform: "WEB",
@@ -204,7 +204,7 @@ suite("bout en bout avec le worker Python réel", () => {
     // Python, qui l'exerce directement.
     const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: TOKEN });
     const session = await client.createSession({
-      ownerId: "user-adlan",
+      ownerId: "user-example",
       allowedDomains: [],
       prohibitedDomains: [],
       headless: true,

@@ -282,6 +282,33 @@ describe("plan d'installation", () => {
     expect(readEnvFile(join(root, ".env")).NODE_ENV).toBe("development");
   });
 
+  it("creates local runtime configuration without tracking personal profiles", () => {
+    const root = workspace();
+    writeFileSync(join(root, ".env"), "NODE_ENV=development\n");
+    mkdirSync(join(root, "services", "agent", "config"), { recursive: true });
+    mkdirSync(join(root, "services", "mission-engine", "config"), { recursive: true });
+    writeFileSync(
+      join(root, "services", "agent", "config", "profiles.example.json"),
+      '{"profiles":{"example":{"command":"npx"}}}\n',
+    );
+    writeFileSync(
+      join(root, "services", "mission-engine", "config", "profiles.example.json"),
+      '{"example":"example"}\n',
+    );
+    writeFileSync(
+      join(root, "services", "mission-engine", "config", "runtime-settings.example.json"),
+      '{"max_attempts":3}\n',
+    );
+
+    const paths = resolvePaths(root, join(root, "home"));
+    applyPlan(setupIn(root));
+
+    expect(readFileSync(paths.agentRegistry, "utf8")).toContain('"example"');
+    expect(readFileSync(paths.engineProfiles, "utf8")).toContain('"example"');
+    expect(readFileSync(paths.engineRuntimeSettings, "utf8")).toContain('"max_attempts"');
+    expect((statSync(paths.agentRegistry).mode & 0o777).toString(8)).toBe("600");
+  });
+
   it("génère une URL PostgreSQL avec un mot de passe aléatoire, et prévient", () => {
     const root = workspace();
     writeFileSync(join(root, ".env"), "NODE_ENV=development\n");

@@ -4,7 +4,7 @@ import { REDACTED, redact, redactText, truncate } from "../src/index.js";
 describe("redact", () => {
   it("masque les clés dont le nom trahit un secret", () => {
     const result = redact({
-      user: "adlan",
+      user: "example",
       password: "hunter2",
       apiKey: "abc",
       access_token: "xyz",
@@ -12,7 +12,7 @@ describe("redact", () => {
     });
 
     expect(result).toEqual({
-      user: "adlan",
+      user: "example",
       password: REDACTED,
       apiKey: REDACTED,
       access_token: REDACTED,

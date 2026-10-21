@@ -14,6 +14,7 @@
 #
 # Usage:
 #   pnpm translation:status
+#   pnpm translation:status --check         # fail while French remains
 #   pnpm translation:status --files docs    # list the remaining files in one area
 set -euo pipefail
 
@@ -36,6 +37,9 @@ if [ "${1:-}" = "--files" ]; then
   exit 0
 fi
 
+check=false
+[ "${1:-}" = "--check" ] && check=true
+
 printf '%-18s %10s %10s\n' 'area' 'files' 'lines'
 printf '%-18s %10s %10s\n' '------------------' '----------' '----------'
 
@@ -43,8 +47,8 @@ total_files=0
 total_lines=0
 for area in "${AREAS[@]}"; do
   [ -d "$area" ] || continue
-  files=$(sources "$area" | xargs grep -l "$ACCENTS" 2>/dev/null | wc -l | tr -d ' ')
-  lines=$(sources "$area" | xargs grep -h "$ACCENTS" 2>/dev/null | wc -l | tr -d ' ')
+  files=$({ sources "$area" | xargs -r grep -l "$ACCENTS" 2>/dev/null || true; } | wc -l | tr -d ' ')
+  lines=$({ sources "$area" | xargs -r grep -h "$ACCENTS" 2>/dev/null || true; } | wc -l | tr -d ' ')
   [ "$files" -eq 0 ] && continue
   printf '%-18s %10s %10s\n' "$area" "$files" "$lines"
   total_files=$((total_files + files))
@@ -69,4 +73,9 @@ if [ "${remaining:-0}" -eq 0 ]; then
   printf 'no French left in any userMessage.\n'
 else
   printf '%s remaining.\n' "$remaining"
+fi
+
+if [ "$check" = true ] && { [ "$total_lines" -ne 0 ] || [ "${remaining:-0}" -ne 0 ]; }; then
+  printf '\nEnglish-only check failed: translate the remaining lines before release.\n' >&2
+  exit 1
 fi

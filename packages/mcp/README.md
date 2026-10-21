@@ -91,7 +91,7 @@ import { githubPreset, filesystemPreset } from "@nexus/mcp";
 githubPreset({ tokenRef: "vault://github" }); // lecture seule
 githubPreset({ tokenRef: "vault://github", allowWrite: true }); // + écritures confirmées
 
-filesystemPreset({ roots: ["/home/adlan/dev"] }); // lecture seule
+filesystemPreset({ roots: ["/workspace/project"] }); // read-only
 ```
 
 Elles servent aussi de modèle : la façon la plus rapide d'écrire une politique

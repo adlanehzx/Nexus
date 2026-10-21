@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Hote WorkerRuntime du Browser Use worker : le raccorde au WorkerGateway de NEXUS",
+  "description": "WorkerRuntime host that connects Browser Use to the NEXUS WorkerGateway",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -19,7 +19,7 @@ describe("secrets dans la trace d'un run", () => {
 
     const h = makeHarness({
       turns: [
-        callTurn("site.login", { user: "adlan", password: "hunter2" }),
+        callTurn("site.login", { user: "example", password: "hunter2" }),
         { kind: "final", text: "Connecté." },
       ],
       tools: [loginTool] as unknown as ToolDefinition<never, unknown>[],
@@ -27,7 +27,7 @@ describe("secrets dans la trace d'un run", () => {
 
     const { record } = await h.run();
 
-    expect(record.toolsUsed[0]?.input).toEqual({ user: "adlan", password: REDACTED });
+    expect(record.toolsUsed[0]?.input).toEqual({ user: "example", password: REDACTED });
     expect(JSON.stringify(record)).not.toContain("hunter2");
     // Les événements sont destinés à être journalisés et transmis : ils sont
     // soumis à la même règle.

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Runtime commun a tous les executants NEXUS : cycle de vie, capacites, execution, reprise",
+  "description": "Shared NEXUS worker lifecycle, capabilities, execution and recovery runtime",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

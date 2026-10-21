@@ -14,7 +14,7 @@ import {
  * **rien de sensible n'est mémorisé en silence.**
  */
 
-const ADLAN = "user-adlan";
+const ADLAN = "user-example";
 const AUTRE = "user-autre";
 
 interface Audit {
@@ -50,10 +50,10 @@ describe("remember", () => {
 
     const record = await service.remember({
       userId: ADLAN,
-      content: "Adlan préfère le train",
+      content: "Alex préfère le train",
     });
 
-    expect(record.content).toBe("Adlan préfère le train");
+    expect(record.content).toBe("Alex préfère le train");
     expect(record.sensitivity).toBe("ORDINARY");
   });
 
@@ -221,7 +221,7 @@ describe("forget", () => {
 
   it("efface tout une fois confirmé, et rien de plus", async () => {
     const { service, provider } = makeService();
-    await service.remember({ userId: ADLAN, content: "Souvenir d'Adlan" });
+    await service.remember({ userId: ADLAN, content: "Souvenir d'Alex" });
     await service.remember({ userId: AUTRE, content: "Souvenir d'un autre" });
 
     const result = await service.forget({ userId: ADLAN, all: true, confirmed: true });

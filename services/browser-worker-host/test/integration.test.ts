@@ -289,7 +289,7 @@ describe("sélection par le cœur", () => {
     });
 
     const plan = createTaskPlan({
-      userId: "user-adlan",
+      userId: "user-example",
       title: "Chercher un prix",
       originClientDeviceId: harness.device.id,
       correlationId: "corr-browser",
@@ -306,7 +306,7 @@ describe("sélection par le cœur", () => {
     });
 
     const chosen = await harness.selector.select({
-      userId: "user-adlan",
+      userId: "user-example",
       requiredCapabilities: ["browser.navigate"],
     });
 

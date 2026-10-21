@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Recherche web locale interchangeable, avec adaptateur SearXNG",
+  "description": "Pluggable local web search with a SearXNG adapter",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

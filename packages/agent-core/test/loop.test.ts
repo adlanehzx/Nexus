@@ -19,13 +19,13 @@ const asTools = (...tools: unknown[]): ToolDefinition<never, unknown>[] =>
 
 describe("réponse simple", () => {
   it("répond sans appeler le moindre outil", async () => {
-    const h = makeHarness({ turns: [{ kind: "final", text: "Bonjour Adlan." }] });
+    const h = makeHarness({ turns: [{ kind: "final", text: "Bonjour Alex." }] });
 
     const { record } = await h.run("Salut");
 
     expect(record.status).toBe("completed");
     expect(record.stopReason).toBe("final_answer");
-    expect(record.response).toBe("Bonjour Adlan.");
+    expect(record.response).toBe("Bonjour Alex.");
     expect(record.iterations).toBe(1);
     expect(record.toolsUsed).toHaveLength(0);
     expect(record.usage.inputTokens).toBeGreaterThan(0);
@@ -459,7 +459,7 @@ describe("confirmation", () => {
   it("fait dépendre la confirmation des arguments", async () => {
     const h = makeHarness({
       turns: [
-        callTurn("filesystem.write", { path: "/home/adlan/dev/x.ts", content: "ok" }),
+        callTurn("filesystem.write", { path: "/workspace/project/x.ts", content: "ok" }),
         { kind: "final", text: "Écrit." },
       ],
       tools: asTools(fileWriteTool),

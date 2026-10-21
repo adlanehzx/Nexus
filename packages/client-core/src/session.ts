@@ -353,7 +353,7 @@ export class SessionManager {
    *  2. **le compte possède déjà cet appareil** — réinstallation, trousseau
    *     effacé, changement de téléphone reprenant le même nom : on se rattache à
    *     la ligne existante. Sans ce chemin, chaque réinstallation ajouterait un
-   *     « iPhone d'Adlan » de plus dans la flotte, et l'utilisateur devrait les
+   *     « iPhone d'Alex » de plus dans la flotte, et l'utilisateur devrait les
    *     approuver un par un ;
    *  3. **aucun appareil ne correspond** — alors seulement on en enregistre un.
    *

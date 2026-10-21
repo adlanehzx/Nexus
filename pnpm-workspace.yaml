@@ -2,47 +2,44 @@ packages:
   - "apps/*"
   - "services/*"
   - "packages/*"
-  - "mcp/*"
-  # Les évaluations sont un paquet comme un autre : elles dépendent du cœur
-  # agent et de la couche d'outils, et doivent donc être résolues par pnpm.
+  # Evaluations are regular workspace packages: they depend on the agent core
+  # and tool layer, so pnpm must resolve them with the rest of the workspace.
   - "evals/*"
 
-# Planchers de sécurité sur des dépendances transitives.
+# Security floors for transitive dependencies.
 #
-# Les deux versions vulnérables étaient atteignables alors que les plages
-# déclarées par leurs parents acceptaient déjà les versions corrigées : seul le
-# verrou était figé plus bas. Un plancher explicite plutôt qu'une simple mise à
-# jour du verrou, pour qu'une régénération ultérieure ne puisse pas redescendre
-# en silence — et pour que la raison soit lisible ici.
+# The vulnerable versions remained reachable even though their parent ranges
+# already accepted fixed versions: only the lockfile was pinned too low. Keep
+# explicit floors so a later lockfile regeneration cannot silently downgrade
+# them and so the reason remains documented here.
 #
-#   proxy-addr  : usurpation d'IP via un sous-réseau IPv6 mappant IPv4
-#                 (GHSA-jqcg-44mw-7w3h), atteint par express via le SDK MCP
-#   shell-quote : injection de commande dans `quote()` via un terminateur de
-#                 ligne (GHSA-pqg4-j6r4-53mv), atteint par l'outillage de
-#                 développement React Native
+#   proxy-addr  : IP spoofing through an IPv4-mapped IPv6 subnet
+#                 (GHSA-jqcg-44mw-7w3h), reached by Express through the MCP SDK
+#   shell-quote : command injection in `quote()` through a line terminator
+#                 (GHSA-pqg4-j6r4-53mv), reached by React Native tooling
 overrides:
   proxy-addr: "^2.0.8"
   shell-quote: "^1.11.0"
 
-# pnpm bloque les scripts d'installation par défaut (protection chaîne
-# d'approvisionnement). On autorise explicitement les seuls paquets qui en ont
-# réellement besoin — tout ajout ici est une décision, pas une formalité.
-#   prisma / @prisma/engines : téléchargement des moteurs de requête
-#   esbuild                  : binaire natif utilisé par vitest et tsx
+# pnpm blocks install scripts by default as a supply-chain safeguard. Only the
+# packages that actually need them are allowed here. Every addition is a
+# deliberate security decision.
+#   prisma / @prisma/engines : downloads query engines
+#   esbuild                  : native binary used by Vitest and tsx
 allowBuilds:
   "@prisma/engines": true
   esbuild: true
-  # Les binaires CPU sont déjà distribués dans le paquet. Le postinstall ne
-  # sert qu'à récupérer les énormes runtimes GPU/CUDA, inutiles à NEXUS.
+  # CPU binaries ship in the package. The postinstall only downloads the large
+  # GPU/CUDA runtimes, which NEXUS does not need.
   onnxruntime-node: false
   prisma: true
-  # protobufjs : le postinstall n'est pas necessaire a l'execution ; les
-  # artefacts JavaScript distribues sont deja construits. Le refuser garde la
-  # politique fermée sans casser l'export OTLP.
+  # protobufjs does not need its postinstall at runtime; the published
+  # JavaScript artifacts are already built. Blocking it preserves the closed
+  # policy without breaking OTLP export.
   protobufjs: false
 
-# pnpm refuse par défaut les versions publiées depuis moins de N jours. Les
-# versions ci-dessous ont été explicitement vérifiées et épinglées.
+# pnpm rejects versions published fewer than N days ago by default. The
+# versions below were explicitly reviewed and pinned.
 minimumReleaseAgeExclude:
   - "@typescript-eslint/eslint-plugin@8.69.0"
   - "@typescript-eslint/parser@8.69.0"

@@ -314,7 +314,7 @@ export function loginResponse(tokens = TOKENS): HttpResponse {
     status: 200,
     body: {
       data: {
-        user: { id: "u1", email: "adlan@exemple.fr" },
+        user: { id: "u1", email: "alex@example.test" },
         tokens: {
           accessToken: tokens.access,
           refreshToken: tokens.refresh,

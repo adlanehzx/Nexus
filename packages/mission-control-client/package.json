@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Client typé et fail-closed de NEXUS Mission Engine",
+  "description": "Typed, fail-closed NEXUS Mission Engine client",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -1,5 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createPublicKey } from "node:crypto";
 
 import { parseConfig } from "@nexus/config";
@@ -194,18 +193,6 @@ async function agentChecks({ paths, probes, env }: DoctorContext): Promise<Check
       : ok("Chromium (CDP)", "joignable"),
   );
 
-  const mcpDir = join(paths.root, "mcp");
-  const servers = existsSync(mcpDir)
-    ? readFileSyncSafe(join(paths.root, "pnpm-workspace.yaml")).includes("mcp/*")
-      ? listDirectories(mcpDir)
-      : []
-    : [];
-  results.push(
-    servers.length > 0
-      ? ok("serveurs MCP", servers.join(", "))
-      : warn("serveurs MCP", "aucun serveur dans mcp/"),
-  );
-
   return results;
 }
 
@@ -368,16 +355,6 @@ function readFileSyncSafe(path: string): string {
     return readFileSync(path, "utf8");
   } catch {
     return "";
-  }
-}
-
-function listDirectories(path: string): string[] {
-  try {
-    return readdirSync(path, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return [];
   }
 }
 

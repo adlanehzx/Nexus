@@ -12,8 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "fr.nexus.client",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "NEXUS utilise le micro uniquement quand vous appuyez sur le bouton micro, pour transcrire ce que vous dictez. Il n'ecoute jamais en continu.",
-        "NSSpeechRecognitionUsageDescription": "NEXUS transcrit ce que vous dictez pour l'envoyer a l'assistant. La transcription n'a lieu que pendant que vous maintenez le bouton micro.",
+        "NSMicrophoneUsageDescription": "NEXUS uses the microphone only while you press the microphone button to dictate a message. It never listens continuously.",
+        "NSSpeechRecognitionUsageDescription": "NEXUS transcribes speech only while you dictate a message for the assistant.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -40,11 +40,6 @@
     "experiments": {
       "typedRoutes": true
     },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "176f6f5f-dd53-4513-9f20-ce3e5c971874"
-      }
-    }
+    "extra": { "router": {} }
   }
 }

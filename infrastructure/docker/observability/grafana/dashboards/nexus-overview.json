@@ -8,7 +8,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "id": 1,
       "targets": [{ "expr": "sum(rate(nexus_http_requests_total[5m]))", "refId": "A" }],
-      "title": "Requêtes API par seconde",
+      "title": "API requests per second",
       "type": "timeseries"
     },
     {

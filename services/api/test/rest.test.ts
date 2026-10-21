@@ -121,7 +121,7 @@ describe("authentification", () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: "adlan@exemple.fr", password: PASSWORD },
+      payload: { email: "alex@example.test", password: PASSWORD },
     });
 
     expect(response.statusCode).toBe(200);
@@ -134,7 +134,7 @@ describe("authentification", () => {
     const known = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: "adlan@exemple.fr", password: "mauvais mot de passe" },
+      payload: { email: "alex@example.test", password: "mauvais mot de passe" },
     });
     const unknown = await harness.app.inject({
       method: "POST",
@@ -224,7 +224,7 @@ describe("authentification", () => {
         harness.app.inject({
           method: "POST",
           url: "/api/v1/auth/login",
-          payload: { email: "adlan@exemple.fr", password: "mauvais" },
+          payload: { email: "alex@example.test", password: "mauvais" },
         }),
       ),
     );
@@ -308,7 +308,7 @@ describe("appareils", () => {
       url: "/api/v1/devices",
       headers: account.authorization,
       payload: {
-        name: "iPhone d'Adlan",
+        name: "iPhone d'Alex",
         type: "IPHONE",
         platform: "IOS",
         role: "CLIENT",
@@ -597,7 +597,7 @@ describe("mémoire", () => {
       method: "POST",
       url: "/api/v1/memory",
       headers: account.authorization,
-      payload: { content: "Adlan préfère les réponses courtes", kind: "SEMANTIC" },
+      payload: { content: "Alex préfère les réponses courtes", kind: "SEMANTIC" },
     });
 
     const response = await harness.app.inject({

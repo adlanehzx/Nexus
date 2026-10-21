@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Intégration Google Workspace (Gmail et Calendar) avec OAuth 2.0 PKCE, coffre sécurisé et outils confirmés",
+  "description": "Google Workspace integration with OAuth 2.0 PKCE, secure vault storage and confirmed tools",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

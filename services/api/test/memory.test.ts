@@ -14,12 +14,12 @@ import { createAccount, makeApi, type Account, type ApiHarness } from "./harness
  */
 
 let harness: ApiHarness;
-let adlan: Account;
+let example: Account;
 let autre: Account;
 
 beforeEach(async () => {
   harness = await makeApi();
-  adlan = await createAccount(harness, "adlan@exemple.fr");
+  example = await createAccount(harness, "alex@example.test");
   autre = await createAccount(harness, "autre@exemple.fr");
 });
 
@@ -45,22 +45,22 @@ async function storeOk(account: Account, content: string, extra: Record<string, 
 
 describe("store", () => {
   it("enregistre un souvenir", async () => {
-    const response = await store(adlan, { content: "Adlan préfère le train" });
+    const response = await store(example, { content: "Alex préfère le train" });
 
     expect(response.statusCode).toBe(201);
     expect(response.json<{ data: { content: string } }>().data.content).toBe(
-      "Adlan préfère le train",
+      "Alex préfère le train",
     );
   });
 
   it("distingue une préférence d'un souvenir", async () => {
-    await storeOk(adlan, "Réponds toujours en français", { layer: "PREFERENCE" });
-    await storeOk(adlan, "Habite à Lyon");
+    await storeOk(example, "Réponds toujours en français", { layer: "PREFERENCE" });
+    await storeOk(example, "Habite à Lyon");
 
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/memory?layer=PREFERENCE",
-      headers: adlan.authorization,
+      headers: example.authorization,
     });
 
     const data = response.json<{ data: { content: string }[] }>().data;
@@ -70,7 +70,7 @@ describe("store", () => {
   it("refuse un secret, et le dit", async () => {
     // La route ne doit pas pouvoir court-circuiter le service : si elle
     // appelait le magasin directement, ce test passerait en 201.
-    const response = await store(adlan, { content: "Mon mot de passe est Tr0ub4dor3xy" });
+    const response = await store(example, { content: "Mon mot de passe est Tr0ub4dor3xy" });
 
     expect(response.statusCode).toBe(422);
     const body = response.json<{ error: { code: string; message: string } }>();
@@ -79,20 +79,20 @@ describe("store", () => {
   });
 
   it("le refus ne renvoie pas le secret", async () => {
-    const response = await store(adlan, { content: "Ma clé API est sk-abcdefghijklmnopqrstuv" });
+    const response = await store(example, { content: "Ma clé API est sk-abcdefghijklmnopqrstuv" });
 
     expect(response.body).not.toContain("sk-abcdefghijklmnopqrstuv");
   });
 
   it("exige un accord pour une information personnelle", async () => {
-    const response = await store(adlan, { content: "J'ai été diagnostiqué diabétique" });
+    const response = await store(example, { content: "J'ai été diagnostiqué diabétique" });
 
     expect(response.statusCode).toBe(409);
     expect(response.json<{ error: { code: string } }>().error.code).toBe("MEMORY_CONSENT_REQUIRED");
   });
 
   it("accepte une fois l'accord donné, et le conserve", async () => {
-    const response = await store(adlan, {
+    const response = await store(example, {
       content: "J'ai été diagnostiqué diabétique",
       acknowledgedSensitive: true,
     });
@@ -107,7 +107,7 @@ describe("store", () => {
   it("l'accord n'est jamais implicite", async () => {
     // Le schéma déclare `acknowledgedSensitive` avec un défaut à `false`. Ne
     // rien envoyer doit donc valoir « non », pas « oui ».
-    const response = await store(adlan, { content: "Mon IBAN figure sur le relevé" });
+    const response = await store(example, { content: "Mon IBAN figure sur le relevé" });
 
     expect(response.statusCode).toBe(409);
   });
@@ -115,17 +115,17 @@ describe("store", () => {
 
 describe("search", () => {
   it("trouve un souvenir par mot-clé", async () => {
-    await storeOk(adlan, "Adlan préfère le train");
-    await storeOk(adlan, "Adlan aime le café serré");
+    await storeOk(example, "Alex préfère le train");
+    await storeOk(example, "Alex aime le café serré");
 
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/memory/search?q=train",
-      headers: adlan.authorization,
+      headers: example.authorization,
     });
 
     const hits = response.json<{ data: { hits: { content: string }[] } }>().data.hits;
-    expect(hits.map((hit) => hit.content)).toEqual(["Adlan préfère le train"]);
+    expect(hits.map((hit) => hit.content)).toEqual(["Alex préfère le train"]);
   });
 
   it("ne trouve rien chez quelqu'un d'autre", async () => {
@@ -134,7 +134,7 @@ describe("search", () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/memory/search?q=secret",
-      headers: adlan.authorization,
+      headers: example.authorization,
     });
 
     expect(response.json<{ data: { hits: unknown[] } }>().data.hits).toEqual([]);
@@ -143,12 +143,12 @@ describe("search", () => {
 
 describe("update", () => {
   it("corriger supersède au lieu d'écraser", async () => {
-    const record = await storeOk(adlan, "Habite à Lyon");
+    const record = await storeOk(example, "Habite à Lyon");
 
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { content: "Habite à Paris" },
     });
 
@@ -161,12 +161,12 @@ describe("update", () => {
   it("reclasse le contenu révisé", async () => {
     // Ne contrôler qu'à la création laisserait la modification comme porte
     // ouverte.
-    const record = await storeOk(adlan, "Une note anodine");
+    const record = await storeOk(example, "Une note anodine");
 
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { content: "Mon mot de passe est Tr0ub4dor3xy" },
     });
 
@@ -179,7 +179,7 @@ describe("update", () => {
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { content: "détourné" },
     });
 
@@ -191,12 +191,12 @@ describe("update", () => {
 
 describe("delete", () => {
   it("oublie un souvenir et rend ce qui a disparu", async () => {
-    const record = await storeOk(adlan, "Habite à Lyon");
+    const record = await storeOk(example, "Habite à Lyon");
 
     const response = await harness.app.inject({
       method: "DELETE",
       url: `/api/v1/memory/${record.id}`,
-      headers: adlan.authorization,
+      headers: example.authorization,
     });
 
     expect(response.statusCode).toBe(200);
@@ -211,7 +211,7 @@ describe("delete", () => {
     const response = await harness.app.inject({
       method: "DELETE",
       url: `/api/v1/memory/${record.id}`,
-      headers: adlan.authorization,
+      headers: example.authorization,
     });
 
     expect(response.statusCode).toBe(404);
@@ -228,13 +228,13 @@ describe("delete", () => {
 
 describe("forget", () => {
   it("oublie par correspondance de texte", async () => {
-    await storeOk(adlan, "Habite à Lyon");
-    await storeOk(adlan, "Préfère le café serré");
+    await storeOk(example, "Habite à Lyon");
+    await storeOk(example, "Préfère le café serré");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { match: "habite lyon" },
     });
 
@@ -242,13 +242,13 @@ describe("forget", () => {
   });
 
   it("rend les candidats plutôt que de deviner", async () => {
-    await storeOk(adlan, "Réunion équipe le lundi");
-    await storeOk(adlan, "Réunion équipe le mardi");
+    await storeOk(example, "Réunion équipe le lundi");
+    await storeOk(example, "Réunion équipe le mardi");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { match: "réunion équipe" },
     });
 
@@ -258,12 +258,12 @@ describe("forget", () => {
   });
 
   it("exige une confirmation pour tout effacer", async () => {
-    await storeOk(adlan, "Un souvenir");
+    await storeOk(example, "Un souvenir");
 
     const sans = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { all: true },
     });
     expect(sans.json<{ data: { needsConfirmation: boolean } }>().data.needsConfirmation).toBe(true);
@@ -271,20 +271,20 @@ describe("forget", () => {
     const avec = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { all: true, confirmed: true },
     });
     expect(avec.json<{ data: { forgotten: unknown[] } }>().data.forgotten).toHaveLength(1);
   });
 
   it("« tout » veut dire « tout le mien »", async () => {
-    await storeOk(adlan, "Souvenir d'Adlan");
+    await storeOk(example, "Souvenir d'Alex");
     await storeOk(autre, "Souvenir de l'autre");
 
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { all: true, confirmed: true },
     });
 
@@ -302,7 +302,7 @@ describe("commandes explicites", () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { text: "Retiens que je préfère le train" },
     });
 
@@ -316,12 +316,12 @@ describe("commandes explicites", () => {
   });
 
   it("exécute « oublie… »", async () => {
-    await storeOk(adlan, "j'habite à Lyon");
+    await storeOk(example, "j'habite à Lyon");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { text: "Oublie que j'habite à Lyon" },
     });
 
@@ -334,7 +334,7 @@ describe("commandes explicites", () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { text: "Retiens que mon mot de passe est Tr0ub4dor3xy" },
     });
 
@@ -345,7 +345,7 @@ describe("commandes explicites", () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
-      headers: adlan.authorization,
+      headers: example.authorization,
       payload: { text: "Quelle est la météo à Lyon ?" },
     });
 
@@ -382,11 +382,11 @@ describe("assemblage du contexte", () => {
     // Le test de bout en bout de la séparation : chaque couche vient de son
     // propriétaire réel — le magasin de mémoire, le contexte de session, le
     // magasin de conversations, le registre d'appareils, le magasin de plans.
-    await storeOk(adlan, "Réponds toujours en français", { layer: "PREFERENCE" });
-    await storeOk(adlan, "Habite à Lyon");
+    await storeOk(example, "Réponds toujours en français", { layer: "PREFERENCE" });
+    await storeOk(example, "Habite à Lyon");
 
     const conversation = await harness.services.conversations.create({
-      userId: adlan.userId,
+      userId: example.userId,
       title: "Essai",
     });
     await harness.services.conversations.appendMessage({
@@ -399,9 +399,9 @@ describe("assemblage du contexte", () => {
     harness.services.shortTerm.set(conversation.id, "fichier-courant", "src/memory.ts");
 
     const assembled = await harness.services.context.assemble({
-      userId: adlan.userId,
+      userId: example.userId,
       conversationId: conversation.id,
-      query: "où habite Adlan",
+      query: "où habite Alex",
     });
 
     expect(assembled.text).toContain("Réponds toujours en français");
@@ -419,7 +419,7 @@ describe("assemblage du contexte", () => {
     await storeOk(autre, "Le secret de l'autre utilisateur");
 
     const assembled = await harness.services.context.assemble({
-      userId: adlan.userId,
+      userId: example.userId,
       conversationId: "conv-inconnue",
       query: "secret",
     });
@@ -442,7 +442,7 @@ describe("assemblage du contexte", () => {
     });
 
     const assembled = await harness.services.context.assemble({
-      userId: adlan.userId,
+      userId: example.userId,
       conversationId: conversation.id,
       query: "quoi de neuf",
     });

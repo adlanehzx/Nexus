@@ -13,7 +13,7 @@ import type { WorkerDispatch, WorkerResult, WorkerTransport } from "../src/coord
  * et vérifient lequel est choisi. C'est la propriété qu'on veut protéger.
  */
 
-export const USER_ID = "user-adlan";
+export const USER_ID = "user-example";
 
 export function capability(
   name: string,

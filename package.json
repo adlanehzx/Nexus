@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
-  "description": "NEXUS — assistant personnel IA multi-appareils",
+  "description": "NEXUS — local multi-device AI assistant",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {

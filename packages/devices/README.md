@@ -22,7 +22,7 @@ ils se branchent dessus.
 ```
 
 **Le cœur ne connaît aucun appareil par son nom.** Il connaît des rôles, des
-types et des capacités. « L'iPhone d'Adlan » est une ligne en base, jamais un
+types et des capacités. « L'iPhone d'Alex » est une ligne en base, jamais un
 `if`. Et il n'y a **pas de second système d'outils** : une capacité devient un
 `ToolDefinition` ordinaire, comme le fait `@nexus/mcp`.
 

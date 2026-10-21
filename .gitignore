@@ -1,4 +1,4 @@
-# Dépendances
+# Dependencies
 node_modules/
 .pnpm-store/
 
@@ -8,14 +8,14 @@ build/
 *.tsbuildinfo
 .turbo/
 
-# Prisma — client généré (recréé par `pnpm db:generate`)
+# Prisma generated client (recreated by `pnpm db:generate`)
 packages/database/src/generated/
 
 # Tests
 coverage/
 *.lcov
 
-# Secrets et configuration locale — JAMAIS commités
+# Secrets and local configuration — NEVER commit these
 .env
 .env.*
 !.env.example
@@ -24,6 +24,11 @@ coverage/
 *.p12
 secrets/
 /services/api/config/*.json
+/services/agent/config/profiles.production.json
+/services/agent/config/*.bak-*
+/services/mission-engine/config/profiles.production.json
+/services/mission-engine/config/runtime-settings.json
+/services/mission-engine/config/*.bak-*
 
 # Logs
 *.log
@@ -31,7 +36,7 @@ npm-debug.log*
 pnpm-debug.log*
 logs/
 
-# Données locales (volumes Docker montés en bind, le cas échéant)
+# Local data (including bind-mounted Docker volumes)
 .data/
 postgres-data/
 redis-data/
@@ -39,7 +44,7 @@ redis-data/
 /backups/
 *.bak-*
 
-# Éditeurs
+# Editors
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
@@ -52,12 +57,12 @@ redis-data/
 Thumbs.db
 desktop.ini
 
-# Mobile / Expo (phase 1)
+# Mobile / Expo
 .expo/
 *.jks
 *.mobileprovision
 
-# Desktop / Tauri (phase 8)
+# Desktop / Tauri
 apps/desktop/src-tauri/target/
 
 # Python — browser worker
@@ -67,5 +72,5 @@ __pycache__/
 .venv-*/
 .pytest_cache/
 .ruff_cache/
-# Secrets locaux Kubernetes : le modele `secret.example.yaml` reste versionne.
+# Local Kubernetes secrets; `secret.example.yaml` remains tracked.
 infrastructure/kubernetes/secret.yaml

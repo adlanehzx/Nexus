@@ -45,7 +45,7 @@ import type {
  *     les frontières externes.
  */
 
-export const USER_ID = "user-adlan";
+export const USER_ID = "user-example";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Doubles de ports système

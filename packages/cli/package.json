@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Installation, diagnostic et conduite d'une instance NEXUS",
+  "description": "Install, diagnose and operate a NEXUS instance",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {

@@ -5,7 +5,7 @@ import { z } from "zod";
  *
  * Un principe gouverne ce fichier : **le cœur ne connaît aucun appareil par son
  * nom**. Il ne connaît que des rôles, des types et des capacités. « L'iPhone
- * d'Adlan » n'existe nulle part dans le code — il existe une ligne en base dont
+ * d'Alex » n'existe nulle part dans le code — il existe une ligne en base dont
  * le rôle est `CLIENT` et le type `IPHONE`. Ajouter un appareil est une écriture
  * en base, jamais un `if`.
  */

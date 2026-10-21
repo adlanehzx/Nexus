@@ -15,7 +15,7 @@ exécute, et qui doit voir le résultat ? »**.
 Deux règles produisent tout le reste :
 
 1. **Le cœur ne connaît aucun appareil par son nom.** Il connaît des rôles, des
-   types et des capacités. « L'iPhone d'Adlan » est une ligne en base, jamais un
+   types et des capacités. « L'iPhone d'Alex » est une ligne en base, jamais un
    `if` dans le code. Ajouter un quatrième ordinateur est une écriture en base.
 2. **Tout passe par le centre.** Aucun client ne parle à un autre. Pas de
    pair-à-pair, pas d'état partagé hors du backend. C'est ce qui garantit qu'un

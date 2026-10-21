@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Moteur de notifications externes unifié (desktop, mobile push ntfy, webhooks) avec priorités et plages silencieuses",
+  "description": "Unified external notifications with priorities and quiet hours",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

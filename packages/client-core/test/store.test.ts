@@ -44,7 +44,7 @@ describe("flux de la réponse", () => {
 
   it("concatène les fragments suivants", () => {
     let state = initialState;
-    for (const delta of ["Bon", "jour ", "Adlan"]) {
+    for (const delta of ["Bon", "jour ", "Alex"]) {
       state = apply(state, SERVER_TO_CLIENT.messageDelta, {
         conversationId: "c1",
         messageId: "m1",
@@ -54,7 +54,7 @@ describe("flux de la réponse", () => {
     }
 
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]?.content).toBe("Bonjour Adlan");
+    expect(state.messages[0]?.content).toBe("Bonjour Alex");
   });
 
   it("clôt le flux au dernier fragment", () => {

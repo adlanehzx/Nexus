@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Politique locale d'un appareil : fichier editable par l'humain, refus verifiables",
+  "description": "Human-editable local device policy with verifiable denials",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

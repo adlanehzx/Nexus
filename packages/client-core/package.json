@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Coeur client NEXUS : session, temps reel, etat, voix â€” sans dependance a une plateforme",
+  "description": "Platform-independent NEXUS client core for sessions, realtime state and voice",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

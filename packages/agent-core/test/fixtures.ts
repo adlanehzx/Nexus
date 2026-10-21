@@ -80,7 +80,7 @@ export const fileWriteTool: ToolDefinition<{ path: string; content: string }, { 
   outputSchema: z.object({ bytes: z.number() }),
   riskLevel: "MEDIUM",
   requiredPermissions: ["filesystem.write"],
-  requiresConfirmation: (input) => !input.path.startsWith("/home/adlan/dev/"),
+  requiresConfirmation: (input) => !input.path.startsWith("/workspace/project/"),
   execute: (input) => Promise.resolve({ bytes: input.content.length }),
 };
 

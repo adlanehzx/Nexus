@@ -9,24 +9,23 @@ src/generated
 __pycache__
 .pytest_cache
 
-# Artefacts de construction Android : cache Gradle, binaires, APK.
+# Android build artifacts: Gradle cache, binaries, and APKs.
 services/android-worker/android/.gradle
 services/android-worker/android/build
 services/android-worker/android/app/build
 
-# Schémas générés par Tauri (`tauri build` les réécrit). Les reformater serait
-# défait à la génération suivante, et le diff reviendrait à chaque build.
+# Tauri-generated schemas (`tauri build` rewrites them). Formatting these files
+# would be undone by the next build and recreate the diff every time.
 apps/desktop/src-tauri/gen
 
-# Configuration que Mission Engine écrit lui-même, en JSON trié et indenté par
-# `json.dumps`. Si Prettier imposait un autre style, chaque modification de
-# réglage depuis le tableau de bord re-salirait l'arbre de travail — le dépôt et
-# le service se battraient pour la même ligne. Les copies `.bak-*` sont des
-# sauvegardes horodatées, et n'ont pas davantage à être mises en forme.
+# Mission Engine writes these configuration files itself using sorted,
+# `json.dumps`-indented JSON. Prettier would fight the service and dirty the
+# working tree after every dashboard change. Timestamped `.bak-*` copies are
+# runtime backups and do not need formatting either.
 services/mission-engine/config/*.json
 services/mission-engine/config/*.bak-*
 
-# Le registre ACP est modifie depuis le dashboard et serialise par le service.
-# Prettier ne doit pas se battre avec ce format persistant a chaque ajout de
-# compte ou d'agent.
+# The ACP registry is changed from the dashboard and serialized by the service.
+# Prettier must not fight this persistent format after each account or agent is
+# added.
 services/agent/config/*.json

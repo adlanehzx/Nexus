@@ -387,13 +387,13 @@ describe("politique Git", () => {
 
   it("accepte un hôte de dépôt autorisé", () => {
     expect(() =>
-      new GitPolicy().assertRemoteAllowed("https://github.com/adlan/leynai.git"),
+      new GitPolicy().assertRemoteAllowed("https://github.com/example/project.git"),
     ).not.toThrow();
   });
 
   it("accepte la forme SSH abrégée", () => {
     expect(() =>
-      new GitPolicy().assertRemoteAllowed("git@github.com:adlan/leynai.git"),
+      new GitPolicy().assertRemoteAllowed("git@github.com:example/project.git"),
     ).not.toThrow();
   });
 

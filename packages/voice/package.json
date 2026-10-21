@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dictee et synthese vocale locales : whisper.cpp et Piper, sans cle API",
+  "description": "Local speech recognition and synthesis through whisper.cpp and Piper",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

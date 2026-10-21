@@ -32,7 +32,7 @@ let membre: Account;
 
 beforeEach(async () => {
   harness = await makeApi();
-  admin = await createAccount(harness, "adlan@exemple.fr");
+  admin = await createAccount(harness, "alex@example.test");
   membre = await createAccount(harness, "membre@exemple.fr");
 });
 

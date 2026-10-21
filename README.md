@@ -174,7 +174,6 @@ apps/                    clients
   mobile/                iPhone — Expo / React Native
   desktop/               Vite + Tauri v2 — Windows, macOS, Linux
   dashboard/             Administration — Vite/React, ADMIN role
-  web/                   Vite + React
 services/
   api/                   Fastify — REST v1, WebSocket, auth
   agent/                 NEXUS native ACP runtime
@@ -203,8 +202,6 @@ packages/
   cli/                   the `nexus` command
 evals/
   security/              adversarial corpus: the model is assumed compromised
-mcp/
-  github/ filesystem/    configuration presets
 infrastructure/
   docker/                 Dockerfiles and Compose stack
   kubernetes/             Kubernetes/k3s control plane; agents stay outside the cluster

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FrontiÃ¨re rÃ©seau : REST v1, WebSocket gateway, authentification",
+  "description": "Network boundary: REST v1, WebSocket gateway and authentication",
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

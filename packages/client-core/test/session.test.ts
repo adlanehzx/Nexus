@@ -29,7 +29,7 @@ describe("connexion", () => {
     const { http, storage, session } = makeSession();
     http.on("POST", "/api/v1/auth/login", loginResponse());
 
-    await session.login("adlan@exemple.fr", "un mot de passe suffisant");
+    await session.login("alex@example.test", "un mot de passe suffisant");
 
     expect(session.isAuthenticated).toBe(true);
     expect(storage.values.get("nexus.access")).toBe(TOKENS.access);
@@ -45,7 +45,7 @@ describe("connexion", () => {
       },
     });
 
-    await expect(session.login("adlan@exemple.fr", "mauvais")).rejects.toMatchObject({
+    await expect(session.login("alex@example.test", "mauvais")).rejects.toMatchObject({
       code: "CLIENT_LOGIN_FAILED",
     });
     expect(session.isAuthenticated).toBe(false);
@@ -55,7 +55,7 @@ describe("connexion", () => {
     const { http, storage, session } = makeSession();
     http.on("POST", "/api/v1/auth/login", loginResponse());
 
-    await session.login("adlan@exemple.fr", "MonMotDePasse2026");
+    await session.login("alex@example.test", "MonMotDePasse2026");
 
     expect(JSON.stringify([...storage.values.values()])).not.toContain("MonMotDePasse2026");
   });
@@ -87,7 +87,7 @@ describe("rafraîchissement", () => {
       body: { data: { accessToken: "acces-2", refreshToken: "rafraichissement-2" } },
     });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const token = await session.refresh();
 
     expect(token).toBe("acces-2");
@@ -105,7 +105,7 @@ describe("rafraîchissement", () => {
       body: { data: { accessToken: "acces-2", refreshToken: "rafraichissement-2" } },
     });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     const results = await Promise.all(Array.from({ length: 10 }, () => session.refresh()));
 
@@ -125,7 +125,7 @@ describe("rafraîchissement", () => {
       body: { error: { code: "SESSION_REVOKED" } },
     });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await expect(session.refresh()).rejects.toMatchObject({ code: "CLIENT_NOT_AUTHENTICATED" });
 
     expect(session.isAuthenticated).toBe(false);
@@ -145,7 +145,7 @@ describe("rafraîchissement", () => {
       { status: 200, body: { data: { accessToken: "a3", refreshToken: "r3" } } },
     );
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect(await session.refresh()).toBe("a2");
     expect(await session.refresh()).toBe("a3");
@@ -158,7 +158,7 @@ describe("requêtes authentifiées", () => {
     http.on("POST", "/api/v1/auth/login", loginResponse());
     http.on("GET", "/api/v1/devices", { status: 200, body: { data: [] } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.authorizedRequest({ method: "GET", path: "/api/v1/devices" });
 
     expect(http.requests.at(-1)?.authorization).toBe(`Bearer ${TOKENS.access}`);
@@ -178,7 +178,7 @@ describe("requêtes authentifiées", () => {
       { status: 200, body: { data: [{ id: "d1" }] } },
     );
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const response = await session.authorizedRequest({ method: "GET", path: "/api/v1/devices" });
 
     expect(response.status).toBe(200);
@@ -196,7 +196,7 @@ describe("requêtes authentifiées", () => {
     });
     http.on("GET", "/api/v1/devices", { status: 401, body: { error: { code: "FORBIDDEN" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const response = await session.authorizedRequest({ method: "GET", path: "/api/v1/devices" });
 
     expect(response.status).toBe(401);
@@ -211,7 +211,7 @@ describe("déconnexion", () => {
     http.on("POST", "/api/v1/auth/login", loginResponse());
     http.on("POST", "/api/v1/auth/logout", { status: 200, body: { data: { closed: true } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.logout();
 
     expect(session.isAuthenticated).toBe(false);
@@ -224,7 +224,7 @@ describe("déconnexion", () => {
     const { http, storage, session } = makeSession();
     http.on("POST", "/api/v1/auth/login", loginResponse());
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     http.failNext = true;
     await session.logout();
 
@@ -239,9 +239,9 @@ describe("enregistrement de l'appareil", () => {
     http.on("POST", "/api/v1/auth/login", loginResponse());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-iphone" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const deviceId = await session.registerDevice({
-      name: "iPhone d'Adlan",
+      name: "iPhone d'Alex",
       publicKeyPem: "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----",
     });
 
@@ -261,7 +261,7 @@ describe("enregistrement de l'appareil", () => {
     http.on("POST", "/api/v1/auth/login", loginResponse());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.registerDevice({ name: "iPhone", publicKeyPem: "clé" });
 
     expect((http.requests.at(-1)?.body as { role: string }).role).toBe("CLIENT");
@@ -275,7 +275,7 @@ describe("enregistrement de l'appareil", () => {
     http.on("POST", "/api/v1/auth/login", loginResponse());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.registerDevice({
       name: "Portable",
       publicKeyPem: "clé",
@@ -301,7 +301,7 @@ describe("enregistrement de l'appareil", () => {
     const { http, storage, session } = makeSession();
     http.on("POST", "/api/v1/auth/login", loginResponse());
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const avant = http.countOf("POST", "/api/v1/devices");
 
     await session.bindDevice("device-portable");

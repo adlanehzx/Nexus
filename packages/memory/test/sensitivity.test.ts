@@ -75,7 +75,7 @@ describe("ce qui exige un accord", () => {
 
 describe("ce qui passe sans cérémonie", () => {
   const ordinaires = [
-    "Adlan préfère le train à l'avion",
+    "Alex préfère le train à l'avion",
     "Réunion d'équipe tous les mardis à 10 h",
     "Le dépôt NEXUS utilise pnpm et Turborepo",
     "Réponds toujours en français",

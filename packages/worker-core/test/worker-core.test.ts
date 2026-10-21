@@ -108,7 +108,7 @@ describe("erreurs de fil", () => {
   it("ne transmet pas le message d'une exception inconnue", () => {
     // Un message d'exception peut contenir un chemin, une variable
     // d'environnement, un fragment de fichier. Il reste local.
-    const wire = toWireError(new Error("ENOENT: /home/adlan/.ssh/id_ed25519"));
+    const wire = toWireError(new Error("ENOENT: /home/example/.ssh/id_ed25519"));
 
     expect(wire.code).toBe("WORKER_INTERNAL_ERROR");
     expect(wire.message).not.toContain("id_ed25519");

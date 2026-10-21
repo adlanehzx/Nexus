@@ -12,7 +12,7 @@ import { InMemoryMemoryProvider } from "../src/in-memory.js";
  *    fait ne l'efface pas, il le date.
  */
 
-const ADLAN = "user-adlan";
+const ADLAN = "user-example";
 const AUTRE = "user-autre";
 
 function makeProvider(now = new Date("2026-09-03T10:00:00.000Z")) {
@@ -34,7 +34,7 @@ describe("store", () => {
     const record = await provider.store({
       userId: ADLAN,
       kind: "SEMANTIC",
-      content: "Adlan préfère le train à l'avion",
+      content: "Alex préfère le train à l'avion",
     });
 
     expect(record.layer).toBe("LONG_TERM");

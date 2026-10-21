@@ -95,7 +95,7 @@ describe("1. connexion avec un appareil déjà rattaché", () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result).toEqual({ deviceId: "device-iphone", origin: "existing", trust: "TRUSTED" });
@@ -109,7 +109,7 @@ describe("1. connexion avec un appareil déjà rattaché", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ trust: "REVOKED" })));
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result.origin).toBe("registered");
@@ -123,7 +123,7 @@ describe("1. connexion avec un appareil déjà rattaché", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ name: "iPhone de Sarah" })));
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect((await session.ensureDevice(IPHONE)).origin).toBe("registered");
   });
@@ -135,7 +135,7 @@ describe("2 et 3. connexion sans appareil : enregistrement", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result).toEqual({ deviceId: "device-neuf", origin: "registered", trust: "PENDING" });
@@ -152,7 +152,7 @@ describe("2 et 3. connexion sans appareil : enregistrement", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
 
     const body = http.requests.at(-1)?.body as Record<string, unknown>;
@@ -164,7 +164,7 @@ describe("2 et 3. connexion sans appareil : enregistrement", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
     await session.ensureDevice(IPHONE);
     await session.ensureDevice(IPHONE);
@@ -182,7 +182,7 @@ describe("4. enregistrement refusé", () => {
       body: { error: { code: "DEVICE_QUOTA", message: "Trop d'appareils sur ce compte." } },
     });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     await expect(session.ensureDevice(IPHONE)).rejects.toThrow("Trop d'appareils sur ce compte.");
     // Rien n'est retenu : réessayer doit repartir d'un état propre.
@@ -191,7 +191,7 @@ describe("4. enregistrement refusé", () => {
 
   it("échoue proprement quand le cœur est injoignable", async () => {
     const { http, session } = makeSession();
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     http.failNext = true;
     await expect(session.ensureDevice(IPHONE)).rejects.toThrow();
@@ -204,7 +204,7 @@ describe("4. enregistrement refusé", () => {
     http.on("GET", "/api/v1/devices?limit=100", { status: 500, body: null });
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect((await session.ensureDevice(IPHONE)).origin).toBe("registered");
   });
@@ -218,7 +218,7 @@ describe("5. appareil en attente d'approbation", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect((await session.ensureDevice(IPHONE)).trust).toBe("PENDING");
   });
@@ -229,7 +229,7 @@ describe("5. appareil en attente d'approbation", () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device({ trust: "PENDING" })));
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     const result = await session.ensureDevice(IPHONE);
 
     expect(result).toEqual({ deviceId: "device-iphone", origin: "existing", trust: "PENDING" });
@@ -263,7 +263,7 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
 
   it("n'ouvre aucune socket sans appareil rattaché", async () => {
     const { session } = makeSession();
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -279,7 +279,7 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     // affichait « connexion perdue » en boucle pour une cause que le réseau ne
     // réparerait jamais.
     const { session } = makeSession();
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -292,7 +292,7 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
 
   it("dit pourquoi, au lieu de laisser un écran vide", async () => {
     const { session } = makeSession();
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -305,7 +305,7 @@ describe("6. le canal n'ouvre qu'avec un appareil", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "device-neuf" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     const h = makeRealtime(session);
     await h.client.start();
@@ -327,7 +327,7 @@ describe("7. déconnexion", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
     await session.logout();
 
@@ -344,7 +344,7 @@ describe("7. déconnexion", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
 
     http.failNext = true;
@@ -359,9 +359,9 @@ describe("8. reconnexion et changement de compte", () => {
     const { http, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect(session.deviceId).toBe("device-iphone");
   });
@@ -373,7 +373,7 @@ describe("8. reconnexion et changement de compte", () => {
     const { http, storage, session } = makeSession();
     http.on("GET", "/api/v1/devices?limit=100", devicesList(device()));
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
     expect(session.deviceId).toBe("device-iphone");
 
@@ -398,7 +398,7 @@ describe("8. reconnexion et changement de compte", () => {
 
     const { session } = makeSession(storage);
     await session.restore();
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
 
     expect(session.deviceId).toBe("device-historique");
   });
@@ -412,7 +412,7 @@ describe("9. aucun privilège accordé au client", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
 
     const body = http.requests.at(-1)?.body as { role: string; grantedPermissions: string[] };
@@ -427,7 +427,7 @@ describe("9. aucun privilège accordé au client", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
 
     expect(http.requests.some((r) => r.path.includes("/trust"))).toBe(false);
@@ -440,7 +440,7 @@ describe("9. aucun privilège accordé au client", () => {
     http.on("GET", "/api/v1/devices?limit=100", devicesList());
     http.on("POST", "/api/v1/devices", { status: 201, body: { data: { id: "d" } } });
 
-    await session.login("adlan@exemple.fr", "mot de passe");
+    await session.login("alex@example.test", "mot de passe");
     await session.ensureDevice(IPHONE);
 
     const roles = http.requests

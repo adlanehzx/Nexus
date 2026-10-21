@@ -18,7 +18,7 @@ async function register(harness: ApiHarness, email: string): Promise<string> {
   const response = await harness.app.inject({
     method: "POST",
     url: "/api/v1/auth/register",
-    payload: { email, displayName: "Adlane", password: PASSWORD },
+    payload: { email, displayName: "Alex", password: PASSWORD },
   });
   expect(response.statusCode).toBe(201);
   return response.json<{ data: { tokens: { accessToken: string } } }>().data.tokens.accessToken;
@@ -51,7 +51,7 @@ describe("appairage par QR", () => {
 
   beforeEach(async () => {
     harness = await makeApi({ publicApiUrl: API_URL });
-    accessToken = await register(harness, "adlan@exemple.fr");
+    accessToken = await register(harness, "alex@example.test");
   });
 
   afterEach(async () => {
@@ -245,7 +245,7 @@ describe("révocation et réappairage", () => {
 
   beforeEach(async () => {
     harness = await makeApi({ publicApiUrl: API_URL });
-    accessToken = await register(harness, "adlan@exemple.fr");
+    accessToken = await register(harness, "alex@example.test");
   });
 
   afterEach(async () => {
@@ -328,7 +328,7 @@ describe("révocation et réappairage", () => {
 describe("sans PUBLIC_API_URL", () => {
   it("refuse d'émettre un QR plutôt que d'en produire un qui mène ailleurs", async () => {
     const harness = await makeApi();
-    const token = await register(harness, "adlan@exemple.fr");
+    const token = await register(harness, "alex@example.test");
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices/pairing-tickets",

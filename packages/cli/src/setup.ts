@@ -80,6 +80,40 @@ export function planSetup(options: SetupOptions): SetupPlan {
 
   const env = envExists ? readEnvFile(paths.envFile) : {};
 
+  // Runtime configuration belongs to the installation, not to the source
+  // tree. Bootstrap it from public examples so a clone starts clean and a
+  // user's agents, account names and routing preferences can never be
+  // committed accidentally.
+  for (const [target, example, fallback, label] of [
+    [
+      paths.agentRegistry,
+      join(dirname(paths.agentRegistry), "profiles.example.json"),
+      '{"profiles":{}}\n',
+      "create the local ACP profile registry",
+    ],
+    [
+      paths.engineProfiles,
+      join(dirname(paths.engineProfiles), "profiles.example.json"),
+      "{}\n",
+      "create the local Mission Engine profile map",
+    ],
+    [
+      paths.engineRuntimeSettings,
+      join(dirname(paths.engineRuntimeSettings), "runtime-settings.example.json"),
+      "{}\n",
+      "create the local Mission Engine settings",
+    ],
+  ] as const) {
+    const needed = !existsSync(target);
+    actions.push({
+      label,
+      needed,
+      detail: target,
+      apply: () =>
+        writeSecret(target, existsSync(example) ? readFileSync(example, "utf8") : fallback),
+    });
+  }
+
   // ── Clé de signature ────────────────────────────────────────────────────
   const existingKey = env.AUTH_SIGNING_KEY;
   const hasKey = typeof existingKey === "string" && existingKey.includes("BEGIN PRIVATE KEY");

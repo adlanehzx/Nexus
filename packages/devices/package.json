@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "ModÃ¨le multi-appareils : rÃ´les, capacitÃ©s, registre, sÃ©lection, plans de tÃ¢ches",
+  "description": "Multi-device roles, capabilities, registry, selection and task plans",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -20,7 +20,7 @@ import type {
  * d'appareils et sans coordinateur de tâches.
  */
 
-const ADLAN = "user-adlan";
+const ADLAN = "user-example";
 const CONVERSATION = "conv-1";
 const NOW = new Date("2026-09-03T10:00:00.000Z");
 
@@ -109,7 +109,7 @@ describe("séparation des couches", () => {
     const assembled = await assembler.assemble({
       userId: ADLAN,
       conversationId: CONVERSATION,
-      query: "où habite Adlan",
+      query: "où habite Alex",
     });
 
     expect(assembled.sections.map((s) => s.name)).toEqual([

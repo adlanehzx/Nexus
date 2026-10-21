@@ -187,12 +187,12 @@ export interface Account {
 
 export async function createAccount(
   harness: ApiHarness,
-  email = "adlan@exemple.fr",
+  email = "alex@example.test",
 ): Promise<Account> {
   const response = await harness.app.inject({
     method: "POST",
     url: "/api/v1/auth/register",
-    payload: { email, displayName: "Adlan", password: PASSWORD },
+    payload: { email, displayName: "Alex", password: PASSWORD },
   });
 
   const body = response.json<{

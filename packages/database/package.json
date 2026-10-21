@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "SchÃ©ma Prisma, client PostgreSQL et sonde de santÃ©",
+  "description": "Prisma schema, PostgreSQL client and health probe",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Memoire NEXUS : six couches separees, politique de sensibilite, assemblage de contexte",
+  "description": "Layered NEXUS memory, sensitivity policy and context assembly",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

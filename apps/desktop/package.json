@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Client Windows NEXUS â€” interface de controle et supervision du worker local",
+  "description": "NEXUS desktop client and local worker supervisor",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

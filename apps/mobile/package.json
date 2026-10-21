@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
-  "description": "Client iPhone NEXUS â€” centre de controle principal (Expo + Expo Router)",
+  "description": "NEXUS mobile client (Expo and Expo Router)",
   "scripts": {
     "start": "expo start",
     "start:go": "expo start --go",

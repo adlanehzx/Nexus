@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Executant Android : capacites locales controlees, connexion sortante vers le coeur NEXUS",
+  "description": "Android worker with controlled local capabilities and an outbound NEXUS connection",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

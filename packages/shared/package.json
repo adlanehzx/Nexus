@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Types, erreurs et utilitaires partagÃ©s par tout le monorepo",
+  "description": "Types, errors and utilities shared across the monorepo",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

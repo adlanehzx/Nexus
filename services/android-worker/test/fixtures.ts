@@ -53,7 +53,7 @@ import { AndroidWorker } from "../src/worker.js";
  * README couvre ce qui ne peut pas l'être ici.
  */
 
-export const USER_ID = "user-adlan";
+export const USER_ID = "user-example";
 export const IPHONE = { id: "device-iphone", name: "iPhone" };
 
 // ─────────────────────────────────────────────────────────────────────────────

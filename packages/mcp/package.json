@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Connexion aux serveurs MCP et adaptation de leurs outils vers le ToolRegistry",
+  "description": "MCP server connections and ToolRegistry adapters",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

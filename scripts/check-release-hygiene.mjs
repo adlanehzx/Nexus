@@ -15,15 +15,23 @@ const forbiddenFiles = new Set([
   "test_p0.cjs",
   "test_schema.cjs",
 ]);
-const forbiddenFragments = [
-  ["/home", "adlane"].join("/"),
-  ["Documents", "Codex"].join("/"),
-  ["nexus", "audit"].join("-"),
-];
+const forbiddenFragments = [["Documents", "Codex"].join("/"), ["nexus", "audit"].join("-")];
+const forbiddenTrackedRuntimeFiles = new Set([
+  "services/agent/config/profiles.production.json",
+  "services/mission-engine/config/profiles.production.json",
+  "services/mission-engine/config/runtime-settings.json",
+]);
+const suspiciousHomePath =
+  /\/home\/(?!example(?:\/|\b)|someone(?:\/|\b)|alice(?:\/|\b)|nexus(?:\/|\b)|node(?:\/|\b))[^/\s"'`]+/;
+const privateTailnetName =
+  /\b(?!nexus-core\.example-tailnet\.ts\.net)[a-z0-9-]+\.tail[a-z0-9]+\.ts\.net\b/i;
 const failures = [];
 
 for (const file of tracked) {
-  if (forbiddenFiles.has(basename(file))) failures.push(`${file}: brouillon interdit`);
+  if (forbiddenFiles.has(basename(file))) failures.push(`${file}: forbidden scratch file`);
+  if (forbiddenTrackedRuntimeFiles.has(file)) {
+    failures.push(`${file}: local runtime configuration must not be tracked`);
+  }
   if (file === "scripts/check-release-hygiene.mjs") continue;
   let contents;
   try {
@@ -32,13 +40,17 @@ for (const file of tracked) {
     continue;
   }
   for (const fragment of forbiddenFragments) {
-    if (contents.includes(fragment)) failures.push(`${file}: chemin local "${fragment}"`);
+    if (contents.includes(fragment)) failures.push(`${file}: local path fragment "${fragment}"`);
   }
+  const home = suspiciousHomePath.exec(contents)?.[0];
+  if (home !== undefined) failures.push(`${file}: suspicious user-specific path "${home}"`);
+  const tailnet = privateTailnetName.exec(contents)?.[0];
+  if (tailnet !== undefined) failures.push(`${file}: private tailnet hostname "${tailnet}"`);
 }
 
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 if (manifest.license !== "AGPL-3.0-or-later") {
-  failures.push("package.json: licence AGPL-3.0-or-later absente");
+  failures.push("package.json: missing AGPL-3.0-or-later license");
 }
 for (const required of [
   "LICENSE",
@@ -47,11 +59,11 @@ for (const required of [
   "CODE_OF_CONDUCT.md",
   "THIRD_PARTY_NOTICES.md",
 ]) {
-  if (!tracked.includes(required)) failures.push(`${required}: fichier de publication absent`);
+  if (!tracked.includes(required)) failures.push(`${required}: missing publication file`);
 }
 
 if (failures.length > 0) {
-  console.error(`Hygiène de publication refusée :\n- ${failures.join("\n- ")}`);
+  console.error(`Release hygiene failed:\n- ${failures.join("\n- ")}`);
   process.exit(1);
 }
-console.log(`Hygiène de publication valide (${tracked.length} fichiers suivis).`);
+console.log(`Release hygiene passed (${tracked.length} tracked files).`);

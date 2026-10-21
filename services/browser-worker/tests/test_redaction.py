@@ -13,7 +13,7 @@ class TestRedactByKey:
     def test_masks_known_secret_keys(self) -> None:
         result = redact(
             {
-                "user": "adlan",
+                "user": "example",
                 "password": "hunter2",
                 "apiKey": "abc",
                 "cookie": "session=1",
@@ -22,7 +22,7 @@ class TestRedactByKey:
             }
         )
         assert result == {
-            "user": "adlan",
+            "user": "example",
             "password": REDACTED,
             "apiKey": REDACTED,
             "cookie": REDACTED,

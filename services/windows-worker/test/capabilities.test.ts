@@ -521,7 +521,7 @@ describe("git", () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await expect(
       run(fixture, "git.clone", {
-        url: "https://github.com/adlan/leynai.git",
+        url: "https://github.com/example/project.git",
         destination: "C:\\Windows\\Temp\\x",
       }),
     ).rejects.toMatchObject({ code: "PATH_NOT_ALLOWED" });

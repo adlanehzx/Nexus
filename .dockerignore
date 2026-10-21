@@ -1,4 +1,4 @@
-# Tout ce qui n'a rien à faire dans le contexte de build.
+# Files that do not belong in the build context.
 **/node_modules
 **/dist
 **/.turbo
@@ -7,23 +7,21 @@
 var
 backups
 services/mission-engine/var
-# Réglages personnels écrits par le dashboard : chemins de sessions, comptes
-# de fournisseurs et références de secrets. Ils vivent dans un volume au
-# runtime et ne doivent jamais entrer dans une couche d'image.
+# Personal settings written by the dashboard: session paths, provider accounts,
+# and secret references. They live in a runtime volume and must never enter an
+# image layer.
 services/api/config
 .git
 .github
 docs
-# Le dashboard possède sa propre image. Les autres clients natifs n'entrent pas
-# dans le contexte des images serveur.
+# The dashboard has its own image. Other native clients do not belong in server
+# image build contexts.
 apps/*
 !apps/dashboard
 !apps/dashboard/**
 !services/windows-worker/**
-mcp
 services/agent
 services/browser-worker
-services/desktop-worker
 **/*.md
 **/.env
 **/.env.*

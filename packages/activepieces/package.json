@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pont local et passerelle d'automatisation SaaS Activepieces avec webhooks et confirmation d'actions sensibles",
+  "description": "Local Activepieces bridge for SaaS automation, webhooks and sensitive-action confirmation",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
