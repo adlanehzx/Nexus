@@ -1,11 +1,11 @@
--- Tickets d'appairage à usage unique.
+-- Single-use device pairing tickets.
 --
--- Migration strictement additive : une table neuve, aucune colonne touchée,
--- aucune donnée réécrite. Elle peut donc s'appliquer sur une installation
--- vivante sans fenêtre d'arrêt, et un retour arrière se limite à un DROP.
+-- Strictly additive migration: a new table, no touched columns,
+-- no rewritten data. It can be applied on live instances without downtime,
+-- and rollback is simply a DROP TABLE.
 --
--- `code_hash` est unique : l'unicité d'un code est une propriété de sécurité,
--- et la faire tenir par la base vaut mieux que par la discipline de l'appelant.
+-- `code_hash` is unique: code uniqueness is a security property enforced
+-- at the database level rather than caller discipline.
 CREATE TABLE "device_pairing_tickets" (
     "id" UUID NOT NULL,
     "userId" UUID NOT NULL,

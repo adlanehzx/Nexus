@@ -1,5 +1,5 @@
--- Recherche sémantique locale indexée. L'image PostgreSQL NEXUS embarque
--- l'extension ; aucune API distante ni clé n'intervient.
+-- Indexed local semantic search. The NEXUS PostgreSQL image includes
+-- the extension; no remote API or key is required.
 CREATE EXTENSION IF NOT EXISTS vector;
 
 ALTER TABLE "memories"

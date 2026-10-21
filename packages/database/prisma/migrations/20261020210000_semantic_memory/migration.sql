@@ -1,9 +1,8 @@
--- Provenance et recherche sémantique locale.
+-- Provenance and local semantic search.
 --
--- Le vecteur reste un tableau PostgreSQL afin que NEXUS fonctionne sur l'image
--- postgres officielle, sans rendre l'extension pgvector obligatoire. Le port
--- EmbeddingProvider permet de brancher pgvector ultérieurement sans changer le
--- modèle métier.
+-- The vector remains a PostgreSQL array so NEXUS runs on official postgres
+-- images without requiring pgvector. The EmbeddingProvider port allows
+-- plugging in pgvector later without changing the domain model.
 ALTER TABLE "memories"
   ADD COLUMN "sourceRunId" UUID,
   ADD COLUMN "sourceConversationId" UUID,
@@ -14,9 +13,9 @@ ALTER TABLE "memories"
   ADD COLUMN "embeddingModel" TEXT,
   ADD COLUMN "extractedAt" TIMESTAMPTZ(3);
 
--- Les lignes historiques reçoivent une empreinte stable compatible avec le
--- calcul applicatif. regexp_replace reproduit la normalisation des espaces ;
--- l'application gère en plus les accents pour les nouvelles écritures.
+-- Historical rows receive a stable fingerprint compatible with application
+-- hashing. regexp_replace reproduces whitespace normalization; application logic
+-- handles accent normalization for new writes.
 UPDATE "memories"
 SET "contentHash" = md5(lower(trim(regexp_replace("content", '\s+', ' ', 'g'))));
 ALTER TABLE "memories" ALTER COLUMN "contentHash" SET NOT NULL;
