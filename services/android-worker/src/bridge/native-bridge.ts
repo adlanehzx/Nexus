@@ -95,6 +95,12 @@ export interface NexusNative {
   secureRandomBase64(count: number): string;
 }
 
+/** Configuration publique persistée après consommation du ticket. */
+export interface NexusProvisioningNative {
+  loadProvisioning(): Promise<{ apiUrl: string; deviceId: string } | null>;
+  saveProvisioning(apiUrl: string, deviceId: string): Promise<void>;
+}
+
 /**
  * Annule une opération native.
  *

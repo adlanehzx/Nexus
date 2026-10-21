@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "pair": "node dist/pair.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

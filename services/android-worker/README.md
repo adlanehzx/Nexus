@@ -133,6 +133,20 @@ clé de signature versionnée.
 
 ## Installation
 
+### APK publié (recommandé)
+
+1. Installer l'APK **signé** de la release NEXUS.
+2. Dans le dashboard, ouvrir **Appareils**, créer un code et choisir
+   **Copier le lien Android**.
+3. Au premier lancement du worker, coller ce lien puis toucher **Appairer**.
+4. Revenir dans le dashboard et approuver l'appareil.
+
+Le même APK sert à tous les téléphones : aucune URL ni aucun identifiant
+personnel n'est compilé dedans. La clé ECDSA P-256 est créée dans Android
+Keystore ; seul son certificat public est envoyé au cœur.
+
+### Depuis les sources
+
 ```bash
 # 1. Enregistrer l'appareil côté cœur : type ANDROID, rôle WORKER.
 #    Le backend attribue DEVICE_ID et les permissions.

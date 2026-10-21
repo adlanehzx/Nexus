@@ -46,7 +46,7 @@ export interface WindowsWorkerOptions {
 export function toRuntimeConfig(config: WorkerConfig): WorkerRuntimeConfig {
   return {
     deviceId: config.deviceId,
-    platform: WORKER_PLATFORM,
+    platform: config.platform ?? WORKER_PLATFORM,
     workerVersion: WORKER_VERSION,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     taskTimeoutMs: config.taskTimeoutMs,

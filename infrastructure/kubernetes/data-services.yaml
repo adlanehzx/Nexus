@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-postgres
+  namespace: nexus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: nexus-postgres }
+  template:
+    metadata:
+      labels: { app: nexus-postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+          env:
+            - { name: POSTGRES_USER, value: nexus }
+            - { name: POSTGRES_DB, value: nexus }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: postgres-password }
+          ports: [{ name: postgres, containerPort: 5432 }]
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          readinessProbe:
+            exec: { command: [pg_isready, -U, nexus, -d, nexus] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: postgres-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-postgres
+  namespace: nexus
+spec:
+  selector: { app: nexus-postgres }
+  ports: [{ name: postgres, port: 5432, targetPort: postgres }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-redis
+  namespace: nexus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: nexus-redis }
+  template:
+    metadata:
+      labels: { app: nexus-redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: [redis-server, --appendonly, "yes", --appendfsync, everysec]
+          ports: [{ name: redis, containerPort: 6379 }]
+          volumeMounts: [{ name: data, mountPath: /data }]
+          readinessProbe:
+            exec: { command: [redis-cli, ping] }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: redis-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-redis
+  namespace: nexus
+spec:
+  selector: { app: nexus-redis }
+  ports: [{ name: redis, port: 6379, targetPort: redis }]

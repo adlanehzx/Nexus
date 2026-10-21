@@ -32,6 +32,9 @@ const csv = (value: string): string[] =>
 const csvList = (fallback = "") => z.string().default(fallback).transform(csv);
 
 export const workerConfigSchema = z.object({
+  /** Plateforme réellement annoncée au cœur. Le défaut préserve les installations Windows. */
+  NEXUS_WORKER_PLATFORM: z.enum(["WINDOWS", "LINUX", "MACOS"]).default("WINDOWS"),
+
   /** URL du cœur. `wss://` en production — le worker refuse `ws://` distant. */
   NEXUS_BACKEND_URL: z.string().url(),
 
@@ -116,6 +119,8 @@ export type RawWorkerConfig = z.infer<typeof workerConfigSchema>;
 
 /** Configuration résolue, telle que le reste du worker la consomme. */
 export interface WorkerConfig {
+  /** Facultatif dans les ports de test historiques ; le chargeur le résout toujours. */
+  platform?: "WINDOWS" | "LINUX" | "MACOS";
   backendUrl: string;
   deviceId: string;
   credentialPath: string;
@@ -171,6 +176,7 @@ export function loadWorkerConfig(env: Record<string, string | undefined>): Worke
   if (issues.length > 0) throw new WorkerConfigurationError(issues);
 
   return {
+    platform: raw.NEXUS_WORKER_PLATFORM,
     backendUrl: raw.NEXUS_BACKEND_URL,
     deviceId: raw.DEVICE_ID,
     credentialPath: raw.DEVICE_CREDENTIAL_PATH,

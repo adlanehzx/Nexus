@@ -20,8 +20,10 @@ import {
 import { Settings } from "./Settings.js";
 
 function backendUrl(): string {
-  const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string } }).env;
-  return injected?.VITE_NEXUS_URL ?? "http://localhost:3000";
+  const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
+  const configured = injected?.VITE_NEXUS_URL?.trim();
+  if (configured !== undefined && configured.length > 0) return configured;
+  return injected?.PROD === true ? window.location.origin : "http://localhost:3000";
 }
 
 const SUPERVISION_SECTIONS = [

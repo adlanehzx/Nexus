@@ -44,7 +44,8 @@ param(
     [Parameter(Mandatory = $true)][string]$InstallDir,
     [string]$NodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source,
     [string]$ServiceName = 'nexus-worker',
-    [string]$ServiceAccount = ''
+    [string]$ServiceAccount = 'NT SERVICE\nexus-worker',
+    [string]$EnvFile = (Join-Path $env:ProgramData 'NEXUS\worker.env')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,19 +57,18 @@ $entry = Join-Path $InstallDir 'dist\main.js'
 if (-not (Test-Path $entry)) {
     throw "Point d'entrée absent : $entry. Lancez d'abord « pnpm build »."
 }
-$envFile = Join-Path $InstallDir '.env'
-if (-not (Test-Path $envFile)) {
+if (-not (Test-Path $EnvFile)) {
     # Refuser plutôt que démarrer un service qui échouera à la première tâche,
     # loin de sa cause.
-    throw "Configuration absente : $envFile. Copiez .env.example et renseignez-le."
+    throw "Configuration absente : $EnvFile. Lancez d'abord setup-worker.ps1."
 }
 
 # Les droits sur .env comptent autant que son contenu : il désigne le chemin de
 # la clé privée de cette machine.
-$acl = Get-Acl $envFile
+$acl = Get-Acl $EnvFile
 $inherited = $acl.Access | Where-Object { $_.IsInherited -eq $true }
 if ($inherited) {
-    Write-Warning "$envFile hérite de droits du dossier parent. Restreignez-le : icacls `"$envFile`" /inheritance:r /grant:r `"$env:USERNAME:(R)`""
+    Write-Warning "$EnvFile hérite de droits du dossier parent. Restreignez-le : icacls `"$EnvFile`" /inheritance:r /grant:r `"$env:USERNAME:(R)`""
 }
 
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
@@ -82,7 +82,7 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 # `binPath` cite node ET le script : un chemin d'installation avec un espace
 # — « C:\Program Files\… » — casse un service dont la ligne n'est pas citée, et
 # le symptôme est un service qui ne démarre pas sans dire pourquoi.
-$binPath = "`"$NodeExe`" `"$entry`""
+$binPath = "`"$NodeExe`" --env-file=`"$EnvFile`" `"$entry`""
 
 $createArgs = @(
     'create', $ServiceName,
@@ -95,6 +95,15 @@ if ($ServiceAccount) {
 }
 sc.exe @createArgs
 if ($LASTEXITCODE -ne 0) { throw "sc.exe create a échoué ($LASTEXITCODE)." }
+
+# Le compte virtuel n'existe qu'apres `sc create`. Lui donner seulement les
+# deux lectures indispensables ; les racines de travail sont accordees par le
+# script d'installation, a partir de la liste explicite de l'utilisateur.
+$credentialLine = Get-Content $EnvFile | Where-Object { $_ -match '^DEVICE_CREDENTIAL_PATH=' } | Select-Object -First 1
+if (-not $credentialLine) { throw 'DEVICE_CREDENTIAL_PATH absent de la configuration.' }
+$credentialPath = $credentialLine.Substring('DEVICE_CREDENTIAL_PATH='.Length)
+icacls $EnvFile /inheritance:r /grant:r "${ServiceAccount}:(R)" 'Administrators:(F)' | Out-Null
+icacls $credentialPath /inheritance:r /grant:r "${ServiceAccount}:(R)" 'Administrators:(F)' | Out-Null
 
 sc.exe description $ServiceName 'Exécute les tâches NEXUS confiées à cette machine. Applique la politique locale ~/.nexus/device-policy.yaml.' | Out-Null
 

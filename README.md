@@ -39,9 +39,21 @@ npm install -g pnpm@11.25.0
 git clone https://github.com/adlanehzx/Nexus.git nexus && cd nexus
 cp .env.example .env         # les valeurs par défaut suffisent en local
 pnpm install
-pnpm docker:up               # postgres + redis + api
-pnpm db:migrate              # applique le schéma
+pnpm docker:platform         # postgres + redis + migrations + api + dashboard
 ```
+
+Le dashboard est alors disponible sur `http://localhost:8080`. La migration est
+appliquée par un conteneur éphémère avant le démarrage de l'API : aucune commande
+Prisma séparée n'est nécessaire.
+
+Les machines supplémentaires s'ajoutent depuis **Supervision → Appareils** :
+installateur Windows, lien Android ou worker Docker isolé pour Linux, NAS et
+Raspberry Pi. Chaque ticket expire après cinq minutes et l'appareil doit encore
+être approuvé dans le dashboard avant de recevoir une tâche.
+
+Les volumes `nexus-runtime-config`, `nexus-artifacts` et
+`nexus-observability` conservent les réglages du dashboard, les captures du
+navigateur et les journaux lorsque les conteneurs sont recréés.
 
 Vérifier que tout répond :
 
@@ -71,7 +83,10 @@ pnpm --filter @nexus/api dev
 | `pnpm db:migrate`                    | Crée et applique une migration (développement)                             |
 | `pnpm db:generate`                   | Régénère le client Prisma                                                  |
 | `pnpm db:studio`                     | Ouvre Prisma Studio                                                        |
-| `pnpm docker:up` / `:down` / `:logs` | Pile Docker locale                                                         |
+| `pnpm docker:infra`                  | PostgreSQL + Redis, pour exécuter API et agents sur l'hôte                 |
+| `pnpm docker:platform`               | Infrastructure + migration + API + dashboard sur `:8080`                   |
+| `pnpm docker:up` / `:down` / `:logs` | Pile Docker et ses profils optionnels                                      |
+| `pnpm k8s:images` / `k8s:render`     | Images locales et rendu Kubernetes/k3s                                     |
 | `pnpm clean`                         | Supprime `dist`, `.turbo` et `node_modules`                                |
 
 ## 4. Variables d'environnement
@@ -114,7 +129,7 @@ services/
   api/                   Fastify — REST v1, WS, auth  ✅
   agent/                 Runtime ACP natif NEXUS      ✅
   browser-worker/        Python — browser-use         ✅
-  windows-worker/        Exécutant Windows            ✅
+  windows-worker/        Exécutant Windows/Linux      ✅
   android-worker/        Exécutant Redmi Note 10S     ✅ (Kotlin non compilé)
   desktop-worker/        remplacé par windows-worker  —
 packages/
@@ -138,6 +153,7 @@ packages/
 mcp/
   github/  filesystem/   presets de configuration     ✅ (cf. packages/mcp)
 infrastructure/docker/   Dockerfiles + compose        ✅
+infrastructure/kubernetes/plan de contrôle k3s/K8s    ✅ (agents hors cluster)
 ```
 
 ### NEXUS Mission Engine

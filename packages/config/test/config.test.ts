@@ -50,6 +50,19 @@ describe("parseConfig", () => {
     );
   });
 
+  it("valide les répertoires persistants des conteneurs", () => {
+    const config = parseConfig({
+      ...minimalEnv,
+      NEXUS_RUNTIME_CONFIG_DIR: "/var/lib/nexus/runtime-config",
+      NEXUS_BROWSER_ARTIFACTS_DIR: "/var/lib/nexus/artifacts/browser",
+      NEXUS_OBSERVABILITY_DIR: "/var/lib/nexus/observability",
+    });
+    expect(config.NEXUS_RUNTIME_CONFIG_DIR).toBe("/var/lib/nexus/runtime-config");
+    expect(() => parseConfig({ ...minimalEnv, NEXUS_RUNTIME_CONFIG_DIR: "./config" })).toThrow(
+      ConfigurationError,
+    );
+  });
+
   it("n'ouvre aucune origine de développement en production", () => {
     // Le défaut permissif est une commodité de développement, et il ne doit pas
     // suivre en production : les origines réellement servies s'y déclarent au

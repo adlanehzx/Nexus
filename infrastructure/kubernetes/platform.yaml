@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-api
+  namespace: nexus
+spec:
+  replicas: 1
+  # Les réglages runtime sont encore sur un PVC ReadWriteOnce. Recreate évite
+  # deux pods concurrents pendant un rollout ; ne pas augmenter replicas avant
+  # migration de ces réglages vers PostgreSQL ou un magasin RWX transactionnel.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: nexus-api }
+  template:
+    metadata:
+      labels: { app: nexus-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: migrate
+          image: nexus-migrate:local
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: database-url }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: api
+          image: nexus-api:local
+          envFrom: [{ configMapRef: { name: nexus-config } }]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: database-url }
+            - name: AUTH_SIGNING_KEY
+              valueFrom:
+                secretKeyRef: { name: nexus-secrets, key: auth-signing-key, optional: true }
+          ports:
+            - { name: http, containerPort: 3000 }
+            - { name: metrics, containerPort: 9464 }
+          volumeMounts:
+            - { name: state, mountPath: /var/lib/nexus }
+            - { name: models, mountPath: /var/lib/nexus/models }
+            - { name: tmp, mountPath: /tmp }
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "4", memory: 4Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: model-cache }
+        - name: state
+          persistentVolumeClaim: { claimName: api-state }
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: nexus
+spec:
+  selector: { app: nexus-api }
+  ports:
+    - { name: http, port: 3000, targetPort: http }
+    - { name: metrics, port: 9464, targetPort: metrics }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-dashboard
+  namespace: nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: nexus-dashboard }
+  template:
+    metadata:
+      labels: { app: nexus-dashboard }
+    spec:
+      containers:
+        - name: dashboard
+          image: nexus-dashboard:local
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: cache, mountPath: /var/cache/nginx }
+            - { name: run, mountPath: /var/run }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - { name: cache, emptyDir: {} }
+        - { name: run, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-dashboard
+  namespace: nexus
+spec:
+  selector: { app: nexus-dashboard }
+  ports: [{ name: http, port: 8080, targetPort: http }]

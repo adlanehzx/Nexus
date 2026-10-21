@@ -522,6 +522,70 @@ details.card[open] > summary {
   display: grid;
   gap: 10px;
 }
+.pairing-card {
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+.pairing-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.pairing-heading h3 {
+  margin: 4px 0;
+}
+.pairing-heading p {
+  max-width: 680px;
+  margin: 0;
+}
+.pairing-create {
+  display: grid;
+  min-width: min(100%, 310px);
+  grid-template-columns: minmax(130px, 1fr) auto;
+  gap: 6px;
+}
+.pairing-create label {
+  grid-column: 1 / -1;
+  color: var(--texte-faible);
+  font-size: 11px;
+}
+.pairing-platforms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.pairing-platforms > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  background: var(--fond-eleve);
+}
+.pairing-platforms span,
+.pairing-ticket small {
+  color: var(--texte-faible);
+  font-size: 11px;
+}
+.pairing-ticket {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgb(110 168 254 / 35%);
+  border-radius: 8px;
+  background: rgb(110 168 254 / 7%);
+}
+.pairing-ticket code {
+  overflow: auto;
+  padding: 10px;
+  border-radius: 6px;
+  background: #080d13;
+  color: #d5e5f7;
+  white-space: nowrap;
+}
 .section-error {
   display: flex;
   align-items: center;
@@ -1000,6 +1064,13 @@ details.card[open] > summary {
 }
 
 @media (max-width: 760px) {
+  .pairing-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .pairing-platforms {
+    grid-template-columns: 1fr;
+  }
   .app {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);

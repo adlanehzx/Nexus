@@ -36,7 +36,7 @@ export interface PublicWorkerState {
  * partagent pas de dossier personnel.
  */
 export function defaultStatePath(env: Record<string, string | undefined>): string {
-  const root = env.ProgramData ?? env.PROGRAMDATA ?? ".";
+  const root = env.ProgramData ?? env.PROGRAMDATA ?? env.XDG_STATE_HOME ?? ".";
   return join(root, "NEXUS", "worker", "device.json");
 }
 

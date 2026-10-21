@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { isAbsolute } from "node:path";
 import { z } from "zod";
 
 /**
@@ -42,6 +43,11 @@ const envBoolean = z.preprocess((value) => {
   if (value === "false" || value === "0") return false;
   return value;
 }, z.boolean());
+
+const optionalAbsolutePath = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().min(1).refine(isAbsolute, "doit être un chemin absolu").optional(),
+);
 
 const modelPricingSchema = z.record(
   z.string().min(1),
@@ -202,6 +208,11 @@ export const configSchema = z
         }, "doit être une URL HTTPS, ou HTTP sur la boucle locale ou un réseau privé")
         .optional(),
     ),
+
+    /** Répertoires persistants, séparés du code dans les images en lecture seule. */
+    NEXUS_RUNTIME_CONFIG_DIR: optionalAbsolutePath,
+    NEXUS_BROWSER_ARTIFACTS_DIR: optionalAbsolutePath,
+    NEXUS_OBSERVABILITY_DIR: optionalAbsolutePath,
 
     /** Moteur NEXUS ACP/paper-trading, optionnel. */
     MISSION_CONTROL_URL: z.preprocess(

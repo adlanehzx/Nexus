@@ -1,0 +1,17 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "test/**",
+        "vitest.config.ts",
+        "$TURBO_ROOT$/packaging/linux/install-worker.sh",
+        "$TURBO_ROOT$/infrastructure/docker/worker.Dockerfile"
+      ],
+      "outputs": []
+    }
+  }
+}

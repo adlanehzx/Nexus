@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@babel/runtime": "7.28.4",
+    "@nexus/devices": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
@@ -34,7 +35,6 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
-    "@nexus/devices": "workspace:*",
     "@babel/plugin-transform-export-namespace-from": "7.27.1",
     "@react-native-community/cli": "20.0.2",
     "@react-native-community/cli-platform-android": "20.0.2",

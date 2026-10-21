@@ -3,6 +3,7 @@ import type {
   DashboardApi,
   McpConfiguration,
   MissionCollaborationDto,
+  PairingTicket,
   ScheduleRun,
   TaskDetail,
 } from "../lib/api.js";
@@ -117,6 +118,41 @@ function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH
 export function Devices({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.devices());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pairing, setPairing] = useState<PairingTicket | null>(null);
+  const [pairingLabel, setPairingLabel] = useState("");
+  const [pairingBusy, setPairingBusy] = useState(false);
+
+  useEffect(() => {
+    if (pairing === null) return;
+    const remaining = Math.max(0, new Date(pairing.expiresAt).getTime() - Date.now());
+    const timer = window.setTimeout(() => setPairing(null), remaining);
+    return () => window.clearTimeout(timer);
+  }, [pairing]);
+
+  const issuePairing = (): void => {
+    setActionError(null);
+    setPairingBusy(true);
+    void api
+      .createPairingTicket(pairingLabel)
+      .then(setPairing)
+      .catch((cause: unknown) =>
+        setActionError(cause instanceof Error ? cause.message : "Appairage impossible."),
+      )
+      .finally(() => setPairingBusy(false));
+  };
+
+  const windowsCommand = (() => {
+    if (pairing === null) return null;
+    const payload = new URL(pairing.payload);
+    const apiUrl = payload.searchParams.get("api") ?? "https://votre-nexus";
+    return `powershell -ExecutionPolicy Bypass -File "C:\\Program Files\\NEXUS\\worker\\setup-worker.ps1" -NexusUrl "${apiUrl}" -PairingToken "${pairing.token}"`;
+  })();
+  const linuxCommand = (() => {
+    if (pairing === null) return null;
+    const payload = new URL(pairing.payload);
+    const apiUrl = payload.searchParams.get("api") ?? "https://votre-nexus";
+    return `curl -fLO https://github.com/adlanehzx/Nexus/releases/latest/download/install-worker.sh && chmod +x install-worker.sh && ./install-worker.sh "${apiUrl}" "${pairing.token}" "$HOME/NEXUS"`;
+  })();
 
   const act = (operation: () => Promise<unknown>): void => {
     setActionError(null);
@@ -130,6 +166,88 @@ export function Devices({ api }: { api: DashboardApi }) {
   return (
     <div className="contenu">
       {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      <section className="card pairing-card" aria-labelledby="pairing-title">
+        <div className="pairing-heading">
+          <div>
+            <span className="eyebrow">NOUVEL EXÉCUTANT</span>
+            <h3 id="pairing-title">Ajouter une machine</h3>
+            <p className="faible">
+              Le code expire après cinq minutes et ne peut servir qu’une fois. La machine restera en
+              attente jusqu’à ton approbation ci-dessous.
+            </p>
+          </div>
+          <div className="pairing-create">
+            <label htmlFor="pairing-label">Nom attendu</label>
+            <input
+              id="pairing-label"
+              className="champ"
+              value={pairingLabel}
+              placeholder="PC bureau"
+              onChange={(event) => setPairingLabel(event.target.value)}
+            />
+            <button
+              className="bouton primary"
+              type="button"
+              disabled={pairingBusy}
+              onClick={issuePairing}
+            >
+              {pairingBusy ? "Création…" : "Créer un code"}
+            </button>
+          </div>
+        </div>
+        {pairing === null || windowsCommand === null || linuxCommand === null ? (
+          <div className="pairing-platforms">
+            <div>
+              <strong>Windows</strong>
+              <span>Installateur + service automatique</span>
+            </div>
+            <div>
+              <strong>Android worker</strong>
+              <span>APK NEXUS puis lien d’appairage</span>
+            </div>
+            <div>
+              <strong>iOS client</strong>
+              <span>Application NEXUS puis connexion</span>
+            </div>
+            <div>
+              <strong>Linux / NAS / Raspberry Pi</strong>
+              <span>Image Docker isolée, amd64 et arm64</span>
+            </div>
+          </div>
+        ) : (
+          <div className="pairing-ticket" role="status">
+            <strong>Commande Windows à lancer en administrateur</strong>
+            <code>{windowsCommand}</code>
+            <div className="table-actions">
+              <button
+                className="bouton"
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(windowsCommand)}
+              >
+                Copier la commande
+              </button>
+              <button
+                className="bouton"
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(pairing.payload)}
+              >
+                Copier le lien Android
+              </button>
+              <button
+                className="bouton"
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(linuxCommand)}
+              >
+                Copier la commande Linux
+              </button>
+              <button className="bouton" type="button" onClick={() => setPairing(null)}>
+                Masquer le code
+              </button>
+            </div>
+            <small>Expire à {new Date(pairing.expiresAt).toLocaleTimeString()}.</small>
+          </div>
+        )}
+      </section>
       <Section state={state}>
         {(data) =>
           data.devices.length === 0 ? (

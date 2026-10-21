@@ -476,4 +476,34 @@ class NexusWorkerModule(private val context: ReactApplicationContext) :
             promise.reject("PUBLIC_KEY_FAILED", "clé publique indisponible")
         }
     }
+
+    /** Charge les deux valeurs publiques issues de l'appairage. */
+    @ReactMethod
+    fun loadProvisioning(promise: Promise) {
+        val preferences = context.getSharedPreferences("nexus-worker", Context.MODE_PRIVATE)
+        val apiUrl = preferences.getString("apiUrl", null)
+        val deviceId = preferences.getString("deviceId", null)
+        if (apiUrl == null || deviceId == null) {
+            promise.resolve(null)
+            return
+        }
+        promise.resolve(Arguments.createMap().apply {
+            putString("apiUrl", apiUrl)
+            putString("deviceId", deviceId)
+        })
+    }
+
+    /**
+     * Persiste uniquement l'adresse et l'identifiant publics. Le ticket n'est
+     * jamais ecrit et la cle privee reste dans Android Keystore.
+     */
+    @ReactMethod
+    fun saveProvisioning(apiUrl: String, deviceId: String, promise: Promise) {
+        context.getSharedPreferences("nexus-worker", Context.MODE_PRIVATE)
+            .edit()
+            .putString("apiUrl", apiUrl)
+            .putString("deviceId", deviceId)
+            .apply()
+        promise.resolve(null)
+    }
 }

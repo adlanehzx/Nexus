@@ -675,6 +675,9 @@ importers:
       '@babel/runtime':
         specifier: 7.28.4
         version: 7.28.4
+      '@nexus/devices':
+        specifier: workspace:*
+        version: link:../../packages/devices
       '@nexus/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -700,9 +703,6 @@ importers:
       '@babel/plugin-transform-export-namespace-from':
         specifier: 7.27.1
         version: 7.27.1(@babel/core@7.29.7(supports-color@8.1.1))
-      '@nexus/devices':
-        specifier: workspace:*
-        version: link:../../packages/devices
       '@react-native-community/cli':
         specifier: 20.0.2
         version: 20.0.2(supports-color@8.1.1)(typescript@6.0.3)

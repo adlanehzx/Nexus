@@ -57,6 +57,7 @@ Section "Worker" SecWorker
   ; renvoie, et un message qui désigne un fichier absent est pire que pas de
   ; message.
   File "install-worker-service.ps1"
+  File "setup-worker.ps1"
 
   ; Le modèle de configuration, jamais la configuration : `.env` contient le
   ; chemin de la clé privée de CETTE machine, donc il se remplit après
@@ -65,13 +66,10 @@ Section "Worker" SecWorker
   File /oname=.env.example "${SOURCE_DIR}\.env.example"
   SetOverwrite on
 
-  ; La configuration vit hors de Program Files : ce dossier est en lecture seule
-  ; pour les utilisateurs, et un service qui ne peut pas lire sa configuration
-  ; échoue sans dire pourquoi.
-  CreateDirectory "$APPDATA\NEXUS"
-  ${IfNot} ${FileExists} "$APPDATA\NEXUS\worker.env"
-    CopyFiles /SILENT "$INSTDIR\.env.example" "$APPDATA\NEXUS\worker.env"
-  ${EndIf}
+  ; La configuration n'est pas créée ici : setup-worker.ps1 la produit seulement
+  ; après avoir consommé un ticket valide. Créer un modèle à cet emplacement
+  ; ferait croire à setup qu'une identité existe déjà et bloquerait l'appairage.
+  CreateDirectory "$COMMONAPPDATA\NEXUS"
 
   ; Node n'est pas embarqué. L'embarquer figerait une version qu'il faudrait
   ; mettre à jour nous-mêmes à chaque correctif de sécurité de Node — or ce
@@ -99,16 +97,14 @@ Section "Worker" SecWorker
 
   ; Le service **n'est pas** installé automatiquement, et c'est une décision.
   ;
-  ; Il faut d'abord renseigner la configuration : identifiant d'appareil,
-  ; adresse du cœur, chemin de la clé privée. Un service installé et démarré
-  ; avant cela échoue en boucle, remplit le journal d'événements, et donne
-  ; l'impression que l'installation a raté alors qu'elle a réussi.
-  DetailPrint "Service non installé : renseignez d'abord %APPDATA%\NEXUS\worker.env"
+  ; Il faut d'abord appairer la machine. Un service installé et démarré avant
+  ; cela échoue en boucle et masque la cause réelle.
+  DetailPrint "Service non installé : appairez d'abord la machine depuis NEXUS > Appareils"
 SectionEnd
 
 Function .onInstSuccess
   MessageBox MB_ICONINFORMATION \
-    "Worker installé.$\n$\n1. Renseignez $APPDATA\NEXUS\worker.env$\n2. Installez le service :$\n   powershell -ExecutionPolicy Bypass -File $INSTDIR\install-worker-service.ps1 -InstallDir $\"$INSTDIR$\"$\n3. Démarrez-le : sc.exe start nexus-worker"
+    "Worker installé.$\n$\nDans NEXUS > Appareils, créez un code d'appairage puis lancez :$\n$\npowershell -ExecutionPolicy Bypass -File $INSTDIR\setup-worker.ps1 -NexusUrl https://votre-nexus -PairingToken VOTRE_CODE"
 FunctionEnd
 
 Section "Uninstall"
@@ -122,6 +118,7 @@ Section "Uninstall"
   Delete "$INSTDIR\package.json"
   Delete "$INSTDIR\.env.example"
   Delete "$INSTDIR\install-worker-service.ps1"
+  Delete "$INSTDIR\setup-worker.ps1"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 
@@ -132,5 +129,5 @@ Section "Uninstall"
   ; après une simple mise à jour — et une mise à jour passe par une
   ; désinstallation.
   MessageBox MB_ICONINFORMATION \
-    "Worker désinstallé.$\n$\nLa configuration est conservée dans $APPDATA\NEXUS.$\nSupprimez-la à la main si vous ne réinstallerez pas."
+    "Worker désinstallé.$\n$\nLa configuration est conservée dans $COMMONAPPDATA\NEXUS.$\nSupprimez-la à la main si vous ne réinstallerez pas."
 SectionEnd

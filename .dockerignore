@@ -4,10 +4,22 @@
 **/.turbo
 **/coverage
 **/src/generated
+var
+backups
+services/mission-engine/var
+# Réglages personnels écrits par le dashboard : chemins de sessions, comptes
+# de fournisseurs et références de secrets. Ils vivent dans un volume au
+# runtime et ne doivent jamais entrer dans une couche d'image.
+services/api/config
 .git
 .github
 docs
-apps
+# Le dashboard possède sa propre image. Les autres clients natifs n'entrent pas
+# dans le contexte des images serveur.
+apps/*
+!apps/dashboard
+!apps/dashboard/**
+!services/windows-worker/**
 mcp
 services/agent
 services/browser-worker

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nexus
+resources:
+  - namespace.yaml
+  - config.yaml
+  - storage.yaml
+  - data-services.yaml
+  - platform.yaml
+  - network-policy.yaml
+images:
+  - name: nexus-api
+    newName: ghcr.io/adlanehzx/nexus/api
+    newTag: v1.0.0
+  - name: nexus-dashboard
+    newName: ghcr.io/adlanehzx/nexus/dashboard
+    newTag: v1.0.0
+  - name: nexus-migrate
+    newName: ghcr.io/adlanehzx/nexus/migrate
+    newTag: v1.0.0

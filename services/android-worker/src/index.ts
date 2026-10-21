@@ -38,4 +38,5 @@ export * from "./bridge/native-bridge.js";
 
 export * from "./connection/websocket-link.js";
 export * from "./pairing.js";
+export * from "./provisioning.js";
 export * from "./main.js";

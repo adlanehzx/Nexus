@@ -76,6 +76,13 @@ export interface WorkerRow extends DeviceRow {
   acceptingTasks: boolean;
 }
 
+export interface PairingTicket {
+  id: string;
+  token: string;
+  payload: string;
+  expiresAt: string;
+}
+
 export interface TaskStepRow {
   id: string;
   description: string;
@@ -658,6 +665,12 @@ export class DashboardApi {
 
   devices(): Promise<{ devices: DeviceRow[] }> {
     return this.#get("/api/v1/dashboard/devices");
+  }
+
+  createPairingTicket(label: string): Promise<PairingTicket> {
+    return this.#request("POST", "/api/v1/devices/pairing-tickets", {
+      ...(label.trim().length === 0 ? {} : { label: label.trim() }),
+    });
   }
 
   workers(): Promise<{ workers: WorkerRow[] }> {

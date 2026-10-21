@@ -25,3 +25,8 @@ apps/desktop/src-tauri/gen
 # sauvegardes horodatées, et n'ont pas davantage à être mises en forme.
 services/mission-engine/config/*.json
 services/mission-engine/config/*.bak-*
+
+# Le registre ACP est modifie depuis le dashboard et serialise par le service.
+# Prettier ne doit pas se battre avec ce format persistant a chaque ajout de
+# compte ou d'agent.
+services/agent/config/*.json

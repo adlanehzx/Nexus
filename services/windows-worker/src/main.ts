@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { loadDevicePolicy } from "@nexus/device-policy";
 import { loadWorkerConfig } from "./config.js";
 import { ConsoleWorkerLogger } from "@nexus/worker-core";
@@ -7,7 +8,7 @@ import { assembleCapabilities } from "./assemble.js";
 import { FileCredentialSigner } from "./connection/signer.js";
 import { WebSocketLink } from "./connection/websocket-link.js";
 import { publicStateOf, publishWorkerState } from "./runtime/state-file.js";
-import { createWindowsWorker, WORKER_PLATFORM, WORKER_VERSION } from "./worker.js";
+import { createWindowsWorker, WORKER_VERSION } from "./worker.js";
 import type { WorkerRuntime } from "@nexus/worker-core";
 import type { WorkerLink } from "@nexus/worker-core";
 
@@ -40,6 +41,7 @@ export interface StartOptions {
 export async function startWorker(options: StartOptions = {}): Promise<WorkerRuntime> {
   const env = options.env ?? process.env;
   const config = loadWorkerConfig(env);
+  const platform = config.platform ?? "WINDOWS";
   const logger = new ConsoleWorkerLogger({ level: config.logLevel, bindings: { WORKER_VERSION } });
 
   // La politique locale, si elle existe. Un fichier **présent mais invalide**
@@ -71,7 +73,7 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
     options.link ??
     new WebSocketLink({
       backendUrl: config.backendUrl,
-      userAgent: `nexus-windows-worker/${WORKER_VERSION}`,
+      userAgent: `nexus-${platform.toLowerCase()}-worker/${WORKER_VERSION}`,
       ...(config.coreFingerprint === undefined
         ? {}
         : { corePublicKeyFingerprint: config.coreFingerprint }),
@@ -92,7 +94,7 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
     config.statePath,
     publicStateOf({
       deviceId: config.deviceId,
-      platform: WORKER_PLATFORM,
+      platform,
       workerVersion: WORKER_VERSION,
       now: new Date(),
     }),
@@ -129,4 +131,19 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
  */
 function defaultDevicePolicyPath(): string {
   return join(homedir(), ".nexus", "device-policy.yaml");
+}
+
+// `main.ts` est aussi importe par les tests. Ne demarrer que lorsqu'il est le
+// point d'entree du processus, jamais lorsqu'une suite importe `startWorker`.
+const invokedAsProgram =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedAsProgram) {
+  startWorker().catch((cause: unknown) => {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    // Le logger structure n'existe pas encore si la configuration est invalide.
+    // Cette ligne reste volontairement courte et ne rend jamais l'environnement.
+    process.stderr.write(`NEXUS worker: ${message}\n`);
+    process.exitCode = 1;
+  });
 }

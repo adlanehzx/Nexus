@@ -67,3 +67,5 @@ __pycache__/
 .venv-*/
 .pytest_cache/
 .ruff_cache/
+# Secrets locaux Kubernetes : le modele `secret.example.yaml` reste versionne.
+infrastructure/kubernetes/secret.yaml

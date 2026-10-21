@@ -52,7 +52,12 @@ jobs:
             exit 1
           fi
           echo "RELEASE_TAG=$REQUESTED_TAG" >> "$GITHUB_ENV"
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_ENV"
+          echo "API_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_ENV"
+          echo "DASHBOARD_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/dashboard" >> "$GITHUB_ENV"
+          echo "MIGRATE_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/migrate" >> "$GITHUB_ENV"
+          echo "WORKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/worker" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -64,15 +69,70 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Construire et publier l'API
-        id: image
+        id: api-image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infrastructure/docker/api.Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE }}:${{ env.RELEASE_TAG }}
-            ${{ env.IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ env.RELEASE_TAG }}
+            ${{ env.API_IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          provenance: mode=max
+          sbom: true
+
+      - name: Construire et publier le dashboard
+        id: dashboard-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/dashboard.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DASHBOARD_IMAGE }}:${{ env.RELEASE_TAG }}
+            ${{ env.DASHBOARD_IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          provenance: mode=max
+          sbom: true
+
+      - name: Construire et publier le migrateur
+        id: migrate-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/migrate.Dockerfile
+          push: true
+          tags: |
+            ${{ env.MIGRATE_IMAGE }}:${{ env.RELEASE_TAG }}
+            ${{ env.MIGRATE_IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          provenance: mode=max
+          sbom: true
+
+      - name: Construire et publier le worker Linux multiarchitecture
+        id: worker-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/worker.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.WORKER_IMAGE }}:${{ env.RELEASE_TAG }}
+            ${{ env.WORKER_IMAGE }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -84,10 +144,17 @@ jobs:
       - name: Installer Cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Signer l'image sans clé statique
+      - name: Signer les images sans clé statique
         env:
-          DIGEST: ${{ steps.image.outputs.digest }}
-        run: cosign sign --yes "$IMAGE@$DIGEST"
+          API_DIGEST: ${{ steps.api-image.outputs.digest }}
+          DASHBOARD_DIGEST: ${{ steps.dashboard-image.outputs.digest }}
+          MIGRATE_DIGEST: ${{ steps.migrate-image.outputs.digest }}
+          WORKER_DIGEST: ${{ steps.worker-image.outputs.digest }}
+        run: |
+          cosign sign --yes "$API_IMAGE@$API_DIGEST"
+          cosign sign --yes "$DASHBOARD_IMAGE@$DASHBOARD_DIGEST"
+          cosign sign --yes "$MIGRATE_IMAGE@$MIGRATE_DIGEST"
+          cosign sign --yes "$WORKER_IMAGE@$WORKER_DIGEST"
 
       - name: Installer Syft
         uses: anchore/sbom-action/download-syft@v0
@@ -96,10 +163,21 @@ jobs:
         run: |
           git archive --format=tar.gz --prefix="nexus-${RELEASE_TAG}/" \
             --output="nexus-${RELEASE_TAG}.tar.gz" "$RELEASE_TAG"
-          syft "$IMAGE@${{ steps.image.outputs.digest }}" \
-            --output "spdx-json=nexus-${RELEASE_TAG}.sbom.spdx.json"
+          syft "$API_IMAGE@${{ steps.api-image.outputs.digest }}" \
+            --output "spdx-json=nexus-${RELEASE_TAG}-api.sbom.spdx.json"
+          syft "$DASHBOARD_IMAGE@${{ steps.dashboard-image.outputs.digest }}" \
+            --output "spdx-json=nexus-${RELEASE_TAG}-dashboard.sbom.spdx.json"
+          syft "$MIGRATE_IMAGE@${{ steps.migrate-image.outputs.digest }}" \
+            --output "spdx-json=nexus-${RELEASE_TAG}-migrate.sbom.spdx.json"
+          syft "$WORKER_IMAGE@${{ steps.worker-image.outputs.digest }}" \
+            --output "spdx-json=nexus-${RELEASE_TAG}-worker.sbom.spdx.json"
+          cp packaging/linux/install-worker.sh install-worker.sh
           sha256sum "nexus-${RELEASE_TAG}.tar.gz" \
-            "nexus-${RELEASE_TAG}.sbom.spdx.json" > SHA256SUMS
+            "nexus-${RELEASE_TAG}-api.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-dashboard.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-migrate.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-worker.sbom.spdx.json" \
+            install-worker.sh > SHA256SUMS
 
       - name: Publier la release GitHub
         env:
@@ -107,7 +185,11 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" \
             "nexus-${RELEASE_TAG}.tar.gz" \
-            "nexus-${RELEASE_TAG}.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-api.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-dashboard.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-migrate.sbom.spdx.json" \
+            "nexus-${RELEASE_TAG}-worker.sbom.spdx.json" \
+            install-worker.sh \
             SHA256SUMS \
             --verify-tag \
             --generate-notes \

@@ -1,0 +1,24 @@
+# Exemple pour k3s/Traefik. Copier en ingress.yaml, remplacer le domaine et le
+# secret TLS, puis appliquer séparément. Tout passe par le dashboard afin que
+# le navigateur utilise une seule origine ; nginx relaie /api et /ws à l'API.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus
+  namespace: nexus
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  tls:
+    - hosts: [nexus.example.invalid]
+      secretName: nexus-tls
+  rules:
+    - host: nexus.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nexus-dashboard
+                port: { name: http }

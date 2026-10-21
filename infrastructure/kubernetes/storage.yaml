@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: nexus
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: nexus
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache
+  namespace: nexus
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi
+---
+# Les réglages modifiables depuis le dashboard, artefacts et journaux sont
+# locaux au processus. Ce volume impose donc une seule réplique API tant que
+# ces données n'ont pas été migrées vers PostgreSQL ou un stockage RWX.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-state
+  namespace: nexus
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi

@@ -65,7 +65,9 @@ import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
 import { LocalHashEmbeddingProvider, TransformersEmbeddingProvider } from "@nexus/memory";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
-const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
+const runtimeConfiguration = new RuntimeConfigurationStore(
+  config.NEXUS_RUNTIME_CONFIG_DIR ?? resolve(here, "../config"),
+);
 const vault = new KeyringVault(runtimeConfiguration);
 const toolRegistry = new ToolRegistry();
 if (config.SEARXNG_URL !== undefined) {
@@ -105,7 +107,8 @@ const nativeBrowserDriver = isLocalHarnessEnabled
 const browserSessionManager = nativeBrowserDriver
   ? new BrowserSessionManager({
       driver: nativeBrowserDriver,
-      artifactsDirectory: resolve(here, "../../../var/artifacts/browser"),
+      artifactsDirectory:
+        config.NEXUS_BROWSER_ARTIFACTS_DIR ?? resolve(here, "../../../var/artifacts/browser"),
     })
   : undefined;
 
@@ -171,7 +174,8 @@ const services = new ServiceContainer({
   runStore: new PrismaAgentRunStore(prisma),
   telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
   embeddings,
-  observabilityDirectory: resolve(here, "../../../var/observability"),
+  observabilityDirectory:
+    config.NEXUS_OBSERVABILITY_DIR ?? resolve(here, "../../../var/observability"),
   tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
   apiVersion: config.API_VERSION,
   toolRegistry,

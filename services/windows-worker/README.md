@@ -66,23 +66,29 @@ filtre se contourne ; une API qui n'accepte pas de ligne de commande, non.
 
 ## Installation
 
+### Installateur publié (recommandé)
+
+1. Installer `nexus-worker-<version>-setup.exe` depuis la release NEXUS.
+2. Dans le dashboard, ouvrir **Appareils**, saisir un nom et cliquer
+   **Créer un code**.
+3. Copier la commande PowerShell affichée et l'exécuter en administrateur.
+4. Revenir dans **Appareils** et cliquer **Approuver**.
+
+La commande génère la clé Ed25519 sur le PC, consomme le ticket à usage unique,
+écrit `worker.env`, restreint les ACL et installe le service. Le code
+d'appairage et la clé privée ne sont jamais conservés ensemble.
+
+### Depuis les sources
+
 ```powershell
-# 1. Générer la paire de clés de l'appareil. La clé privée ne quitte jamais la machine.
-openssl genpkey -algorithm ed25519 -out C:\ProgramData\NEXUS\nexus-device.key
-openssl pkey -in C:\ProgramData\NEXUS\nexus-device.key -pubout -out nexus-device.pub
-
-# 2. Restreindre l'accès à la clé au seul compte qui exécute le worker.
-icacls C:\ProgramData\NEXUS\nexus-device.key /inheritance:r /grant:r "$env:USERNAME:(R)"
-
-# 3. Enregistrer l'appareil côté cœur, avec la clé PUBLIQUE, et l'approuver.
-#    C'est le backend qui attribue DEVICE_ID, le rôle et les permissions.
-
-# 4. Configurer le worker.
-cp .env.example .env   # puis renseigner
-
-# 5. Installer et lancer.
 pnpm install
 pnpm --filter @nexus/windows-worker build
+pnpm --filter @nexus/windows-worker pair -- `
+  --api-url https://votre-nexus `
+  --token CODE_DU_DASHBOARD `
+  --key-path C:\ProgramData\NEXUS\nexus-device.key `
+  --env-path .env `
+  --allowed-paths C:\Projets
 pnpm --filter @nexus/windows-worker start
 ```
 
