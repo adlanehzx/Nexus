@@ -1,29 +1,23 @@
 /**
- * Lecture et comparaison de versions sémantiques.
+ * Semantic version parsing and comparison.
  *
- * Ici, et non dans chaque paquet qui en a besoin, parce que la comparaison de
- * versions est un classique des erreurs silencieuses : `"10" < "9"` en
- * comparaison de chaînes, et une pré-version qui passe pour plus récente que la
- * version finale. Deux implémentations, c'est deux occasions de se tromper —
- * et celle qui se trompe décide quand même de mettre à jour.
+ * Centralized here to ensure uniform version comparison semantics across all components
+ * and avoid pitfalls like string comparison ordering or incorrect pre-release handling.
  */
 
 export interface SemanticVersion {
   major: number;
   minor: number;
   patch: number;
-  /** Partie de pré-version, par exemple `rc.1`. Absente le plus souvent. */
+  /** Pre-release segment, e.g. `rc.1`. Omitted in stable releases. */
   prerelease: string | undefined;
 }
 
 const VERSION = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 
 /**
- * Lit une version, ou rend `undefined`.
- *
- * Ne lève pas : une version illisible est une **observation** — quelque chose a
- * annoncé n'importe quoi — et non une erreur de programmation. Elle se traduit
- * en « inconnu », ce qui est affichable ; une exception, non.
+ * Parses a semantic version string or returns `undefined`.
+ * Does not throw: unparseable versions represent observations, not exceptions.
  */
 export function parseVersion(value: string | null | undefined): SemanticVersion | undefined {
   if (value === null || value === undefined) return undefined;
@@ -38,13 +32,8 @@ export function parseVersion(value: string | null | undefined): SemanticVersion 
 }
 
 /**
- * Compare deux versions : négatif si `left` est plus ancienne.
- *
- * Les pré-versions sont **plus anciennes** que la version finale correspondante
- * — `1.2.0-rc.1` précède `1.2.0` — conformément à l'usage sémantique. Entre
- * deux pré-versions, la comparaison est lexicographique : approximatif, et
- * suffisant pour la seule question posée, « faut-il mettre à jour ? ». Un ordre
- * exact entre `rc.9` et `rc.10` ne changerait aucune décision.
+ * Compares two semantic versions: returns negative if `left` is older than `right`.
+ * Pre-releases are considered older than the corresponding stable release (e.g. 1.2.0-rc.1 < 1.2.0).
  */
 export function compareVersions(left: SemanticVersion, right: SemanticVersion): number {
   if (left.major !== right.major) return left.major - right.major;
@@ -56,7 +45,7 @@ export function compareVersions(left: SemanticVersion, right: SemanticVersion): 
   return left.prerelease < right.prerelease ? -1 : 1;
 }
 
-/** Compare deux chaînes de version. `undefined` si l'une est illisible. */
+/** Compares two version strings. Returns `undefined` if either is invalid. */
 export function compareVersionStrings(left: string, right: string): number | undefined {
   const a = parseVersion(left);
   const b = parseVersion(right);

@@ -76,7 +76,7 @@ describe("contrats de santé", () => {
 
   it("impose un correlationId dans toute réponse d'erreur", () => {
     const withoutId = {
-      error: { code: "NOT_FOUND", message: "Ressource introuvable.", retryable: false },
+      error: { code: "NOT_FOUND", message: "Resource not found.", retryable: false },
     };
     expect(errorResponseSchema.safeParse(withoutId).success).toBe(false);
   });

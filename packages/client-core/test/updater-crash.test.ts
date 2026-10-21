@@ -145,7 +145,7 @@ describe("crash telemetry", () => {
     const error = new Error("long");
     error.stack = "x".repeat(5_000);
     const report = await crashes.record(error);
-    expect(report.stack).toContain("tronqué");
+    expect(report.stack).toContain("truncated");
     expect(report.stack.length).toBeLessThan(200);
   });
 

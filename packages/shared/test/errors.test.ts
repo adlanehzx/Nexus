@@ -11,15 +11,15 @@ import {
 } from "../src/errors.js";
 
 describe("AppError", () => {
-  it("expose un code et un statut HTTP stables", () => {
-    const error = new NotFoundError({ message: "conversation absente" });
+  it("exposes stable public error codes and HTTP statuses", () => {
+    const error = new NotFoundError({ message: "missing conversation" });
     expect(error.code).toBe("NOT_FOUND");
     expect(error.httpStatus).toBe(404);
   });
 
-  it("ne laisse jamais fuir le contexte technique dans la charge publique", () => {
+  it("never leaks technical context into public payloads", () => {
     const error = new ValidationError({
-      message: "email invalide",
+      message: "invalid email",
       context: { query: "SELECT * FROM users", secret: "sk-live-123" },
     });
 
@@ -32,50 +32,48 @@ describe("AppError", () => {
     expect(JSON.stringify(publicJson)).not.toContain("sk-live-123");
   });
 
-  it("permet de surcharger le message utilisateur", () => {
+  it("allows overriding the user message", () => {
     const error = new NotFoundError({
-      message: "interne",
-      userMessage: "Cette conversation n'existe plus.",
+      message: "internal",
+      userMessage: "This conversation no longer exists.",
     });
-    expect(error.toPublicJSON().message).toBe("Cette conversation n'existe plus.");
+    expect(error.toPublicJSON().message).toBe("This conversation no longer exists.");
   });
 
-  it("marque comme réessayables les seules erreurs qui le sont", () => {
+  it("marks as retryable only genuinely retryable errors", () => {
     expect(new RateLimitError({ message: "quota" }).retryable).toBe(true);
     expect(new DependencyError({ message: "postgres down" }).retryable).toBe(true);
-    expect(new ValidationError({ message: "champ manquant" }).retryable).toBe(false);
-    expect(new NotFoundError({ message: "absent" }).retryable).toBe(false);
+    expect(new ValidationError({ message: "missing field" }).retryable).toBe(false);
+    expect(new NotFoundError({ message: "missing" }).retryable).toBe(false);
   });
 
-  it("conserve la cause d'origine", () => {
+  it("preserves the original cause", () => {
     const cause = new Error("ECONNREFUSED");
-    const error = new DependencyError({ message: "redis injoignable", cause });
+    const error = new DependencyError({ message: "redis unreachable", cause });
     expect(error.cause).toBe(cause);
   });
 
-  it("classe une erreur de configuration comme fatale", () => {
-    expect(new ConfigurationError({ message: "DATABASE_URL manquante" }).severity).toBe("fatal");
+  it("classifies configuration errors as fatal", () => {
+    expect(new ConfigurationError({ message: "missing DATABASE_URL" }).severity).toBe("fatal");
   });
 });
 
 describe("toAppError", () => {
-  it("laisse passer une AppError inchangée", () => {
+  it("passes through an existing AppError unchanged", () => {
     const original = new NotFoundError({ message: "x" });
     expect(toAppError(original)).toBe(original);
   });
 
-  it("enveloppe une Error native", () => {
-    const converted = toAppError(new Error("boum"));
+  it("wraps a native Error", () => {
+    const converted = toAppError(new Error("boom"));
     expect(isAppError(converted)).toBe(true);
     expect(converted.code).toBe("INTERNAL_ERROR");
     expect(converted.httpStatus).toBe(500);
   });
 
-  it("enveloppe une valeur non typée sans planter", () => {
-    // Le pipeline d'erreurs ne doit jamais rencontrer une valeur qu'il ne sait
-    // pas traiter — y compris un `throw "chaîne"`.
-    const converted = toAppError("échec brut");
+  it("wraps untyped values without crashing", () => {
+    const converted = toAppError("raw failure");
     expect(converted).toBeInstanceOf(AppError);
-    expect(converted.context).toEqual({ raw: "échec brut" });
+    expect(converted.context).toEqual({ raw: "raw failure" });
   });
 });

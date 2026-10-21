@@ -1,27 +1,27 @@
 /**
- * Taxonomie d'erreurs partagée par tout le monorepo.
+ * Error taxonomy shared across the monorepo.
  *
- * Trois principes, tenus partout :
- *  1. `userMessage` est toujours sûr à afficher ; `context` ne l'est jamais.
- *  2. Un `code` est un contrat public : il ne change pas une fois publié.
- *  3. Une erreur porte elle-même son statut HTTP et son caractère réessayable —
- *     les couches supérieures n'ont pas à le deviner.
+ * Three core invariants held everywhere:
+ *  1. `userMessage` is always safe to display to end-users; `context` never is.
+ *  2. An error `code` is a public contract: it never changes once published.
+ *  3. An error declares its own HTTP status and retryability — upper layers
+ *     do not guess.
  */
 
 export type ErrorSeverity = "warning" | "error" | "fatal";
 
 export interface AppErrorOptions {
-  /** Message technique, destiné aux logs. */
+  /** Technical message intended for logs and diagnostics. */
   message: string;
-  /** Message sûr à afficher à l'utilisateur final. */
+  /** Safe message intended for display to the end user. */
   userMessage?: string;
-  /** Données de diagnostic. Jamais renvoyées au client. */
+  /** Diagnostic context. Never leaked across network boundaries. */
   context?: Record<string, unknown>;
   cause?: unknown;
 }
 
 export abstract class AppError extends Error {
-  /** Contrat public et stable. */
+  /** Stable public error contract code. */
   abstract readonly code: string;
   abstract readonly httpStatus: number;
 
@@ -33,12 +33,12 @@ export abstract class AppError extends Error {
   constructor(options: AppErrorOptions) {
     super(options.message, options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = new.target.name;
-    this.userMessage = options.userMessage ?? "Une erreur est survenue.";
+    this.userMessage = options.userMessage ?? "An error occurred.";
     this.context = options.context;
     Error.captureStackTrace?.(this, new.target);
   }
 
-  /** Représentation sûre : ce qui peut franchir la frontière réseau. */
+  /** Safe serialization: payload that can cross network boundaries. */
   toPublicJSON(): { code: string; message: string; retryable: boolean } {
     return { code: this.code, message: this.userMessage, retryable: this.retryable };
   }
@@ -59,7 +59,7 @@ export class AuthenticationError extends AppError {
   readonly httpStatus = 401;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Authentification requise.", ...options });
+    super({ userMessage: "Authentication required.", ...options });
   }
 }
 
@@ -78,7 +78,7 @@ export class NotFoundError extends AppError {
   override readonly severity: ErrorSeverity = "warning";
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Ressource introuvable.", ...options });
+    super({ userMessage: "Resource not found.", ...options });
   }
 }
 
@@ -127,7 +127,7 @@ export class InternalError extends AppError {
   readonly httpStatus = 500;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Une erreur interne est survenue.", ...options });
+    super({ userMessage: "An internal error occurred.", ...options });
   }
 }
 
@@ -136,13 +136,13 @@ export function isAppError(error: unknown): error is AppError {
 }
 
 /**
- * Ramène n'importe quoi à une AppError. Le pipeline d'erreurs ne doit jamais
- * rencontrer une valeur qu'il ne sait pas traiter.
+ * Normalizes any unknown thrown value to an AppError.
+ * Error handling pipelines must never encounter unhandled throwables.
  */
 export function toAppError(error: unknown): AppError {
   if (isAppError(error)) return error;
   if (error instanceof Error) {
     return new InternalError({ message: error.message, cause: error });
   }
-  return new InternalError({ message: "Erreur non typée", context: { raw: String(error) } });
+  return new InternalError({ message: "Untyped error", context: { raw: String(error) } });
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { REDACTED, redact, redactText, truncate } from "../src/index.js";
 
 describe("redact", () => {
-  it("masque les clés dont le nom trahit un secret", () => {
+  it("masks keys indicating secrets", () => {
     const result = redact({
       user: "example",
       password: "hunter2",
@@ -20,105 +20,101 @@ describe("redact", () => {
     });
   });
 
-  it("masque une valeur qui a la forme d'un secret, quel que soit son nom", () => {
-    // Un secret finit toujours par se retrouver dans un champ innocemment nommé.
+  it("masks values shaped like secrets regardless of key name", () => {
     const result = redact({
       note: "sk-abcdefghijklmnopqrstuvwxyz123456",
       other: "ghp_abcdefghijklmnopqrstuvwxyz1234",
       header: "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig",
-      innocent: "bonjour",
+      innocent: "hello",
     });
 
     expect(result).toEqual({
       note: REDACTED,
       other: REDACTED,
       header: REDACTED,
-      innocent: "bonjour",
+      innocent: "hello",
     });
   });
 
-  it("traverse les tableaux", () => {
+  it("traverses arrays", () => {
     expect(redact([{ token: "a" }, { ok: "b" }])).toEqual([{ token: REDACTED }, { ok: "b" }]);
   });
 
-  it("survit à une référence circulaire", () => {
+  it("survives circular references", () => {
     const cyclic: Record<string, unknown> = { name: "x" };
     cyclic.self = cyclic;
 
-    // La journalisation ne doit pas tomber précisément quand ça va mal.
     expect(() => redact(cyclic)).not.toThrow();
-    expect(redact(cyclic)).toMatchObject({ name: "x", self: "[référence circulaire]" });
+    expect(redact(cyclic)).toMatchObject({ name: "x", self: "[circular reference]" });
   });
 
-  it("borne la profondeur", () => {
+  it("bounds recursion depth", () => {
     let deep: Record<string, unknown> = { value: 1 };
     for (let i = 0; i < 20; i += 1) deep = { child: deep };
 
-    expect(JSON.stringify(redact(deep))).toContain("profondeur maximale");
+    expect(JSON.stringify(redact(deep))).toContain("max depth reached");
   });
 
-  it("laisse intactes les valeurs ordinaires", () => {
-    expect(redact({ n: 1, b: true, nil: null, s: "texte" })).toEqual({
+  it("leaves standard values intact", () => {
+    expect(redact({ n: 1, b: true, nil: null, s: "text" })).toEqual({
       n: 1,
       b: true,
       nil: null,
-      s: "texte",
+      s: "text",
     });
   });
 });
 
 describe("truncate", () => {
-  it("ne touche pas à un texte court", () => {
-    expect(truncate("court", 100)).toBe("court");
+  it("does not modify text within limit", () => {
+    expect(truncate("short", 100)).toBe("short");
   });
 
-  it("annonce la troncature et la taille réelle", () => {
+  it("reports truncation marker and original length", () => {
     const result = truncate("x".repeat(500), 10);
-    expect(result).toContain("tronqué");
+    expect(result).toContain("truncated");
     expect(result).toContain("500");
   });
 });
 
 describe("redactText", () => {
-  it("masque une valeur derriere un nom de cle prefixe", () => {
-    // Le nom porte un prefixe : c'est la forme courante dans un fichier .env,
-    // et celle qu'une limite de mot laisserait passer.
+  it("masks values following prefixed key names", () => {
     const result = redactText("env: DATABASE_PASSWORD=motdepassesecret");
     expect(result).not.toContain("motdepassesecret");
     expect(result).toContain(REDACTED);
   });
 
-  it("masque une valeur entre guillemets sans avaler la ligne", () => {
+  it("masks quoted values without consuming remaining lines", () => {
     const result = redactText('api_key: "sk-quelquechosedelong123456"');
     expect(result).not.toContain("sk-quelquechosedelong123456");
     expect(result).toContain("api_key");
   });
 
-  it("masque un jeton reconnaissable a sa seule forme", () => {
+  it("masks standalone token formats", () => {
     expect(redactText("clone https://github.com ghp_abcdefghijklmnopqrstuvwxyz01")).not.toContain(
       "ghp_abcdefghijklmnopqrstuvwxyz01",
     );
   });
 
-  it("masque les identifiants d'une URL sans perdre l'hote", () => {
-    const result = redactText("remote: https://utilisateur:motdepasse@github.com/a/b.git");
-    expect(result).not.toContain("motdepasse");
+  it("masks credentials in URLs while preserving hostnames", () => {
+    const result = redactText("remote: https://user:secretpassword@github.com/a/b.git");
+    expect(result).not.toContain("secretpassword");
     expect(result).toContain("github.com");
   });
 
-  it("masque un en-tete Authorization", () => {
+  it("masks Authorization headers", () => {
     expect(redactText("Authorization: Bearer abcdefghijklmnopqrstuvwxyz")).not.toContain(
       "abcdefghijklmnopqrstuvwxyz",
     );
   });
 
-  it("masque une cle privee complete", () => {
+  it("masks private keys", () => {
     const key = "-----BEGIN PRIVATE KEY-----\nMIIBVQ==\n-----END PRIVATE KEY-----";
-    expect(redactText(`cle: ${key}`)).not.toContain("MIIBVQ==");
+    expect(redactText(`key: ${key}`)).not.toContain("MIIBVQ==");
   });
 
-  it("laisse le texte ordinaire intact", () => {
-    const text = "build reussi en 12s, 240 tests passes";
+  it("leaves standard text untouched", () => {
+    const text = "build succeeded in 12s, 240 tests passed";
     expect(redactText(text)).toBe(text);
   });
 });
