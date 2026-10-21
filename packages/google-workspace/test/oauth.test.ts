@@ -8,8 +8,8 @@ import {
 } from "../src/oauth.js";
 import { GOOGLE_WORKSPACE_SCOPES } from "../src/types.js";
 
-describe("OAuth 2.0 PKCE pour Google Workspace", () => {
-  it("génère un couple PKCE conforme et non prédictible", () => {
+describe("OAuth 2.0 PKCE for Google Workspace", () => {
+  it("generates compliant non-predictable PKCE pair", () => {
     const pair1 = generatePkcePair();
     const pair2 = generatePkcePair();
 
@@ -19,7 +19,7 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     expect(pair1.codeChallenge).not.toBe(pair2.codeChallenge);
   });
 
-  it("génère l'URL d'autorisation officielle Google avec les scopes stricts", () => {
+  it("builds official Google authorization URL with strict scopes", () => {
     const pkce = generatePkcePair();
     const authUrl = buildAuthorizationUrl({
       clientId: "test-client-id.apps.googleusercontent.com",
@@ -41,11 +41,11 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     expect(scopes).toContain(GOOGLE_WORKSPACE_SCOPES.GMAIL_READONLY);
     expect(scopes).toContain(GOOGLE_WORKSPACE_SCOPES.GMAIL_SEND);
     expect(scopes).toContain(GOOGLE_WORKSPACE_SCOPES.CALENDAR_EVENTS);
-    // Aucun scope excessif complet
+    // No excessive wildcard scopes
     expect(scopes).not.toContain("https://mail.google.com/");
   });
 
-  it("échange le code d'autorisation contre des jetons", async () => {
+  it("exchanges authorization code for tokens", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -73,7 +73,7 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     expect(tokens.expiresAt).toBeGreaterThan(Date.now() + 3500 * 1000);
   });
 
-  it("renouvelle un jeton d'accès via le refresh token", async () => {
+  it("renews access token via refresh token", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -96,11 +96,11 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     expect(refreshed.refreshToken).toBe("1//existing-refresh-token");
   });
 
-  it("gère l'expiration et le rafraîchissement transparent via le coffre NEXUS", async () => {
+  it("handles expiration and seamless refresh via NEXUS vault", async () => {
     const storedTokens = JSON.stringify({
       accessToken: "ya29.expiring-token",
       refreshToken: "1//valid-refresh",
-      // Expiré ou expirant dans moins de 5 min
+      // Expired or expiring within 5 min
       expiresAt: Date.now() + 60_000,
       tokenType: "Bearer",
     });
@@ -135,7 +135,6 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     const token = await manager.getValidAccessToken();
     expect(token).toBe("ya29.refreshed-from-vault");
 
-    // Vérifie que le coffre a été mis à jour avec le nouveau token
     const updated = JSON.parse(mockVault.get("vault://nexus/google-tokens")!);
     expect(updated.accessToken).toBe("ya29.refreshed-from-vault");
   });

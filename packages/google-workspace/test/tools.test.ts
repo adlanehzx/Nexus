@@ -3,7 +3,7 @@ import { createGoogleWorkspaceTools } from "../src/tools.js";
 import type { GoogleWorkspaceClient } from "../src/client.js";
 import type { ToolContext, ToolDefinition } from "@nexus/tools";
 
-describe("Outils Google Workspace (Gmail & Calendar)", () => {
+describe("Google Workspace Tools (Gmail & Calendar)", () => {
   const createMockContext = (): ToolContext => ({
     runId: "run-test-1",
     userId: "user-1",
@@ -17,22 +17,22 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
 
   const mockClient: Partial<GoogleWorkspaceClient> = {
     searchEmails: vi.fn().mockResolvedValue({
-      messages: [{ id: "m1", threadId: "t1", snippet: "hello", subject: "Sujet 1" }],
+      messages: [{ id: "m1", threadId: "t1", snippet: "hello", subject: "Subject 1" }],
     }),
     getEmail: vi.fn().mockResolvedValue({
       id: "m1",
       threadId: "t1",
       snippet: "hello",
-      subject: "Sujet 1",
+      subject: "Subject 1",
       bodyText: "Message",
       labels: ["INBOX"],
     }),
     getThread: vi.fn().mockResolvedValue({
       id: "t1",
-      subject: "Fil 1",
+      subject: "Thread 1",
       messageCount: 2,
       participants: ["alice@example.com"],
-      summary: "Résumé du fil",
+      summary: "Thread summary",
       messages: [],
     }),
     createDraft: vi.fn().mockResolvedValue({ id: "draft-1", messageId: "msg-draft-1" }),
@@ -55,14 +55,14 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
     createEvent: vi.fn().mockResolvedValue({
       id: "new-e1",
       calendarId: "primary",
-      summary: "Nouvel événement",
+      summary: "New event",
       start: "2026-10-21T14:00:00Z",
       end: "2026-10-21T15:00:00Z",
     }),
     updateEvent: vi.fn().mockResolvedValue({
       id: "e1",
       calendarId: "primary",
-      summary: "Mis à jour",
+      summary: "Updated event",
       start: "2026-10-21T14:00:00Z",
       end: "2026-10-21T15:00:00Z",
     }),
@@ -73,7 +73,7 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
     client: mockClient as unknown as GoogleWorkspaceClient,
   });
 
-  it("enregistre tous les 11 outils avec leurs permissions et niveaux de risque corrects", () => {
+  it("registers all 11 tools with correct permissions and risk levels", () => {
     const names = tools.map((t) => t.name);
     expect(names).toContain("gmail.search");
     expect(names).toContain("gmail.read");
@@ -89,7 +89,7 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
     expect(tools).toHaveLength(11);
   });
 
-  it("exige STRICTEMENT une confirmation humaine pour les actions sensibles d'envoi et modification", () => {
+  it("strictly requires human confirmation for mutating send and edit actions", () => {
     const sendTool = tools.find((t) => t.name === "gmail.send")!;
     expect(sendTool.requiresConfirmation).toBe(true);
     expect(sendTool.riskLevel).toBe("HIGH");
@@ -109,7 +109,7 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
     expect(deleteEventTool.riskLevel).toBe("CRITICAL");
   });
 
-  it("laisse les opérations de consultation et brouillons sans confirmation bloquante", () => {
+  it("allows read operations and draft creation without blocking confirmation", () => {
     const searchTool = tools.find((t) => t.name === "gmail.search")!;
     expect(searchTool.requiresConfirmation).toBe(false);
     expect(searchTool.riskLevel).toBe("SAFE");
@@ -125,22 +125,20 @@ describe("Outils Google Workspace (Gmail & Calendar)", () => {
     expect(listEventsTool.requiresConfirmation).toBe(false);
   });
 
-  it("exécute l'outil gmail.send et produit un résumé clair pour la carte de confirmation", async () => {
+  it("executes gmail.send and generates clear confirmation summary", async () => {
     const rawTool = tools.find((t) => t.name === "gmail.send")!;
     const sendTool = rawTool as unknown as ToolDefinition<
       { to: string[]; subject: string; body: string },
       { id: string; threadId: string }
     >;
     const input = {
-      to: ["collegue@example.com"],
-      subject: "Compte-rendu du projet",
-      body: "Voici le compte-rendu.",
+      to: ["colleague@example.com"],
+      subject: "Project Report",
+      body: "Here is the report.",
     };
 
     const summary = sendTool.summarize?.(input);
-    expect(summary).toBe(
-      "Envoi d'un email à collegue@example.com avec pour sujet « Compte-rendu du projet »",
-    );
+    expect(summary).toBe('Send email to colleague@example.com with subject "Project Report"');
 
     const ctx = createMockContext();
     const result = await sendTool.execute(input, ctx);

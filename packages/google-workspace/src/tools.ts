@@ -3,20 +3,20 @@ import type { ToolContext, ToolDefinition } from "@nexus/tools";
 import type { GoogleWorkspaceClient } from "./client.js";
 
 // ==========================================
-// SCHEMAS GMAIL
+// GMAIL SCHEMAS
 // ==========================================
 
 export const gmailSearchInputSchema = z.object({
-  query: z.string().min(1).describe("Requête de recherche Gmail (ex: 'from:alice label:unread')"),
+  query: z.string().min(1).describe("Gmail search query (e.g. 'from:alice label:unread')"),
   maxResults: z
     .number()
     .int()
     .min(1)
     .max(50)
     .optional()
-    .describe("Nombre maximal de messages à renvoyer"),
-  labelIds: z.array(z.string()).optional().describe("Filtre par identifiants de libellés"),
-  pageToken: z.string().optional().describe("Jeton de pagination"),
+    .describe("Maximum number of messages to return"),
+  labelIds: z.array(z.string()).optional().describe("Filter by label IDs"),
+  pageToken: z.string().optional().describe("Pagination token"),
 });
 
 export const gmailSearchOutputSchema = z.object({
@@ -35,7 +35,7 @@ export const gmailSearchOutputSchema = z.object({
 });
 
 export const gmailReadInputSchema = z.object({
-  messageId: z.string().min(1).describe("Identifiant unique du message Gmail"),
+  messageId: z.string().min(1).describe("Unique Gmail message identifier"),
 });
 
 export const gmailReadOutputSchema = z.object({
@@ -53,7 +53,7 @@ export const gmailReadOutputSchema = z.object({
 });
 
 export const gmailSummarizeInputSchema = z.object({
-  threadId: z.string().min(1).describe("Identifiant unique du fil de discussion"),
+  threadId: z.string().min(1).describe("Unique Gmail thread identifier"),
 });
 
 export const gmailSummarizeOutputSchema = z.object({
@@ -65,12 +65,12 @@ export const gmailSummarizeOutputSchema = z.object({
 });
 
 export const gmailDraftInputSchema = z.object({
-  to: z.array(z.string().email()).min(1).describe("Destinataires de l'email"),
+  to: z.array(z.string().email()).min(1).describe("Email recipients"),
   cc: z.array(z.string().email()).optional(),
   bcc: z.array(z.string().email()).optional(),
-  subject: z.string().min(1).describe("Sujet du message"),
-  body: z.string().min(1).describe("Corps textuel du message"),
-  threadId: z.string().optional().describe("Identifiant de fil existant si réponse"),
+  subject: z.string().min(1).describe("Message subject"),
+  body: z.string().min(1).describe("Message body text"),
+  threadId: z.string().optional().describe("Existing thread ID if replying"),
 });
 
 export const gmailDraftOutputSchema = z.object({
@@ -86,17 +86,17 @@ export const gmailSendOutputSchema = z.object({
 });
 
 // ==========================================
-// SCHEMAS CALENDAR
+// CALENDAR SCHEMAS
 // ==========================================
 
 export const calendarListEventsInputSchema = z.object({
   calendarId: z
     .string()
     .default("primary")
-    .describe("Identifiant de l'agenda ('primary' par défaut)"),
-  timeMin: z.string().optional().describe("Borne inférieure au format ISO 8601"),
-  timeMax: z.string().optional().describe("Borne supérieure au format ISO 8601"),
-  query: z.string().optional().describe("Filtre textuel"),
+    .describe("Calendar ID ('primary' by default)"),
+  timeMin: z.string().optional().describe("Lower time bound in ISO 8601 format"),
+  timeMax: z.string().optional().describe("Upper time bound in ISO 8601 format"),
+  query: z.string().optional().describe("Text query filter"),
   maxResults: z.number().int().min(1).max(100).optional(),
 });
 
@@ -124,8 +124,8 @@ export const calendarGetEventInputSchema = z.object({
 
 export const calendarAvailabilityInputSchema = z.object({
   calendarId: z.string().default("primary"),
-  timeMin: z.string().describe("Début de la période d'analyse ISO 8601"),
-  timeMax: z.string().describe("Fin de la période d'analyse ISO 8601"),
+  timeMin: z.string().describe("Start of time period in ISO 8601 format"),
+  timeMax: z.string().describe("End of time period in ISO 8601 format"),
 });
 
 export const calendarAvailabilityOutputSchema = z.object({
@@ -138,11 +138,11 @@ export const calendarAvailabilityOutputSchema = z.object({
 
 export const calendarCreateEventInputSchema = z.object({
   calendarId: z.string().default("primary"),
-  summary: z.string().min(1).describe("Titre de l'événement"),
+  summary: z.string().min(1).describe("Event title"),
   description: z.string().optional(),
-  start: z.string().describe("Date et heure de début ISO 8601"),
-  end: z.string().describe("Date et heure de fin ISO 8601"),
-  attendees: z.array(z.string().email()).optional().describe("Emails des participants"),
+  start: z.string().describe("Start date and time in ISO 8601 format"),
+  end: z.string().describe("End date and time in ISO 8601 format"),
+  attendees: z.array(z.string().email()).optional().describe("Attendee email addresses"),
   location: z.string().optional(),
 });
 
@@ -168,7 +168,7 @@ export const calendarDeleteEventOutputSchema = z.object({
 });
 
 /**
- * Crée la collection d'outils officiels Google Workspace (Gmail et Calendar) pour NEXUS.
+ * Creates the official Google Workspace tools collection (Gmail & Calendar) for NEXUS.
  */
 export function createGoogleWorkspaceTools(options: {
   client: GoogleWorkspaceClient;
@@ -181,7 +181,7 @@ export function createGoogleWorkspaceTools(options: {
       name: "gmail.search",
       version: "1.0.0",
       description:
-        "Recherche des emails dans la boîte Gmail de l'utilisateur par mots-clés ou libellés.",
+        "Searches emails in user's Gmail mailbox by keywords or labels.",
       inputSchema: gmailSearchInputSchema,
       outputSchema: gmailSearchOutputSchema,
       riskLevel: "SAFE",
@@ -189,7 +189,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof gmailSearchInputSchema>) =>
-        `Recherche d'emails : ${input.query}`,
+        `Search emails: ${input.query}`,
       execute: async (input: z.infer<typeof gmailSearchInputSchema>, context: ToolContext) => {
         return client.searchEmails(input, context.signal);
       },
@@ -200,7 +200,7 @@ export function createGoogleWorkspaceTools(options: {
       name: "gmail.read",
       version: "1.0.0",
       description:
-        "Lit le contenu complet d'un email. Le texte renvoyé est encapsulé dans des balises de sécurité anti-injection.",
+        "Reads full content of an email. Returned text is encapsulated in prompt-injection defense tags.",
       inputSchema: gmailReadInputSchema,
       outputSchema: gmailReadOutputSchema,
       riskLevel: "SAFE",
@@ -208,7 +208,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof gmailReadInputSchema>) =>
-        `Lecture de l'email ${input.messageId}`,
+        `Read email ${input.messageId}`,
       execute: async (input: z.infer<typeof gmailReadInputSchema>, context: ToolContext) => {
         return client.getEmail(input, context.signal);
       },
@@ -219,7 +219,7 @@ export function createGoogleWorkspaceTools(options: {
       name: "gmail.summarize",
       version: "1.0.0",
       description:
-        "Fournit la chronologie ordonnée et le résumé des échanges d'un fil de discussion Gmail complet.",
+        "Provides chronological thread history and summary for a Gmail thread.",
       inputSchema: gmailSummarizeInputSchema,
       outputSchema: gmailSummarizeOutputSchema,
       riskLevel: "SAFE",
@@ -227,7 +227,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof gmailSummarizeInputSchema>) =>
-        `Résumé du fil de discussion ${input.threadId}`,
+        `Summary of thread ${input.threadId}`,
       execute: async (input: z.infer<typeof gmailSummarizeInputSchema>, context: ToolContext) => {
         return client.getThread(input, context.signal);
       },
@@ -237,7 +237,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "gmail.draft",
       version: "1.0.0",
-      description: "Prépare un brouillon d'email dans la boîte Gmail sans l'expédier.",
+      description: "Prepares a draft email in Gmail without sending.",
       inputSchema: gmailDraftInputSchema,
       outputSchema: gmailDraftOutputSchema,
       riskLevel: "MEDIUM",
@@ -245,7 +245,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof gmailDraftInputSchema>) =>
-        `Préparation du brouillon pour ${input.to.join(", ")} (« ${input.subject} »)`,
+        `Prepare draft for ${input.to.join(", ")} ("${input.subject}")`,
       execute: async (input: z.infer<typeof gmailDraftInputSchema>, context: ToolContext) => {
         return client.createDraft(
           {
@@ -261,12 +261,12 @@ export function createGoogleWorkspaceTools(options: {
       },
     },
 
-    // 5. gmail.send (CONFIRMATION OBLIGATOIRE)
+    // 5. gmail.send (MANDATORY CONFIRMATION)
     {
       name: "gmail.send",
       version: "1.0.0",
       description:
-        "Envoie réellement un email depuis le compte Gmail de l'utilisateur. Requiert obligatoirement une confirmation humaine avant émission.",
+        "Sends an email from the user's Gmail account. Requires explicit human confirmation before sending.",
       inputSchema: gmailSendInputSchema,
       outputSchema: gmailSendOutputSchema,
       riskLevel: "HIGH",
@@ -274,7 +274,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: true,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof gmailSendInputSchema>) =>
-        `Envoi d'un email à ${input.to.join(", ")} avec pour sujet « ${input.subject} »`,
+        `Send email to ${input.to.join(", ")} with subject "${input.subject}"`,
       execute: async (input: z.infer<typeof gmailSendInputSchema>, context: ToolContext) => {
         return client.sendEmail(
           {
@@ -294,7 +294,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "calendar.list_events",
       version: "1.0.0",
-      description: "Liste les événements de l'agenda Google Calendar.",
+      description: "Lists events from Google Calendar.",
       inputSchema: calendarListEventsInputSchema,
       outputSchema: calendarListEventsOutputSchema,
       riskLevel: "SAFE",
@@ -302,7 +302,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof calendarListEventsInputSchema>) =>
-        `Consultation de l'agenda ${input.calendarId ?? "primary"}`,
+        `View calendar ${input.calendarId ?? "primary"}`,
       execute: async (
         input: z.infer<typeof calendarListEventsInputSchema>,
         context: ToolContext,
@@ -316,7 +316,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "calendar.get_event",
       version: "1.0.0",
-      description: "Obtient le détail d'un événement spécifique du calendrier.",
+      description: "Gets details for a specific calendar event.",
       inputSchema: calendarGetEventInputSchema,
       outputSchema: calendarEventSchema,
       riskLevel: "SAFE",
@@ -324,7 +324,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof calendarGetEventInputSchema>) =>
-        `Consultation de l'événement ${input.eventId}`,
+        `View event ${input.eventId}`,
       execute: async (input: z.infer<typeof calendarGetEventInputSchema>, context: ToolContext) => {
         return client.getEvent(input, context.signal);
       },
@@ -334,7 +334,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "calendar.check_availability",
       version: "1.0.0",
-      description: "Analyse les créneaux libres et occupés sur une période donnée.",
+      description: "Analyzes busy and free slots over a given time range.",
       inputSchema: calendarAvailabilityInputSchema,
       outputSchema: calendarAvailabilityOutputSchema,
       riskLevel: "SAFE",
@@ -342,7 +342,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: false,
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof calendarAvailabilityInputSchema>) =>
-        `Vérification des disponibilités du ${input.timeMin} au ${input.timeMax}`,
+        `Check availability from ${input.timeMin} to ${input.timeMax}`,
       execute: async (
         input: z.infer<typeof calendarAvailabilityInputSchema>,
         context: ToolContext,
@@ -351,12 +351,12 @@ export function createGoogleWorkspaceTools(options: {
       },
     },
 
-    // 9. calendar.create_event (CONFIRMATION OBLIGATOIRE)
+    // 9. calendar.create_event (MANDATORY CONFIRMATION)
     {
       name: "calendar.create_event",
       version: "1.0.0",
       description:
-        "Crée un nouvel événement dans Google Calendar. Requiert obligatoirement une confirmation humaine avant création.",
+        "Creates a new event in Google Calendar. Requires explicit human confirmation before creation.",
       inputSchema: calendarCreateEventInputSchema,
       outputSchema: calendarEventSchema,
       riskLevel: "HIGH",
@@ -364,7 +364,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: true,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarCreateEventInputSchema>) =>
-        `Création de l'événement « ${input.summary} » le ${input.start}`,
+        `Create event "${input.summary}" on ${input.start}`,
       execute: async (
         input: z.infer<typeof calendarCreateEventInputSchema>,
         context: ToolContext,
@@ -373,12 +373,12 @@ export function createGoogleWorkspaceTools(options: {
       },
     },
 
-    // 10. calendar.update_event (CONFIRMATION OBLIGATOIRE)
+    // 10. calendar.update_event (MANDATORY CONFIRMATION)
     {
       name: "calendar.update_event",
       version: "1.0.0",
       description:
-        "Modifie un événement existant dans Google Calendar. Requiert obligatoirement une confirmation humaine.",
+        "Updates an existing event in Google Calendar. Requires explicit human confirmation.",
       inputSchema: calendarUpdateEventInputSchema,
       outputSchema: calendarEventSchema,
       riskLevel: "HIGH",
@@ -386,7 +386,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: true,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarUpdateEventInputSchema>) =>
-        `Mise à jour de l'événement ${input.eventId} (« ${input.summary ?? "modifications"} »)`,
+        `Update event ${input.eventId} ("${input.summary ?? "modifications"}")`,
       execute: async (
         input: z.infer<typeof calendarUpdateEventInputSchema>,
         context: ToolContext,
@@ -395,12 +395,12 @@ export function createGoogleWorkspaceTools(options: {
       },
     },
 
-    // 11. calendar.delete_event (CONFIRMATION OBLIGATOIRE)
+    // 11. calendar.delete_event (MANDATORY CONFIRMATION)
     {
       name: "calendar.delete_event",
       version: "1.0.0",
       description:
-        "Supprime définitivement un événement de Google Calendar. Requiert obligatoirement une confirmation humaine.",
+        "Permanently deletes an event from Google Calendar. Requires explicit human confirmation.",
       inputSchema: calendarDeleteEventInputSchema,
       outputSchema: calendarDeleteEventOutputSchema,
       riskLevel: "CRITICAL",
@@ -408,7 +408,7 @@ export function createGoogleWorkspaceTools(options: {
       requiresConfirmation: true,
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarDeleteEventInputSchema>) =>
-        `Suppression définitive de l'événement ${input.eventId} du calendrier ${input.calendarId}`,
+        `Permanently delete event ${input.eventId} from calendar ${input.calendarId}`,
       execute: async (
         input: z.infer<typeof calendarDeleteEventInputSchema>,
         context: ToolContext,

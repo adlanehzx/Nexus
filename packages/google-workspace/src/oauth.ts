@@ -10,7 +10,7 @@ export type SecretResolver = (ref: string) => Promise<string | undefined>;
 export type SecretWriter = (ref: string, value: string) => Promise<void>;
 
 /**
- * Génère une paire de clés PKCE (RFC 7636) conforme aux recommandations OAuth 2.0 pour clients publics/locaux.
+ * Generates a PKCE key pair (RFC 7636) compliant with OAuth 2.0 recommendations for public/local clients.
  */
 export function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
   const codeVerifier = randomBytes(32)
@@ -23,7 +23,7 @@ export function generatePkcePair(): { codeVerifier: string; codeChallenge: strin
 }
 
 /**
- * Construit l'URL d'autorisation Google officielle avec PKCE et consentement hors-ligne (refresh token).
+ * Builds official Google authorization URL with PKCE and offline access (refresh token).
  */
 export function buildAuthorizationUrl(options: {
   clientId: string;
@@ -49,7 +49,7 @@ export function buildAuthorizationUrl(options: {
 }
 
 /**
- * Échange un code d'autorisation contre des jetons d'accès et de rafraîchissement.
+ * Exchanges authorization code for access and refresh tokens.
  */
 export async function exchangeAuthorizationCode(options: {
   code: string;
@@ -78,7 +78,7 @@ export async function exchangeAuthorizationCode(options: {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Échec de l'échange OAuth Google (${response.status}): ${errorBody}`);
+    throw new Error(`Google OAuth exchange failed (${response.status}): ${errorBody}`);
   }
 
   const data = (await response.json()) as {
@@ -100,7 +100,7 @@ export async function exchangeAuthorizationCode(options: {
 }
 
 /**
- * Renouvelle le jeton d'accès à l'aide du jeton de rafraîchissement.
+ * Renews access token using the refresh token.
  */
 export async function refreshAccessToken(options: {
   refreshToken: string;
@@ -125,7 +125,7 @@ export async function refreshAccessToken(options: {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Échec du rafraîchissement du jeton Google (${response.status}): ${errorBody}`);
+    throw new Error(`Google token refresh failed (${response.status}): ${errorBody}`);
   }
 
   const data = (await response.json()) as {
@@ -147,7 +147,7 @@ export async function refreshAccessToken(options: {
 }
 
 /**
- * Gestionnaire sécurisé des jetons Google Workspace via le coffre NEXUS (`vault://`).
+ * Secure Google Workspace token manager backed by the NEXUS vault (`vault://`).
  */
 export class GoogleTokenManager {
   readonly #clientId: string;
@@ -174,13 +174,13 @@ export class GoogleTokenManager {
   }
 
   /**
-   * Obtient un jeton d'accès valide, en le rafraîchissant automatiquement si nécessaire.
+   * Retrieves a valid access token, automatically refreshing if expiring soon.
    */
   async getValidAccessToken(): Promise<string> {
     const rawTokens = await this.#resolveSecret(this.#tokensRef);
     if (!rawTokens) {
       throw new Error(
-        `Aucun jeton Google trouvé dans le coffre sous la référence « ${this.#tokensRef} »`,
+        `No Google tokens found in vault under reference "${this.#tokensRef}"`,
       );
     }
 
@@ -189,11 +189,11 @@ export class GoogleTokenManager {
       tokens = googleOAuthTokensSchema.parse(JSON.parse(rawTokens));
     } catch {
       throw new Error(
-        `Format de jetons Google invalide dans le coffre sous « ${this.#tokensRef} »`,
+        `Invalid Google token format in vault under "${this.#tokensRef}"`,
       );
     }
 
-    // Marge de sécurité de 5 minutes (300 000 ms) avant expiration
+    // Safety margin of 5 minutes (300,000 ms) before expiration
     const isExpiringSoon = Date.now() + 300_000 >= tokens.expiresAt;
 
     if (!isExpiringSoon) {
@@ -202,14 +202,14 @@ export class GoogleTokenManager {
 
     if (!tokens.refreshToken) {
       throw new Error(
-        `Le jeton d'accès Google est expiré et aucun refresh token n'est disponible dans « ${this.#tokensRef} »`,
+        `Google access token has expired and no refresh token is available in "${this.#tokensRef}"`,
       );
     }
 
     const clientSecret = await this.#resolveSecret(this.#clientSecretRef);
     if (!clientSecret) {
       throw new Error(
-        `Le secret client Google « ${this.#clientSecretRef} » est introuvable dans le coffre`,
+        `Google client secret "${this.#clientSecretRef}" not found in vault`,
       );
     }
 
