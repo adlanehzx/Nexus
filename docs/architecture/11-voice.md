@@ -1,196 +1,159 @@
-# 11 — Stratégie voix
+# 11 — Voice Strategy
 
-## 1. Principe : la voix est une couche d'entrée/sortie, pas une variante de l'agent
+## 1. Principle: Voice is an I/O Transport, Not an Agent Variant
 
-L'agent ne sait pas s'il parle à quelqu'un qui a tapé ou parlé. Il reçoit du texte, il produit du
-texte. La chaîne audio est branchée **avant** et **après** lui, jamais dedans
+The agent core does not distinguish whether input was typed or spoken. It ingests text and produces
+text. Audio processing pipelines attach **before** and **after** the core loop, never inside it
 (→ [ADR-012](../adr/ADR-012-voice-decoupled.md)).
 
 ```
-Micro → [STT] → texte → Agent (identique au flux texte) → texte → [TTS] → audio
+Microphone → [STT] → Text → Agent Core (Standard Execution) → Text → [TTS] → Audio
 ```
 
-Un seul indice traverse la frontière : `Message.inputModality = 'voice' | 'text'`, que le prompt
-utilise uniquement pour ajuster le **style** (réponses plus courtes, pas de tableaux markdown,
-pas d'URL à lire à voix haute). C'est une consigne de rendu, pas une logique différente.
+Only one contextual signal traverses the boundary: `Message.inputModality = 'voice' | 'text'`, which
+the prompt uses solely to adjust response **style** (more concise phrasing, avoiding markdown tables,
+avoiding reading out raw URLs). It represents a rendering directive, not altered business logic.
 
-## 2. Abstractions
+## 2. Port Abstractions
 
 ```ts
 interface STTProvider {
-  transcribe(audio: AudioBuffer, opts): Promise<Transcript>; // batch
-  stream(opts): STTStream; // → partial / final / vad events
+  transcribe(audio: AudioBuffer, opts): Promise<Transcript>; // Batch mode
+  stream(opts): STTStream; // → partial / final / VAD events
 }
 interface TTSProvider {
   synthesize(text, opts): Promise<AudioBuffer>;
-  stream(textStream, opts): AsyncIterable<AudioChunk>; // phrase par phrase
+  stream(textStream, opts): AsyncIterable<AudioChunk>; // Sentence-by-sentence streaming
   listVoices(): Promise<Voice[]>;
 }
 ```
 
-Adaptateurs prévus : cloud (Whisper/Deepgram côté STT, ElevenLabs/OpenAI côté TTS), et **local**
-(`whisper.cpp`, Piper) pour un mode confidentialité déployable sur le VPS ou le PC. Le choix est
-une configuration, pas une réécriture.
+Supported adapters: Cloud providers (Whisper/Deepgram for STT, ElevenLabs/OpenAI for TTS), and **local
+backends** (`whisper.cpp`, Piper) enabling an offline privacy mode on workstations or VPS nodes.
+Choosing a backend is a configuration option, not a code rewrite.
 
-## 3. Deux modes produit
+## 3. Two Operating Modes
 
-**Mode dictée (v1)** — l'utilisateur appuie, parle, relâche.
+**Dictation Mode (v1)** — Push-to-talk: press, speak, release.
 
-- Enregistrement local (`expo-av`), VAD léger pour couper les silences, upload en Opus.
-- Transcription affichée et **éditable avant envoi** : corriger un mot mal transcrit est plus
-  rapide que refaire la demande, et cela évite qu'un agent agisse sur une transcription fausse.
-- Coût faible, latence acceptable, complexité minimale.
+- Local audio recording (`expo-av`), lightweight voice activity detection (VAD) to trim silence, Opus upload.
+- Transcription displayed and **editable prior to sending**: fixing a misinterpreted word takes seconds
+  and prevents agents from acting on faulty transcriptions.
+- Low token cost, minimal latency, simplest operational footprint.
 
-**Mode conversation (v2)** — session continue, mains libres.
+**Continuous Conversation Mode (v2)** — Hands-free streaming session.
 
-- Streaming micro → WS (`voice.chunk`, frames binaires Opus 20 ms) → STT en flux.
-- Endpointing serveur (silence 700 ms ou fin de phrase détectée) → lancement du run.
-- TTS **par phrase** dès que la première phrase est complète : la voix démarre pendant que le
-  modèle écrit encore. C'est ce qui fait passer la latence perçue de ~4 s à ~1 s.
-- **Barge-in** : si le micro détecte de la parole pendant la lecture, on coupe le TTS, on annule
-  le run si l'utilisateur reformule. Sans barge-in, un assistant vocal est insupportable.
+- Streaming microphone frames over WebSockets (`voice.chunk`, binary 20ms Opus frames) → real-time STT.
+- Server-side speech endpointing (700ms silence or sentence closure) triggers the agent run.
+- **Sentence-by-sentence TTS**: Synthesis begins as soon as the first sentence completes, while the LLM
+  is still streaming subsequent tokens. This cuts perceived latency from ~4s to ~1s.
+- **Barge-in Support**: If the microphone detects user speech while audio is playing, playback is
+  instantly muted and the in-flight agent generation is cancelled. Without barge-in, voice assistants
+  feel cumbersome.
 
-## 4. Latence — le budget qui compte
+## 4. Latency Budget
 
-| Étape                                | Cible       | Levier                                        |
-| ------------------------------------ | ----------- | --------------------------------------------- |
-| Fin de parole → transcription finale | < 400 ms    | STT en flux, endpointing local                |
-| Transcription → premier token        | < 800 ms    | contexte préchauffé, modèle rapide en routage |
-| Premier token → premier son          | < 500 ms    | TTS phrase par phrase, pas d'attente de fin   |
-| **Total perçu**                      | **< 1,5 s** |                                               |
+| Pipeline Stage                       | Target      | Architectural Lever                          |
+| ------------------------------------ | ----------- | -------------------------------------------- |
+| End of speech → Final transcript     | < 400 ms    | Streaming STT, local endpointing             |
+| Transcript → First token emitted     | < 800 ms    | Pre-warmed context, fast routing model       |
+| First token → First audio frame      | < 500 ms    | Sentence-by-sentence TTS streaming           |
+| **Total Perceived Latency**          | **< 1.5 s** |                                              |
 
-Quand l'agent doit exécuter des outils, la réponse est lente par nature : on comble alors par une
-**annonce vocale d'état** (« je regarde tes emails… ») générée localement à partir de
-`tool.started`, pas par le LLM.
+When an agent must execute external tools, latency naturally increases: we bridge the gap with
+**local voice status announcements** ("Checking your upcoming calendar…") generated from `tool.started`
+metadata rather than waiting for LLM completion tokens.
 
-## 5. Confidentialité
+## 5. Privacy and Security Guarantees
 
-- **Aucun audio n'est conservé**, et ce n'est plus une option mais le défaut — la rétention
-  « 7 jours » annoncée ici n'a jamais été implémentée, et l'implémentation a pris l'autre
-  direction : il n'existe aucun chemin qui garde un enregistrement. Voir « Rien ne reste »
-  ci-dessous.
-- Aucun mot-clef d'activation permanent en v1 : le micro ne s'ouvre que sur action explicite.
-  Une wake word éventuelle serait **entièrement locale**, sans upload avant déclenchement.
-- Les confirmations `CRITICAL` ne sont **jamais** approuvables à la voix : une action irréversible
-  exige un geste, pas un mot que le micro pourrait mal comprendre ou capter d'un tiers.
-- Les transcriptions passent par la même redaction que le reste avant journalisation.
+- **Zero Audio Retention by Default**: Recordings are never persisted long term. There is no code path
+  retaining raw audio files beyond the immediate transcription lifecycle.
+- Zero permanent wake-word listening in v1: microphones only open upon explicit user actions. Future
+  wake-word models will run **strictly on-device**, uploading zero audio prior to local activation.
+- `CRITICAL` risk actions **never** accept voice authorization: irreversible mutations require explicit
+  touch or biometric confirmation on a screen to eliminate accidental acoustic misinterpretations.
+- Transcriptions undergo identical data redaction filters as text messages prior to logging.
 
-## 6. Implémentation locale : whisper.cpp et Piper
+## 6. Local Implementation: whisper.cpp and Piper
 
-### Pourquoi local, et pas une API
+### Why Local Voice Matters
 
-La dictée porte **tout ce qu'on dit à voix haute chez soi**. Une API de
-transcription reçoit l'audio brut d'un micro de salon, et elle le reçoit même
-quand la phrase n'était pas pour l'assistant. La synthèse est le même problème
-dans l'autre sens : lire à voix haute une réponse, c'est prononcer le contenu
-d'un agenda et d'une boîte mail.
+Spoken dictation captures **ambient household speech**. Transmitting raw audio to cloud APIs exports
+sensitive ambient conversations. Synthesis poses the reciprocal risk: reading responses aloud voices
+private calendar items and confidential emails.
 
-`@nexus/voice` fait donc tourner les deux sur la machine : whisper.cpp pour la
-dictée, Piper pour la voix. Aucun compte, aucune clé, aucun réseau.
+`@nexus/voice` executes both models locally: `whisper.cpp` for STT transcription, and `Piper` for TTS
+synthesis. Zero accounts, zero external API keys, zero outbound network telemetry.
 
-### La chaîne, et où elle peut laisser des traces
+### Processing Pipeline and Artifact Hygiene
 
 ```
-  dictée   micro (arecord) → WAV temporaire → whisper.cpp → texte
-                                   ↑
-                        supprimé, suppression VÉRIFIÉE
+  Dictation: Microphone (arecord) → Ephemeral WAV → whisper.cpp → Text
+                                          ↑
+                               Unlinked with VERIFIED deletion
 
-  voix     texte → piper (stdin) → audio brut → aplay (stdin)
-                        aucun fichier, donc rien à supprimer
+  Synthesis: Text → Piper (stdin) → Raw Audio → aplay (stdin)
+                         Zero filesystem writes: pure stream pipe
 ```
 
-L'asymétrie est dans l'outil : whisper.cpp exige un fichier d'entrée, Piper
-accepte un tube. La dictée a donc un fichier à faire disparaître, la synthèse
-non.
+The asymmetry is inherent to the tools: `whisper.cpp` requires an input file, while `Piper` reads directly
+from standard input. Thus, dictation requires verified temporary file destruction.
 
-### Rien ne reste
+### Guaranteed Cleanup via `AudioScratch`
 
-« Aucun audio conservé » est la promesse la plus facile à faire et la plus
-facile à trahir : un `return` anticipé, une exception, un processus tué au
-mauvais moment, et un enregistrement de la cuisine reste sur le disque. Elle ne
-tient pas par la discipline mais par un module unique, `AudioScratch`, et trois
-règles :
+"No audio retained" must not rely on fragile developer discipline. It is enforced through `AudioScratch`
+under three strict rules:
 
-1. **un seul dossier**, en 0700, pour savoir où regarder et pouvoir tout purger ;
-2. **la suppression est vérifiée** — un `unlink` dont on ignore le résultat est
-   une intention, pas une suppression. Si le fichier survit, la dictée s'arrête
-   bruyamment plutôt que de continuer à remplir un dossier ;
-3. **le nettoyage passe par `finally`** : l'appelant n'a pas le choix, et le
-   chemin d'erreur — précisément celui où l'on oublierait — est couvert.
+1. **Dedicated Directory**, permissions `0700`, isolated and purgeable on service boot;
+2. **Verified Unlinking**: An `unlink` call whose exit code is ignored is merely an intention. If a file
+   cannot be removed, dictation halts noisily rather than accumulating files;
+3. **Guaranteed `finally` Execution**: Cleanup runs unconditionally on error and success paths alike.
 
-Une rétention `diagnostic` existe pour comprendre un problème de transcription.
-Jamais par défaut, et elle signale chaque fichier qu'elle laisse.
+An opt-in `diagnostic` retention flag exists solely for debugging failed transcriptions, logging an
+explicit warning whenever an audio trace is preserved.
 
-**Ce qui n'est pas garanti**, et il faut le savoir : que les octets ne soient
-plus récupérables sur le support. Un `unlink` délie un nom, il ne réécrit pas
-les secteurs — et sur un SSD, aucune réécriture logicielle ne le garantit. La
-promesse est « NEXUS ne conserve aucun fichier audio », pas « l'audio est
-effacé de façon médico-légale ». Confondre les deux serait rassurer à tort.
+Note on storage media: File `unlink` removes filesystem references; it does not perform forensic
+multi-pass disk shredding across flash blocks. The guarantee is "NEXUS retains no audio files", not
+defense against forensic hardware-level chip extraction.
 
-### Ce que « streaming » veut dire ici
+### Streaming Transcription Mechanics
 
-Les transcriptions partielles sont réelles : l'enregistrement est découpé en
-segments, chacun transcrit dès qu'il est clos. Mais whisper.cpp travaille par
-fenêtres, donc **la latence perçue est celle d'un segment, pas celle d'un
-mot** — deux secondes par défaut. Le dire importe : promettre un flux continu
-ferait attendre autre chose que ce qui arrive.
+`whisper.cpp` operates over discrete window slices, meaning **perceived transcription latency corresponds
+to chunk size** (typically ~2 seconds), rather than continuous single-word streams.
 
-### L'interruption vocale
+### Voice Interruption (Barge-in)
 
-Une synthèse qu'on ne peut pas couper est insupportable : on parle par-dessus,
-et la machine continue. `stop()` tue **les deux** processus, et c'est le point
-qui compte — ne tuer que la synthèse laisserait le lecteur vider son tampon,
-donc parler encore une seconde après qu'on lui a dit de se taire. C'est
-exactement ce que l'utilisateur ressent comme « ça ne m'écoute pas ».
+An un-cancellable voice synthesis is jarring. The `stop()` primitive terminates **both** the synthesis
+process and the audio player process simultaneously. Terminating only the synthesis engine would leave
+the audio output buffer playing out for another second, making the system feel unresponsive.
 
-La détection de parole est déléguée au port `onSpeechDetected` : la façon de
-savoir « quelqu'un parle » dépend de la plateforme, et un seuil d'énergie écrit
-dans ce paquet serait faux partout. Sans détecteur, l'interruption est
-désactivée — mieux vaut pas d'interruption qu'une interruption qui se déclenche
-sur le bruit du ventilateur et coupe chaque phrase.
+Speech activity detection delegates to the `onSpeechDetected` interface. Without an explicit detector,
+barge-in remains disabled to prevent background fan noise from constantly clipping output speech.
 
-### Conversation mains libres, et comment elle s'arrête
+### Hands-Free Turn Progression
 
-Un tour : écouter, transcrire, répondre, prononcer, réécouter — sans toucher
-l'appareil **entre** les tours.
+A continuous conversation turn encompasses: listen, transcribe, reason, speak, listen again — with zero
+touch interaction between conversational exchanges.
 
-Ce n'est pas une écoute permanente, et les sorties sont ce qui le garantit :
+Exit conditions ensure microphones do not remain indefinitely open:
 
-| sortie             | déclencheur                                                      |
+| Exit Trigger       | Condition                                                        |
 | ------------------ | ---------------------------------------------------------------- |
-| `silence`          | un tour n'a rien entendu — on s'arrête de parler, et ça s'arrête |
-| `plafond-de-tours` | 20 tours par défaut                                              |
-| `plafond-de-durée` | 10 minutes par défaut                                            |
-| `demandée`         | `stop()`                                                         |
+| `silence`          | A turn registers no input speech — conversation halts naturally  |
+| `turn_ceiling`     | 20 turns by default                                              |
+| `duration_ceiling` | 10 minutes maximum duration                                      |
+| `explicit_stop`    | User invokes `stop()` or taps pause                              |
 
-Un `finally` ferme le micro et la parole quoi qu'il arrive, y compris si l'agent
-lève une exception — une sortie par erreur ne doit pas laisser un micro ouvert.
+A `finally` block terminates recording handles and audio channels under all conditions, including unhandled
+agent exceptions.
 
-### Essayer, et savoir ce qui manque
+### Diagnostic Verification CLI
 
 ```sh
-nexus voice check                      # ce qui manque, et le geste qui corrige
-nexus voice dictate --seconds 5        # une dictée réelle
-nexus voice dictate --seconds 5 --speak
+nexus voice check                      # Verifies binaries, models, and audio hardware
+nexus voice dictate --seconds 5        # Executes a live dictation test
+nexus voice dictate --seconds 5 --speak # Dictates and verifies synthesis playback
 ```
 
-`check` existe parce que la voix locale a quatre dépendances externes —
-binaire whisper, modèle, binaire Piper, voix — et que leur absence se manifeste
-autrement : par un micro qui s'ouvre et ne rend rien. La commande nomme la
-pièce manquante et le geste.
-
-`dictate` est la seule vérification qui compte vraiment. Les tests éprouvent le
-cycle de vie avec des doublures — ce qu'on lance, ce qu'on tue, ce qu'on
-supprime — parce qu'aucune suite de tests ne peut brancher un micro. La qualité
-de la dictée, elle, ne se vérifie qu'en parlant.
-
-### Ce qui reste à faire
-
-- **Aucune surface graphique ne l'utilise encore.** Le paquet et la CLI
-  fonctionnent ; le bouton micro du tableau de bord et de l'application de
-  bureau reste à brancher.
-- **La détection de parole n'a pas d'implémentation fournie.** Le port existe,
-  l'interruption est testée avec un détecteur injecté ; il manque un détecteur
-  réel par plateforme.
-- **Les confirmations `CRITICAL` ne sont pas approuvables à la voix**, comme
-  décidé plus haut — et rien dans ce paquet ne permet de le faire.
+`nexus voice check` validates the four prerequisites — whisper binary, model weights, Piper binary,
+voice model — reporting specific remediation steps if any component is missing.

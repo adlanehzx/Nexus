@@ -1,114 +1,102 @@
-# Recherche web NEXUS
+# NEXUS Web Search
 
-NEXUS expose deux ports internes : `WebSearchProvider` pour découvrir des
-sources et `WebDocumentFetcher` pour lire une page. L'agent ne connaît ni
-SearXNG ni son API : il voit les outils stables `search.web` et `web.fetch`.
+NEXUS exposes two internal port interfaces: `WebSearchProvider` to discover external sources and
+`WebDocumentFetcher` to retrieve and read web pages. The agent core remains agnostic of SearXNG APIs:
+it interacts strictly via stable tools: `search.web` and `web.fetch`.
 
 ```text
 Agent Core → ToolRegistry → search.web → WebSearchProvider → SearXNG
-                         ↘ web.fetch  → SafeWebFetcher → page publique
+                         ↘ web.fetch  → SafeWebFetcher → Public Web Page
 ```
 
-Cette frontière permet de remplacer SearXNG sans modifier les prompts, les
-permissions ou l'orchestrateur. Le fournisseur normalise les résultats, borne
-les contenus et écarte les URL non HTTP(S) ou contenant des credentials.
+This boundary enables replacing or upgrading SearXNG without altering prompts, permissions, or the
+orchestrator. The provider normalizes results, truncates content length, and rejects non-HTTP(S) URLs
+or credentials embedded in query paths.
 
-`web.fetch` récupère uniquement du HTML ou du texte brut, extrait le texte et
-les métadonnées sans exécuter JavaScript, puis renvoie :
+`web.fetch` retrieves solely HTML or plaintext, extracting readable text and metadata without running
+arbitrary JavaScript, returning:
 
-- l'URL demandée, l'URL finale et l'URL canonique de même origine ;
-- la chaîne de redirections ;
-- le titre, l'auteur, la langue et la date lorsqu'ils existent ;
-- un hash SHA-256 de la version lue ;
-- du texte borné et des citations extractives stables.
+- Requested URL, final redirected URL, and canonical same-origin URL;
+- Complete HTTP redirect chain;
+- Page title, author, language, and publication date when present;
+- SHA-256 hash of the retrieved document version;
+- Bounded text content alongside stable extractive citations.
 
-Les citations sont des passages exacts du document. `createCitation` et
-`verifyCitation` vérifient le hash de version, l'URL, les offsets et, si une
-affirmation est fournie, une couverture lexicale minimale. Cette vérification
-est déterministe : elle empêche les citations inventées mais ne remplace pas
-une vérification sémantique ou éditoriale.
+Citations represent exact verbatim excerpts from the source document. `createCitation` and `verifyCitation`
+verify the version hash, URL, byte/character offsets, and minimal lexical coverage against asserted claims.
+This validation is deterministic: it prevents fabricated citations, while leaving semantic truth
+evaluation to the reasoning model.
 
-`deduplicateDocuments` élimine les doublons par URL canonique normalisée, puis
-par hash de contenu, en conservant la provenance de chaque doublon.
+`deduplicateDocuments` eliminates redundant sources via normalized canonical URLs and content hashing,
+preserving source attribution provenance across duplicates.
 
-## Sécurité
+## Security Controls
 
-- aucune clé LLM ou clé de moteur de recherche ;
-- SearXNG n'est jamais publié hors de la boucle locale ;
-- le JSON doit être explicitement activé dans `settings.yml` ;
-- les extraits sont du contenu externe non fiable, jamais des instructions ;
-- `search.web` et `web.fetch` sont en lecture seule, idempotents et exigent
-  `browser.navigate` ;
-- une instance distante doit utiliser HTTPS.
+- Zero third-party LLM or search engine API keys required;
+- SearXNG binds strictly to the local loopback interface, never publicly exposed;
+- JSON format output must be explicitly enabled in `settings.yml`;
+- Extracted snippets are treated as untrusted external data, never as system instructions;
+- `search.web` and `web.fetch` are read-only, idempotent, and require `browser.navigate` permissions;
+- Remote engine instances require HTTPS.
 
-Le fetcher applique en plus les protections suivantes avant la requête initiale
-et avant chaque redirection :
+The document fetcher applies defensive checks prior to the initial query and before following every redirect:
 
-- schémas limités à HTTP(S), sans credentials ;
-- ports limités à 80 et 443 ;
-- résolution DNS obligatoire ;
-- refus des adresses loopback, privées, link-local, multicast, documentaires et
-  des endpoints de métadonnées connus ;
-- refus d'une réponse DNS mixant adresses publiques et privées ;
-- cinq redirections maximum ;
-- délai, `Content-Length` et lecture effective bornés ;
-- types MIME limités à `text/html`, XHTML et `text/plain`.
+- Protocols restricted to HTTP(S), disallowing inline user credentials;
+- Outbound ports restricted strictly to 80 and 443;
+- Mandatory pre-flight DNS resolution;
+- Rejection of loopback, private, link-local, multicast, documentation addresses, and cloud metadata endpoints;
+- Rejection of split-horizon DNS responses mixing public and private IP records;
+- Enforced limit of at most 5 redirects;
+- Hard caps on connection timeouts, `Content-Length`, and maximum streamed bytes;
+- MIME types restricted to `text/html`, XHTML, and `text/plain`.
 
-La validation DNS précède l'appel à `fetch`. Le runtime HTTP résout ensuite le
-nom pour ouvrir la connexion : un adversaire contrôlant le DNS pourrait tenter
-un rebinding dans cette fenêtre. Pour un déploiement exposé à des utilisateurs
-non fiables, il faut compléter cette défense applicative par une politique
-d'egress réseau qui interdit les plages privées et les métadonnées cloud.
+DNS validation precedes the low-level `fetch` call. Because the HTTP client runtime resolves DNS when
+establishing TCP sockets, a malicious DNS operator could attempt a time-of-check-to-time-of-use (TOCTOU)
+rebinding. For production deployments exposed to untrusted external users, this software-layer defense
+should be reinforced with container egress firewall rules blocking private IP ranges and cloud metadata endpoints.
 
-## Veille et détection de changement
+## Content Monitoring and Change Detection
 
-`WebWatchService` réalise **un contrôle ponctuel**. Le scheduler décide quand il
-est appelé ; la bibliothèque de recherche ne crée aucun timer et ne duplique
-pas la logique d'orchestration durable.
+`WebWatchService` conducts **point-in-time document inspections**. The task scheduler dictates
+check intervals; the web search package contains zero timers and does not duplicate durable orchestration logic.
 
-Le service compare le nouveau document au dernier snapshot avec :
+The service compares new document fetches against the latest snapshot using:
 
-1. le hash exact du contenu ;
-2. une similarité de Jaccard sur des trigrammes normalisés ;
-3. un seuil configurable.
+1. Exact cryptographic content hash;
+2. Jaccard similarity across normalized character trigrams;
+3. Configurable sensitivity thresholds.
 
-Il renvoie `first_seen`, `unchanged` ou `changed`. Le stockage JSON fourni écrit
-atomiquement un fichier en mode `0600`, dans un répertoire `0700`, et dérive son
-nom du hash de l'identifiant de veille. Seuls le hash, les métadonnées et la
-signature de comparaison sont conservés : le texte intégral de la page n'est
-pas persisté. Pour une installation multi-instance, ce port devra recevoir une
-implémentation PostgreSQL et un verrou distribué.
+It evaluates to `first_seen`, `unchanged`, or `changed`. The bundled JSON storage adapter writes files
+atomically using permissions `0600` inside a `0700` directory, hashing watch keys for filenames.
+Only content hashes, metadata, and comparison signatures are persisted — full page body text is not
+stored. Multi-node clusters should implement this port via PostgreSQL with distributed advisory locks.
 
-## Démarrage Docker
+## Docker Deployment
 
-Définir `SEARXNG_URL=http://searxng:8080` pour l'API conteneurisée, ou
-`SEARXNG_URL=http://127.0.0.1:18080` lorsque l'API tourne directement sur
-l'hôte. Générer une valeur aléatoire pour `SEARXNG_SECRET`, puis lancer :
+Configure `SEARXNG_URL=http://searxng:8080` for containerized environments, or
+`SEARXNG_URL=http://127.0.0.1:18080` when the API runs directly on the host machine.
+Generate a random secret for `SEARXNG_SECRET`, then launch:
 
 ```bash
 pnpm docker:research
 pnpm docker:up
 ```
 
-Le profil `research` reste optionnel : sans `SEARXNG_URL`, aucun outil web n'est
-enregistré et le reste de NEXUS démarre normalement.
+The `research` profile remains optional: without `SEARXNG_URL`, web search tools are simply not registered,
+and all other NEXUS capabilities boot normally.
 
-## Limites assumées
+## Explicit Limitations
 
-- l'extracteur HTML est déterministe et léger ; il ne rend pas les applications
-  JavaScript et ne remplace pas Browser Harness pour les pages dynamiques ;
-- les PDF et formats Office doivent passer ultérieurement par une couche
-  documentaire dédiée ;
-- la couverture lexicale d'une citation ne prouve ni la véracité de la source,
-  ni la correction d'une paraphrase ;
-- la détection de changement ne décide pas si le changement est important pour
-  la mission : cette décision appartient à l'orchestrateur ;
-- la bibliothèque n'envoie aucune notification et ne planifie aucune tâche.
+- The HTML text extractor is deterministic and lightweight; it does not render dynamic single-page
+  applications and does not replace Browser Harness for JavaScript-heavy interfaces;
+- PDF, Word, and PowerPoint processing is handled via dedicated document ingestion engines (Docling);
+- Lexical citation coverage does not verify factual accuracy or evaluate paraphrases;
+- Change detection flags differences, leaving relevance judgments to the mission orchestrator;
+- The search package does not dispatch notifications or schedule autonomous cron jobs.
 
-## Dépendance et licence
+## Dependencies and Licensing
 
-SearXNG est exécuté comme service séparé depuis son image officielle épinglée ;
-son code n'est ni copié ni lié à celui de NEXUS. SearXNG est distribué sous
-AGPL-3.0-or-later. Une redistribution de l'image, ou une version modifiée mise à
-disposition sur un réseau, doit respecter ses obligations et fournir un accès à
-la source correspondante : <https://github.com/searxng/searxng>.
+SearXNG runs as a separate decoupled service via its pinned official container image; its code is
+neither bundled nor statically linked with NEXUS. SearXNG is licensed under AGPL-3.0-or-later.
+Distributing container images or deploying modified network services requires compliance with upstream
+licensing terms and providing access to corresponding source code: <https://github.com/searxng/searxng>.

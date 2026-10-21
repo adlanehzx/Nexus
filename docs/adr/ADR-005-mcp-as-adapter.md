@@ -1,44 +1,45 @@
-# ADR-005 — MCP comme source d'outils, pas comme cœur de l'architecture
+# ADR-005 — MCP as a Tool Source, Not the Architectural Core
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-MCP standardise l'exposition d'outils à un modèle et donne accès à un écosystème de serveurs
-existants (GitHub, filesystem, bases de données…). La tentation est d'en faire le modèle
-d'intégration unique : « tout est MCP ». Le cahier des charges demande, lui, de pouvoir
-« connecter plusieurs MCP servers sans modifier l'agent core ».
+MCP standardizes exposing tools to a model and provides access to an existing ecosystem of servers
+(GitHub, filesystem, databases, etc.). The temptation is to treat it as the universal integration
+model: "everything is MCP". The specifications mandate being able to "connect multiple MCP servers
+without modifying agent core".
 
-## Décision
+## Decision
 
-MCP est **un adaptateur de `ToolSource` parmi cinq** (builtin, MCP, browser, device, HTTP).
-`McpManager` connecte les serveurs (stdio ou HTTP/SSE), découvre leurs outils et les traduit en
-`ToolDefinition` internes : JSON Schema → Zod, erreurs MCP → `ToolError`, nom → `mcp.{slug}.{tool}`.
+MCP is **one of five `ToolSource` adapters** (builtin, MCP, browser, device, HTTP).
+`McpManager` connects servers (stdio or HTTP/SSE), discovers their tools, and translates them into
+internal `ToolDefinition` instances: JSON Schema → Zod, MCP errors → `ToolError`, name →
+`mcp.{slug}.{tool}`.
 
-Trois règles de gouvernance :
+Three governance rules:
 
-1. Un outil MCP découvert arrive en **`CONFIRM`** par défaut ; l'abaisser est une décision humaine
-   persistée, jamais déduite de la description fournie par le serveur.
-2. La description d'un serveur tiers est une **entrée non fiable** (injection de prompt possible) :
-   tronquée, échappée, incapable de modifier le prompt système.
-3. Les serveurs stdio tournent dans un conteneur dédié, sans réseau par défaut, avec un
-   environnement minimal — aucune variable d'env du backend n'est héritée.
+1. A discovered MCP tool enters with **`CONFIRM`** risk level by default; lowering it is an
+   explicit, persisted human decision, never deduced from the description provided by the server.
+2. The description of a third-party server is **untrusted input** (potential prompt injection):
+   truncated, escaped, incapable of modifying the system prompt.
+3. stdio servers run inside an isolated sandbox container, network-less by default, with minimal
+   environment variables — no backend environment secrets are inherited.
 
 ## Alternatives
 
-- **Tout exposer via MCP, y compris nos outils natifs.** Uniformité séduisante, mais on paierait
-  une sérialisation et un saut de processus pour des appels internes, on perdrait le typage Zod
-  de bout en bout, et l'architecture serait couplée à l'évolution d'un protocole tiers.
-- **Ignorer MCP, tout écrire à la main.** On perd l'écosystème et l'extensibilité que l'utilisateur
-  demande explicitement.
+- **Expose everything via MCP, including native tools.** Seductive uniformity, but introduces
+  serialization overhead and process hops for internal calls, loses end-to-end Zod typing, and
+  couples internal architecture to external protocol revisions.
+- **Ignore MCP, handcraft everything.** Loses the broader ecosystem and user extensibility required
+  by the specifications.
 
-## Conséquences
+## Consequences
 
-**Positives** — ajouter un serveur MCP depuis l'app ne touche ni `agent-core` ni le code : c'est
-une ligne en base. Les outils MCP héritent gratuitement des permissions, confirmations, timeouts,
-audit et circuit breakers. Si MCP change, un seul package bouge.
+**Positive** — Adding an MCP server from the UI touches neither `agent-core` nor codebase: it is a
+database entry. MCP tools automatically inherit permissions, confirmations, timeouts, audit logs,
+and circuit breakers. If MCP evolves, only a single adapter package changes.
 
-**Négatives, acceptées** — coût de traduction JSON Schema → Zod (cas limites : `oneOf`, schémas
-récursifs — on refuse alors l'outil avec un message clair plutôt que de deviner). Un serveur MCP
-lent ou instable dégrade l'expérience : mitigé par le circuit breaker et le retrait automatique
-de ses outils du registre.
+**Negative, accepted** — JSON Schema → Zod translation overhead (edge cases: `oneOf`, recursive
+schemas — in which case we reject the tool with a clear diagnostic rather than guessing). A slow or
+unstable MCP server could degrade performance: mitigated by circuit breakers and automated tool
+deregistration upon repeated failures.

@@ -1,61 +1,65 @@
-# Architecture NEXUS — 27. Routage Intelligent des Agents & Feedback Learning
+# NEXUS Architecture — 27. Intelligent Agent Routing & Feedback Learning
 
-## 1. Contexte & Objectifs
+## 1. Context and Goals
 
-Jusqu'alors, NEXUS s'appuyait sur des listes de priorité statiques définies dans les paramètres de runtime (`research_priority`, `review_priority`, `synthesis_priority`) pour affecter les tâches ACP à un agent (`claude`, `antigravity`, `codex`).
+NEXUS previously relied on static priority lists configured in runtime settings (`research_priority`,
+`review_priority`, `synthesis_priority`) to dispatch ACP tasks to agents (`claude`, `antigravity`, `codex`).
 
-Le système de **routage intelligent multi-critères** (Chantier 13 de la Priorité 2) remplace ces choix statiques par un moteur d'arbitrage dynamique combinant :
+The **multi-criteria intelligent routing engine** replaces static preferences with a dynamic arbitration
+engine combining:
 
-1. La **classification sémantique et lexicale de la tâche** (`code`, `research`, `review`, `browser`, `synthesis`, `general`) ;
-2. La **détection stricte des capacités requises** (ex. navigateur réel via `browser-harness`) ;
-3. L'**état de santé et de connexion de l'agent** (authentification active, absence de cooldown) ;
-4. Le **quota restant** (fenêtre glissante 5h et hebdomadaire de l'abonnement fournisseur) ;
-5. L'**historique de qualité et de réussite** par catégorie (boucle de feedback learning persistant) ;
-6. La **longueur de contexte** et l'adéquation au budget de tokens ;
-7. Le **calcul automatique de chaînes de fallback dynamiques** ordonnées par score décroissant.
-
----
-
-## 2. Taxonomie & Classification des Tâches
-
-Le classifieur analyse l'instruction de la tâche selon un système d'analyse lexicale pondérée et d'intention :
-
-| Catégorie   | Signaux lexicaux principaux                                          | Agent de référence par défaut                       |
-| ----------- | -------------------------------------------------------------------- | --------------------------------------------------- |
-| `browser`   | Mots-clés navigation, chromium, clics, formulaires, scrape web       | `codex`, `claude` (agents équipés du harness local) |
-| `code`      | Fichiers source (.ts, .py, etc.), refactor, build, git, tests vitest | `codex` (92), `claude` (90), `antigravity` (85)     |
-| `research`  | Analyse de codebase, architecture, documentation, exploration        | `antigravity` (95), `claude` (90), `codex` (80)     |
-| `review`    | Critique, audit, vérification de sécurité, détection d'erreurs       | `claude` (95), `codex` (85), `antigravity` (80)     |
-| `synthesis` | Résumé exécutif, synthèse finale, conclusion, bilan                  | `claude` (95), `antigravity` (85), `codex` (80)     |
-| `general`   | Tâches polyvalentes non spécialisées                                 | `claude` (85), `antigravity` (85), `codex` (85)     |
+1. **Semantic and Lexical Task Classification** (`code`, `research`, `review`, `browser`, `synthesis`, `general`);
+2. **Strict Required Capability Detection** (e.g. real Chromium navigation via `browser-harness`);
+3. **Agent Connection and Health Status** (valid session, zero active cooldown);
+4. **Remaining Rolling Quotas** (5-hour and weekly subscription windows);
+5. **Historical Quality and Success Metrics** (persistent feedback learning loop);
+6. **Context Length Feasibility** matched to model token limits;
+7. **Automated Dynamic Fallback Chains** ordered by descending affinity score.
 
 ---
 
-## 3. Algorithme de Scoring Multi-Critères
+## 2. Taxonomy and Task Classification
 
-Pour chaque candidat disponible, le score global $S_{total} \in [0, 100]$ est calculé selon la formule pondérée :
+The classifier evaluates task prompts through weighted lexical token matching and intent analysis:
+
+| Category    | Primary Lexical Signals                                               | Default Benchmark Profile                        |
+| ----------- | --------------------------------------------------------------------- | ------------------------------------------------ |
+| `browser`   | Navigation keywords, chromium, clicks, input forms, web scraping      | `codex`, `claude` (equipped with local harness)  |
+| `code`      | Source files (.ts, .py, etc.), refactoring, builds, git, vitest tests | `codex` (92), `claude` (90), `antigravity` (85)  |
+| `research`  | Codebase audits, architecture design, documentation, exploration      | `antigravity` (95), `claude` (90), `codex` (80)  |
+| `review`    | Critique, security auditing, error and regression detection           | `claude` (95), `codex` (85), `antigravity` (80)  |
+| `synthesis` | Executive summaries, final synthesis, conclusions, reports           | `claude` (95), `antigravity` (85), `codex` (80)  |
+| `general`   | Versatile unspecialized tasks                                         | `claude` (85), `antigravity` (85), `codex` (85)  |
+
+---
+
+## 3. Multi-Criteria Scoring Algorithm
+
+For each available agent candidate, the aggregate score $S_{total} \in [0, 100]$ is computed as:
 
 $$S_{total} = w_1 S_{compat} + w_2 S_{auth} + w_3 S_{quota} + w_4 S_{health} + w_5 S_{quality} + w_6 S_{perf} + w_7 S_{context}$$
 
-Avec les coefficients standardisés :
+Using standardized weighting coefficients:
 
-- $w_1 = 0.30$ : **Compatibilité de la tâche** (affinité de base modulée par le taux de succès appris dans cette catégorie) ;
-- $w_2 = 0.20$ : **Authentification** ($100$ si session valide, $0$ si expirée ou requise) ;
-- $w_3 = 0.15$ : **Disponibilité des quotas** (pourcentage de réserve 5h/hebdo, $0$ si épuisé) ;
-- $w_4 = 0.15$ : **Santé & Cooldown** ($100$ nominal, $0$ si cooldown actif ou consécutifs d'échecs) ;
-- $w_5 = 0.10$ : **Qualité observée** (taux de passage au contrôle qualité NEXUS `pass` vs `revise`) ;
-- $w_6 = 0.05$ : **Performance de latence** (ajustement selon la durée moyenne de résolution) ;
-- $w_7 = 0.05$ : **Capacité de contexte** (adéquation de la fenêtre de contexte au volume de caractères).
+- $w_1 = 0.30$: **Task Compatibility** (base affinity adjusted by learned historical category success rate);
+- $w_2 = 0.20$: **Authentication** ($100$ if session active, $0$ if expired or missing);
+- $w_3 = 0.15$: **Quota Availability** (percentage of remaining 5h/weekly reserve, $0$ if exhausted);
+- $w_4 = 0.15$: **Health & Cooldown** ($100$ nominal, $0$ if active cooldown or repeated errors);
+- $w_5 = 0.10$: **Observed Output Quality** (success rate through NEXUS quality control: `pass` vs `revise`);
+- $w_6 = 0.05$: **Latency Performance** (adjusted by historical resolution duration);
+- $w_7 = 0.05$: **Context Capacity** (model token window vs. task prompt size).
 
-### Règle d'éligibilité stricte
+### Strict Eligibility Filter
 
-Si un agent est en cooldown, si son quota est épuisé ou s'il n'est pas compatible avec le navigateur local alors que la tâche l'exige, il est marqué `isAvailable = false` et relégué après les agents disponibles, avec son motif d'exclusion affiché.
+If an agent is cooling down, its quota is exhausted, or it lacks local browser harness support when
+required by the task, it is marked `isAvailable = false` and sorted behind available agents with an
+explicit exclusion reason.
 
 ---
 
-## 4. Boucle d'Apprentissage (Feedback Learning)
+## 4. Feedback Learning Loop
 
-Les statistiques d'exécution sont persistées dans `~/.nexus/agents/routing/agent-routing-stats.json` :
+Execution telemetry persists into `~/.nexus/agents/routing/agent-routing-stats.json`:
 
 ```typescript
 export interface AgentCategoryPerformance {
@@ -75,26 +79,28 @@ export interface AgentPerformanceStats {
 }
 ```
 
-À chaque issue de tâche ACP dans le Mission Engine :
+Upon task completion in the Mission Engine:
 
-1. `recordOutcome(key, category, outcome, durationMs, qualityVerdict)` met à jour les compteurs atomiquement.
-2. Si un agent subit plusieurs échecs consécutifs, un cooldown automatique temporaire est suggéré.
-3. Le score de compatibilité $S_{compat}$ s'auto-ajuste de $\pm 15$ points selon l'historique empirique réel.
+1. `recordOutcome(key, category, outcome, durationMs, qualityVerdict)` updates counters atomically.
+2. If an agent experiences consecutive failures, a temporary cooldown is triggered.
+3. The compatibility score $S_{compat}$ self-adjusts by $\pm 15$ points based on empirical history.
 
 ---
 
-## 5. Intégration dans l'Orchestrateur & API
+## 5. Orchestrator Integration & REST APIs
 
-1. **Recommandation dans le DAG (`AcpOrchestrator`)** :
-   - Lorsque le planificateur LLM conçoit le DAG, l'orchestrateur injecte les recommandations de routage dans le prompt système du planificateur.
-   - Si le LLM échoue ou en mode fallback déterministe (`fallbackPlan`), `agentRouter.bestProfileFor` sélectionne directement le profil le plus performant pour chaque tâche.
-2. **Chaînes de fallback dynamiques** :
-   - Pour chaque tâche, `router.fallbackOrderFor(profile, profiles, instruction)` calcule l'ordre optimal de repli en cas d'erreur ou d'épuisement de quota en cours d'exécution.
-3. **Endpoints REST exposés (`/api/v1/orchestrator/routing/*`)** :
-   - `GET /orchestrator/routing/matrix` : expose la matrice d'affinité temps-réel avec scores, statut d'auth et historique.
-   - `POST /orchestrator/routing/evaluate` : évalue en direct une instruction et retourne le classement explicité.
-   - `POST /orchestrator/routing/reset` : réinitialise l'apprentissage empirique (réservé admin).
-4. **Interface Dashboard (`Agents.tsx`)** :
-   - Tableau matriciel des affinités par catégorie ;
-   - Simulateur d'évaluation de routage interactif permettant de tester instantanément l'attribution d'un prompt quelconque ;
-   - Action de réinitialisation sécurisée par confirmation.
+1. **DAG Generation Recommendations (`AcpOrchestrator`)**:
+   - When generating mission DAGs, the orchestrator injects routing recommendations into the planner prompt.
+   - If heuristic or deterministic fallbacks engage (`fallbackPlan`), `agentRouter.bestProfileFor`
+     selects the top-performing profile for each task.
+2. **Dynamic Fallback Chains**:
+   - For every task, `router.fallbackOrderFor(profile, profiles, instruction)` computes optimal fallback
+     sequences in case of runtime errors or quota exhaustion.
+3. **REST Endpoints (`/api/v1/orchestrator/routing/*`)**:
+   - `GET /orchestrator/routing/matrix`: Exposes the real-time affinity matrix with scores, auth status, and history.
+   - `POST /orchestrator/routing/evaluate`: Evaluates an arbitrary task instruction and returns ranked recommendations.
+   - `POST /orchestrator/routing/reset`: Resets empirical learning statistics (admin only).
+4. **Dashboard Interface (`Agents.tsx`)**:
+   - Matrix table showing affinities by task category;
+   - Interactive routing evaluation simulator allowing immediate prompt testing;
+   - Protected reset action with confirmation prompt.

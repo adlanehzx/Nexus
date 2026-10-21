@@ -1,16 +1,16 @@
-# ADR-004 — Abstraction `LLMProvider`
+# ADR-004 — `LLMProvider` Abstraction
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Le paysage des modèles change tous les trimestres : prix, capacités, formats de tool-calling,
-disponibilité. Le cahier des charges impose que les providers soient interchangeables et que
-« le reste de l'application ne dépende jamais directement d'un SDK LLM ».
+The LLM landscape changes quarterly: pricing, capabilities, tool-calling formats, availability.
+The architectural requirements dictate that providers be interchangeable and that "the rest of the
+application never directly depends on an LLM SDK".
 
-## Décision
+## Decision
 
-Un port unique dans `@nexus/llm` :
+A single port in `@nexus/llm`:
 
 ```ts
 interface LLMProvider {
@@ -23,31 +23,29 @@ interface LLMProvider {
 }
 ```
 
-Les SDK vendeurs ne sont importés **que** dans `packages/llm/src/adapters/*`. Une règle de lint
-interdit `@anthropic-ai/*`, `openai`, etc. ailleurs dans le dépôt. Les messages et les appels
-d'outils circulent dans un format neutre (`@nexus/contracts`) ; chaque adaptateur traduit dans les
-deux sens.
+Vendor SDKs are imported **only** in `packages/llm/src/adapters/*`. A lint rule prohibits
+`@anthropic-ai/*`, `openai`, etc. elsewhere in the repository. Messages and tool calls flow in a
+neutral format (`@nexus/contracts`); each adapter translates bidirectionally.
 
-Un `LLMRouter` au-dessus choisit le modèle par tâche (planification, réponse, résumé de
-compaction, classification), applique le fallback en cascade et le budget.
+An `LLMRouter` layered above selects the model per task (planning, direct response, compaction
+summaries, classification), enforcing cascade fallbacks and budgets.
 
 ## Alternatives
 
-- **Vercel AI SDK / LangChain.** Abstraction déjà faite — mais on hérite de leur modèle de données
-  et de leurs ruptures ; LangChain impose en outre une conception d'agent dont nous ne voulons pas
-  (notre boucle est explicite et persistée, cf. ADR-003). Une interface de 4 méthodes que nous
-  possédons est plus petite que la surface d'API que nous éviterions.
-- **Appel direct d'un SDK.** Rapide au départ, coûteux au premier changement, et incompatible avec
-  l'exigence explicite du cahier des charges.
+- **Vercel AI SDK / LangChain.** Pre-existing abstraction — but we would inherit their data models
+  and breaking changes; LangChain additionally imposes an agent design philosophy we do not want
+  (our loop is explicit and persisted, cf. ADR-003). A clean 4-method interface we own is smaller
+  than the surface area of external SDK APIs we avoid.
+- **Direct vendor SDK calls.** Quick to start, costly at the first provider change, and violates the
+  explicit requirement of the specifications.
 
-## Conséquences
+## Consequences
 
-**Positives** — changer de modèle est une ligne de configuration ; le fallback multi-provider est
-possible en cas de panne ; `FakeLLM` scripté rend `agent-core` testable sans réseau ; le comptage
-de tokens et de coûts est centralisé.
+**Positive** — Changing a model is a one-line configuration update; multi-provider fallbacks operate
+seamlessly during outages; a scripted `FakeLLM` allows testing `agent-core` without network access;
+token counting and cost tracking are centralized.
 
-**Négatives, acceptées** — l'abstraction est le plus petit dénominateur commun : une nouveauté
-propre à un fournisseur (cache de prompt, exécution serveur d'outils, mode « thinking ») demande
-d'étendre `capabilities` plutôt que d'être utilisée directement. C'est un coût réel, assumé, et
-mitigé par un mécanisme d'options `providerOptions` typées par adaptateur et jamais lues par
-`agent-core`.
+**Negative, accepted** — The abstraction represents the lowest common denominator: provider-specific
+innovations (prompt caching, server-side tool execution, thinking mode) require extending
+`capabilities` rather than being consumed immediately. This is an accepted cost, mitigated by typed
+`providerOptions` per adapter that `agent-core` never inspects.

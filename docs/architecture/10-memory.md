@@ -1,92 +1,89 @@
-# 10 — Stratégie mémoire
+# 10 — Memory Strategy
 
-## 1. Cinq couches, cinq durées de vie
+## 1. Five Layers, Five Lifespans
 
-Le mot « mémoire » recouvre cinq mécanismes différents qu'il faut refuser de confondre :
+The term "memory" encompasses five distinct mechanisms that must not be conflated:
 
-| Couche                   | Contenu                                                   | Durée                | Stockage                 | Entre dans le prompt       |
-| ------------------------ | --------------------------------------------------------- | -------------------- | ------------------------ | -------------------------- |
-| **Working context**      | La fenêtre envoyée au modèle maintenant                   | le tour courant      | RAM                      | intégralement (c'est elle) |
-| **Short-term**           | Le run en cours : plan, observations d'outils, brouillons | le run               | `AgentStep` + Redis      | oui, tronqué               |
-| **Conversation history** | Messages d'une conversation                               | illimitée            | `Message`                | K derniers tours + résumé  |
-| **Long-term memory**     | Faits, préférences implicites, procédures apprises        | illimitée            | `Memory` + vecteur local | top-K hybride              |
-| **User preferences**     | Réglages explicites et structurés                         | jusqu'à modification | `UserPreference`         | toujours, compact          |
+| Layer                    | Content                                                     | Lifespan             | Storage                  | Injected into Prompt       |
+| ------------------------ | ----------------------------------------------------------- | -------------------- | ------------------------ | -------------------------- |
+| **Working context**      | Immediate token window passed to the model                  | Current turn         | RAM                      | In full (defines context)  |
+| **Short-term memory**    | Active run execution: plan, tool observations, drafts       | Duration of run      | `AgentStep` + Redis      | Yes, intelligently trimmed |
+| **Conversation history** | Chat messages in a conversation                             | Indefinite           | `Message`                | Last K turns + summary     |
+| **Long-term memory**     | Extracted facts, implicit preferences, procedural knowledge | Indefinite           | `Memory` + local vector  | Hybrid top-K retrieval     |
+| **User preferences**     | Explicit structured settings                                | Until changed        | `UserPreference`         | Always, compact format     |
 
-Y ajouter deux journaux qui ne sont **pas** de la mémoire au sens du prompt, mais qui sont
-interrogeables par outil : `Task` (historique des tâches) et `ToolExecution` (historique des
-actions). L'agent y accède via `history.search`, il ne les porte pas dans son contexte.
+Two auxiliary audit stores exist which are **not** prompt memory, but are queryable via tools:
+`Task` (task execution history) and `ToolExecution` (audit trail of tool calls). The agent queries
+these via `history.search` rather than polluting its immediate context window.
 
-## 2. Écriture en mémoire longue
+## 2. Writing to Long-Term Memory
 
-L'extraction est **asynchrone et post-run** — jamais dans le chemin critique de la réponse :
-
-```
-run terminé → ControlledMemoryExtractor
-  1. l'extracteur propose des candidats { type, content, importance, confidence, provenance }
-  2. filtrage : pas de secret, pas d'éphémère ("je suis fatigué"), pas de doublon
-  3. déduplication exacte par empreinte normalisée
-     → les paraphrases restent à arbitrer pour ne jamais fusionner une contradiction
-  4. embedding + insertion
-  5. WS memory.updated → l'UI affiche discrètement « j'ai retenu que… »
-```
-
-Trois règles de conception :
-
-- **La mémoire est révisable.** Un écran Settings → Mémoire liste tout, permet d'éditer, épingler,
-  supprimer. Une mémoire qu'on ne peut pas corriger devient un défaut permanent.
-- **Rien n'est écrasé, tout est supersédé.** `supersededById` + `validFrom/validUntil` conservent
-  l'histoire (§07).
-- **Une préférence inférée est proposée, pas appliquée.** `source=INFERRED` + `confidence` ;
-  au-delà d'un seuil, l'agent demande confirmation avant d'en faire une règle.
-
-## 3. Lecture : recherche hybride
-
-La recherche purement vectorielle rate les noms propres et les identifiants ; la recherche
-plein texte rate les paraphrases. La tranche locale combine les deux en mémoire applicative :
+Memory extraction is **asynchronous and post-run** — never on the critical latency path of a user response:
 
 ```
-candidats = filtre utilisateur/validité + lexical + cosine
-score = 0.45·lexical + 0.35·similarité + 0.12·importance + 0.08·fraîcheur
-filtres : userId, type, validUntil IS NULL OR validUntil > now()
-retour : top-K (défaut 8) sous budget de tokens
+Run Completed → ControlledMemoryExtractor
+  1. Extractor proposes candidate facts { type, content, importance, confidence, provenance }
+  2. Filtering: No secrets, no ephemeral comments ("I feel tired"), no duplicates
+  3. Exact deduplication via normalized content hash
+     → Paraphrases are flagged for confirmation to avoid merging contradictions
+  4. Vector embedding generation + database insertion
+  5. Emits WS memory.updated → Dashboard displays subtle "Remembered that…" indicator
 ```
 
-`EmbeddingProvider` rend l'encodeur remplaçable. Le défaut `nexus-hash-v1` est déterministe,
-local et sans clé. Le vecteur est persisté avec sa provenance dans PostgreSQL. pgvector/HNSW et
-RRF restent une optimisation de volume : ils ne sont pas rendus obligatoires tant que l'image
-PostgreSQL standard ne fournit pas l'extension.
+Three core design rules:
 
-## 4. Compaction du contexte
+- **Memory is inspectable and editable.** A dedicated Settings → Memory screen lists all memories,
+  allowing users to edit, pin, or delete entries. Uncorrectable memory is a product flaw.
+- **Facts are superseded, never overwritten.** `supersededById` + `validFrom/validUntil` preserve
+  chronological truth over time (§07).
+- **Inferred preferences are suggested, not silently applied.** Marked with `source=INFERRED` +
+  `confidence`; exceeding a threshold triggers a prompt asking user confirmation before making it a rule.
 
-Déclenchée quand la fenêtre dépasse ~70 % du budget du modèle, ou après N tours.
+## 3. Retrieval: Hybrid Search
+
+Dense vector search alone struggles with proper nouns, model numbers, and IDs; full-text search misses
+semantic paraphrases. The local retrieval engine combines both within application logic:
 
 ```
-1. planifier : `ContextWindowPlanner` réserve sortie et marge de sécurité par modèle
-2. protéger : prompt système, préférences, les 3 derniers tours, le plan courant,
-              les confirmations en attente
-3. résumer  : les tours plus anciens via le port `MemoryProvider.summarize`
-4. dégrader : `ContextCompactor` range l'original puis rend { résumé, artifactId }
-5. élaguer  : observations d'outils redondantes ou obsolètes du run courant
-6. vérifier : recompter avec le `TokenCounter` injecté ; sinon estimation conservatrice
+Candidates = User/Validity Filter + Full-Text Lexical + Dense Cosine Similarity
+Score = 0.45·lexical + 0.35·similarity + 0.12·importance + 0.08·recency
+Filters: userId, type, validUntil IS NULL OR validUntil > now()
+Return: Top-K (default 8) bounded by token budget
 ```
 
-L'information n'est jamais détruite, seulement **déplacée hors contexte** et rendue re-consultable
-via `artifact.read` / `history.search`. C'est la différence entre compacter et perdre.
+`EmbeddingProvider` keeps the vectorizer pluggable. The default `nexus-hash-v1` is deterministic,
+local, and requires zero API keys. Embeddings are stored with provenance in PostgreSQL. pgvector/HNSW
+and Reciprocal Rank Fusion remain an optimization layer as dataset sizes scale.
 
-## 5. Oubli
+## 4. Context Compaction
 
-Une mémoire qui ne fait que grossir devient bruyante et coûteuse. Un job hebdomadaire :
+Triggered when prompt token consumption crosses ~70% of the model window, or after N conversational turns.
 
-- décroissance de `importance` pour les faits jamais réutilisés depuis 90 j ;
-- archivage (hors index de recherche) sous un seuil, sans suppression ;
-- détection de contradictions → demande d'arbitrage à l'utilisateur plutôt que choix silencieux ;
-- suppression immédiate et totale sur demande explicite (« oublie ça »), y compris l'embedding.
+```
+1. Plan: ContextWindowPlanner reserves output tokens and safety headroom per model
+2. Protect: System prompt, preferences, last 3 turns, active plan DAG, pending confirmations
+3. Summarize: Older turns via MemoryProvider.summarize port
+4. Degrade: ContextCompactor caches original messages and returns { summary, artifactId }
+5. Prune: Redundant or obsolete tool observations from earlier steps of current run
+6. Verify: Recount token usage via injected TokenCounter; fallback to conservative estimation
+```
 
-## 6. Pourquoi pas de base vectorielle dédiée
+Information is never permanently lost: it is **relocated outside the prompt context** and remains
+accessible via `artifact.read` and `history.search`. This is the distinction between compaction and destruction.
 
-Un utilisateur personnel commence avec un volume que PostgreSQL et un tableau de vecteurs
-peuvent servir sans service supplémentaire. Quand le corpus justifiera un index ANN, pgvector
-avec HNSW restera dans **la même transaction** que les données métier. L'activation demandera
-une image PostgreSQL qui fournit explicitement l'extension et une migration séparée, plutôt que
-de casser les installations standard. Qdrant/Weaviate n'apporteraient rien à cette étape
+## 5. Memory Pruning and Decay
+
+A memory store that only expands accumulates noise and inflates retrieval costs. A weekly background job:
+
+- Applies exponential decay to `importance` scores for facts unaccessed for >90 days;
+- Archives items dropping below threshold out of search indexes without deletion;
+- Flags semantic contradictions for user review rather than making silent assumptions;
+- Performs immediate, comprehensive deletion upon user command ("forget this"), removing embeddings as well.
+
+## 6. Why Not a Dedicated Vector Database
+
+A personal assistant starts with a scale that standard PostgreSQL with vector support handles in
+milliseconds without operational overhead. When dataset volume justifies approximate nearest-neighbor
+(ANN) indexes, pgvector with HNSW keeps embeddings in **the same atomic transaction** as domain entities.
+Separate clusters like Qdrant or Weaviate add unwarranted operational complexity at this scale
 (→ [ADR-011](../adr/ADR-011-memory-pgvector.md)).

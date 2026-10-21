@@ -1,48 +1,48 @@
-# ADR-003 — Boucle agentique durable, exécutée dans un worker séparé
+# ADR-003 — Durable Agent Loop Executed in a Separated Worker
 
-**Statut** : Proposé · 2026-09-01 · **Décision la plus structurante du projet**
+**Status**: Proposed · 2026-09-01 · **Core Architectural Decision**
 
-## Contexte
+## Context
 
-Trois exigences du cahier des charges sont incompatibles avec une boucle agentique classique
-tenue en mémoire dans le processus HTTP :
+Three requirements are incompatible with a traditional in-memory agent loop held inside the HTTP
+process:
 
-1. **Confirmation humaine** — un run peut attendre plusieurs minutes une réponse de l'utilisateur.
-2. **Annulation** — depuis un autre appareil que celui qui a lancé le run.
-3. **Robustesse** — un redéploiement ou un crash ne doit pas perdre un run en cours, surtout
-   s'il a déjà envoyé un email ou modifié un fichier.
+1. **Human Confirmation** — A run may wait several minutes for a user response.
+2. **Cancellation** — Can be triggered from a device other than the one that started the run.
+3. **Resilience** — A redeployment or crash must not lose an active run, especially after it has
+   already dispatched an email or modified a file.
 
-## Décision
+## Decision
 
-1. La boucle est un **réducteur sur un état persisté** : `AgentRun` porte l'état, `AgentStep`
-   journalise chaque transition (`UNIQUE(runId, index)`).
-2. Elle s'exécute dans `apps/worker` (BullMQ), séparé de `apps/api`.
-3. Une confirmation **suspend** le run (`WAITING_CONFIRMATION`) et **libère** le worker ; la
-   réponse de l'utilisateur enfile un job de reprise qui recharge l'état.
-4. Un verrou Redis par run garantit qu'un seul worker le fait avancer.
-5. La fonction de transition est pure et injectée de ports (`llm`, `store`, `executor`, `clock`) :
-   testable sans base ni réseau, et **rejouable**.
+1. The loop is a **reducer over persisted state**: `AgentRun` holds the state, and `AgentStep` logs
+   each transition (`UNIQUE(runId, index)`).
+2. It executes inside `apps/worker` (BullMQ), separated from `apps/api`.
+3. A confirmation **suspends** the run (`WAITING_CONFIRMATION`) and **frees** the worker; the user's
+   reply enqueues a resume job that reloads state.
+4. A Redis lock per run guarantees that only one worker advances it at any given time.
+5. The state transition function is pure and injected with ports (`llm`, `store`, `executor`,
+   `clock`): testable without database or network, and fully **replayable**.
 
 ## Alternatives
 
-- **Boucle en mémoire dans l'API.** Simple, mais : un déploiement tue les runs, une confirmation
-  bloque une connexion HTTP, l'annulation cross-device exige un canal ad hoc, et rien n'est
-  rejouable. Écarté.
-- **Moteur de workflow durable (Temporal, Inngest, Restate).** Techniquement la meilleure réponse
-  au problème — mais Temporal ajoute un cluster à opérer sur un VPS, et Inngest/Restate ajoutent
-  une dépendance SaaS ou un service de plus. Notre besoin durable se réduit à « persister des
-  steps et reprendre » : BullMQ + Postgres le couvrent. **Chemin de migration conservé** : la
-  boucle étant déjà une machine à états explicite, la porter sur un moteur de workflow serait
-  une réécriture de l'exécuteur, pas de la logique.
-- **Sous-processus par run.** Isolation mémoire réelle, mais coût de démarrage et complexité de
-  supervision disproportionnés.
+- **In-memory loop in API.** Simple, but: a deployment kills active runs, a confirmation blocks an
+  HTTP connection, cross-device cancellation requires an ad-hoc channel, and nothing is replayable.
+  Rejected.
+- **Durable workflow engine (Temporal, Inngest, Restate).** Technically the best answer to the
+  problem — but Temporal adds an operational cluster on a VPS, and Inngest/Restate introduce SaaS
+  dependencies or extra services. Our durable needs are satisfied by "persisting steps and resuming":
+  BullMQ + PostgreSQL covers this well. **Migration path preserved**: because the loop is already an
+  explicit state machine, porting it to an external workflow engine would be an executor rewrite,
+  not a logic redesign.
+- **Sub-process per run.** True memory isolation, but disproportionate startup overhead and
+  supervisory complexity.
 
-## Conséquences
+## Consequences
 
-**Positives** — les runs survivent aux déploiements et aux crashs ; le « Run Inspector » et les
-évals découlent gratuitement des steps persistés ; l'API garde un p99 propre ; workers et API
-scalent séparément.
+**Positive** — Runs survive redeployments and crashes; the "Run Inspector" and evaluation suites
+come for free from persisted steps; the API maintains a clean p99; workers and API scale
+independently.
 
-**Négatives, acceptées** — plus de code que la version naïve ; chaque transition écrit en base
-(coût mesuré : quelques écritures par itération, négligeable) ; il faut gérer explicitement le
-verrou, l'idempotence de reprise et les runs orphelins (alerte « RUNNING > 10 min »).
+**Negative, accepted** — More code than a naive implementation; each transition writes to the
+database (measured overhead: a few writes per iteration, negligible); requires explicit handling of
+distributed locks, resume idempotency, and orphaned runs (alert on `RUNNING > 10 min`).

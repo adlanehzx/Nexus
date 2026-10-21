@@ -1,41 +1,43 @@
-# ADR-011 — pgvector plutôt qu'une base vectorielle dédiée
+# ADR-011 — pgvector Rather Than a Dedicated Vector Database
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-La mémoire longue durée demande une recherche sémantique. La réponse réflexe est d'ajouter une
-base vectorielle (Qdrant, Weaviate, Pinecone). Il faut vérifier que le besoin la justifie.
+Long-term memory requires semantic retrieval. The immediate reflex in modern AI stacks is adding a
+dedicated vector database (Qdrant, Weaviate, Pinecone). We must evaluate whether actual system
+requirements warrant this operational complexity.
 
-## Décision
+## Decision
 
-`pgvector` dans la base PostgreSQL existante, index HNSW, avec **recherche hybride** :
-vectoriel + plein texte français (`tsvector`), fusionnés par Reciprocal Rank Fusion, puis
-repondérés par importance, fraîcheur et fréquence d'accès.
+`pgvector` inside the primary PostgreSQL database, using HNSW indexes with **hybrid search**:
+dense vector embeddings combined with full-text search (`tsvector`), merged via Reciprocal Rank
+Fusion (RRF), and reranked using importance, recency, and access frequency factors.
 
 ## Alternatives
 
-- **Qdrant / Weaviate auto-hébergés.** Meilleurs à grande échelle (10⁷+ vecteurs), filtrage riche,
-  quantification. Écarté : un utilisateur personnel produira 10⁴–10⁵ souvenirs, un domaine où
-  pgvector répond en quelques millisecondes. Ce serait un service de plus à opérer, sauvegarder,
-  sécuriser et maintenir cohérent.
-- **Pinecone / Turbopuffer (SaaS).** Zéro exploitation, mais dépendance externe, coût récurrent, et
-  les souvenirs personnels partent chez un tiers — contraire à l'esprit du projet.
-- **Recherche plein texte seule.** Rate les paraphrases, qui sont le cas d'usage principal d'une
-  mémoire conversationnelle.
+- **Self-hosted Qdrant / Weaviate.** Better suited at massive scale (10⁷+ vectors), richer filtering,
+  quantization. Rejected: a personal assistant generates 10⁴–10⁵ memories over its lifetime, an
+  operating envelope where pgvector returns in milliseconds. Running a dedicated engine adds another
+  daemon to operate, back up, secure, and maintain in sync.
+- **SaaS Vector DB (Pinecone, Turbopuffer).** Zero operational maintenance, but introduces external
+  network dependencies, recurring costs, and exports private memory data to a third party —
+  counter to our local-first, privacy-respecting ethos.
+- **Full-text search alone.** Fails on paraphrases and synonym matches, which constitute the core
+  retrieval patterns of conversational memory.
 
-## Conséquences
+## Consequences
 
-**Positives** — **une seule transaction** : un souvenir et son embedding sont écrits, mis à jour et
-supprimés atomiquement, donc jamais désynchronisés. Une seule sauvegarde, une seule surface de
-sécurité, un seul endroit à monitorer. Les filtres SQL (`userId`, `type`, `validUntil`) sont
-naturels et exacts, là où ils sont souvent limités côté bases vectorielles.
+**Positive** — **Single atomic transaction**: a memory record and its vector embedding are created,
+updated, and deleted atomically within PostgreSQL, eliminating split-brain desynchronization. A
+single unified backup, a single security perimeter, and a single system to monitor. Relational
+filters (`userId`, `type`, `validUntil`) are native and performant.
 
-**Négatives, acceptées** — l'index HNSW consomme de la RAM sur l'instance PostgreSQL (négligeable
-à cette échelle) ; la reconstruction d'index après un changement de modèle d'embedding est une
-opération de maintenance à scripter ; au-delà de ~10⁶ vecteurs il faudra reconsidérer.
+**Negative, accepted** — HNSW indexes consume RAM on the PostgreSQL instance (negligible at this
+scale); rebuilding indexes following embedding model upgrades requires scripted maintenance; scale
+beyond ~10⁶ vectors will require architectural reassessment.
 
-## Signal de réévaluation
+## Re-evaluation Trigger
 
-Si la latence p95 de `memory.search` dépasse 150 ms ou si le nombre de vecteurs franchit 10⁶,
-rouvrir la décision. Le port `MemoryStore` est déjà en place : le changement serait un adaptateur.
+If p95 latency on `memory.search` exceeds 150 ms or vector count crosses 10⁶, reopen this decision.
+The `MemoryStore` port interface is already decoupled, allowing an alternative adapter implementation.

@@ -1,36 +1,37 @@
 # ADR-001 — Monorepo pnpm + Turborepo
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Sept applications (api, worker, mobile, desktop, web, device-agent, browser-worker) partagent des
-types, un protocole WebSocket, des schémas d'outils et des codes d'erreur. Ces contrats changent
-souvent au début du projet. Le risque principal est la **dérive** : le mobile parlant une version
-du protocole que le serveur ne parle plus.
+Seven applications (api, worker, mobile, desktop, web, device-agent, browser-worker) share
+types, a WebSocket protocol, tool schemas, and error codes. These contracts evolve frequently in the
+early stages of the project. The primary risk is **drift**: mobile speaking a version of the
+protocol that the server no longer supports.
 
-## Décision
+## Decision
 
-Un monorepo pnpm workspaces + Turborepo, avec `@nexus/contracts` comme package pivot et des règles
-de dépendance vérifiées en CI. `apps/browser-worker` (Python) vit dans le même dépôt mais garde sa
-chaîne d'outils propre (`uv`, `pytest`), branchée sur le graphe Turborepo comme tâche opaque.
+A monorepo using pnpm workspaces + Turborepo, with `@nexus/contracts` as the pivot package and
+dependency boundary rules enforced in CI. `apps/browser-worker` (Python) lives in the same
+repository but maintains its own toolchain (`uv`, `pytest`), wired into the Turborepo graph as an
+opaque task.
 
 ## Alternatives
 
-- **Polyrepo + packages npm publiés.** Chaque changement de contrat demande publication, bump et
-  synchronisation sur 5 dépôts. Rédhibitoire à ce stade du projet.
-- **Nx.** Plus riche (générateurs, graphe, plugins) mais plus prescriptif et plus lourd à
-  apprendre ; Turborepo suffit pour un cache de tâches et un graphe de dépendances.
-- **npm/yarn workspaces.** pnpm est retenu pour son store lié en dur (installation rapide, disque
-  économisé) et son isolation stricte des dépendances, qui empêche les dépendances fantômes —
-  précieux quand 7 apps cohabitent.
+- **Polyrepo + published npm packages.** Every contract change requires publishing, bumping, and
+  synchronizing across 5 repositories. Prohibitive at this stage of the project.
+- **Nx.** Richer feature set (generators, graph, plugins) but more prescriptive and heavier to
+  learn; Turborepo is sufficient for a task cache and dependency graph.
+- **npm/yarn workspaces.** pnpm was selected for its hard-linked store (fast installation, disk
+  savings) and strict dependency isolation preventing phantom dependencies — essential when 7 apps
+  coexist.
 
-## Conséquences
+## Consequences
 
-**Positives** — un changement de contrat casse la compilation de tous les consommateurs
-immédiatement ; refactoring atomique ; une seule CI ; onboarding simple.
+**Positive** — A contract change immediately breaks compilation across all consumers; atomic
+refactoring; a single CI; straightforward onboarding.
 
-**Négatives, acceptées** — CI plus longue sans cache correct (mitigation : cache distant
-Turborepo) ; Expo/Metro demande une configuration spécifique pour résoudre les packages du
-workspace (`disableHierarchicalLookup`, `watchFolders`) ; le dépôt grossit ; la discipline des
-règles de dépendance doit être automatisée, sinon elle sera violée.
+**Negative, accepted** — Longer CI runs without proper caching (mitigation: Turborepo remote
+cache); Expo/Metro requires specific configuration to resolve workspace packages
+(`disableHierarchicalLookup`, `watchFolders`); repository grows larger; dependency boundary rules
+must be automated, otherwise they will be violated.

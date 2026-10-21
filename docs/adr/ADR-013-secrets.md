@@ -1,50 +1,50 @@
-# ADR-013 — Secrets : chiffrement enveloppe et port `SecretStore`
+# ADR-013 — Secrets: Envelope Encryption and `SecretStore` Port
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Deux familles de secrets, souvent confondues :
+Two distinct categories of secrets exist and are frequently conflated:
 
-- **Infrastructure** — clefs d'API LLM, mot de passe PostgreSQL, clefs de signature JWT.
-- **Utilisateur** — jetons OAuth Google/GitHub, cookies de session de sites, clefs d'API tierces.
+- **Infrastructure** — LLM API keys, PostgreSQL passwords, JWT signing keys.
+- **User Credentials** — Google/GitHub OAuth tokens, third-party API keys, web session cookies.
 
-Contrainte du cahier des charges : aucun secret dans le code. À quoi s'ajoute une contrainte
-propre aux agents : **le LLM ne doit jamais voir un secret**, sous peine de le recracher dans une
-réponse ou de l'exfiltrer sous injection.
+Specification constraint: Zero hardcoded secrets in code. Furthermore, an agent-specific constraint
+applies: **the LLM must never view raw user credentials**, preventing accidental regurgitation or
+exfiltration under prompt injection attacks.
 
-## Décision
+## Decision
 
-1. **Infrastructure** — variables d'environnement injectées (Docker secrets sur le VPS), validées
-   au démarrage par `@nexus/config` (Zod). Un secret manquant **empêche le boot**. Accès uniquement
-   via un port `SecretStore`, jamais via `process.env` dispersé dans le code.
-2. **Utilisateur** — chiffrement enveloppe : `MASTER_KEY` (env) → DEK par utilisateur (HKDF) →
-   AES-256-GCM sur chaque credential, avec `keyVersion` pour permettre la rotation sans
-   interruption. Jamais exposé par l'API, même à son propriétaire (on montre l'existence et les
-   scopes, pas la valeur).
-3. **Les outils reçoivent des `secretRef`**, résolus **dans le `ToolExecutor`**, après la décision
-   de permission. Le LLM voit `secretRef: FLIGHT_API_KEY`, jamais la valeur ; les arguments
-   persistés et journalisés sont rédigés.
-4. **Redaction systématique** (Pino) sur `authorization`, `cookie`, `token`, `password`, `apiKey`,
-   plus un détecteur de motifs (`sk-`, `ghp_`, JWT) en dernier rideau.
-5. **`gitleaks`** en pre-commit et en CI ; `.env.example` liste les clefs, jamais les valeurs.
+1. **Infrastructure Secrets** — Injected environment variables (Docker secrets in production),
+   strictly validated at startup by `@nexus/config` (Zod). Missing configuration **aborts startup**.
+   Accessed exclusively via the `SecretStore` port, never via arbitrary `process.env` lookups.
+2. **User Credentials** — Envelope encryption: `MASTER_KEY` (env) → per-user DEK (HKDF) →
+   AES-256-GCM encryption on each credential record, with `keyVersion` metadata supporting zero-downtime
+   key rotation. Never exposed in API responses (metadata and scopes only).
+3. **Tools receive `secretRef` handles**, resolved **inside `ToolExecutor`** only after permission
+   grants have been confirmed. The LLM prompt sees `secretRef: FLIGHT_API_KEY`, never the secret
+   value; logged tool arguments are redacted.
+4. **Automated redaction** (Pino) covering `authorization`, `cookie`, `token`, `password`, `apiKey`,
+   plus regex fallback filters (`sk-`, `ghp_`, JWT signatures).
+5. **`gitleaks`** in pre-commit hooks and CI; `.env.example` documents keys with placeholder values.
 
 ## Alternatives
 
-- **Vault / Infisical dès le départ.** Le bon outil à grande échelle, mais un service de plus à
-  opérer et à sauvegarder pour un système mono-utilisateur. Le port `SecretStore` rend la
-  migration ultérieure indolore : un adaptateur, zéro changement d'appelant.
-- **KMS cloud (AWS/GCP).** Excellente gestion de clefs, mais lie l'infrastructure à un cloud alors
-  que la cible est un VPS neutre.
-- **Secrets utilisateur en clair en base.** Inacceptable : une fuite de dump donnerait accès aux
-  comptes Google et GitHub de l'utilisateur.
+- **HashiCorp Vault / Infisical from day one.** Standard at enterprise scale, but represents another
+  stateful service to operate and back up for single-tenant or personal usage. The `SecretStore` port
+  makes future adoption seamless: write an adapter without changing callers.
+- **Cloud KMS (AWS/GCP KMS).** High-grade key management, but couples the architecture to a single
+  cloud vendor when our deployment target is neutral VPS infrastructure.
+- **Plaintext database storage.** Completely unacceptable: a compromised database dump would leak
+  all connected user accounts.
 
-## Conséquences
+## Consequences
 
-**Positives** — un dump de base volé ne suffit pas à compromettre les comptes tiers (il faut aussi
-`MASTER_KEY`) ; la rotation est possible ; le LLM ne peut pas exfiltrer ce qu'il n'a jamais vu.
+**Positive** — A stolen database dump alone cannot compromise user third-party credentials (it
+requires the external `MASTER_KEY`); key rotation is fully supported; the LLM cannot exfiltrate what
+it never observes.
 
-**Négatives, acceptées** — `MASTER_KEY` devient le secret racine : sa perte rend les credentials
-irrécupérables (d'où sa sauvegarde hors ligne, dans un gestionnaire de mots de passe), et sa fuite
-combinée à un dump est critique. La rotation de la clef racine est une opération à scripter
-(`infra/scripts/rotate-master-key.ts`) et à tester avant d'en avoir besoin.
+**Negative, accepted** — `MASTER_KEY` becomes the root of trust: losing it renders credentials
+unrecoverable (requiring offline password manager backups), while leaking it alongside a database dump
+is catastrophic. Root key rotation requires scripted automation (`infra/scripts/rotate-master-key.ts`)
+and thorough verification.

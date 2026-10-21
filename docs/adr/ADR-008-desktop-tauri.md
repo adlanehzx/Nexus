@@ -1,44 +1,44 @@
-# ADR-008 — Desktop en Tauri v2
+# ADR-008 — Desktop in Tauri v2
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Le cahier des charges suggère Tauri « si pertinent, sinon proposer une alternative justifiée ».
-L'application desktop a deux rôles : client de conversation, et coquille de supervision du Device
-Agent (statut, logs, politique locale, bouton pause).
+The system requirements mention Tauri "if relevant, otherwise provide a justified alternative".
+The desktop application serves two distinct purposes: a conversation chat client, and a supervisory
+shell for the Device Agent (status, live logs, local policy editor, pause toggle).
 
-## Décision
+## Decision
 
-**Tauri v2**, UI React partagée avec le web, plus les intégrations natives (tray, raccourci global,
-fenêtre spotlight, notifications, lancement au démarrage, deep links). Le Device Agent reste un
-processus séparé (ADR-007) supervisé par l'app.
+**Tauri v2**, with a React UI shared with the web dashboard, augmented with native OS integrations
+(system tray, global hotkeys, spotlight quick-input window, native notifications, launch on boot,
+deep links). The Device Agent remains an independent background process (ADR-007) supervised by
+the application.
 
 ## Alternatives
 
-- **Electron.** L'argument fort en sa faveur : une seule webview (Chromium) sur tous les OS, donc
-  zéro surprise de rendu, et un écosystème mature (auto-update, packaging, crash reporting).
-  Écarté : ~120 Mo de binaire contre ~10 Mo, 150–250 Mo de RSS au repos contre ~60 Mo, et un
-  modèle de sécurité où tout est ouvert par défaut alors que Tauri exige une déclaration explicite
-  des capacités — ce qui va dans le sens du reste de l'architecture.
-- **Application web installée (PWA).** Zéro packaging, mais pas de tray, pas de raccourci global,
-  pas de supervision de service local. Insuffisant pour le rôle de coquille.
-- **Natif (WinUI/SwiftUI).** Meilleure intégration, mais deux UI à écrire et maintenir pour un
-  bénéfice marginal sur ce produit.
+- **Electron.** Strong argument in its favor: identical webview (Chromium) across all operating
+  systems ensuring zero rendering inconsistencies, plus mature ecosystem (auto-update, packaging,
+  crash reporting). Rejected: ~120 MB binary vs. ~10 MB, 150–250 MB idle RSS vs. ~60 MB, and an
+  insecure-by-default execution model whereas Tauri enforces explicit capability declarations —
+  aligning with our broader defense-in-depth architecture.
+- **Progressive Web App (PWA).** Zero packaging friction, but lacks system tray support, global
+  hotkeys, and local daemon supervision. Insufficient for a host controller shell.
+- **Native (WinUI/SwiftUI).** Best platform integration, but requires writing and maintaining two
+  separate user interfaces for marginal benefit on this product.
 
-## Conséquences
+## Consequences
 
-**Positives** — binaire léger, démarrage rapide, faible empreinte pour une app qui reste ouverte
-en permanence ; permissions explicites ; auto-update signé fourni ; Rust disponible si l'on veut
-plus tard descendre au niveau système.
+**Positive** — Lightweight binary, rapid startup, minimal memory footprint for an always-running
+utility; fine-grained permissions; built-in signed auto-updates; Rust available when low-level
+system primitives are required.
 
-**Négatives, acceptées** — la **webview dépend de l'OS** (WebView2 sur Windows, WKWebView sur
-macOS, WebKitGTK sur Linux) : différences de rendu et de bugs CSS. Mitigation : UI volontairement
-sobre, pas d'effets exotiques, matrice de test avec Windows en priorité (machine cible) puis
-macOS. Écosystème plus jeune qu'Electron, moins de réponses toutes faites. Nécessite la chaîne
-Rust en CI pour builder.
+**Negative, accepted** — The **webview runtime depends on host OS** (WebView2 on Windows, WKWebView
+on macOS, WebKitGTK on Linux): slight CSS rendering differences. Mitigation: clean, sober design
+system without exotic CSS effects, with Windows prioritized as the primary development target.
+Requires Rust toolchain in CI runners.
 
-## Réversibilité
+## Reversibility
 
-Le risque est contenu : l'UI est du React standard consommant `@nexus/sdk-client`. Basculer sur
-Electron consisterait à remplacer la coquille, pas l'application.
+Risk is contained: the UI is standard React consuming `@nexus/sdk-client`. Migrating to Electron
+would involve replacing the native wrapper shell without rewriting the application frontend.

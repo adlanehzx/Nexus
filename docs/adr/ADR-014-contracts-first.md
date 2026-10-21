@@ -1,50 +1,48 @@
-# ADR-014 — Les contrats Zod sont la source de vérité unique
+# ADR-014 — Zod Contracts as the Single Source of Truth
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Cinq consommateurs (mobile, desktop, web, device-agent, browser-worker) dépendent des mêmes
-formes de données : DTO d'API, événements WebSocket, schémas d'outils, codes d'erreur. Chacune
-peut être décrite au mauvais endroit — types TypeScript d'un côté, validation de l'autre, doc
-OpenAPI écrite à la main — avec la garantie qu'elles divergeront.
+Five consumers (mobile, desktop, web, device-agent, browser-worker) rely on the same data structures:
+API DTOs, WebSocket event envelopes, tool schemas, and error codes. Each could easily be defined
+in conflicting locations — TypeScript types in one package, validation logic in another, handcrafted
+OpenAPI docs — guaranteeing eventual drift.
 
-## Décision
+## Decision
 
-`@nexus/contracts` définit **une fois** chaque forme, en Zod, et tout le reste en dérive :
+`@nexus/contracts` defines each structure **once** using Zod, and all downstream artifacts derive
+from it:
 
 ```
 Zod schema
- ├── type TypeScript          z.infer
- ├── validation runtime       .parse() aux frontières, dans les deux sens
- ├── documentation OpenAPI    @fastify/swagger via fastify-type-provider-zod
- ├── JSON Schema              zod-to-json-schema → outils LLM, contrat Python
- └── modèles Pydantic         générés pour apps/browser-worker, vérifiés par test de contrat
+ ├── TypeScript type          z.infer
+ ├── Runtime validation       .parse() across boundaries, bidirectionally
+ ├── OpenAPI documentation    @fastify/swagger via fastify-type-provider-zod
+ ├── JSON Schema              zod-to-json-schema → LLM tool definitions, Python contract
+ └── Pydantic models          Generated for apps/browser-worker, verified via CI contract tests
 ```
 
-Règles : aucune interface dupliquée à la main ; toute enveloppe réseau porte un champ de version ;
-la validation s'applique **aussi en réception côté client** (un serveur peut être en avance sur
-l'app mobile du store).
+Rules: Zero manually duplicated interfaces; every network envelope carries a version field (`v`);
+validation applies **on client reception as well** (the server may run ahead of mobile store releases).
 
 ## Alternatives
 
-- **Types TypeScript seuls.** Effacés à l'exécution : aucune protection contre une réponse
-  malformée, un vieux client ou un serveur MCP hostile.
-- **OpenAPI comme source, types générés.** Fonctionne pour le REST, mais couvre mal le protocole
-  WebSocket et les schémas d'outils dynamiques, et l'outillage de génération ajoute une étape de
-  build fragile.
-- **tRPC.** Excellent en TypeScript de bout en bout, mais notre API doit être consommée par du
-  Python et rester conventionnellement REST/versionnée pour d'éventuels clients tiers.
-- **Protobuf.** Typage fort et multilingue, mais outillage lourd et mauvaise ergonomie côté
-  React Native pour un gain limité ici.
+- **TypeScript types alone.** Stripped at compile time: zero runtime protection against malformed
+  payloads, outdated clients, or malicious MCP responses.
+- **OpenAPI specs as primary source, generating types.** Effective for REST, but poorly handles
+  WebSocket multiplexing and dynamic tool schemas; code-generation CLI tooling introduces fragile build steps.
+- **tRPC.** Exceptional for pure TypeScript end-to-end, but our API must be consumed by Python
+  services and remain standard REST for third-party integrations.
+- **Protobuf.** Robust cross-language typing, but heavy tooling footprint and poor React Native
+  ergonomics for limited gain in this context.
 
-## Conséquences
+## Consequences
 
-**Positives** — un changement de contrat casse la compilation de tous les consommateurs
-immédiatement, au lieu de casser la production silencieusement ; la doc OpenAPI ne peut pas mentir ;
-la frontière Python est couverte par un test automatique.
+**Positive** — A contract change immediately fails the build for all consumers before hitting
+production; OpenAPI docs never drift; the Python boundary is locked by automated CI tests.
 
-**Négatives, acceptées** — Zod ajoute un coût runtime (négligeable devant un appel LLM, mesuré sur
-les chemins chauds comme le fanout WebSocket où l'on valide en développement et échantillonne en
-production) ; les schémas récursifs demandent des annotations explicites ; il faut une discipline
-de versionnement (`v` dans l'enveloppe, règles d'évolution additive uniquement).
+**Negative, accepted** — Zod incurs slight runtime overhead (negligible compared to LLM call latency,
+monitored on hot paths like WebSocket fanout where full validation runs in dev and sampled in prod);
+recursive schemas require explicit type annotations; demands strict versioning discipline (`v` in
+envelopes, additive evolution only).

@@ -1,194 +1,166 @@
-# Paquets, signature et publication
+# Packaging, Signing, and Publishing
 
-## Ce qui est automatisé, et ce qui ne peut pas l'être
+## What is Automated, and What Cannot Be
 
-| artefact         | produit par                                         | signé par                                |
-| ---------------- | --------------------------------------------------- | ---------------------------------------- |
-| AppImage, `.deb` | workflow « Paquets », runner Linux                  | clé Tauri (`TAURI_SIGNING_PRIVATE_KEY`)  |
-| paquet Arch      | `packaging/arch/PKGBUILD`, construit sur la machine | rien — Arch construit depuis les sources |
-| MSI, NSIS        | runner Windows                                      | certificat de signature de code          |
-| `.dmg`           | runner macOS                                        | certificat Apple, puis notarisation      |
-| APK              | runner Linux + Gradle                               | keystore Android                         |
-| TestFlight       | **manuel**, voir ci-dessous                         | certificat Apple                         |
+| Artifact         | Produced By                                          | Signed By                                  |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------ |
+| AppImage, `.deb` | "Packages" workflow, Linux runner                    | Tauri key (`TAURI_SIGNING_PRIVATE_KEY`)    |
+| Arch package     | `packaging/arch/PKGBUILD`, built on host             | None — Arch builds directly from source    |
+| MSI, NSIS        | Windows runner                                       | Code signing certificate                   |
+| `.dmg`           | macOS runner                                         | Apple certificate, followed by notarization|
+| APK              | Linux runner + Gradle                                | Android keystore                           |
+| TestFlight       | **Manual**, see below                                | Apple certificate                          |
 
-**Aucun secret n'est nécessaire pour faire tourner le pipeline.** Sans
-certificat ni keystore, les paquets sont produits **non signés** : utilisables
-localement, refusés par SmartScreen et par Android. C'est délibéré — un pipeline
-qui ne tourne qu'avec des secrets ne se teste jamais, et on ne découvre qu'il
-est cassé que le jour de la publication. Chaque exécution écrit dans son résumé
-si l'artefact est signé ou non.
+**No secrets are required to run the build pipeline.** In the absence of certificates or keystores,
+packages are built **unsigned**: functional for local testing, but flagged by SmartScreen and
+Android package installers. This is intentional — a pipeline that only runs when secrets are configured
+cannot be properly tested in forks or CI, and breaking changes are only noticed on release day. Each
+workflow run clearly reports in its job summary whether each artifact was signed or left unsigned.
 
-## Le défaut qui empêchait tout
+## The Flaw That Previously Blocked Non-Windows Builds
 
-`apps/desktop/src-tauri/Cargo.toml` déclarait `keyring` avec
-`features = ["windows-native"]` dans les dépendances **communes**. La coquille
-était donc inconstructible ailleurs que sur Windows, ce qui rendait l'AppImage,
-le `.deb` et le `.dmg` impossibles — sans qu'aucun message ne le dise, puisque
-personne ne compilait pour Linux.
+`apps/desktop/src-tauri/Cargo.toml` previously declared `keyring` with `features = ["windows-native"]`
+in the **common** dependencies block. As a result, the desktop shell could not compile on platforms
+other than Windows, preventing AppImage, `.deb`, and `.dmg` generation without any explicit warning
+since Linux compilation was not routinely validated.
 
-La dépendance est désormais déclinée par plateforme : le besoin est le même
-partout — les jetons n'ont rien à faire dans un fichier de configuration ni dans
-le stockage du moteur de rendu — c'est le magasin qui change de nom (Credential
-Manager, Keychain, Secret Service).
+The dependency is now properly segregated per platform: the requirement is identical everywhere —
+authentication tokens do not belong in plaintext configuration files or renderer webview storage —
+only the underlying OS credential provider differs (Credential Manager, Keychain, Secret Service).
 
-Et le job `desktop-compile` compile la coquille sous Linux **à chaque poussée**,
-pour que cette classe d'erreur ne puisse plus passer inaperçue. Il fait
-`cargo check` et non `tauri build` : on vérifie que ça compile sur une autre
-plateforme que Windows, pas qu'on sait fabriquer un paquet — ce dernier point
-est le travail du workflow de publication.
+The `desktop-compile` job compiles the shell under Linux **on every push** to ensure this class of
+regression cannot go unnoticed. It executes `cargo check` rather than `tauri build`: validating cross-platform
+compilation capability, leaving artifact packaging to the dedicated release workflow.
 
-### `Cargo.lock`, et comment il a été régénéré
+### `Cargo.lock` Regeneration
 
-Déclarer `keyring` par plateforme change le graphe de dépendances, donc le
-verrou devait être régénéré — ce qui demande une chaîne Rust, absente de la
-machine où ce travail a été fait. Un verrou écrit à la main aurait été pire
-qu'un verrou absent : il aurait affirmé des versions et des empreintes que
-personne n'a résolues.
+Declaring `keyring` per platform modifies the Cargo dependency graph, requiring lockfile regeneration —
+which demands a full Rust toolchain.
 
-Le job a donc servi de chaîne Rust à lui-même : il a détecté la dérive, publié
-le verrou qu'il venait de calculer comme artefact, et celui-ci a été récupéré et
-committé. Quatre paquets s'y sont ajoutés, un par plateforme concernée :
-`dbus-secret-service` (Linux), `security-framework` et `security-framework-sys`
-(macOS), `zeroize_derive`. `windows-sys` y était déjà. Les trois trousseaux sont
-donc dans le verrou, même s'il a été calculé sous Linux — cargo enregistre tous
-les cibles, pas seulement la courante.
+The workflow job acted as its own toolchain: it detected dependency drift, exported the computed lockfile
+as a build artifact, which was subsequently committed. Four platform-specific crates were added:
+`dbus-secret-service` (Linux), `security-framework` and `security-framework-sys` (macOS), and `zeroize_derive`.
+`windows-sys` was already included. All platform credential targets are now recorded in the lockfile.
 
-`--locked` est rétabli, et la construction est reproductible. L'étape de
-détection de dérive reste en place : elle ne devrait plus se déclencher, et
-c'est pour cela qu'on la garde. Le jour où une dépendance change, son message
-dira quoi faire — là où `--locked` seul échoue sur « cannot update the lock
-file », qui ne nomme aucun geste.
+`--locked` is enforced, ensuring reproducible builds. The drift detection check remains active: it should
+not trigger normally, which is why it remains in place to guide developers if dependencies change.
 
-## Signature des exécutables
+## Binary Code Signing
 
-### Ce que la signature apporte, et ce qu'elle n'apporte pas
+### What Signing Guarantees, and What It Does Not
 
-Elle prouve que le paquet vient de qui détient la clé, et qu'il n'a pas été
-modifié depuis. Elle ne dit rien de ce que le programme fait. Un binaire signé
-peut être malveillant ; un binaire non signé peut être parfait. La signature
-sert à rendre **détectable** une substitution, pas à valider un comportement.
+Signing verifies that a binary originates from the holder of the signing key and has not been altered
+in transit. It does not certify the program's runtime safety. A signed binary can still contain bugs
+or vulnerabilities; an unsigned binary may be entirely safe. Signing makes unauthorized substitution
+**detectable**; it does not validate application behavior.
 
-### Les secrets, et où ils vivent
+### Secrets and Storage
 
-Jamais dans Git. Jamais dans un fichier du dépôt. Uniquement dans les secrets
-du dépôt GitHub, lus par le workflow comme variables d'environnement :
+Never committed to Git. Never placed in repository tracking. Secrets live exclusively in repository
+secret storage and are provided to workflow jobs as environment variables:
 
 ```
-TAURI_SIGNING_PRIVATE_KEY           clé de signature des mises à jour Tauri
+TAURI_SIGNING_PRIVATE_KEY           Tauri update signing private key
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-APPLE_CERTIFICATE                   .p12 encodé en base64
+APPLE_CERTIFICATE                   Base64-encoded .p12
 APPLE_CERTIFICATE_PASSWORD
 APPLE_SIGNING_IDENTITY
-APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID   notarisation
-ANDROID_KEYSTORE_BASE64             .jks encodé en base64
+APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID   Apple notarization credentials
+ANDROID_KEYSTORE_BASE64             Base64-encoded .jks keystore
 ANDROID_KEYSTORE_PASSWORD
 ANDROID_KEY_ALIAS
 ANDROID_KEY_PASSWORD
 ```
 
-Le keystore Android est écrit dans le répertoire temporaire du runner, jamais
-dans l'arbre du dépôt — un fichier déposé dans l'arbre finit un jour dans un
-`git add -A`.
+The Android keystore is decoded into the runner's temporary directory, never within the working tree,
+preventing accidental commits via `git add -A`.
 
-### Générer la clé de mise à jour Tauri
+### Generating the Tauri Update Key
 
 ```sh
 pnpm --filter @nexus/desktop exec tauri signer generate -w ~/.nexus/tauri-update.key
 ```
 
-La **clé publique** va dans `tauri.conf.json` (`plugins.updater.pubkey`), la
-privée dans les secrets. Sans clé publique, l'updater reste `active: false` :
-un updater sans clé accepterait n'importe quel paquet, ce qui est pire que pas
-d'updater.
+The **public key** is committed in `tauri.conf.json` (`plugins.updater.pubkey`), while the private
+key is stored in deployment secrets. Without a public key, the updater remains `active: false`: an
+updater without cryptographic verification would accept arbitrary unsigned bundles, creating an
+unacceptable attack vector.
 
-### Android : pourquoi un APK non signé plutôt qu'un échec
+### Android: Why Unsigned APKs are Built Rather Than Failing
 
-Échouer sans keystore rendrait la chaîne impossible à vérifier : personne ne
-saurait si le build casse à cause du code ou de l'absence de clé. Produire un
-APK non signé prouve tout sauf la signature, et donne un artefact qui refuse de
-s'installer — exactement ce qu'on veut d'un paquet sans clé.
+Failing when a keystore is absent prevents validating the Android toolchain: developers cannot
+determine whether a failure stems from application code or missing credentials. Producing an
+unsigned APK verifies the complete compilation and bundling process, yielding an artifact that
+requires explicit debug installation flags — exactly what is needed for local development.
 
-`enableV1Signing` reste active : un téléphone sous Android 10 ou plus ancien
-n'installe pas un APK signé uniquement en V2.
+`enableV1Signing` remains active: Android devices running Android 10 or older cannot install APKs
+signed solely with V2 schemas.
 
-## Installateur Windows du worker
+## Windows Worker Installer
 
-Le MSI produit par Tauri installe la **coquille de bureau**. Le worker est autre
-chose : un démon Node sans interface, qui doit tourner sans session ouverte.
-D'où `packaging/windows/nexus-worker.nsi`, un installateur à lui, construit par
-le runner Windows du workflow de publication.
+The MSI bundle built by Tauri installs the **desktop GUI shell**. The worker is fundamentally different:
+a headless Node daemon that must run without an active interactive user desktop session. Hence,
+`packaging/windows/nexus-worker.nsi` provides an independent installer built by the Windows release runner.
 
-NSIS plutôt que MSI : un MSI demande WiX et une chaîne de construction de plus,
-pour un gain nul ici — il n'y a ni déploiement par stratégie de groupe ni
-désinstallation pilotée à distance.
+NSIS was chosen over MSI: building MSIs requires WiX and an additional toolchain without tangible
+benefit here — there is neither Active Directory Group Policy deployment nor remote uninstallation orchestration.
 
-Quatre décisions y sont explicites, et chacune évite une panne précise.
+Four specific design decisions are enforced:
 
-**Installation par machine.** Un service Windows est une ressource de la
-machine ; l'installer dans le profil d'un utilisateur produirait un service dont
-les fichiers disparaissent quand ce profil est supprimé.
+**Per-Machine Installation.** A Windows service is a machine-wide resource; installing it within a
+specific user profile creates a service whose underlying binaries vanish if that user profile is removed.
 
-**La configuration vit hors de `Program Files`.** Ce dossier est en lecture
-seule pour les utilisateurs, et un service qui ne peut pas lire sa configuration
-échoue sans dire pourquoi. Elle va dans `%APPDATA%\NEXUS\worker.env`, et une
-réinstallation ne l'écrase pas.
+**Configuration Lives Outside `Program Files`.** The `Program Files` directory is read-only for standard
+users, and a background service unable to read or write runtime settings fails silently. Configuration
+resides in `%APPDATA%\NEXUS\worker.env`, and reinstallations never overwrite existing configurations.
 
-**Node n'est pas embarqué.** L'embarquer figerait une version qu'il faudrait
-mettre à jour nous-mêmes à chaque correctif de sécurité — or ce worker exécute
-des commandes sur la machine, c'est le dernier endroit où l'on veut un runtime
-en retard. L'installateur vérifie sa présence et refuse proprement s'il manque.
+**Node.js is Not Bundled.** Bundling a Node runtime freezes an engine version that would require manual
+updates on every upstream security advisory — and because this worker executes shell commands on the host,
+it requires an up-to-date runtime. The installer checks for Node on the system path and halts cleanly
+with instructions if absent.
 
-**Le service n'est pas installé automatiquement.** Il faut d'abord renseigner
-l'identifiant d'appareil, l'adresse du cœur et le chemin de la clé privée. Un
-service installé et démarré avant cela échoue en boucle, remplit le journal
-d'événements, et donne l'impression que l'installation a raté alors qu'elle a
-réussi. L'installateur affiche les trois commandes à lancer.
+**The Service is Not Started Automatically.** Users must first configure their device ID, central API
+endpoint URL, and private key path. A service started prior to configuration enters a crash loop, fills
+the Windows Event Log, and gives the false impression that installation failed. The installer displays
+the required setup commands upon completion.
 
-La désinstallation arrête et supprime le service **avant** les fichiers —
-l'inverse laisse un service qui redémarre en boucle sur un binaire absent — et
-conserve la configuration : une mise à jour passe par une désinstallation, et
-emporter l'identifiant d'appareil obligerait à réappairer à chaque fois.
+Uninstallation halts and deregisters the service **before** removing binary files — reversing the order
+leaves an orphaned service perpetually attempting to launch missing binaries — and preserves configuration
+files so version updates do not require re-pairing the device.
 
-## Service Windows
+## Windows Service Configuration
 
-`packaging/windows/install-worker-service.ps1`, via `sc.exe` — présent partout,
-contrairement à un empaqueteur tiers qu'il faudrait installer d'abord.
+`packaging/windows/install-worker-service.ps1`, orchestrated via native `sc.exe` — available on all
+Windows editions without third-party wrapper dependencies.
 
-| décision                                            | raison                                                                                                                                                                   |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| compte de service, pas `LocalSystem`                | `LocalSystem` donnerait les droits complets de la machine, ce qui annulerait la politique locale : les refus par chemin ne protègent plus rien si le processus peut tout |
-| redémarrage automatique **borné** (5 s, 30 s, 60 s) | un worker qui plante en boucle et redémarre aussitôt transforme un défaut en charge                                                                                      |
-| aucun secret en argument                            | une ligne de commande de service est lisible par tout le monde dans le gestionnaire de tâches ; la clé est désignée par un chemin                                        |
-| `delayed-auto`                                      | démarre après les services système, pour ne pas allonger le démarrage de la machine                                                                                      |
+| Decision                                            | Reason                                                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dedicated service account, not `LocalSystem`        | `LocalSystem` grants unrestricted machine privileges, invalidating local path policies: filesystem restrictions provide no protection if the process is root|
+| Bounded automatic restarts (5s, 30s, 60s)           | A continuously crashing worker restarting immediately transforms an isolated defect into an aggressive CPU/log denial of service                           |
+| No secrets passed in command-line arguments         | Service command lines are visible to any unprivileged user via Task Manager; private keys are referenced strictly by filesystem path                        |
+| `delayed-auto` startup mode                         | Boots following essential system services to avoid lengthening host boot times                                                                              |
 
-Le script refuse d'installer un service dont le `.env` est absent, et avertit si
-ce fichier hérite des droits de son dossier parent — il désigne le chemin de la
-clé privée de cette machine.
+The script halts if `.env` configuration is missing, and warns if permissions on the file are insecurely
+inherited from the parent folder.
 
-## iOS et TestFlight
+## iOS and TestFlight
 
-### Ce qui est fait ici, et ce qui ne peut pas l'être
+### Scope and Prerequisites
 
-Rien d'iOS ne peut être construit ni vérifié depuis ce dépôt sans un Mac et un
-compte développeur Apple. Ce document décrit donc la procédure ; il ne prétend
-pas l'avoir exécutée.
+iOS artifacts cannot be built or validated without macOS hardware and an active Apple Developer
+account. This document details the procedure for operators.
 
-### Préparation, une fois
+### One-Time Setup
 
-1. **Compte développeur Apple** (99 €/an) et un identifiant d'application —
-   `fr.nexus.mobile` — créé dans App Store Connect.
-2. **Profil de provisionnement** de type _App Store_, lié au certificat de
-   distribution.
-3. **Capacités** : NEXUS mobile demande le micro (dictée) et les notifications.
-   Chaque capacité demandée doit être justifiée dans la fiche App Store, et une
-   capacité inutilisée est un motif de rejet.
-4. **Déclaration de confidentialité.** C'est le point qui demande le plus
-   d'attention et le seul qui ne soit pas technique : l'application parle à
-   _votre_ serveur, pas au nôtre. La fiche doit dire que les données ne quittent
-   pas l'infrastructure de l'utilisateur, et que l'audio de dictée n'est pas
-   conservé — ce qui est vrai, et vérifié par les tests de `@nexus/voice`.
+1. **Apple Developer Account** and an App ID — such as `app.nexus.mobile` — created in App Store Connect.
+2. **Provisioning Profile** of type _App Store_, bound to the distribution certificate.
+3. **Capabilities**: NEXUS mobile requests microphone access (voice dictation) and push notifications.
+   Every capability requested must be justified in App Store Connect submission metadata.
+4. **Privacy Declaration**: The app communicates with _your_ private server. The privacy disclosure
+   must clearly state that data does not leave user-controlled infrastructure, and that dictation
+   audio is processed without retention — verified by `@nexus/voice` test suites.
 
-### Monter une version
+### Building a Release
 
 ```sh
 cd apps/mobile
@@ -202,23 +174,18 @@ xcrun altool --upload-app -f build/ipa/NEXUS.ipa \
   -u "$APPLE_ID" -p "$APPLE_APP_PASSWORD"
 ```
 
-### Ce à quoi s'attendre au premier envoi
+### Initial Submission Notes
 
-- **Rejet probable sur le champ « à quoi sert le micro ».** Une description
-  vague — « améliorer l'expérience » — est rejetée. Écrire « dicter un message à
-  son assistant personnel, l'audio est transcrit sur l'appareil et n'est pas
-  conservé ».
-- **Une application qui exige un serveur personnel** demande une explication et
-  un compte de démonstration. Sans serveur joignable par le relecteur, il ne
-  peut rien voir, et le rejet est automatique. Prévoir une instance de
-  démonstration **jetable**, jamais la sienne.
-- **Pas de mise à jour automatique hors App Store** sur iOS : `UpdatePolicy`
-  n'y sert qu'à informer, l'installation passe par le magasin.
+- **Microphone Purpose String**: Generic descriptions will trigger rejection. Use descriptive text:
+  "Dictate commands and messages to your personal assistant; audio is processed directly and never stored."
+- **Self-Hosted Backend Review**: Apps requiring a private backend require clear demo reviewer credentials.
+  Always provide a disposable, isolated demo backend instance.
+- **No Side-Loaded Auto-Updates on iOS**: `UpdatePolicy` acts purely informatively on iOS; updates
+  are distributed strictly through the App Store or TestFlight.
 
-## Mise à jour automatique
+## Automatic Updates
 
-La décision est prise par `UpdatePolicy` dans `@nexus/client-core`, qui ne
-télécharge ni n'installe rien — c'est l'hôte qui applique, et qui vérifie la
-signature. Les refus sont documentés dans `docs/architecture/12-clients.md` :
-pas de paquet non signé, pas de retour en arrière, pas de changement de canal,
-pas de version majeure sans accord.
+Update decisions are evaluated by `UpdatePolicy` in `@nexus/client-core`. It neither downloads nor
+executes binaries directly — the host platform verifies cryptographic signatures and applies updates.
+Safety rules documented in `docs/architecture/12-clients.md`: no unsigned packages, no downgrades,
+no channel hopping, no major version upgrades without explicit user confirmation.

@@ -1,44 +1,45 @@
-# ADR-006 — Browser Use en service Python isolé
+# ADR-006 — Browser Use as an Isolated Python Service
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-`browser-use` est une bibliothèque Python. Le backend est TypeScript. Le cahier des charges
-interdit explicitement que le backend importe le code Python, et impose l'isolation du worker.
-S'y ajoutent deux réalités : un Chromium consomme de la mémoire et plante, et il visite par
-définition du contenu hostile.
+`browser-use` is a Python library. The backend is written in TypeScript. The architectural
+guidelines explicitly forbid the TypeScript backend from directly importing Python code, and
+mandate worker isolation. Two realities reinforce this: Chromium consumes substantial memory and
+is prone to crashes, and by definition it navigates potentially hostile external web content.
 
-## Décision
+## Decision
 
-`apps/browser-worker` : service FastAPI, conteneur dédié, exposant une API HTTP versionnée
-(sessions, act, cancel, health) et publiant sa progression sur un Redis Stream. Le TypeScript ne
-le connaît qu'à travers `@nexus/browser-client`, un client typé. Réseau Docker isolé, sans port
-publié, egress filtré, aucun secret applicatif dans le conteneur.
+`apps/browser-worker`: A FastAPI service in a dedicated container, exposing a versioned HTTP API
+(sessions, act, cancel, health) and publishing execution progress to a Redis Stream. The TypeScript
+layer interacts exclusively through `@nexus/browser-client`, a typed client. The service runs in an
+isolated Docker network without published host ports, filtered egress, and zero application secrets
+inside the container.
 
-Deux niveaux d'outils exposés à l'agent : `browser.act` (haut niveau, boucle `browser-use`,
-coûteux, `CONFIRM` dès que mutant) et `browser.navigate/extract/click/type` (bas niveau,
-déterministe, bon marché).
+Two tiers of tools are exposed to the agent: `browser.act` (high level, `browser-use` loop,
+resource intensive, `CONFIRM` on mutating actions) and `browser.navigate/extract/click/type`
+(low level, deterministic, fast).
 
 ## Alternatives
 
-- **Playwright directement en TypeScript.** Supprime Python et le saut réseau — mais on
-  réimplémenterait l'intelligence de `browser-use` (perception de la page, résolution d'éléments,
-  boucle d'action), qui est précisément la valeur de la bibliothèque. Reste une option de repli si
-  `browser-use` s'avère instable ; l'interface `browser.*` ne changerait pas.
-- **Pont in-process (`python-shell`, PyO3).** Viole la contrainte, couple les cycles de vie, et un
-  crash Chromium ferait tomber le worker agent.
-- **Service de navigation SaaS (Browserbase, Steel).** Moins d'exploitation, mais dépendance
-  externe, coût récurrent et données de navigation chez un tiers. Envisageable plus tard derrière
-  la même interface.
+- **Playwright directly in TypeScript.** Eliminates Python and network hops — but would require
+  reimplementing the perceptual intelligence of `browser-use` (page analysis, DOM element resolution,
+  vision-action loop), which is precisely the library's value proposition. Remains a fallback option
+  if `browser-use` proves unstable; the `browser.*` tool interface would remain unchanged.
+- **In-process bridge (`python-shell`, PyO3).** Violates decoupling constraints, tightly binds
+  lifecycles, and a Chromium crash could bring down the agent worker.
+- **SaaS navigation service (Browserbase, Steel).** Less operational overhead, but introduces
+  external dependencies, recurring costs, and streams private browsing data through a third party.
+  Can be considered later behind the same interface.
 
-## Conséquences
+## Consequences
 
-**Positives** — isolation des pannes et de la sécurité ; scaling indépendant ; possibilité de
-remplacer l'implémentation sans toucher à l'agent ; capture d'écran par étape, qui est à la fois
-une fonctionnalité et l'outil de débogage principal.
+**Positive** — Fault and security isolation; independent scaling; ability to swap out the
+implementation without modifying agent logic; step-by-step screenshot streaming serving both as a
+feature and as the primary debugging tool.
 
-**Négatives, acceptées** — deux écosystèmes à maintenir et à builder (mitigé par des tests de
-contrat, cf. [15-testing](../architecture/15-testing.md) §4) ; latence réseau supplémentaire
-(négligeable devant les secondes d'une action navigateur) ; image Docker lourde (~1,5 Go avec
-Playwright).
+**Negative, accepted** — Two distinct language toolchains to maintain and build (mitigated by
+contract tests, cf. [15-testing](../architecture/15-testing.md) §4); slight network latency (negligible
+compared to multi-second browser operations); heavy Docker image (~1.5 GB with Playwright and
+browser binaries).

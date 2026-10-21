@@ -1,39 +1,39 @@
-# 03 — Architecture de l'agent
+# 03 — Agent Architecture
 
-## 1. Le principe : la boucle est un réducteur sur un état persisté
+## 1. Core Principle: The Loop is a Reducer Over Persisted State
 
-La formulation naïve d'une boucle agentique est une fonction récursive en mémoire. Elle ne
-survit pas à trois exigences du cahier des charges : **confirmation humaine** (le run peut
-attendre 10 minutes), **annulation** (depuis un autre appareil), **reprise après crash**.
+The naive formulation of an agent loop is an in-memory recursive function. It fails when meeting three
+critical production requirements: **human confirmation** (a run may pause for 10 minutes waiting for
+approval), **cross-device cancellation**, and **resilience across crashes and restarts**.
 
-Nous modélisons donc le run comme une machine à états dont chaque transition est persistée :
+We model each run as an explicit finite state machine where every transition is persisted:
 
 ```
 AgentRun  = { id, status, iteration, budget, cursor, ... }
 AgentStep = { runId, index, type, input, output, tokens, cost, latency, error }
 ```
 
-`step(state) → command` est une fonction **pure et testable** ; le worker exécute la commande,
-persiste le nouvel état et rappelle `step`. Rejouer un run = rejouer ses steps. C'est la
-propriété qui rend l'agent débuggable et évaluable (→ [ADR-003](../adr/ADR-003-durable-agent-loop.md)).
+`step(state) → command` is a **pure and testable** function; the worker processes the command,
+persists the resulting state, and invokes `step` again. Replaying a run means replaying its steps.
+This property makes the agent systematically debuggable and verifiable (→ [ADR-003](../adr/ADR-003-durable-agent-loop.md)).
 
-## 2. Machine à états
+## 2. State Machine
 
 ```mermaid
 stateDiagram-v2
   [*] --> QUEUED
-  QUEUED --> RUNNING: worker prend le lock
+  QUEUED --> RUNNING: Worker acquires lock
   RUNNING --> RUNNING: observe → reason → act → observe
-  RUNNING --> WAITING_CONFIRMATION: outil CONFIRM/CRITICAL
-  WAITING_CONFIRMATION --> RUNNING: user approuve (job de reprise)
-  WAITING_CONFIRMATION --> CANCELLED: user refuse
-  WAITING_CONFIRMATION --> EXPIRED: TTL dépassé
-  RUNNING --> WAITING_INPUT: l'agent pose une question bloquante
-  WAITING_INPUT --> RUNNING: réponse utilisateur
-  RUNNING --> COMPLETED: réponse finale
-  RUNNING --> FAILED: erreur non récupérable
-  RUNNING --> CANCELLED: cancel utilisateur
-  RUNNING --> PARTIAL: budget/itérations épuisés, résultat partiel rendu
+  RUNNING --> WAITING_CONFIRMATION: Tool CONFIRM/CRITICAL
+  WAITING_CONFIRMATION --> RUNNING: User approves (resume job)
+  WAITING_CONFIRMATION --> CANCELLED: User rejects
+  WAITING_CONFIRMATION --> EXPIRED: TTL exceeded
+  RUNNING --> WAITING_INPUT: Agent asks blocking question
+  WAITING_INPUT --> RUNNING: User responds
+  RUNNING --> COMPLETED: Final answer delivered
+  RUNNING --> FAILED: Unrecoverable error
+  RUNNING --> CANCELLED: User cancels run
+  RUNNING --> PARTIAL: Budget/iterations exhausted, partial synthesis returned
   COMPLETED --> [*]
   FAILED --> [*]
   CANCELLED --> [*]
@@ -41,114 +41,114 @@ stateDiagram-v2
   EXPIRED --> [*]
 ```
 
-`PARTIAL` est un état de première classe, pas un échec : quand un budget s'épuise, l'agent
-**doit** produire une synthèse de ce qu'il a appris et de ce qui reste à faire. Un agent qui
-s'arrête sans rien dire est un bug produit.
+`PARTIAL` is a first-class state, not an unhandled failure: when an execution budget is exhausted, the
+agent **must** synthesize what it learned and identify outstanding steps. An assistant that abruptly halts
+in silence is a product defect.
 
-## 3. La boucle
+## 3. The Execution Loop
 
 ```
 loop:
-  0. guard        → budgets, timeout global, flag d'annulation, verrou
-  1. observe      → assemble le contexte (Memory Assembler, §5)
-  2. reason       → LLMProvider.stream(messages, tools autorisés)
-                    tokens → événements WS au fil de l'eau
-  3. decide       → réponse finale ? question ? appel(s) d'outil ?
-  4. authorize    → validation zod des args + PermissionService.check()
-                    DENY → observation d'erreur, retour en 1
-                    CONFIRM → persiste Confirmation, suspend le run, LIBÈRE le worker
-  5. execute      → ToolExecutor (timeout, retry, idempotence) ; parallèle si outils
-                    indépendants et tous SAFE, séquentiel sinon
-  6. observe      → normalise le résultat, tronque, réinjecte comme message tool
-  7. reflect      → si N échecs consécutifs : force une étape de replanification
-  8. compact      → si contexte > seuil : compaction (§5.4)
-  9. continue     → iteration++ ; retour en 0
+  0. guard        → Budgets, global timeout, cancellation flag, distributed lock
+  1. observe      → Assemble context (Context Assembler, §5)
+  2. reason       → LLMProvider.stream(messages, authorized_tools)
+                    Tokens stream to WebSocket subscribers in real time
+  3. decide       → Final response? Blocking question? Tool invocation(s)?
+  4. authorize    → Zod argument validation + PermissionService.check()
+                    DENY → Error observation, return to step 1
+                    CONFIRM → Persist Confirmation, suspend run, RELEASE worker
+  5. execute      → ToolExecutor (timeout, retry, idempotency); parallelized if tools
+                    are independent and SAFE, sequential otherwise
+  6. observe      → Normalize result, truncate, re-inject as tool message
+  7. reflect      → If N consecutive failures: trigger forced replanning step
+  8. compact      → If context tokens > threshold: run compaction (§5)
+  9. continue     → iteration++; return to step 0
 finish:
-  réponse finale, persistance, extraction mémoire (async), run.completed
+  Final answer emitted, state persisted, asynchronous memory extraction, run.completed event
 ```
 
-### Budgets et garde-fous
+### Budgets and Safeguards
 
-| Garde-fou                    | Défaut                        | Comportement au dépassement                     |
+| Safeguard                    | Default                       | Behavior on Limit Exceeded                      |
 | ---------------------------- | ----------------------------- | ----------------------------------------------- |
-| `maxIterations`              | 12                            | → `PARTIAL` avec synthèse                       |
-| `maxWallClock`               | 180 s (600 s si tâche longue) | → `PARTIAL`                                     |
-| `maxTokens` (run)            | 200 k                         | → compaction forcée puis `PARTIAL`              |
-| `maxCostUsd` (run / jour)    | configurable                  | → `PARTIAL`, alerte                             |
+| `maxIterations`              | 12                            | → `PARTIAL` with synthesis                      |
+| `maxWallClock`               | 180s (600s for long jobs)     | → `PARTIAL`                                     |
+| `maxTokens` (run)            | 200k                          | → Forced compaction, then `PARTIAL`             |
+| `maxCostUsd` (run / day)     | Configurable                  | → `PARTIAL`, cost alert emitted                 |
 | `maxToolCalls`               | 25                            | → `PARTIAL`                                     |
-| `maxConsecutiveToolFailures` | 3                             | → replanification forcée, puis abandon expliqué |
-| `maxSameToolSameArgs`        | 2                             | anti-boucle : refus + observation explicite     |
+| `maxConsecutiveToolFailures` | 3                             | → Forced replanning, then graceful abandonment  |
+| `maxSameToolSameArgs`        | 2                             | Anti-loop: rejection + explicit observation     |
 
-Les budgets sont **des données**, portées par `AgentRun.budget`, pas des constantes compilées :
-une tâche « surveille ce déploiement » et une question météo n'ont pas le même profil.
+Budgets are **data**, carried inside `AgentRun.budget`, not hardcoded constants: a deployment monitor
+task and a weather lookup have fundamentally different profiles.
 
-### Annulation
+### Cancellation
 
-`POST /agent/runs/:id/cancel` → écrit `cancelRequestedAt` en base **et** publie sur
-`cancel:run:{id}`. Le worker écoute ce canal et détient un `AbortController` propagé jusqu'aux
-appels HTTP des outils. L'annulation est vérifiée à chaque garde de boucle _et_ pendant le
-streaming. Un outil déjà parti n'est pas magiquement annulé : on marque `ToolExecution.status =
-ABORTED` et, si l'outil expose une annulation (Browser Worker, Device Agent), on la propage.
+`POST /agent/runs/:id/cancel` → Sets `cancelRequestedAt` in the database **and** publishes to
+`cancel:run:{id}`. The worker subscribes to this channel and holds an `AbortController` passed down to
+HTTP tool calls. Cancellation is verified at each loop guard _and_ during token streaming. An in-flight
+action is handled cleanly: `ToolExecution.status = ABORTED` is recorded, and cancellation is forwarded
+if the target worker supports it (Browser Worker, Device Agent).
 
-### Reprise sur erreur d'outil
+### Recovery on Tool Failure
 
-Politique en cascade, décidée par `ToolFailurePolicy` et non par le modèle seul :
+Tiered policy managed by `ToolFailurePolicy`, not left solely to model inference:
 
-1. **Retry transparent** si `retryable` (429, 5xx, timeout réseau) — 3 tentatives, backoff
-   exponentiel + jitter, jamais pour un outil non idempotent sans clé d'idempotence.
-2. **Réinjection** de l'erreur normalisée au modèle (il peut corriger ses arguments).
-3. **Outil de repli** si la définition en déclare un (`search.web` → `browser.act`).
-4. **Abandon expliqué** : l'agent dit ce qui a échoué et pourquoi. Jamais de silence.
+1. **Transparent Retry** if `retryable` (429, 5xx, network timeout) — 3 attempts, exponential backoff
+   with jitter, never for non-idempotent operations lacking an idempotency key.
+2. **Re-injection** of normalized error to the model (allowing it to fix arguments).
+3. **Fallback Tool** if defined in the tool specification (e.g. `search.web` → `browser.act`).
+4. **Explained Abandonment**: The agent clearly articulates what failed and why. Never silent failure.
 
 ## 4. Planner
 
-Deux modes, choisis par un routeur bon marché (heuristique + classification LLM courte) :
+Two modes, selected by a fast routing heuristic and lightweight LLM classification:
 
-- **Mode réactif (défaut)** — pas de plan explicite ; la boucle ReAct suffit pour 80 % des
-  demandes (« quelle météo », « ajoute un rdv »). Moins de latence, moins de tokens.
-- **Mode planifié** — pour les demandes multi-étapes ou à effets de bord (« trouve un billet
-  Paris–Alger vendredi soir »), le planner produit un `Plan` structuré
-  (`structuredOutput()`), persisté en `Task`/`TaskStep`, affiché dans l'UI, et révisable :
-  après chaque étape la boucle peut replanifier si l'observation invalide le plan.
+- **Reactive Mode (Default)** — No explicit plan DAG; standard ReAct execution suffices for 80% of
+  requests ("what's the weather", "create a calendar reminder"). Lower latency and token usage.
+- **Planned Mode** — For complex multi-step missions or mutating side effects ("find flight options
+  for Friday evening"), the planner generates a structured `Plan` (`structuredOutput()`), persisted
+  into `Task`/`TaskStep`, visualized in the UI, and revisable: after each step, the loop can replan if
+  observations contradict assumptions.
 
-Le plan est un **artefact utilisateur** autant qu'un artefact interne : c'est ce que le mobile
-affiche pendant l'exécution, et ce qui rend l'agent lisible plutôt que magique.
+The plan is a **user-facing artifact** as well as internal state: rendered in the dashboard and mobile
+app during execution, making agent progress transparent and auditable.
 
-## 5. Assemblage du contexte
+## 5. Context Assembly
 
-Le `ContextAssembler` construit la fenêtre à chaque itération, avec un budget de tokens par
-section — jamais « on empile jusqu'à ce que ça déborde » :
+`ContextAssembler` builds the LLM prompt window on each iteration with strict token allocations per
+section — avoiding unconstrained token expansion:
 
-| Section                              | Budget indicatif | Source                                                 |
-| ------------------------------------ | ---------------- | ------------------------------------------------------ |
-| System prompt + identité + date/lieu | 5 %              | statique + `User`                                      |
-| Préférences utilisateur              | 5 %              | `UserPreference` (structuré, jamais inféré à la volée) |
-| Souvenirs pertinents                 | 15 %             | `Memory` via recherche hybride (§10)                   |
-| Résumé de conversation               | 10 %             | `ConversationSummary`                                  |
-| Fenêtre de messages récents          | 40 %             | `Message` (K derniers tours, intégraux)                |
-| Résultats d'outils du run courant    | 20 %             | `AgentStep` (troncature intelligente)                  |
-| Définitions d'outils                 | 5 %              | `ToolRegistry` filtré par permissions                  |
+| Section                              | Target Budget    | Source                                                |
+| ------------------------------------ | ---------------- | ----------------------------------------------------- |
+| System prompt + identity + datetime  | 5%               | Static template + `User` metadata                     |
+| User preferences                     | 5%               | `UserPreference` (structured, never inferred on fly)  |
+| Relevant memory items                | 15%              | `Memory` retrieved via hybrid search (see §10)        |
+| Conversation summary                 | 10%              | `ConversationSummary`                                 |
+| Recent message history               | 40%              | `Message` (last K turns, uncompressed)                |
+| Current run tool outputs             | 20%              | `AgentStep` (intelligent truncation)                  |
+| Available tool definitions           | 5%               | `ToolRegistry` filtered by permissions                |
 
-**Compaction** (§10.4) : quand la fenêtre dépasse le seuil, les tours les plus anciens sont
-remplacés par un résumé produit par un modèle rapide, les résultats d'outils volumineux sont
-remplacés par un extrait + une référence (`artifactId`) que l'agent peut re-consulter via un
-outil `artifact.read`. On ne perd jamais l'information : on la déplace hors du contexte.
+**Compaction**: When the context window reaches its threshold, older turns are replaced by a summary
+generated by a fast model. Large tool outputs are replaced by an excerpt and an `artifactId` reference
+that the agent can consult via an `artifact.read` tool. Information is never destroyed: it is moved
+out of the immediate inference context into storage.
 
-## 6. Ports de `@nexus/agent-core`
+## 6. `@nexus/agent-core` Ports
 
 ```ts
 interface AgentDeps {
   llm: LLMProvider;
-  tools: ToolRegistryView; // lecture seule, déjà filtrée par permissions
+  tools: ToolRegistryView; // Read-only, pre-filtered by user permissions
   executor: ToolExecutor;
   memory: MemoryPort;
-  store: AgentRunStore; // persistance des steps
-  events: EventPublisher; // → Redis → WS
-  clock: Clock; // injecté : tests déterministes
+  store: AgentRunStore; // Step persistence
+  events: EventPublisher; // → Redis → WebSocket
+  clock: Clock; // Injected for deterministic unit tests
   budget: BudgetGuard;
 }
 ```
 
-Aucune de ces dépendances n'est concrète dans le package. `agent-core` se teste intégralement
-avec un `FakeLLM` scripté et des outils factices, sans Postgres, Redis, ni réseau
+None of these dependencies are concrete inside the package. `agent-core` is tested exhaustively using a
+scripted `FakeLLM` and mock tools without requiring PostgreSQL, Redis, or external network connectivity
 (→ [15-testing](15-testing.md)).

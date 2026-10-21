@@ -1,38 +1,40 @@
-# ADR-007 — Device Agent en Node.js headless, distinct de l'app desktop
+# ADR-007 — Device Agent in Headless Node.js, Separate from Desktop App
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Le PC doit pouvoir exécuter des tâches (fichiers, shell, Docker, Git) demandées par l'agent, même
-quand l'application desktop est fermée. Il faut donc un démon. Deux questions : dans quel langage,
-et faut-il le fondre dans l'application Tauri ?
+The user's PC must be able to execute tasks (filesystem, shell, Docker, Git) requested by the agent,
+even when the desktop GUI application is closed. A daemon is therefore required. Two questions arise:
+what runtime/language to choose, and should it be bundled inside the Tauri desktop shell?
 
-## Décision
+## Decision
 
-Un **démon Node.js autonome** (`apps/device-agent`), installé comme service
-(Windows Service / launchd / systemd), distinct de l'application desktop. L'app Tauri l'installe,
-le supervise, affiche son état et ses logs, et peut le lancer en sidecar pour un usage simple.
+A **standalone Node.js daemon** (`apps/device-agent`), installed as a system service
+(Windows Service / launchd / systemd), distinct from the desktop GUI application. The Tauri app
+installs it, monitors it, displays its status and logs, and can run it as a local sidecar for
+lightweight usage.
 
-Distribution en binaire unique (Node SEA ou `pkg`), signé, avec auto-update vérifié par signature.
+Distribution as a single signed binary (Node SEA or `pkg`), with signature-verified auto-updates.
 
 ## Alternatives
 
-- **Écrire l'agent en Rust dans le cœur Tauri.** Meilleure empreinte mémoire et démarrage plus
-  rapide. Écarté pour deux raisons décisives : il faudrait **réimplémenter le protocole WebSocket
-  et tous les schémas en Rust**, créant exactement la dérive de contrat que le monorepo cherche à
-  éviter ; et l'agent cesserait de fonctionner quand l'app est fermée, sauf à écrire un second
-  service de toute façon.
-- **Pas de démon : tout passe par l'app desktop ouverte.** Simple, mais casse le cas d'usage
-  central (« lance les tests sur mon PC » depuis l'iPhone, PC allumé mais app fermée).
-- **Agent en Python.** Aucun bénéfice ici, et un runtime de plus à distribuer.
+- **Write the agent in Rust inside the Tauri core.** Smaller memory footprint and faster startup.
+  Rejected for two decisive reasons: we would have to **reimplement the WebSocket protocol and all
+  Zod schemas in Rust**, causing the exact contract drift the monorepo is built to avoid; and the
+  agent would cease running whenever the GUI window is closed, unless a second background service
+  were written anyway.
+- **No daemon: everything routes through the open desktop app.** Simple, but breaks the core use case
+  ("run the test suite on my PC" initiated from mobile while the PC is on but the GUI app is closed).
+- **Agent in Python.** No distinct benefit here, and introduces another runtime to package and
+  distribute to client machines.
 
-## Conséquences
+## Consequences
 
-**Positives** — `@nexus/device-protocol` et `@nexus/contracts` sont partagés tels quels : un seul
-protocole, typé, testé une fois. L'agent fonctionne sans UI. On peut l'installer sur une machine
-sans interface graphique (serveur personnel, NAS).
+**Positive** — `@nexus/device-protocol` and `@nexus/contracts` are shared directly: a single, typed,
+once-tested protocol. The agent operates without a display server. It can be deployed onto headless
+machines (home servers, NAS units).
 
-**Négatives, acceptées** — un runtime Node embarqué pèse ~50 Mo et consomme ~40 Mo de RSS au repos
-(acceptable sur un PC de développement) ; il faut gérer l'installation de service sur trois OS et
-la signature de code sur Windows et macOS (coût de certificat, à prévoir en phase 4).
+**Negative, accepted** — An embedded Node runtime weighs ~50 MB and consumes ~40 MB RSS idle
+(acceptable on modern workstations); service installation logic must be maintained across three OS
+families, alongside code signing certificates on Windows and macOS.

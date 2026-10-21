@@ -1,209 +1,171 @@
-# 12 — Clients : mobile, desktop, web
+# 12 — Clients: Mobile, Desktop, and Web
 
-## 1. Socle commun
+## 1. Common Foundation
 
-Les trois clients partagent `@nexus/sdk-client` : client REST typé, gestionnaire de connexion WS
-(reconnexion, reprise par `seq`, file d'envoi hors ligne), machine à états de run, et cache. Un
-client ne connaît **ni les outils, ni les providers LLM, ni la base**. Il connaît des
-conversations, des messages, des événements et des confirmations (contrainte C4).
+All three clients share `@nexus/sdk-client`: typed REST client, WebSocket connection manager
+(auto-reconnect, `seq` replay, offline dispatch queue), agent run state machine, and local cache. A
+client knows **neither backend tools, nor LLM providers, nor the database**. It knows conversations,
+messages, streaming events, and confirmation prompts (Constraint C4).
 
-État : **TanStack Query** pour l'état serveur, **Zustand** pour l'état d'interaction (run courant,
-buffer de streaming, enregistrement audio). Ne pas mettre les événements de streaming dans le
-cache Query : ils sont éphémères et à haute fréquence.
+State Management: **TanStack Query** for server-state caching, **Zustand** for interactive client
+state (active run state, streaming token buffers, audio recording lifecycle). High-frequency streaming
+deltas are kept out of Query cache to avoid rendering bottlenecks.
 
 ## 2. Mobile (Expo / React Native)
 
-**Stack** : Expo SDK (managed + dev client), Expo Router, `react-native-reanimated`,
-`expo-av` (audio), `expo-secure-store` (tokens), `expo-notifications` (push),
-`react-native-mmkv` (cache local), Nativewind ou StyleSheet + `@nexus/ui-tokens`.
+**Stack**: Expo SDK (managed + development build), Expo Router, `react-native-reanimated`,
+`expo-av` (audio capture), `expo-secure-store` (tokens), `expo-notifications` (push),
+`react-native-mmkv` (local storage), Nativewind / StyleSheet + `@nexus/ui-tokens`.
 
-**Écrans**
+**Screens**
 
-| Écran        | Contenu clef                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------- |
-| Conversation | fil de messages, streaming, cartes d'outils, cartes de confirmation, composer texte + micro |
-| Historique   | liste des conversations, recherche, épinglage, archivage                                    |
-| Tâches       | tâches en cours et planifiées, progression, résultats                                       |
-| Devices      | appareils, statut en ligne, appairage par QR, logs, révocation                              |
-| Permissions  | grants par outil, scopes, révocation, journal d'audit                                       |
-| Mémoire      | ce que l'assistant a retenu, édition, suppression                                           |
-| Settings     | providers, voix, modèle, budgets, confidentialité                                           |
+| Screen         | Key Contents                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| Conversation   | Message timeline, streaming tokens, tool cards, confirmation cards, text + mic composer   |
+| History        | Conversation list, search, pinning, archiving                                              |
+| Tasks          | Active and scheduled missions, progress tracking, result summaries                         |
+| Devices        | Paired machines, online status, QR enrollment, audit logs, revocation                      |
+| Permissions    | Tool grants, path scopes, instant revocation, audit log viewer                             |
+| Memory         | Long-term memory facts, inline editing, manual deletion                                     |
+| Settings       | Provider configurations, voice models, cost budgets, privacy toggles                       |
 
-**Le fil de conversation** est le cœur du produit. Il rend une **timeline d'événements**, pas
-seulement des messages :
+**The Conversation Timeline** is the core product interface. It renders an **event timeline**, not
+merely static chat bubbles:
 
 ```
 ┌──────────────────────────────────────────┐
-│ 👤 Regarde mes emails et dis-moi les      │
-│    importants                             │
+│ 👤 Check my inbox and highlight          │
+│    important emails                       │
 ├──────────────────────────────────────────┤
-│ ✳ Réflexion…            (pulse animé)     │
-│ ▸ Plan  1. lire  2. classer  3. résumer   │
-│ 🔧 mail.list          ✓ 1,2 s   34 emails │
-│ 🔧 mail.read          ⟳ 12/34   ▓▓▓░░░    │
+│ ✳ Thinking…             (animated pulse)  │
+│ ▸ Plan  1. read  2. classify  3. digest  │
+│ 🔧 mail.list          ✓ 1.2s   34 emails │
+│ 🔧 mail.read          ⟳ 12/34  ▓▓▓░░░    │
 │ ┌──────────────────────────────────────┐ │
-│ │ ⚠️ Confirmation requise               │ │
-│ │ mail.send → recruteur@x.com           │ │
-│ │ Objet : Re: proposition               │ │
-│ │ « Bonjour, merci pour votre… »        │ │
-│ │        [ Refuser ]  [ Envoyer ]       │ │
+│ │ ⚠️ Confirmation Required              │ │
+│ │ mail.send → recruiter@example.com    │ │
+│ │ Subject: Re: Proposal                │ │
+│ │ "Hello, thank you for your note..."  │ │
+│ │        [ Reject ]  [ Send ]          │ │
 │ └──────────────────────────────────────┘ │
-│ 🤖 Tu as 3 emails importants : …          │
-│    (texte en streaming)                   │
+│ 🤖 You have 3 important emails: …        │
+│    (streaming text output)                │
 └──────────────────────────────────────────┘
 ```
 
-Principes d'interface, non négociables :
+Non-Negotiable UI Principles:
 
-1. **Toute action réelle est visible.** Une carte d'outil apparaît pour chaque exécution, avec son
-   niveau de risque et sa durée. L'utilisateur ne découvre jamais après coup ce qui a été fait.
-2. **Les cartes de confirmation montrent le contenu exact**, pas un résumé — corps complet de
-   l'email, diff du fichier, commande shell avec son répertoire. Repli plié/déplié pour la place.
-3. **Les états d'attente sont différenciés** : « réflexion », « exécution de X », « attente de ta
-   réponse » ont trois animations distinctes. Un spinner unique rend l'agent opaque.
-4. **L'annulation est toujours à un geste**, pendant tout le run.
-5. **Optimiste et hors ligne** : le message part immédiatement en local avec `clientMessageId`,
-   se réconcilie à l'`ack`, et se ré-envoie à la reconnexion.
+1. **Every real-world action is visible.** A tool card renders for every execution, highlighting risk
+   tier, duration, and status. Users never discover post-hoc what actions were taken.
+2. **Confirmation cards show exact payloads**, not summaries — full email drafts, exact file diffs,
+   or shell commands with working directories. Collapsible for comfortable viewing.
+3. **Distinct waiting states**: "Thinking", "Executing tool X", and "Waiting for your input" feature
+   three distinct visual indicators. A generic spinner makes the assistant opaque.
+4. **Cancellation is always one tap away** throughout the entire run lifecycle.
+5. **Optimistic and offline-tolerant**: User messages appear locally immediately with a `clientMessageId`,
+   reconciling on server `ack`, and retrying upon reconnection.
 
-**Notifications push** : quand l'app est en arrière-plan, une confirmation en attente et la fin
-d'un run déclenchent un push. Une confirmation `CONFIRM` est approuvable depuis une action de
-notification ; une `CRITICAL` exige l'ouverture de l'app et une ré-authentification biométrique.
+**Push Notifications**: When the app is backgrounded, pending confirmations and completed runs trigger
+push alerts. A standard `CONFIRM` prompt can be approved directly via notification actions; a `CRITICAL`
+action strictly requires opening the app and completing biometric re-authentication.
 
 ## 3. Desktop (Tauri v2)
 
-**Choix** : Tauri v2 plutôt qu'Electron (→ [ADR-008](../adr/ADR-008-desktop-tauri.md)) — binaire
-~10 Mo contre ~120 Mo, empreinte mémoire moindre, modèle de permissions explicite, et surtout un
-cœur Rust déjà adapté au rôle d'agent local (accès système, service en arrière-plan, tray).
+**Choice**: Tauri v2 rather than Electron (→ [ADR-008](../adr/ADR-008-desktop-tauri.md)) — ~10 MB
+binary vs. ~120 MB, significantly lower memory footprint, explicit security capability model, and an
+underlying Rust foundation suited for host controller tasks (tray icon, process supervision).
 
-Le risque connu — la webview varie selon l'OS (WebView2 / WKWebView / WebKitGTK) — est accepté :
-l'UI reste volontairement simple, et la matrice de test couvre Windows en priorité (la machine
-cible), macOS ensuite.
+Known trade-off: Host OS webviews differ slightly (WebView2 on Windows, WKWebView on macOS, WebKitGTK
+on Linux). Mitigated by clean, functional UI styling without exotic CSS properties, prioritizing
+Windows first, followed by macOS.
 
-**Rôle double** :
+**Dual Purpose**:
 
-1. **Client** — même UI React que le web, réutilisation maximale des composants.
-2. **Coquille du Device Agent** — installe, supervise et affiche le démon Node (→ [06](06-devices.md)) :
-   statut, tâches en cours, logs en direct, éditeur de politique locale, bouton « pause » qui coupe
-   instantanément toute exécution locale.
+1. **Chat Client** — Shares identical React UI components with the web dashboard.
+2. **Device Agent Shell** — Installs, supervises, and monitors the background Node daemon (→ [06](06-devices.md)):
+   online status, running tasks, live logs, local policy editor, and an emergency "pause" button that
+   immediately freezes local execution.
 
-**Intégrations natives** : raccourci global (invocation instantanée), fenêtre « spotlight »,
-icône de barre d'état, notifications système, lancement au démarrage, deep links.
+**Native OS Integrations**: Global hotkey invocation, spotlight quick-entry window, system tray menu,
+desktop notifications, launch on boot, and deep-link handling.
 
-## 4. Web (optionnel, phase 5)
+## 4. Web Dashboard
 
-Vite + React, mêmes composants que le desktop. Sert deux besoins : accès depuis une machine non
-équipée, et surface de démonstration. Ne dispose évidemment d'aucune capacité device.
-Contraintes propres : CSP stricte, tokens en mémoire + refresh en cookie `HttpOnly` `SameSite=Strict`
-(le seul endroit où un cookie est utilisé), pas de stockage de refresh en `localStorage`.
+Vite + React, sharing components with the desktop shell. Addresses two needs: quick access from
+un-enrolled browsers and administrative supervision. Features no device-agent capabilities.
+Enforces strict CSP, ephemeral tokens in memory, and rotating refresh tokens inside `HttpOnly`
+`SameSite=Strict` cookies (the only place cookies are used), avoiding `localStorage` refresh storage.
 
-## 5. Ce qui est partagé, ce qui ne l'est pas
+## 5. Shared vs. Platform-Specific Code
 
-| Partagé                                 | Spécifique                              |
-| --------------------------------------- | --------------------------------------- |
-| `@nexus/contracts`, `@nexus/sdk-client` | rendu natif RN vs DOM                   |
-| logique de run, réducteurs d'événements | navigation, animations                  |
-| design tokens (`@nexus/ui-tokens`)      | composants d'interface                  |
-| validation, types, codes d'erreur       | audio, notifications, stockage sécurisé |
+| Shared Components                       | Platform-Specific Implementations      |
+| --------------------------------------- | -------------------------------------- |
+| `@nexus/contracts`, `@nexus/sdk-client` | React Native native views vs. DOM HTML |
+| Run state machine, event reducers       | Navigation stacks, gesture animations  |
+| Design tokens (`@nexus/ui-tokens`)      | Low-level component wrappers           |
+| Validation schemas, error taxonomies    | Audio recording, biometric storage     |
 
-On ne tente **pas** de partager les composants d'UI entre React Native et le web
-(`react-native-web` ajoute une couche de compromis pour un gain faible sur trois écrans). On
-partage la logique, on réécrit la présentation.
+We do **not** use `react-native-web`. We share business logic, hooks, and contracts, while maintaining
+clean platform-native presentation layers.
 
-## Mode hors ligne, mise à jour, télémétrie de crash
+## Offline Handling, Auto-Updates, and Crash Telemetry
 
-### Mode hors ligne : ce qu'on refuse de garder
+### Offline Queue: Preventing Duplicate Actions
 
-Une file d'attente hors ligne est une machine à doubler les actions. Le
-téléphone envoie « range mes mails », perd le réseau avant la réponse, réessaie
-à la reconnexion — et la demande part deux fois. Le module de rattrapage porte
-déjà cet avertissement : « un rattrapage qui pourrait créer une tâche
-transformerait une coupure réseau en seconde commande ».
+An unconstrained offline queue risks doubling user actions. A user sends "clean up my inbox", loses
+network before the response arrives, and reconnects — sending the command twice.
 
-Trois règles, et chacune ferme une voie de doublon.
+Three strict rules prevent duplicate execution:
 
-**La clé d'idempotence naît à la mise en file, pas à l'envoi.** Les trois
-tentatives d'une même entrée portent donc la même clé, et le cœur reconnaît la
-répétition. Une clé générée à l'envoi serait différente à chaque essai,
-c'est-à-dire inutile.
+**Idempotency Keys Generated at Queue Time, Not Dispatch Time.** Subsequent network retry attempts
+carry the identical token, allowing the backend to recognize repetitions.
 
-**On ne met en file que ce que le serveur sait dédupliquer.** C'est une limite
-réelle — une seule route honore `Idempotency-Key` aujourd'hui — et la nommer
-vaut mieux que l'ignorer : sur une route qui ne l'honore pas, mettre en file
-_garantit_ le doublon au lieu de le risquer. La file refuse, et le dit. La liste
-est blanche, pas noire : une route ajoutée demain n'est pas mise en file par
-défaut, parce que se tromper dans ce sens coûte une action à refaire, et dans
-l'autre une action faite deux fois.
+**Only Deduplicated Routes Can Be Queued.** Only routes that explicitly support `Idempotency-Key` are
+eligible for offline queueing. On unsupported endpoints, offline queueing would guarantee duplicate
+mutations; the client therefore rejects queueing and informs the user immediately.
 
-**Une entrée expire** — vingt-quatre heures. Une intention dont le contexte a
-disparu n'est plus une intention : « réponds à ce mail » mis en file mardi n'a
-aucun sens vendredi, et l'exécuter serait pire que de l'avoir perdu.
+**Time-to-Live Expiration.** Queue items expire after 24 hours. An intent whose temporal context has
+expired must not execute stale actions ("reply to this urgent message" queued Tuesday makes no sense on Friday).
 
-Et ce qui n'entre **jamais** en file : les confirmations. Approuver hors ligne
-une action à risque puis l'envoyer trois heures plus tard, c'est approuver
-quelque chose qu'on n'a pas relu — et qui a peut-être changé. Une confirmation
-se donne en ligne, devant ce qu'elle autorise.
+**Confirmation Prompts Are Never Queued Offline.** Approving a mutating action offline to dispatch
+hours later is dangerous. Confirmations must be reviewed and authorized in real time against active state.
 
-L'envoi respecte l'ordre et s'arrête au premier échec réessayable : deux
-messages envoyés à l'envers racontent une autre conversation, et continuer
-après un échec réseau enverrait le second message d'une suite dont le premier
-n'est pas passé. Un refus **définitif**, lui, est écarté — il ne sera pas
-meilleur demain, et le garder bloquerait toute la file derrière lui.
+Queue processing respects strict sequence order, halting on the first retryable network error to
+preserve message causality. Definite 4xx rejections are discarded to prevent queue head-of-line blocking.
 
-### Mise à jour automatique : décider, jamais appliquer
+### Automatic Updates: Deciding, Never Executing
 
-`UpdatePolicy` lit un flux de versions et dit s'il y a quelque chose à
-installer. Il n'installe rien, ne télécharge rien, n'exécute rien — c'est le
-travail de l'hôte (Tauri pour le bureau, le magasin pour le mobile), qui
-possède la clé publique vérifiant la signature du paquet.
+`UpdatePolicy` evaluates release version feeds and reports whether an update is available. It downloads,
+installs, and executes nothing — that responsibility belongs strictly to the platform host (Tauri on
+desktop, app stores on mobile), which holds the public key validating package signatures.
 
-Un module qui déciderait **et** appliquerait serait un installeur, c'est-à-dire
-la pièce la plus sensible de la chaîne : celle qui doit être la plus petite et
-la plus auditée. Celui-ci est une fonction de comparaison avec des règles, et il
-se teste entièrement — y compris le fait qu'il n'expose aucune méthode
-d'installation.
+Safety Rules:
 
-Les refus sont le contenu réel :
+| Rejection Case          | Rationale                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| Unsigned bundle         | An unsigned package is untrusted: whoever serves it could inject arbitrary malicious code |
+| Version downgrade       | Downgrade attacks could reintroduce previously patched security vulnerabilities            |
+| Channel switching       | Stable production installs must not jump to beta channels without explicit user intent    |
+| Major version upgrades  | Breaking changes require database or config migrations; never auto-applied silently        |
 
-| refus               | raison                                                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| version non signée  | un flux sans signature n'est pas incomplet, il est non fiable : qui le sert peut y mettre n'importe quel binaire |
-| retour en arrière   | permettrait de réinstaller une faille corrigée                                                                   |
-| changement de canal | une installation stable ne doit pas se retrouver en bêta parce que le flux en a proposé une                      |
-| version majeure     | peut demander une migration ; l'appliquer pendant la nuit serait une mauvaise surprise au réveil                 |
+Malformed feed entries are ignored rather than failing the evaluation, ensuring feed issues do not
+block critical security patch installations.
 
-Le flux est une donnée non fiable : chaque entrée est filtrée sur ses propres
-mérites, et une entrée malformée est **ignorée** plutôt que de faire échouer la
-décision — sans quoi un flux abîmé empêcherait toute mise à jour, y compris
-celle qui corrige le problème.
+### Crash Telemetry: Strictly Local, Zero Outbound Network Calls
 
-### Télémétrie de crash : locale, et sans réseau
+Crash dumps are written **locally on the workstation**. Nothing is transmitted to external telemetry
+servers: zero third-party endpoints, zero telemetry API keys, zero outbound network queries. A crash
+trace contains file paths, conversation snippets, and runtime context — transmitting this by default
+violates user privacy.
 
-Écrire la trace d'un plantage **sur la machine**. Rien ne part : pas de point
-de collecte, pas de clé d'API, aucune requête sortante. Un rapport de crash
-contient des chemins de fichiers, des noms de conversations, parfois des
-fragments de données — l'envoyer par défaut serait exactement la décision qu'un
-assistant personnel ne doit pas prendre à la place de son propriétaire.
+The `share()` helper exports an explicitly redacted summary that the user can inspect before sharing.
+The module contains no networking dependencies, verified by unit tests.
 
-`share()` rend le texte, rédigé, et l'appelant en fait ce qu'il veut. Le module
-n'a pas de réseau, donc il ne peut pas envoyer par accident, et un test le
-vérifie.
+Three safeguards are enforced:
 
-Trois choses se trompent systématiquement quand on écrit cela à la main, et sont
-donc traitées ici :
-
-- **les secrets** — la rédaction passe par celle du reste du dépôt, pas par un
-  filtre maison, et couvre le message, la pile _et_ le contexte, où une URL avec
-  jeton se glisse souvent ;
-- **la taille** — un plantage en boucle écrirait mille rapports et remplirait le
-  disque, c'est-à-dire transformerait un bug en panne ;
-- **la répétition** — cent fois la même pile n'apporte rien de plus que la
-  première, et noie la seconde cause, qui est souvent la vraie. Le compteur
-  monte, la liste ne s'allonge pas.
-
-### Ce qui reste à faire
-
-- **Une seule route honore `Idempotency-Key`.** Le mode hors ligne est donc
-  limité à l'envoi de messages. Étendre la déduplication côté serveur est ce qui
-  élargira la file, et non une modification du client.
-- **Aucune surface n'affiche encore la file ni les rapports de crash.** Les
-  modules et leurs tests existent ; les écrans restent à faire.
+- **Strict Redaction**: Uses the centralized regex redaction engine across error messages, stack traces,
+  and context metadata;
+- **Disk Bounding**: Crash loops could otherwise generate thousands of dumps and fill disk space;
+  reports are strictly bounded;
+- **Deduplication**: Repeated identical stack traces increment an occurrence counter rather than
+  appending redundant dump files.

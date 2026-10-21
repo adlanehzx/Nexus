@@ -1,125 +1,126 @@
-# 08 — Protocole WebSocket
+# 08 — WebSocket Protocol
 
-## 1. Décisions de base
+## 1. Core Architecture Decisions
 
-- **Une seule connexion** par client, multiplexée par canaux (`conversation:{id}`, `run:{id}`,
-  `user:{id}`, `device:{id}`). Ouvrir un socket par run est un anti-pattern mobile : coûteux en
-  batterie, fragile en réseau cellulaire.
-- **WebSocket natif** (`ws`), pas Socket.IO : un protocole propriétaire n'apporte rien ici et
-  complique le client Python/Rust éventuel (→ [ADR-009](../adr/ADR-009-ws-protocol.md)).
-- **Deux endpoints** : `/ws/client` (utilisateurs) et `/ws/device` (Device Agents). Séparer les
-  surfaces d'authentification et de messages évite les confusions de privilèges.
-- **JSON par défaut**, MessagePack négociable ; les payloads audio passent en frames binaires.
+- **Single Connection** per client session, multiplexed across channels (`conversation:{id}`, `run:{id}`,
+  `user:{id}`, `device:{id}`). Spawning a socket per run is an anti-pattern on mobile: drains battery
+  and is vulnerable to mobile cellular drops.
+- **Native WebSockets** (`ws`), avoiding Socket.IO: proprietary protocols offer no advantage here and
+  complicate non-JS clients (Python/Rust workers) (→ [ADR-009](../adr/ADR-009-ws-protocol.md)).
+- **Two Distinct Endpoints**: `/ws/client` (user interactive sessions) and `/ws/device` (Device Agents).
+  Separating authentication mechanisms and message types avoids privilege confusion.
+- **JSON Encoding** by default, MessagePack negotiable; raw audio payloads stream over binary frames.
 
-## 2. Enveloppe
+## 2. Standard Envelope
 
-Chaque message, dans les deux sens, a la même forme :
+Every frame, in both directions, follows a consistent schema:
 
 ```jsonc
 {
-  "v": 1, // version du protocole ; incompatibilité → close(4400)
-  "id": "01J...", // ULID du message (dédup côté client)
+  "v": 1, // Protocol major version; mismatch → close(4400)
+  "id": "01J...", // ULID of the frame (client-side deduplication)
   "type": "agent.token",
   "ts": "2026-09-01T10:00:00.123Z",
-  "seq": 42, // monotone par canal ; base de la reprise
+  "seq": 42, // Monotonic sequence per channel; basis of replay
   "channel": "run:01J...",
   "payload": {},
 }
 ```
 
-Un `z.discriminatedUnion('type', ...)` dans `@nexus/contracts` définit l'ensemble ; le client et
-le serveur valident à la réception. Un message inconnu est ignoré et journalisé, jamais fatal :
-c'est ce qui permet d'ajouter des événements sans casser les vieux clients mobiles.
+A `z.discriminatedUnion('type', ...)` in `@nexus/contracts` defines the entire catalog; both client and
+server parse frames on receipt. Unknown frame types are logged and ignored, never fatal: this allows
+introducing new event types without breaking older mobile clients.
 
-## 3. Établissement de connexion
+## 3. Connection Handshake
 
 ```
-1. Client   WSS /ws/client?v=1  (pas de token dans l'URL : il finirait dans les logs)
-2. Serveur  attend le premier frame ; 5 s de grâce
+1. Client   WSS /ws/client?v=1  (Zero tokens in query parameters: avoids log leakage)
+2. Server   Awaits first frame; 5-second grace period
 3. Client   { type: "auth", payload: { accessToken } }
-4. Serveur  { type: "connection.ready", payload: { sessionId, serverTime, limits, features } }
+4. Server   { type: "connection.ready", payload: { sessionId, serverTime, limits, features } }
 5. Client   { type: "subscribe", payload: { channels: ["conversation:X"], since: { "run:Y": 41 } } }
-6. Serveur  rejoue les événements manquants depuis le Redis Stream, puis passe en direct
+6. Server   Replays missed frames from Redis Stream, then transitions to real-time broadcast
 ```
 
-`since` est ce qui rend le protocole **reprenable** : un tunnel qui passe en 4G ne perd pas la
-réponse en cours. Les événements sont conservés 15 minutes dans un Redis Stream par run.
+`since` makes the protocol **resumable**: switching between Wi-Fi and cellular does not lose in-flight
+tokens. Run events are retained for 15 minutes in a per-run Redis Stream.
 
-## 4. Client → Serveur
+## 4. Client → Server Messages
 
 | Type                                         | Payload                                                      | Notes                           |
 | -------------------------------------------- | ------------------------------------------------------------ | ------------------------------- |
-| `auth`                                       | `{ accessToken }`                                            | obligatoire en premier          |
-| `subscribe` / `unsubscribe`                  | `{ channels[], since? }`                                     | autorisation vérifiée par canal |
-| `message.send`                               | `{ conversationId, content, clientMessageId, attachments? }` | `clientMessageId` = idempotence |
-| `run.cancel`                                 | `{ runId, reason? }`                                         |                                 |
-| `confirmation.respond`                       | `{ confirmationId, decision, remember?, nonce }`             | miroir de l'API REST            |
-| `voice.start` / `voice.chunk` / `voice.stop` | frames binaires                                              | streaming STT                   |
-| `typing`                                     | `{ conversationId }`                                         | présence multi-appareils        |
-| `ping`                                       | `{}`                                                         | heartbeat applicatif, 25 s      |
+| `auth`                                       | `{ accessToken }`                                            | Mandatory as initial frame      |
+| `subscribe` / `unsubscribe`                  | `{ channels[], since? }`                                     | Authorization checked per channel|
+| `message.send`                               | `{ conversationId, content, clientMessageId, attachments? }` | `clientMessageId` = idempotency |
+| `run.cancel`                                 | `{ runId, reason? }`                                         | Graceful cooperative abort      |
+| `confirmation.respond`                       | `{ confirmationId, decision, remember?, nonce }`             | Mirrors REST API route          |
+| `voice.start` / `voice.chunk` / `voice.stop` | Binary audio frames                                          | Streaming STT dictation         |
+| `typing`                                     | `{ conversationId }`                                         | Cross-device presence indicators|
+| `ping`                                       | `{}`                                                         | Heartbeat ping, every 25s       |
 
-## 5. Serveur → Client
+## 5. Server → Client Messages
 
-| Type                            | Payload                                                                  | Sémantique                                    |
+| Type                            | Payload                                                                  | Semantics                                     |
 | ------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------- |
-| `connection.ready`              | `{ sessionId, limits, features }`                                        | après auth                                    |
-| `message.created`               | `Message`                                                                | echo, y compris vers les **autres** appareils |
-| `run.started`                   | `{ runId, mode, budget }`                                                |                                               |
-| `run.status`                    | `{ runId, status, iteration }`                                           | transitions de la machine à états             |
-| `agent.thinking`                | `{ runId, label }`                                                       | alimente l'animation mobile                   |
-| `agent.plan`                    | `{ runId, steps[] }`                                                     | plan affiché et mis à jour                    |
-| `agent.token`                   | `{ runId, messageId, delta, index }`                                     | streaming ; coalescé (§7)                     |
-| `agent.message`                 | `Message`                                                                | message assistant complet et persisté         |
-| `tool.started`                  | `{ execId, runId, tool, title, riskLevel, argsPreview }`                 | `argsPreview` rédigé                          |
-| `tool.progress`                 | `{ execId, pct?, label?, chunk?, screenshotUrl? }`                       | browser, shell, upload                        |
-| `tool.result`                   | `{ execId, ok, summary, artifacts[], durationMs }`                       |                                               |
-| `confirmation.requested`        | `{ confirmationId, title, summary, diff?, riskLevel, expiresAt, nonce }` | déclenche la carte + push                     |
-| `confirmation.resolved`         | `{ confirmationId, decision, by }`                                       | ferme la carte sur tous les appareils         |
-| `run.completed`                 | `{ runId, messageId, usage }`                                            |                                               |
-| `run.failed`                    | `{ runId, error: { code, userMessage } }`                                | jamais de stack trace                         |
-| `run.cancelled` / `run.partial` | `{ runId, summary }`                                                     |                                               |
-| `device.status`                 | `{ deviceId, status }`                                                   | badge de disponibilité                        |
-| `memory.updated`                | `{ memoryId, kind }`                                                     | « j'ai retenu que… »                          |
-| `error`                         | `{ code, message, retryable, correlationId }`                            | erreur de protocole                           |
-| `pong`                          | `{ serverTime }`                                                         |                                               |
+| `connection.ready`              | `{ sessionId, limits, features }`                                        | Emitted upon successful auth                  |
+| `message.created`               | `Message`                                                                | Broadcast, including to other active devices  |
+| `run.started`                   | `{ runId, mode, budget }`                                                | Run lifecycle kickoff                         |
+| `run.status`                    | `{ runId, status, iteration }`                                           | State machine transition notifications        |
+| `agent.thinking`                | `{ runId, label }`                                                       | Drives mobile UI progress animations          |
+| `agent.plan`                    | `{ runId, steps[] }`                                                     | Live plan DAG updates                         |
+| `agent.token`                   | `{ runId, messageId, delta, index }`                                     | Streamed text tokens; coalesced (§7)          |
+| `agent.message`                 | `Message`                                                                | Final assistant message, persisted in DB      |
+| `tool.started`                  | `{ execId, runId, tool, title, riskLevel, argsPreview }`                 | Redacted argument preview                     |
+| `tool.progress`                 | `{ execId, pct?, label?, chunk?, screenshotUrl? }`                       | Browser screenshots, shell stdout chunks     |
+| `tool.result`                   | `{ execId, ok, summary, artifacts[], durationMs }`                       | Final tool result                             |
+| `confirmation.requested`        | `{ confirmationId, title, summary, diff?, riskLevel, expiresAt, nonce }` | Triggers prompt card + push notification      |
+| `confirmation.resolved`         | `{ confirmationId, decision, by }`                                       | Dismisses prompt card across all user devices |
+| `run.completed`                 | `{ runId, messageId, usage }`                                            | Terminal completion with token metrics        |
+| `run.failed`                    | `{ runId, error: { code, userMessage } }`                                | Clean error format, never stack traces        |
+| `run.cancelled` / `run.partial` | `{ runId, summary }`                                                     | Partial completion status                     |
+| `device.status`                 | `{ deviceId, status }`                                                   | Device online/offline badges                  |
+| `memory.updated`                | `{ memoryId, kind }`                                                     | Subtle notification of learned facts          |
+| `error`                         | `{ code, message, retryable, correlationId }`                            | Protocol-level errors                         |
+| `pong`                          | `{ serverTime }`                                                         | Heartbeat response                            |
 
-## 6. Canal device (`/ws/device`)
+## 6. Device Channel (`/ws/device`)
 
-| Sens | Type                                 | Rôle                                                            |
-| ---- | ------------------------------------ | --------------------------------------------------------------- |
-| →    | `device.auth`                        | challenge signé Ed25519                                         |
-| ←    | `device.ready`                       | politique attendue, version de protocole                        |
-| →    | `device.heartbeat`                   | 20 s ; charge, version, tâches en cours                         |
-| ←    | `device.task.assign`                 | `{ taskId, tool, args, idemKey, deadline }`                     |
-| →    | `device.task.accepted` / `.rejected` | rejet motivé (policy, capacité)                                 |
-| →    | `device.task.progress`               | stdout/stderr en chunks, pourcentage                            |
-| →    | `device.task.result`                 | `{ ok, output, exitCode, metrics }`                             |
-| ←    | `device.task.cancel`                 | annulation coopérative                                          |
-| ←    | `device.policy.sync`                 | le serveur demande la politique locale courante (lecture seule) |
+| Direction | Type                                 | Role                                                            |
+| --------- | ------------------------------------ | --------------------------------------------------------------- |
+| →         | `device.auth`                        | Ed25519 cryptographic challenge signature                       |
+| ←         | `device.ready`                       | Policy acknowledgment and protocol version negotiation          |
+| →         | `device.heartbeat`                   | Every 20s: system load, version, active running tasks           |
+| ←         | `device.task.assign`                 | `{ taskId, tool, args, idemKey, deadline }`                     |
+| →         | `device.task.accepted` / `.rejected` | Rejection with explanation (local policy denial, missing deps)  |
+| →         | `device.task.progress`               | stdout/stderr chunks and execution percentage                   |
+| →         | `device.task.result`                 | `{ ok, output, exitCode, metrics }`                             |
+| ←         | `device.task.cancel`                 | Cooperative task cancellation                                   |
+| ←         | `device.policy.sync`                 | Server queries current active local policy (read-only)          |
 
-Le serveur ne peut **jamais** modifier la politique locale par ce canal. C'est intentionnel.
+The server **never** modifies local security policy over this channel. This is an invariant architectural constraint.
 
-## 7. Backpressure, coalescence, limites
+## 7. Backpressure, Token Coalescence, and Limits
 
-- **Coalescence des tokens** : les deltas sont agrégés par fenêtre de ~50 ms ou 40 caractères.
-  Envoyer un frame par token détruit la batterie du mobile pour aucun gain perceptible.
-- **Buffer borné** : si le client ne consomme pas (`bufferedAmount` > 1 Mo), on dégrade — on
-  cesse d'envoyer `agent.token` et on ne garde que les événements d'état ; le texte complet
-  arrivera dans `agent.message`. Perdre du streaming est acceptable, perdre l'état ne l'est pas.
-- **Limites** : 1 Mo par frame, 20 messages/s par connexion, 5 connexions par utilisateur.
-- **Heartbeat** : ping applicatif 25 s, timeout 60 s. Le mobile en arrière-plan ferme sa
-  connexion et bascule sur les **push notifications** pour les confirmations et les fins de run.
+- **Token Coalescence**: Deltas aggregate across ~50ms or 40-character windows. Emitting a frame per
+  individual token causes unnecessary mobile CPU wakeups and battery drain for no perceived benefit.
+- **Bounded Buffering**: If a client falls behind (`bufferedAmount` > 1 MB), we throttle gracefully —
+  temporarily dropping high-frequency `agent.token` deltas while preserving lifecycle state events.
+  The full response arrives in the final `agent.message`. Sacrificing streaming smoothness is acceptable;
+  losing operational state is not.
+- **Connection Limits**: 1 MB max frame payload, 20 messages/sec per connection, 5 concurrent connections per user.
+- **Heartbeats**: Application ping every 25s, timeout after 60s. Backgrounded mobile clients close
+  active sockets and rely on **push notifications** for confirmation prompts and completions.
 
-## 8. Codes de fermeture
+## 8. WebSocket Close Codes
 
-| Code | Sens                                                                |
-| ---- | ------------------------------------------------------------------- |
-| 4400 | version de protocole incompatible → le client doit se mettre à jour |
-| 4401 | auth manquante ou invalide                                          |
-| 4403 | canal non autorisé                                                  |
-| 4408 | timeout d'authentification                                          |
-| 4429 | rate limit dépassé                                                  |
-| 4500 | erreur serveur → reconnexion avec backoff                           |
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| 4400 | Incompatible protocol version → client upgrade required               |
+| 4401 | Missing or invalid authentication token                               |
+| 4403 | Unauthorized channel subscription attempt                             |
+| 4408 | Authentication handshake timeout                                      |
+| 4429 | Rate limit exceeded                                                   |
+| 4500 | Server error → client reconnects with exponential backoff             |
 
-Le client reconnecte avec backoff exponentiel + jitter (1 s → 30 s), **sauf** sur 4400 et 4401
-(4401 déclenche d'abord un rafraîchissement de token, puis une seule nouvelle tentative).
+Clients reconnect using exponential backoff with jitter (1s → 30s), **except** on 4400 (fatal) and
+4401 (triggers a token refresh cycle prior to one retry attempt).

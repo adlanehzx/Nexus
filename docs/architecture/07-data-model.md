@@ -1,106 +1,104 @@
-# 07 — Modèle de données
+# 07 — Data Model
 
-PostgreSQL 16 + extension `pgvector`. Prisma pour le schéma, les migrations et le typage.
-Toutes les clefs primaires sont des **UUID v7** (triables par le temps, index-friendly, non
-devinables). Tous les timestamps sont `timestamptz` en UTC.
+PostgreSQL 16 + `pgvector` extension. Prisma manages schema definitions, migrations, and TypeScript
+type generation. All primary keys are **UUID v7** (time-sortable, B-tree friendly, cryptographically
+unguessable). All timestamps use `timestamptz` stored in UTC.
 
-## 1. Vue d'ensemble
+## 1. Entity Overview
 
 ```mermaid
 erDiagram
-  User ||--o{ Device : possède
-  User ||--o{ Session : ouvre
-  User ||--o{ Conversation : possède
-  User ||--o{ PermissionGrant : détient
-  User ||--o{ Memory : accumule
-  User ||--o{ UserPreference : configure
-  User ||--o{ Credential : stocke
-  User ||--o{ Budget : consomme
-  Conversation ||--o{ Message : contient
-  Conversation ||--o{ AgentRun : déclenche
-  Conversation ||--o| ConversationSummary : résume
-  AgentRun ||--o{ AgentStep : journalise
-  AgentRun ||--o{ ToolExecution : effectue
-  AgentRun ||--o{ Confirmation : demande
-  AgentRun ||--o| Task : matérialise
-  Task ||--o{ TaskStep : décompose
-  Tool ||--o{ ToolExecution : instancie
-  Tool }o--o{ PermissionGrant : requiert
-  Device ||--o{ DeviceTask : exécute
-  ToolExecution ||--o| DeviceTask : délègue
-  ToolExecution ||--o{ Artifact : produit
-  McpServer ||--o{ Tool : expose
+  User ||--o{ Device : owns
+  User ||--o{ Session : opens
+  User ||--o{ Conversation : owns
+  User ||--o{ PermissionGrant : holds
+  User ||--o{ Memory : accumulates
+  User ||--o{ UserPreference : configures
+  User ||--o{ Credential : stores
+  User ||--o{ Budget : consumes
+  Conversation ||--o{ Message : contains
+  Conversation ||--o{ AgentRun : triggers
+  Conversation ||--o| ConversationSummary : summarizes
+  AgentRun ||--o{ AgentStep : logs
+  AgentRun ||--o{ ToolExecution : executes
+  AgentRun ||--o{ Confirmation : requests
+  AgentRun ||--o| Task : materializes
+  Task ||--o{ TaskStep : decomposes
+  Tool ||--o{ ToolExecution : instantiates
+  Tool }o--o{ PermissionGrant : requires
+  Device ||--o{ DeviceTask : executes
+  ToolExecution ||--o| DeviceTask : delegates
+  ToolExecution ||--o{ Artifact : produces
+  McpServer ||--o{ Tool : exposes
 ```
 
-## 2. Identité & accès
+## 2. Identity and Access
 
 **User** — `id, email, displayName, locale, timezone, status, createdAt, updatedAt`
-Aucun mot de passe en clair ; hash Argon2id dans `AuthCredential` (séparée, pour pouvoir la lire
-sans jamais charger le hash par accident).
+Zero plaintext passwords; Argon2id password hash isolated inside `AuthCredential` (separated so that
+queries for `User` records never accidentally load cryptographic password hashes).
 
-**Session** — session d'authentification, **distincte** d'une conversation.
+**Session** — Authentication session, **distinct** from conversational context.
 `id, userId, deviceId?, refreshTokenHash, userAgent, ip, expiresAt, revokedAt, lastUsedAt`
-Rotation du refresh token à chaque usage ; réutilisation d'un token déjà consommé = vol présumé →
-révocation de toute la famille de sessions.
+Rotating refresh tokens on every issuance; replay of an already consumed refresh token indicates theft
+and immediately revokes the entire associated session family.
 
 **Device** — `id, userId, name, platform, publicKey, agentVersion, status(ONLINE|OFFLINE|REVOKED),
 capabilities Json, policyHash, lastSeenAt, pairedAt, revokedAt`
-`capabilities` est déclaré par l'agent (`fs`, `shell`, `docker`, `git`…) et borne ce que le
-serveur peut lui demander.
+`capabilities` are advertised by the device agent (`fs`, `shell`, `docker`, `git`, etc.) and constrain
+what tasks the server may dispatch to it.
 
-**Credential** — coffre des identifiants tiers (OAuth Google/GitHub, clefs API, cookies de site).
+**Credential** — Vault for third-party user credentials (Google/GitHub OAuth tokens, API keys, session cookies).
 `id, userId, provider, scopes, ciphertext, iv, authTag, keyVersion, expiresAt, rotatedAt`
-Chiffrement enveloppe AES-256-GCM ; jamais exposé par l'API ; jamais visible du LLM
+AES-256-GCM envelope encryption; never exposed across API responses; never exposed to LLM prompts
 (→ [09-security](09-security-permissions.md) §5).
 
-## 3. Conversation
+## 3. Conversations and Messages
 
 **Conversation** — `id, userId, title, status, pinnedAt, lastMessageAt, tokenCount, archivedAt`
 
 **Message** — `id, conversationId, role(USER|ASSISTANT|SYSTEM|TOOL), content Jsonb,
-contentText (généré, pour la recherche plein texte), toolCallId?, runId?, tokensIn, tokensOut,
+contentText (generated full-text search column), toolCallId?, runId?, tokensIn, tokensOut,
 model?, createdAt, editedAt, status`
-`content` est un tableau de blocs typés (`text`, `tool_call`, `tool_result`, `image`, `audio`) et
-non une chaîne : c'est ce qui permet de rendre l'UI riche et de recomposer le contexte fidèlement
-pour n'importe quel provider LLM.
+`content` is an array of typed blocks (`text`, `tool_call`, `tool_result`, `image`, `audio`) rather
+than a raw string, enabling rich UI rendering and accurate context reconstruction across different LLMs.
 
 **ConversationSummary** — `id, conversationId, uptoMessageId, summary, tokens, model, createdAt`
-Résumés cumulatifs pour la compaction ; on garde l'historique des résumés (débogage, régression).
+Cumulative compaction summaries; summary history is retained for debugging and regression audits.
 
-## 4. Agent
+## 4. Agent Execution State
 
 **AgentRun** — `id, conversationId, userId, triggerMessageId, status, mode(REACTIVE|PLANNED),
 iteration, maxIterations, budget Jsonb, usage Jsonb, model, startedAt, endedAt,
 cancelRequestedAt, error Jsonb, resumeCursor Jsonb`
-`resumeCursor` est ce qui rend le run reprenable après une confirmation ou un crash.
+`resumeCursor` allows runs to resume cleanly following human confirmations or unexpected worker restarts.
 
 **AgentStep** — `id, runId, index, type(OBSERVE|REASON|PLAN|TOOL_CALL|TOOL_RESULT|CONFIRM|
 COMPACT|FINALIZE), input Jsonb, output Jsonb, tokensIn, tokensOut, costUsd, latencyMs,
 error Jsonb, createdAt`
-Contrainte `UNIQUE(runId, index)` : elle garantit l'exactly-once logique lors d'une reprise.
+`UNIQUE(runId, index)` constraint: guarantees logical exactly-once step transitions upon resume.
 
-**Task / TaskStep** — matérialisation utilisateur d'un plan.
+**Task / TaskStep** — User-facing plan materialization.
 `Task: id, userId, runId?, title, description, status, priority, scheduledFor?, recurrence?,
 progress, resultSummary, createdAt`
 `TaskStep: id, taskId, index, title, status, toolExecutionId?, output`
-`Task` sert aussi aux tâches **planifiées** ou récurrentes (« chaque matin, résume mes mails »).
+`Task` also represents scheduled or recurring autonomous missions ("Every morning, summarize industry news").
 
-## 5. Outils
+## 5. Tools and Executions
 
-**Tool** — catalogue persisté (nécessaire pour l'UI, les permissions et l'audit, même quand la
-définition vient de MCP).
+**Tool** — Persisted tool catalog (enables UI permission inspection and audit logging even for dynamic MCP tools).
 `id, name, version, source(BUILTIN|MCP|BROWSER|DEVICE|HTTP), mcpServerId?, title, description,
 inputSchema Jsonb, outputSchema Jsonb, riskLevel, requiresConfirmation, idempotent, sideEffects,
 timeoutMs, enabled, discoveredAt, deprecatedAt`
 
 **ToolExecution** — `id, runId?, stepId?, userId, toolId, toolName, toolVersion,
-input Jsonb (rédigé), output Jsonb (rédigé), summaryForModel, status(PENDING|RUNNING|SUCCESS|
+input Jsonb (redacted), output Jsonb (redacted), summaryForModel, status(PENDING|RUNNING|SUCCESS|
 FAILED|DENIED|TIMEOUT|ABORTED), riskLevel, confirmationId?, deviceTaskId?, idempotencyKey,
 attempt, startedAt, endedAt, durationMs, costUsd, error Jsonb`
-`UNIQUE(idempotencyKey)`. C'est **le** journal d'audit des actions réelles : rétention longue,
-jamais supprimé par la compaction.
+`UNIQUE(idempotencyKey)`. Serves as the primary immutable audit trail for real-world side effects:
+long retention window, never pruned by context compaction.
 
-**Artifact** — sorties volumineuses hors contexte.
+**Artifact** — Large outputs stored outside the immediate LLM context window.
 `id, toolExecutionId?, userId, kind(FILE|IMAGE|SCREENSHOT|JSON|TEXT|AUDIO), storageKey, mimeType,
 sizeBytes, sha256, preview, expiresAt`
 
@@ -110,73 +108,70 @@ status, defaultRiskLevel, enabled, lastHandshakeAt, lastError`
 **DeviceTask** — `id, deviceId, toolExecutionId, tool, args Jsonb, status, idempotencyKey,
 assignedAt, acceptedAt, finishedAt, exitCode?, stdoutRef?, stderrRef?, error Jsonb`
 
-## 6. Permissions & confirmations
+## 6. Permissions and Confirmation Gates
 
-**PermissionGrant** — l'autorisation durable.
+**PermissionGrant** — Long-lived authorization grants.
 `id, userId, subject(TOOL|TOOL_PATTERN|CAPABILITY), subjectKey ('mail.send', 'device.fs.*'),
-scope Jsonb (contraintes : domaines, chemins, montant max, destinataires),
+scope Jsonb (constraints: allowed domains, path sandboxes, budget thresholds, recipient lists),
 decision(ALLOW|ALWAYS_CONFIRM|DENY), grantedAt, expiresAt?, deviceId?, revokedAt, source(USER|DEFAULT)`
-Deny par défaut : l'absence de grant vaut refus. `scope` permet « autorise `device.fs.write`
-mais seulement sous `~/dev` ».
+Deny by default: missing grants evaluate to denial. `scope` allows policies such as "permit `device.fs.write`
+strictly under `~/workspace`".
 
-**Confirmation** — la demande ponctuelle.
+**Confirmation** — Single-use interactive approval request.
 `id, userId, runId, toolExecutionId?, riskLevel, title, summary, diff Jsonb?, payloadHash,
 status(PENDING|APPROVED|REJECTED|EXPIRED), rememberChoice bool, expiresAt, decidedAt,
 decidedFromDeviceId, nonce`
-`payloadHash` lie la décision aux arguments exacts : si l'agent modifie ne serait-ce qu'un
-caractère après l'approbation, l'exécution est refusée. C'est la garantie anti-« bait and switch ».
+`payloadHash` binds approval to the exact evaluated arguments: modifying a single character post-approval
+invalidates the confirmation, preventing bait-and-switch attacks.
 
 **AuditLog** — `id, userId, actor(USER|AGENT|SYSTEM|DEVICE), action, subjectType, subjectId,
-riskLevel, ip, deviceId, metadata Jsonb, createdAt` — append-only, jamais modifié, jamais purgé
-avant 1 an.
+riskLevel, ip, deviceId, metadata Jsonb, createdAt` — Append-only, immutable, retained for at least 1 year.
 
-## 7. Mémoire & préférences
+## 7. Long-Term Memory and Preferences
 
 **Memory** — `id, userId, type(SEMANTIC|EPISODIC|PROCEDURAL), content, embedding vector(1536),
 sourceMessageId?, sourceRunId?, confidence, importance, accessCount, lastAccessedAt, validFrom,
 validUntil?, supersededById?, tags text[], createdAt`
-Les faits ne sont pas supprimés mais **supersédés** : « il habite à Paris » reste vrai jusqu'au
-2026-03-01, puis est remplacé. On peut donc répondre à « où j'habitais l'an dernier ».
+Facts are superseded rather than overwritten: "User lives in Seattle" remains historically valid until
+a change of residence is recorded, enabling temporal queries ("Where did I live last year?").
 
 **UserPreference** — `id, userId, key, value Jsonb, source(EXPLICIT|INFERRED), confidence,
-updatedAt` — `UNIQUE(userId, key)`. Une préférence inférée est **proposée**, pas appliquée
-silencieusement.
+updatedAt` — `UNIQUE(userId, key)`. Inferred preferences are suggested to the user, never silently applied.
 
-## 8. Infrastructure
+## 8. Infrastructure State
 
-**OutboxEvent** — `id, aggregateType, aggregateId, type, payload, status, attempts, availableAt,
-publishedAt`
+**OutboxEvent** — `id, aggregateType, aggregateId, type, payload, status, attempts, availableAt, publishedAt`
 **IdempotencyKey** — `key, userId, endpoint, requestHash, responseStatus, responseBody, expiresAt`
 **Budget** — `id, userId, period, tokensUsed, costUsd, runsCount, toolCalls Jsonb, resetAt`
-**Notification** — `id, userId, type, payload, deliveredAt, readAt` (push mobile pour les
-confirmations quand l'app est fermée).
+**Notification** — `id, userId, type, payload, deliveredAt, readAt` (push notifications for pending
+confirmations when clients are backgrounded).
 
-## 9. Index critiques
+## 9. Critical Indexes
 
-```
+```sql
 Message              (conversationId, createdAt DESC)
-Message              GIN(to_tsvector('french', contentText))
+Message              GIN(to_tsvector('english', contentText))
 AgentRun             (userId, status, startedAt DESC) ; (status) WHERE status IN ('QUEUED','RUNNING')
 AgentStep            UNIQUE(runId, index)
 ToolExecution        (userId, startedAt DESC) ; (toolName, status) ; UNIQUE(idempotencyKey)
 Confirmation         (userId, status) WHERE status = 'PENDING'
 Memory               HNSW(embedding vector_cosine_ops) ; (userId, type, importance DESC)
-Memory               GIN(to_tsvector('french', content))   -- recherche hybride
+Memory               GIN(to_tsvector('english', content))   -- Hybrid retrieval index
 Device               (userId, status) ; (lastSeenAt)
 OutboxEvent          (status, availableAt) WHERE status = 'PENDING'
 ```
 
-## 10. Rétention
+## 10. Data Retention Policies
 
-| Donnée                    | Durée                                 | Motif                                      |
-| ------------------------- | ------------------------------------- | ------------------------------------------ |
-| `Message`, `Conversation` | illimitée (archivage utilisateur)     | valeur produit                             |
-| `AgentStep`               | 90 j détaillé, puis agrégé            | volume ; le débogage passé 90 j est rare   |
-| `ToolExecution`           | 1 an minimum                          | audit des actions réelles                  |
-| `AuditLog`                | 1 an minimum, append-only             | sécurité                                   |
-| `Artifact`                | 30 j par défaut, épinglable           | stockage                                   |
-| `Memory`                  | illimitée, révision par l'utilisateur | c'est le produit                           |
-| Audio brut (voix)         | 7 j puis suppression                  | données sensibles, transcription conservée |
+| Data Entity               | Retention Window                     | Operational Reason                                |
+| ------------------------- | ------------------------------------ | ------------------------------------------------- |
+| `Message`, `Conversation` | Indefinite (user archives)           | Primary product value                             |
+| `AgentStep`               | 90 days detailed, then aggregated    | Trace storage volume; step debugging is near-term |
+| `ToolExecution`           | 1 year minimum                       | Verifiable audit trail of real-world actions      |
+| `AuditLog`                | 1 year minimum, append-only          | Security compliance                               |
+| `Artifact`                | 30 days default, pinnable by user    | Object storage optimization                       |
+| `Memory`                  | Indefinite, editable by user         | Core personalized memory                          |
+| Raw Audio Recordings      | Ephemeral, immediate zero-retention  | Privacy-first architecture, transcripts retained  |
 
-Suppression de compte : effacement en cascade + purge du stockage objet sous 30 jours, avec
-journal de suppression conservé (RGPD).
+Account deletion: Cascading removal across tables + object storage purge within 30 days, retaining
+an anonymized deletion certificate for regulatory compliance.

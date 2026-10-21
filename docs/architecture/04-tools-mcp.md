@@ -1,19 +1,19 @@
-# 04 — Système d'outils & MCP
+# 04 — Tools System & MCP
 
-## 1. `ToolDefinition` — le contrat unique
+## 1. `ToolDefinition` — The Universal Contract
 
-Tout ce qui peut agir sur le monde est un outil, décrit par la même structure, quelle que soit
-son implémentation (natif, MCP, browser, device, HTTP).
+Everything capable of affecting state in the world is a tool, defined by a single unified structure
+regardless of implementation (native TypeScript, MCP, browser automation, device agent, or HTTP).
 
 ```ts
 interface ToolDefinition<I = unknown, O = unknown> {
-  name: string; // 'mail.send' — namespacé, stable, unique
-  version: string; // semver ; le prompt voit la version majeure
-  title: string; // libellé UI
-  description: string; // pour le LLM : quand l'utiliser ET quand ne pas
-  inputSchema: ZodType<I>; // validé avant exécution, toujours
-  outputSchema: ZodType<O>; // validé après exécution, toujours
-  permissions: PermissionKey[]; // ex. ['mail:send']
+  name: string; // 'mail.send' — namespaced, stable, unique
+  version: string; // semver; prompt receives major version
+  title: string; // UI label
+  description: string; // For the LLM: when to use AND when NOT to use
+  inputSchema: ZodType<I>; // Validated before execution, always
+  outputSchema: ZodType<O>; // Validated after execution, always
+  permissions: PermissionKey[]; // e.g. ['mail:send']
   riskLevel: "SAFE" | "CONFIRM" | "CRITICAL";
   requiresConfirmation: boolean | ((input: I, ctx: ToolContext) => boolean);
   idempotent: boolean;
@@ -22,15 +22,15 @@ interface ToolDefinition<I = unknown, O = unknown> {
   retry: { attempts: number; backoff: "exp" | "none" };
   costHint?: { unit: "call" | "token" | "usd"; value: number };
   fallbackTool?: string;
-  redact?: (io: unknown) => unknown; // avant log/persistance
+  redact?: (io: unknown) => unknown; // Applied prior to logging and persistence
   execute(input: I, ctx: ToolContext): Promise<ToolResult<O>>;
 }
 ```
 
-`requiresConfirmation` accepte une fonction : `fs.write` sur `~/scratch/note.md` n'a pas le même
-risque que sur `/etc/hosts`, et `mail.send` à soi-même n'a pas le même risque qu'à une liste de
-diffusion. **Le risque dépend des arguments, pas seulement de l'outil** — c'est l'une des rares
-subtilités qu'il ne faut pas simplifier.
+`requiresConfirmation` accepts a predicate function: `fs.write` targeting `~/scratch/note.md` carries
+fundamentally different risk than targeting `/etc/hosts`, and `mail.send` to oneself carries different
+risk than dispatching to an external mailing list. **Risk depends on evaluated arguments, not merely
+tool identity** — an essential subtlety of the security architecture.
 
 ```ts
 type ToolResult<O> =
@@ -38,128 +38,128 @@ type ToolResult<O> =
   | { ok: false; error: ToolError; partial?: unknown; summaryForModel: string };
 ```
 
-`summaryForModel` est distinct de `output` : le modèle reçoit une projection bornée (≤ ~2 k
-tokens) pendant que l'output complet est persisté comme artefact consultable. C'est ce qui
-empêche un `fs.read` de 3 Mo de faire exploser le contexte.
+`summaryForModel` is distinct from raw `output`: the model receives a bounded projection (≤ ~2k tokens)
+while the complete payload is stored as an auditable artifact. This prevents large outputs (e.g. 3 MB
+file reads) from blowing up the inference window.
 
 ## 2. `ToolRegistry`
 
 ```ts
 interface ToolRegistry {
-  register(source: ToolSource): void; // natif | mcp | browser | device | http
-  listFor(ctx: UserContext): ToolDefinition[]; // filtré par grants ET par contexte
+  register(source: ToolSource): void; // Native | MCP | Browser | Device | HTTP
+  listFor(ctx: UserContext): ToolDefinition[]; // Filtered by grants AND context
   get(name: string, version?: string): ToolDefinition | undefined;
-  onChange(cb): Unsubscribe; // hot-reload MCP
+  onChange(cb): Unsubscribe; // MCP hot-reloading
 }
 ```
 
-Le registre est alimenté par des **ToolSource**. Ajouter une capacité = ajouter une source ;
-le cœur agent ne change jamais.
+The registry is populated by **ToolSource** adapters. Adding capabilities means registering a new
+source; the agent core logic remains unchanged.
 
 ```
 ToolSource
-├── BuiltinToolSource      outils natifs TS
-├── McpToolSource          1 par serveur MCP, découverte dynamique
-├── BrowserToolSource      expose browser.* (proxy vers le worker Python)
-├── DeviceToolSource       expose device.* (proxy vers le Device Agent connecté)
-└── HttpToolSource         outils déclarés en YAML depuis une spec OpenAPI
+├── BuiltinToolSource      Native TypeScript tools
+├── McpToolSource          One per connected MCP server, dynamic discovery
+├── BrowserToolSource      Exposes browser.* (proxies to the Python browser-worker)
+├── DeviceToolSource       Exposes device.* (proxies to connected Device Agents)
+└── HttpToolSource         Declarative YAML tools compiled from OpenAPI specifications
 ```
 
-`listFor` filtre **deux fois** : par grants de permission, et par pertinence contextuelle (les
-outils `device.*` n'apparaissent que si un device est en ligne). Un outil qu'on ne veut pas voir
-utilisé n'est pas décrit au modèle — c'est la défense la plus efficace, bien avant le prompt.
+`listFor` applies a **two-phase filter**: by user permission grants, and by active environment context
+(e.g. `device.*` tools only appear if an associated device is currently online). A tool we do not want
+the model to invoke is never described in the prompt — the strongest defense against unauthorized actions.
 
-## 3. `ToolExecutor` — la frontière d'exécution
+## 3. `ToolExecutor` — The Execution Boundary
 
-Pipeline unique, sans chemin de contournement :
+A single, unified pipeline with zero bypasses:
 
 ```
-1.  resolve       registry.get(name) → sinon ToolNotFound (observation, pas crash)
-2.  validate      inputSchema.parse(args) → sinon ValidationError renvoyée au modèle
+1.  resolve       registry.get(name) → otherwise ToolNotFound (observation, not a crash)
+2.  validate      inputSchema.parse(args) → otherwise ValidationError returned to model
 3.  authorize     PermissionService.check(user, tool, args, ctx)
-4.  confirm       si requis : Confirmation persistée → suspension du run
-5.  idempotency   clé (runId, stepIndex, tool, hash(args)) → si déjà exécuté : rejoue le résultat
-6.  persist       ToolExecution(status=RUNNING) — AVANT l'appel, pas après
-7.  execute       AbortSignal + timeout + retry + circuit breaker par source
-8.  validate out  outputSchema.parse → sinon ToolExecutionError(phase='output')
-9.  redact        secrets ôtés avant log/persistance
+4.  confirm       If required: persist Confirmation → suspend run, release worker
+5.  idempotency   Key (runId, stepIndex, tool, hash(args)) → if executed: replay cached result
+6.  persist       ToolExecution(status=RUNNING) — BEFORE invocation, never after
+7.  execute       AbortSignal + timeout + retry + per-source circuit breaker
+8.  validate out  outputSchema.parse → otherwise ToolExecutionError(phase='output')
+9.  redact        Strip secrets before logging and database persistence
 10. persist       ToolExecution(status, output, metrics, cost)
-11. summarize     projection bornée pour le modèle + artefacts
-12. emit          tool.started / tool.progress / tool.result sur le WS
+11. summarize     Bounded projection for LLM + artifact references
+12. emit          tool.started / tool.progress / tool.result on WebSocket gateway
 ```
 
-L'étape 6 avant l'appel est délibérée : si le worker meurt pendant un `mail.send`, on doit savoir
-au redémarrage qu'une exécution était en vol, et ne pas la rejouer aveuglément.
+Step 6 prior to invocation is crucial: if a worker crashes during an external API call, the system
+knows upon restart that an execution was in-flight and avoids blind retries.
 
-**Circuit breaker par source** : si un serveur MCP échoue 5 fois de suite, sa source est ouverte
-60 s, ses outils disparaissent de `listFor`, et l'agent en est informé. Un MCP défaillant ne doit
-pas dégrader tout l'assistant.
+**Per-source circuit breaker**: If an MCP server fails 5 consecutive times, its circuit trips open for
+60s, its tools are temporarily removed from `listFor`, and the agent is informed. An unstable MCP
+server cannot degrade overall platform reliability.
 
-## 4. Catalogue d'outils v1
+## 4. Default Tool Catalog
 
-| Outil                           | Risque                               | Confirmation          | Notes                                    |
-| ------------------------------- | ------------------------------------ | --------------------- | ---------------------------------------- |
-| `search.web`                    | SAFE                                 | non                   | provider externe                         |
-| `http.request`                  | CONFIRM                              | GET non / autres oui  | allowlist de domaines                    |
-| `weather.get`                   | SAFE                                 | non                   |                                          |
-| `calendar.list`                 | SAFE                                 | non                   | Google Calendar OAuth                    |
-| `calendar.create` / `.update`   | CONFIRM                              | oui                   |                                          |
-| `calendar.delete`               | CONFIRM → CRITICAL si récurrent      | oui                   |                                          |
-| `mail.list` / `mail.read`       | SAFE                                 | non                   | lecture seule                            |
-| `mail.send`                     | CONFIRM                              | oui                   | aperçu complet obligatoire dans la carte |
-| `memory.search` / `.write`      | SAFE                                 | non                   |                                          |
-| `device.fs.read`                | SAFE                                 | non                   | jail de chemins par device               |
-| `device.fs.write`               | CONFIRM                              | oui                   | diff affiché                             |
-| `device.fs.delete`              | CRITICAL                             | oui                   |                                          |
-| `device.shell.exec`             | CONFIRM                              | oui                   | classifieur de commande (§09)            |
-| `device.process.list` / `.kill` | SAFE / CONFIRM                       | selon                 |                                          |
-| `github.*`                      | SAFE en lecture, CONFIRM en écriture | oui                   | push, PR, merge                          |
-| `browser.act`                   | CONFIRM                              | oui si action mutante | voir [05](05-browser-use.md)             |
-| `payment.*`                     | CRITICAL                             | double                | **hors v1**                              |
+| Tool                            | Risk Level                           | Confirmation Required | Notes                                      |
+| ------------------------------- | ------------------------------------ | --------------------- | ------------------------------------------ |
+| `search.web`                    | SAFE                                 | No                    | External search provider                   |
+| `http.request`                  | CONFIRM                              | GET no / Others yes   | Domain allowlist validation                |
+| `weather.get`                   | SAFE                                 | No                    | Read-only utility                          |
+| `calendar.list`                 | SAFE                                 | No                    | Google Calendar OAuth                      |
+| `calendar.create` / `.update`   | CONFIRM                              | Yes                   | Scoped event manipulation                  |
+| `calendar.delete`               | CONFIRM → CRITICAL if recurring      | Yes                   | Irreversible for recurring events          |
+| `mail.list` / `mail.read`       | SAFE                                 | No                    | Read-only email access                     |
+| `mail.send`                     | CONFIRM                              | Yes                   | Full preview card mandatory in dashboard   |
+| `memory.search` / `.write`      | SAFE                                 | No                    | Core personal memory                       |
+| `device.fs.read`                | SAFE                                 | No                    | Enforces per-device path jail              |
+| `device.fs.write`               | CONFIRM                              | Yes                   | File diff displayed before execution       |
+| `device.fs.delete`              | CRITICAL                             | Yes                   | Soft delete / trash where supported        |
+| `device.shell.exec`             | CONFIRM                              | Yes                   | Command classification policy enforced     |
+| `device.process.list` / `.kill` | SAFE / CONFIRM                       | Contextual            | Kill requires explicit confirmation        |
+| `github.*`                      | SAFE read, CONFIRM write             | Yes on write          | Pull requests, commits, merges             |
+| `browser.act`                   | CONFIRM                              | Yes on mutating act   | See [05](05-browser-use.md)                |
+| `payment.*`                     | CRITICAL                             | Strict dual factor    | Out of scope for initial release           |
 
-## 5. MCP
+## 5. Model Context Protocol (MCP)
 
-### Ce qu'est MCP ici
+### Architecture Role
 
-MCP est **une source d'outils parmi d'autres**, pas le modèle d'intégration central. On adopte son
-protocole pour bénéficier de l'écosystème sans y adosser l'architecture — si MCP évolue ou si un
-serveur est indisponible, seul l'adaptateur bouge (→ [ADR-005](../adr/ADR-005-mcp-as-adapter.md)).
+MCP is **one tool source among several**, not the central architectural hub. We leverage the protocol
+to access the broader ecosystem of community tools without coupling internal logic to external API
+churn — if MCP changes or a server crashes, only the adapter is affected (→ [ADR-005](../adr/ADR-005-mcp-as-adapter.md)).
 
 ### `McpManager`
 
 ```
 McpManager
-├── charge la config déclarative (table McpServer, éditable dans Settings)
-├── lance / connecte chaque serveur : stdio (process enfant) ou HTTP/SSE (distant)
-├── supervise : healthcheck, restart avec backoff, circuit breaker
-├── découvre tools / resources / prompts → mappe en ToolDefinition
-└── traduit : JSON Schema MCP → Zod, erreurs MCP → ToolError
+├── Loads declarative configuration (McpServer table, editable via UI)
+├── Launches / connects each server: stdio (child process) or HTTP/SSE (remote)
+├── Supervises: healthchecks, backoff restarts, circuit breakers
+├── Discovers tools / resources / prompts → maps into ToolDefinition
+└── Translates: MCP JSON Schema → Zod, MCP errors → ToolError
 ```
 
-### Mapping et sécurité
+### Mapping and Security Boundary
 
-- **Namespacing** : `mcp.{serverSlug}.{toolName}`. Deux serveurs peuvent exposer `search` sans
-  collision.
-- **Risque par défaut** : un outil MCP découvert dynamiquement arrive en `CONFIRM`. Le passer en
-  `SAFE` est une décision humaine explicite, stockée en base, jamais déduite d'une description.
-  Un serveur MCP tiers est du code non audité : sa `description` est une **entrée non fiable**
-  susceptible de porter une injection de prompt (→ [09-security](09-security-permissions.md) §7).
-- **Isolation** : serveurs stdio lancés dans un conteneur dédié, sans accès réseau par défaut, avec
-  un environnement minimal — aucune variable d'env du backend n'est héritée.
-- **Hot reload** : ajouter un serveur MCP depuis l'app ne redémarre pas le backend ;
-  `registry.onChange` propage aux runs suivants, pas aux runs en cours (reproductibilité).
+- **Namespacing**: `mcp.{serverSlug}.{toolName}`. Prevents name collisions between servers.
+- **Default Risk Level**: Dynamically discovered MCP tools default to `CONFIRM`. Upgrading a tool to
+  `SAFE` is an explicit human action stored in the database, never deduced from third-party tool
+  descriptions. Third-party descriptions are treated as **untrusted input** prone to indirect prompt
+  injections (→ [09-security](09-security-permissions.md) §7).
+- **Process Isolation**: stdio servers run inside isolated sandbox containers, network-less by default,
+  with minimal environment variables — inheriting zero backend secrets.
+- **Hot Reloading**: Registering an MCP server from the dashboard does not restart the backend;
+  `registry.onChange` applies to subsequent runs while leaving active runs unaffected for reproducibility.
 
-## 6. Outils HTTP déclaratifs
+## 6. Declarative HTTP Tools
 
-Pour les APIs externes simples, écrire du TypeScript est du bruit. Un outil peut être déclaré :
+For simple third-party REST endpoints, writing TypeScript boilerplate is unnecessary. Tools can be
+declared in YAML:
 
 ```yaml
 name: flights.search
-description: Recherche de vols entre deux villes à une date.
+description: Search flights between two airport codes for a specific date.
 risk: SAFE
 auth:
   type: apiKey
-  secretRef: FLIGHT_API_KEY # référence au coffre, jamais la valeur
+  secretRef: FLIGHT_API_KEY # Reference to encrypted vault, never raw secret
 request:
   method: GET
   url: https://api.example.com/v1/search
@@ -167,6 +167,6 @@ input: { from: string, to: string, date: string }
 output: { flights: [{ carrier, price, departAt }] }
 ```
 
-Compilé en `ToolDefinition` au démarrage, avec les mêmes garanties (validation, permissions,
-timeout, audit). `secretRef` pointe vers le coffre — la clef n'est ni dans le YAML ni en base
-en clair.
+Compiled into `ToolDefinition` at boot time, benefiting from identical safety guarantees (schema
+validation, permissions, timeouts, audit logs). `secretRef` resolves securely through the vault at
+execution time.

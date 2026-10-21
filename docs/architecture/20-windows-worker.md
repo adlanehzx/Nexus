@@ -1,147 +1,128 @@
-# 20 — Worker Windows (implémenté)
+# 20 — Windows Worker (Implemented Architecture)
 
-Décrit le sous-système **tel qu'il est construit**. Le document
-[19 — Architecture multi-appareils](19-multi-devices.md) en pose le cadre ;
-celui-ci fait foi pour le code. Paquet :
-[`@nexus/windows-worker`](../../services/windows-worker).
+Describes the Windows Worker subsystem **as built in the codebase**. Document [19 — Multi-Device Architecture](19-multi-devices.md)
+establishes the overarching framework; this document reflects the implemented code.
+Package: [`@nexus/windows-worker`](../../services/windows-worker).
 
-## 1. Ce que ce lot ajoute — et ce qu'il ne change pas
+## 1. What Was Delivered
 
-Le cœur multi-appareils déclarait un port, `WorkerTransport`, et ne connaissait
-aucun exécutant réel. Ce lot fournit les deux extrémités du fil :
+The multi-device core declared a transport port, `WorkerTransport`, without coupling to concrete worker
+implementations. This milestone provided both ends of the bridge:
 
-- **`WorkerGateway`** (`@nexus/devices`) implémente `WorkerTransport` ;
-- **`@nexus/windows-worker`** est le premier exécutant physique.
+- **`WorkerGateway`** (`@nexus/devices`) implementing `WorkerTransport`;
+- **`@nexus/windows-worker`** as the first physical worker node.
 
-`TaskCoordinator`, `DeviceSelector`, `TaskPlan`, `PermissionService`,
-`ConfirmationService` et `createDeviceTools` sont **inchangés**. Le worker leur
-apparaît comme un exécutant ordinaire, exactement comme prévu.
+`TaskCoordinator`, `DeviceSelector`, `TaskPlan`, `PermissionService`, `ConfirmationService`, and
+`createDeviceTools` remain **completely unchanged**. The worker interfaces with them as a standard
+worker node, exactly as designed.
 
-## 2. Le sens de la connexion
-
-```
-Worker Windows ──(WebSocket sortant, wss://)──▶ NEXUS Core
-                                                   │
-                                             WorkerGateway
-                                                   │
-                                   TaskCoordinator ◀── DeviceSelector
-                                                   │
-                                                 Agent
-```
-
-**Le worker appelle le cœur.** Le cœur ne sait pas joindre une machine Windows ;
-il répond sur un canal déjà ouvert. Ce n'est pas une commodité mais une propriété
-défendue par la forme du port : `WorkerLink` expose `connect()`, jamais
-`listen()`.
-
-Aucune redirection de port, aucune machine exposée, aucun client qui parle
-directement à un exécutant.
-
-## 3. La même implémentation sur deux machines
-
-|              | Portable     | Poste fixe   |
-| ------------ | ------------ | ------------ |
-| Rôle         | `BOTH`       | `WORKER`     |
-| Type         | `WINDOWS_PC` | `WINDOWS_PC` |
-| Code exécuté | identique    | identique    |
-
-Rien dans le worker ne lit son rôle ni son nom : ils viennent du registre, côté
-cœur. Un test le vérifie en connectant la même classe sous deux identités, avec
-des noms délibérément dissemblables, et en comparant capacités annoncées et
-comportement.
-
-Ajouter une quatrième machine reste donc une **écriture en base**.
-
-## 4. Il n'existe pas de point d'exécution arbitraire
-
-C'est la contrainte structurante du lot. Aucune capacité n'accepte de chaîne de
-commande ; `terminal.execute` prend un exécutable choisi dans une liste et un
-tableau d'arguments, et `spawn` est appelé avec `shell: false`.
-
-La sécurité vient de la **forme de l'API**, pas d'un filtre. Un test le vérifie
-sur trois plans : aucune capacité déclarée n'expose de champ `command`, aucun
-fichier source n'importe `exec`/`execSync`, et chaque `spawn` porte
-`shell: false`.
-
-Corollaire assumé : une tentative d'injection **réussit** — au sens où elle
-s'exécute. `git log "&& del /S /Q C:\Projets"` lance `git` avec un argument
-absurde. Une seule commande, et c'est `git`. C'est précisément ce qu'on veut
-démontrer : il n'y a rien à filtrer.
-
-Les `.bat` et `.cmd` sont refusés à part : Node les exécute via `cmd.exe`, ce qui
-réintroduirait exactement l'interprétation qu'on écarte.
-
-## 5. Sept capacités Git, pas un `git.execute`
-
-La distinction n'est pas cosmétique : elle permet d'accorder `git.status` sans
-accorder `git.checkout`, et au cœur d'exiger une confirmation pour l'une et pas
-pour l'autre. Un `git.execute` générique obligerait à inspecter les arguments
-pour deviner l'intention — c'est-à-dire à réintroduire l'analyse de chaînes.
-
-`git.checkout` est classé HIGH, au-dessus de `commit` et `pull` : c'est la seule
-opération capable de détruire un travail non enregistré, sans confirmation ni
-retour possible.
-
-## 6. Déclaration dynamique des capacités
-
-Deux conditions cumulatives pour qu'une capacité soit annoncée : être
-**réellement disponible** (sonde à l'exécution — le démon Docker répond, le
-binaire Git existe) et être **explicitement autorisée** par la configuration.
-
-Annoncer ce qu'on ne peut pas honorer est pire que se taire : le sélecteur
-choisirait cette machine, l'étape échouerait, et un exécutant capable aurait été
-écarté entre-temps.
-
-Le cœur reste autoritaire : `worker.registered` renvoie la liste **acceptée**,
-et c'est elle que le worker retient — pas celle qu'il a demandée.
-
-## 7. Authentification
-
-Réutilise `DeviceSessionService` sans le modifier. Aucun second mécanisme.
+## 2. Inverted Connection Direction
 
 ```
-hello  ─▶  (challenge)  ─▶  authenticate (nonce signé Ed25519)  ─▶  session
+Windows Worker ──(Outbound WebSocket, wss://)──▶ NEXUS Core
+                                                     │
+                                               WorkerGateway
+                                                     │
+                                     TaskCoordinator ◀── DeviceSelector
+                                                     │
+                                                   Agent
 ```
 
-`hello` n'accorde rien : un identifiant d'appareil est public. La clé privée ne
-quitte jamais la machine ; elle est désignée dans la configuration par un
-**chemin**, jamais par sa valeur.
+**The worker initiates connections to the central core.** The core does not initiate inbound connections
+to Windows workstations; it dispatches tasks over the pre-established outbound channel. This is an
+invariant property enforced by the interface contract: `WorkerLink` exposes `connect()`, never `listen()`.
 
-L'anti-rejeu (`requestId` + horodatage borné) couvre l'authentification et les
-battements de cœur. Une reconnexion refait la poignée de main complète : une
-session dont on ne sait pas si elle est encore valide n'est pas une session.
+Zero firewall port forwarding, zero exposed host endpoints, and zero client devices communicating directly with workers.
 
-## 8. Rédaction
+## 3. Identical Code Across Workstations and Laptops
 
-Trois points d'interception, parce qu'aucun ne suffit seul :
+| Configuration   | Laptop Node   | Workstation Node |
+| --------------- | ------------- | ---------------- |
+| Role            | `BOTH`        | `WORKER`         |
+| Device Type     | `WINDOWS_PC`  | `WINDOWS_PC`     |
+| Executable Code | Identical     | Identical        |
 
-1. **La sortie des processus** — ce qu'écrit un programme n'est pas maîtrisable.
-   Un script de déploiement qui affiche son jeton ne doit pas le faire entrer
-   dans le journal du cœur.
-2. **Le contenu des fichiers lus** — un `.env` lu par `filesystem.read` est un
-   cas parfaitement ordinaire.
-3. **Les arguments journalisés** — le worker reçoit les vraies valeurs, le
-   journal reçoit `[REDACTED]`.
+Nothing inside the worker inspects its configured device role or friendly name: those attributes derive
+from the central database registry. Tests verify this by connecting the identical worker class under two
+different machine identities and verifying matching advertised capabilities and execution behavior.
 
-Ce lot a étendu `@nexus/shared` d'une fonction `redactText`, qui cherche les
-secrets **à l'intérieur** d'un texte libre — là où `redact` ne travaillait que
-sur des structures. `redact` l'applique désormais aussi à ses chaînes feuilles :
-un secret ne se présente pas toujours comme la valeur entière d'un champ bien
-nommé.
+Enrolling a new machine is purely a **database record addition**.
 
-## 9. Événements
+## 4. Elimination of Arbitrary Shell Execution
 
-Quatre types ajoutés à l'union existante, en pur ajout : `worker.connected`,
-`worker.ready`, `worker.disconnected`, `worker.task_cancelled`.
+This is the primary security constraint. No capability accepts raw command strings; `terminal.execute`
+requires an executable binary selected from an allowlist alongside an explicit array of arguments,
+spawning processes with `shell: false`.
 
-`device.connected` dit « le registre a vu cette machine » ; `worker.connected`
-dit « le canal d'exécution est ouvert ». Un appareil peut être connu et joignable
-sans être prêt à exécuter — la distinction sert au diagnostic.
+Security derives from **API design**, not fragile string regexes. Automated tests verify this across
+three vectors: zero advertised capabilities expose a `command` string property, zero source files import
+`exec` or `execSync`, and every `spawn` invocation specifies `shell: false`.
 
-## 10. Ce qui reste à faire
+Design consequence: adversarial injections fail harmlessly. Passing `git log "&& del /S /Q C:\Projects"`
+invokes `git` with an unusual argument string. A single command runs, and that command is `git`. There
+is no shell to interpret chained commands.
 
-Le transport réel. Le worker dépend du port `WorkerLink`, pas du WebSocket ;
-l'adaptateur de la phase suivante ouvre la socket, transmet les enveloppes JSON
-dans les deux sens et signale la fermeture. Aucune logique — elle est déjà
-écrite et éprouvée de bout en bout avec `LoopbackLink`, l'autre implémentation du
-même port.
+`.bat` and `.cmd` scripts are explicitly rejected: Node invokes batch files through `cmd.exe`, which
+would reintroduce shell interpretation.
+
+## 5. Seven Distinct Git Capabilities, Not a Generic `git.execute`
+
+Granular capabilities allow granting `git.status` while denying `git.checkout`, and allow the central
+core to require human confirmation for destructive mutations while treating read commands as safe.
+A generic `git.execute` would require string scraping to infer intent.
+
+`git.checkout` is classified as `HIGH` risk, above `commit` and `pull`: it is capable of discarding
+uncommitted local changes without automated recovery.
+
+## 6. Dynamic Capability Advertising
+
+Two conditions must be met for a capability to be advertised: it must be **verified present** (probed
+at runtime — e.g. Docker daemon answers, Git binary exists) and **explicitly permitted** in local configuration.
+
+Advertising capabilities that cannot be fulfilled is worse than remaining silent: the selector would
+assign the task to that machine, causing execution failure while bypassing other available workers.
+
+The central server maintains authority: `worker.registered` returns the **accepted** capability set,
+which the worker adopts.
+
+## 7. Cryptographic Authentication
+
+Integrates with `DeviceSessionService` without modification:
+
+```
+hello ─▶ (Cryptographic Challenge) ─▶ authenticate (Nonce signed via Ed25519) ─▶ session
+```
+
+`hello` grants zero privileges: device IDs are public identifiers. Private keys never leave the host
+workstation; local configuration points to key files via **filesystem path**, never raw key bytes.
+
+Replay protection (`requestId` + bounded timestamp) covers authentication and heartbeat frames.
+Reconnecting requires a fresh handshake: stale sessions are discarded.
+
+## 8. Multi-Layered Data Redaction
+
+Three points of interception:
+
+1. **Process Output Streams** — Program outputs cannot be predicted. A build script emitting an API
+   token must not leak into central server logs.
+2. **Read File Payloads** — Reading `.env` files via `filesystem.read` is a standard developer action.
+3. **Logged Arguments** — The worker receives raw arguments for execution, while central audit logs
+   record `[REDACTED]`.
+
+`@nexus/shared` provides `redactText`, which sanitizes credentials **inside unstructured text blocks**,
+complementing structural key-based redaction.
+
+## 9. Lifecycle Events
+
+Four events extend the protocol union: `worker.connected`, `worker.ready`, `worker.disconnected`, and
+`worker.task_cancelled`.
+
+`device.connected` indicates "the central registry recognizes this machine"; `worker.connected`
+indicates "the execution channel is open and ready". A device can be enrolled without being ready for
+task execution — distinguishing these states aids system diagnostics.
+
+## 10. Decoupled Transport Layer
+
+The worker depends on the `WorkerLink` port interface rather than hardcoded WebSockets; real network
+transports attach clean JSON framing and disconnect handlers. Unit tests validate end-to-end execution
+against `LoopbackLink`, verifying protocol mechanics independently of network sockets.

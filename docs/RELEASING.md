@@ -1,12 +1,12 @@
-# Publier une release
+# Publishing a Release
 
-1. Mettre à jour la version et le journal des changements, puis vérifier la CI de la branche.
-2. Créer un tag annoté `vMAJEUR.MINEUR.CORRECTIF` sur le commit validé.
-3. Pousser le tag. Le workflow `Release` reconstruit l'API, génère un SBOM SPDX, publie l'image
-   `ghcr.io/<propriétaire>/<dépôt>/api` et la signe sans clé statique avec l'identité OIDC GitHub.
-4. Vérifier la signature Cosign, les checksums et le SBOM avant de publier les notes GitHub.
+1. Update the version and changelog, then verify the branch CI passes.
+2. Create an annotated tag `vMAJOR.MINOR.PATCH` on the validated commit.
+3. Push the tag. The `Release` workflow rebuilds the API, generates an SPDX SBOM, publishes the
+   image `ghcr.io/<owner>/<repo>/api`, and signs it keylessly with the GitHub OIDC identity.
+4. Verify the Cosign signature, checksums, and SBOM before publishing GitHub release notes.
 
-Exemple de vérification :
+Verification example:
 
 ```bash
 cosign verify ghcr.io/OWNER/REPOSITORY/api:v1.2.3 \
@@ -14,6 +14,6 @@ cosign verify ghcr.io/OWNER/REPOSITORY/api:v1.2.3 \
   --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
 ```
 
-Une release ne doit contenir aucun `.env`, profil de navigateur, base locale, sauvegarde,
-identifiant ACP ou chemin utilisateur. Le paquet racine reste `private: true` pour empêcher une
-publication npm accidentelle ; cela ne limite pas la licence open source du dépôt.
+A release must contain no `.env`, browser profiles, local databases, backups, ACP credentials, or
+user-specific paths. The root package remains `private: true` to prevent accidental npm publishing;
+this does not restrict the open-source license of the repository.

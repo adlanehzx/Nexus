@@ -1,35 +1,34 @@
-# ADR-002 — Fastify comme framework HTTP
+# ADR-002 — Fastify as HTTP Framework
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-L'API doit servir du REST versionné, des WebSockets, des uploads audio, et générer une
-documentation OpenAPI fiable. Elle doit rester une **frontière mince** : validation, auth,
-orchestration — la logique métier vit dans les services et les packages.
+The API must serve versioned REST endpoints, WebSockets, audio uploads, and generate reliable
+OpenAPI documentation. It must remain a **thin boundary**: validation, authentication, and
+orchestration — business logic lives in services and domain packages.
 
-## Décision
+## Decision
 
-Fastify 5 avec `fastify-type-provider-zod`, `@fastify/websocket`, `@fastify/swagger`,
-`@fastify/rate-limit`, `@fastify/helmet`.
+Fastify 5 with `fastify-type-provider-zod`, `@fastify/websocket`, `@fastify/swagger`,
+`@fastify/rate-limit`, and `@fastify/helmet`.
 
 ## Alternatives
 
-- **NestJS.** Structure fournie, DI intégrée, écosystème riche. Écarté : le poids des décorateurs
-  et des modules dépasse le besoin, et son opinion sur la DI entrerait en concurrence avec
-  l'injection explicite déjà retenue pour `agent-core`. Le principe « SOLID sans overengineering »
-  du cahier des charges tranche ici.
-- **Express.** Écosystème le plus large, mais pas de validation de schéma native, typage faible,
-  performances moindres, et son modèle de middleware rend l'encapsulation plus difficile.
-- **Hono / Elysia.** Excellents et modernes, mais écosystème plus jeune ; on préfère la maturité
-  sur la brique la plus exposée.
+- **NestJS.** Rich scaffolding, built-in DI, mature ecosystem. Rejected: the weight of decorators
+  and modules exceeds our needs, and its opinionated DI would conflict with the explicit dependency
+  injection chosen for `agent-core`. The "SOLID without over-engineering" principle applies here.
+- **Express.** Largest ecosystem, but lacks native schema validation, weak typing, lower
+  performance, and its middleware model makes encapsulation harder.
+- **Hono / Elysia.** Excellent and modern, but younger ecosystem; we prefer maturity for our most
+  exposed boundary component.
 
-## Conséquences
+## Consequences
 
-**Positives** — un schéma Zod par route sert simultanément à valider, typer et documenter :
-la doc OpenAPI ne peut pas mentir. Les plugins encapsulés donnent une isolation naturelle par
-domaine. Performances confortables pour du streaming.
+**Positive** — A single Zod schema per route simultaneously validates, types, and documents: the
+OpenAPI documentation cannot drift. Encapsulated plugins provide natural domain isolation.
+Comfortable performance for streaming.
 
-**Négatives, acceptées** — aucune structure imposée : la discipline des couches
-(routes → services → repositories) doit être tenue par revue et par lint, pas par le framework.
-Moins de tutoriels que pour Express ou Nest.
+**Negative, accepted** — No enforced structure: layer discipline (routes → services → repositories)
+must be maintained through code review and lint rules rather than framework opinions. Fewer tutorials
+compared to Express or Nest.

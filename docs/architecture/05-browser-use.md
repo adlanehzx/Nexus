@@ -1,16 +1,17 @@
-# 05 — Browser Use worker
+# 05 — Browser Use Worker
 
-## 1. Pourquoi un service séparé
+## 1. Why a Dedicated Service
 
-`browser-use` est une bibliothèque Python qui pilote un navigateur Chromium via Playwright. Trois
-raisons rendent l'isolation non négociable :
+`browser-use` is a Python library controlling Chromium instances via Playwright. Three reasons make
+service isolation mandatory:
 
-1. **Langage** — le backend est TypeScript. Le cahier des charges interdit l'import direct du code
-   Python. La frontière est donc un contrat réseau, pas un binding.
-2. **Ressources** — un Chromium consomme 300 Mo à 1 Go et peut planter. Il ne doit jamais pouvoir
-   faire tomber l'API ou le worker agent.
-3. **Sécurité** — le navigateur visite du contenu hostile par définition. Il tourne dans un
-   conteneur sans accès au réseau interne, sans secrets applicatifs, sans volume monté.
+1. **Language Boundary** — The core backend is TypeScript. Architectural rules strictly forbid direct
+   Python runtime imports. The integration is a clean network contract, not an in-process binding.
+2. **Resource Management** — Chromium consumes 300 MB to 1 GB RAM and can crash under heavy DOM loads.
+   It must never degrade the API or primary agent workers.
+3. **Security Boundary** — The browser visits untrusted, potentially hostile web content by definition.
+   It executes inside an isolated container with no internal network access, no backend secrets, and
+   no host filesystem mounts.
 
 ```mermaid
 flowchart LR
@@ -24,107 +25,105 @@ flowchart LR
   B -.->|screenshots, traces| S[(Object storage)]
 ```
 
-## 1 bis. Raccordement au WorkerGateway (phase 9)
+## 1 bis. Connection to WorkerGateway
 
-Le service Python décrit ci-dessous n'est pas joint directement par l'agent. Il
-est précédé de `@nexus/browser-worker-host`, un **exécutant NEXUS à part
-entière** — le même `WorkerRuntime` que le worker Windows et le worker Android.
+The Python service detailed below is not called directly by the agent loop. It is fronted by
+`@nexus/browser-worker-host`, a **first-class NEXUS worker node** implementing the standard
+`WorkerRuntime` interface shared by Windows and Android workers.
 
 ```
-Agent → plan → capacités requises → autorisation
-                                          │
-                                   WorkerGateway
-                                          │  session authentifiée (Ed25519)
-                            @nexus/browser-worker-host
-                                          │  contrat HTTP versionné (§2)
-                              services/browser-worker (Python)
+Agent → Plan → Required Capabilities → Authorization Gate
+                                              │
+                                        WorkerGateway
+                                              │  Authenticated session (Ed25519)
+                                 @nexus/browser-worker-host
+                                              │  Versioned HTTP contract (§2)
+                                   services/browser-worker (Python)
 ```
 
-Ce que ce raccordement apporte, et qu'un appel HTTP direct ne donnait pas :
+Advantages provided by the WorkerGateway architecture:
 
-|                  |                                                                            |
-| ---------------- | -------------------------------------------------------------------------- |
-| Authentification | signature d'un défi, pas un jeton statique                                 |
-| Identité         | un appareil de type `BROWSER_WORKER`, révocable                            |
-| Sélection        | `DeviceSelector`, sur capacités annoncées                                  |
-| Permissions      | `browser.*`, comme toute capacité d'appareil                               |
-| Confirmations    | par niveau de risque, jusqu'à `CRITICAL` pour un achat                     |
-| Santé            | battements ; l'exécutant disparaît du sélecteur si Chromium ne répond plus |
+| Capability         | Guarantee                                                                     |
+| ------------------ | ----------------------------------------------------------------------------- |
+| Authentication     | Cryptographic challenge-response signing, not static tokens                   |
+| Identity           | Dedicated device entry of type `BROWSER_WORKER`, instantly revocable          |
+| Selection          | Dynamic `DeviceSelector` matching advertised browser capabilities             |
+| Permissions        | Standard `browser.*` permission hierarchy                                     |
+| Confirmations      | Tiered risk levels, escalating to `CRITICAL` for mutating transactions        |
+| Health Monitoring  | Heartbeats; worker automatically delists if Chromium becomes unresponsive     |
 
-Les capacités annoncées sont `browser.navigate`, `browser.interact`,
-`browser.login` et `browser.purchase` — une par intention. La restriction réelle
-des actions reste dans `app/policies.py`, côté Python : le cœur décide _ce qu'on
-veut faire_, le worker décide _ce qu'il est possible de faire_.
+Advertised capabilities comprise `browser.navigate`, `browser.interact`, `browser.login`, and
+`browser.purchase`. Concrete operational limits remain enforced in `app/policies.py` on the Python
+side: central core decides _what should be done_, the local worker enforces _what is permitted to happen_.
 
 ---
 
-## 2. Contrat HTTP
+## 2. HTTP Contract
 
-Versionné, décrit en OpenAPI, généré depuis les mêmes schémas que `@nexus/contracts`
-(JSON Schema exporté → modèles Pydantic vérifiés par un test de contrat).
+Versioned OpenAPI specification derived from `@nexus/contracts` schemas (JSON Schema export validated
+against Pydantic models via cross-language contract tests).
 
-| Verbe    | Route                     | Rôle                                                          |
-| -------- | ------------------------- | ------------------------------------------------------------- |
-| `POST`   | `/v1/sessions`            | Ouvre une session navigateur (profil, headless, proxy, TTL)   |
-| `GET`    | `/v1/sessions/:id`        | État, URL courante, coût, screenshot courant                  |
-| `POST`   | `/v1/sessions/:id/act`    | Exécute une tâche en langage naturel ou une action structurée |
-| `POST`   | `/v1/sessions/:id/cancel` | Annulation coopérative                                        |
-| `DELETE` | `/v1/sessions/:id`        | Ferme la session, libère le contexte                          |
-| `GET`    | `/v1/health`              | Liveness + readiness (pool de navigateurs)                    |
+| Method   | Route                     | Purpose                                                      |
+| -------- | ------------------------- | ------------------------------------------------------------ |
+| `POST`   | `/v1/sessions`            | Opens a browser session (profile, headless, proxy, TTL)      |
+| `GET`    | `/v1/sessions/:id`        | Status, active URL, token cost, current screenshot           |
+| `POST`   | `/v1/sessions/:id/act`    | Executes a natural language task or structured action        |
+| `POST`   | `/v1/sessions/:id/cancel` | Cooperative task cancellation                                |
+| `DELETE` | `/v1/sessions/:id`        | Terminates session, releases browser context                 |
+| `GET`    | `/v1/health`              | Liveness and readiness checks (warm browser pool status)     |
 
-Authentification service-à-service : mTLS **ou** token porteur signé à courte durée + réseau
-Docker privé (le worker n'est jamais exposé publiquement).
+Service-to-service authentication: mTLS **or** short-lived signed bearer tokens across private Docker
+networks (the browser worker is never publicly exposed).
 
-## 3. Deux niveaux d'API pour l'agent
+## 3. Two API Tiers for the Agent
 
-L'outil exposé au LLM n'est pas l'API brute. `BrowserToolSource` publie :
+The tool exposed to the model is not the raw HTTP endpoint. `BrowserToolSource` publishes:
 
-- **`browser.act`** — haut niveau, prompt en langage naturel (« sur ce site, récupère les
-  horaires »). Le worker exécute sa propre boucle `browser-use`. Puissant, coûteux, non
-  déterministe. Risque `CONFIRM` dès que la tâche peut muter un état (formulaire, achat, login).
-- **`browser.navigate` / `.extract` / `.click` / `.type`** — bas niveau, déterministe, bon marché.
-  Préféré quand la page est connue. `extract` est `SAFE`.
+- **`browser.act`** — High-level natural language prompt ("Find flight departures for tomorrow on this
+  site"). The worker runs its internal `browser-use` visual agent loop. Flexible, token-intensive,
+  non-deterministic. Enforces `CONFIRM` risk whenever actions mutate state (forms, logins, purchases).
+- **`browser.navigate` / `.extract` / `.click` / `.type`** — Low-level, deterministic, fast. Preferred
+  when DOM structure is known. `extract` operates as `SAFE`.
 
-L'agent choisit ; le planner est instruit de préférer le bas niveau quand c'est possible. Cette
-dualité est ce qui évite de payer un sous-agent LLM complet pour lire une page.
+The agent planner selects between tiers, preferring deterministic operations where possible. This
+duality avoids running a full neural browser loop simply to extract plaintext from a known article.
 
-## 4. Streaming de progression
+## 4. Real-Time Progress Streaming
 
-Le worker publie sur un Redis Stream `browser:events:{sessionId}` :
+The worker emits progress events to a Redis Stream `browser:events:{sessionId}`:
 
 ```json
 {
   "t": "step",
   "i": 3,
   "action": "click",
-  "target": "Rechercher",
-  "url": "https://...",
-  "screenshotRef": "s3://.../3.jpg",
-  "ts": "..."
+  "target": "Search",
+  "url": "https://example.com/search",
+  "screenshotRef": "s3://nexus-artifacts/sessions/123/step-3.jpg",
+  "ts": "2026-10-21T20:15:00Z"
 }
 ```
 
-L'Agent Runtime relaie en `tool.progress` sur le WebSocket client. L'utilisateur **voit** ce que
-le navigateur fait, capture après capture. C'est à la fois une fonctionnalité produit et le
-principal outil de débogage de cette brique.
+The Agent Runtime relays these frames as `tool.progress` over the client WebSocket. The user watches
+the browser navigate step-by-step through live screenshot previews. This provides transparency and
+serves as the primary debugging interface for web tasks.
 
-## 5. Sécurité
+## 5. Security & Threat Mitigations
 
-| Menace                                  | Mitigation                                                                                                                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Injection de prompt depuis une page web | Le contenu de page est balisé comme donnée non fiable ; il ne peut jamais élever un privilège ni déclencher un outil `CRITICAL` (→ [09](09-security-permissions.md) §7)    |
-| Exfiltration de secrets                 | Aucun secret applicatif dans le conteneur ; les credentials de site vivent dans le coffre et sont injectés par un mécanisme `secretRef` que le LLM ne voit jamais en clair |
-| Accès au réseau interne                 | Réseau Docker isolé, egress filtré, blocage RFC1918 + metadata cloud (169.254.169.254)                                                                                     |
-| Escape / crash Chromium                 | Conteneur non-root, `seccomp`, pas de `--no-sandbox`, redémarrage automatique, TTL de session                                                                              |
-| Domaines interdits                      | Allowlist/denylist par utilisateur, vérifiée côté worker _et_ côté outil                                                                                                   |
-| Coût qui dérive                         | Budget par session (steps max, durée max, tokens max) appliqué par le worker                                                                                               |
+| Threat                                  | Mitigation                                                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Indirect prompt injection from web DOM  | Page text marked as untrusted input; prohibited from privilege escalation or invoking `CRITICAL` tools (→ [09](09-security-permissions.md) §7)            |
+| Credential exfiltration                 | Zero central secrets inside container; web session credentials injected via `secretRef` handles never revealed to LLM prompts                            |
+| Internal network reconnaissance (SSRF)  | Isolated Docker network, strict egress filters, blocking RFC1918 subnets and cloud metadata endpoints (169.254.169.254)                                   |
+| Chromium container escape               | Non-root container execution, strict `seccomp` profile, sandboxing enabled, automatic process recycling, hard session timeouts                             |
+| Access to unauthorized domains          | User allowlist / denylist enforced at both backend executor and worker boundary                                                                           |
+| Uncontrolled session costs              | Hard session limits (max steps, max wall-clock time, max LLM tokens) enforced autonomously by worker daemon                                              |
 
-## 6. Cycle de vie & robustesse
+## 6. Lifecycle & Operational Resilience
 
-- Pool de N contextes navigateur préchauffés (démarrage à froid ≈ 2 s évité).
-- TTL de session (défaut 10 min) + garbage collector ; une session orpheline est fermée.
-- Profils persistants **optionnels** par utilisateur (cookies de connexion), chiffrés au repos,
-  jamais partagés entre utilisateurs.
-- `cancel` coopératif : le flag est vérifié entre deux steps `browser-use`.
-- Le worker est **stateless côté métier** : perdre le conteneur perd les sessions en cours (que
-  l'agent traite comme une `ToolExecutionError` retryable), jamais des données.
+- Pre-warmed pool of browser contexts avoiding ~2s cold-start overhead.
+- Session TTL (default 10 minutes) + garbage collector reclaiming orphaned contexts.
+- Optional persistent user profiles (saved site logins), encrypted at rest, isolated per tenant.
+- Cooperative cancellation: the worker verifies cancellation flags between `browser-use` steps.
+- Worker is **stateless regarding user domain data**: restarting the container discards ephemeral browser
+  sessions (handled by the agent as a retryable `ToolExecutionError`), preserving database integrity.

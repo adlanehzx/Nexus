@@ -1,28 +1,29 @@
-# Architecture NEXUS — 28. Collaboration Inter-Agents Améliorée
+# NEXUS Architecture — 28. Enhanced Inter-Agent Collaboration
 
-## 1. Contexte & Objectifs
+## 1. Context and Goals
 
-Dans une architecture multi-agents coordonnée, le simple passage de texte brut non typé (`<DEPENDENCY_RESULTS>`) présente de sévères limites :
+In a coordinated multi-agent architecture, passing raw untyped strings (`<DEPENDENCY_RESULTS>`) presents
+severe limitations:
 
-- Risque de tronquage intempestif des fichiers de code volumineux et des journaux d'audit ;
-- Impossibilité de transmettre des données binaires (captures Chromium, schémas, archives) ;
-- Absence de métadonnées sémantiques (niveau de confiance, hypothèses, questions ouvertes) ;
-- Manque de protocole pour arbitrer les divergences quand deux agents formulent des conclusions opposées ;
-- Incapacité pour un agent en cours d'exécution de soumettre des sous-tâches imprévues au DAG.
+- High risk of truncating large code patches and extensive audit logs;
+- Inability to pass binary data (Chromium screenshots, diagrams, archives);
+- Absence of structured semantic metadata (confidence levels, working hypotheses, open questions);
+- Lack of an arbitration protocol when two agents arrive at conflicting conclusions;
+- Inability for a running agent to dynamically spawn unpredicted follow-up tasks into the mission DAG.
 
-Le **Chantier 14** (finalisant la **Priorité 2**) dote NEXUS d'une suite de collaboration inter-agents complète :
+This subsystem equips NEXUS with an end-to-end collaboration suite:
 
-1. **Espace d'artefacts partagés (`SharedArtifactStore`)** avec adressage URI `artifact://` et intégrité SHA-256 ;
-2. **Messages structurés inter-tâches (`StructuredTaskOutput`)** avec typologie et métadonnées d'exécution ;
-3. **Protocole de débat & cross-critique contradictoire** avec tâche d'arbitrage neutre (`nexus_cross_critique_arbitration`) ;
-4. **Propositions dynamiques de sous-tâches** (`ProposedSubtask`) intégrées au DAG avec attribution par `AgentRouter` ;
-5. **Panneau de collaboration du tableau de bord** pour l'inspection des artefacts et des débats.
+1. **Shared Artifact Store (`SharedArtifactStore`)** using URI scheme `artifact://` and SHA-256 integrity checks;
+2. **Structured Task Outputs (`StructuredTaskOutput`)** with typed categories and execution metadata;
+3. **Contradictory Debate & Cross-Critique Protocol** with neutral arbitration tasks (`nexus_cross_critique_arbitration`);
+4. **Dynamic Subtask Proposals (`ProposedSubtask`)** integrated into active DAGs via `AgentRouter`;
+5. **Dashboard Collaboration Panel** for inspecting shared artifacts, debates, and dynamic subtasks.
 
 ---
 
-## 2. Espace d'Artefacts Partagés (`SharedArtifactStore`)
+## 2. Shared Artifact Store (`SharedArtifactStore`)
 
-Chaque mission dispose d'un espace d'artefacts sanctuarisé dans son workspace :
+Each mission maintains an isolated artifact workspace directory:
 
 ```
 <missionWorkspace>/
@@ -36,7 +37,7 @@ Chaque mission dispose d'un espace d'artefacts sanctuarisé dans son workspace :
         └── page_screenshot.png
 ```
 
-### Manifeste atomique (`manifest.json`)
+### Atomic Manifest (`manifest.json`)
 
 ```typescript
 export interface SharedArtifactRecord {
@@ -55,18 +56,21 @@ export interface SharedArtifactRecord {
 }
 ```
 
-### Garanties de sécurité
+### Security Guarantees
 
-- **Isolation anti-directory traversal** : le chemin absolu de destination doit strictement résider sous le répertoire canonique `artifacts/` de la mission. Toute tentative (`..`, liens symboliques, barres obliques doubles) est rejetée avec `ArtifactSecurityError`.
-- **Permissions strictes** : dossiers en `0700`, fichiers d'artefacts en `0600`.
-- **Quotas stricts** : 25 Mo maximum par artefact, 100 Mo maximum cumulés par mission.
-- **Accès API** : consultation et téléchargement direct via `GET /api/v1/orchestrator/missions/:missionId/artifacts/download?uri=...` avec en-têtes HTTP de type MIME et ETag basés sur le hash SHA-256.
+- **Anti-Directory Traversal Isolation**: Destination paths must reside strictly within the canonical
+  mission `artifacts/` folder. Path traversal attempts (`..`, symlinks, double slashes) are rejected
+  with `ArtifactSecurityError`.
+- **Strict File Permissions**: Directories created with `0700`, artifact files created with `0600`.
+- **Enforced Storage Quotas**: 25 MB max per artifact, 100 MB max aggregate per mission.
+- **REST Download API**: Accessible via `GET /api/v1/orchestrator/missions/:missionId/artifacts/download?uri=...`
+  streaming content with verified MIME headers and SHA-256 ETag headers.
 
 ---
 
-## 3. Messages Structurés Inter-Tâches
+## 3. Structured Inter-Task Messages
 
-Chaque agent produit un résultat qui est analysé et structuré selon le schéma :
+Every agent generates structured outputs parsed according to:
 
 ```typescript
 export interface StructuredTaskOutput {
@@ -79,7 +83,7 @@ export interface StructuredTaskOutput {
     | "browser_findings"
     | "hypothesis"
     | "contradiction_claim";
-  confidenceScore: number; // 0.0 à 1.0
+  confidenceScore: number; // 0.0 to 1.0
   data?: Record<string, unknown>;
   assumptions: string[];
   openQuestions: string[];
@@ -88,33 +92,36 @@ export interface StructuredTaskOutput {
 }
 ```
 
-### Injection dans les tâches aval
+### Injection into Downstream Tasks
 
-Les tâches dépendantes reçoivent un bloc typé `<STRUCTURED_UPSTREAM_CONTEXT>` contenant :
+Dependent tasks receive a typed `<STRUCTURED_UPSTREAM_CONTEXT>` block containing:
 
-- Le profil et la tâche source ;
-- Le type de payload et le niveau de confiance ;
-- Le résumé factuel ;
-- La liste explicite des hypothèses et questions ouvertes ;
-- Les liens vers les artefacts partagés (`artifact://...`) avec leur taille et empreinte SHA-256.
-
----
-
-## 4. Protocole de Débat & Cross-Critique Contradictoire
-
-Lorsqu'un agent de revue ou d'investigation émet une contradiction majeure (`payloadType: "contradiction_claim"` ou signaux lexicaux de réfutation formelle avec divergence de conclusions) :
-
-1. `AgentCollaborationService.detectContradiction` identifie le litige entre la tâche A et la tâche B.
-2. Une tâche d'arbitrage `nexus_cross_critique_arbitration` est intercalée dans le DAG :
-   - Dépendance : attend la fin des deux tâches conflictuelles ;
-   - Profil : `AgentRouter` sélectionne en priorité un **agent tiers neutre** (non impliqué dans la dispute initiale) ;
-   - Consigne : analyser les arguments respectifs, examiner les artefacts, démêler les contradictions et émettre un verdict d'arbitrage définitif pour la synthèse finale.
+- Source agent profile and originating task key;
+- Payload category and confidence score;
+- Factual summary;
+- Explicit assumptions and open questions;
+- References to shared artifacts (`artifact://...`) with file sizes and SHA-256 checksums.
 
 ---
 
-## 5. Proposition Dynamique de Sous-Tâches
+## 4. Contradictory Debate and Cross-Critique Protocol
 
-Un agent en cours d'exécution peut identifier un point bloquant imprévu ou un besoin de test critique. Il inclut dans sa sortie une liste de `proposedSubtasks` :
+When a review or investigation agent flags a substantial contradiction (`payloadType: "contradiction_claim"`
+or formal disagreement signals):
+
+1. `AgentCollaborationService.detectContradiction` identifies conflicting conclusions between Task A and Task B.
+2. An arbitration task `nexus_cross_critique_arbitration` is inserted into the DAG:
+   - Dependency: awaits completion of both conflicting tasks;
+   - Profile: `AgentRouter` selects a **neutral third-party agent** not involved in the original dispute;
+   - Instruction: Analyze both perspectives, examine shared artifacts, reconcile contradictions, and
+     render a definitive verdict for the final synthesis.
+
+---
+
+## 5. Dynamic Subtask Proposals
+
+An executing agent may encounter an unexpected blocker or identify a critical test requirement.
+It includes candidate tasks in its output under `proposedSubtasks`:
 
 ```typescript
 export interface ProposedSubtask {
@@ -128,28 +135,29 @@ export interface ProposedSubtask {
 }
 ```
 
-### Règles d'adoption
+### Adoption Constraints
 
-- Seules les sous-tâches prioritaires (`critical` ou `recommended`) sont retenues ;
-- Plafond de sous-tâches dynamiques par mission (3 maximum) pour empêcher toute dérive du DAG ;
-- Vérification anti-cycle et assignation du profil optimal par `AgentRouter` si non renseigné ;
-- Rebranchement automatique des dépendances de la synthèse finale (`nexus_final_synthesis`) pour attendre l'exécution de la sous-tâche validée.
+- Only high-priority subtasks (`critical` or `recommended`) are accepted;
+- Bounded subtask limit (at most 3 dynamic subtasks per mission) to prevent DAG inflation;
+- Cycle prevention checks and optimal profile assignment via `AgentRouter`;
+- Final synthesis dependencies (`nexus_final_synthesis`) dynamically rewire to await validated subtasks.
 
 ---
 
-## 6. Endpoints REST & Interface Tableau de Bord
+## 6. REST Endpoints & Dashboard Interface
 
-### Endpoints REST (`/api/v1/orchestrator/missions/:missionId/*`)
+### REST Endpoints (`/api/v1/orchestrator/missions/:missionId/*`)
 
-- `GET /artifacts` : Liste des artefacts enregistrés dans la mission.
-- `GET /artifacts/download?uri=...` : Téléchargement sécurisé avec streaming du fichier.
-- `POST /artifacts` : Dépôt manuel ou programmatique d'un artefact.
-- `GET /collaboration` : Vue d'ensemble collaborative (tâches, sorties structurées, artefacts, débats détectés, sous-tâches).
+- `GET /artifacts`: Lists all registered artifacts for the mission.
+- `GET /artifacts/download?uri=...`: Secure streaming file download.
+- `POST /artifacts`: Upload an artifact programmatically or manually.
+- `GET /collaboration`: Comprehensive collaboration summary (tasks, structured outputs, artifacts,
+  debates, subtasks).
 
-### Tableau de bord (`apps/dashboard/src/ui/Sections.tsx`)
+### Dashboard Interface (`apps/dashboard/src/ui/Sections.tsx`)
 
-Le panneau `MissionCollaborationPanel` intégré dans chaque carte de mission permet :
+The `MissionCollaborationPanel` inside mission detail views enables:
 
-- De visualiser et télécharger directement les artefacts partagés ;
-- De visualiser les débats contradictoires détectés avec la recommandation d'arbitrage ;
-- De consulter les sous-tâches dynamiques proposées par les agents au cours de la mission.
+- Browsing and downloading shared mission artifacts;
+- Reviewing detected debate points alongside arbitration recommendations;
+- Inspecting dynamic subtasks proposed by agents during mission execution.

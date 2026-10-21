@@ -1,188 +1,190 @@
 # Roadmap
 
-## Principe d'ordonnancement
+## Scheduling Principle
 
-Chaque phase se termine par une **démonstration utilisable**, pas par un lot de code. On construit
-en tranches verticales : à la fin de la phase 1 on peut réellement parler à l'assistant depuis un
-téléphone, même si presque rien n'est fini derrière.
+Every phase concludes with a **working, usable demonstration**, not merely a bundle of code. We
+build in vertical slices: by the end of Phase 1, you can talk to the assistant directly from a
+smartphone, even if backend components are still minimal.
 
-Deux règles qui décident de l'ordre :
+Two fundamental rules govern sequencing:
 
-1. **Les permissions arrivent avec le premier outil, pas après.** Rétrofitter un système
-   d'autorisation sur un agent qui agit déjà est le refactoring le plus douloureux du projet — et
-   entre-temps, l'agent peut faire de vrais dégâts.
-2. **Le protocole avant les clients.** WebSocket, contrats et boucle durable sont figés tôt, parce
-   que cinq consommateurs en dépendront.
+1. **Permissions arrive alongside the very first tool, never after.** Retrofitting an authorization
+   system onto an agent already performing actions is the most painful refactoring in the project —
+   and in the interim, the agent could cause real damage.
+2. **Protocols before clients.** WebSockets, contracts, and the durable execution loop are stabilized
+   early, because five downstream consumers depend on them.
 
-Les durées supposent **une personne à temps partiel** et sont indicatives : ce sont des ordres de
-grandeur pour séquencer, pas des engagements.
-
----
-
-## Phase 0 — Fondations · ~1,5 semaine
-
-**Objectif** — un squelette qui compile, se teste et se déploie, avant toute fonctionnalité.
-
-- Monorepo pnpm + Turborepo, TypeScript strict, ESLint + règles de frontières, Prettier.
-- `@nexus/contracts`, `config`, `logger`, `errors`, `testing` (versions minimales).
-- Prisma : schéma initial (User, Session, Conversation, Message), migrations, seed.
-- Docker Compose local (postgres+pgvector, redis, minio) + Dockerfiles.
-- CI : install → typecheck → lint → test → build, gitleaks, `pnpm audit`.
-- `/healthz`, logs structurés, `correlationId` de bout en bout.
-
-**Critère de sortie** — `pnpm dev` démarre tout ; `pnpm test` passe ; un déploiement bidon part sur
-le VPS et répond en HTTPS.
+Durations assume **one person working part-time** and are indicative: order-of-magnitude guidelines
+for sequencing, not rigid contractual commitments.
 
 ---
 
-## Phase 1 — Conversation de bout en bout · ~2 semaines
+## Phase 0 — Foundations · ~1.5 weeks
 
-**Objectif** — parler à l'assistant depuis l'iPhone, en streaming. Aucun outil.
+**Objective** — A skeleton that compiles, passes tests, and deploys, before building any business
+features.
 
-- Auth : inscription, connexion, JWT + refresh rotatif, `expo-secure-store`.
-- API v1 : `/auth`, `/conversations`, `/messages`.
-- `@nexus/llm` : port `LLMProvider` + un adaptateur réel + `FakeLLM`.
-- WS Gateway : enveloppes typées, auth, canaux, heartbeat, reconnexion, reprise par `seq`.
-- `apps/worker` + BullMQ : run minimal (pas de boucle d'outils), streaming de tokens.
-- Mobile Expo : écran conversation, composer, streaming, historique. UI volontairement brute.
+- Monorepo pnpm + Turborepo, strict TypeScript, ESLint + boundary rules, Prettier.
+- `@nexus/contracts`, `config`, `logger`, `errors`, `testing` (initial minimal versions).
+- Prisma: initial schema (User, Session, Conversation, Message), migrations, seed scripts.
+- Local Docker Compose (postgres + pgvector, redis, minio) + Dockerfiles.
+- CI: install → typecheck → lint → test → build, gitleaks, `pnpm audit`.
+- `/healthz`, structured logs, end-to-end `correlationId`.
 
-**Critère de sortie** — j'envoie « raconte-moi une blague » depuis mon iPhone, la réponse s'écrit
-en direct, je coupe le Wi-Fi et je le rétablis : le flux reprend sans perte.
-
----
-
-## Phase 2 — Agent, outils et permissions · ~3 semaines · **phase la plus critique**
-
-**Objectif** — l'agent agit réellement, sous contrôle.
-
-- `@nexus/agent-core` : boucle durable, `AgentRun` / `AgentStep`, budgets, itérations, timeout,
-  annulation, retry, résultat partiel, replanification sur échec.
-- `tools-core` : `ToolDefinition`, `ToolRegistry`, `ToolExecutor` (validation, idempotence,
-  timeout, circuit breaker, redaction, artefacts).
-- `permissions` : `RiskEvaluator`, `PermissionService`, grants scopés, deny par défaut.
-- Confirmations : suspension durable du run, `payloadHash`, `nonce`, expiration, reprise.
-- Premiers outils : `search.web`, `weather.get`, `http.request`, `memory.*`, `calendar.*`, `mail.*`.
-- OAuth Google (calendrier, Gmail) + coffre à credentials chiffré.
-- UI mobile : cartes d'outils, cartes de confirmation, bouton d'annulation.
-- Tests unitaires exhaustifs sur la boucle et la table de vérité des permissions.
-
-**Critère de sortie** — « regarde mes emails et dis-moi lesquels sont importants » fonctionne ;
-« envoie un message à X » ouvre une carte de confirmation montrant le texte exact ; refuser
-l'annule proprement ; tuer le worker au milieu d'un run et le redémarrer reprend le run.
+**Exit Criteria** — `pnpm dev` boots all services; `pnpm test` passes cleanly; a test deployment runs
+on a VPS and answers over HTTPS.
 
 ---
 
-## Phase 3 — Application mobile réelle · ~2,5 semaines
+## Phase 1 — End-to-End Conversation · ~2 weeks
 
-**Objectif** — passer d'un prototype à une application qu'on a envie d'ouvrir.
+**Objective** — Chat with the assistant from a mobile phone with real-time streaming. No tools yet.
 
-- Design system (`@nexus/ui-tokens`), animations d'état (réflexion / exécution / attente).
-- Écrans Historique, Tâches, Permissions, Mémoire, Settings.
-- Envoi optimiste, mode hors ligne, file de réémission.
-- Notifications push (confirmations, fins de run), actions depuis la notification.
-- Build TestFlight, Sentry, télémétrie de crash.
+- Auth: signup, login, JWT + rotating refresh tokens, `expo-secure-store`.
+- API v1: `/auth`, `/conversations`, `/messages`.
+- `@nexus/llm`: `LLMProvider` port + one real provider adapter + `FakeLLM`.
+- WS Gateway: typed envelopes, authentication, channels, heartbeat, reconnection, `seq` replay.
+- `apps/worker` + BullMQ: minimal run execution (no tool loop), token streaming.
+- Mobile Expo: conversation screen, composer, streaming display, history. Minimalist UI.
 
-**Critère de sortie** — l'application est utilisée quotidiennement sans passer par un terminal.
-
----
-
-## Phase 4 — Device Agent · ~2,5 semaines
-
-**Objectif** — l'assistant agit sur le PC depuis le téléphone.
-
-- `@nexus/device-protocol`, canal `/ws/device`, appairage Ed25519 par QR code.
-- Démon Node : politique locale YAML, jail de chemins, allowlist shell, classifieur de commandes.
-- Outils `device.fs.*`, `device.shell.exec`, `device.process.*`, `device.git.*`, `device.docker.*`.
-- Heartbeat, reconnexion, reprise de tâche, annulation, streaming stdout.
-- Installation en service Windows, signature du binaire.
-- UI Devices : statut, logs en direct, édition de la politique, bouton pause.
-
-**Critère de sortie** — « ouvre mon projet LeynAI et lance les tests » depuis l'iPhone affiche la
-sortie des tests en direct ; « regarde pourquoi Docker ne démarre pas » remonte un diagnostic ;
-une commande hors politique est refusée par le PC et expliquée par l'agent.
+**Exit Criteria** — Sending "tell me a joke" from mobile displays the streamed answer in real time;
+toggling airplane mode on and off seamlessly reconnects and resumes the stream without frame loss.
 
 ---
 
-## Phase 5 — MCP et Browser Use · ~2,5 semaines
+## Phase 2 — Agent, Tools, and Permissions · ~3 weeks · **Most Critical Phase**
 
-**Objectif** — extensibilité et navigation web.
+**Objective** — The agent performs real-world actions, strictly under control.
 
-- `McpManager` : stdio + HTTP/SSE, découverte, traduction JSON Schema → Zod, supervision, hot
-  reload, conteneur `mcp-runner` isolé. UI d'ajout de serveur.
-- `apps/browser-worker` : FastAPI + browser-use, contrat OpenAPI, tests de contrat TS ↔ Python.
-- Outils `browser.act` et `browser.navigate/extract/click/type`, progression avec captures d'écran.
-- Isolation réseau, filtrage d'egress, budgets de session.
+- `@nexus/agent-core`: durable loop, `AgentRun` / `AgentStep`, token/step budgets, timeouts,
+  cancellation, retries, partial results, replanning on failure.
+- `tools-core`: `ToolDefinition`, `ToolRegistry`, `ToolExecutor` (validation, idempotency,
+  timeouts, circuit breaker, redaction, artifacts).
+- `permissions`: `RiskEvaluator`, `PermissionService`, scoped grants, deny-by-default posture.
+- Confirmations: durable run suspension, `payloadHash`, single-use `nonce`, expiration, resumption.
+- Initial tools: `search.web`, `weather.get`, `http.request`, `memory.*`, `calendar.*`, `mail.*`.
+- Google OAuth (Calendar, Gmail) + encrypted credential vault.
+- Mobile UI: tool execution cards, confirmation prompt cards, cancellation button.
+- Comprehensive unit test suite covering loop transitions and the permission truth table.
 
-**Critère de sortie** — « va sur ce site et récupère les informations » affiche la navigation
-étape par étape ; ajouter un serveur MCP depuis l'app rend ses outils disponibles sans
-redéploiement, en `CONFIRM` par défaut.
-
----
-
-## Phase 6 — Mémoire et tâches planifiées · ~2 semaines
-
-**Objectif** — l'assistant se souvient et agit dans le temps.
-
-- pgvector + HNSW, recherche hybride RRF, extraction post-run, déduplication, supersession.
-- Compaction du contexte, `ConversationSummary`, `artifact.read`.
-- Écran Mémoire (voir, éditer, épingler, oublier).
-- `Task` planifiées et récurrentes (« chaque matin, résume mes mails ») via BullMQ repeatable.
-- Job d'oubli hebdomadaire.
-
-**Critère de sortie** — l'assistant se souvient d'un fait donné trois semaines plus tôt ; une
-conversation de 200 messages reste utilisable et à coût stable ; une routine matinale s'exécute
-seule et notifie.
+**Exit Criteria** — "Check my unread emails and highlight important ones" functions reliably;
+"Send an email to contact@example.com" renders a confirmation card displaying the exact drafted body;
+rejecting the confirmation cancels cleanly; killing the worker mid-run and rebooting resumes smoothly.
 
 ---
 
-## Phase 7 — Voix · ~2 semaines
+## Phase 3 — Production Mobile Application · ~2.5 weeks
 
-**Objectif** — parler et être répondu à voix haute.
+**Objective** — Transition from an initial prototype to a polished, everyday application.
 
-- Ports STT/TTS + adaptateurs cloud, mode dictée avec transcription éditable.
-- Puis streaming : `voice.chunk`, endpointing, TTS phrase par phrase, barge-in.
-- Réglages de voix, mode « ne jamais conserver l'audio », adaptateurs locaux (whisper.cpp, Piper).
+- Design system (`@nexus/ui-tokens`), state animations (thinking / acting / awaiting input).
+- Screens: History, Tasks, Permissions, Memory, Settings.
+- Optimistic UI updates, offline handling, re-dispatch queues.
+- Push notifications (confirmation prompts, run completions), actionable notifications.
+- TestFlight builds, Sentry error tracking, crash telemetry.
 
-**Critère de sortie** — conversation vocale mains libres avec moins de 1,5 s de latence perçue ;
-une action `CRITICAL` refuse l'approbation vocale et exige un geste.
-
----
-
-## Phase 8 — Desktop, web et durcissement · ~3 semaines
-
-**Objectif** — rendre le système présentable, observable et robuste.
-
-- App Tauri v2 : UI partagée, tray, raccourci global, fenêtre spotlight, supervision du démon.
-- Web (Vite) pour l'accès occasionnel.
-- Observabilité complète : OTel + Grafana/Loki/Tempo/Prometheus, tableau de bord coûts, alertes.
-- Run Inspector, export de run, rejeu.
-- Suite d'évals agent (~50 scénarios) + évals de sécurité (injections), en nocturne.
-- Audit de sécurité, tests de restauration, documentation d'exploitation, runbooks.
-
-**Critère de sortie** — un run échoué se diagnostique en moins de 5 minutes ; les évals nocturnes
-passent au vert ; une restauration complète depuis sauvegarde est réalisée en conditions réelles.
+**Exit Criteria** — The mobile application is used daily without opening a development terminal.
 
 ---
 
-## Vue d'ensemble
+## Phase 4 — Device Agent · ~2.5 weeks
 
-| Phase                      | Durée   | Cumul | Livre                       |
-| -------------------------- | ------- | ----- | --------------------------- |
-| 0 · Fondations             | 1,5 sem | 1,5   | squelette déployable        |
-| 1 · Conversation           | 2 sem   | 3,5   | **parler à l'assistant**    |
-| 2 · Agent + permissions    | 3 sem   | 6,5   | **il agit, sous contrôle**  |
-| 3 · Mobile                 | 2,5 sem | 9     | **application quotidienne** |
-| 4 · Devices                | 2,5 sem | 11,5  | **il agit sur le PC**       |
-| 5 · MCP + Browser          | 2,5 sem | 14    | **extensible et web**       |
-| 6 · Mémoire + tâches       | 2 sem   | 16    | **il se souvient**          |
-| 7 · Voix                   | 2 sem   | 18    | **on lui parle**            |
-| 8 · Desktop + durcissement | 3 sem   | 21    | **fiable et observable**    |
+**Objective** — The assistant executes actions on a workstation triggered from mobile.
 
-≈ **5 mois à temps partiel**, avec un produit utile dès la semaine 6,5.
+- `@nexus/device-protocol`, `/ws/device` gateway channel, Ed25519 pairing via QR code.
+- Node daemon: local YAML policy, path sandboxing jail, shell command allowlist, command classifier.
+- Tools: `device.fs.*`, `device.shell.exec`, `device.process.*`, `device.git.*`, `device.docker.*`.
+- Heartbeats, auto-reconnection, task resumption, cancellation, stdout streaming.
+- Windows Service installation script, binary signing.
+- Desktop Devices UI: status dashboard, live log viewer, policy editor, emergency pause button.
 
-## Coupes possibles si le temps manque
+**Exit Criteria** — "Open my project and run the test suite" from mobile streams test stdout live;
+"Check why Docker is failing" returns diagnostic info; an unauthorized command outside local policy
+is denied locally by the PC and clearly explained by the agent.
 
-Dans cet ordre : le web (phase 8), le mode conversation vocale continue (garder la dictée),
-le desktop Tauri (le mobile + le démon suffisent), les tâches récurrentes. **Ne jamais couper** :
-les permissions, les confirmations, la boucle durable, l'audit. Ce sont eux qui rendent le reste
-utilisable sans danger.
+---
+
+## Phase 5 — MCP and Browser Use · ~2.5 weeks
+
+**Objective** — Extensibility via external tool servers and web automation.
+
+- `McpManager`: stdio + HTTP/SSE, tool discovery, JSON Schema → Zod translation, supervision, hot
+  reloading, isolated `mcp-runner` container. UI to register MCP servers.
+- `apps/browser-worker`: FastAPI + browser-use, OpenAPI contract, cross-language TS ↔ Python contract tests.
+- Tools: `browser.act` and `browser.navigate/extract/click/type`, live screenshot streaming.
+- Network isolation, egress filtering, strict session execution budgets.
+
+**Exit Criteria** — "Go to this site and extract pricing details" displays step-by-step navigation;
+adding an external MCP server from the UI makes its tools available without redeployment, defaulting
+to `CONFIRM`.
+
+---
+
+## Phase 6 — Long-Term Memory and Scheduled Tasks · ~2 weeks
+
+**Objective** — The assistant remembers information across sessions and acts over time.
+
+- pgvector + HNSW index, hybrid search with Reciprocal Rank Fusion, post-run extraction, deduplication,
+  supersession tracking.
+- Context compaction, `ConversationSummary`, `artifact.read`.
+- Memory UI (browse, edit, pin, delete memories).
+- Scheduled and recurring tasks ("Every morning, summarize my unread newsletters") via BullMQ repeatable jobs.
+- Automated weekly garbage-collection job for outdated short-term memories.
+
+**Exit Criteria** — The assistant recalls a specific preference stated three weeks prior; a 200-message
+thread maintains stable context cost and latency; a morning scheduled task executes autonomously and
+sends a digest notification.
+
+---
+
+## Phase 7 — Voice Interaction · ~2 weeks
+
+**Objective** — Spoken input with voice synthesis responses.
+
+- STT/TTS port interfaces + cloud adapters, dictation mode with editable on-device transcription.
+- Audio streaming: `voice.chunk`, endpoint detection, sentence-by-sentence TTS, barge-in support.
+- Voice configuration settings, "never persist raw audio" privacy mode, local adapters (whisper.cpp, Piper).
+
+**Exit Criteria** — Hands-free voice conversation with under 1.5s perceived latency; any `CRITICAL`
+action strictly refuses voice authorization and demands on-screen biometric confirmation.
+
+---
+
+## Phase 8 — Desktop App, Web Dashboard, and Hardening · ~3 weeks
+
+**Objective** — Deliver a polished, observable, and hardened system.
+
+- Tauri v2 app: shared React UI, system tray, global hotkeys, spotlight quick window, daemon supervisor.
+- Web dashboard (Vite) for occasional browser access.
+- Comprehensive observability: OpenTelemetry + Grafana/Loki/Tempo/Prometheus, cost dashboard, alerts.
+- Run Inspector, full execution trace export, step replay.
+- Agent evaluation suite (~50 scenarios) + nocturnal security prompt injection benchmarks.
+- Security audit, full disaster recovery restoration drills, operational runbooks.
+
+**Exit Criteria** — A failed run can be thoroughly diagnosed in under 5 minutes; nocturnal evaluation
+suites pass cleanly; a complete blank-machine restoration drill is performed successfully.
+
+---
+
+## Overview Summary
+
+| Phase                        | Duration  | Cumulative | Deliverable                  |
+| ---------------------------- | --------- | ---------- | ---------------------------- |
+| 0 · Foundations              | 1.5 wks   | 1.5        | deployable skeleton          |
+| 1 · Conversation             | 2 wks     | 3.5        | **chat with assistant**      |
+| 2 · Agent + Permissions      | 3 wks     | 6.5        | **acts, strictly governed**  |
+| 3 · Mobile                   | 2.5 wks   | 9          | **daily mobile app**         |
+| 4 · Devices                  | 2.5 wks   | 11.5       | **acts on workstation**      |
+| 5 · MCP + Browser            | 2.5 wks   | 14         | **extensible web runner**    |
+| 6 · Memory + Tasks           | 2 wks     | 16         | **remembers long term**      |
+| 7 · Voice                    | 2 wks     | 18         | **spoken interaction**       |
+| 8 · Desktop + Hardening      | 3 wks     | 21         | **reliable and observable**  |
+
+≈ **5 months part-time**, with a useful working product available from week 6.5.
+
+## Scope Reductions if Time is Constrained
+
+In this priority order: Web dashboard (Phase 8), continuous streaming voice (keep dictation mode),
+Tauri desktop GUI (mobile app + background daemon suffice), recurring tasks. **Never cut**:
+permissions, confirmation gates, durable execution loop, audit logging. These guarantees ensure the
+system remains safe to operate.

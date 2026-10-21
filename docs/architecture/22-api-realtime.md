@@ -1,121 +1,113 @@
-# 22 — API et temps réel (implémenté)
+# 22 — API and Real-Time Gateway (Implemented Architecture)
 
-Décrit la couche réseau **telle qu'elle est construite**. Les documents
-[02 — Backend](02-backend.md) et [08 — Protocole WebSocket](08-websocket-protocol.md)
-en posent la conception ; celui-ci fait foi pour le code.
+Describes the network boundary **as built in the codebase**. Documents [02 — Backend](02-backend.md)
+and [08 — WebSocket Protocol](08-websocket-protocol.md) establish the initial architecture; this
+document reflects the implemented code.
 
-## 1. Ce qui a été ajouté, et ce qui n'a pas bougé
+## 1. What Was Delivered
 
-Aucune logique métier n'a été redessinée. `TaskCoordinator`, `DeviceSelector`,
-`WorkerGateway`, `DeviceSessionService`, `PermissionService`,
-`ConfirmationService`, `EventRouter` et les deux workers sont **inchangés** —
-leurs 425 tests passent tels quels.
+Existing core business logic remains untouched. `TaskCoordinator`, `DeviceSelector`, `WorkerGateway`,
+`DeviceSessionService`, `PermissionService`, `ConfirmationService`, `EventRouter`, and both workers
+remain **identical** — their 425 unit tests pass as-is.
 
-L'API les câble. Trois choses ont été créées :
+The API layer wires these components together:
 
-1. **`@nexus/auth` est devenu réel** — il ne contenait que des schémas. Jetons
-   EdDSA, mots de passe scrypt, rotation de session.
-2. **Le canal client** (`@nexus/protocol/client.ts`), pendant du canal worker
-   déjà en place. Même cadrage `envelopeSchema`, types disjoints.
-3. **Les routes REST et les deux canaux WebSocket**, plus quatre services que
-   personne ne portait encore : conversations, notifications, courtier de
-   confirmation, superviseur de tâches.
+1. **`@nexus/auth` was implemented** — providing EdDSA keypair token signing, scrypt password hashing,
+   and session rotation logic.
+2. **Client Gateway Channel** (`@nexus/protocol/client.ts`), mirroring the worker channel with disjoint
+   message types inside a shared `envelopeSchema`.
+3. **REST Route Controllers and Dual WebSocket Channels**, alongside four core services: conversations,
+   notifications, confirmation broker, and task supervisor.
 
-## 2. Le cœur est l'autorité
+## 2. Centralized Authorization Authority
 
 ```
-client ─▶ route ou WebSocket
-       ─▶ jeton vérifié + session active
-       ─▶ propriété de la ressource
-       ─▶ PermissionService
-       ─▶ TaskCoordinator ─▶ DeviceSelector ─▶ WorkerGateway ─▶ worker
+Client ─▶ Route or WebSocket Channel
+       ─▶ Verified JWT + Active Session Check
+       ─▶ Resource Ownership Check
+       ─▶ PermissionService Authorization Check
+       ─▶ TaskCoordinator ─▶ DeviceSelector ─▶ WorkerGateway ─▶ Worker Node
 ```
 
-Un client ne désigne jamais d'exécutant. Il déclare des **capacités requises** ;
-le sélecteur choisit. C'est ce qui empêche « envoie ça au poste fixe » de devenir
-un chemin d'exécution dirigé depuis un téléphone.
+A client device never assigns tasks directly to an executor. It declares **required capabilities**;
+the server's `DeviceSelector` determines the target machine. This prevents compromised mobile devices
+from executing arbitrary directed commands on specific workstations.
 
-Les deux canaux WebSocket ont des **types disjoints**, des schémas disjoints et
-des points d'entrée disjoints. Un `worker.task_result` forgé depuis un iPhone
-n'a nulle part où arriver — deux tests le vérifient dans les deux sens.
+The two WebSocket channels feature **disjoint types**, disjoint schemas, and separate endpoints.
+A forged `worker.task_result` frame sent across a client WebSocket fails schema validation immediately.
 
-## 3. Deux surfaces d'authentification
+## 3. Two Distinct Authentication Boundaries
 
-|                             | Utilisateur                | Appareil                      |
+| Feature                     | User Sessions              | Device Worker Sessions        |
 | --------------------------- | -------------------------- | ----------------------------- |
-| Preuve                      | mot de passe → jeton EdDSA | challenge signé Ed25519/P-256 |
-| Durée                       | 15 min, rafraîchi          | 30 min, rotatif               |
-| Garde                       | `requireUser`              | `requireDevice`               |
-| Peut agir au nom de l'autre | non                        | non                           |
+| Credential Proof            | Password → EdDSA JWT token | Signed Ed25519/P-256 challenge|
+| Validity Lifespan           | 15 minutes, rotating       | 30 minutes, rotating          |
+| Route Guard                 | `requireUser`              | `requireDevice`               |
+| Act on Behalf of Other?     | Prohibited                 | Prohibited                    |
 
-`verifyAccessToken` refuse un jeton d'appareil, et réciproquement. Il n'existe
-pas de garde générique qui accepterait les deux.
+`verifyAccessToken` rejects device tokens, and device validators reject user tokens. Generic guards
+that conflate the two identities do not exist.
 
-**La vérification se fait en deux temps** : la signature prouve que le jeton
-vient de nous, la session prouve qu'il est toujours valide. Sans le second,
-se déconnecter ne ferait rien pendant un quart d'heure.
+**Two-Phase Verification**: Cryptographic signatures verify token authenticity; active session lookups
+verify non-revocation. Without the second check, logging out would fail to revoke access until the
+15-minute token TTL elapsed.
 
-## 4. EdDSA plutôt qu'un secret partagé
+## 4. EdDSA Asymmetric Tokens vs. Shared Secrets
 
-Plusieurs composants doivent **vérifier** un jeton — l'API, la passerelle
-WebSocket, demain un service séparé — alors qu'un seul doit pouvoir en
-**émettre**. Avec un secret symétrique, tout ce qui vérifie peut aussi forger.
+Multiple backend components need to **verify** tokens — API routes, WebSocket gateways, and background
+workers — while only the authentication service needs to **issue** tokens. With symmetric HMAC secrets,
+every verifying service can forge tokens.
 
-`TokenService.publicKeyPem` existe pour cela : un vérificateur qui ne peut pas
-émettre.
+`TokenService.publicKeyPem` distributes public verification keys to services without sharing private
+signing credentials.
 
-## 5. Rotation du jeton de rafraîchissement
+## 5. Refresh Token Rotation and Anti-Theft Revocation
 
-Le jeton tourne à chaque usage, et l'ancien est révoqué dans le même mouvement.
-Si un jeton déjà consommé réapparaît, c'est qu'il a été copié : **toutes les
-sessions de l'utilisateur sont fermées**, pas seulement celle-là. L'attaquant et
-la victime en détiennent chacun un, et on ne sait pas lequel est lequel.
+Refresh tokens rotate on every invocation, immediately invalidating the prior token. If a previously
+consumed token is presented again, theft is assumed: **all active sessions for that user account are
+instantly terminated**. Both attacker and victim possess a token copy, and the backend treats the
+account as compromised.
 
-## 6. Synchronisation iPhone ↔ portable
+## 6. Multi-Device Real-Time Synchronization
 
-Elle n'a demandé **aucun code spécifique**. `EventRouter` diffusait déjà à tous
-les clients de l'utilisateur, l'appareil d'origine servi en premier, avec une file
-bornée pour les absents. Le canal client ne fait qu'y brancher une connexion.
+Synchronizing actions across mobile phones and workstations required **zero specialized sync code**.
+`EventRouter` already broadcasts events to all active sessions owned by a user, prioritizing the
+originating device and buffering events for disconnected sessions. The client channel simply attaches
+to this pipeline.
 
-Trois propriétés, chacune testée :
+Three verified properties:
 
-- une tâche lancée depuis l'iPhone apparaît sur le portable ;
-- `originClientDeviceId` est préservé dans **tous** les événements de tâche — le
-  portable sait que la demande vient de l'iPhone, et peut ne pas la sonner ;
-- un client déconnecté reçoit au retour ce qu'il a manqué.
+- A task initiated from mobile renders immediately on the desktop dashboard;
+- `originClientDeviceId` is preserved across **all** task events — allowing the desktop client to know
+  an action was triggered from mobile and silence duplicate audio chimes;
+- A disconnected client receives missed events upon reconnection.
 
-Les **notifications sont produites au centre**, jamais par un client. Si chaque
-client décidait quoi notifier, l'iPhone et le portable afficheraient des choses
-différentes du même événement, et une tâche terminée pendant que l'iPhone était
-éteint ne produirait rien du tout.
+**Notifications originate from the central server**, never client devices. If clients generated local
+notifications independently, mobile and desktop would display conflicting states for the same event,
+and tasks finishing while a mobile device was powered down would generate no notification history.
 
-## 7. Confirmations : la demande vit au centre
+## 7. Confirmation Broker: Decoupled Human Approval
 
-`ConfirmationBroker` réconcilie deux contrats incompatibles en apparence :
-`TaskCoordinator` attend un verdict, `ConfirmationService` ne bloque jamais.
+`ConfirmationBroker` reconciles two seemingly incompatible contracts: `TaskCoordinator` expects a
+synchronous resolution promise, while `ConfirmationService` operates non-blockingly.
 
-Conséquence utile : une confirmation demandée pendant qu'on est sur l'iPhone peut
-être approuvée **depuis le portable**. Une réponse en double n'est pas une
-erreur — deux clients peuvent répondre presque en même temps, et le second ne
-doit pas voir un message d'échec alors que tout s'est bien passé.
+Key benefit: a confirmation prompt triggered while using mobile can be approved **from the desktop**.
+Duplicate approvals (e.g. approving on two screens near-simultaneously) resolve gracefully without
+spurious error messages.
 
-L'expiration vaut **refus**. Le silence ne doit jamais valoir accord pour une
-action qui touche les fichiers de quelqu'un.
+Confirmation timeouts evaluate strictly to **rejection**. Silence is never interpreted as consent for
+actions that mutate user systems or files.
 
-## 8. Nommage du canal worker
+## 8. Worker Channel Protocol Naming
 
-Le lot demandait `worker.task.progress` ; le code utilise `worker.task_progress`,
-déjà en service dans les deux workers et leurs 319 tests. Les renommer aurait été
-une rupture de contrat sans bénéfice fonctionnel — la consigne interdit par
-ailleurs de redessiner ce qui marche. Les noms côté **client** suivent
-exactement la spécification du lot.
+The task specification requested `worker.task.progress`; the codebase utilizes `worker.task_progress`,
+already standardized across both workers and 319 unit tests. The naming was maintained to preserve
+contract stability. Client-facing event names adhere strictly to specification standards.
 
-## 9. Ce qui reste
+## 9. Next Operational Steps
 
-La persistance : tous les magasins sont en mémoire derrière des ports. Le schéma
-Prisma existe pour utilisateurs, appareils, sessions, conversations, messages et
-tâches ; les implémentations restent à écrire. Aucune route ne changera.
-
-Le transport WebSocket lui-même : `ClientChannel` et `WorkerChannel` sont
-complets et testés, mais rien n'ouvre encore de socket. Brancher `@fastify/websocket`
-consiste à appeler `authenticate`, `attach`, `handle` et `detach`.
+Prisma schema models exist for users, devices, sessions, conversations, messages, and tasks; database
+repositories are ready for persistent PostgreSQL storage behind existing repository interfaces without
+changing route controllers.
+WebSocket route integration wires `@fastify/websocket` to `ClientChannel` and `WorkerChannel` via
+`authenticate`, `attach`, `handle`, and `detach` hooks.

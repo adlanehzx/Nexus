@@ -1,43 +1,44 @@
-# ADR-012 — La voix est découplée de l'agent
+# ADR-012 — Voice is Decoupled from the Agent Core
 
-**Statut** : Proposé · 2026-09-01
+**Status**: Proposed · 2026-09-01
 
-## Contexte
+## Context
 
-Le produit doit accepter la parole et répondre en voix. La tentation est d'utiliser une API
-« speech-to-speech » de bout en bout, ou d'introduire un chemin d'exécution spécifique au mode
-vocal. Le cahier des charges demande explicitement de « ne pas coupler la logique voice au backend
-agent ».
+The product must accept spoken input and respond with natural voice synthesis. The temptation is to
+adopt an end-to-end "speech-to-speech" multimodal API or introduce voice-specific branching inside
+the agent execution path. The system requirements explicitly state: "do not couple voice logic to
+the agent backend".
 
-## Décision
+## Decision
 
-STT et TTS sont des couches d'entrée/sortie autour d'un agent qui ne manipule que du texte.
-Ports `STTProvider` et `TTSProvider` dans `@nexus/voice`, adaptateurs cloud et locaux
-(`whisper.cpp`, Piper). Un seul indice traverse la frontière : `Message.inputModality`, utilisé
-uniquement pour ajuster le **style** de la réponse (plus court, pas de markdown, pas d'URL lue).
+Speech-to-Text (STT) and Text-to-Speech (TTS) are decoupled input/output transport layers wrapping
+an agent core that operates strictly on text. Decoupled ports `STTProvider` and `TTSProvider` live
+in `@nexus/voice`, with cloud and local adapters (`whisper.cpp`, Piper). Only one signal crosses the
+boundary: `Message.inputModality`, used solely to subtly adjust response **style** (shorter phrases,
+no raw markdown tables, avoid spelling out raw URLs).
 
-Deux modes produit : dictée (v1, transcription éditable avant envoi) puis conversation continue
-(v2, streaming, endpointing, TTS phrase par phrase, barge-in).
+Two modes: dictation (v1, editable transcription before sending) and continuous conversation
+(v2, streaming chunks, speech endpointing, sentence-by-sentence TTS, barge-in support).
 
 ## Alternatives
 
-- **API speech-to-speech de bout en bout.** Latence excellente et prosodie supérieure. Écarté pour
-  la v1 : le modèle vocal devient le cerveau, ce qui court-circuite la boucle agentique, les
-  permissions, les confirmations et la mémoire — c'est-à-dire tout le produit. Réenvisageable
-  plus tard **derrière le même port**, pour les échanges purement conversationnels sans outil.
-- **STT/TTS sur l'appareil uniquement.** Confidentialité maximale et zéro coût serveur, mais
-  qualité et latence variables selon le téléphone, et impossible de partager la voix entre
-  appareils. Conservé comme option de configuration, pas comme défaut.
-- **Un pipeline agent distinct pour la voix.** Double la logique métier, donc double les bugs.
-  Rejeté par principe.
+- **End-to-end speech-to-speech API.** Excellent latency and natural prosody. Rejected for v1: the
+  voice model acts as the brain, short-circuiting the durable agent loop, permissions, confirmation
+  gates, and memory systems — essentially bypassing the core product architecture. Can be considered
+  later **behind the same port** for purely conversational interactions without tool usage.
+- **On-device STT/TTS only.** Maximum privacy and zero server compute costs, but uneven quality and
+  latency across varied mobile devices, and cannot share synthesized voice state across machines.
+  Retained as a configurable option, not default.
+- **Separate agent pipeline for voice.** Duplicates core business logic, doubling surface area for
+  bugs. Rejected on principle.
 
-## Conséquences
+## Consequences
 
-**Positives** — un seul chemin d'exécution à tester et à sécuriser ; changer de fournisseur STT ou
-TTS est une configuration ; le mode « tout local » reste atteignable pour la confidentialité ;
-les confirmations vocales héritent des mêmes règles que le texte.
+**Positive** — A single execution flow to test, audit, and secure; switching STT or TTS providers is
+a matter of configuration; an "all-local" privacy mode remains easily attainable; voice
+confirmations inherit identical permission policies as text.
 
-**Négatives, acceptées** — latence supérieure à un modèle speech-to-speech natif (budget cible
-< 1,5 s perçu, atteint par le TTS phrase par phrase) ; la transcription introduit des erreurs que
-l'agent traite comme du texte — d'où l'édition avant envoi en mode dictée, et l'interdiction
-d'approuver une action `CRITICAL` à la voix.
+**Negative, accepted** — Higher latency than a native speech-to-speech neural pipeline (target
+perceived latency < 1.5s, achieved through streaming sentence-by-sentence TTS); STT transcription
+errors enter the context as literal text — requiring editable previews in dictation mode, and
+prohibiting verbal approval of `CRITICAL` actions.

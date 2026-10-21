@@ -1,58 +1,63 @@
-# Architecture NEXUS — 26. Gestion Multi-Comptes Fournisseurs
+# NEXUS Architecture — 26. Multi-Account Provider Management
 
-## 1. Contexte & Objectifs
+## 1. Context and Goals
 
-NEXUS s'appuie sur des agents CLI locaux connectés aux abonnements existants de l'utilisateur (ChatGPT Plus pour Codex, Claude Pro pour Claude Code, Google AI Pro pour Antigravity), sans recourir à des clés API payantes tierces.
+NEXUS leverages local CLI agents connected to the user's existing personal subscriptions
+(ChatGPT Plus for Codex, Claude Pro for Claude Code, Google AI Pro for Antigravity), without relying on
+metered third-party API keys.
 
-Pour répondre aux cas d'usage avancés et aux contraintes de quotas observés, NEXUS permet d'administrer **plusieurs comptes et identités par fournisseur** :
+To satisfy intensive workloads and handle rolling quota constraints, NEXUS administers **multiple
+accounts and identities per provider**:
 
-- `antigravity-personnel` / `antigravity-secondaire` ;
-- `claude-principal` / `claude-backup` ;
-- `codex-principal` / `codex-dev`.
+- `antigravity-personal` / `antigravity-secondary`;
+- `claude-primary` / `claude-backup`;
+- `codex-primary` / `codex-dev`.
 
-Chaque identité dispose :
+Each configured identity maintains:
 
-1. De son **profil système** et de sa **session CLI étanche** ;
-2. De son **état d'authentification** surveillé ;
-3. De ses **quotas observés** (fenêtres 5h, hebdo, état d'épuisement) ;
-4. De ses **cooldowns** (temps de recharge automatiques et manuels) ;
-5. De sa **priorité** d'arbitrage (1 = haute priorité) ;
-6. De son **historique de fiabilité** et score de succès (0.00 à 1.00).
+1. A dedicated **system profile** and **isolated CLI session** directory;
+2. Monitored **authentication status**;
+3. Tracked **observed quotas** (5-hour window, weekly window, exhaustion state);
+4. Automated and manual **cooldown timers**;
+5. Arbitration **priority weight** (1 = highest priority);
+6. Historical **reliability score** and success rate (0.00 to 1.00).
 
 ---
 
-## 2. Isolation Étanche des Sessions CLI
+## 2. Strict CLI Session Isolation
 
-Les outils CLI (Claude Code, Antigravity `agy`, Codex CLI) stockent par défaut leurs jetons de session et caches dans le dossier utilisateur (`~/.claude`, `~/.config/agy`, etc.).
+Command-line tools (Claude Code, Antigravity `agy`, Codex CLI) default to storing session tokens and
+caches in home directories (`~/.claude`, `~/.config/agy`, etc.).
 
-Pour garantir une séparation stricte sans collision entre identités d'un même fournisseur :
+To ensure strict separation and prevent cross-identity session contamination:
 
-- Chaque identité se voit assigner un répertoire de session dédié :
+- Each identity is assigned an isolated session folder:
   ```
   ~/.nexus/agents/sessions/<account-id>/
   ```
-- Ce répertoire est créé avec des droits restreints (`0700`, accessible uniquement par l'utilisateur hôte).
-- Lors de l'invocation ACP (`@nexus/agent`), les variables d'environnement appropriées sont injectées dans le sous-processus :
-  - `CLAUDE_CONFIG_DIR` pour Claude Code ;
-  - `ANTIGRAVITY_CONFIG_DIR` / `GEMINI_CLI_HOME` pour Antigravity ;
-  - `CODEX_CONFIG_DIR` pour Codex ;
-  - `XDG_CONFIG_HOME` comme repli standard.
-- Les identifiants de session et trousseaux ne sont **jamais partagés** entre deux comptes.
+- Directories are created with restricted file permissions (`0700`, readable only by the host user).
+- During ACP process invocation (`@nexus/agent`), appropriate environment variables are injected into
+  the spawned subprocess:
+  - `CLAUDE_CONFIG_DIR` for Claude Code;
+  - `ANTIGRAVITY_CONFIG_DIR` / `GEMINI_CLI_HOME` for Antigravity;
+  - `CODEX_CONFIG_DIR` for Codex;
+  - `XDG_CONFIG_HOME` as standard fallback.
+- Session credentials and keyring entries are **never shared** across multiple accounts.
 
 ---
 
-## 3. Modèle de Données & États
+## 3. Data Model and Account States
 
-Chaque compte fournisseur est représenté selon le schéma typé Zod :
+Provider accounts are typed via Zod schemas:
 
 ```typescript
 export interface ProviderAccount {
-  id: string; // ex: "claude-backup", slug [a-z0-9_-]
+  id: string; // e.g. "claude-backup", slug [a-z0-9_-]
   provider: "claude" | "antigravity" | "codex" | string;
-  name: string; // Nom convivial
-  profileKey: string; // Profil ACP associé
-  sessionDir: string; // Chemin absolu du profil CLI isolé
-  env: Record<string, string>; // Variables d'environnement spécifiques
+  name: string; // Human-friendly display label
+  profileKey: string; // Associated ACP profile
+  sessionDir: string; // Absolute path to isolated CLI profile
+  env: Record<string, string>; // Identity-specific environment variables
   authStatus: "authenticated" | "unauthenticated" | "expired" | "unknown";
   lastCheckedAt: string | null;
   quotas: {
@@ -64,12 +69,12 @@ export interface ProviderAccount {
   };
   cooldown: {
     active: boolean;
-    until: string | null; // Date ISO d'expiration
+    until: string | null; // ISO expiration timestamp
     reason: string | null;
   };
-  priority: number; // 1 = priorité maximale
+  priority: number; // 1 = highest scheduling priority
   reliability: {
-    score: number; // 0.00 à 1.00
+    score: number; // 0.00 to 1.00
     totalRuns: number;
     successCount: number;
     failureCount: number;
@@ -85,51 +90,55 @@ export interface ProviderAccount {
 
 ---
 
-## 4. Politique de Cooldowns et Fiabilité
+## 4. Cooldown Policies and Reliability Tracking
 
-### 4.1 Cooldown Automatique
+### 4.1 Automated Cooldowns
 
-Lorsqu'un run agent échoue, la catégorie de l'erreur détermine l'action préventive :
+When an agent run fails, the classified error category triggers targeted mitigations:
 
-- **`rate_limited`** (code 429 ou rate limit CLI) :
-  - Cooldown automatique de **60 secondes**.
-  - Raison : _« Rate limit détecté par le CLI »_.
-- **`quota_exhausted`** (quota 5h ou message de limite atteint) :
-  - `quotas.exhausted = true`.
-  - Cooldown automatique de **300 secondes** (5 minutes) ou jusqu'à la réinitialisation observée.
-  - L'identité est exclue de l'arbitrage automatique en faveur d'un compte secondaire.
-- **`auth_required`** (session expirée ou révocation) :
-  - `authStatus = "expired"`.
-  - Cooldown automatique de **600 secondes** (10 minutes) pour éviter le martèlement d'échecs.
+- **`rate_limited`** (HTTP 429 or CLI rate limit signals):
+  - Automated cooldown of **60 seconds**.
+  - Reason: _"Rate limit detected by CLI"_.
+- **`quota_exhausted`** (5-hour window or quota ceiling exceeded):
+  - Sets `quotas.exhausted = true`.
+  - Automated cooldown of **300 seconds** (5 minutes) or until quota reset time.
+  - Excludes the identity from automated selection in favor of available backups.
+- **`auth_required`** (Expired session token or credential revocation):
+  - Sets `authStatus = "expired"`.
+  - Automated cooldown of **600 seconds** (10 minutes) to avoid repeated failure loops.
 
-### 4.2 Score de Fiabilité
+### 4.2 Reliability Scoring
 
-Le score de fiabilité est calculé dynamiquement :
+Reliability scores update dynamically:
 $$\text{Score} = \frac{\text{successCount}}{\text{totalRuns}}$$
 
-Les identités avec des échecs consécutifs sont rétrogradées lors de la sélection, incitant l'orchestrateur à router les missions critiques vers les comptes les plus stables.
+Accounts experiencing consecutive failures are temporarily downgraded during selection, guiding the
+orchestrator toward the most stable accounts for critical tasks.
 
 ---
 
-## 5. Algorithme de Sélection Intelligente (`selectAccount`)
+## 5. Intelligent Selection Algorithm (`selectAccount`)
 
-Pour un fournisseur donné (`claude`, `antigravity`, ou `codex`) :
+For a specified provider (`claude`, `antigravity`, or `codex`):
 
-1. **Filtrage des candidats viables** :
-   - Cooldown inactif (`cooldown.active === false` ou date expirée) ;
-   - Quota non épuisé (`quotas.exhausted === false`) ;
-   - Authentification valide (`authStatus !== "expired"` et `authStatus !== "unauthenticated"`).
-2. **Ordre de tri** :
-   - **Priorité croissante** : `priority = 1` avant `priority = 2` ;
-   - **Score de fiabilité décroissant** : `0.98` avant `0.85` ;
-   - **Échecs consécutifs croissants** : `0` avant `1`.
-3. **Repli ordonné** :
-   - Si tous les comptes sont en cooldown ou épuisés, l'algorithme sélectionne le compte le plus proche de la sortie de cooldown pour minimiser l'attente globale.
+1. **Filter Viable Candidates**:
+   - Inactive cooldown (`cooldown.active === false` or timestamp in past);
+   - Available quota (`quotas.exhausted === false`);
+   - Valid authentication (`authStatus !== "expired"` and `authStatus !== "unauthenticated"`).
+2. **Sort Order**:
+   - **Ascending Priority**: `priority = 1` evaluated before `priority = 2`;
+   - **Descending Reliability Score**: `0.98` evaluated before `0.85`;
+   - **Ascending Consecutive Failures**: `0` evaluated before `1`.
+3. **Graceful Fallback**:
+   - If all accounts are cooling down or exhausted, the algorithm selects the account closest to
+     cooldown expiration to minimize overall execution latency.
 
 ---
 
-## 6. Sécurité & Confidentialité
+## 6. Security and Privacy Guarantees
 
-- **Aucun secret dans le dashboard ou l'API** : Les jetons de session, cookies et variables sensibles restent strictement cantonnés aux répertoires de session locaux (`~/.nexus/agents/sessions/<id>`) avec droits `0700`.
-- **Contrôle d'accès** : Les routes `/api/v1/orchestrator/accounts/*` exigent le rôle administrateur (`requireAdmin`).
-- **Persistance locale atomique** : Stockage dans `var/config/provider-accounts.json` via écriture atomique (écriture temporaire puis renommage). Aucun fichier de session n'est versionné dans Git.
+- **Zero Secrets in Dashboard or API**: Session tokens, cookies, and sensitive environment keys
+  remain strictly within local session directories (`~/.nexus/agents/sessions/<id>`) using `0700` permissions.
+- **Access Control**: Administrative routes under `/api/v1/orchestrator/accounts/*` require `requireAdmin` role.
+- **Atomic Local Persistence**: Saved into `var/config/provider-accounts.json` using atomic temporary file
+  writes and renames. Session directories are excluded from Git tracking.
