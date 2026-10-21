@@ -42,7 +42,7 @@ export class InMemoryWatchSnapshotStore implements WatchSnapshotStore {
   }
 }
 
-/** Stockage atomique, un fichier par veille. Aucun contenu complet n'est conservé. */
+/** Atomic storage, one file per watch. No full content is retained. */
 export class JsonFileWatchSnapshotStore implements WatchSnapshotStore {
   readonly #directory: string;
 

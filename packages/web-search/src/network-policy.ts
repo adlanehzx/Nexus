@@ -16,7 +16,7 @@ const BLOCKED_HOSTNAMES = new Set([
   "metadata.azure.internal",
 ]);
 
-/** Valide la destination initiale et chaque redirection avant tout accès réseau. */
+/** Validates initial target and each redirect before any network access. */
 export async function assertPublicWebUrl(
   value: string | URL,
   resolver: HostResolver = resolveHost,
@@ -25,33 +25,33 @@ export async function assertPublicWebUrl(
   try {
     url = value instanceof URL ? new URL(value) : new URL(value);
   } catch (error) {
-    throw invalidUrl("L’URL web est invalide.", error);
+    throw invalidUrl("Invalid web URL.", error);
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw invalidUrl("Seules les URL HTTP(S) sont autorisées.");
+    throw invalidUrl("Only HTTP(S) URLs are permitted.");
   }
   if (url.username || url.password) {
-    throw invalidUrl("Les identifiants intégrés dans une URL sont interdits.");
+    throw invalidUrl("Embedded credentials in URLs are forbidden.");
   }
   if (
     (url.protocol === "http:" && url.port && url.port !== "80") ||
     (url.protocol === "https:" && url.port && url.port !== "443")
   ) {
-    throw invalidUrl("Les ports web non standards sont interdits.");
+    throw invalidUrl("Non-standard web ports are forbidden.");
   }
 
   const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
   if (!hostname || BLOCKED_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost")) {
-    throw invalidUrl("Cette destination réseau privée est interdite.");
+    throw invalidUrl("This private network destination is forbidden.");
   }
 
   const addresses = isIP(hostname)
     ? [{ address: hostname, family: isIP(hostname) }]
     : await resolver(hostname).catch((error: unknown) => {
-        throw invalidUrl("Le nom de domaine ne peut pas être résolu.", error);
+        throw invalidUrl("Domain name could not be resolved.", error);
       });
   if (!addresses.length || addresses.some(({ address }) => !isPublicIp(address))) {
-    throw invalidUrl("Cette destination réseau privée est interdite.");
+    throw invalidUrl("This private network destination is forbidden.");
   }
   url.hostname = hostname;
   url.hash = "";

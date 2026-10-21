@@ -24,22 +24,22 @@ function document(url: string, content: string, canonicalUrl = url): WebDocument
       description: null,
       author: null,
       publishedAt: null,
-      language: "fr",
+      language: "en",
     },
     provenance: { redirectChain: [], untrustedExternalContent: true },
   };
 }
 
-describe("preuves web", () => {
-  it("vérifie une citation exacte et la couverture lexicale de l'affirmation", () => {
+describe("web evidence", () => {
+  it("verifies an exact citation and claim token coverage", () => {
     const source = document(
       "https://example.org/a",
-      "NEXUS utilise une recherche locale sans clé API payante.",
+      "NEXUS uses local search without paid API keys.",
     );
     const citation = createCitation(
       source,
-      "NEXUS utilise une recherche locale sans clé API payante.",
-      "La recherche NEXUS est locale et sans clé payante",
+      "NEXUS uses local search without paid API keys.",
+      "NEXUS search is local and needs no paid API key",
     );
 
     expect(citation.verified).toBe(true);
@@ -48,18 +48,18 @@ describe("preuves web", () => {
     expect(verifyCitation(citation, source).verified).toBe(true);
   });
 
-  it("refuse une citation inventée ou issue d'une autre version", () => {
-    const source = document("https://example.org/a", "Texte réellement publié.");
-    expect(createCitation(source, "Texte inventé.").verified).toBe(false);
-    const valid = createCitation(source, "Texte réellement publié.");
-    const changed = document("https://example.org/a", "Nouvelle version.");
+  it("rejects fabricated citations or citations from another document version", () => {
+    const source = document("https://example.org/a", "Actually published text.");
+    expect(createCitation(source, "Fabricated text.").verified).toBe(false);
+    const valid = createCitation(source, "Actually published text.");
+    const changed = document("https://example.org/a", "New version.");
     expect(verifyCitation(valid, changed).verified).toBe(false);
   });
 
-  it("propose uniquement des citations extractives", () => {
+  it("suggests only extractive citations", () => {
     const source = document(
       "https://example.org/a",
-      "Ce paragraphe contient assez de texte pour devenir une citation extractive utile et contrôlable.\nCourt.",
+      "This paragraph contains enough text to qualify as a verifiable extractive citation.\nShort.",
     );
     const citations = suggestCitations(source);
     expect(citations).toHaveLength(1);
@@ -67,18 +67,18 @@ describe("preuves web", () => {
     expect(citations[0]?.verified).toBe(true);
   });
 
-  it("déduplique d'abord par URL canonique puis par hash de contenu", () => {
+  it("deduplicates by canonical URL first, then by content hash", () => {
     const first = document(
       "https://example.org/a?utm_source=x",
-      "Contenu un",
+      "Content one",
       "https://example.org/a",
     );
     const canonicalDuplicate = document(
       "https://example.org/a?ref=two",
-      "Autre",
+      "Other",
       "https://example.org/a",
     );
-    const hashDuplicate = document("https://mirror.example.net/a", "Contenu un");
+    const hashDuplicate = document("https://mirror.example.net/a", "Content one");
     const result = deduplicateDocuments([first, canonicalDuplicate, hashDuplicate]);
 
     expect(result.documents).toEqual([first]);

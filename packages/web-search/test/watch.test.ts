@@ -30,22 +30,22 @@ function doc(content: string, time: string): WebDocument {
     wordCount: content.split(/\s+/).length,
     content,
     metadata: {
-      title: "Actualité",
+      title: "News",
       description: null,
       author: null,
       publishedAt: null,
-      language: "fr",
+      language: "en",
     },
     provenance: { redirectChain: [], untrustedExternalContent: true },
   };
 }
 
-describe("veille web", () => {
-  it("distingue première vue, contenu inchangé et changement significatif", async () => {
+describe("web watch", () => {
+  it("distinguishes first seen, unchanged content, and significant change", async () => {
     const versions = [
       doc("alpha beta gamma delta epsilon", "2026-10-20T10:00:00Z"),
       doc("alpha beta gamma delta epsilon", "2026-10-20T11:00:00Z"),
-      doc("nouvelle information complètement différente publiée", "2026-10-20T12:00:00Z"),
+      doc("completely different new information published", "2026-10-20T12:00:00Z"),
     ];
     const fetcher = { fetch: () => Promise.resolve(versions.shift()!) };
     const service = new WebWatchService({ fetcher, store: new InMemoryWatchSnapshotStore() });
@@ -61,7 +61,7 @@ describe("veille web", () => {
     ).resolves.toMatchObject({ status: "changed", similarity: 0 });
   });
 
-  it("persiste un snapshot atomique sans utiliser watchId comme chemin", async () => {
+  it("persists atomic snapshot without using watchId as path", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-watch-"));
     temporaryDirectories.push(directory);
     const store = new JsonFileWatchSnapshotStore(directory);
@@ -69,7 +69,7 @@ describe("veille web", () => {
       watchId: "../../outside",
       url: "https://example.org",
       canonicalUrl: "https://example.org",
-      title: "Titre",
+      title: "Title",
       contentHash: "a".repeat(64),
       signature: ["abc"],
       capturedAt: "2026-10-20T12:00:00Z",

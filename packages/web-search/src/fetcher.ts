@@ -23,8 +23,8 @@ type PdfParser = (
 ) => Promise<{ content: string; metadata: WebDocument["metadata"] }>;
 
 /**
- * Client de lecture seule. La résolution DNS est contrôlée avant chaque appel
- * et chaque redirection. Le contenu reste explicitement marqué non fiable.
+ * Read-only client. DNS resolution is validated before each request
+ * and each redirect. Content remains explicitly marked untrusted.
  */
 export class SafeWebFetcher implements WebDocumentFetcher {
   readonly #timeoutMs: number;
@@ -72,9 +72,9 @@ export class SafeWebFetcher implements WebDocumentFetcher {
       if (isRedirect(response.status)) {
         const location = response.headers.get("location");
         await response.body?.cancel().catch(() => undefined);
-        if (!location) throw unavailable("La redirection web ne contient aucune destination.");
+        if (!location) throw unavailable("Web redirect does not specify a destination.");
         if (redirects === MAX_REDIRECTS) {
-          throw unavailable("La page web contient trop de redirections.");
+          throw unavailable("Web page contains too many redirects.");
         }
         redirectChain.push(current.toString());
         current = await this.#validate(new URL(location, current));
@@ -83,7 +83,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
 
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined);
-        throw unavailable(`La page web a répondu HTTP ${String(response.status)}.`);
+        throw unavailable(`Web page returned HTTP ${String(response.status)}.`);
       }
 
       const contentType = parseContentType(response.headers.get("content-type"));
@@ -192,7 +192,7 @@ function extractHtml(
   if (canonical) {
     try {
       const candidate = new URL(decodeEntities(canonical), pageUrl);
-      // Une canonical inter-domaine peut empoisonner la provenance et la déduplication.
+      // Cross-domain canonical links can pollute provenance and deduplication.
       if (
         (candidate.protocol === "http:" || candidate.protocol === "https:") &&
         candidate.origin === pageUrl.origin &&
@@ -203,7 +203,7 @@ function extractHtml(
         canonicalUrl = candidate.toString();
       }
     } catch {
-      // Canonical invalide : l'URL finale reste la source de vérité.
+      // Invalid canonical: final URL remains source of truth.
     }
   }
   return {
@@ -313,13 +313,11 @@ async function parsePdf(
   url: URL,
 ): Promise<{ content: string; metadata: WebDocument["metadata"] }> {
   const { PDFParse } = await import("pdf-parse");
-  // pdf.js transfère le tampon à son worker. Sous Node 26, un Uint8Array issu
-  // d'un flux fetch peut être adossé à un ArrayBuffer non transférable : une
-  // copie élément par élément garantit un ArrayBuffer ordinaire indépendant.
+  // pdf.js transfers buffer to its worker. In Node, copying elements
+  // ensures an independent ordinary ArrayBuffer.
   const parser = new PDFParse({ data: Uint8Array.from(bytes) });
   try {
-    // Le premier appel transfère le buffer au worker PDF.js. Les lancer en
-    // parallèle tenterait de transférer deux fois le même objet sous Node 26.
+    // Sequential calls prevent duplicate buffer transfers to PDF.js worker.
     const text = await parser.getText();
     const info = await parser.getInfo();
     const pageText = text.pages
@@ -330,7 +328,7 @@ async function parsePdf(
       content: normalizeText(pageText),
       metadata: {
         title:
-          metadataString(documentInfo.Title) ?? url.pathname.split("/").at(-1) ?? "Document PDF",
+          metadataString(documentInfo.Title) ?? url.pathname.split("/").at(-1) ?? "PDF document",
         description: metadataString(documentInfo.Subject),
         author: metadataString(documentInfo.Author),
         publishedAt: info.getDateNode().CreationDate?.toISOString() ?? null,
@@ -338,7 +336,7 @@ async function parsePdf(
       },
     };
   } catch (error) {
-    throw unavailable("Le document PDF ne peut pas être analysé.", error);
+    throw unavailable("PDF document could not be parsed.", error);
   } finally {
     await parser.destroy().catch(() => undefined);
   }
@@ -367,7 +365,7 @@ function nullableMetadata(value: string | null): string | null {
 
 function emptyMetadata(): WebDocument["metadata"] {
   return {
-    title: "Document texte",
+    title: "Text document",
     description: null,
     author: null,
     publishedAt: null,

@@ -3,7 +3,7 @@ import { SafeWebFetcher, assertPublicWebUrl, isPublicIp } from "../src/index.js"
 
 const publicResolver = () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
 
-describe("politique réseau", () => {
+describe("network policy", () => {
   it.each([
     "127.0.0.1",
     "10.0.0.1",
@@ -14,26 +14,26 @@ describe("politique réseau", () => {
     "fc00::1",
     "fe80::1",
     "::ffff:127.0.0.1",
-  ])("bloque l'adresse privée %s", (address) => {
+  ])("blocks private address %s", (address) => {
     expect(isPublicIp(address)).toBe(false);
   });
 
   it.each(["93.184.216.34", "1.1.1.1", "2606:4700:4700::1111"])(
-    "accepte l'adresse publique %s",
+    "accepts public address %s",
     (address) => {
       expect(isPublicIp(address)).toBe(true);
     },
   );
 
-  it("refuse localhost, les credentials, les ports privés et une résolution mixte", async () => {
+  it("rejects localhost, credentials, private ports, and mixed resolution", async () => {
     await expect(assertPublicWebUrl("http://localhost/test", publicResolver)).rejects.toThrow(
-      /privée/,
+      /private/i,
     );
     await expect(assertPublicWebUrl("https://u:p@example.org", publicResolver)).rejects.toThrow(
-      /identifiants/,
+      /credentials/i,
     );
     await expect(assertPublicWebUrl("https://example.org:8443", publicResolver)).rejects.toThrow(
-      /ports web/,
+      /ports/i,
     );
     await expect(
       assertPublicWebUrl("https://example.org", () =>
@@ -42,25 +42,25 @@ describe("politique réseau", () => {
           { address: "127.0.0.1", family: 4 },
         ]),
       ),
-    ).rejects.toThrow(/privée/);
+    ).rejects.toThrow(/private/i);
   });
 });
 
 describe("SafeWebFetcher", () => {
-  it("suit une redirection validée, extrait le texte et conserve la provenance", async () => {
+  it("follows validated redirect, extracts text, and preserves provenance", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "/article" } }))
       .mockResolvedValueOnce(
         new Response(
-          `<!doctype html><html lang="fr"><head>
-            <title>NEXUS &amp; recherche</title>
-            <meta name="description" content="Une description fiable">
+          `<!doctype html><html lang="en"><head>
+            <title>NEXUS &amp; search</title>
+            <meta name="description" content="A reliable description">
             <meta name="author" content="Ada">
             <meta property="article:published_time" content="2026-10-20">
             <link rel="canonical" href="/article?utm_source=test">
           </head><body><script>ignore me</script>
-          <h1>Résultat</h1><p>Le contenu public est extrait sans exécuter le script.</p>
+          <h1>Result</h1><p>Public content is extracted without running scripts.</p>
           </body></html>`,
           { headers: { "content-type": "text/html; charset=utf-8" } },
         ),
@@ -81,18 +81,18 @@ describe("SafeWebFetcher", () => {
       untrustedExternalContent: true,
     });
     expect(document.metadata).toMatchObject({
-      title: "NEXUS & recherche",
-      description: "Une description fiable",
+      title: "NEXUS & search",
+      description: "A reliable description",
       author: "Ada",
       publishedAt: "2026-10-20",
-      language: "fr",
+      language: "en",
     });
-    expect(document.content).toContain("Le contenu public est extrait");
+    expect(document.content).toContain("Public content is extracted");
     expect(document.content).not.toContain("ignore me");
     expect(document.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("bloque une redirection SSRF avant le second appel réseau", async () => {
+  it("blocks SSRF redirect before second network call", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(
@@ -100,11 +100,11 @@ describe("SafeWebFetcher", () => {
       );
     const client = new SafeWebFetcher({ fetch, resolver: publicResolver });
 
-    await expect(client.fetch({ url: "https://example.org" })).rejects.toThrow(/privée/);
+    await expect(client.fetch({ url: "https://example.org" })).rejects.toThrow(/private/i);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("borne la réponse même sans Content-Length", async () => {
+  it("bounds response even without Content-Length", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(
@@ -117,20 +117,20 @@ describe("SafeWebFetcher", () => {
     ).rejects.toThrow(/byte limit/);
   });
 
-  it("extrait un PDF borné sans transmettre le binaire à un service externe", async () => {
+  it("extracts bounded PDF without transmitting binary to external service", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(
-        new Response("%PDF-1.7 contenu", { headers: { "content-type": "application/pdf" } }),
+        new Response("%PDF-1.7 content", { headers: { "content-type": "application/pdf" } }),
       );
     const pdfParser = vi.fn().mockResolvedValue({
-      content: "--- page 1 ---\nRapport public vérifiable.",
+      content: "--- page 1 ---\nVerifiable public report.",
       metadata: {
-        title: "Rapport",
+        title: "Report",
         description: null,
         author: "NEXUS",
         publishedAt: null,
-        language: "fr",
+        language: "en",
       },
     });
     const client = new SafeWebFetcher({ fetch, resolver: publicResolver, pdfParser });
@@ -140,10 +140,10 @@ describe("SafeWebFetcher", () => {
     expect(pdfParser).toHaveBeenCalledOnce();
     expect(document.contentType).toBe("application/pdf");
     expect(document.content).toContain("page 1");
-    expect(document.metadata.title).toBe("Rapport");
+    expect(document.metadata.title).toBe("Report");
   });
 
-  it("refuse les autres formats binaires", async () => {
+  it("rejects other binary formats", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValue(new Response("PK", { headers: { "content-type": "application/zip" } }));

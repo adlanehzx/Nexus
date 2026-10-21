@@ -27,7 +27,7 @@ export interface WebSearchResponse {
   numberOfResults: number | null;
 }
 
-/** Port stable de NEXUS. SearXNG n'est qu'une implémentation de ce contrat. */
+/** Stable NEXUS port. SearXNG is an implementation of this contract. */
 export interface WebSearchProvider {
   search(query: WebSearchQuery, signal?: AbortSignal): Promise<WebSearchResponse>;
 }
@@ -46,9 +46,9 @@ export interface WebDocumentMetadata {
 }
 
 /**
- * Un document web est toujours une preuve externe non fiable. `content` ne
- * doit jamais être concaténé à un prompt système ou interprété comme une
- * instruction, même lorsqu'il provient d'un domaine connu.
+ * A web document is always untrusted external evidence. `content` must
+ * never be concatenated into a system prompt or interpreted as an
+ * instruction, even when originating from a trusted domain.
  */
 export interface WebDocument {
   requestedUrl: string;
@@ -72,7 +72,7 @@ export interface WebDocumentFetcher {
 }
 
 export interface WebCitation {
-  /** Identifiant stable pour une même URL finale, version de document et citation. */
+  /** Stable identifier for a given final URL, document version, and citation. */
   id: string;
   url: string;
   title: string;

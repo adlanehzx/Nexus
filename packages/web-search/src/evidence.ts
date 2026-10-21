@@ -40,7 +40,7 @@ export function createCitation(document: WebDocument, quote: string, claim?: str
   };
 }
 
-/** Citations extractives : aucune phrase n'est inventée ou paraphrasée. */
+/** Extractive citations: no sentence is hallucinated or paraphrased. */
 export function suggestCitations(document: WebDocument, limit = 5): WebCitation[] {
   const candidates = document.content
     .split(/\n+/)

@@ -71,23 +71,23 @@ export class SearxngClient implements WebSearchProvider {
         signal: combined,
       });
     } catch (error) {
-      throw unavailable("SearXNG est injoignable.", error);
+      throw unavailable("SearXNG is unreachable.", error);
     }
 
     if (!response.ok) {
-      throw unavailable(`SearXNG a refusé la recherche (HTTP ${String(response.status)}).`);
+      throw unavailable(`SearXNG rejected the search request (HTTP ${String(response.status)}).`);
     }
 
     let raw: unknown;
     try {
       raw = await response.json();
     } catch (error) {
-      throw unavailable("SearXNG a renvoyé une réponse illisible.", error);
+      throw unavailable("SearXNG returned an unreadable response.", error);
     }
 
     const parsed = searxResponseSchema.safeParse(raw);
     if (!parsed.success) {
-      throw unavailable("SearXNG a renvoyé un format de réponse inattendu.");
+      throw unavailable("SearXNG returned an unexpected response format.");
     }
 
     const limit = Math.min(Math.max(query.limit ?? 10, 1), 20);
