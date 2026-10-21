@@ -1,19 +1,9 @@
 import type { Envelope } from "@nexus/protocol";
 
 /**
- * Canal vers le cœur.
+ * Worker connection link port.
  *
- * **Port, pas implémentation.** Le worker ne connaît pas le WebSocket ; il
- * connaît une chose capable d'ouvrir un canal, d'envoyer des enveloppes et d'en
- * recevoir. Trois conséquences :
- *
- *  1. tout le worker — authentification, enregistrement, exécution, reprise —
- *     se teste sans réseau ;
- *  2. le WebSocket réel de la phase suivante s'y branche sans modifier une ligne
- *     de logique ;
- *  3. le sens de la connexion est inscrit dans la forme du port : il y a
- *     `connect()`, il n'y a pas `listen()`. Ce worker ne peut structurellement
- *     pas accepter de connexion entrante.
+ * Abstract transport interface decoupled from WebSockets or HTTP implementations.
  */
 
 export type LinkState = "idle" | "connecting" | "open" | "closed";
@@ -24,28 +14,21 @@ export interface WorkerLink {
   send(envelope: Envelope): Promise<void>;
   close(reason: string): Promise<void>;
   onMessage(handler: (envelope: unknown) => void): void;
-  /** Fermeture subie ou demandée. Le worker y déclenche sa reconnexion. */
+  /** Triggered on planned or unplanned connection drops to drive reconnection. */
   onClose(handler: (reason: string) => void): void;
 }
 
 /**
- * Canal de bout en bout, en mémoire.
- *
- * Sert aux tests d'intégration : il relie le worker à un vrai `WorkerGateway`
- * sans passer par le réseau, ce qui permet de valider le chemin complet
- * `TaskCoordinator → WorkerTransport → worker → capacité → événements`.
- *
- * Ce n'est pas un simulacre du protocole : les deux extrémités échangent les
- * mêmes enveloppes que sur le fil, validées par les mêmes schémas.
+ * In-memory loopback transport for unit and integration testing.
  */
 export class LoopbackLink implements WorkerLink {
   #state: LinkState = "idle";
   #onMessage: ((envelope: unknown) => void) | undefined;
   #onClose: ((reason: string) => void) | undefined;
 
-  /** Réception côté cœur. Branché par le harnais de test sur la passerelle. */
+  /** Outbound receiver hooked up by integration test harnesses. */
   outbound: (envelope: Envelope) => Promise<void> | void = () => undefined;
-  /** Échoue le prochain `connect()`, pour éprouver la reprise. */
+  /** Fault injection flag to fail next connect attempt. */
   failNextConnect = false;
 
   readonly sent: Envelope[] = [];
@@ -59,19 +42,19 @@ export class LoopbackLink implements WorkerLink {
     if (this.failNextConnect) {
       this.failNextConnect = false;
       this.#state = "closed";
-      return Promise.reject(new Error("connexion refusée"));
+      return Promise.reject(new Error("connection refused"));
     }
     this.#state = "open";
     return Promise.resolve();
   }
 
   async send(envelope: Envelope): Promise<void> {
-    if (this.#state !== "open") throw new Error("canal fermé");
+    if (this.#state !== "open") throw new Error("channel closed");
     this.sent.push(envelope);
     await this.outbound(envelope);
   }
 
-  /** Livre une trame descendante au worker. */
+  /** Injects a server-to-worker inbound envelope. */
   deliver(envelope: unknown): void {
     this.#onMessage?.(envelope);
   }
@@ -83,7 +66,7 @@ export class LoopbackLink implements WorkerLink {
     return Promise.resolve();
   }
 
-  /** Coupure subie, à l'initiative de l'autre bout ou du réseau. */
+  /** Simulates network drop. */
   drop(reason: string): void {
     void this.close(reason);
   }

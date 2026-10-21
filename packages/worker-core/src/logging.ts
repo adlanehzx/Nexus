@@ -1,19 +1,11 @@
 import { redact } from "@nexus/shared";
 
 /**
- * Journalisation du worker.
+ * Worker logging utilities.
  *
- * Une seule règle, appliquée sans exception : **tout ce qui entre dans un
- * journal passe par `redact`**. Pas « tout ce qui semble sensible » — tout. Un
- * champ innocemment nommé `value` finit toujours par contenir une clé d'API, et
- * personne ne s'en aperçoit avant de lire le journal.
- *
- * La sortie est en JSON : un journal d'exécutant est lu par un collecteur, pas
- * par un humain devant un terminal.
- *
- * Le puits est **injectable et sans dépendance à Node**. Ce module tourne aussi
- * bien dans un service Windows que sur Hermes, le moteur JavaScript d'Android,
- * où `process.stdout` n'existe pas.
+ * Core requirement: all log payloads pass through `redact`.
+ * Emits structured JSON. The sink is injectable with zero Node.js runtime assumptions,
+ * allowing execution on Android Hermes or desktop services.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -85,8 +77,7 @@ export class ConsoleWorkerLogger implements WorkerLogger {
   #write(level: LogLevel, message: string, context?: Record<string, unknown>): void {
     if (LEVEL_RANK[level] < LEVEL_RANK[this.#level]) return;
 
-    // La rédaction s'applique aux liaisons **et** au contexte : un identifiant
-    // de session attaché une fois au logger enfant fuirait sinon à chaque ligne.
+    // Redaction applies to bindings and context to prevent leaks across child loggers.
     const redacted = redact({ ...this.#bindings, ...(context ?? {}) }) as Record<string, unknown>;
 
     this.#sink({ level, message, at: this.#now().toISOString(), ...redacted });
@@ -94,13 +85,7 @@ export class ConsoleWorkerLogger implements WorkerLogger {
 }
 
 /**
- * Puits par défaut.
- *
- * Volontairement pauvre, et sans dépendance à Node : ce module tourne aussi sur
- * Hermes, le moteur JavaScript d'Android, où `process.stdout` n'existe pas. Un
- * exécutant qui journalise pour de vrai fournit son propre puits — celui d'un
- * service Windows écrit sur la sortie standard, celui d'Android passe par
- * Logcat.
+ * Default log sink using global console.
  */
 function defaultSink(record: LogRecord): void {
   const line = JSON.stringify(record);
@@ -108,7 +93,7 @@ function defaultSink(record: LogRecord): void {
   else globalThis.console.warn(line);
 }
 
-/** Journal de test : conserve les enregistrements au lieu de les écrire. */
+/** Test logger retaining structured records in memory. */
 export class MemoryWorkerLogger implements WorkerLogger {
   readonly records: LogRecord[] = [];
   readonly #bindings: Record<string, unknown>;
@@ -138,7 +123,7 @@ export class MemoryWorkerLogger implements WorkerLogger {
     return new MemoryWorkerLogger({ ...this.#bindings, ...bindings }, this.records);
   }
 
-  /** Tout le journal en une chaîne — sert aux assertions d'absence de secret. */
+  /** Serialized log buffer for test assertions verifying absence of credentials. */
   get text(): string {
     return JSON.stringify(this.records);
   }

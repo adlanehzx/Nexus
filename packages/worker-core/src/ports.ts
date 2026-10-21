@@ -1,56 +1,41 @@
 import type { WorkerHealth } from "@nexus/protocol";
 
 /**
- * Ce qu'un exécutant doit fournir, et que le runtime commun ignore.
+ * Worker platform ports.
  *
- * Trois ports, pas un de plus. Tout le reste — cycle de vie, poignée de main,
- * registre de capacités, exécution, reprise, journalisation — est identique
- * d'une plateforme à l'autre et vit dans ce paquet.
+ * Windows, macOS, Linux, and Android workers implement these three ports:
+ *  - Credential signing
+ *  - Health telemetry
+ *  - Timer abstraction
  *
- * C'est la raison d'être de `@nexus/worker-core` : le worker Windows et le
- * worker Android partagent le même code de coordination. Les dupliquer aurait
- * créé un second système de capacités et un second cycle de vie, avec la
- * garantie qu'ils divergent au premier correctif appliqué d'un seul côté.
+ * All protocol lifecycle, capability registration, execution, and backoff reside in worker-core.
  */
 
 /**
- * Signature du challenge d'authentification.
+ * Challenge signature provider.
  *
- * La clé privée ne quitte jamais l'appareil et n'est jamais transmise : le
- * worker prouve qu'il la détient en signant un nonce à usage unique. Un jeton
- * dérobé dans un journal ne permet donc pas de se faire passer pour lui.
- *
- * Les implémentations diffèrent radicalement selon la plateforme — un fichier
- * PEM sous Windows, le magasin de clés matériel sous Android — et c'est
- * précisément pourquoi c'est un port.
+ * Private keys never leave the device: workers prove identity by signing
+ * a one-time cryptographic nonce.
  */
 export interface CredentialSigner {
-  /** Signe un nonce. Retour en base64, comme l'attend `DeviceSessionService`. */
+  /** Signs a nonce string and returns base64 signature. */
   sign(nonce: string): Promise<string>;
 }
 
 /**
- * État de santé remonté au cœur.
- *
- * Strictement ce dont `DeviceSelector` a besoin pour répondre à « puis-je
- * confier une tâche à cet appareil ? ». Pas d'inventaire matériel, pas de nom
- * d'utilisateur, pas de liste de processus.
+ * Health telemetry source reported to orchestrator.
  */
 export interface HealthSource {
   snapshot(): WorkerHealth;
-  /** L'appareil peut-il accepter une tâche de plus ? */
+  /** Whether the worker currently has capacity to accept another task. */
   hasCapacity(): boolean;
   /**
-   * L'appareil est-il dégradé ?
-   *
-   * Un téléphone à 8 % de batterie reste joignable et parfaitement capable ;
-   * il ne doit simplement plus recevoir de tâche non essentielle. C'est un état
-   * distinct de « hors ligne », et le sélecteur en tient compte.
+   * Whether device performance is degraded (e.g. low battery, high thermal throttle).
    */
   isDegraded(): boolean;
 }
 
-/** Minuteries injectables — les tests de reprise n'attendent pas réellement. */
+/** Injectable timer interface for deterministic testing. */
 export interface TimerPort {
   set(callback: () => void, delayMs: number): unknown;
   clear(handle: unknown): void;

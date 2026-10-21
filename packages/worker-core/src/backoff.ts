@@ -1,23 +1,17 @@
 /**
- * Attente exponentielle avec bruit.
+ * Exponential backoff with random jitter.
  *
- * Le bruit n'est pas un raffinement. Sans lui, tous les workers d'un
- * utilisateur — portable, poste fixe, Android — reconnectent à la même
- * milliseconde après une coupure du cœur, et le font retomber au moment précis
- * où il redémarre. Une tempête de reconnexions transforme une panne de dix
- * secondes en panne de dix minutes.
+ * Random jitter prevents reconnect thundering herds when the core service restarts.
  *
- * Le décompte se remet à zéro sur une connexion **réellement établie**, pas sur
- * une tentative : un worker qui se connecte puis se fait fermer aussitôt ne doit
- * pas repartir à une seconde indéfiniment.
+ * Counters reset only upon a verified established connection.
  */
 
 export interface BackoffOptions {
   minMs: number;
   maxMs: number;
-  /** Facteur de croissance. 2 double à chaque échec. */
+  /** Growth factor. 2 doubles interval on each failed attempt. */
   factor?: number;
-  /** Part aléatoire, de 0 à 1. 0,3 = ±30 %. */
+  /** Random jitter fraction between 0 and 1. 0.3 = ±30%. */
   jitter?: number;
   random?: () => number;
 }
@@ -43,7 +37,7 @@ export class Backoff {
     return this.#attempt;
   }
 
-  /** Prochain délai, en millisecondes. Incrémente le compteur. */
+  /** Calculates next delay in milliseconds and increments attempt count. */
   next(): number {
     const base = Math.min(this.#minMs * this.#factor ** this.#attempt, this.#maxMs);
     this.#attempt += 1;
@@ -51,12 +45,11 @@ export class Backoff {
     const spread = base * this.#jitter;
     const delay = base - spread + this.#random() * spread * 2;
 
-    // Le bruit ne doit jamais faire descendre sous le minimum ni dépasser le
-    // plafond : ce sont des garanties, pas des indications.
+    // Jitter must never fall below minimum or exceed maximum ceiling.
     return Math.round(Math.min(Math.max(delay, this.#minMs), this.#maxMs));
   }
 
-  /** Après une connexion établie. */
+  /** Resets attempt counter following successful connection establishment. */
   reset(): void {
     this.#attempt = 0;
   }

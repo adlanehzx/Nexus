@@ -16,26 +16,13 @@ import { TaskRunner } from "./task-runner.js";
 import { WorkerNotAuthenticatedError } from "./errors.js";
 
 /**
- * Le runtime d'un exécutant, quelle que soit la plateforme.
+ * Platform-independent worker runtime.
  *
- * **Rien ici ne sait sur quoi il tourne.** Ni le système d'exploitation, ni le
- * nom de la machine, ni son rôle, ni ses permissions n'apparaissent dans ce
- * fichier : ils viennent de la configuration et du registre côté cœur. Le poste
- * fixe Windows, le portable et le téléphone Android exécutent ces mêmes lignes.
+ * Runs across Windows, Linux, macOS, and Android nodes without platform-specific assumptions.
  *
- * Ce qui les distingue tient dans trois ports — signature, santé, minuteries —
- * et dans les capacités enregistrées. Dupliquer ce fichier par plateforme
- * garantirait qu'un correctif appliqué d'un seul côté fasse diverger les deux.
- *
- * Cycle de vie, dans l'ordre :
- *
- *     start → connect → hello → challenge → authenticate → session
- *           → register → heartbeat ⇄ receive/execute → shutdown
- *
- * Une coupure à n'importe quel point ramène à `connect`, avec attente
- * exponentielle. L'état d'authentification n'est pas conservé au travers d'une
- * coupure : le worker refait la poignée de main complète. Une session dont on ne
- * sait pas si elle est encore valide n'est pas une session.
+ * Lifecycle:
+ *   start -> connect -> hello -> challenge -> authenticate -> session
+ *   -> register -> heartbeat <-> receive/execute -> shutdown
  */
 
 export type WorkerState =
@@ -47,15 +34,9 @@ export type WorkerState =
   | "reconnecting"
   | "stopping";
 
-/**
- * Ce que le runtime a besoin de savoir, indépendamment de la plateforme.
- *
- * Le **rôle** n'y figure pas : il appartient au registre, côté cœur. Un worker
- * qui déciderait lui-même de son rôle pourrait se l'élargir.
- */
 export interface WorkerRuntimeConfig {
   deviceId: string;
-  /** `WINDOWS`, `ANDROID`… Renseigne la trame de présentation, rien de plus. */
+  /** `WINDOWS`, `ANDROID`, `LINUX`, etc. Included in hello handshake. */
   platform: string;
   workerVersion: string;
   heartbeatIntervalMs: number;
@@ -74,7 +55,6 @@ export interface WorkerRuntimeOptions {
   health: HealthSource;
   now?: () => Date;
   newId?: () => string;
-  /** Injectables pour éprouver la reprise sans attendre réellement. */
   timers?: TimerPort;
   random?: () => number;
 }
@@ -99,7 +79,6 @@ export class WorkerRuntime {
   #grantedCapabilities: string[] = [];
   #heartbeatHandle: unknown;
   #reconnectHandle: unknown;
-  /** Empêche deux boucles de reconnexion de coexister après une double coupure. */
   #reconnecting = false;
 
   constructor(options: WorkerRuntimeOptions) {
@@ -158,35 +137,27 @@ export class WorkerRuntime {
     return this.#sessionToken !== undefined;
   }
 
-  // ── Cycle de vie ────────────────────────────────────────────────────────
+  // ── Lifecycle ───────────────────────────────────────────────────────────
 
   /**
-   * Démarre le worker et ouvre le canal.
-   *
-   * Les sondes de disponibilité tournent **avant** la connexion : le worker doit
-   * savoir ce qu'il sait faire avant de l'annoncer. Annoncer Docker puis
-   * découvrir qu'il n'est pas installé ferait échouer une tâche après avoir
-   * écarté une machine capable.
+   * Starts the worker and opens the connection link.
+   * Runs local capability probes before connecting.
    */
   async start(): Promise<void> {
     this.#state = "connecting";
     await this.#capabilities.probeAll();
 
-    this.#logger.info("capacités locales sondées", {
-      disponibles: this.#capabilities.declare().map((capability) => capability.name),
+    this.#logger.info("local capabilities probed", {
+      available: this.#capabilities.declare().map((capability) => capability.name),
     });
 
     await this.#connect();
   }
 
   /**
-   * Arrêt propre.
-   *
-   * Les étapes en cours sont annulées et leur échec est **remonté au cœur avant
-   * la fermeture**. Sans cela, le coordinateur attendrait un résultat pendant
-   * tout le délai de l'étape avant de comprendre qu'il n'arrivera pas.
+   * Graceful worker shutdown.
    */
-  async stop(reason = "arrêt demandé"): Promise<void> {
+  async stop(reason = "shutdown requested"): Promise<void> {
     this.#state = "stopping";
     this.#stopHeartbeat();
 
@@ -198,8 +169,6 @@ export class WorkerRuntime {
 
     const cancelled = this.#runner.cancelAll(reason);
     if (cancelled > 0) {
-      // Une boucle d'événements de plus : les résultats d'annulation partent
-      // avant que le canal ne se ferme.
       await Promise.resolve();
     }
 
@@ -208,25 +177,23 @@ export class WorkerRuntime {
     this.#sessionId = undefined;
     this.#state = "stopped";
 
-    this.#logger.info("worker arrêté", { reason, étapesAnnulées: cancelled });
+    this.#logger.info("worker stopped", { reason, cancelledSteps: cancelled });
   }
 
-  // ── Connexion et poignée de main ────────────────────────────────────────
+  // ── Connection & Handshake ──────────────────────────────────────────────
 
   async #connect(): Promise<void> {
     try {
       await this.#link.connect();
     } catch (cause) {
-      this.#logger.warn("connexion impossible", {
-        raison: cause instanceof Error ? cause.message : "inconnue",
+      this.#logger.warn("connection failed", {
+        reason: cause instanceof Error ? cause.message : "unknown",
       });
-      this.#scheduleReconnect("connexion impossible");
+      this.#scheduleReconnect("connection failed");
       return;
     }
 
     this.#state = "authenticating";
-    // `hello` n'authentifie rien : il déclenche le challenge. Un identifiant
-    // d'appareil est public, il ne donne accès à rien par lui-même.
     await this.#send(WORKER_MESSAGE.hello, {
       deviceId: this.#config.deviceId,
       workerVersion: this.#config.workerVersion,
@@ -237,8 +204,6 @@ export class WorkerRuntime {
   async #onEnvelope(raw: unknown): Promise<void> {
     const message = parseWorkerMessage(raw);
     if (message === undefined) {
-      // Type inconnu : un cœur plus récent que ce worker. On ignore plutôt que
-      // de tomber — c'est ce qui rend les mises à jour indépendantes.
       return;
     }
 
@@ -266,9 +231,9 @@ export class WorkerRuntime {
           return;
       }
     } catch (cause) {
-      this.#logger.error("trame non traitée", {
+      this.#logger.error("unhandled envelope", {
         type: message.type,
-        raison: cause instanceof Error ? cause.message : "inconnue",
+        reason: cause instanceof Error ? cause.message : "unknown",
       });
     }
   }
@@ -276,8 +241,6 @@ export class WorkerRuntime {
   async #onChallenge(payload: WorkerPayload<"worker.challenge">): Promise<void> {
     const signature = await this.#signer.sign(payload.nonce);
 
-    // `requestId` et `timestamp` alimentent l'anti-rejeu du cœur : une trame
-    // d'authentification capturée ne peut pas être renvoyée.
     await this.#send(WORKER_MESSAGE.authenticate, {
       deviceId: this.#config.deviceId,
       nonce: payload.nonce,
@@ -295,11 +258,9 @@ export class WorkerRuntime {
     this.#backoff.reset();
     this.#state = "registering";
 
-    // Le jeton n'apparaît nulle part dans le journal — seulement l'identifiant
-    // de session, qui n'ouvre rien.
-    this.#logger.info("session ouverte", {
+    this.#logger.info("session established", {
       sessionId: payload.sessionId,
-      capacitésAccordées: payload.capabilities.length,
+      grantedCapabilitiesCount: payload.capabilities.length,
     });
 
     await this.#send(WORKER_MESSAGE.register, {
@@ -312,21 +273,17 @@ export class WorkerRuntime {
     this.#state = "ready";
     this.#startHeartbeat();
 
-    // **Le cœur fait autorité.** La liste retenue est celle qu'il a acceptée,
-    // pas celle que le worker a demandée. Celle négociée à l'ouverture de
-    // session est nécessairement vide au premier appairage — l'appareil n'a
-    // encore rien enregistré — et ne peut donc pas servir de référence.
     this.#grantedCapabilities = [...payload.accepted];
 
-    this.#logger.info("worker prêt", {
-      acceptées: payload.accepted.length,
-      refusées: payload.rejected.length,
+    this.#logger.info("worker ready", {
+      accepted: payload.accepted.length,
+      rejected: payload.rejected.length,
     });
 
     for (const rejected of payload.rejected) {
-      this.#logger.warn("capacité refusée par le cœur", {
-        capacité: rejected.name,
-        raison: rejected.reason,
+      this.#logger.warn("capability rejected by server", {
+        capability: rejected.name,
+        reason: rejected.reason,
       });
     }
   }
@@ -334,9 +291,7 @@ export class WorkerRuntime {
   #onHeartbeatAck(payload: WorkerPayload<"worker.heartbeat_ack">): void {
     if (!payload.rotateSession) return;
 
-    // Le cœur demande une rotation : on refait la poignée de main complète
-    // plutôt que d'ajouter un second chemin d'obtention de jeton.
-    this.#logger.info("rotation de session demandée");
+    this.#logger.info("session rotation requested");
     void this.#send(WORKER_MESSAGE.hello, {
       deviceId: this.#config.deviceId,
       workerVersion: this.#config.workerVersion,
@@ -345,16 +300,12 @@ export class WorkerRuntime {
   }
 
   async #onDispatch(payload: WorkerPayload<"worker.task_dispatch">): Promise<void> {
-    // Un ordre ne s'exécute jamais hors session. Le cas ne devrait pas se
-    // produire — le cœur ne dispatche que vers un worker authentifié — mais un
-    // worker qui exécuterait sur simple réception ferait reposer toute la
-    // sécurité sur le bon comportement de l'autre bout.
     if (this.#sessionToken === undefined) {
-      this.#logger.warn("ordre reçu hors session, ignoré", {
+      this.#logger.warn("dispatch received outside active session, ignoring", {
         taskId: payload.taskId,
         stepId: payload.stepId,
       });
-      throw new WorkerNotAuthenticatedError("ordre reçu avant l'ouverture de session");
+      throw new WorkerNotAuthenticatedError("task dispatch received prior to session establishment");
     }
 
     await this.#runner.handleDispatch(payload);
@@ -364,7 +315,7 @@ export class WorkerRuntime {
     this.#runner.cancel(payload.taskId, payload.stepId, payload.reason);
   }
 
-  // ── Battement de cœur ───────────────────────────────────────────────────
+  // ── Heartbeat ───────────────────────────────────────────────────────────
 
   #startHeartbeat(): void {
     this.#stopHeartbeat();
@@ -377,8 +328,8 @@ export class WorkerRuntime {
         timestamp: this.#now().toISOString(),
         health: this.#health.snapshot(),
       }).catch((cause: unknown) => {
-        this.#logger.warn("battement de cœur non transmis", {
-          raison: cause instanceof Error ? cause.message : "inconnue",
+        this.#logger.warn("heartbeat delivery failed", {
+          reason: cause instanceof Error ? cause.message : "unknown",
         });
       });
 
@@ -395,16 +346,7 @@ export class WorkerRuntime {
   }
 
   /**
-   * Réannonce les capacités au cœur.
-   *
-   * Les sondes sont rejouées d'abord : c'est le point. Sur un téléphone, la
-   * disponibilité change sous les pieds du worker — l'utilisateur désactive le
-   * service d'accessibilité, révoque les notifications, et trois capacités
-   * disparaissent. Le cœur doit l'apprendre tout de suite, sinon le sélecteur
-   * continue de choisir cet appareil pour des tâches qu'il ne peut plus honorer.
-   *
-   * Sans effet hors de l'état « prêt » : une réannonce pendant la poignée de
-   * main doublerait l'enregistrement.
+   * Re-announces capabilities to core server following probe updates.
    */
   async announceCapabilities(): Promise<boolean> {
     if (this.#state !== "ready") return false;
@@ -417,7 +359,7 @@ export class WorkerRuntime {
     return true;
   }
 
-  /** Envoie un battement immédiatement — utilisé par les tests et au diagnostic. */
+  /** Sends an immediate heartbeat telemetry message. */
   async sendHeartbeat(): Promise<void> {
     await this.#send(WORKER_MESSAGE.heartbeat, {
       requestId: this.#newId(),
@@ -426,7 +368,7 @@ export class WorkerRuntime {
     });
   }
 
-  // ── Reprise ─────────────────────────────────────────────────────────────
+  // ── Reconnection ────────────────────────────────────────────────────────
 
   #onClose(reason: string): void {
     if (this.#state === "stopping" || this.#state === "stopped") return;
@@ -435,11 +377,9 @@ export class WorkerRuntime {
     this.#sessionToken = undefined;
     this.#sessionId = undefined;
 
-    // Les étapes en cours n'aboutiront pas : le canal qui devait porter leur
-    // résultat est fermé. Le cœur les a déjà libérées de son côté.
-    const cancelled = this.#runner.cancelAll("connexion perdue");
+    const cancelled = this.#runner.cancelAll("connection lost");
 
-    this.#logger.warn("connexion perdue", { raison: reason, étapesAnnulées: cancelled });
+    this.#logger.warn("connection lost", { reason, cancelledSteps: cancelled });
     this.#scheduleReconnect(reason);
   }
 
@@ -449,10 +389,10 @@ export class WorkerRuntime {
     this.#state = "reconnecting";
 
     const delayMs = this.#backoff.next();
-    this.#logger.info("reconnexion programmée", {
-      raison: reason,
-      délaiMs: delayMs,
-      tentative: this.#backoff.attempt,
+    this.#logger.info("reconnect scheduled", {
+      reason,
+      delayMs,
+      attempt: this.#backoff.attempt,
     });
 
     this.#reconnectHandle = this.#setTimer(() => {
@@ -463,13 +403,13 @@ export class WorkerRuntime {
     }, delayMs);
   }
 
-  // ── Émission ────────────────────────────────────────────────────────────
+  // ── Messaging ───────────────────────────────────────────────────────────
 
   async #send<T extends WorkerMessageType>(type: T, payload: WorkerPayload<T>): Promise<void> {
     await this.#link.send(workerEnvelope(type, payload, { id: this.#newId(), at: this.#now() }));
   }
 
-  /** État interne, pour le diagnostic. Ne contient aucun secret. */
+  /** Snapshot of internal worker state for diagnostics. */
   describe(): Record<string, unknown> {
     return {
       state: this.#state,

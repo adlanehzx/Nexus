@@ -9,20 +9,13 @@ import { CapabilityUnavailableError, ExecutionTimeoutError } from "../src/errors
 import type { WorkerPayload } from "@nexus/protocol";
 
 /**
- * Le runtime commun, éprouvé pour lui-même.
- *
- * Les workers Windows et Android l'exercent déjà de bout en bout ; ces tests
- * couvrent ce qui n'appartient à aucun des deux — les contrats du registre, la
- * rédaction des arguments, la forme des erreurs de fil.
- *
- * Ce paquet ne doit dépendre d'**aucune** API de Node : il tourne aussi sur
- * Hermes, le moteur JavaScript d'Android. Un test le vérifie sur le code source.
+ * Worker core common runtime tests.
  */
 
 function capability(overrides: Partial<LocalCapability<never, unknown>> = {}) {
   return {
     name: "test.echo",
-    description: "Renvoie ce qu'on lui donne.",
+    description: "Echoes received input.",
     inputSchema: z.object({ value: z.string() }),
     riskLevel: "SAFE" as const,
     execute: (input: { value: string }) => Promise.resolve({ echoed: input.value }),
@@ -30,8 +23,8 @@ function capability(overrides: Partial<LocalCapability<never, unknown>> = {}) {
   } as unknown as LocalCapability<never, unknown>;
 }
 
-describe("registre de capacités", () => {
-  it("annonce ce qui est enregistré", async () => {
+describe("capability registry", () => {
+  it("advertises registered capabilities", async () => {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability());
     await registry.probeAll();
@@ -39,26 +32,25 @@ describe("registre de capacités", () => {
     expect(registry.declare().map((entry) => entry.name)).toEqual(["test.echo"]);
   });
 
-  it("refuse un enregistrement en double", () => {
+  it("rejects duplicate registration", () => {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability());
     expect(() => registry.register(capability())).toThrow(CapabilityUnavailableError);
   });
 
-  it("écarte une capacité dont la sonde échoue", async () => {
+  it("omits capabilities when dynamic probe fails", async () => {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability({ probe: () => Promise.reject(new Error("absent")) }));
     await registry.probeAll();
 
-    // Une sonde en échec vaut une indisponibilité : dans le doute, on n'annonce pas.
     expect(registry.declare()).toEqual([]);
   });
 
-  it("nomme le champ fautif quand les arguments sont invalides", () => {
+  it("reports invalid field path upon input validation failure", () => {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability());
 
-    expect(() => registry.validateInput("test.echo", { autre: 1 })).toThrow(
+    expect(() => registry.validateInput("test.echo", { other: 1 })).toThrow(
       expect.objectContaining({
         code: "CAPABILITY_INPUT_INVALID",
         context: expect.objectContaining({
@@ -68,7 +60,7 @@ describe("registre de capacités", () => {
     );
   });
 
-  it("transporte le risque dans les métadonnées annoncées", async () => {
+  it("carries risk level in advertised metadata", async () => {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability({ riskLevel: "HIGH" }));
     await registry.probeAll();
@@ -77,37 +69,35 @@ describe("registre de capacités", () => {
   });
 });
 
-describe("rédaction des arguments déclarés secrets", () => {
-  it("masque les champs nommés par la capacité", () => {
-    const masked = maskSecretFields({ selector: "champ", text: "MonMotDePasse" }, ["text"]);
-    expect(masked).toEqual({ selector: "champ", text: "[REDACTED]" });
+describe("redaction of declared secret arguments", () => {
+  it("masks fields designated by the capability", () => {
+    const masked = maskSecretFields({ selector: "field", text: "MyPassword" }, ["text"]);
+    expect(masked).toEqual({ selector: "field", text: "[REDACTED]" });
   });
 
-  it("laisse la charge utile intacte sans déclaration", () => {
+  it("leaves payload intact without secret field declaration", () => {
     const input = { text: "visible" };
     expect(maskSecretFields(input, undefined)).toBe(input);
     expect(maskSecretFields(input, [])).toBe(input);
   });
 
-  it("ignore un champ absent", () => {
+  it("ignores missing fields gracefully", () => {
     expect(maskSecretFields({ a: 1 }, ["text"])).toEqual({ a: 1 });
   });
 
-  it("laisse passer ce qui n'est pas un objet", () => {
-    expect(maskSecretFields("texte", ["text"])).toBe("texte");
+  it("leaves non-object values unchanged", () => {
+    expect(maskSecretFields("text", ["text"])).toBe("text");
     expect(maskSecretFields([1, 2], ["text"])).toEqual([1, 2]);
   });
 });
 
-describe("erreurs de fil", () => {
-  it("respecte le code et la reprise d'une AppError", () => {
+describe("wire errors", () => {
+  it("respects error code and retryable flag from AppError", () => {
     const wire = toWireError(new ExecutionTimeoutError("test.echo", 1_000));
     expect(wire).toMatchObject({ code: "EXECUTION_TIMEOUT", retryable: true });
   });
 
-  it("ne transmet pas le message d'une exception inconnue", () => {
-    // Un message d'exception peut contenir un chemin, une variable
-    // d'environnement, un fragment de fichier. Il reste local.
+  it("redacts raw message of unexpected errors", () => {
     const wire = toWireError(new Error("ENOENT: /home/example/.ssh/id_ed25519"));
 
     expect(wire.code).toBe("WORKER_INTERNAL_ERROR");
@@ -116,12 +106,12 @@ describe("erreurs de fil", () => {
   });
 });
 
-describe("délai d'exécution", () => {
-  it("laisse passer une promesse rapide", async () => {
+describe("execution timeout", () => {
+  it("passes fast promises", async () => {
     await expect(withTimeout(Promise.resolve(42), 1_000, () => undefined, "x")).resolves.toBe(42);
   });
 
-  it("déclenche l'annulation coopérative avant de rejeter", async () => {
+  it("triggers cooperative abort before rejecting", async () => {
     const onTimeout = vi.fn();
     const pending = withTimeout(new Promise(() => undefined), 20, onTimeout, "test.echo");
 
@@ -130,7 +120,7 @@ describe("délai d'exécution", () => {
   });
 });
 
-describe("exécution d'une étape", () => {
+describe("step execution", () => {
   function makeRunner(overrides: Partial<LocalCapability<never, unknown>> = {}) {
     const registry = new LocalCapabilityRegistry();
     registry.register(capability(overrides));
@@ -159,7 +149,7 @@ describe("exécution d'une étape", () => {
       stepId: "s1",
       capability: "test.echo",
       tool: "device.test.echo",
-      arguments: { value: "bonjour" },
+      arguments: { value: "hello" },
       timeoutMs: 1_000,
       riskLevel: "SAFE",
       requestId: "r1",
@@ -167,56 +157,55 @@ describe("exécution d'une étape", () => {
     };
   }
 
-  it("exécute et renvoie un résultat", async () => {
+  it("executes and returns result", async () => {
     const { runner, results } = makeRunner();
     await runner.handleDispatch(dispatch());
 
-    expect(results[0]).toMatchObject({ ok: true, result: { echoed: "bonjour" } });
+    expect(results[0]).toMatchObject({ ok: true, result: { echoed: "hello" } });
   });
 
-  it("marque le résultat sensible quand la capacité le déclare", async () => {
+  it("flags sensitive output when declared by capability", async () => {
     const { runner, results } = makeRunner({ sensitiveResult: true });
     await runner.handleDispatch(dispatch());
 
     expect(results[0]?.sensitiveResult).toBe(true);
   });
 
-  it("ne journalise pas un argument déclaré secret", async () => {
+  it("does not log secret arguments", async () => {
     const { runner, logger } = makeRunner({ secretArguments: ["value"] });
-    await runner.handleDispatch(dispatch({ arguments: { value: "MonMotDePasse2026" } }));
+    await runner.handleDispatch(dispatch({ arguments: { value: "SecretPass2026" } }));
 
-    expect(logger.text).not.toContain("MonMotDePasse2026");
+    expect(logger.text).not.toContain("SecretPass2026");
     expect(logger.text).toContain("REDACTED");
   });
 
-  it("refuse un renvoi de la même requête", async () => {
+  it("deduplicates redundant requests with same requestId", async () => {
     const { runner, results } = makeRunner();
     await runner.handleDispatch(dispatch());
     await runner.handleDispatch(dispatch());
 
-    // Le cœur peut renvoyer un ordre après une coupure : on ne réexécute pas.
     expect(results).toHaveLength(1);
   });
 
-  it("ne lève jamais : toute issue devient un résultat", async () => {
+  it("never throws unhandled exceptions: all outcomes yield a result", async () => {
     const { runner, results } = makeRunner();
     await expect(
-      runner.handleDispatch(dispatch({ capability: "inconnue.capacite" })),
+      runner.handleDispatch(dispatch({ capability: "unknown.capability" })),
     ).resolves.toBeUndefined();
 
     expect(results[0]).toMatchObject({ ok: false, error: { code: "CAPABILITY_UNAVAILABLE" } });
   });
 });
 
-describe("attente exponentielle", () => {
-  it("croît puis plafonne", () => {
+describe("exponential backoff", () => {
+  it("grows and caps at maximum delay", () => {
     const backoff = new Backoff({ minMs: 1_000, maxMs: 8_000, jitter: 0, random: () => 0.5 });
     expect([backoff.next(), backoff.next(), backoff.next(), backoff.next()]).toEqual([
       1_000, 2_000, 4_000, 8_000,
     ]);
   });
 
-  it("repart à zéro après une connexion établie", () => {
+  it("resets to initial delay following connection", () => {
     const backoff = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0, random: () => 0.5 });
     backoff.next();
     backoff.reset();
@@ -224,8 +213,8 @@ describe("attente exponentielle", () => {
   });
 });
 
-describe("canal en mémoire", () => {
-  it("achemine les enveloppes dans les deux sens", async () => {
+describe("in-memory loopback link", () => {
+  it("routes envelopes bidirectionally", async () => {
     const link = new LoopbackLink();
     const received: unknown[] = [];
     link.onMessage((envelope) => received.push(envelope));
@@ -238,13 +227,13 @@ describe("canal en mémoire", () => {
       ts: new Date().toISOString(),
       payload: {},
     });
-    link.deliver({ descendant: true });
+    link.deliver({ incoming: true });
 
     expect(link.sent).toHaveLength(1);
-    expect(received).toEqual([{ descendant: true }]);
+    expect(received).toEqual([{ incoming: true }]);
   });
 
-  it("signale la fermeture une seule fois", async () => {
+  it("signals close only once", async () => {
     const link = new LoopbackLink();
     const reasons: string[] = [];
     link.onClose((reason) => reasons.push(reason));
@@ -257,14 +246,8 @@ describe("canal en mémoire", () => {
   });
 });
 
-describe("portabilite du runtime", () => {
-  /**
-   * Ce paquet tourne sur Node **et** sur Hermes, le moteur JavaScript
-   * d'Android. Une seule importation de `node:` suffirait a casser le bundle du
-   * worker Android, et l'erreur n'apparaitrait qu'a l'execution sur le
-   * telephone — au pire endroit possible pour la decouvrir.
-   */
-  it("n'importe aucune API de Node", async () => {
+describe("runtime portability", () => {
+  it("imports no node-specific APIs", async () => {
     const { readFileSync, readdirSync, statSync } = await import("node:fs");
     const path = await import("node:path");
     const { fileURLToPath } = await import("node:url");
