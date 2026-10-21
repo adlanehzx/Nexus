@@ -37,24 +37,27 @@ pour que cette classe d'erreur ne puisse plus passer inaperçue. Il fait
 plateforme que Windows, pas qu'on sait fabriquer un paquet — ce dernier point
 est le travail du workflow de publication.
 
-### Une dette assumée : `Cargo.lock`
+### `Cargo.lock`, et comment il a été régénéré
 
-Le job tourne **sans `--locked`**, et il faut savoir pourquoi.
+Déclarer `keyring` par plateforme change le graphe de dépendances, donc le
+verrou devait être régénéré — ce qui demande une chaîne Rust, absente de la
+machine où ce travail a été fait. Un verrou écrit à la main aurait été pire
+qu'un verrou absent : il aurait affirmé des versions et des empreintes que
+personne n'a résolues.
 
-Déclarer `keyring` par plateforme change le graphe de dépendances : le verrou
-doit donc être régénéré, ce qui demande une chaîne Rust. Celle qui a écrit ce
-job n'en avait pas, et un verrou fabriqué à la main serait pire qu'un verrou
-absent — il affirmerait des versions et des empreintes qui n'ont été résolues
-par personne.
+Le job a donc servi de chaîne Rust à lui-même : il a détecté la dérive, publié
+le verrou qu'il venait de calculer comme artefact, et celui-ci a été récupéré et
+committé. Quatre paquets s'y sont ajoutés, un par plateforme concernée :
+`dbus-secret-service` (Linux), `security-framework` et `security-framework-sys`
+(macOS), `zeroize_derive`. `windows-sys` y était déjà. Les trois trousseaux sont
+donc dans le verrou, même s'il a été calculé sous Linux — cargo enregistre tous
+les cibles, pas seulement la courante.
 
-Le job détecte donc la dérive, le dit dans son résumé, et **publie le verrou
-qu'il a calculé** comme artefact `cargo-lock`. Le geste qui ferme la dette :
-récupérer cet artefact, le committer, et rétablir `--locked`.
-
-Tant que ce n'est pas fait, la construction de la coquille n'est pas
-reproductible : rien ne garantit que deux exécutions résolvent les mêmes
-versions. C'est la seule partie de ce document qui décrive un état
-intermédiaire.
+`--locked` est rétabli, et la construction est reproductible. L'étape de
+détection de dérive reste en place : elle ne devrait plus se déclencher, et
+c'est pour cela qu'on la garde. Le jour où une dépendance change, son message
+dira quoi faire — là où `--locked` seul échoue sur « cannot update the lock
+file », qui ne nomme aucun geste.
 
 ## Signature des exécutables
 
