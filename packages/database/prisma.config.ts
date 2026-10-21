@@ -4,16 +4,15 @@ import { dirname, resolve } from "node:path";
 import { defineConfig } from "prisma/config";
 
 /**
- * Configuration Prisma 7.
+ * Prisma 7 configuration.
  *
- * Depuis la v7, l'URL de connexion ne vit plus dans `schema.prisma` : les
- * commandes de migration la lisent ici, et le client applicatif la reçoit via un
- * driver adapter (cf. `src/client.ts`). Le schéma ne décrit plus que la forme des
- * données — la connexion est une affaire de configuration, pas de modèle.
+ * As of Prisma v7, the database connection URL is no longer declared in
+ * `schema.prisma`: migration commands read it here, and the application client
+ * receives it via a driver adapter (cf. `src/client.ts`). The schema file only
+ * defines the data model.
  *
- * Prisma 7 ne charge plus automatiquement les fichiers .env : on le fait
- * explicitement, depuis la racine du monorepo, pour que `pnpm db:migrate`
- * fonctionne quel que soit le répertoire courant.
+ * Prisma 7 does not automatically load .env files; we load it explicitly from
+ * monorepo root so `pnpm db:migrate` works from any working directory.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 for (const candidate of [resolve(here, ".env"), resolve(here, "../../.env")]) {
@@ -28,11 +27,7 @@ export default defineConfig({
   migrations: {
     path: "prisma/migrations",
   },
-  // L'URL n'est renseignée que si l'environnement la fournit.
-  //
-  // `prisma generate` n'a besoin d'aucune connexion : exiger DATABASE_URL le
-  // ferait échouer dans un build Docker, où la base n'existe pas encore. Les
-  // commandes qui en ont réellement besoin (`migrate`, `studio`) la réclament
-  // elles-mêmes, avec leur propre message.
+  // URL is only provided if defined in environment.
+  // `prisma generate` does not require a connection, ensuring Docker builds succeed.
   datasource: process.env["DATABASE_URL"] ? { url: process.env["DATABASE_URL"] } : {},
 });

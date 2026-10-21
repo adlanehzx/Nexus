@@ -1,29 +1,23 @@
-// NEXUS — schéma de données
-// Référence complète : docs/architecture/07-data-model.md
+// NEXUS — Data schema
+// Full reference: docs/architecture/07-data-model.md
 //
-// Ce fichier contient le sous-ensemble de la phase 0/1 : identité et conversation.
-// Les entités agent (AgentRun, AgentStep, ToolExecution, Confirmation,
-// PermissionGrant) arrivent en phase 2, la mémoire vectorielle en phase 6.
-//
-// Convention : les identifiants sont des UUID v7 générés côté application
-// (`uuidv7()` de @nexus/shared) — triables par le temps, donc sans fragmentation
-// d'index, et non devinables. Aucun défaut SQL n'est déclaré : un identifiant
-// est une décision de l'application, pas un effet de bord de la base.
+// Convention: IDs are UUID v7 generated on the application side
+// (`uuidv7()` from @nexus/shared) — time-sortable without index fragmentation,
+// and unguessable. No SQL default is declared: IDs are decided by application logic.
 
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
-// Depuis Prisma 7, l'URL de connexion ne vit plus dans le schéma : les migrations
-// la lisent dans `prisma.config.ts`, et le client la reçoit via un driver adapter
-// (cf. src/client.ts). Le schéma ne décrit plus que la forme des données.
+// As of Prisma 7, connection URL is read from `prisma.config.ts` by migrations,
+// and passed via driver adapter to the client (cf. src/client.ts).
 datasource db {
   provider = "postgresql"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Identité
+// Identity
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum UserStatus {
@@ -55,7 +49,7 @@ model User {
   @@map("users")
 }
 
-/// Séparée de User pour que charger un utilisateur ne charge jamais son hash.
+/// Decoupled from User so fetching user data never fetches password hashes.
 model AuthCredential {
   id           String   @id @db.Uuid
   userId       String   @unique @db.Uuid
@@ -68,9 +62,8 @@ model AuthCredential {
   @@map("auth_credentials")
 }
 
-/// Session d'authentification — distincte d'une conversation.
-/// Le refresh token est stocké haché ; sa réutilisation après rotation vaut vol
-/// présumé et révoque toute la famille de sessions.
+/// Authentication session — distinct from conversation.
+/// Refresh tokens are stored hashed; reuse after rotation triggers family revocation.
 model Session {
   id               String    @id @db.Uuid
   userId           String    @db.Uuid
@@ -99,9 +92,7 @@ enum DevicePlatform {
   WEB
 }
 
-/// Nature de l'appareil. `BROWSER_WORKER` y figure parce que Browser Use est un
-/// exécutant à part entière du point de vue du sélecteur, sans être un appareil
-/// physique de l'utilisateur.
+/// Device kind. `BROWSER_WORKER` is included because Browser Use acts as a full worker.
 enum DeviceType {
   IPHONE
   ANDROID
@@ -111,9 +102,7 @@ enum DeviceType {
   BROWSER_WORKER
 }
 
-/// Ce qu'un appareil a le droit d'être. `BOTH` n'est pas une commodité : le
-/// portable est réellement les deux, et un client ne doit jamais être choisi
-/// comme exécutant sans ce rôle explicite.
+/// Allowed device role. `BOTH` allows desktop/laptops to serve as client and worker.
 enum DeviceRole {
   CLIENT
   WORKER
@@ -127,19 +116,14 @@ enum DeviceStatus {
   REVOKED
 }
 
-/// Distincte du statut : un appareil peut être en ligne et non fiable. Un
-/// appareil fraîchement appairé est PENDING et n'exécute rien.
+/// Distinct from status: a device can be online without being trusted yet (PENDING).
 enum TrustState {
   PENDING
   TRUSTED
   REVOKED
 }
 
-/// Machine enregistrée : client, exécutant, ou les deux.
-///
-/// Le cœur ne connaît aucun appareil par son nom — il ne connaît que des rôles,
-/// des types et des capacités. Ajouter un appareil est une écriture ici, jamais
-/// une condition dans le code.
+/// Registered device: client, worker, or both.
 model Device {
   id                 String         @id @db.Uuid
   userId             String         @db.Uuid
@@ -150,12 +134,9 @@ model Device {
   status             DeviceStatus   @default(OFFLINE)
   trust              TrustState     @default(PENDING)
   agentVersion       String?
-  /// Santé rapportée au dernier battement de cœur : charge, batterie, latence,
-  /// tâches en cours. Alimente le score de sélection.
+  /// Health reported on last heartbeat: load, battery, latency, active tasks.
   health             Json           @default("{\"activeTasks\":0,\"maxConcurrentTasks\":1}")
-  /// Permissions accordées À CET APPAREIL, en plus de celles de l'utilisateur.
-  /// Autoriser `terminal.execute` sur le poste fixe et le refuser sur le
-  /// portable est un cas d'usage, pas une exception.
+  /// Explicit permissions granted to THIS DEVICE in addition to user permissions.
   grantedPermissions String[]       @default([])
   metadata           Json           @default("{}")
   lastSeenAt         DateTime?      @db.Timestamptz(3)
@@ -175,18 +156,15 @@ model Device {
   @@map("devices")
 }
 
-/// Capacité déclarée par un worker.
-///
-/// Une ligne par capacité plutôt qu'un tableau JSON : c'est ce qui rend la
-/// recherche par capacité indexable, et ce qui permet d'activer ou désactiver
-/// une capacité sans réécrire la déclaration entière.
+/// Capability declared by a worker.
+/// Normalized row-per-capability for indexing and independent enable/disable toggles.
 model DeviceCapability {
   id          String   @id @db.Uuid
   deviceId    String   @db.Uuid
   name        String
   version     String   @default("1")
   description String   @default("")
-  /// Schéma JSON des arguments, tel que le worker le déclare.
+  /// JSON schema for capability arguments as declared by worker.
   inputSchema Json?
   enabled     Boolean  @default(true)
   metadata    Json     @default("{}")
@@ -201,15 +179,11 @@ model DeviceCapability {
 
 enum DeviceCredentialKind {
   ED25519_PUBLIC_KEY
-  // Android ne sait pas stocker de cle Ed25519 dans son magasin materiel.
   ECDSA_P256_PUBLIC_KEY
   SERVICE_TOKEN_HASH
 }
 
-/// Secret d'authentification d'un appareil.
-///
-/// Jamais la valeur : une clé publique, ou l'empreinte d'un jeton. `rotatedAt`
-/// rend la rotation observable.
+/// Device authentication credential. Public key or token hash, never raw private keys.
 model DeviceCredential {
   id        String               @id @db.Uuid
   deviceId  String               @db.Uuid
@@ -226,22 +200,19 @@ model DeviceCredential {
   @@map("device_credentials")
 }
 
-/// Session authentifiée d'un appareil connecté.
-///
-/// Distincte de `Session`, qui est la session d'authentification d'un HUMAIN.
-/// Les deux surfaces restent séparées pour éviter toute confusion de privilèges.
+/// Authenticated device session. Distinct from user session.
 model DeviceSession {
   id              String    @id @db.Uuid
   deviceId        String    @db.Uuid
   userId          String    @db.Uuid
-  /// Empreinte du jeton. La valeur n'est rendue qu'une fois, à l'émission.
+  /// Token hash. Returned once upon issuance.
   tokenHash       String    @unique
   issuedAt        DateTime  @default(now()) @db.Timestamptz(3)
   expiresAt       DateTime  @db.Timestamptz(3)
   lastHeartbeatAt DateTime  @default(now()) @db.Timestamptz(3)
   rotatedFromId   String?   @db.Uuid
   revokedAt       DateTime? @db.Timestamptz(3)
-  /// Capacités négociées à l'ouverture, bornées par celles de l'appareil.
+  /// Negotiated capabilities for this session, bounded by device capabilities.
   capabilities    String[]  @default([])
   remoteAddress   String?
 
@@ -274,18 +245,12 @@ enum TaskStepStatus {
   CANCELLED
 }
 
-/// Plan d'exécution réparti sur plusieurs appareils.
-///
-/// À ne pas confondre avec le run agent : celui-là décrit un raisonnement,
-/// celui-ci une exécution. Un run peut produire un plan ; un plan peut
-/// s'exécuter sans agent.
+/// Distributed multi-device execution plan.
 model TaskPlan {
   id                   String         @id @db.Uuid
   userId               String         @db.Uuid
   title                String
-  /// Appareil d'où part la demande. Conservé pendant toute la vie de la tâche,
-  /// quels que soient les appareils qui l'exécutent : c'est le fil qui ramène
-  /// événements et confirmations au bon client.
+  /// Origin client device where request was initiated.
   originClientDeviceId String         @db.Uuid
   runId                String?        @db.Uuid
   conversationId       String?        @db.Uuid
@@ -304,12 +269,11 @@ model TaskPlan {
   @@map("task_plans")
 }
 
-/// Une étape du plan. `requiredCapabilities` — jamais un appareil — décide de
-/// l'exécutant ; `selectedDeviceId` n'est renseigné qu'à l'exécution.
+/// Plan step. `requiredCapabilities` decides worker selection; `selectedDeviceId` assigned at runtime.
 model TaskStep {
   id                   String         @id @db.Uuid
   taskId               String         @db.Uuid
-  /// Identifiant lisible au sein du plan (`clone`, `test`…).
+  /// Readable identifier within the plan (`clone`, `test`...).
   key                  String
   description          String
   requiredCapabilities String[]
@@ -337,9 +301,7 @@ model TaskStep {
   @@map("task_steps")
 }
 
-/// Une tentative d'exécution d'une étape sur un appareil donné.
-///
-/// Journal d'audit des actions réelles : rétention longue, arguments rédigés.
+/// Execution attempt of a step on a designated device.
 model TaskExecution {
   id          String         @id @db.Uuid
   taskId      String         @db.Uuid
@@ -350,7 +312,7 @@ model TaskExecution {
   startedAt   DateTime       @default(now()) @db.Timestamptz(3)
   completedAt DateTime?      @db.Timestamptz(3)
   durationMs  Int?
-  /// Arguments rédigés : aucun secret dans un journal d'audit.
+  /// Redacted arguments: zero secrets in audit logs.
   input       Json?
   result      Json?
   error       Json?
@@ -397,10 +359,8 @@ enum MessageRole {
   TOOL
 }
 
-/// `content` est un tableau de blocs typés (text, tool_call, tool_result, image,
-/// audio), pas une chaîne : c'est ce qui permet un rendu riche côté client et une
-/// recomposition fidèle du contexte pour n'importe quel fournisseur LLM.
-/// `contentText` en est la projection plate, pour la recherche plein texte.
+/// `content` is an array of typed content blocks (text, tool_call, tool_result, image, audio).
+/// `contentText` is the flattened text projection for full-text search.
 model Message {
   id                   String      @id @db.Uuid
   conversationId       String      @db.Uuid
@@ -455,18 +415,14 @@ model Memory {
   origin               MemoryOrigin                @default(USER)
   sensitivity          MemorySensitivity           @default(ORDINARY)
   sensitiveCategories  String[]                    @default([])
-  /// Provenance explicite. Ces champs ne contiennent jamais le texte source :
-  /// ils permettent de retrouver le run, la conversation ou la ressource qui
-  /// a produit le fait sans recopier une donnée potentiellement sensible.
+  /// Explicit provenance pointers without duplicating sensitive source raw text.
   sourceRunId          String?                     @db.Uuid
   sourceConversationId String?                     @db.Uuid
   sourceMessageId      String?                     @db.Uuid
   sourceUri            String?
-  /// Empreinte du contenu normalisé, utilisée pour la déduplication.
+  /// Normalized content hash for deduplication.
   contentHash          String
-  /// Le tableau reste la copie portable utilisée par Prisma et les exports.
-  /// La colonne pgvector est synchronisée par l'adaptateur pour la recherche
-  /// cosinus indexée ; Prisma la laisse volontairement au SQL natif.
+  /// Array copy used by Prisma and portable exports.
   embedding            Float[]                     @default([])
   embeddingVector      Unsupported("vector(384)")? @map("embedding_vector")
   embeddingModel       String?
@@ -509,33 +465,17 @@ model Notification {
   @@map("notifications")
 }
 
-/// Registre des assertions de mission émises.
-///
-/// Son existence change la nature de l'assertion : sans registre, une assertion
-/// volée reste exploitable jusqu'à son expiration, et rien ne permet de la
-/// retirer. `requireMissionGrant` consulte donc cette table à chaque requête —
-/// une signature valide ne suffit plus, il faut aussi que l'assertion soit
-/// toujours active.
-///
-/// Refuser par défaut est délibéré : une assertion absente du registre est
-/// rejetée. Une signature correcte mais inconnue signifie soit une clé
-/// compromise, soit un enregistrement perdu, et aucun des deux ne doit ouvrir.
-/// Ticket d'appairage à usage unique.
-///
-/// Le code n'est **jamais** stocké : seule son empreinte SHA-256 l'est, et la
-/// recherche se fait par empreinte. Il n'y a donc aucune comparaison à rendre
-/// constante, et une base lue par un tiers ne livre aucun ticket utilisable.
+/// Registry of issued mission grant assertions.
 model DevicePairingTicket {
   id         String    @id @db.Uuid
   userId     String    @db.Uuid
-  /// SHA-256 du code, en hexadécimal. Unique : deux tickets ne peuvent pas
-  /// partager un code, et la contrainte le garantit plutôt que le supposer.
+  /// SHA-256 of code in hex. Unique constraint guarantees one ticket per code.
   codeHash   String    @unique @db.Char(64)
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
   expiresAt  DateTime  @db.Timestamptz(3)
-  /// Nul tant que le ticket n'a pas servi. C'est lui qui rend l'usage unique.
+  /// Null while unused; timestamp enforces single-use.
   consumedAt DateTime? @db.Timestamptz(3)
-  /// Appareil créé par ce ticket. Renseigné à la consommation.
+  /// Device created by this pairing ticket.
   deviceId   String?   @db.Uuid
   label      String?   @db.VarChar(120)
 
@@ -545,7 +485,7 @@ model DevicePairingTicket {
 }
 
 model MissionGrant {
-  /// Le `jti` de l'assertion.
+  /// The `jti` of the assertion.
   id                 String            @id @db.Uuid
   missionExternalKey String            @db.VarChar(128)
   userId             String            @db.Uuid
@@ -553,8 +493,7 @@ model MissionGrant {
   issuedAt           DateTime          @default(now()) @db.Timestamptz(3)
   expiresAt          DateTime          @db.Timestamptz(3)
   status             MissionGrantState @default(ACTIVE)
-  /// Horodatage du retrait, quel qu'en soit le motif. Nul tant que l'assertion
-  /// est active.
+  /// Retirement timestamp. Null while active.
   retiredAt          DateTime?         @db.Timestamptz(3)
 
   @@index([missionExternalKey, status])
@@ -565,16 +504,13 @@ model MissionGrant {
 
 enum MissionGrantState {
   ACTIVE
-  /// Retirée parce que la mission est terminée ou annulée. Chemin normal.
+  /// Retired because mission completed or cancelled. Normal flow.
   COMPLETED
-  /// Retirée parce qu'on ne lui fait plus confiance. Chemin d'incident.
+  /// Revoked due to incident/mistrust.
   REVOKED
 }
 
-/// Délégation durable et révocable accordée à un calendrier.
-/// Seul le hash du secret opaque est conservé. Il ne donne pas directement
-/// accès à Agent Core : il permet d'émettre une assertion courte, bornée à
-/// une occurrence dont la clé est recalculée côté API.
+/// Long-lived revocable delegation grant.
 model ScheduleGrant {
   id                 String             @id @db.Uuid
   tokenHash          String             @unique @db.Char(64)
@@ -596,19 +532,12 @@ enum ScheduleGrantState {
   REVOKED
 }
 
-/// Réservation d'un run Agent Core pour une tentative de tâche.
-///
-/// La contrainte d'unicité porte sur `(mission, tâche, tentative)` et c'est
-/// elle, et non une lecture préalable, qui garantit qu'un bail expiré pendant
-/// un appel long ne produit pas deux runs. Un `SELECT` suivi d'un `INSERT`
-/// laisserait passer deux requêtes concurrentes dans l'intervalle.
+/// Agent Core run claim for task attempts.
+/// Unique constraint on (mission, task, attempt) prevents concurrent double runs.
 model AgentCoreRunClaim {
   id                 String   @id @db.Uuid
   missionExternalKey String   @db.VarChar(128)
   taskKey            String   @db.VarChar(128)
-  /// Tentative du moteur. Stable pour une tentative, différente d'un vrai
-  /// réessai : c'est ce qui distingue « deux workers sur le même travail » de
-  /// « nouvelle tentative après échec ».
   attemptId          String   @db.VarChar(128)
   runId              String   @db.Uuid
   userId             String   @db.Uuid
@@ -627,9 +556,7 @@ model AgentRunSnapshot {
   state     Json
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  /// Mission qui a demandé ce run. `null` pour un run lancé par une personne.
-  /// Colonne à part entière, et pas seulement un champ de `state` : la portée
-  /// d'une assertion se vérifie à la lecture, donc elle doit être indexable.
+  /// Mission that requested this run. Null for interactive runs initiated by a user.
   missionExternalKey String? @db.VarChar(128)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

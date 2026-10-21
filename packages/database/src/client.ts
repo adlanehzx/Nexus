@@ -5,19 +5,17 @@ export type { PrismaClient };
 
 export interface DatabaseOptions {
   url: string;
-  /** Journalise les requêtes SQL. À n'activer qu'en développement. */
+  /** Logs SQL queries. Enable in development only. */
   logQueries?: boolean;
-  /** Taille maximale du pool de connexions PostgreSQL. */
+  /** Maximum PostgreSQL connection pool size. */
   poolMax?: number;
 }
 
 /**
- * Construit un client Prisma.
+ * Builds a PrismaClient instance.
  *
- * Depuis Prisma 7, la connexion passe par un driver adapter : c'est `pg` qui
- * détient le pool, pas un moteur natif. Conséquence pratique — la configuration
- * du pool est explicite et sous notre contrôle, et l'URL vient de la
- * configuration validée, jamais d'une lecture directe de `process.env`.
+ * Uses `@prisma/adapter-pg` driver adapter. Connection pooling is managed
+ * explicitly via `pg`, with validated configuration rather than reading raw process.env.
  */
 export function createDatabaseClient(options: DatabaseOptions): PrismaClient {
   const adapter = new PrismaPg({
@@ -38,9 +36,7 @@ export interface DatabaseHealth {
 }
 
 /**
- * Sonde de readiness. Volontairement triviale (`SELECT 1`) : on vérifie que le
- * pool rend une connexion, pas que le schéma est correct — une sonde qui fait
- * trop de travail devient elle-même une cause de panne.
+ * Readiness probe (`SELECT 1`).
  */
 export async function checkDatabase(client: PrismaClient): Promise<DatabaseHealth> {
   const startedAt = performance.now();
@@ -51,7 +47,7 @@ export async function checkDatabase(client: PrismaClient): Promise<DatabaseHealt
     return {
       status: "down",
       latencyMs: Math.round(performance.now() - startedAt),
-      error: error instanceof Error ? error.message : "erreur inconnue",
+      error: error instanceof Error ? error.message : "unknown error",
     };
   }
 }
