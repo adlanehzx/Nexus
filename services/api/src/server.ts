@@ -202,6 +202,19 @@ async function main(): Promise<void> {
   // before accepting new traffic.
   await services.coordinator.recover();
 
+  // La pause est relue **avant** d'accepter du trafic. Sans cette ligne, elle
+  // serait écrite sur disque et jamais rechargée : on croirait NEXUS arrêté
+  // alors qu'il reprendrait du service au premier redémarrage, sans que
+  // personne en soit averti. Le journal le dit, parce qu'un démarrage en pause
+  // doit s'expliquer tout seul.
+  const pause = await services.pause.restore();
+  if (pause.paused) {
+    logger.warn(
+      { event: "api.paused", since: pause.since, reason: pause.reason },
+      "NEXUS démarre en pause : seules les actions sans effet de bord sont autorisées",
+    );
+  }
+
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
   logger.info(
     { event: "api.listening", host: config.API_HOST, port: config.API_PORT },

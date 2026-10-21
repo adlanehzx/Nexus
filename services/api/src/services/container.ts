@@ -73,6 +73,7 @@ import type { NotificationDispatcher } from "@nexus/notifications";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
+import { PauseSwitch } from "./pause.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 import { ProviderAccountService } from "./provider-accounts.js";
 import { AgentRouter } from "./agent-router.js";
@@ -221,6 +222,7 @@ export class ServiceContainer {
   readonly deviceCredentials: DeviceCredentialStore;
   readonly pairing: PairingService;
   readonly publicApiUrl: string | undefined;
+  readonly pause: PauseSwitch;
   readonly selector: DeviceSelector;
   readonly router: EventRouter;
   readonly gateway: WorkerGateway;
@@ -323,8 +325,21 @@ export class ServiceContainer {
     });
     this.selector = new DeviceSelector({ registry: this.deviceRegistry });
 
+    // ── Pause globale ─────────────────────────────────────────────────────
+    //
+    // Montée avant les permissions : c'est elle qu'elles consultent.
+    this.pause = new PauseSwitch({
+      ...(options.runtimeConfiguration === undefined
+        ? {}
+        : { store: options.runtimeConfiguration }),
+      now,
+    });
+
     // ── Permissions et confirmations ──────────────────────────────────────
     this.permissions = new PermissionService({
+      // Fermeture et non valeur : la pause doit prendre effet sur l'appel
+      // suivant, sans reconstruire le service ni ce qui en dépend.
+      readOnly: () => this.pause.paused,
       grants: {
         // Les permissions accordées à l'utilisateur sont l'union de celles de
         // ses appareils. Un poste autorisé à `terminal.execute` rend la

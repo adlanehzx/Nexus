@@ -96,6 +96,69 @@ Un grant n'est pas un booléen mais un domaine de validité :
 Si les arguments sortent du scope, on retombe en `CONFIRM` — pas en `DENY` : l'utilisateur garde
 la main sans que l'agent soit bloqué sèchement.
 
+## 4 bis. Pause globale
+
+### La définition retenue
+
+**Lire continue, agir s'arrête.**
+
+C'est la seule définition utile pour un assistant personnel : on met NEXUS en
+pause parce qu'on ne veut plus qu'il _fasse_ des choses, pas parce qu'on veut
+qu'il devienne aveugle. En pause, il consulte, résume et répond encore ; il
+n'envoie plus, n'écrit plus, n'exécute plus, n'achète plus.
+
+Cette frontière existait déjà : `readOnly` refuse dans `PermissionService` tout
+outil de risque `LOW` ou plus et laisse passer `SAFE`. L'échelle de risque
+portait donc le bon découpage ; il manquait de quoi l'actionner.
+
+### Ce qu'il a fallu changer pour que ce soit actionnable
+
+`readOnly` était un booléen figé à la construction. Le changer demandait de
+reconstruire le service de permissions, donc de perdre tout ce qui en dépend.
+Il accepte désormais une **fermeture**, consultée à chaque autorisation : une
+pause prend effet sur l'appel suivant.
+
+### Trois propriétés, et pourquoi chacune
+
+**Elle survit à un redémarrage.** Une pause qui s'oublie est pire que pas de
+pause : on croit NEXUS arrêté, il ne l'est plus, et personne n'est prévenu.
+L'état est écrit par la même écriture atomique que le reste de la
+configuration, relu avant d'accepter du trafic, et un démarrage en pause est
+journalisé — il doit s'expliquer tout seul.
+
+**Elle porte un motif et une date.** « Rien ne se passe » est le symptôme le
+plus coûteux à diagnostiquer. Une interface qui dit « en pause depuis 14h02 :
+réunion » transforme une énigme en information. Remettre en pause ce qui l'est
+déjà ne déplace pas la date : on veut savoir depuis quand, pas depuis le
+dernier clic.
+
+**Elle ne peut pas s'enfermer.** Reprendre est une action ; si la pause
+refusait les actions sans exception, elle interdirait sa propre levée. Les
+routes `/pause` ne la consultent donc pas — elles la modifient.
+
+### Elle couvre les deux moitiés du système
+
+Un bouton d'arrêt qui n'arrête qu'une partie est pire qu'aucun bouton.
+
+| chemin                                                                  | ce qui refuse                                                                                       |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| outils de l'agent                                                       | `PermissionService`, par la fermeture `readOnly`                                                    |
+| tâche d'appareil soumise directement (`POST /tasks`, `/tasks/instruct`) | la route, qui vérifie la pause — elle n'emprunte pas la couche de permissions                       |
+| mission depuis le chat (`POST /orchestrator/messages`)                  | la route, **avant** de soumettre : une mission à moitié exécutée serait pire qu'une mission refusée |
+
+Annuler reste possible en pause : une annulation retire un effet, elle n'en
+ajoute pas.
+
+### Surface
+
+```
+GET  /api/v1/pause   → { paused, reason, since }
+POST /api/v1/pause   { paused, reason? }
+```
+
+Les deux exigent un utilisateur. La mise en pause et la reprise sont inscrites
+au journal de sécurité.
+
 ## 5. Flux de confirmation
 
 ```mermaid

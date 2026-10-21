@@ -147,6 +147,11 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
+      // La pause passe **avant** la vérification du moteur : refuser pour la
+      // bonne raison compte, et une mission à moitié partie serait pire qu'une
+      // mission refusée. Elle ne doit pas non plus compter sur le refus de
+      // chaque outil en aval.
+      app.services.pause.assertRunning();
       if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
       const { userId } = currentUser(request);
       const mission = await orchestrator.submit(

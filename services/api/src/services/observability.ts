@@ -184,6 +184,9 @@ export type SecurityEventKind =
   | "device.trusted"
   | "device.revoked"
   | "device.auth_failed"
+  /** Pause globale actionnée. Le motif accompagne la ligne. */
+  | "system.paused"
+  | "system.resumed"
   | "permission.denied"
   | "confirmation.requested"
   | "confirmation.answered"

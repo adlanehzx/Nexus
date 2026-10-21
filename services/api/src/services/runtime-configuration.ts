@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { pauseStateSchema, type PauseState } from "./pause.js";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 import { notificationsConfigSchema, type NotificationsConfig } from "@nexus/notifications";
 import { providerAccountSchema, type ProviderAccount } from "./provider-accounts.js";
@@ -93,6 +94,15 @@ export class RuntimeConfigurationStore {
 
   async saveProviderAccounts(accounts: ProviderAccount[]): Promise<void> {
     await this.#write("provider-accounts.json", z.array(providerAccountSchema).parse(accounts));
+  }
+
+  async loadPause(): Promise<PauseState | null> {
+    const raw = await this.#read("pause.json", null);
+    return raw === null ? null : pauseStateSchema.parse(raw);
+  }
+
+  async savePause(state: PauseState): Promise<void> {
+    await this.#write("pause.json", pauseStateSchema.parse(state));
   }
 
   async loadRoutingStats(): Promise<AgentRoutingStats | null> {

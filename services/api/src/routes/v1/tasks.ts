@@ -155,6 +155,10 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       },
     },
     async (request, reply) => {
+      // Une tâche d'appareil n'emprunte pas la couche de permissions de l'agent :
+      // elle est soumise directement. Le coupe-circuit doit donc être vérifié
+      // ici aussi, sans quoi la pause ne couvrirait qu'une moitié du système.
+      app.services.pause.assertRunning();
       const { userId } = currentUser(request);
       const capabilities = request.body.steps.flatMap((step) => step.requiredCapabilities);
 
@@ -204,6 +208,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         throw new Error("Le service LLMProvider n'est pas configuré");
       }
 
+      app.services.pause.assertRunning();
       const availableCapabilities = await app.services.permissionsFor(userId);
 
       const planner = new TaskPlanner({
