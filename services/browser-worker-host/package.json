@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@nexus/devices": "workspace:*",
-    "@types/node": "24.13.3",
+    "@types/node": "26.6.5",
     "@types/ws": "8.18.1",
     "vitest": "4.1.11"
   }

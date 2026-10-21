@@ -41,7 +41,7 @@
     "@react-native/babel-preset": "0.81.5",
     "@react-native/gradle-plugin": "0.81.5",
     "@react-native/metro-config": "0.81.5",
-    "@types/node": "24.13.3",
+    "@types/node": "26.6.5",
     "@types/react": "~19.1.0",
     "@types/ws": "8.18.1",
     "vitest": "4.1.11",
