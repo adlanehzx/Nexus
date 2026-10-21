@@ -5,6 +5,11 @@ import {
   MissionGrantService,
   type MissionGrantRegistry,
 } from "./mission-grants.js";
+import {
+  InMemoryScheduleGrantRegistry,
+  ScheduleGrantService,
+  type ScheduleGrantRegistry,
+} from "./schedule-grants.js";
 import { TokenService, type ScryptParams } from "@nexus/auth";
 import type { LLMProvider } from "@nexus/llm";
 import {
@@ -128,6 +133,8 @@ export interface ServiceContainerOptions {
    * assertion inconnue — donc refusée — et casserait les missions en cours.
    */
   missionGrantRegistry?: MissionGrantRegistry;
+  /** Délégations durables des calendriers, hachées en persistance. */
+  scheduleGrantRegistry?: ScheduleGrantRegistry;
 
   /** Marge de renouvellement d'une assertion. Exposée pour les tests d'horloge. */
   missionGrantRenewWithinMs?: number;
@@ -223,6 +230,7 @@ export class ServiceContainer {
   readonly telemetry: NexusTelemetry;
   readonly agentRunClaims: AgentRunClaimStore;
   readonly missionGrants: MissionGrantService;
+  readonly scheduleGrants: ScheduleGrantService;
   /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
   readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
@@ -469,6 +477,12 @@ export class ServiceContainer {
       ...(options.missionGrantRenewWithinMs === undefined
         ? {}
         : { renewWithinMs: options.missionGrantRenewWithinMs }),
+      now,
+    });
+    this.scheduleGrants = new ScheduleGrantService({
+      registry: options.scheduleGrantRegistry ?? new InMemoryScheduleGrantRegistry(),
+      missions: this.missionGrants,
+      isUserActive: async (userId) => (await this.users.findById(userId))?.status === "ACTIVE",
       now,
     });
     this.agentCore =

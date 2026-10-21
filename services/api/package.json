@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo",
     "e2e:confirmation": "node scripts/e2e-confirmation.mjs",
+    "e2e:schedule-grant": "node scripts/e2e-schedule-grant.mjs",
     "e2e:chain": "node scripts/e2e-mission-chain.mjs"
   },
   "dependencies": {

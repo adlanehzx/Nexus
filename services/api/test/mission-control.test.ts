@@ -174,6 +174,40 @@ describe("routes Mission Control", () => {
     expect(input?.mission.workspace).not.toBe("/tmp/nexus");
   });
 
+  it("ajoute une délégation serveur aux calendriers Agent Core sans l'exposer", async () => {
+    const created = scheduleFor(admin.userId);
+    fake.createSchedule.mockResolvedValueOnce(created);
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/mission-control/schedules",
+      headers: admin.authorization,
+      payload: {
+        name: "Synthèse durable",
+        timezone: "UTC",
+        cron_expression: "0 8 * * *",
+        mission: {
+          external_key: "ignorée",
+          title: "Synthèse",
+          workspace: "/tmp/ignoré",
+          tasks: [
+            {
+              key: "synthesis",
+              profile: "agent-core",
+              agent_kind: "agent-core",
+              instruction: "Synthétise",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const submitted = fake.createSchedule.mock.calls[0]?.[0];
+    expect(submitted?.schedule_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(submitted?.owner_delegation).toMatch(/^nsg_/);
+    expect(response.body).not.toContain("nsg_");
+  });
+
   it("filtre la liste et masque les calendriers d'un autre administrateur", async () => {
     await harness.services.users.setRole(member.userId, "ADMIN");
     const owned = scheduleFor(admin.userId);

@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS mission_schedules (
     max_concurrency INTEGER NOT NULL CHECK (max_concurrency BETWEEN 1 AND 32),
     misfire_grace_seconds INTEGER NOT NULL CHECK (misfire_grace_seconds BETWEEN 0 AND 86400),
     mission_template_json TEXT NOT NULL CHECK (json_valid(mission_template_json)),
+    owner_delegation TEXT,
     next_run_at TEXT,
     last_scheduled_at TEXT,
     created_at TEXT NOT NULL,
@@ -510,6 +511,14 @@ class Database:
             if research_columns and "allowed_sources_json" not in research_columns:
                 connection.execute(
                     "ALTER TABLE research_runs ADD COLUMN allowed_sources_json TEXT NOT NULL DEFAULT '[]'"
+                )
+            schedule_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(mission_schedules)")
+            }
+            if "owner_delegation" not in schedule_columns:
+                connection.execute(
+                    "ALTER TABLE mission_schedules ADD COLUMN owner_delegation TEXT"
                 )
 
     @contextmanager

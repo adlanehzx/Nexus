@@ -229,6 +229,9 @@ jobs:
       - name: Scénario complet
         run: pnpm --filter @nexus/api e2e:confirmation
 
+      - name: Contrat calendrier Agent Core TypeScript ↔ Python
+        run: pnpm --filter @nexus/api e2e:schedule-grant
+
   e2e-chain:
     name: Chaîne d'agents de bout en bout
     runs-on: ubuntu-latest

@@ -10,7 +10,8 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from nexus_engine.database import Database
-from nexus_engine.domain import canonical_json, validate_plan
+from nexus_engine.agent_core import ScheduleGrantGateway
+from nexus_engine.domain import AGENT_CORE_KIND, canonical_json, validate_plan
 from nexus_engine.errors import (
     ConflictError,
     LeaseLostError,
@@ -142,14 +143,21 @@ class ScheduleLease:
     schedule_id: str
     scheduled_for: str
     mission_template: dict[str, Any]
+    owner_delegation: str | None
     lease_owner: str
     lease_token: str
 
 
 class SchedulerRepository:
-    def __init__(self, database: Database, missions: MissionRepository):
+    def __init__(
+        self,
+        database: Database,
+        missions: MissionRepository,
+        schedule_grants: ScheduleGrantGateway | None = None,
+    ):
         self.db = database
         self.missions = missions
+        self.schedule_grants = schedule_grants
         self.db.migrate()
 
     @staticmethod
@@ -171,6 +179,8 @@ class SchedulerRepository:
         max_catch_up: int,
         max_concurrency: int,
         misfire_grace_seconds: int,
+        schedule_id: str | None = None,
+        owner_delegation: str | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         current = _utc(now or datetime.now(UTC))
@@ -189,12 +199,29 @@ class SchedulerRepository:
         if not 0 <= misfire_grace_seconds <= 86_400:
             raise ValidationError("misfire_grace_seconds must be between 0 and 86400")
         zone = self._timezone(timezone)
-        validated = validate_plan(mission, self.missions.plannable_profiles())
-        template = json.loads(validated.canonical_json)
-        if validated.owner is not None:
-            raise ValidationError(
-                "schedules cannot persist an expiring owner assertion"
+        if mission.get("owner") is not None:
+            raise ValidationError("schedules cannot persist an expiring owner assertion")
+        raw_tasks = mission.get("tasks")
+        uses_agent_core = isinstance(raw_tasks, list) and any(
+            isinstance(task, dict)
+            and (
+                task.get("agent_kind") == AGENT_CORE_KIND
+                or task.get("profile") == "agent-core"
             )
+            for task in raw_tasks
+        )
+        if uses_agent_core and not owner_delegation:
+            raise ValidationError("scheduled agent-core tasks require an owner delegation")
+        if owner_delegation and not uses_agent_core:
+            raise ValidationError("owner delegation is only valid for agent-core schedules")
+        candidate = dict(mission)
+        if uses_agent_core:
+            # Identité factice uniquement pour la validation structurelle. Elle
+            # est retirée du JSON canonique par validate_plan et n'est jamais
+            # persistée ni utilisée pour agir.
+            candidate["owner"] = {"user_id": "scheduled", "assertion": "delegated"}
+        validated = validate_plan(candidate, self.missions.plannable_profiles())
+        template = json.loads(validated.canonical_json)
         if run_at is not None:
             first = _utc(run_at)
             schedule_kind = "one_shot"
@@ -205,7 +232,7 @@ class SchedulerRepository:
             # jamais rétroactivement à 10:00.
             first = cron.next_after(current, zone)
             schedule_kind = "cron"
-        schedule_id = str(uuid.uuid4())
+        schedule_id = schedule_id or str(uuid.uuid4())
         current_text = timestamp(current)
         with self.db.transaction(immediate=True) as connection:
             connection.execute(
@@ -214,8 +241,8 @@ class SchedulerRepository:
                     id,name,state,schedule_kind,run_at,cron_expression,timezone,
                     catch_up_policy,max_catch_up,max_concurrency,
                     misfire_grace_seconds,mission_template_json,next_run_at,
-                    created_at,updated_at
-                ) VALUES (?,?, 'active', ?,?,?,?,?,?,?,?,?,?,?,?)
+                    owner_delegation,created_at,updated_at
+                ) VALUES (?,?, 'active', ?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     schedule_id,
@@ -230,6 +257,7 @@ class SchedulerRepository:
                     misfire_grace_seconds,
                     canonical_json(template),
                     timestamp(first),
+                    owner_delegation,
                     current_text,
                     current_text,
                 ),
@@ -440,7 +468,7 @@ class SchedulerRepository:
         with self.db.transaction(immediate=True) as connection:
             row = connection.execute(
                 """
-                SELECT sr.*,s.mission_template_json,s.max_concurrency
+                SELECT sr.*,s.mission_template_json,s.owner_delegation,s.max_concurrency
                 FROM schedule_runs sr
                 JOIN mission_schedules s ON s.id=sr.schedule_id
                 WHERE (
@@ -479,6 +507,11 @@ class SchedulerRepository:
                 schedule_id=str(row["schedule_id"]),
                 scheduled_for=str(row["scheduled_for"]),
                 mission_template=json.loads(row["mission_template_json"]),
+                owner_delegation=(
+                    str(row["owner_delegation"])
+                    if row["owner_delegation"] is not None
+                    else None
+                ),
                 lease_owner=worker_id,
                 lease_token=token,
             )
@@ -489,6 +522,20 @@ class SchedulerRepository:
             str(plan["external_key"]), lease.schedule_id, lease.scheduled_for
         )
         idempotency_key = f"schedule:{lease.schedule_id}:{lease.scheduled_for}"
+        if lease.owner_delegation is not None:
+            if self.schedule_grants is None:
+                raise ValidationError("schedule grant exchange is not configured")
+            owner = self.schedule_grants.exchange(
+                delegation=lease.owner_delegation,
+                schedule_id=lease.schedule_id,
+                scheduled_for=lease.scheduled_for,
+                mission_external_key=str(plan["external_key"]),
+            )
+            plan["owner"] = {
+                "user_id": owner.user_id,
+                "assertion": owner.assertion,
+                **({} if owner.expires_at is None else {"expires_at": owner.expires_at}),
+            }
         try:
             mission_id, _ = self.missions.submit(plan, idempotency_key)
         except (ValidationError, ConflictError) as exc:

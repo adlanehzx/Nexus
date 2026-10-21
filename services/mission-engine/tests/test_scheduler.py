@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from nexus_engine.database import Database
+from nexus_engine.domain import MissionOwner
 from nexus_engine.errors import ConflictError, ValidationError
 from nexus_engine.repository import MissionRepository
 from nexus_engine.scheduler import CronExpression, Scheduler, SchedulerRepository
@@ -335,6 +336,105 @@ def test_schedule_rejects_unknown_timezone_and_persisted_owner(repositories) -> 
             mission=owned,
             timezone="UTC",
             run_at=due,
+            cron_expression=None,
+            catch_up_policy="latest",
+            max_catch_up=1,
+            max_concurrency=1,
+            misfire_grace_seconds=0,
+        )
+
+
+def test_scheduled_agent_core_exchanges_delegation_just_in_time(tmp_path) -> None:
+    missions = MissionRepository(Database(tmp_path / "scheduled-core.db"))
+
+    class Grants:
+        calls: list[dict] = []
+
+        def exchange(self, **values):  # noqa: ANN003, ANN201
+            self.calls.append(values)
+            return MissionOwner(
+                user_id="user-1",
+                assertion="short-lived-assertion",
+                expires_at="2030-01-02T00:00:00+00:00",
+            )
+
+    grants = Grants()
+    schedules = SchedulerRepository(missions.db, missions, grants)  # type: ignore[arg-type]
+    due = datetime(2030, 1, 1, 7, tzinfo=UTC)
+    schedule = schedules.create(
+        name="Agent Core",
+        mission={
+            "external_key": "nexus-scheduled-core",
+            "title": "Agent Core",
+            "workspace": "/tmp/workspace",
+            "tasks": [
+                {
+                    "key": "synthesis",
+                    "profile": "agent-core",
+                    "agent_kind": "agent-core",
+                    "instruction": "Synthétise",
+                }
+            ],
+        },
+        timezone="UTC",
+        run_at=due,
+        cron_expression=None,
+        catch_up_policy="latest",
+        max_catch_up=1,
+        max_concurrency=1,
+        misfire_grace_seconds=0,
+        schedule_id="22222222-2222-4222-8222-222222222222",
+        owner_delegation="nsg_" + "x" * 43,
+        now=due - timedelta(days=1),
+    )
+    assert "owner_delegation" not in schedule
+    assert "nsg_" not in str(schedule)
+
+    schedules.materialize_due(due)
+    lease = schedules.claim("scheduler")
+    assert lease is not None
+    mission_id = schedules.submit_claim(lease)
+
+    assert grants.calls == [
+        {
+            "delegation": "nsg_" + "x" * 43,
+            "schedule_id": schedule["id"],
+            "scheduled_for": "2030-01-01T07:00:00.000000+00:00",
+            "mission_external_key": (
+                "nexus-scheduled-core:22222222:20300101T070000.000000+0000"
+            ),
+        }
+    ]
+    with missions.db.connect() as connection:
+        stored = connection.execute(
+            "SELECT owner_user_id,owner_assertion,definition_json FROM missions WHERE id=?",
+            (mission_id,),
+        ).fetchone()
+    assert stored["owner_user_id"] == "user-1"
+    assert stored["owner_assertion"] == "short-lived-assertion"
+    assert "short-lived-assertion" not in stored["definition_json"]
+
+
+def test_scheduled_agent_core_requires_delegation(repositories) -> None:
+    _, schedules = repositories
+    with pytest.raises(ValidationError, match="owner delegation"):
+        schedules.create(
+            name="Unsafe",
+            mission={
+                "external_key": "unsafe",
+                "title": "Unsafe",
+                "workspace": "/tmp/workspace",
+                "tasks": [
+                    {
+                        "key": "one",
+                        "profile": "agent-core",
+                        "agent_kind": "agent-core",
+                        "instruction": "Go",
+                    }
+                ],
+            },
+            timezone="UTC",
+            run_at=datetime(2030, 1, 1, tzinfo=UTC),
             cron_expression=None,
             catch_up_policy="latest",
             max_catch_up=1,

@@ -8,6 +8,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from nexus_engine.acp import AcpError
+from nexus_engine.domain import MissionOwner
 
 #: Nom sous lequel le moteur se présente dans l'assertion. L'API tient une liste
 #: blanche des services admis ; cette valeur doit y figurer.
@@ -220,6 +221,78 @@ class AgentCoreGateway:
             raise AcpError("Agent Core bridge is unreachable", category="transport") from exc
         except json.JSONDecodeError as exc:
             raise AcpError("Agent Core bridge returned invalid JSON", category="transport") from exc
+
+
+class ScheduleGrantGateway:
+    """Échange une délégation durable contre une assertion d'occurrence.
+
+    Le moteur conserve un secret opaque borné au calendrier. Il ne sait ni en
+    déduire l'utilisateur, ni élargir sa portée : l'API recalcule elle-même la
+    clé externe attendue avant d'émettre une assertion courte.
+    """
+
+    def __init__(
+        self,
+        base_url: str | None,
+        *,
+        timeout_seconds: int = 30,
+        opener: Callable[[urllib.request.Request, int], Any] | None = None,
+    ):
+        self.base_url = base_url.rstrip("/") if base_url else None
+        self.timeout_seconds = timeout_seconds
+        self._opener = opener or AgentCoreGateway._default_opener
+
+    def exchange(
+        self,
+        *,
+        delegation: str,
+        schedule_id: str,
+        scheduled_for: str,
+        mission_external_key: str,
+    ) -> MissionOwner:
+        if self.base_url is None:
+            raise AcpError("schedule grant exchange is not configured", category="config")
+        payload = json.dumps(
+            {
+                "scheduleId": schedule_id,
+                "scheduledFor": scheduled_for,
+                "missionExternalKey": mission_external_key,
+            }
+        ).encode()
+        request = urllib.request.Request(
+            f"{self.base_url}/api/v1/agent-core/schedule-grants/exchange",
+            data=payload,
+            method="POST",
+            headers={
+                "authorization": f"Bearer {delegation}",
+                "content-type": "application/json",
+            },
+        )
+        try:
+            with self._opener(request, self.timeout_seconds) as response:
+                body = json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            raise AcpError(
+                "schedule grant exchange was refused",
+                category=_category_for_status(exc.code),
+            ) from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise AcpError("schedule grant exchange is unreachable", category="transport") from exc
+        except json.JSONDecodeError as exc:
+            raise AcpError("schedule grant exchange returned invalid JSON", category="transport") from exc
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict):
+            raise AcpError("schedule grant exchange returned an invalid envelope", category="transport")
+        user_id = data.get("userId")
+        assertion = data.get("assertion")
+        expires_at = data.get("expiresAt")
+        if not isinstance(user_id, str) or not isinstance(assertion, str):
+            raise AcpError("schedule grant exchange returned an invalid owner", category="transport")
+        return MissionOwner(
+            user_id=user_id,
+            assertion=assertion,
+            expires_at=expires_at if isinstance(expires_at, str) else None,
+        )
 
 
 def _read_run(body: Any) -> AgentCoreOutcome:

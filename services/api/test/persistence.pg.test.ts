@@ -8,6 +8,7 @@ import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.j
 import { PrismaDeviceStore } from "../src/services/persistence/prisma-device-store.js";
 import { PrismaAgentRunClaimStore } from "../src/services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "../src/services/persistence/prisma-mission-grant-registry.js";
+import { PrismaScheduleGrantRegistry } from "../src/services/persistence/prisma-schedule-grant-registry.js";
 
 /**
  * Magasins Prisma contre un PostgreSQL réel.
@@ -100,6 +101,7 @@ afterAll(async () => {
   await prisma.taskPlan.deleteMany({ where: { id: planId } });
   await prisma.agentCoreRunClaim.deleteMany({ where: { userId: ownerId } });
   await prisma.missionGrant.deleteMany({ where: { userId: ownerId } });
+  await prisma.scheduleGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.agentRunSnapshot.deleteMany({ where: { userId: ownerId } });
   await prisma.deviceCapability.deleteMany({ where: { deviceId } });
   await prisma.device.deleteMany({ where: { id: deviceId } });
@@ -481,5 +483,54 @@ describe("registre des assertions sur PostgreSQL", () => {
       },
     });
     await expect(invalid).rejects.toThrow();
+  });
+});
+
+describe("délégations de calendrier sur PostgreSQL", () => {
+  it("ne conserve que le hash, lie le calendrier et révoque atomiquement", async () => {
+    const registry = new PrismaScheduleGrantRegistry(prisma);
+    const id = randomUUID();
+    const scheduleId = randomUUID();
+    const tokenHash = "a".repeat(64);
+    await registry.record({
+      id,
+      tokenHash,
+      userId: ownerId,
+      missionExternalKey: "nexus-scheduled-pg",
+      scheduleId,
+      status: "ACTIVE",
+      createdAt: new Date(),
+      revokedAt: null,
+    });
+
+    expect(await registry.findByTokenHash(tokenHash)).toMatchObject({
+      id,
+      scheduleId,
+      status: "ACTIVE",
+    });
+    await registry.revoke(id, new Date());
+    expect(await registry.findByTokenHash(tokenHash)).toMatchObject({
+      status: "REVOKED",
+    });
+  });
+
+  it("laisse PostgreSQL refuser deux délégations pour le même calendrier", async () => {
+    const scheduleId = randomUUID();
+    const base = {
+      userId: ownerId,
+      missionExternalKey: "nexus-scheduled-unique",
+      scheduleId,
+      status: "ACTIVE" as const,
+      createdAt: new Date(),
+      revokedAt: null,
+    };
+    await prisma.scheduleGrant.create({
+      data: { ...base, id: randomUUID(), tokenHash: "b".repeat(64) },
+    });
+    await expect(
+      prisma.scheduleGrant.create({
+        data: { ...base, id: randomUUID(), tokenHash: "c".repeat(64) },
+      }),
+    ).rejects.toThrow();
   });
 });

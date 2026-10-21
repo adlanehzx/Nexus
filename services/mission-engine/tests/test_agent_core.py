@@ -7,7 +7,12 @@ from io import BytesIO
 import pytest
 
 from nexus_engine.acp import AcpError
-from nexus_engine.agent_core import AgentCoreGateway, AgentCoreOutcome, validated_base_url
+from nexus_engine.agent_core import (
+    AgentCoreGateway,
+    AgentCoreOutcome,
+    ScheduleGrantGateway,
+    validated_base_url,
+)
 from nexus_engine.database import Database
 from nexus_engine.errors import ConflictError, ValidationError
 from nexus_engine.repository import MissionRepository
@@ -107,6 +112,36 @@ def _agent_core_mission(repository: MissionRepository, *, owner: bool = True) ->
         spec["owner"] = {"user_id": "user-1", "assertion": "signed-assertion"}
     mission_id, _ = repository.submit(spec, f"bridge-{owner}")
     return mission_id
+
+
+def test_schedule_grant_exchange_sends_only_the_scoped_delegation() -> None:
+    captured: list = []
+
+    def opener(request, timeout):  # noqa: ANN001, ANN202
+        captured.append(request)
+        return _Response(
+            {
+                "data": {
+                    "userId": "user-1",
+                    "assertion": "short-assertion",
+                    "expiresAt": "2030-01-02T00:00:00+00:00",
+                }
+            }
+        )
+
+    owner = ScheduleGrantGateway("http://127.0.0.1:3000", opener=opener).exchange(
+        delegation="nsg_secret",
+        schedule_id="22222222-2222-4222-8222-222222222222",
+        scheduled_for="2030-01-01T07:00:00.000000+00:00",
+        mission_external_key="nexus-scheduled:22222222:20300101T070000.000000+0000",
+    )
+
+    assert owner.user_id == "user-1"
+    assert owner.assertion == "short-assertion"
+    request = captured[0]
+    assert request.full_url.endswith("/api/v1/agent-core/schedule-grants/exchange")
+    assert request.get_header("Authorization") == "Bearer nsg_secret"
+    assert "nsg_secret" not in request.data.decode()
 
 
 def test_bridge_sends_the_assertion_and_the_mission_scope() -> None:
