@@ -48,6 +48,7 @@ import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaPairingTicketStore } from "./services/persistence/prisma-pairing-ticket-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
+import { PrismaDeviceCredentialStore } from "./services/persistence/prisma-device-credential-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
 import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "./services/persistence/prisma-mission-grant-registry.js";
@@ -143,6 +144,10 @@ const services = new ServiceContainer({
   sessions: new PrismaSessionStore(prisma),
   conversations: new PrismaConversationStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),
+  // Sans ce magasin, les clés publiques des appareils vivaient en mémoire : un
+  // redémarrage de l'API les perdait toutes, et chaque worker se faisait
+  // ensuite refuser sa poignée de main sans que rien ne nomme la cause.
+  credentials: new PrismaDeviceCredentialStore(prisma),
   taskStore: new PrismaTaskStore(prisma),
   agentRunClaims: new PrismaAgentRunClaimStore(prisma),
   missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),

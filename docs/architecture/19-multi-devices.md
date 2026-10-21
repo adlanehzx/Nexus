@@ -120,6 +120,81 @@ rejouer l'historique.
   worker et ne survit pas à la ligne de journal. Les événements, eux, ne portent
   jamais d'arguments — seulement des identifiants, une capacité et une description.
 
+## 7 ter. Clés d'appareils : où elles vivent, et ce que révoquer veut dire
+
+### Un défaut qui ne se voyait pas
+
+La table `device_credentials` était dans le schéma depuis le début, et personne
+ne l'écrivait : la production montait `InMemoryCredentialProvider`. La
+conséquence n'était pas une fonctionnalité manquante mais une **panne
+silencieuse** — au redémarrage de l'API, toutes les clés publiques
+disparaissaient. Un worker se reconnectait, signait son challenge, et se
+faisait refuser parce qu'il n'y avait plus rien pour vérifier sa signature.
+Aucun message ne nommait la cause, et le seul remède était de réenregistrer
+chaque appareil.
+
+C'est la classe de défaut que `persistence.pg.test.ts` décrit dans son propre
+préambule : _ce qui n'est vérifié que contre une doublure n'est pas vérifié._
+Les tests de ce magasin vont donc jusqu'à instancier un **second** magasin pour
+relire — c'est ce qui simule le redémarrage, et c'est la seule assertion qui
+aurait attrapé le défaut.
+
+### Une dérive de migration, trouvée en même temps
+
+`DeviceCredentialKind.ECDSA_P256_PUBLIC_KEY` était déclaré dans
+`schema.prisma` sans qu'aucune migration ne l'ait jamais créé. La valeur
+manquait donc dans toute base, **y compris une installation neuve**, et le seul
+symptôme était une erreur d'enum au moment d'écrire — c'est-à-dire au moment
+d'enregistrer la clé d'un téléphone Android, le seul appareil qui en ait
+besoin, son magasin matériel ne sachant pas conserver de clé Ed25519.
+
+### L'algorithme est déduit de la clé
+
+Pas d'une étiquette fournie par l'appelant. Un désaccord entre l'étiquette et
+le contenu laisserait l'étiquette choisir le vérificateur, ce qui est
+exactement le mauvais sens. `createPublicKey(pem).asymmetricKeyType` tranche.
+
+### Rotation et révocation
+
+| geste                                    | effet en base                                                                  | effet sur l'authentification            |
+| ---------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------- |
+| `set` sur un appareil qui a déjà une clé | l'ancienne reçoit `rotatedAt` **et** `revokedAt`, une nouvelle ligne est créée | la nouvelle clé vérifie, l'ancienne non |
+| `revoke`                                 | `revokedAt` sur toutes les lignes actives                                      | plus aucune clé ne vérifie              |
+
+Deux conséquences voulues.
+
+**Une seule clé active à la fois.** Deux clés actives seraient une ambiguïté —
+laquelle doit vérifier ? — et la lecture trancherait par la date, ce qui est
+trop implicite pour une décision d'authentification.
+
+**Révoquer n'est pas supprimer.** Une clé publique n'est pas un secret, c'est
+la moitié publiable ; après un incident on veut savoir _laquelle_ était
+enregistrée, et depuis quand. La lecture ignore les lignes révoquées, donc
+l'effet pour l'authentification est identique à une suppression.
+
+### Révoquer un appareil retire sa clé
+
+La révocation d'un appareil ferme ses sessions, le détache de la passerelle,
+**et** retire sa clé. Ce n'est pas la barrière principale — un appareil révoqué
+est déjà refusé sur sa confiance — mais c'est celle qui reste si un futur
+chemin oublie de vérifier la confiance : sans clé, la poignée de main est
+_invérifiable_, donc impossible, quelle que soit la règle qu'on aurait omise.
+
+L'écriture de ces clés ne passe plus par `"set" in provider` suivi d'une
+conversion de type. Une capacité obtenue en contournant le système de types
+n'est vérifiée par personne, et c'est ainsi qu'une révocation peut oublier de
+retirer la clé sans qu'aucune compilation ne s'en plaigne.
+`DeviceCredentialStore` l'expose, `DeviceCredentialProvider` reste en lecture
+seule pour la passerelle — qui n'a aucune raison d'écrire.
+
+### Réappairer
+
+Un réappairage **est** un appairage : nouveau ticket, nouvel appareil. La même
+clé matérielle est réutilisée, et c'est normal — elle n'a pas changé, c'est
+l'enregistrement qui a été retiré. L'ancien appareil reste en base et reste
+`REVOKED` : l'historique des tâches y renvoie, et le ressusciter effacerait la
+décision prise.
+
 ## 7 bis. Appairage par QR code
 
 ### Ce que le QR remplace, et ce qu'il ne remplace pas

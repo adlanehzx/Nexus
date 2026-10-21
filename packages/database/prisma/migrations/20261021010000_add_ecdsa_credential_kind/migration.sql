@@ -1,0 +1,13 @@
+-- Rattrape une dérive entre le schéma et l'historique des migrations.
+--
+-- `DeviceCredentialKind.ECDSA_P256_PUBLIC_KEY` était déclaré dans
+-- `schema.prisma` sans qu'aucune migration ne l'ait jamais créé. La valeur
+-- manquait donc dans toute base, y compris une installation neuve, et le seul
+-- symptôme était une erreur d'enum au moment d'écrire — c'est-à-dire au moment
+-- d'enregistrer la clé d'un téléphone Android, qui est précisément le seul
+-- appareil à en avoir besoin : son magasin matériel ne sait pas conserver de
+-- clé Ed25519.
+--
+-- `IF NOT EXISTS` rend la migration rejouable sur une base où quelqu'un aurait
+-- ajouté la valeur à la main.
+ALTER TYPE "DeviceCredentialKind" ADD VALUE IF NOT EXISTS 'ECDSA_P256_PUBLIC_KEY';

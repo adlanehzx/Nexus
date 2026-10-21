@@ -169,12 +169,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // La clé publique est enregistrée séparément : elle a un cycle de vie
       // propre — rotation, révocation — distinct de celui de l'appareil.
       // Les CLIENT purs (iPhone) n'en envoient pas : ils s'authentifient par JWT.
-      if (request.body.publicKeyPem !== undefined && "set" in app.services.deviceCredentials) {
-        (
-          app.services.deviceCredentials as unknown as {
-            set: (id: string, pem: string) => void;
-          }
-        ).set(device.id, request.body.publicKeyPem);
+      if (request.body.publicKeyPem !== undefined) {
+        await app.services.deviceCredentials.set(device.id, request.body.publicKeyPem);
       }
 
       app.services.securityLog.record({
@@ -350,12 +346,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         role: request.body.role,
       });
 
-      if (request.body.publicKeyPem !== undefined && "set" in app.services.deviceCredentials) {
-        (
-          app.services.deviceCredentials as unknown as {
-            set: (id: string, pem: string) => void;
-          }
-        ).set(device.id, request.body.publicKeyPem);
+      if (request.body.publicKeyPem !== undefined) {
+        await app.services.deviceCredentials.set(device.id, request.body.publicKeyPem);
       }
 
       await app.services.pairing.complete(ticket, device.id);
@@ -447,6 +439,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // avant leur expiration.
       await app.services.deviceSessions.revokeAllForDevice(device.id);
       await app.services.gateway.detach(device.id, "appareil révoqué");
+      // Et la clé part avec. Ce n'est pas la barrière principale — la confiance
+      // révoquée suffit — mais c'est celle qui reste si un futur chemin oublie
+      // de la vérifier : sans clé, la poignée de main est invérifiable, donc
+      // impossible, quelle que soit la règle qu'on aurait oubliée.
+      await app.services.deviceCredentials.revoke(device.id);
 
       return ok(present(revoked), request.id);
     },

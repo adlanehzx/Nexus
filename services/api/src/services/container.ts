@@ -20,7 +20,7 @@ import {
   WorkerGateway,
   ecdsaP256Verifier,
   ed25519Verifier,
-  type DeviceCredentialProvider,
+  type DeviceCredentialStore,
   type DeviceStore,
   type PairingTicketStore,
   type SignatureVerifier,
@@ -106,7 +106,7 @@ export interface ServiceContainerOptions {
   conversations?: ConversationStore;
   notifications?: NotificationStore;
   memory?: MemoryProvider;
-  credentials?: DeviceCredentialProvider;
+  credentials?: DeviceCredentialStore;
   taskStore?: TaskStore;
   deviceStore?: DeviceStore;
   /**
@@ -218,7 +218,7 @@ export class ServiceContainer {
 
   readonly deviceRegistry: DeviceRegistry;
   readonly deviceSessions: DeviceSessionService;
-  readonly deviceCredentials: DeviceCredentialProvider;
+  readonly deviceCredentials: DeviceCredentialStore;
   readonly pairing: PairingService;
   readonly publicApiUrl: string | undefined;
   readonly selector: DeviceSelector;

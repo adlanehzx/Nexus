@@ -239,6 +239,92 @@ describe("appairage par QR", () => {
   });
 });
 
+describe("révocation et réappairage", () => {
+  let harness: ApiHarness;
+  let accessToken: string;
+
+  beforeEach(async () => {
+    harness = await makeApi({ publicApiUrl: API_URL });
+    accessToken = await register(harness, "adlan@exemple.fr");
+  });
+
+  afterEach(async () => {
+    await harness.close();
+  });
+
+  async function pair(): Promise<string> {
+    const ticket = await issueTicket(harness, accessToken);
+    const paired = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/devices/pair",
+      payload: { token: ticket.token, ...PHONE },
+    });
+    expect(paired.statusCode).toBe(201);
+    return paired.json<{ data: { id: string } }>().data.id;
+  }
+
+  it("retire la clé publique en révoquant", async () => {
+    const deviceId = await pair();
+    expect(await harness.services.deviceCredentials.publicKeyFor(deviceId)).toBe(
+      PHONE.publicKeyPem,
+    );
+
+    const revoked = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${deviceId}/revoke`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(revoked.statusCode).toBe(200);
+
+    // Sans clé, la poignée de main est invérifiable — donc impossible, quelle
+    // que soit la règle qu'un futur chemin aurait oublié de vérifier.
+    expect(await harness.services.deviceCredentials.publicKeyFor(deviceId)).toBeUndefined();
+  });
+
+  it("laisse réappairer, sans ressusciter l'appareil révoqué", async () => {
+    const first = await pair();
+    await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${first}/revoke`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    // Le réappairage est un appairage : un nouveau ticket, un nouvel appareil.
+    // La même clé matérielle est réutilisée, et c'est normal — elle n'a pas
+    // changé, c'est l'appareil enregistré qui a été retiré.
+    const second = await pair();
+    expect(second).not.toBe(first);
+    expect(await harness.services.deviceCredentials.publicKeyFor(second)).toBe(PHONE.publicKeyPem);
+
+    const devices = await harness.app.inject({
+      method: "GET",
+      url: "/api/v1/devices",
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    const rows = devices.json<{ data: { id: string; trust: string }[] }>().data;
+    // L'ancien reste en base et reste révoqué : l'historique des tâches y
+    // renvoie, et le ressusciter effacerait la décision prise.
+    expect(rows.find((item) => item.id === first)?.trust).toBe("REVOKED");
+    expect(rows.find((item) => item.id === second)?.trust).toBe("PENDING");
+  });
+
+  it("refuse un challenge sur un appareil révoqué", async () => {
+    const deviceId = await pair();
+    await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${deviceId}/revoke`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+
+    const challenge = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/devices/${deviceId}/challenge`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(challenge.statusCode).toBeGreaterThanOrEqual(400);
+  });
+});
+
 describe("sans PUBLIC_API_URL", () => {
   it("refuse d'émettre un QR plutôt que d'en produire un qui mène ailleurs", async () => {
     const harness = await makeApi();
