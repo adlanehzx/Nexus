@@ -22,7 +22,7 @@ export class NotFoundError extends AppError {
   constructor(what: string, id: string) {
     super({
       message: `${what} introuvable : ${id}`,
-      userMessage: "La ressource demandée n'existe pas.",
+      userMessage: "The requested resource does not exist.",
       context: { what, id },
     });
   }

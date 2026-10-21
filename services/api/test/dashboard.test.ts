@@ -89,7 +89,7 @@ describe("garde d'administration", () => {
 
     const body = response.json<{ error: { message: string } }>();
     expect(body.error.message).not.toMatch(/administrat/i);
-    expect(body.error.message).toBe("La ressource demandée n'existe pas.");
+    expect(body.error.message).toBe("The requested resource does not exist.");
   });
 
   it("ouvre toutes les sections à l'administrateur", async () => {

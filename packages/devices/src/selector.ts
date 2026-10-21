@@ -137,33 +137,33 @@ export class DeviceSelector {
    */
   #reject(device: Device, request: SelectionRequest): string | undefined {
     if (request.excludeDeviceIds?.includes(device.id) === true) {
-      return "écarté pour cette tâche";
+      return "excluded for this task";
     }
 
     // 1. Rôle. Un client n'exécute rien — sauf s'il est explicitement BOTH.
     if (!canAcceptTasks(device.role)) {
-      return `rôle ${device.role} : cet appareil est un client, pas un exécutant`;
+      return `role ${device.role}: this device is a client, not an executor`;
     }
 
     // 2. Révocation, avant toute autre chose.
     if (device.trust === "REVOKED" || device.revokedAt !== null) {
-      return "appareil révoqué";
+      return "device revoked";
     }
 
     // 3. Confiance. Un appareil appairé mais non approuvé n'exécute rien.
     if (device.trust !== "TRUSTED") {
-      return "appareil pas encore approuvé";
+      return "device not approved yet";
     }
 
     // 4. Disponibilité réelle : en ligne ET session authentifiée ouverte.
     if (!isOperational(device)) {
-      return device.status === "ONLINE" ? "session non authentifiée" : "hors ligne";
+      return device.status === "ONLINE" ? "session not authenticated" : "offline";
     }
 
     // 5. Capacités déclarées.
     const missing = missingCapabilities(device.capabilities, request.requiredCapabilities);
     if (missing.length > 0) {
-      return `capacité manquante : ${missing.join(", ")}`;
+      return `missing capability: ${missing.join(", ")}`;
     }
 
     // 6. Permissions. Une capacité déclarée n'est pas une autorisation :
@@ -173,24 +173,24 @@ export class DeviceSelector {
       (capability) => !isPermitted(granted, permissionForCapability(capability)),
     );
     if (unauthorized.length > 0) {
-      return `permission non accordée : ${unauthorized.join(", ")}`;
+      return `permission not granted: ${unauthorized.join(", ")}`;
     }
 
     // 7. Saturation.
     if (device.health.activeTasks >= device.health.maxConcurrentTasks) {
-      return `déjà occupé (${String(device.health.activeTasks)} tâche(s) en cours)`;
+      return `already busy (${String(device.health.activeTasks)} task(s) running)`;
     }
 
     // 8. Contraintes de la tâche.
     const constraints = request.constraints;
     if (constraints?.deviceTypes !== undefined && !constraints.deviceTypes.includes(device.type)) {
-      return `type ${device.type} non conforme à la contrainte`;
+      return `type ${device.type} does not match the constraint`;
     }
     if (constraints?.platforms !== undefined && !constraints.platforms.includes(device.platform)) {
-      return `plateforme ${device.platform} non conforme à la contrainte`;
+      return `platform ${device.platform} does not match the constraint`;
     }
     if (constraints?.requireMainsPower === true && device.health.onBattery === true) {
-      return "sur batterie alors que la tâche exige le secteur";
+      return "on battery while the task requires mains power";
     }
 
     return undefined;

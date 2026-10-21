@@ -41,7 +41,7 @@ export class TokenInvalidError extends AppError {
   constructor(reason: string) {
     super({
       message: `Jeton refusé : ${reason}`,
-      userMessage: "Session invalide ou expirée. Reconnectez-vous.",
+      userMessage: "Invalid or expired session. Please sign in again.",
       context: { reason },
     });
   }
@@ -57,7 +57,7 @@ export class TokenExpiredError extends AppError {
   constructor() {
     super({
       message: "Jeton expiré",
-      userMessage: "Votre session a expiré. Reconnectez-vous.",
+      userMessage: "Your session has expired. Please sign in again.",
     });
   }
 }

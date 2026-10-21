@@ -30,7 +30,8 @@ export class MicrophoneUnavailableError extends AppError {
   constructor(reason: string) {
     super({
       message: `Micro indisponible : ${reason}`,
-      userMessage: "NEXUS n'a pas accès au micro. Autorisez-le dans Réglages → NEXUS → Microphone.",
+      userMessage:
+        "NEXUS has no access to the microphone. Allow it in Settings → NEXUS → Microphone.",
       context: { reason },
     });
   }

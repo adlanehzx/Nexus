@@ -214,7 +214,7 @@ describe("serveur indisponible", () => {
       expect(result.error.code).toBe("MCP_SERVER_UNAVAILABLE");
       expect(result.error.retryable).toBe(true);
       // Le message doit dire à l'agent quoi faire, pas juste qu'il a échoué.
-      expect(result.error.message).toContain("indisponible");
+      expect(result.error.message).toContain("unavailable");
     }
   });
 

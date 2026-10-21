@@ -40,7 +40,7 @@ export class CapabilityInputError extends AppError {
   constructor(capability: string, issues: string[]) {
     super({
       message: `Arguments invalides pour ${capability} : ${issues.join(" ; ")}`,
-      userMessage: `Les paramètres fournis pour « ${capability} » sont invalides : ${issues.join(" ; ")}.`,
+      userMessage: `The arguments given for "${capability}" are invalid: ${issues.join("; ")}.`,
       context: { capability, issues },
     });
   }
@@ -59,7 +59,7 @@ export class PolicyViolationError extends AppError {
 
   constructor(options: AppErrorOptions & { rule: string }) {
     super({
-      userMessage: options.userMessage ?? "Cette opération est interdite par la politique locale.",
+      userMessage: options.userMessage ?? "This operation is forbidden by the local policy.",
       ...options,
       context: { rule: options.rule, ...options.context },
     });
@@ -75,7 +75,7 @@ export class ExecutionTimeoutError extends AppError {
   constructor(capability: string, timeoutMs: number) {
     super({
       message: `${capability} a dépassé ${String(timeoutMs)} ms`,
-      userMessage: "L'opération a pris trop de temps et a été interrompue.",
+      userMessage: "The operation took too long and was interrupted.",
       context: { capability, timeoutMs },
     });
   }
@@ -90,7 +90,7 @@ export class ExecutionCancelledError extends AppError {
   constructor(capability: string, reason: string) {
     super({
       message: `${capability} annulée : ${reason}`,
-      userMessage: "L'opération a été annulée.",
+      userMessage: "The operation was cancelled.",
       context: { capability, reason },
     });
   }
@@ -105,7 +105,7 @@ export class WorkerNotAuthenticatedError extends AppError {
   constructor(reason: string) {
     super({
       message: `Worker non authentifié : ${reason}`,
-      userMessage: "L'appareil n'est pas authentifié auprès de NEXUS.",
+      userMessage: "This device is not authenticated with NEXUS.",
       context: { reason },
     });
   }

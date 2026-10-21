@@ -79,7 +79,7 @@ export class NotQueueableError extends AppError {
     super({
       message: `${path} ne peut pas être mis en file : ${reason}`,
       userMessage:
-        "Cette action a besoin du réseau : NEXUS ne peut pas la garder pour plus tard sans risquer de la faire deux fois.",
+        "This action needs the network: NEXUS cannot hold it for later without risking doing it twice.",
       context: { path, reason },
     });
   }

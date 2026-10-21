@@ -67,8 +67,8 @@ export class UiPolicy {
           rule: "ui.coordinatesDisabled",
           message: "Clic par coordonnées désactivé",
           userMessage:
-            "Les clics par coordonnées sont désactivés sur cet appareil : ils touchent un " +
-            "endroit de l'écran, pas un élément identifié.",
+            "Coordinate taps are disabled on this device: they hit a place on the " +
+            "screen, not an identified element.",
         });
       }
 
@@ -91,7 +91,7 @@ export class UiPolicy {
         throw new PolicyViolationError({
           rule: "ui.coordinatesOutOfBounds",
           message: "Coordonnées hors de l'écran",
-          userMessage: "Le point visé est en dehors de l'écran.",
+          userMessage: "The target point is off screen.",
         });
       }
 
@@ -129,7 +129,7 @@ export class UiPolicy {
       throw new PolicyViolationError({
         rule: "ui.textEmpty",
         message: "Texte de saisie vide",
-        userMessage: "Aucun texte à saisir n'a été fourni.",
+        userMessage: "No text to type was given.",
       });
     }
     if (text.length > this.#maxInput) {
@@ -137,7 +137,7 @@ export class UiPolicy {
         rule: "ui.textTooLong",
         // La longueur seule : le contenu ne doit pas atteindre le journal.
         message: `Texte de saisie trop long (${String(text.length)} caractères)`,
-        userMessage: "Le texte à saisir dépasse la longueur autorisée.",
+        userMessage: "The text to type exceeds the allowed length.",
         context: { length: text.length },
       });
     }
@@ -160,14 +160,14 @@ export class UiPolicy {
       throw new PolicyViolationError({
         rule: "ui.scrollAmount",
         message: `Amplitude de défilement invalide : ${String(amount)}`,
-        userMessage: "L'amplitude de défilement doit être un entier positif.",
+        userMessage: "The scroll amount must be a positive integer.",
       });
     }
     if (amount > this.#maxScroll) {
       throw new PolicyViolationError({
         rule: "ui.scrollTooFar",
         message: `Amplitude de défilement excessive : ${String(amount)}`,
-        userMessage: `Le défilement est limité à ${String(this.#maxScroll)} gestes par opération.`,
+        userMessage: `Scrolling is limited to ${String(this.#maxScroll)} gestures per operation.`,
         context: { amount, max: this.#maxScroll },
       });
     }
@@ -189,14 +189,14 @@ export class UiPolicy {
       throw new PolicyViolationError({
         rule: "ui.nodeNotClickable",
         message: "L'élément visé n'est pas cliquable",
-        userMessage: "L'élément visé n'accepte pas de clic.",
+        userMessage: "The target element does not accept a tap.",
       });
     }
     if (action === "input" && !node.editable) {
       throw new PolicyViolationError({
         rule: "ui.nodeNotEditable",
         message: "L'élément visé n'est pas un champ de saisie",
-        userMessage: "L'élément visé n'est pas un champ de saisie.",
+        userMessage: "The target element is not a text field.",
       });
     }
   }

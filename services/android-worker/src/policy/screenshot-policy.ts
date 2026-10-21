@@ -83,8 +83,7 @@ export class ScreenshotPolicy {
       throw new PolicyViolationError({
         rule: "screenshot.rate",
         message: `Capture trop rapprochée (${String(elapsed)} ms)`,
-        userMessage:
-          "Une capture d'écran vient d'être prise. NEXUS ne capture pas l'écran en continu.",
+        userMessage: "A screenshot was just taken. NEXUS does not capture the screen continuously.",
         context: { elapsedMs: elapsed, minIntervalMs: this.#minIntervalMs },
       });
     }
@@ -104,7 +103,7 @@ export class ScreenshotPolicy {
       throw new PolicyViolationError({
         rule: "screenshot.tooLarge",
         message: `Capture trop lourde (${String(image.bytes)} octets)`,
-        userMessage: "La capture d'écran dépasse la taille autorisée.",
+        userMessage: "The screenshot exceeds the allowed size.",
         context: { bytes: image.bytes, max: this.#maxBytes },
       });
     }
@@ -114,7 +113,7 @@ export class ScreenshotPolicy {
       throw new PolicyViolationError({
         rule: "screenshot.tooBig",
         message: `Capture trop grande (${String(largest)} px)`,
-        userMessage: "La capture d'écran dépasse la résolution autorisée.",
+        userMessage: "The screenshot exceeds the allowed resolution.",
         context: { largest, max: this.#maxDimension },
       });
     }

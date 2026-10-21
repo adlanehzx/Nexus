@@ -116,7 +116,7 @@ describe("sélection de l'exécutant", () => {
     });
 
     expect(selection.device.id).toBe(LAPTOP.id);
-    expect(selection.rejected.find((r) => r.deviceId === DESKTOP.id)?.reason).toBe("hors ligne");
+    expect(selection.rejected.find((r) => r.deviceId === DESKTOP.id)?.reason).toBe("offline");
   });
 
   it("écarte un exécutant en ligne mais non authentifié", async () => {
@@ -148,7 +148,7 @@ describe("sélection de l'exécutant", () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
-    expect((error as NoEligibleWorkerError).userMessage).toContain("pas encore approuvé");
+    expect((error as NoEligibleWorkerError).userMessage).toContain("not approved yet");
   });
 
   it("écarte un exécutant dont la permission n'est pas accordée", async () => {
@@ -168,7 +168,7 @@ describe("sélection de l'exécutant", () => {
 
     // La capacité existe, l'autorisation non : savoir faire n'est pas avoir le droit.
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
-    expect((error as NoEligibleWorkerError).userMessage).toContain("permission non accordée");
+    expect((error as NoEligibleWorkerError).userMessage).toContain("permission not granted");
   });
 
   it("écarte un exécutant dont la capacité manque", async () => {
@@ -184,7 +184,7 @@ describe("sélection de l'exécutant", () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
-    expect((error as NoEligibleWorkerError).userMessage).toContain("capacité manquante");
+    expect((error as NoEligibleWorkerError).userMessage).toContain("missing capability");
   });
 
   it("écarte un appareil révoqué", async () => {
@@ -200,7 +200,7 @@ describe("sélection de l'exécutant", () => {
 
     expect(selection.device.id).toBe(LAPTOP.id);
     expect(selection.rejected.find((r) => r.deviceId === DESKTOP.id)?.reason).toBe(
-      "appareil révoqué",
+      "device revoked",
     );
   });
 
@@ -275,7 +275,7 @@ describe("sélection de l'exécutant", () => {
       })
       .catch((e: unknown) => e);
 
-    expect((error as NoEligibleWorkerError).userMessage).toContain("occupé");
+    expect((error as NoEligibleWorkerError).userMessage).toContain("busy");
   });
 
   it("écarte un exécutant dont le type ne respecte pas la contrainte", async () => {
@@ -293,7 +293,7 @@ describe("sélection de l'exécutant", () => {
 
     // Deux postes Windows savent le faire, mais la contrainte les exclut.
     expect(error).toBeInstanceOf(NoEligibleWorkerError);
-    expect((error as NoEligibleWorkerError).userMessage).toContain("non conforme");
+    expect((error as NoEligibleWorkerError).userMessage).toContain("does not match");
   });
 
   it("écarte un appareil sur batterie quand la tâche exige le secteur", async () => {
@@ -308,7 +308,7 @@ describe("sélection de l'exécutant", () => {
     });
 
     expect(selection.device.id).toBe(DESKTOP.id);
-    expect(selection.rejected.find((r) => r.deviceId === LAPTOP.id)?.reason).toContain("batterie");
+    expect(selection.rejected.find((r) => r.deviceId === LAPTOP.id)?.reason).toContain("battery");
   });
 });
 

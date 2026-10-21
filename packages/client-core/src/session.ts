@@ -56,7 +56,7 @@ export class LoginFailedError extends AppError {
   override readonly severity: ErrorSeverity = "warning";
 
   constructor(userMessage: string) {
-    super({ message: `Connexion refusée : ${userMessage}`, userMessage });
+    super({ message: `Sign-in refused: ${userMessage}`, userMessage });
   }
 }
 

@@ -315,7 +315,7 @@ describe("exécution répartie", () => {
 
     expect(result.status).toBe("failed");
     expect(transport.dispatched).toHaveLength(0);
-    expect(result.steps[0]?.error?.message).toContain("révoqué");
+    expect(result.steps[0]?.error?.message).toContain("revoked");
   });
 });
 

@@ -310,7 +310,7 @@ export class AnthropicProvider implements LLMProvider {
     if (error instanceof Error && error.name === "AbortError") {
       return new LLMProviderError(this.id, {
         message: "Génération annulée",
-        userMessage: "L'opération a été annulée.",
+        userMessage: "The operation was cancelled.",
         retryable: false,
         cause: error,
       });

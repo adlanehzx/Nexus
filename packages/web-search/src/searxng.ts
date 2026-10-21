@@ -165,7 +165,7 @@ function bounded(value: string, max: number): string {
 function unavailable(message: string, cause?: unknown): DependencyError {
   return new DependencyError({
     message,
-    userMessage: "La recherche web locale est momentanément indisponible.",
+    userMessage: "Local web search is temporarily unavailable.",
     ...(cause === undefined ? {} : { cause }),
   });
 }

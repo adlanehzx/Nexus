@@ -421,6 +421,6 @@ export class ApiClient {
         return String(error.message);
       }
     }
-    return "La requête a échoué.";
+    return "The request failed.";
   }
 }

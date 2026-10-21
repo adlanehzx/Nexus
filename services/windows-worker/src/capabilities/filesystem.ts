@@ -148,7 +148,7 @@ export function createFilesystemWriteCapability(
         throw new PolicyViolationError({
           rule: "filesystem.directory",
           message: "Le chemin désigne un dossier",
-          userMessage: "Ce chemin est un dossier ; impossible d'y écrire un fichier.",
+          userMessage: "That path is a directory; a file cannot be written there.",
           context: { path: resolved },
         });
       }
@@ -157,8 +157,7 @@ export function createFilesystemWriteCapability(
         throw new PolicyViolationError({
           rule: "filesystem.overwrite",
           message: "Écrasement non autorisé",
-          userMessage:
-            "Ce fichier existe déjà. Demandez explicitement l'écrasement ou l'ajout à la fin.",
+          userMessage: "That file already exists. Ask explicitly to overwrite or to append.",
           context: { path: resolved },
         });
       }

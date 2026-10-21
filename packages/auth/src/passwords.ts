@@ -70,8 +70,8 @@ export class PasswordTooWeakError extends AppError {
 
   constructor(reason: string) {
     super({
-      message: `Mot de passe refusé : ${reason}`,
-      userMessage: `Mot de passe refusé : ${reason}`,
+      message: `Password refused: ${reason}`,
+      userMessage: `Password refused: ${reason}`,
       // Le mot de passe lui-même n'entre nulle part dans l'erreur.
       context: { reason },
     });

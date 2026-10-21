@@ -50,7 +50,7 @@ export class AudioNotDeletedError extends AppError {
     super({
       message: `l'enregistrement n'a pas pu être supprimé : ${path}`,
       userMessage:
-        "NEXUS n'a pas pu supprimer un enregistrement temporaire. La dictée est arrêtée par précaution.",
+        "NEXUS could not delete a temporary recording. Dictation is stopped as a precaution.",
       context: { path },
     });
   }

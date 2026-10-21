@@ -114,7 +114,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
       if (app.services.agentCore === undefined) {
         throw new DependencyError({
           message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
-          userMessage: "Le moteur agent généraliste n'est pas disponible.",
+          userMessage: "The general-purpose agent engine is not available.",
         });
       }
 
@@ -193,7 +193,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
       if (app.services.agentCore === undefined) {
         throw new DependencyError({
           message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
-          userMessage: "Le moteur agent généraliste n'est pas disponible.",
+          userMessage: "The general-purpose agent engine is not available.",
         });
       }
 

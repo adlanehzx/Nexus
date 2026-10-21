@@ -77,7 +77,7 @@ export class ToolOutputValidationError extends AppError {
   constructor(toolName: string, issues: unknown) {
     super({
       message: `Sortie non conforme au schéma pour ${toolName}`,
-      userMessage: "L'outil a renvoyé un résultat inattendu.",
+      userMessage: "The tool returned an unexpected result.",
       context: { toolName, issues },
     });
     this.toolName = toolName;
@@ -95,7 +95,7 @@ export class ToolTimeoutError extends AppError {
   constructor(toolName: string, timeoutMs: number) {
     super({
       message: `L'outil ${toolName} a dépassé son délai de ${String(timeoutMs)} ms`,
-      userMessage: "L'outil a mis trop de temps à répondre.",
+      userMessage: "The tool took too long to answer.",
       context: { toolName, timeoutMs },
     });
     this.toolName = toolName;
@@ -111,7 +111,7 @@ export class ToolCancelledError extends AppError {
   constructor(toolName: string) {
     super({
       message: `Exécution de ${toolName} annulée`,
-      userMessage: "L'opération a été annulée.",
+      userMessage: "The operation was cancelled.",
       context: { toolName },
     });
     this.toolName = toolName;
@@ -127,7 +127,7 @@ export class PermissionDeniedError extends AppError {
   constructor(toolName: string, missing: readonly string[]) {
     super({
       message: `Permissions manquantes pour ${toolName} : ${missing.join(", ")}`,
-      userMessage: "Cette action n'est pas autorisée.",
+      userMessage: "This action is not allowed.",
       context: { toolName, missing },
     });
     this.toolName = toolName;

@@ -32,7 +32,7 @@ export class PathNotAllowedError extends AppError {
       // révéler l'arborescence d'une machine à un appelant qui n'y a pas accès
       // est déjà une fuite.
       message: `Chemin refusé (${reason})`,
-      userMessage: "Ce chemin est en dehors des dossiers autorisés.",
+      userMessage: "That path is outside the allowed directories.",
       context: { requested, reason },
     });
   }
@@ -46,7 +46,7 @@ export class ExecutableNotAllowedError extends AppError {
   constructor(executable: string) {
     super({
       message: `Exécutable non autorisé : ${executable}`,
-      userMessage: `Le programme « ${executable} » n'est pas autorisé sur cet appareil.`,
+      userMessage: `The program "${executable}" is not allowed on this device.`,
       context: { executable },
     });
   }

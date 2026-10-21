@@ -37,8 +37,8 @@ export class AccessibilityDisabledError extends AppError {
     super({
       message: `Service d'accessibilité désactivé, requis par ${capability}`,
       userMessage:
-        "Le service d'accessibilité NEXUS n'est pas activé sur ce téléphone. " +
-        "Réglages → Accessibilité → Applications installées → NEXUS Worker.",
+        "The NEXUS accessibility service is not enabled on this phone. " +
+        "Settings → Accessibility → Installed apps → NEXUS Worker.",
       context: { capability },
     });
   }
@@ -53,7 +53,7 @@ export class AndroidPermissionDeniedError extends AppError {
   constructor(permission: string, howTo: string) {
     super({
       message: `Permission Android refusée : ${permission}`,
-      userMessage: `Cette action requiert une autorisation non accordée. ${howTo}`,
+      userMessage: `This action needs a permission that was not granted. ${howTo}`,
       context: { permission },
     });
   }
@@ -71,7 +71,7 @@ export class UiNodeNotFoundError extends AppError {
   constructor(selectorKind: string) {
     super({
       message: `Aucun élément ne correspond au sélecteur (${selectorKind})`,
-      userMessage: "L'élément visé n'a pas été trouvé à l'écran.",
+      userMessage: "The target element was not found on screen.",
       context: { selectorKind },
     });
   }
@@ -85,7 +85,7 @@ export class AppNotAvailableError extends AppError {
   constructor(packageName: string) {
     super({
       message: `Paquet introuvable ou non visible : ${packageName}`,
-      userMessage: `L'application « ${packageName} » n'est pas installée sur ce téléphone.`,
+      userMessage: `The app "${packageName}" is not installed on this phone.`,
       context: { packageName },
     });
   }
@@ -108,9 +108,9 @@ export class ActivityLaunchBlockedError extends AppError {
     super({
       message: `Lancement bloqué pour ${packageName} : ${reason}`,
       userMessage:
-        "Android a refusé d'ouvrir l'application depuis l'arrière-plan. " +
-        "Sur Xiaomi/MIUI, autorisez « Afficher les fenêtres contextuelles en arrière-plan » " +
-        "pour NEXUS Worker.",
+        "Android refused to open the app from the background. " +
+        'On Xiaomi/MIUI, allow "Display pop-up windows while running in the background" ' +
+        "for NEXUS Worker.",
       context: { packageName, reason },
     });
   }

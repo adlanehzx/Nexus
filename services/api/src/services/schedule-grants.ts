@@ -104,13 +104,13 @@ export class ScheduleGrantService {
     if (expected !== input.missionExternalKey) {
       throw new AuthorizationError({
         message: "La délégation de calendrier ne couvre pas cette occurrence",
-        userMessage: "Accès refusé.",
+        userMessage: "Access denied.",
       });
     }
     if (!(await this.#isUserActive(record.userId))) {
       throw new AuthorizationError({
         message: `Délégation de calendrier pour un compte inactif : ${record.userId}`,
-        userMessage: "Accès refusé.",
+        userMessage: "Access denied.",
       });
     }
     const grant = await this.#missions.issue({
