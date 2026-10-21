@@ -34,6 +34,7 @@ import { v1HealthRoutes } from "./routes/v1/health.js";
 import { authRoutes, userRoutes } from "./routes/v1/auth.js";
 import { capabilityRoutes, deviceRoutes } from "./routes/v1/devices.js";
 import { confirmationRoutes, taskRoutes } from "./routes/v1/tasks.js";
+import { pauseRoutes } from "./routes/v1/pause.js";
 import {
   conversationRoutes,
   memoryRoutes,
@@ -258,6 +259,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(deviceRoutes);
       await v1.register(capabilityRoutes);
       await v1.register(taskRoutes);
+      await v1.register(pauseRoutes);
       await v1.register(confirmationRoutes);
       await v1.register(conversationRoutes);
       await v1.register(notificationRoutes);

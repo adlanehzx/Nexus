@@ -2,6 +2,8 @@ export * from "./types.js";
 export * from "./capabilities.js";
 export * from "./errors.js";
 export * from "./registry.js";
+export * from "./pairing.js";
+export * from "./updates.js";
 export * from "./selector.js";
 export * from "./tasks.js";
 export * from "./router.js";

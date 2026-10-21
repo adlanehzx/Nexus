@@ -1,7 +1,13 @@
 import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { CAPABILITIES, SUGGESTED_CAPABILITIES, deviceCapabilitySchema } from "@nexus/devices";
+import {
+  CAPABILITIES,
+  SUGGESTED_CAPABILITIES,
+  deviceCapabilitySchema,
+  encodePairingPayload,
+  updateAdvice,
+} from "@nexus/devices";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
@@ -37,23 +43,35 @@ const deviceSchema = z.object({
     .passthrough(),
   lastSeenAt: z.string().datetime().nullable(),
   authenticated: z.boolean(),
+  /** Version annoncée par l'exécutant, et ce qu'il faut en penser. */
+  agentVersion: z.string().nullable(),
+  update: z.object({
+    status: z.enum(["a-jour", "en-retard", "en-avance", "inconnu"]),
+    expected: z.string().nullable(),
+    /** Le geste à faire, ou `null`. Il est toujours **local**. */
+    action: z.string().nullable(),
+  }),
 });
 
 /** Ce qu'un appareil expose au client. Le secret d'appairage n'y figure pas. */
-function present(device: {
-  id: string;
-  name: string;
-  type: string;
-  platform: string;
-  role: string;
-  status: string;
-  trust: string;
-  capabilities: { name: string; enabled: boolean }[];
-  grantedPermissions: string[];
-  health: Record<string, unknown>;
-  lastSeenAt: Date | null;
-  authenticated: boolean;
-}) {
+function present(
+  device: {
+    id: string;
+    name: string;
+    type: string;
+    platform: string;
+    role: string;
+    status: string;
+    trust: string;
+    capabilities: { name: string; enabled: boolean }[];
+    grantedPermissions: string[];
+    health: Record<string, unknown>;
+    lastSeenAt: Date | null;
+    authenticated: boolean;
+    agentVersion: string | null;
+  },
+  expectedWorkerVersion?: string,
+) {
   return {
     id: device.id,
     name: device.name,
@@ -66,6 +84,14 @@ function present(device: {
     grantedPermissions: device.grantedPermissions,
     health: device.health as never,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    agentVersion: device.agentVersion,
+    // L'avis est calculé par le cœur, qui est le seul à connaître la version
+    // attendue. Le worker, lui, ne reçoit aucune instruction : il n'y a pas de
+    // canal pour lui en donner.
+    update: (() => {
+      const advice = updateAdvice(device.agentVersion, expectedWorkerVersion);
+      return { status: advice.status, expected: advice.expected, action: advice.action };
+    })(),
     authenticated: device.authenticated ?? false,
   };
 }
@@ -94,7 +120,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
           ? all
           : all.filter((device) => device.role === request.query.role);
 
-      const page = paginate(filtered.map(present), request.query, (device) => device.id);
+      const page = paginate(
+        filtered.map((device) => present(device, app.services.expectedWorkerVersion)),
+        request.query,
+        (device) => device.id,
+      );
       return {
         data: page.items,
         meta: { requestId: request.id, nextCursor: page.nextCursor, total: page.total },
@@ -164,12 +194,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // La clé publique est enregistrée séparément : elle a un cycle de vie
       // propre — rotation, révocation — distinct de celui de l'appareil.
       // Les CLIENT purs (iPhone) n'en envoient pas : ils s'authentifient par JWT.
-      if (request.body.publicKeyPem !== undefined && "set" in app.services.deviceCredentials) {
-        (
-          app.services.deviceCredentials as unknown as {
-            set: (id: string, pem: string) => void;
-          }
-        ).set(device.id, request.body.publicKeyPem);
+      if (request.body.publicKeyPem !== undefined) {
+        await app.services.deviceCredentials.set(device.id, request.body.publicKeyPem);
       }
 
       app.services.securityLog.record({
@@ -179,7 +205,190 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         context: { deviceId: device.id, type: device.type, platform: device.platform },
       });
 
-      return reply.code(201).send(ok(present(device), request.id));
+      return reply
+        .code(201)
+        .send(ok(present(device, app.services.expectedWorkerVersion), request.id));
+    },
+  );
+
+  // ── Appairage par QR ─────────────────────────────────────────────────────
+  //
+  // Deux routes, et leur asymétrie *est* le dispositif. La première exige un
+  // utilisateur authentifié : c'est elle qui fabrique la preuve. La seconde
+  // n'exige rien d'autre que le ticket, parce que l'appareil qui scanne ne
+  // possède encore aucune identité — c'est précisément ce qu'il vient
+  // chercher.
+  app.post(
+    "/devices/pairing-tickets",
+    {
+      preHandler: app.requireUser,
+      // Un ticket par émission, et pas d'inondation : chaque ticket est une
+      // fenêtre de cinq minutes, et en ouvrir cent en ouvrirait cent.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["devices"],
+        summary: "Émet un ticket d'appairage à usage unique, à afficher en QR",
+        body: z.object({ label: z.string().min(1).max(120).optional() }),
+        response: {
+          201: okSchema(
+            z.object({
+              id: z.string(),
+              /**
+               * Le code en clair, rendu **une seule fois**.
+               *
+               * Nommé `token` jusque dans la réponse : la rédaction de
+               * `@nexus/shared` masque par nom de clé, et `token` en fait
+               * partie. Un champ nommé `code` traverserait les journaux en
+               * clair le jour où quelqu'un journalise un corps de réponse.
+               */
+              token: z.string(),
+              /** Charge utile prête à encoder en QR. */
+              payload: z.string(),
+              expiresAt: z.string().datetime(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = currentUser(request);
+      const apiUrl = app.services.publicApiUrl;
+      if (apiUrl === undefined) {
+        // Refuser plutôt que deviner : un QR qui porte la mauvaise adresse
+        // échoue sur le téléphone, loin de sa cause.
+        throw new Error(
+          "L'appairage par QR exige PUBLIC_API_URL : l'adresse que vos appareils peuvent joindre.",
+        );
+      }
+      const { ticket, code } = await app.services.pairing.issue({
+        userId,
+        ...(request.body.label === undefined ? {} : { label: request.body.label }),
+      });
+
+      app.services.securityLog.record({
+        kind: "device.pairing_ticket_issued",
+        userId,
+        summary: "Ticket d'appairage émis (valable 5 minutes, usage unique)",
+        // Jamais le code, ni son empreinte : l'identifiant suffit à relier
+        // cette ligne à l'appairage qui suivra.
+        context: { ticketId: ticket.id },
+      });
+
+      return reply.code(201).send(
+        ok(
+          {
+            id: ticket.id,
+            token: code,
+            payload: encodePairingPayload({ apiUrl, token: code }),
+            expiresAt: ticket.expiresAt.toISOString(),
+          },
+          request.id,
+        ),
+      );
+    },
+  );
+
+  app.get(
+    "/devices/pairing-tickets",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Tickets d'appairage récents — sans leur code, qui n'est plus lisible",
+        response: {
+          200: listSchema(
+            z.object({
+              id: z.string(),
+              status: z.enum(["pending", "consumed", "expired"]),
+              label: z.string().nullable(),
+              deviceId: z.string().nullable(),
+              createdAt: z.string().datetime(),
+              expiresAt: z.string().datetime(),
+              consumedAt: z.string().datetime().nullable(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const tickets = await app.services.pairing.list(userId);
+      return {
+        data: tickets.map((ticket) => ({
+          id: ticket.id,
+          status: ticket.status,
+          label: ticket.label,
+          deviceId: ticket.deviceId,
+          createdAt: ticket.createdAt.toISOString(),
+          expiresAt: ticket.expiresAt.toISOString(),
+          consumedAt: ticket.consumedAt === null ? null : ticket.consumedAt.toISOString(),
+        })),
+        meta: { requestId: request.id, nextCursor: null, total: tickets.length },
+      };
+    },
+  );
+
+  app.post(
+    "/devices/pair",
+    {
+      // Pas de `preHandler` : l'appareil n'a pas encore d'identité. Le ticket
+      // est son unique titre, et il est à usage unique — mais un code reste un
+      // code, donc la limite de débit est ici une mesure de sécurité et non de
+      // confort : elle est ce qui rend le tâtonnement inutile.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["devices"],
+        summary: "Appaire un appareil avec un ticket — il arrive non approuvé",
+        body: z
+          .object({
+            token: z.string().min(16).max(256),
+            name: z.string().min(1).max(120),
+            type: z.enum(["IPHONE", "ANDROID", "WINDOWS_PC", "MAC", "LINUX", "BROWSER_WORKER"]),
+            platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
+            role: z.enum(["CLIENT", "WORKER", "BOTH"]),
+            publicKeyPem: z.string().min(1).max(4_096).optional(),
+          })
+          // Le même raffinement que l'enregistrement manuel, et pour la même
+          // raison : un exécutant sans clé publique serait un exécutant dont
+          // aucune signature n'est vérifiable. Le ticket change le transport,
+          // pas les règles.
+          .refine(
+            (body) => body.role === "CLIENT" || body.publicKeyPem !== undefined,
+            "Un appareil WORKER ou BOTH doit fournir sa clé publique.",
+          ),
+        response: { 201: okSchema(deviceSchema) },
+      },
+    },
+    async (request, reply) => {
+      const ticket = await app.services.pairing.redeem(request.body.token);
+
+      // Le propriétaire vient du ticket, jamais du corps de la requête : c'est
+      // ce qui interdit au porteur d'un code de rattacher l'appareil à
+      // quelqu'un d'autre.
+      const device = await app.services.deviceRegistry.registerDevice({
+        userId: ticket.userId,
+        name: request.body.name,
+        type: request.body.type,
+        platform: request.body.platform,
+        role: request.body.role,
+      });
+
+      if (request.body.publicKeyPem !== undefined) {
+        await app.services.deviceCredentials.set(device.id, request.body.publicKeyPem);
+      }
+
+      await app.services.pairing.complete(ticket, device.id);
+
+      app.services.securityLog.record({
+        kind: "device.paired",
+        userId: ticket.userId,
+        summary: `Appareil « ${device.name} » appairé par QR (${device.role}, non approuvé)`,
+        context: { deviceId: device.id, ticketId: ticket.id, type: device.type },
+      });
+
+      return reply
+        .code(201)
+        .send(ok(present(device, app.services.expectedWorkerVersion), request.id));
     },
   );
 
@@ -200,7 +409,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       if (device === undefined) throw new NotFoundError("Appareil", request.params.deviceId);
       assertOwnedBy(device.userId, userId, "Appareil");
 
-      return ok(present(device), request.id);
+      return ok(present(device, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -228,7 +437,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         context: { deviceId: trusted.id },
       });
 
-      return ok(present(trusted), request.id);
+      return ok(present(trusted, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -259,8 +468,13 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // avant leur expiration.
       await app.services.deviceSessions.revokeAllForDevice(device.id);
       await app.services.gateway.detach(device.id, "appareil révoqué");
+      // Et la clé part avec. Ce n'est pas la barrière principale — la confiance
+      // révoquée suffit — mais c'est celle qui reste si un futur chemin oublie
+      // de la vérifier : sans clé, la poignée de main est invérifiable, donc
+      // impossible, quelle que soit la règle qu'on aurait oubliée.
+      await app.services.deviceCredentials.revoke(device.id);
 
-      return ok(present(revoked), request.id);
+      return ok(present(revoked, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -284,7 +498,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       const updated = await app.services.deviceRegistry.updateDevice(device.id, {
         grantedPermissions: request.body.grantedPermissions,
       });
-      return ok(present(updated), request.id);
+      return ok(present(updated, app.services.expectedWorkerVersion), request.id);
     },
   );
 

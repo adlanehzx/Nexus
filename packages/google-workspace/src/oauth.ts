@@ -17,9 +17,7 @@ export function generatePkcePair(): { codeVerifier: string; codeChallenge: strin
     .toString("base64url")
     .replace(/[^a-zA-Z0-9_-]/g, "");
 
-  const codeChallenge = createHash("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
 
   return { codeVerifier, codeChallenge };
 }
@@ -34,8 +32,7 @@ export function buildAuthorizationUrl(options: {
   state: string;
   scopes?: GoogleWorkspaceScope[];
 }): string {
-  const scopes =
-    options.scopes ?? Object.values(GOOGLE_WORKSPACE_SCOPES);
+  const scopes = options.scopes ?? Object.values(GOOGLE_WORKSPACE_SCOPES);
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", options.clientId);
@@ -182,14 +179,18 @@ export class GoogleTokenManager {
   async getValidAccessToken(): Promise<string> {
     const rawTokens = await this.#resolveSecret(this.#tokensRef);
     if (!rawTokens) {
-      throw new Error(`Aucun jeton Google trouvé dans le coffre sous la référence « ${this.#tokensRef} »`);
+      throw new Error(
+        `Aucun jeton Google trouvé dans le coffre sous la référence « ${this.#tokensRef} »`,
+      );
     }
 
     let tokens: GoogleOAuthTokens;
     try {
       tokens = googleOAuthTokensSchema.parse(JSON.parse(rawTokens));
     } catch {
-      throw new Error(`Format de jetons Google invalide dans le coffre sous « ${this.#tokensRef} »`);
+      throw new Error(
+        `Format de jetons Google invalide dans le coffre sous « ${this.#tokensRef} »`,
+      );
     }
 
     // Marge de sécurité de 5 minutes (300 000 ms) avant expiration
@@ -207,7 +208,9 @@ export class GoogleTokenManager {
 
     const clientSecret = await this.#resolveSecret(this.#clientSecretRef);
     if (!clientSecret) {
-      throw new Error(`Le secret client Google « ${this.#clientSecretRef} » est introuvable dans le coffre`);
+      throw new Error(
+        `Le secret client Google « ${this.#clientSecretRef} » est introuvable dans le coffre`,
+      );
     }
 
     const refreshed = await refreshAccessToken({

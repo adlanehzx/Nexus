@@ -18,13 +18,16 @@ import {
   DeviceSessionService,
   EventRouter,
   InMemoryCredentialProvider,
+  InMemoryPairingTicketStore,
   InMemoryTaskStore,
+  PairingService,
   TaskCoordinator,
   WorkerGateway,
   ecdsaP256Verifier,
   ed25519Verifier,
-  type DeviceCredentialProvider,
+  type DeviceCredentialStore,
   type DeviceStore,
+  type PairingTicketStore,
   type SignatureVerifier,
   type TaskPlan,
   type TaskStore,
@@ -76,6 +79,7 @@ import type { NotificationDispatcher } from "@nexus/notifications";
 import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
+import { PauseSwitch } from "./pause.js";
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 import { ProviderAccountService } from "./provider-accounts.js";
 import { AgentRouter } from "./agent-router.js";
@@ -110,9 +114,31 @@ export interface ServiceContainerOptions {
   conversations?: ConversationStore;
   notifications?: NotificationStore;
   memory?: MemoryProvider;
-  credentials?: DeviceCredentialProvider;
+  credentials?: DeviceCredentialStore;
   taskStore?: TaskStore;
   deviceStore?: DeviceStore;
+  /**
+   * Magasin des tickets d'appairage.
+   *
+   * Absent, un magasin en mémoire est monté : les tickets vivent cinq minutes,
+   * donc une installation qui redémarre n'en perd aucun qui compte. En
+   * production, le magasin PostgreSQL est fourni — sans quoi un QR affiché sur
+   * le tableau de bord ne serait plus reconnu par le processus qui reçoit le
+   * scan, dès qu'il y en a plus d'un.
+   */
+  pairingTickets?: PairingTicketStore;
+  /**
+   * Adresse publique de l'API, inscrite dans le QR d'appairage.
+   *
+   * Facultative, et son absence a une conséquence nommée : l'appairage par QR
+   * est refusé avec un message qui désigne `PUBLIC_API_URL`. Produire un QR
+   * avec une adresse devinée serait pire que de refuser — il mènerait
+   * silencieusement au mauvais endroit, et le symptôme apparaîtrait sur le
+   * téléphone, loin de la cause.
+   */
+  publicApiUrl?: string;
+  /** Version d'exécutant attendue. Consultative : voir `@nexus/devices/updates`. */
+  expectedWorkerVersion?: string;
   runStore?: QueryableAgentRunStore;
   telemetry?: NexusTelemetry;
   embeddings?: EmbeddingProvider;
@@ -206,7 +232,11 @@ export class ServiceContainer {
 
   readonly deviceRegistry: DeviceRegistry;
   readonly deviceSessions: DeviceSessionService;
-  readonly deviceCredentials: DeviceCredentialProvider;
+  readonly deviceCredentials: DeviceCredentialStore;
+  readonly pairing: PairingService;
+  readonly publicApiUrl: string | undefined;
+  readonly expectedWorkerVersion: string | undefined;
+  readonly pause: PauseSwitch;
   readonly selector: DeviceSelector;
   readonly router: EventRouter;
   readonly gateway: WorkerGateway;
@@ -295,6 +325,12 @@ export class ServiceContainer {
       ...(options.deviceStore ? { store: options.deviceStore } : {}),
     });
     this.deviceCredentials = options.credentials ?? new InMemoryCredentialProvider();
+    this.pairing = new PairingService({
+      store: options.pairingTickets ?? new InMemoryPairingTicketStore(),
+      now,
+    });
+    this.publicApiUrl = options.publicApiUrl;
+    this.expectedWorkerVersion = options.expectedWorkerVersion;
     this.deviceSessions = new DeviceSessionService({
       registry: this.deviceRegistry,
       verifier: options.deviceVerifier ?? multiAlgorithmVerifier,
@@ -310,8 +346,21 @@ export class ServiceContainer {
     });
     this.selector = new DeviceSelector({ registry: this.deviceRegistry });
 
+    // ── Pause globale ─────────────────────────────────────────────────────
+    //
+    // Montée avant les permissions : c'est elle qu'elles consultent.
+    this.pause = new PauseSwitch({
+      ...(options.runtimeConfiguration === undefined
+        ? {}
+        : { store: options.runtimeConfiguration }),
+      now,
+    });
+
     // ── Permissions et confirmations ──────────────────────────────────────
     this.permissions = new PermissionService({
+      // Fermeture et non valeur : la pause doit prendre effet sur l'appel
+      // suivant, sans reconstruire le service ni ce qui en dépend.
+      readOnly: () => this.pause.paused,
       grants: {
         // Les permissions accordées à l'utilisateur sont l'union de celles de
         // ses appareils. Un poste autorisé à `terminal.execute` rend la

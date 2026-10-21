@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createDatabaseClient, type PrismaClient } from "@nexus/database";
 import type { TaskPlan } from "@nexus/devices";
 import { PrismaTaskStore } from "../src/services/persistence/prisma-task-store.js";
@@ -9,6 +9,7 @@ import { PrismaDeviceStore } from "../src/services/persistence/prisma-device-sto
 import { PrismaAgentRunClaimStore } from "../src/services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "../src/services/persistence/prisma-mission-grant-registry.js";
 import { PrismaScheduleGrantRegistry } from "../src/services/persistence/prisma-schedule-grant-registry.js";
+import { PrismaDeviceCredentialStore } from "../src/services/persistence/prisma-device-credential-store.js";
 
 /**
  * Magasins Prisma contre un PostgreSQL réel.
@@ -103,6 +104,7 @@ afterAll(async () => {
   await prisma.missionGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.scheduleGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.agentRunSnapshot.deleteMany({ where: { userId: ownerId } });
+  await prisma.deviceCredential.deleteMany({ where: { deviceId } });
   await prisma.deviceCapability.deleteMany({ where: { deviceId } });
   await prisma.device.deleteMany({ where: { id: deviceId } });
   await prisma.authCredential.deleteMany({ where: { userId: ownerId } });
@@ -532,5 +534,107 @@ describe("délégations de calendrier sur PostgreSQL", () => {
         data: { ...base, id: randomUUID(), tokenHash: "c".repeat(64) },
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("PrismaDeviceCredentialStore", () => {
+  /**
+   * La clé publique d'un appareil doit survivre à un redémarrage.
+   *
+   * Avant ce magasin, la production montait `InMemoryCredentialProvider` : au
+   * redémarrage de l'API, toutes les clés disparaissaient, chaque worker se
+   * faisait refuser sa poignée de main, et rien ne nommait la cause. Un test
+   * contre une doublure ne pouvait pas le voir — c'est précisément la leçon que
+   * ce fichier porte en préambule.
+   */
+  const ed25519 = generateKeyPairSync("ed25519").publicKey.export({
+    type: "spki",
+    format: "pem",
+  }) as string;
+  const p256 = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).publicKey.export({
+    type: "spki",
+    format: "pem",
+  }) as string;
+
+  it("écrit, relit, et survit à une nouvelle instance", async () => {
+    await new PrismaDeviceCredentialStore(prisma).set(deviceId, ed25519);
+
+    // Une *autre* instance : c'est ce qui simule le redémarrage. Si la clé
+    // vivait en mémoire, cette ligne rendrait `undefined`.
+    const afterRestart = new PrismaDeviceCredentialStore(prisma);
+    expect(await afterRestart.publicKeyFor(deviceId)).toBe(ed25519);
+  });
+
+  it("déduit l'algorithme de la clé, pas d'une étiquette fournie", async () => {
+    const store = new PrismaDeviceCredentialStore(prisma);
+    await store.set(deviceId, ed25519);
+    const first = await prisma.deviceCredential.findFirst({
+      where: { deviceId, revokedAt: null },
+    });
+    expect(first?.kind).toBe("ED25519_PUBLIC_KEY");
+
+    // Android ne sait pas garder d'Ed25519 dans son magasin matériel : c'est le
+    // seul cas où l'algorithme change, et il doit être reconnu sans qu'on le
+    // déclare.
+    await store.set(deviceId, p256);
+    const second = await prisma.deviceCredential.findFirst({
+      where: { deviceId, revokedAt: null },
+    });
+    expect(second?.kind).toBe("ECDSA_P256_PUBLIC_KEY");
+    expect(await store.publicKeyFor(deviceId)).toBe(p256);
+  });
+
+  it("une rotation laisse une seule clé active, et garde la trace de l'ancienne", async () => {
+    const store = new PrismaDeviceCredentialStore(prisma);
+    await store.set(deviceId, ed25519);
+    await store.set(deviceId, p256);
+
+    const active = await prisma.deviceCredential.findMany({ where: { deviceId, revokedAt: null } });
+    expect(active).toHaveLength(1);
+
+    // Deux clés actives seraient une ambiguïté : laquelle vérifie ?
+    const rotated = await prisma.deviceCredential.findMany({
+      where: { deviceId, rotatedAt: { not: null } },
+    });
+    expect(rotated.length).toBeGreaterThanOrEqual(1);
+    expect(rotated[0]?.material).toBe(ed25519);
+  });
+
+  it("révoquer rend la clé invisible sans effacer la ligne", async () => {
+    const store = new PrismaDeviceCredentialStore(prisma);
+    await store.set(deviceId, ed25519);
+    await store.revoke(deviceId);
+
+    expect(await store.publicKeyFor(deviceId)).toBeUndefined();
+    // La clé publique n'est pas un secret, et après un incident on veut savoir
+    // *laquelle* était enregistrée, et depuis quand.
+    const rows = await prisma.deviceCredential.findMany({ where: { deviceId } });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.revokedAt !== null)).toBe(true);
+  });
+
+  it("ignore une clé expirée", async () => {
+    await new PrismaDeviceCredentialStore(prisma).set(deviceId, ed25519);
+    await prisma.deviceCredential.updateMany({
+      where: { deviceId, revokedAt: null },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    expect(await new PrismaDeviceCredentialStore(prisma).publicKeyFor(deviceId)).toBeUndefined();
+  });
+
+  it("refuse un PEM qui n'est pas une clé", async () => {
+    const store = new PrismaDeviceCredentialStore(prisma);
+    await expect(store.set(deviceId, "pas une clé")).rejects.toThrow(/PEM/);
+    // Et rien n'a été écrit : un refus doit laisser la base dans l'état
+    // d'avant, sans quoi une erreur d'appelant révoquerait la clé en service.
+    await store.set(deviceId, ed25519);
+    await expect(
+      store.set(deviceId, "-----BEGIN PUBLIC KEY-----\nnope\n-----END PUBLIC KEY-----"),
+    ).rejects.toThrow();
+    expect(await store.publicKeyFor(deviceId)).toBe(ed25519);
+  });
+
+  afterEach(async () => {
+    await prisma.deviceCredential.deleteMany({ where: { deviceId } });
   });
 });

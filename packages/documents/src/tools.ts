@@ -5,7 +5,10 @@ import { DocumentChunker } from "./chunker.js";
 import type { DocumentMemoryBridge } from "./memory-bridge.js";
 
 export const documentParseInputSchema = z.object({
-  filePath: z.string().min(1).describe("Chemin absolu du document à analyser (PDF, DOCX, PPTX, MD, TXT)"),
+  filePath: z
+    .string()
+    .min(1)
+    .describe("Chemin absolu du document à analyser (PDF, DOCX, PPTX, MD, TXT)"),
 });
 
 export const documentParseOutputSchema = z.object({
@@ -41,7 +44,13 @@ export const documentExtractTablesOutputSchema = z.object({
 
 export const documentIngestInputSchema = z.object({
   filePath: z.string().min(1).describe("Chemin du document à indexer dans la mémoire"),
-  maxChunkSizeChars: z.number().int().min(200).max(5000).optional().describe("Taille maximale d'un fragment textuel"),
+  maxChunkSizeChars: z
+    .number()
+    .int()
+    .min(200)
+    .max(5000)
+    .optional()
+    .describe("Taille maximale d'un fragment textuel"),
 });
 
 export const documentIngestOutputSchema = z.object({
@@ -105,7 +114,10 @@ export function createDocumentTools(options: {
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof documentExtractTablesInputSchema>) =>
         `Extraction des tableaux de ${input.filePath}`,
-      execute: async (input: z.infer<typeof documentExtractTablesInputSchema>, _context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof documentExtractTablesInputSchema>,
+        _context: ToolContext,
+      ) => {
         const parsed = await parser.parseDocument(input.filePath);
         return { tables: parsed.tables };
       },

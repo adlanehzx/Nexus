@@ -65,10 +65,7 @@ export function parseMarkdownTable(
 /**
  * Détecte et extrait tous les tableaux Markdown présents dans un texte libre.
  */
-export function extractTablesFromText(
-  text: string,
-  pageNumber?: number  ,
-): DocumentTable[] {
+export function extractTablesFromText(text: string, pageNumber?: number): DocumentTable[] {
   const tables: DocumentTable[] = [];
   const lines = text.split("\n");
   let currentTableLines: string[] = [];

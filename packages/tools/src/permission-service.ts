@@ -51,7 +51,16 @@ export interface PermissionServiceOptions {
    * Coupe-circuit global : refuse toute action au-dessus de SAFE sans
    * redéploiement. Sert d'interrupteur d'urgence.
    */
-  readOnly?: boolean;
+  /**
+   * Coupe-circuit global : refuse tout outil de risque `LOW` ou plus.
+   *
+   * Accepte une **fonction** autant qu'un booléen, et c'est ce qui le rend
+   * actionnable : un booléen figé à la construction ne peut être changé qu'en
+   * reconstruisant le service, donc en perdant tout ce qui en dépend. Une
+   * fermeture est consultée à chaque autorisation, donc une pause prend effet
+   * sur l'appel suivant.
+   */
+  readOnly?: boolean | (() => boolean);
 }
 
 /**
@@ -64,12 +73,13 @@ export interface PermissionServiceOptions {
 export class PermissionService {
   readonly #grants: GrantProvider;
   readonly #autoApproveMaxRisk: RiskLevel;
-  readonly #readOnly: boolean;
+  readonly #readOnly: () => boolean;
 
   constructor(options: PermissionServiceOptions) {
     this.#grants = options.grants;
     this.#autoApproveMaxRisk = options.autoApproveMaxRisk ?? "LOW";
-    this.#readOnly = options.readOnly ?? false;
+    const readOnly = options.readOnly ?? false;
+    this.#readOnly = typeof readOnly === "function" ? readOnly : () => readOnly;
   }
 
   async listGranted(userId: string): Promise<readonly string[]> {
@@ -86,10 +96,10 @@ export class PermissionService {
     context: ToolContext,
   ): Promise<PermissionDecision> {
     // 1. Coupe-circuit global.
-    if (this.#readOnly && riskAtLeast(tool.riskLevel, "LOW")) {
+    if (this.#readOnly() && riskAtLeast(tool.riskLevel, "LOW")) {
       return {
         effect: "deny",
-        reason: "NEXUS est en mode lecture seule : aucune action modifiante n'est autorisée.",
+        reason: "NEXUS est en pause : seules les actions sans effet de bord restent autorisées.",
         missing: [],
       };
     }

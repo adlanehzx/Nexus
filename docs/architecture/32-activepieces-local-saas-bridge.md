@@ -3,6 +3,7 @@
 ## 1. Contexte et Objectifs
 
 Activepieces offre à NEXUS un écosystème de centaines de connecteurs SaaS prêts à l'emploi (Slack, Discord, Notion, Stripe, GitHub, Airtable, etc.) orchestrables localement :
+
 1. **Déploiement local isolé** :
    - Déploiement conteneurisé via `infrastructure/docker/docker-compose.activepieces.yml`.
    - Boucle locale stricte `127.0.0.1:8080` sans aucune exposition extérieure ni fuite sur Tailscale.
@@ -19,17 +20,19 @@ Activepieces offre à NEXUS un écosystème de centaines de connecteurs SaaS pr�
 
 ## 2. Outils Natifs pour les Agents NEXUS
 
-| Outil | Domaine | Niveau de Risque | Confirmation Humaine | Description |
-|---|---|---|---|---|
-| `activepieces.list_flows` | `terminal.execute` | `SAFE` | Non | Liste les flux d'automatisation locaux disponibles |
-| `activepieces.trigger_flow` | `terminal.execute` | `HIGH` | Conditionnelle (`isSensitive`) | Déclenche un flux complet via webhook ou identifiant |
-| `activepieces.execute_action` | `terminal.execute` | `HIGH` | **Dynamique / Obligatoire si sensible** | Exécute une action SaaS directe (Slack, Stripe, Notion, etc.) |
-| `activepieces.get_run` | `terminal.execute` | `SAFE` | Non | Interroge l'état et la sortie d'un run |
+| Outil                         | Domaine            | Niveau de Risque | Confirmation Humaine                    | Description                                                   |
+| ----------------------------- | ------------------ | ---------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `activepieces.list_flows`     | `terminal.execute` | `SAFE`           | Non                                     | Liste les flux d'automatisation locaux disponibles            |
+| `activepieces.trigger_flow`   | `terminal.execute` | `HIGH`           | Conditionnelle (`isSensitive`)          | Déclenche un flux complet via webhook ou identifiant          |
+| `activepieces.execute_action` | `terminal.execute` | `HIGH`           | **Dynamique / Obligatoire si sensible** | Exécute une action SaaS directe (Slack, Stripe, Notion, etc.) |
+| `activepieces.get_run`        | `terminal.execute` | `SAFE`           | Non                                     | Interroge l'état et la sortie d'un run                        |
 
 ## 3. Déploiement Local Isolé
 
 Pour démarrer la pile locale Activepieces isolée :
+
 ```bash
 docker compose -f infrastructure/docker/docker-compose.activepieces.yml up -d
 ```
+
 L'interface et l'API sont confinées à l'adresse de bouclage `http://127.0.0.1:8080`.

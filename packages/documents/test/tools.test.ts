@@ -62,10 +62,9 @@ describe("Outils documentaires NEXUS", () => {
       { filePath: string },
       { id: string; filename: string; tablesCount: number }
     >;
-    const extractTablesTool = tools.find((t) => t.name === "document.extract_tables")! as unknown as ToolDefinition<
-      { filePath: string },
-      { tables: { headers: string[] }[] }
-    >;
+    const extractTablesTool = tools.find(
+      (t) => t.name === "document.extract_tables",
+    )! as unknown as ToolDefinition<{ filePath: string }, { tables: { headers: string[] }[] }>;
 
     const ctx = createMockContext();
     const parseRes = await parseTool.execute({ filePath }, ctx);
@@ -86,7 +85,9 @@ describe("Outils documentaires NEXUS", () => {
     const bridge = new DocumentMemoryBridge(mockSink);
 
     const tools = createDocumentTools({ parser, memoryBridge: bridge });
-    const ingestTool = tools.find((t) => t.name === "document.ingest_to_memory")! as unknown as ToolDefinition<
+    const ingestTool = tools.find(
+      (t) => t.name === "document.ingest_to_memory",
+    )! as unknown as ToolDefinition<
       { filePath: string },
       { chunksIngested: number; citationUris: string[] }
     >;

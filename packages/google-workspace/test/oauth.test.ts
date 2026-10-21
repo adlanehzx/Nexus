@@ -49,13 +49,14 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        access_token: "ya29.mock-access-token",
-        refresh_token: "1//mock-refresh-token",
-        expires_in: 3600,
-        token_type: "Bearer",
-        scope: "https://www.googleapis.com/auth/gmail.readonly",
-      }),
+      json: () =>
+        Promise.resolve({
+          access_token: "ya29.mock-access-token",
+          refresh_token: "1//mock-refresh-token",
+          expires_in: 3600,
+          token_type: "Bearer",
+          scope: "https://www.googleapis.com/auth/gmail.readonly",
+        }),
     });
 
     const tokens = await exchangeAuthorizationCode({
@@ -76,11 +77,12 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        access_token: "ya29.new-access-token",
-        expires_in: 3600,
-        token_type: "Bearer",
-      }),
+      json: () =>
+        Promise.resolve({
+          access_token: "ya29.new-access-token",
+          expires_in: 3600,
+          token_type: "Bearer",
+        }),
     });
 
     const refreshed = await refreshAccessToken({
@@ -110,11 +112,12 @@ describe("OAuth 2.0 PKCE pour Google Workspace", () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({
-        access_token: "ya29.refreshed-from-vault",
-        expires_in: 3600,
-        token_type: "Bearer",
-      }),
+      json: () =>
+        Promise.resolve({
+          access_token: "ya29.refreshed-from-vault",
+          expires_in: 3600,
+          token_type: "Bearer",
+        }),
     });
 
     const manager = new GoogleTokenManager({

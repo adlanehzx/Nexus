@@ -1,7 +1,4 @@
-import {
-  type DocumentChunk,
-  type ParsedDocument,
-} from "./types.js";
+import { type DocumentChunk, type ParsedDocument } from "./types.js";
 
 /**
  * Normalise un titre de section en fragment d'ancre d'URL sûr.
@@ -117,8 +114,7 @@ export class DocumentChunker {
             const overlapPart = currentWindow.slice(-this.#overlapChars);
             currentWindow = overlapPart + "\n\n" + p;
           } else {
-            currentWindow =
-              currentWindow.length === 0 ? p : `${currentWindow}\n\n${p}`;
+            currentWindow = currentWindow.length === 0 ? p : `${currentWindow}\n\n${p}`;
           }
         }
 

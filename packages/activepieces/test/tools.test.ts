@@ -16,9 +16,7 @@ describe("Outils Activepieces pour les agents NEXUS", () => {
   });
 
   const mockClient: Partial<ActivepiecesBridgeClient> = {
-    listFlows: vi.fn().mockResolvedValue([
-      { id: "f1", name: "Backup Notion", status: "ENABLED" },
-    ]),
+    listFlows: vi.fn().mockResolvedValue([{ id: "f1", name: "Backup Notion", status: "ENABLED" }]),
     triggerFlow: vi.fn().mockResolvedValue({
       runId: "run-101",
       flowId: "f1",

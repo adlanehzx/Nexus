@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildCitationLabel,
-  buildCitationUri,
-  DocumentChunker,
-  slugify,
-} from "../src/chunker.js";
+import { buildCitationLabel, buildCitationUri, DocumentChunker, slugify } from "../src/chunker.js";
 import { type ParsedDocument } from "../src/types.js";
 
 describe("Découpage hiérarchique et citations documentaires", () => {
   it("normalise un titre de section en slug pour citation", () => {
     expect(slugify("1.1 Introduction et Contexte !")).toBe("1-1-introduction-et-contexte");
-    expect(slugify("Spécification Technique Électrique")).toBe("specification-technique-electrique");
+    expect(slugify("Spécification Technique Électrique")).toBe(
+      "specification-technique-electrique",
+    );
   });
 
   it("génère des identifiants et libellés de citation stables", () => {
@@ -68,6 +65,8 @@ describe("Découpage hiérarchique et citations documentaires", () => {
       "1.1 Isolation MCP",
     ]);
     expect(chunkSub?.citationUri).toBe("doc://doc-test-1/page/1#1-1-isolation-mcp");
-    expect(chunkSub?.citationLabel).toContain("Manuel_Architecture.pdf (Page 1, § 1.1 Isolation MCP)");
+    expect(chunkSub?.citationLabel).toContain(
+      "Manuel_Architecture.pdf (Page 1, § 1.1 Isolation MCP)",
+    );
   });
 });

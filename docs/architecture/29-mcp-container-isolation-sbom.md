@@ -5,6 +5,7 @@
 Les serveurs MCP (Model Context Protocol) exécutent des binaires ou runtimes locaux (`node`, `python`, `npx`, `uvx`, etc.) susceptibles d'être compromis, de contenir des dépendances vulnérables ou d'exfiltrer des données sensibles.
 
 Dans NEXUS, aucun serveur MCP ne doit s'exécuter avec les privilèges complets de la machine hôte :
+
 1. **Isolation par conteneur / bac à sable** : Chaque serveur MCP tourne dans son propre bac à sable Bubblewrap (`bwrap`) ou conteneur (`docker`).
 2. **Système de fichiers en lecture seule** : Racine (`/`) montée en `--ro-bind` en lecture seule stricte.
 3. **Bind mounts explicites** : Seuls les répertoires nécessaires (ex. `/workspace`) sont montés explicitement.
@@ -17,6 +18,7 @@ Dans NEXUS, aucun serveur MCP ne doit s'exécuter avec les privilèges complets 
 ## 2. Architecture Technique (`@nexus/mcp`)
 
 ### Bac à sable Bubblewrap (`McpSandboxManager`)
+
 Bubblewrap (`/usr/bin/bwrap`) tire parti des user namespaces non privilégiés du noyau Linux pour créer un bac à sable hermétique sans aucun démon ni privilège root :
 
 ```
@@ -39,6 +41,7 @@ StdioClientTransport (exécute bwrap de façon transparente)
 ```
 
 ### Schéma de Configuration (`McpSandboxPolicy`)
+
 ```typescript
 export const mcpSandboxPolicySchema = z.object({
   enabled: z.boolean().default(true),
@@ -48,12 +51,17 @@ export const mcpSandboxPolicySchema = z.object({
   allowNetwork: z.boolean().default(false),
   resourceLimits: mcpResourceLimitsSchema.default(DEFAULT_MCP_RESOURCE_LIMITS),
   allowedBinaries: z.array(z.string()).default([...DEFAULT_MCP_ALLOWED_BINARIES]),
-  verifyChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  verifyChecksum: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 ```
 
 ### Software Bill of Materials (SBOM)
+
 Le SBOM capture l'empreinte logicielle :
+
 - `serverName` : Nom du serveur MCP.
 - `runtime` : `node`, `python`, `container`, etc.
 - `packages` : Liste des packages et sources (`npm`, `pypi`, `oci`).
@@ -61,6 +69,8 @@ Le SBOM capture l'empreinte logicielle :
 - `checksum` : Empreinte SHA-256 canonique scellée.
 
 ## 3. Audit et Diagnostics
+
 Via le gestionnaire MCP :
+
 - `mcpManager.getSbom(name)` : Récupère le SBOM d'un serveur.
 - `mcpManager.listSboms()` : Liste l'inventaire SBOM de tous les serveurs enregistrés.

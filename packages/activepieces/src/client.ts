@@ -60,7 +60,7 @@ export class ActivepiecesBridgeClient {
   /**
    * Liste les flux configurés dans l'instance Activepieces.
    */
-  async listFlows(signal?: AbortSignal  ): Promise<ActivepiecesFlow[]> {
+  async listFlows(signal?: AbortSignal): Promise<ActivepiecesFlow[]> {
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
     if (signal) reqOptions.signal = signal;
 
@@ -87,12 +87,8 @@ export class ActivepiecesBridgeClient {
   /**
    * Déclenche l'exécution d'un flux Activepieces via son webhook ou son identifiant.
    */
-  async triggerFlow(
-    options: FlowTriggerOptions,
-    signal?: AbortSignal  ,
-  ): Promise<FlowRunResult> {
-    const targetUrl =
-      options.webhookUrl ?? `${this.#baseUrl}/api/v1/webhooks/${options.flowId}`;
+  async triggerFlow(options: FlowTriggerOptions, signal?: AbortSignal): Promise<FlowRunResult> {
+    const targetUrl = options.webhookUrl ?? `${this.#baseUrl}/api/v1/webhooks/${options.flowId}`;
 
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = {
       method: "POST",
@@ -128,7 +124,7 @@ export class ActivepiecesBridgeClient {
   /**
    * Récupère le statut et le résultat d'un run de flux.
    */
-  async getRun(runId: string, signal?: AbortSignal  ): Promise<FlowRunResult> {
+  async getRun(runId: string, signal?: AbortSignal): Promise<FlowRunResult> {
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
     if (signal) reqOptions.signal = signal;
 
@@ -158,7 +154,7 @@ export class ActivepiecesBridgeClient {
     runId: string,
     maxPolls = 30,
     intervalMs = 1000,
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<FlowRunResult> {
     for (let i = 0; i < maxPolls; i++) {
       if (signal?.aborted) {
@@ -181,7 +177,7 @@ export class ActivepiecesBridgeClient {
    */
   async executePieceAction(
     options: PieceActionOptions,
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<PieceActionResult> {
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = {
       method: "POST",

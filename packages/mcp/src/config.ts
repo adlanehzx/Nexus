@@ -80,7 +80,10 @@ export const mcpSandboxPolicySchema = z.object({
   allowNetwork: z.boolean().default(DEFAULT_MCP_SANDBOX_POLICY.allowNetwork),
   resourceLimits: mcpResourceLimitsSchema.default(DEFAULT_MCP_RESOURCE_LIMITS),
   allowedBinaries: z.array(z.string()).default([...DEFAULT_MCP_ALLOWED_BINARIES]),
-  verifyChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  verifyChecksum: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 export type McpSandboxPolicy = z.infer<typeof mcpSandboxPolicySchema>;
 

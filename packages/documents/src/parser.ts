@@ -65,7 +65,14 @@ export class DocumentParser {
     // 1. Tente Docling si configuré et disponible
     if (this.#doclingBinary) {
       try {
-        const doclingResult = await this.#parseWithDocling(filePath, docId, filename, format, sha256, fileStats.size);
+        const doclingResult = await this.#parseWithDocling(
+          filePath,
+          docId,
+          filename,
+          format,
+          sha256,
+          fileStats.size,
+        );
         if (doclingResult) return doclingResult;
       } catch {
         // Fallback transparent vers le moteur local
@@ -83,7 +90,14 @@ export class DocumentParser {
       case "md":
       case "txt":
       default:
-        return this.#parseTextOrMarkdown(fileBuffer.toString("utf-8"), docId, filename, format, sha256, fileStats.size);
+        return this.#parseTextOrMarkdown(
+          fileBuffer.toString("utf-8"),
+          docId,
+          filename,
+          format,
+          sha256,
+          fileStats.size,
+        );
     }
   }
 
@@ -260,7 +274,7 @@ except Exception as e:
     let currentContent: string[] = [];
 
     for (const p of paragraphs) {
-      if (p.startsWith("#") || p.length < 60 && /^[A-Z0-9\s.-]{4,}$/.test(p)) {
+      if (p.startsWith("#") || (p.length < 60 && /^[A-Z0-9\s.-]{4,}$/.test(p))) {
         if (currentContent.length > 0) {
           sections.push({
             title: currentTitle,
@@ -291,7 +305,8 @@ except Exception as e:
     const tables: DocumentTable[] = rawTables.map((t, idx) => {
       const headers = t[0] ?? [];
       const rows = t.slice(1);
-      const markdown = `| ${headers.join(" | ")} |\n| ${headers.map(() => "---").join(" | ")} |\n` +
+      const markdown =
+        `| ${headers.join(" | ")} |\n| ${headers.map(() => "---").join(" | ")} |\n` +
         rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
       return {
         headers,
@@ -358,7 +373,9 @@ except Exception as e:
     let slides: { title: string; content: string; page: number }[];
     try {
       const { stdout } = await execFileAsync("python3", ["-c", pythonScript, filePath]);
-      const data = JSON.parse(stdout) as { slides: { title: string; content: string; page: number }[] };
+      const data = JSON.parse(stdout) as {
+        slides: { title: string; content: string; page: number }[];
+      };
       slides = data.slides;
     } catch {
       slides = [{ title: "Présentation", content: "Contenu extrait", page: 1 }];

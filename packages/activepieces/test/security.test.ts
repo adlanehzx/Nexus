@@ -5,7 +5,10 @@ describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
   it("détecte les actions d'écriture externes sensibles comme exigeant confirmation", () => {
     // Slack / Discord message
     expect(
-      isSensitiveSaaSAction("slack", "send_channel_message", { channel: "#general", text: "Hello" }),
+      isSensitiveSaaSAction("slack", "send_channel_message", {
+        channel: "#general",
+        text: "Hello",
+      }),
     ).toBe(true);
 
     // Stripe financial
@@ -14,24 +17,20 @@ describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
     ).toBe(true);
 
     // Deletion
-    expect(
-      isSensitiveSaaSAction("notion", "delete_database_item", { pageId: "page-123" }),
-    ).toBe(true);
+    expect(isSensitiveSaaSAction("notion", "delete_database_item", { pageId: "page-123" })).toBe(
+      true,
+    );
 
     // Flag explicite
-    expect(
-      isSensitiveSaaSAction("custom_piece", "read_data", { isSensitive: true }),
-    ).toBe(true);
+    expect(isSensitiveSaaSAction("custom_piece", "read_data", { isSensitive: true })).toBe(true);
   });
 
   it("laisse les actions de consultation sans confirmation bloquante", () => {
-    expect(
-      isSensitiveSaaSAction("notion", "get_database_item", { pageId: "page-123" }),
-    ).toBe(false);
+    expect(isSensitiveSaaSAction("notion", "get_database_item", { pageId: "page-123" })).toBe(
+      false,
+    );
 
-    expect(
-      isSensitiveSaaSAction("airtable", "list_records", { baseId: "app123" }),
-    ).toBe(false);
+    expect(isSensitiveSaaSAction("airtable", "list_records", { baseId: "app123" })).toBe(false);
 
     expect(
       isSensitiveSaaSAction("github", "get_repository", { owner: "nexus", repo: "nexus" }),

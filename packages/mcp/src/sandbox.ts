@@ -27,7 +27,10 @@ export function verifyPackageChecksum(content: Buffer | string, expectedSha256: 
 /**
  * Vérifie l'intégrité d'un fichier sur disque par rapport à son empreinte SHA-256 attendue.
  */
-export async function verifyFileChecksum(filePath: string, expectedSha256: string): Promise<boolean> {
+export async function verifyFileChecksum(
+  filePath: string,
+  expectedSha256: string,
+): Promise<boolean> {
   try {
     const content = await readFile(filePath);
     return verifyPackageChecksum(content, expectedSha256);

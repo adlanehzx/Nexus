@@ -1,0 +1,87 @@
+# Politique locale de cet appareil — éditée par vous, jamais par NEXUS.
+#
+# C'est le seul endroit où la machine se protège du cœur : si le serveur est
+# compromis, c'est ce fichier qui empêche ce poste de devenir une machine
+# ouverte. NEXUS ne l'écrit pas, et aucune commande ne le modifie.
+#
+# Après chaque modification :
+#   nexus policy check --path ~/un/chemin/a/verifier
+version: 1
+
+filesystem:
+  # Racines accessibles. Rien n'est accessible en dehors.
+  #
+  # Volontairement VIDE : cet exemple ne donne aucun accès tant que vous n'avez
+  # pas choisi. Un exemple qui ouvrirait votre dossier personnel serait recopié
+  # tel quel, et c'est ainsi qu'un exemple devient une faille.
+  #
+  # Remplacez par vos racines, par exemple :
+  #   allow:
+  #     - ~/projets
+  #     - ~/Documents/nexus
+  allow: []
+
+  # Les refus gagnent, même sous une racine autorisée. C'est l'intérêt :
+  # autoriser large, exclure précisément.
+  deny:
+    # Tout ce qui est sous ces dossiers.
+    under:
+      - ~/.ssh
+      - ~/.aws
+      - ~/.gnupg
+      - ~/.config/nexus
+    # Tout chemin traversant un de ces dossiers, où qu'il soit.
+    segments:
+      - node_modules
+      - .git
+    # Noms de fichiers. Une seule étoile, en fin de nom.
+    names:
+      - .env*
+      - id_rsa
+      - id_ed25519
+      - credentials*
+
+  maxFileSizeMb: 20
+
+exec:
+  # allowlist : seuls les exécutables ci-dessous (vide = liste par défaut du
+  #             worker, volontairement courte).
+  # disabled  : aucune exécution de processus, quoi que le cœur demande.
+  #
+  # Il n'y a pas de mode « demander » : une confirmation est une décision
+  # humaine, et elle se prend sur la surface où vous êtes — pas sur une machine
+  # qui n'a pas d'écran.
+  mode: allowlist
+  allowedExecutables:
+    - git
+    - node
+    - pnpm
+    - python
+  # L'environnement du worker n'est jamais transmis en bloc : il contient le
+  # chemin de la clé privée de cet appareil.
+  allowedEnv:
+    - PATH
+    - HOME
+    - LANG
+  # Vide = les racines autorisées ci-dessus.
+  workdirRoots: []
+  timeoutSec: 300
+
+git:
+  # Autorise pull / checkout / commit / clone.
+  allowWrite: false
+
+docker:
+  # Par défaut : consultation seule. Élargir est une décision — l'accès au
+  # démon Docker équivaut à un accès administrateur.
+  allowedSubcommands:
+    - ps
+    - images
+    - logs
+    - inspect
+
+network:
+  # Sortie réseau du worker lui-même. Il parle au cœur, et c'est tout : une
+  # capacité qui a besoin du réseau passe par le cœur, où la permission et la
+  # confirmation existent.
+  egress: deny

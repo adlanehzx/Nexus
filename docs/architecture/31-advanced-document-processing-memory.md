@@ -3,6 +3,7 @@
 ## 1. Contexte et Objectifs
 
 Pour que les agents NEXUS puissent analyser des documents professionnels complexes et formuler des réponses étayées sans hallucination, le traitement documentaire fournit :
+
 1. **Multi-formats universel** : Ingestion native des fichiers PDF (`.pdf`), Word (`.docx`), PowerPoint (`.pptx`), Markdown (`.md`) et texte brut (`.txt`).
 2. **Support Docling & Fallback Local** :
    - Détection et délégation transparente à Docling si configuré.
@@ -50,8 +51,8 @@ Fichier (.pdf, .docx, .pptx, .md)
 
 ## 3. Outils Natifs pour les Agents NEXUS
 
-| Outil | Domaine | Niveau de Risque | Description |
-|---|---|---|---|
-| `document.parse` | `filesystem.read` | `SAFE` | Extrait le texte, métadonnées, pages et sections |
-| `document.extract_tables` | `filesystem.read` | `SAFE` | Extrait tous les tableaux structurés (en-têtes et lignes) |
-| `document.ingest_to_memory` | `filesystem.read`, `memory.write` | `MEDIUM` | Découpe le document et injecte les fragments indexés avec citations dans la mémoire |
+| Outil                       | Domaine                           | Niveau de Risque | Description                                                                         |
+| --------------------------- | --------------------------------- | ---------------- | ----------------------------------------------------------------------------------- |
+| `document.parse`            | `filesystem.read`                 | `SAFE`           | Extrait le texte, métadonnées, pages et sections                                    |
+| `document.extract_tables`   | `filesystem.read`                 | `SAFE`           | Extrait tous les tableaux structurés (en-têtes et lignes)                           |
+| `document.ingest_to_memory` | `filesystem.read`, `memory.write` | `MEDIUM`         | Découpe le document et injecte les fragments indexés avec citations dans la mémoire |

@@ -48,8 +48,10 @@ import {
 } from "@nexus/llm";
 import { createDatabaseClient } from "@nexus/database";
 import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
+import { PrismaPairingTicketStore } from "./services/persistence/prisma-pairing-ticket-store.js";
 import { PrismaSessionStore } from "./services/persistence/prisma-session-store.js";
 import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js";
+import { PrismaDeviceCredentialStore } from "./services/persistence/prisma-device-credential-store.js";
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
 import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "./services/persistence/prisma-mission-grant-registry.js";
@@ -157,6 +159,10 @@ const services = new ServiceContainer({
   sessions: new PrismaSessionStore(prisma),
   conversations: new PrismaConversationStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),
+  // Sans ce magasin, les clés publiques des appareils vivaient en mémoire : un
+  // redémarrage de l'API les perdait toutes, et chaque worker se faisait
+  // ensuite refuser sa poignée de main sans que rien ne nomme la cause.
+  credentials: new PrismaDeviceCredentialStore(prisma),
   taskStore: new PrismaTaskStore(prisma),
   agentRunClaims: new PrismaAgentRunClaimStore(prisma),
   missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
@@ -180,6 +186,11 @@ const services = new ServiceContainer({
     new GeminiCliProvider(),
     new LocalLLMProvider(),
   ]),
+  ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
+  ...(config.EXPECTED_WORKER_VERSION === undefined
+    ? {}
+    : { expectedWorkerVersion: config.EXPECTED_WORKER_VERSION }),
+  pairingTickets: new PrismaPairingTicketStore(prisma),
   ...(config.MISSION_CONTROL_URL === undefined
     ? {}
     : {
@@ -211,6 +222,19 @@ async function main(): Promise<void> {
   // Phase 5 Recovery: Reconstruct active task states from persistent storage
   // before accepting new traffic.
   await services.coordinator.recover();
+
+  // La pause est relue **avant** d'accepter du trafic. Sans cette ligne, elle
+  // serait écrite sur disque et jamais rechargée : on croirait NEXUS arrêté
+  // alors qu'il reprendrait du service au premier redémarrage, sans que
+  // personne en soit averti. Le journal le dit, parce qu'un démarrage en pause
+  // doit s'expliquer tout seul.
+  const pause = await services.pause.restore();
+  if (pause.paused) {
+    logger.warn(
+      { event: "api.paused", since: pause.since, reason: pause.reason },
+      "NEXUS démarre en pause : seules les actions sans effet de bord sont autorisées",
+    );
+  }
 
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
   logger.info(

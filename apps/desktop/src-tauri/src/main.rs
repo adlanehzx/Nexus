@@ -22,11 +22,11 @@ use std::path::PathBuf;
 
 use keyring::Entry;
 use serde::Deserialize;
-use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
-/// Service sous lequel les secrets sont rangés dans le gestionnaire
-/// d'identifiants de Windows. Fixe : le moteur de rendu ne le choisit pas, sans
+/// Service sous lequel les secrets sont rangés dans le trousseau du système —
+/// Credential Manager sous Windows, Keychain sous macOS, Secret Service sous
+/// Linux. Fixe : le moteur de rendu ne le choisit pas, sans
 /// quoi une page compromise pourrait lire les secrets d'une autre application.
 const KEYRING_SERVICE: &str = "fr.nexus.desktop";
 

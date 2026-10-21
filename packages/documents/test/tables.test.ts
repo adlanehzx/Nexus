@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  extractTablesFromText,
-  parseMarkdownTable,
-  tableToMarkdown,
-} from "../src/tables.js";
+import { extractTablesFromText, parseMarkdownTable, tableToMarkdown } from "../src/tables.js";
 
 describe("Extraction et manipulation de tableaux", () => {
   it("analyse un tableau Markdown régulier", () => {

@@ -152,6 +152,57 @@ export const configSchema = z
 
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
 
+    /**
+     * Version d'exécutant attendue, pour signaler ceux qui sont en retard.
+     *
+     * **Consultative, et c'est tout.** NEXUS ne met pas un worker à jour : il
+     * n'existe aucun canal pour cela, et c'est délibéré — ce serait de
+     * l'exécution de code à distance, exactement ce que la politique locale
+     * existe pour empêcher. Ce réglage sert à *savoir* qu'une machine est en
+     * retard, ce qu'un worker oublié depuis six mois ne signale pas tout seul.
+     *
+     * Absente, aucun avis n'est rendu. Mieux vaut ne rien dire que d'affirmer
+     * « à jour » sans savoir.
+     */
+    EXPECTED_WORKER_VERSION: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "doit être une version sémantique")
+        .optional(),
+    ),
+
+    /**
+     * Adresse publique de l'API, telle qu'un appareil doit l'appeler.
+     *
+     * Nécessaire pour l'appairage par QR, et explicite plutôt que déduite de
+     * l'en-tête `Host` : cet en-tête est choisi par l'appelant, et un QR qui en
+     * dériverait son adresse laisserait n'importe quelle requête décider où un
+     * téléphone enverra sa clé publique. Un réglage se relit et s'audite ; un
+     * en-tête, non.
+     *
+     * Absente, l'appairage par QR est refusé avec un message qui nomme ce
+     * réglage — plutôt que de produire un QR qui mène au mauvais endroit.
+     */
+    PUBLIC_API_URL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .refine((value) => {
+          if (!URL.canParse(value)) return false;
+          const url = new URL(value);
+          if (url.username || url.password) return false;
+          const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+          // Un réseau local est le cas d'usage normal : le téléphone et le cœur
+          // sont sur le même Wi-Fi. HTTPS reste exigé dès qu'on sort de là.
+          const privateHost = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname);
+          return (
+            url.protocol === "https:" || (url.protocol === "http:" && (loopback || privateHost))
+          );
+        }, "doit être une URL HTTPS, ou HTTP sur la boucle locale ou un réseau privé")
+        .optional(),
+    ),
+
     /** Moteur NEXUS ACP/paper-trading, optionnel. */
     MISSION_CONTROL_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),

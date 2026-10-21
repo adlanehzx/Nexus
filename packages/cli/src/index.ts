@@ -5,6 +5,8 @@ import { runDoctor } from "./doctor.js";
 import { applyPlan, planSetup } from "./setup.js";
 import { exitCodeFor, renderReport } from "./report.js";
 import { createBackup, restoreBackup, verifyBackup } from "./backup.js";
+import { policyCommand } from "./policy.js";
+import { voiceCommand } from "./voice.js";
 import { BROWSER_UNIT, MISSION_ENGINE_UNIT } from "./systemd.js";
 
 /**
@@ -29,6 +31,10 @@ const USAGE = `nexus — installation, diagnostic et conduite d'une instance NEX
   nexus stop [service]      arrête les services
   nexus backup [options]    sauvegarde complète, avec rotation
   nexus restore <archive>   restaure une sauvegarde sur cette installation
+  nexus policy [init|show|check]
+                            politique locale de cet appareil
+  nexus voice [check|dictate]
+                            dictée et synthèse locales
 
 Options communes
   --root <chemin>           installation visée, au lieu de celle qui contient
@@ -55,7 +61,8 @@ Codes de sortie
   1  au moins une vérification en échec, ou une action impossible
 `;
 
-type Command = "doctor" | "setup" | "start" | "stop" | "backup" | "restore" | "help";
+type Command =
+  "doctor" | "setup" | "start" | "stop" | "backup" | "restore" | "policy" | "voice" | "help";
 
 async function main(argv: string[]): Promise<number> {
   const [rawCommand = "help", ...rest] = argv;
@@ -86,6 +93,10 @@ async function main(argv: string[]): Promise<number> {
       return backupCommand(paths, rest);
     case "restore":
       return restoreCommand(paths, rest);
+    case "policy":
+      return policyCommand(rest);
+    case "voice":
+      return voiceCommand(rest);
   }
 }
 
@@ -280,6 +291,8 @@ function normaliseCommand(value: string): Command {
     case "stop":
     case "backup":
     case "restore":
+    case "policy":
+    case "voice":
       return value;
     default:
       return "help";

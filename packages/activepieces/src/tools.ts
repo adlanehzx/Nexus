@@ -22,7 +22,10 @@ export const activepiecesTriggerFlowInputSchema = z.object({
   webhookUrl: z.string().url().optional().describe("URL directe du webhook de déclenchement"),
   payload: z.record(z.string(), z.unknown()).default({}).describe("Données transmises au flux"),
   waitForCompletion: z.boolean().default(true).describe("Attendre la fin de l'exécution du flux"),
-  isSensitive: z.boolean().default(false).describe("Indique si le flux produit des effets externes sensibles"),
+  isSensitive: z
+    .boolean()
+    .default(false)
+    .describe("Indique si le flux produit des effets externes sensibles"),
 });
 
 export const activepiecesTriggerFlowOutputSchema = z.object({
@@ -36,7 +39,10 @@ export const activepiecesTriggerFlowOutputSchema = z.object({
 
 export const activepiecesExecuteActionInputSchema = z.object({
   pieceName: z.string().min(1).describe("Nom de la pièce SaaS (ex: slack, notion, stripe, github)"),
-  actionName: z.string().min(1).describe("Nom de l'action à exécuter (ex: send_message, create_customer)"),
+  actionName: z
+    .string()
+    .min(1)
+    .describe("Nom de l'action à exécuter (ex: send_message, create_customer)"),
   input: z.record(z.string(), z.unknown()).describe("Paramètres d'entrée de l'action"),
   pieceVersion: z.string().optional().describe("Version optionnelle de la pièce"),
   isSensitive: z.boolean().optional().describe("Force la demande de confirmation humaine si true"),
@@ -77,7 +83,10 @@ export function createActivepiecesTools(options: {
       requiresConfirmation: false,
       timeoutMs: 15_000,
       summarize: () => "Consultation des flux Activepieces disponibles",
-      execute: async (_input: z.infer<typeof activepiecesListFlowsInputSchema>, context: ToolContext) => {
+      execute: async (
+        _input: z.infer<typeof activepiecesListFlowsInputSchema>,
+        context: ToolContext,
+      ) => {
         const flows = await client.listFlows(context.signal);
         return { flows };
       },
@@ -98,7 +107,10 @@ export function createActivepiecesTools(options: {
       timeoutMs: 60_000,
       summarize: (input: z.infer<typeof activepiecesTriggerFlowInputSchema>) =>
         `Déclenchement du flux Activepieces « ${input.flowId ?? "webhook externe"} »`,
-      execute: async (input: z.infer<typeof activepiecesTriggerFlowInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof activepiecesTriggerFlowInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.triggerFlow(input, context.signal);
       },
     },
@@ -118,7 +130,10 @@ export function createActivepiecesTools(options: {
       timeoutMs: 45_000,
       summarize: (input: z.infer<typeof activepiecesExecuteActionInputSchema>) =>
         summarizeSaaSAction(input.pieceName, input.actionName, input.input),
-      execute: async (input: z.infer<typeof activepiecesExecuteActionInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof activepiecesExecuteActionInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.executePieceAction(input, context.signal);
       },
     },
@@ -136,7 +151,10 @@ export function createActivepiecesTools(options: {
       timeoutMs: 15_000,
       summarize: (input: z.infer<typeof activepiecesGetRunInputSchema>) =>
         `Consultation de l'exécution Activepieces ${input.runId}`,
-      execute: async (input: z.infer<typeof activepiecesGetRunInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof activepiecesGetRunInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.getRun(input.runId, context.signal);
       },
     },

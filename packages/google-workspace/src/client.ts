@@ -10,11 +10,7 @@ import {
 /**
  * Nettoie et encadre le contenu d'un email externe pour neutraliser les tentatives de prompt injection.
  */
-export function sanitizeUntrustedEmail(
-  rawText: string,
-  from?: string  ,
-  subject?: string  ,
-): string {
+export function sanitizeUntrustedEmail(rawText: string, from?: string, subject?: string): string {
   // Neutralise les marqueurs d'instructions courantes dans les injections indirectes
   const safeText = rawText
     .replace(/<system>[\s\S]*?<\/system>/gi, "[BLOCKED_SYSTEM_TAG]")
@@ -118,7 +114,7 @@ export class GoogleWorkspaceClient {
       labelIds?: string[] | undefined;
       pageToken?: string | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<{ messages: GmailMessageSummary[]; nextPageToken?: string | undefined }> {
     const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
     url.searchParams.set("q", options.query);
@@ -176,10 +172,7 @@ export class GoogleWorkspaceClient {
     };
   }
 
-  async getEmail(
-    options: { messageId: string },
-    signal?: AbortSignal  ,
-  ): Promise<GmailMessage> {
+  async getEmail(options: { messageId: string }, signal?: AbortSignal): Promise<GmailMessage> {
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${options.messageId}?format=full`;
     const requestOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
     if (signal) requestOptions.signal = signal;
@@ -204,9 +197,15 @@ export class GoogleWorkspaceClient {
       headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
 
     const from = getHeader("from");
-    const to = getHeader("to")?.split(",").map((s) => s.trim());
-    const cc = getHeader("cc")?.split(",").map((s) => s.trim());
-    const bcc = getHeader("bcc")?.split(",").map((s) => s.trim());
+    const to = getHeader("to")
+      ?.split(",")
+      .map((s) => s.trim());
+    const cc = getHeader("cc")
+      ?.split(",")
+      .map((s) => s.trim());
+    const bcc = getHeader("bcc")
+      ?.split(",")
+      .map((s) => s.trim());
     const subject = getHeader("subject");
     const date = getHeader("date");
 
@@ -241,7 +240,7 @@ export class GoogleWorkspaceClient {
 
   async getThread(
     options: { threadId: string },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<GmailThreadSummary> {
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/threads/${options.threadId}?format=full`;
     const requestOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
@@ -293,7 +292,7 @@ export class GoogleWorkspaceClient {
       bodyHtml?: string | undefined;
       threadId?: string | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<{ id: string; messageId: string }> {
     const raw = createMimeMessage(options);
     const url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts";
@@ -312,7 +311,10 @@ export class GoogleWorkspaceClient {
     };
     if (signal) requestOptions.signal = signal;
 
-    const res = (await this.#request(url, requestOptions)) as { id: string; message: { id: string } };
+    const res = (await this.#request(url, requestOptions)) as {
+      id: string;
+      message: { id: string };
+    };
 
     return { id: res.id, messageId: res.message.id };
   }
@@ -327,7 +329,7 @@ export class GoogleWorkspaceClient {
       bodyHtml?: string | undefined;
       threadId?: string | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<{ id: string; threadId: string }> {
     const raw = createMimeMessage(options);
     const url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
@@ -361,7 +363,7 @@ export class GoogleWorkspaceClient {
       query?: string | undefined;
       maxResults?: number | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<CalendarEvent[]> {
     const calendarId = encodeURIComponent(options.calendarId ?? "primary");
     const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`);
@@ -407,7 +409,7 @@ export class GoogleWorkspaceClient {
 
   async getEvent(
     options: { calendarId?: string | undefined; eventId: string },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<CalendarEvent> {
     const calendarId = encodeURIComponent(options.calendarId ?? "primary");
     const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${options.eventId}`;
@@ -447,7 +449,7 @@ export class GoogleWorkspaceClient {
       timeMin: string;
       timeMax: string;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<CalendarAvailability> {
     const events = await this.listEvents(
       {
@@ -509,7 +511,7 @@ export class GoogleWorkspaceClient {
       attendees?: string[] | undefined;
       location?: string | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<CalendarEvent> {
     const calendarId = encodeURIComponent(options.calendarId ?? "primary");
     const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`;
@@ -567,7 +569,7 @@ export class GoogleWorkspaceClient {
       attendees?: string[] | undefined;
       location?: string | undefined;
     },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<CalendarEvent> {
     const calendarId = encodeURIComponent(options.calendarId ?? "primary");
     const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${options.eventId}`;
@@ -615,7 +617,7 @@ export class GoogleWorkspaceClient {
 
   async deleteEvent(
     options: { calendarId?: string | undefined; eventId: string },
-    signal?: AbortSignal  ,
+    signal?: AbortSignal,
   ): Promise<{ success: boolean; eventId: string }> {
     const calendarId = encodeURIComponent(options.calendarId ?? "primary");
     const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${options.eventId}`;

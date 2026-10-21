@@ -8,7 +8,13 @@ import type { GoogleWorkspaceClient } from "./client.js";
 
 export const gmailSearchInputSchema = z.object({
   query: z.string().min(1).describe("Requête de recherche Gmail (ex: 'from:alice label:unread')"),
-  maxResults: z.number().int().min(1).max(50).optional().describe("Nombre maximal de messages à renvoyer"),
+  maxResults: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe("Nombre maximal de messages à renvoyer"),
   labelIds: z.array(z.string()).optional().describe("Filtre par identifiants de libellés"),
   pageToken: z.string().optional().describe("Jeton de pagination"),
 });
@@ -84,7 +90,10 @@ export const gmailSendOutputSchema = z.object({
 // ==========================================
 
 export const calendarListEventsInputSchema = z.object({
-  calendarId: z.string().default("primary").describe("Identifiant de l'agenda ('primary' par défaut)"),
+  calendarId: z
+    .string()
+    .default("primary")
+    .describe("Identifiant de l'agenda ('primary' par défaut)"),
   timeMin: z.string().optional().describe("Borne inférieure au format ISO 8601"),
   timeMax: z.string().optional().describe("Borne supérieure au format ISO 8601"),
   query: z.string().optional().describe("Filtre textuel"),
@@ -171,7 +180,8 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "gmail.search",
       version: "1.0.0",
-      description: "Recherche des emails dans la boîte Gmail de l'utilisateur par mots-clés ou libellés.",
+      description:
+        "Recherche des emails dans la boîte Gmail de l'utilisateur par mots-clés ou libellés.",
       inputSchema: gmailSearchInputSchema,
       outputSchema: gmailSearchOutputSchema,
       riskLevel: "SAFE",
@@ -227,8 +237,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "gmail.draft",
       version: "1.0.0",
-      description:
-        "Prépare un brouillon d'email dans la boîte Gmail sans l'expédier.",
+      description: "Prépare un brouillon d'email dans la boîte Gmail sans l'expédier.",
       inputSchema: gmailDraftInputSchema,
       outputSchema: gmailDraftOutputSchema,
       riskLevel: "MEDIUM",
@@ -294,7 +303,10 @@ export function createGoogleWorkspaceTools(options: {
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof calendarListEventsInputSchema>) =>
         `Consultation de l'agenda ${input.calendarId ?? "primary"}`,
-      execute: async (input: z.infer<typeof calendarListEventsInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof calendarListEventsInputSchema>,
+        context: ToolContext,
+      ) => {
         const events = await client.listEvents(input, context.signal);
         return { events };
       },
@@ -331,7 +343,10 @@ export function createGoogleWorkspaceTools(options: {
       timeoutMs: 20_000,
       summarize: (input: z.infer<typeof calendarAvailabilityInputSchema>) =>
         `Vérification des disponibilités du ${input.timeMin} au ${input.timeMax}`,
-      execute: async (input: z.infer<typeof calendarAvailabilityInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof calendarAvailabilityInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.checkAvailability(input, context.signal);
       },
     },
@@ -350,7 +365,10 @@ export function createGoogleWorkspaceTools(options: {
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarCreateEventInputSchema>) =>
         `Création de l'événement « ${input.summary} » le ${input.start}`,
-      execute: async (input: z.infer<typeof calendarCreateEventInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof calendarCreateEventInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.createEvent(input, context.signal);
       },
     },
@@ -369,7 +387,10 @@ export function createGoogleWorkspaceTools(options: {
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarUpdateEventInputSchema>) =>
         `Mise à jour de l'événement ${input.eventId} (« ${input.summary ?? "modifications"} »)`,
-      execute: async (input: z.infer<typeof calendarUpdateEventInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof calendarUpdateEventInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.updateEvent(input, context.signal);
       },
     },
@@ -388,7 +409,10 @@ export function createGoogleWorkspaceTools(options: {
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof calendarDeleteEventInputSchema>) =>
         `Suppression définitive de l'événement ${input.eventId} du calendrier ${input.calendarId}`,
-      execute: async (input: z.infer<typeof calendarDeleteEventInputSchema>, context: ToolContext) => {
+      execute: async (
+        input: z.infer<typeof calendarDeleteEventInputSchema>,
+        context: ToolContext,
+      ) => {
         return client.deleteEvent(input, context.signal);
       },
     },

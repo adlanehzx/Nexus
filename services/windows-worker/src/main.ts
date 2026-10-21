@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { loadDevicePolicy } from "@nexus/device-policy";
 import { loadWorkerConfig } from "./config.js";
 import { ConsoleWorkerLogger } from "@nexus/worker-core";
 import { assembleCapabilities } from "./assemble.js";
@@ -39,7 +42,30 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
   const config = loadWorkerConfig(env);
   const logger = new ConsoleWorkerLogger({ level: config.logLevel, bindings: { WORKER_VERSION } });
 
-  const { capabilities } = assembleCapabilities({ config, env });
+  // La politique locale, si elle existe. Un fichier **présent mais invalide**
+  // arrête le démarrage : quelqu'un a écrit une politique, et démarrer en
+  // l'ignorant appliquerait l'inverse de son intention sans le dire. Absente,
+  // le worker se règle sur son environnement, comme avant.
+  const policyPath = env.WORKER_POLICY_FILE ?? defaultDevicePolicyPath();
+  const loaded = await loadDevicePolicy(policyPath);
+  logger.info(
+    loaded.source === "fichier"
+      ? "politique locale chargée"
+      : "aucune politique locale : réglages d'environnement",
+    {
+      event: "worker.policy",
+      source: loaded.source,
+      path: loaded.path ?? policyPath,
+      allowedRoots: loaded.policy.filesystem.allow.length,
+      exec: loaded.policy.exec.mode,
+    },
+  );
+
+  const { capabilities } = assembleCapabilities({
+    config,
+    env,
+    ...(loaded.source === "fichier" ? { devicePolicy: loaded.policy } : {}),
+  });
 
   const link =
     options.link ??
@@ -92,4 +118,15 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
 
   await worker.start();
   return worker;
+}
+
+/**
+ * `~/.nexus/device-policy.yaml`.
+ *
+ * Le même emplacement que celui qu'utilise `nexus policy` : une politique
+ * qu'on édite d'un côté et que le worker chercherait ailleurs serait pire
+ * qu'aucune politique.
+ */
+function defaultDevicePolicyPath(): string {
+  return join(homedir(), ".nexus", "device-policy.yaml");
 }

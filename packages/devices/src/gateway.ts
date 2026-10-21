@@ -75,12 +75,42 @@ export interface DeviceCredentialProvider {
   publicKeyFor(deviceId: string): Promise<string | undefined>;
 }
 
-export class InMemoryCredentialProvider implements DeviceCredentialProvider {
+/**
+ * Enregistrement et retrait des clés d'appareils.
+ *
+ * Séparé de `DeviceCredentialProvider` à dessein : la passerelle ne fait que
+ * **lire**, et un type en lecture seule l'empêche d'écrire par accident. Les
+ * routes, elles, ont besoin d'écrire, et un seul des deux rôles doit pouvoir le
+ * faire.
+ *
+ * L'interface existe aussi pour une raison moins noble et plus utile : sans
+ * elle, les appels d'écriture passaient par `"set" in provider` suivi d'une
+ * conversion de type. Une capacité qu'on obtient en contournant le système de
+ * types n'est vérifiée par personne — et c'est ainsi qu'une révocation peut
+ * oublier de retirer la clé sans qu'aucune compilation ne s'en plaigne.
+ */
+export interface DeviceCredentialStore extends DeviceCredentialProvider {
+  set(deviceId: string, publicKeyPem: string): Promise<void> | void;
+  /**
+   * Retire la clé d'un appareil.
+   *
+   * Appelée à la révocation. Ce n'est pas la barrière principale — un appareil
+   * révoqué est déjà refusé sur sa confiance — mais c'est celle qui reste si un
+   * futur chemin oublie de vérifier la confiance. Retirer la clé rend la
+   * poignée de main **invérifiable**, donc impossible, indépendamment de toute
+   * autre règle.
+   */
+  revoke(deviceId: string): Promise<void> | void;
+}
+
+export class InMemoryCredentialProvider implements DeviceCredentialStore {
   readonly #keys = new Map<string, string>();
 
-  set(deviceId: string, publicKeyPem: string): this {
+  // Rend `void` et non `this` : la forme fluide n'était utilisée nulle part, et
+  // elle empêchait cette classe de satisfaire `DeviceCredentialStore` — dont
+  // l'implémentation PostgreSQL, elle, est forcément asynchrone.
+  set(deviceId: string, publicKeyPem: string): void {
     this.#keys.set(deviceId, publicKeyPem);
-    return this;
   }
 
   revoke(deviceId: string): void {

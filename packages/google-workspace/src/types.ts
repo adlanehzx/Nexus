@@ -28,7 +28,10 @@ export const googleOAuthConfigSchema = z.object({
   clientId: z.string().min(1),
   clientSecretRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
   tokensRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
-  redirectUri: z.string().url().default("http://127.0.0.1:4000/api/v1/integrations/google/callback"),
+  redirectUri: z
+    .string()
+    .url()
+    .default("http://127.0.0.1:4000/api/v1/integrations/google/callback"),
 });
 export type GoogleOAuthConfig = z.infer<typeof googleOAuthConfigSchema>;
 

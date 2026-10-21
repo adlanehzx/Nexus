@@ -16,6 +16,52 @@ plugins {
  * dessus. Une declaration de six lignes vaut mieux qu'un deplacement de huit
  * fichiers.
  */
+/**
+ * Signature de publication, prise dans l'ENVIRONNEMENT.
+ *
+ * Quatre variables, et aucune dans le depot :
+ *
+ *   NEXUS_KEYSTORE_PATH      chemin du .jks
+ *   NEXUS_KEYSTORE_PASSWORD  mot de passe du magasin
+ *   NEXUS_KEY_ALIAS          alias de la cle
+ *   NEXUS_KEY_PASSWORD       mot de passe de la cle
+ *
+ * Toutes presentes et le fichier lisible : l'APK est signe. Sinon il est produit
+ * NON SIGNE, et le build le dit au lieu d'echouer.
+ *
+ * Ce choix merite sa raison. Echouer sans keystore rendrait la chaine
+ * impossible a verifier : personne ne saurait si le build casse a cause du code
+ * ou de l'absence de cle, et on ne l'apprendrait que le jour de la publication.
+ * Produire un APK non signe prouve tout sauf la signature — un artefact qui
+ * refuse de s'installer, ce qui est exactement ce qu'on veut d'un paquet sans
+ * cle.
+ *
+ * Un keystore versionne serait l'inverse : n'importe qui pourrait publier une
+ * mise a jour de cette application, sur un telephone qui detient un service
+ * d'accessibilite.
+ */
+val keystorePath: String? = System.getenv("NEXUS_KEYSTORE_PATH")
+val keystorePassword: String? = System.getenv("NEXUS_KEYSTORE_PASSWORD")
+val keyAlias: String? = System.getenv("NEXUS_KEY_ALIAS")
+val keyPassword: String? = System.getenv("NEXUS_KEY_PASSWORD")
+
+val signingReady: Boolean =
+    !keystorePath.isNullOrBlank() &&
+        file(keystorePath).exists() &&
+        !keystorePassword.isNullOrBlank() &&
+        !keyAlias.isNullOrBlank() &&
+        !keyPassword.isNullOrBlank()
+
+gradle.taskGraph.whenReady {
+    // Dit a la construction, pas apres : un APK non signe decouvert au moment de
+    // l'installation coute un aller-retour complet.
+    if (signingReady) {
+        logger.lifecycle("NEXUS : APK de publication SIGNE (keystore fourni par l'environnement).")
+    } else {
+        logger.lifecycle("NEXUS : APK de publication NON SIGNE — aucun keystore dans l'environnement.")
+    }
+}
+
 react {
     // Le paquet npm est le parent : c'est la que vivent `index.js`,
     // `nexus.config.json`, `metro.config.js` et le code TypeScript.
@@ -85,6 +131,21 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (signingReady) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+                // V1 reste active : un telephone sous Android 10 ou plus ancien
+                // n'installe pas un APK signe uniquement en V2.
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             // Signature de debogage par defaut d'Android. Aucun secret n'est
@@ -100,10 +161,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Volontairement non signe ici : `assembleRelease` produira un APK
-            // non signe tant qu'une cle n'est pas fournie hors depot. Mieux vaut
-            // un artefact qui refuse de s'installer qu'une cle versionnee.
-            signingConfig = null
+            // Signe si et seulement si l'environnement fournit un keystore
+            // complet et lisible. Sinon l'APK est produit non signe : un
+            // artefact qui refuse de s'installer vaut mieux qu'une cle
+            // versionnee.
+            signingConfig = if (signingReady) signingConfigs.getByName("release") else null
         }
     }
 

@@ -57,8 +57,8 @@ export class DocumentMemoryBridge {
       // Si le fragment porte des tableaux, on les inclut lisiblement
       let finalContent = header;
       if (chunk.tables && chunk.tables.length > 0) {
-        finalContent += "\n\nTableaux associés :\n" +
-          chunk.tables.map((t) => t.markdown).join("\n\n");
+        finalContent +=
+          "\n\nTableaux associés :\n" + chunk.tables.map((t) => t.markdown).join("\n\n");
       }
 
       await this.#sink({
@@ -69,12 +69,7 @@ export class DocumentMemoryBridge {
         origin: "SYSTEM",
         importance: 0.8,
         confidence: 0.95,
-        tags: [
-          "document",
-          chunk.documentId,
-          chunk.filename,
-          `page-${chunk.pageNumber}`,
-        ],
+        tags: ["document", chunk.documentId, chunk.filename, `page-${chunk.pageNumber}`],
         ...(options.sourceRunId ? { sourceRunId: options.sourceRunId } : {}),
       });
 
