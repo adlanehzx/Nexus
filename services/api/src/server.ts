@@ -13,6 +13,8 @@ import {
 } from "@nexus/browser-client";
 import { NotificationDispatcher } from "@nexus/notifications";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
+import { initializeTelemetry } from "./services/telemetry-runtime.js";
+import { NexusTelemetry } from "./services/domain-telemetry.js";
 
 /**
  * Point d'entrée du service API.
@@ -28,6 +30,7 @@ loadDotEnv(resolve(here, "../../../.env"));
 // Une configuration invalide doit empêcher le boot, pas produire une erreur
 // obscure à la première requête. On la résout donc avant toute autre chose.
 const config = getConfig();
+const telemetryRuntime = initializeTelemetry(config);
 
 /**
  * Les services d'abord, le logger ensuite.
@@ -147,6 +150,7 @@ const services = new ServiceContainer({
   missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
+  telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
   observabilityDirectory: resolve(here, "../../../var/observability"),
   tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
   apiVersion: config.API_VERSION,
@@ -227,7 +231,12 @@ async function main(): Promise<void> {
 
     try {
       await app.close();
-      await Promise.allSettled([services.mcp?.stop(), app.prisma.$disconnect(), app.redis.quit()]);
+      await Promise.allSettled([
+        services.mcp?.stop(),
+        app.prisma.$disconnect(),
+        app.redis.quit(),
+        telemetryRuntime.shutdown(),
+      ]);
       logger.info({ event: "api.shutdown.done" }, "Arrêt terminé");
       process.exit(0);
     } catch (error) {

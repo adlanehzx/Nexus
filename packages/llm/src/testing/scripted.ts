@@ -22,12 +22,13 @@ import type {
  */
 
 export type ScriptedTurn =
-  | { kind: "final"; text: string; usage?: Partial<TokenUsage> }
+  | { kind: "final"; text: string; usage?: Partial<TokenUsage>; fallbackCount?: number }
   | {
       kind: "tool_calls";
       text?: string;
       calls: { id: string; name: string; arguments: unknown }[];
       usage?: Partial<TokenUsage>;
+      fallbackCount?: number;
     }
   | { kind: "error"; error: Error }
   /** Ne résout jamais tant que le signal n'est pas abandonné : teste annulation et délais. */
@@ -101,6 +102,7 @@ export class ScriptedLLMProvider implements LLMProvider {
         outputTokens: turn.usage?.outputTokens ?? 20,
       },
       model: this.model,
+      ...(turn.fallbackCount === undefined ? {} : { fallbackCount: turn.fallbackCount }),
     });
   }
 

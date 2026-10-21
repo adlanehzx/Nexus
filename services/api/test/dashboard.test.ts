@@ -46,6 +46,7 @@ const SECTIONS = [
   "/api/v1/dashboard/workers",
   "/api/v1/dashboard/tasks",
   "/api/v1/dashboard/runs",
+  "/api/v1/dashboard/observability",
   "/api/v1/dashboard/tools",
   "/api/v1/dashboard/mcp",
   "/api/v1/dashboard/browser",
@@ -91,7 +92,7 @@ describe("garde d'administration", () => {
     expect(body.error.message).toBe("La ressource demandée n'existe pas.");
   });
 
-  it("ouvre les douze sections à l'administrateur", async () => {
+  it("ouvre toutes les sections à l'administrateur", async () => {
     for (const url of SECTIONS) {
       expect((await get(url, admin)).statusCode, url).toBe(200);
     }
@@ -214,6 +215,8 @@ describe("le raisonnement du modèle ne franchit pas la frontière", () => {
         "errors",
         "iterations",
         "metrics",
+        "missionExternalKey",
+        "replayOfRunId",
         "response",
         "runId",
         "startedAt",

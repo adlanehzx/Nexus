@@ -75,6 +75,7 @@ import { ProviderAccountService } from "./provider-accounts.js";
 import { AgentRouter } from "./agent-router.js";
 import { SharedArtifactStore } from "./shared-artifacts.js";
 import { AgentCollaborationService } from "./agent-collaboration.js";
+import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 
 /**
  * Assemblage des services de l'API.
@@ -107,6 +108,7 @@ export interface ServiceContainerOptions {
   taskStore?: TaskStore;
   deviceStore?: DeviceStore;
   runStore?: QueryableAgentRunStore;
+  telemetry?: NexusTelemetry;
 
   /**
    * Registre des réservations de run Agent Core.
@@ -216,6 +218,7 @@ export class ServiceContainer {
   // est honnete ; un magasin invente ne l'aurait pas ete.
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
+  readonly telemetry: NexusTelemetry;
   readonly agentRunClaims: AgentRunClaimStore;
   readonly missionGrants: MissionGrantService;
   /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
@@ -448,7 +451,11 @@ export class ServiceContainer {
 
     // ── Observabilite ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
-    this.runStore = options.runStore ?? new InMemoryAgentRunStore();
+    this.telemetry = options.telemetry ?? new NexusTelemetry();
+    this.runStore = new ObservableAgentRunStore(
+      options.runStore ?? new InMemoryAgentRunStore(),
+      this.telemetry,
+    );
     this.agentRunClaims = options.agentRunClaims ?? new InMemoryAgentRunClaimStore();
     this.missionGrants = new MissionGrantService({
       signer: this.tokens,

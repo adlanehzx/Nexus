@@ -33,6 +33,10 @@ allowBuilds:
   "@prisma/engines": true
   esbuild: true
   prisma: true
+  # protobufjs : le postinstall n'est pas necessaire a l'execution ; les
+  # artefacts JavaScript distribues sont deja construits. Le refuser garde la
+  # politique fermée sans casser l'export OTLP.
+  protobufjs: false
 
 # pnpm refuse par défaut les versions publiées depuis moins de N jours. Les
 # versions ci-dessous ont été explicitement vérifiées et épinglées.

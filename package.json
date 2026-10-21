@@ -30,7 +30,8 @@
     "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env logs -f",
     "clean": "turbo run clean && rimraf node_modules",
     "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker",
-    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng"
+    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng",
+    "docker:observability": "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile observability up -d"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

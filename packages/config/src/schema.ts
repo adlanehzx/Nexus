@@ -36,6 +36,35 @@ const csv = z
   )
   .pipe(z.array(z.string()));
 
+const envBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return value;
+}, z.boolean());
+
+const modelPricingSchema = z.record(
+  z.string().min(1),
+  z.object({
+    /** Equivalent API en USD par million de jetons, jamais une facture réelle. */
+    inputPerMillionUsd: z.number().nonnegative(),
+    outputPerMillionUsd: z.number().nonnegative(),
+    cacheReadPerMillionUsd: z.number().nonnegative().default(0),
+    cacheWritePerMillionUsd: z.number().nonnegative().default(0),
+  }),
+);
+
+const modelPricing = z.preprocess((value, ctx) => {
+  if (value === undefined || value === "") return {};
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    ctx.addIssue({ code: "custom", message: "doit contenir un objet JSON valide" });
+    return z.NEVER;
+  }
+}, modelPricingSchema);
+
 /**
  * Origines de la coquille de bureau Tauri.
  *
@@ -77,6 +106,22 @@ export const configSchema = z
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(0).max(120_000).default(10_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),
+
+    // Observabilite locale. Prometheus utilise un port distinct, non publie
+    // par defaut ; OTLP reste facultatif pour que le developpement ne depende
+    // jamais d'un collecteur externe.
+    METRICS_ENABLED: envBoolean.default(true),
+    METRICS_HOST: z.string().min(1).default("127.0.0.1"),
+    METRICS_PORT: z.coerce.number().int().min(1).max(65_535).default(9464),
+    OTEL_SERVICE_NAME: z.string().min(1).max(100).default("nexus-api"),
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .refine(isUrl(["http:", "https:"]), "doit être une URL HTTP(S)")
+        .optional(),
+    ),
+    MODEL_PRICING_JSON: modelPricing.default({}),
 
     DATABASE_URL: z
       .string()

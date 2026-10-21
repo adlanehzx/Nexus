@@ -524,7 +524,27 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
 
 export function Runs({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.runs());
+  const observability = useSection(() => api.observability());
   const [selected, setSelected] = useState<string | null>(null);
+  const [action, setAction] = useState<string | null>(null);
+
+  const replay = async (runId: string): Promise<void> => {
+    if (
+      !globalThis.confirm(
+        "Créer un rejeu d'analyse ? Les outils seront totalement désactivés pour empêcher tout effet externe.",
+      )
+    )
+      return;
+    setAction("Rejeu en cours…");
+    try {
+      const result = await api.replayRun(runId);
+      setAction(`Rejeu ${result.runId.slice(0, 8)} terminé : ${result.status}.`);
+      state.reload();
+      observability.reload();
+    } catch (cause) {
+      setAction(cause instanceof Error ? cause.message : "Rejeu impossible.");
+    }
+  };
 
   return (
     <div className="contenu">
@@ -532,6 +552,54 @@ export function Runs({ api }: { api: DashboardApi }) {
         Statut, actions, outils, progression, résultat, erreurs et métriques. Le raisonnement du
         modèle n&apos;est pas exposé — le serveur ne le transmet pas.
       </p>
+
+      <Section state={observability}>
+        {(summary) => (
+          <>
+            <div className="mesures">
+              <Metric value={formatCount(summary.totals.runs)} label="runs analysés" />
+              <Metric value={asPercent(summary.rates.fallback)} label="taux de fallback" />
+              <Metric
+                value={asPercent(summary.rates.toolError)}
+                label="erreurs d'outils"
+                alert={summary.rates.toolError > 0.1}
+              />
+              <Metric value={asPercent(summary.rates.runError)} label="runs en échec" />
+              <Metric
+                value={formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
+                label="coût API équivalent"
+              />
+            </div>
+            {summary.agents.length === 0 ? null : (
+              <Table
+                head={[
+                  "Agent",
+                  "Runs",
+                  "Échecs",
+                  "Latence moyenne",
+                  "p95",
+                  "Jetons",
+                  "Coût équiv.",
+                ]}
+              >
+                {summary.agents.map((agent) => (
+                  <tr key={agent.agent}>
+                    <td className="mono">{agent.agent}</td>
+                    <td>{agent.runs}</td>
+                    <td>{agent.failures}</td>
+                    <td>{formatDuration(agent.averageLatencyMs)}</td>
+                    <td>{formatDuration(agent.p95LatencyMs)}</td>
+                    <td>{formatCount(agent.inputTokens + agent.outputTokens)}</td>
+                    <td>{formatEstimatedCost(agent.estimatedApiEquivalentCostUsd)}</td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </>
+        )}
+      </Section>
+
+      {action === null ? null : <p className="faible">{action}</p>}
 
       <Section state={state}>
         {(data) =>
@@ -613,6 +681,15 @@ export function Runs({ api }: { api: DashboardApi }) {
                     <h3>Résultat</h3>
                     <p>{run.response ?? <span className="faible">Aucune réponse finale.</span>}</p>
 
+                    <button className="bouton" type="button" onClick={() => void replay(run.runId)}>
+                      Rejouer en analyse seule
+                    </button>
+                    {run.replayOfRunId === null ? null : (
+                      <p className="faible">
+                        Rejeu du run <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
+                      </p>
+                    )}
+
                     {run.errors.length === 0 ? null : (
                       <>
                         <h3>Erreurs</h3>
@@ -657,6 +734,14 @@ function runTone(status: string): string {
   if (status === "failed") return "down";
   if (status === "incomplete" || status === "waiting_for_confirmation") return "degraded";
   return "unknown";
+}
+
+function asPercent(rate: number): string {
+  return `${String(Math.round(rate * 1_000) / 10)} %`;
+}
+
+function formatEstimatedCost(cost: number | null): string {
+  return cost === null ? "non configuré" : `${cost.toFixed(4)} $`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -81,6 +81,12 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3000
       API_VERSION: ${API_VERSION:-1.0.0}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_HOST: 0.0.0.0
+      METRICS_PORT: 9464
+      OTEL_SERVICE_NAME: nexus-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      MODEL_PRICING_JSON: ${MODEL_PRICING_JSON:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
@@ -99,6 +105,93 @@ services:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     # L'arrêt gracieux dispose du délai qu'il annonce, plus une marge.
     stop_grace_period: 15s
+    networks: [nexus]
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.7.3}
+    container_name: nexus-prometheus
+    restart: unless-stopped
+    profiles: [observability]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    security_opt: [no-new-privileges:true]
+    networks: [nexus]
+
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:3.7.0}
+    container_name: nexus-loki
+    restart: unless-stopped
+    profiles: [observability]
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    expose: ["3100"]
+    security_opt: [no-new-privileges:true]
+    networks: [nexus]
+
+  tempo:
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.9.0}
+    container_name: nexus-tempo
+    restart: unless-stopped
+    profiles: [observability]
+    command: ["-config.file=/etc/tempo/config.yml"]
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo/config.yml:ro
+      - tempo-data:/var/tempo
+    expose: ["3200", "4317", "4318"]
+    security_opt: [no-new-privileges:true]
+    networks: [nexus]
+
+  otel-collector:
+    image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.140.0}
+    container_name: nexus-otel-collector
+    restart: unless-stopped
+    profiles: [observability]
+    command: ["--config=/etc/otelcol/config.yml"]
+    depends_on: [tempo]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otelcol/config.yml:ro
+    expose: ["4317", "4318"]
+    security_opt: [no-new-privileges:true]
+    networks: [nexus]
+
+  alloy:
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.11.3}
+    container_name: nexus-alloy
+    restart: unless-stopped
+    profiles: [observability]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy"]
+    depends_on: [loki]
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy-data:/var/lib/alloy
+    security_opt: [no-new-privileges:true]
+    networks: [nexus]
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.3.5}
+    container_name: nexus-grafana
+    restart: unless-stopped
+    profiles: [observability]
+    depends_on: [prometheus, loki, tempo]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-nexus-local-observability}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3300}:3000"
+    security_opt: [no-new-privileges:true]
     networks: [nexus]
 
   searxng:
@@ -166,6 +259,11 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  alloy-data:
+  grafana-data:
 
 networks:
   nexus:

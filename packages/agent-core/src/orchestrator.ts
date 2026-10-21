@@ -57,6 +57,7 @@ export interface StartRunInput {
   policy?: Partial<ExecutionPolicy>;
   /** Mission d'origine, quand le run est demandé par le moteur et non par une personne. */
   missionExternalKey?: string;
+  replayOfRunId?: string;
   /**
    * Identifiant imposé au run.
    *
@@ -149,6 +150,8 @@ export class AgentOrchestrator {
         model: this.#options.llm.model,
         response: null,
         missionExternalKey: input.missionExternalKey ?? null,
+        replayOfRunId: input.replayOfRunId ?? null,
+        fallbackCount: 0,
       },
       messages: [],
       pendingConfirmation: null,

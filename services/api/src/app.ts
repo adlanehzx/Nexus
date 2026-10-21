@@ -43,6 +43,7 @@ import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { missionControlRoutes } from "./routes/v1/mission-control.js";
 import { orchestratorRoutes } from "./routes/v1/orchestrator.js";
 import { agentCoreRoutes } from "./routes/v1/agent-core.js";
+import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -108,6 +109,7 @@ export async function buildApp(options: BuildAppOptions) {
     bodyLimit: 1_048_576,
     ajv: { customOptions: { removeAdditional: false } },
   }).withTypeProvider<ZodTypeProvider>();
+  const requestSpans = new WeakMap<object, ReturnType<typeof startHttpSpan>>();
 
   // Zod devient le moteur de validation ET de sérialisation : un schéma unique
   // valide l'entrée, type le handler et produit la documentation OpenAPI.
@@ -132,6 +134,27 @@ export async function buildApp(options: BuildAppOptions) {
   // de sa requête — HTTP, job, run agent, exécution d'outil.
   app.addHook("onRequest", (request, reply, done) => {
     void reply.header("x-request-id", request.id);
+    requestSpans.set(
+      request,
+      startHttpSpan({
+        method: request.method,
+        route: request.routeOptions.url ?? request.url,
+        correlationId: request.id,
+      }),
+    );
+    done();
+  });
+
+  app.addHook("onResponse", (request, reply, done) => {
+    const active = requestSpans.get(request);
+    if (active !== undefined) {
+      finishHttpSpan(active, {
+        method: request.method,
+        route: request.routeOptions.url ?? request.url,
+        statusCode: reply.statusCode,
+      });
+      requestSpans.delete(request);
+    }
     done();
   });
 

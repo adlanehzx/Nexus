@@ -4,6 +4,27 @@ Un agent est un système non déterministe qui prend des décisions coûteuses e
 observabilité, il est indébuggable : on ne peut ni reproduire une erreur, ni expliquer une action,
 ni maîtriser un coût. C'est une exigence structurelle, pas un confort de production.
 
+## État implémenté
+
+- métriques OpenTelemetry exposées au format Prometheus sur un port séparé ;
+- spans HTTP et export OTLP optionnel vers le Collector puis Tempo ;
+- compteurs de runs, jetons, outils, erreurs, bascules explicites et latence par agent ;
+- coût API **équivalent** uniquement si l'administrateur fournit une table de prix ;
+- page Runs avec agrégats, latence moyenne/p95, erreurs et rejeu d'analyse ;
+- stack locale optionnelle Prometheus, Grafana, Loki, Tempo, Collector et Alloy ;
+- collecte des journaux Docker en lecture seule, sans monter la socket Docker.
+
+Lancement :
+
+```bash
+pnpm docker:observability
+```
+
+Grafana écoute uniquement sur `http://127.0.0.1:3300`. Changez
+`GRAFANA_ADMIN_PASSWORD` dans `.env` avant tout usage autre qu'une machine de développement.
+L'API n'exporte les traces que lorsque `OTEL_EXPORTER_OTLP_ENDPOINT` est défini ; le script ci-dessus
+le positionne vers le Collector interne. Les métriques restent disponibles sans la stack.
+
 ## 1. Corrélation
 
 Un identifiant unique traverse toute la chaîne et apparaît dans **chaque** log, span et métrique :
@@ -64,19 +85,18 @@ Exporteur OTLP → Grafana Tempo (ou Jaeger en dev). Échantillonnage : 100 % de
 
 ## 4. Métriques (Prometheus)
 
-| Famille     | Métriques                                                                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Agent       | `runs_total{status}`, `run_duration_seconds`, `run_iterations`, `runs_active`, `partial_ratio`                          |
-| LLM         | `llm_requests_total{provider,model,status}`, `llm_tokens_total{direction}`, `llm_latency_seconds`, `llm_cost_usd_total` |
-| Outils      | `tool_executions_total{tool,status,risk}`, `tool_duration_seconds{tool}`, `tool_retries_total`                          |
-| Permissions | `permission_decisions_total{effect,risk}`, `confirmations_total{status}`, `confirmation_response_seconds`               |
-| Temps réel  | `ws_connections`, `ws_messages_total{type}`, `ws_dropped_frames_total`, `ws_resume_total`                               |
-| Devices     | `devices_online`, `device_task_duration_seconds`, `device_policy_denied_total`                                          |
-| Infra       | latences HTTP, profondeur des queues, pool PG, mémoire, `outbox_lag_seconds`                                            |
+| Famille     | Métriques                                                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| Agent       | `nexus_agent_runs_total{agent,status}`, `nexus_agent_run_duration_seconds`, `nexus_agent_fallbacks_total` |
+| LLM         | `nexus_agent_tokens_total{agent,direction}`, `nexus_agent_api_equivalent_cost_usd_total`                  |
+| Outils      | `nexus_tool_calls_total{tool,status,agent}`                                                               |
+| Permissions | `permission_decisions_total{effect,risk}`, `confirmations_total{status}`, `confirmation_response_seconds` |
+| Temps réel  | `ws_connections`, `ws_messages_total{type}`, `ws_dropped_frames_total`, `ws_resume_total`                 |
+| Devices     | `devices_online`, `device_task_duration_seconds`, `device_policy_denied_total`                            |
+| Infra       | latences HTTP, profondeur des queues, pool PG, mémoire, `outbox_lag_seconds`                              |
 
-**Le coût est une métrique de premier plan**, pas une donnée de facturation à consulter en fin de
-mois : `llm_cost_usd_total` par utilisateur et par run, exposé dans l'app (`/me/usage`) et
-alertable. Un agent qui boucle doit se voir en quelques minutes.
+Le coût affiché est un **équivalent API configurable**, jamais une facture déduite de l'abonnement
+CLI. Sans `MODEL_PRICING_JSON`, NEXUS affiche « non configuré » au lieu d'inventer un montant.
 
 ## 5. Alertes qui comptent
 
@@ -93,15 +113,16 @@ alertable. Un agent qui boucle doit se voir en quelques minutes.
 
 ## 6. Débogage d'un run
 
-L'écran admin « Run Inspector » (et l'export JSON) reconstitue, à partir de `AgentStep` :
-prompt exact envoyé à chaque itération, réponse brute du modèle, arguments d'outil avant et après
-validation, décision de permission et son motif, résultat d'outil complet, tokens et coût par
-étape. C'est le bénéfice direct de la boucle persistée : **on peut rejouer un run** avec un autre
-modèle ou un autre prompt et comparer, ce qui est la base des évaluations
-(→ [15-testing](15-testing.md) §5).
+L'écran admin « Runs agent » expose le statut, la réponse finale, les outils, les arguments rédigés,
+les erreurs et les métriques. Il ne sérialise jamais le transcript, les blocs de raisonnement du
+fournisseur ni les secrets. Cette frontière est testée.
+
+Le rejeu crée une nouvelle conversation reliée au run source et fixe `maxToolCalls` à zéro. C'est
+donc un **rejeu d'analyse** : même si le modèle réclame un outil à effet externe, l'outil n'est pas
+exécuté. Un rejeu avec effets doit passer par une nouvelle mission et ses confirmations normales.
 
 ## 7. Stack
 
-Dev : logs console jolis (`pino-pretty`), Jaeger, Prometheus.
-Prod VPS : Grafana + Loki + Tempo + Prometheus en Compose, ou un SaaS (Grafana Cloud / Axiom) si
-l'on veut éviter l'exploitation. Sentry pour les erreurs applicatives et les crashs mobiles.
+La stack Compose fournie vise une installation personnelle mono-machine. Elle conserve ses données
+dans des volumes nommés et ne publie que Grafana et Prometheus sur la boucle locale. Pour un VPS,
+ajouter TLS, sauvegardes, rétention explicite et authentification amont avant exposition réseau.

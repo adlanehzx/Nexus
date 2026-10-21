@@ -722,6 +722,8 @@ function presentAcpRun(userId: string, mission: MissionSnapshot, task: MissionTa
     userId,
     conversationId: lastAttempt?.conversation_id ?? task.id,
     correlationId: `mission:${mission.id}:${task.task_key}`,
+    missionExternalKey: mission.external_key,
+    replayOfRunId: null,
     status:
       task.state === "succeeded" ? "completed" : task.state === "failed" ? "failed" : task.state,
     stopReason: task.state === "succeeded" ? "completed" : (error?.code ?? null),
@@ -764,6 +766,7 @@ function presentAcpRun(userId: string, mission: MissionSnapshot, task: MissionTa
       cacheWriteTokens: 0,
       toolCalls: 1,
       failedToolCalls: error === null ? 0 : 1,
+      fallbackCount: Math.max(0, task.attempts.length - 1),
     },
   };
 }
