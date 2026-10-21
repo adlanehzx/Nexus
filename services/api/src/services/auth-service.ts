@@ -48,7 +48,7 @@ export class SessionRevokedError extends AppError {
   constructor(reason: string) {
     super({
       message: `Session révoquée : ${reason}`,
-      userMessage: "Votre session a été fermée. Reconnectez-vous.",
+      userMessage: "Your session was closed. Please sign in again.",
       context: { reason },
     });
   }

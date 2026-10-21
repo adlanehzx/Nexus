@@ -121,7 +121,7 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
           message: `Tableau de bord demandé par un compte non administrateur : ${userId}`,
           // Le message ne dit pas « il faut être administrateur » : la surface
           // d'administration n'a pas à s'annoncer à qui n'y a pas droit.
-          userMessage: "La ressource demandée n'existe pas.",
+          userMessage: "The requested resource does not exist.",
           context: { userId },
         });
       }
@@ -134,7 +134,7 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
         // pour un appareil révoqué : la distinction n'aiderait qu'un attaquant.
         throw new AuthenticationError({
           message: "Session d'appareil invalide ou révoquée",
-          userMessage: "Cet appareil n'est pas authentifié.",
+          userMessage: "This device is not authenticated.",
         });
       }
 
@@ -162,7 +162,7 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
       if (!ALLOWED_GRANT_SERVICES.has(claims.svc)) {
         throw new AuthorizationError({
           message: `Assertion de mission présentée par un service inconnu : ${claims.svc}`,
-          userMessage: "Accès refusé.",
+          userMessage: "Access denied.",
           context: { service: claims.svc },
         });
       }
@@ -173,7 +173,7 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
       if (owner?.status !== "ACTIVE") {
         throw new AuthorizationError({
           message: `Assertion de mission pour un compte inactif : ${claims.sub}`,
-          userMessage: "Accès refusé.",
+          userMessage: "Access denied.",
           context: { userId: claims.sub },
         });
       }
@@ -209,7 +209,7 @@ export function currentUser(request: FastifyRequest): { userId: string; sessionI
   if (principal?.kind !== "user") {
     throw new AuthorizationError({
       message: "Route utilisateur atteinte sans principal utilisateur",
-      userMessage: "Accès refusé.",
+      userMessage: "Access denied.",
     });
   }
   return { userId: principal.userId, sessionId: principal.sessionId };
@@ -225,7 +225,7 @@ export function currentDevice(request: FastifyRequest): {
   if (principal?.kind !== "device") {
     throw new AuthorizationError({
       message: "Route appareil atteinte sans principal appareil",
-      userMessage: "Accès refusé.",
+      userMessage: "Access denied.",
     });
   }
   return {
@@ -249,7 +249,7 @@ export function currentMission(request: FastifyRequest): {
   if (principal?.kind !== "mission") {
     throw new AuthorizationError({
       message: "Route de mission atteinte sans principal de mission",
-      userMessage: "Accès refusé.",
+      userMessage: "Access denied.",
     });
   }
   return {
@@ -274,7 +274,7 @@ export function assertMissionScope(grantedExternalKey: string, requestedExternal
 
   throw new AuthorizationError({
     message: "Assertion de mission utilisée hors de sa portée",
-    userMessage: "La ressource demandée n'existe pas.",
+    userMessage: "The requested resource does not exist.",
     context: { granted: grantedExternalKey, requested: requestedExternalKey },
   });
 }
@@ -293,7 +293,7 @@ export function assertOwnedBy(resourceUserId: string, userId: string, what: stri
     message: `${what} appartenant à un autre utilisateur`,
     // Le message ne distingue pas « n'existe pas » de « ne vous appartient
     // pas » : la différence permettrait de sonder l'existence des ressources.
-    userMessage: "La ressource demandée n'existe pas.",
+    userMessage: "The requested resource does not exist.",
     context: { what },
   });
 }

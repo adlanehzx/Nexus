@@ -252,7 +252,7 @@ export class ToolExecutor {
     // défaut enverrait deux fois le même email.
     return new ToolExecutionError(toolName, {
       message: error instanceof Error ? error.message : String(error),
-      userMessage: "L'outil a échoué.",
+      userMessage: "The tool failed.",
       cause: error,
       retryable: false,
     });

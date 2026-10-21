@@ -113,7 +113,7 @@ function isPublicIpv6(value: string): boolean {
 function invalidUrl(message: string, cause?: unknown): ValidationError {
   return new ValidationError({
     message,
-    userMessage: "Cette adresse web ne peut pas être consultée en sécurité.",
+    userMessage: "That web address cannot be visited safely.",
     ...(cause === undefined ? {} : { cause }),
   });
 }

@@ -60,7 +60,7 @@ export function createBrowserOpenCapability(
         throw new PolicyViolationError({
           rule: "browser.protocol",
           message: `Schéma d'URL refusé : ${url.protocol}`,
-          userMessage: "Seules les adresses http et https peuvent être ouvertes.",
+          userMessage: "Only http and https addresses can be opened.",
           context: { protocol: url.protocol },
         });
       }

@@ -27,7 +27,7 @@ export class ToolRegistry {
     if (this.#tools.has(tool.name) && options?.replace !== true) {
       throw new ConflictError({
         message: `Outil déjà enregistré : ${tool.name}`,
-        userMessage: "Cet outil est déjà enregistré.",
+        userMessage: "This tool is already registered.",
         context: { toolName: tool.name },
       });
     }

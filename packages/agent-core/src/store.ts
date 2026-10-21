@@ -38,7 +38,7 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     if (state === undefined) {
       throw new NotFoundError({
         message: `Run inconnu : ${runId}`,
-        userMessage: "Cette tâche n'existe plus.",
+        userMessage: "This task no longer exists.",
         context: { runId },
       });
     }

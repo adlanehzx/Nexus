@@ -1,4 +1,4 @@
-# 25 — Notifications externes unifiées
+# 33 — Unified external notifications
 
 Décrit l'architecture du sous-système de notifications externes de NEXUS, couvrant le bureau Linux, le push mobile sans clé et les webhooks vers les messageries.
 

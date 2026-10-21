@@ -33,7 +33,7 @@ export class McpTimeoutError extends AppError {
   constructor(server: string, timeoutMs: number, operation: string) {
     super({
       message: `${operation} sur « ${server} » a dépassé ${String(timeoutMs)} ms`,
-      userMessage: `Le serveur d'outils « ${server} » ne répond pas assez vite.`,
+      userMessage: `The tool server "${server}" is not responding fast enough.`,
       context: { server, timeoutMs, operation },
     });
     this.server = server;
@@ -55,7 +55,7 @@ export class McpUnavailableError extends AppError {
   constructor(server: string, status: string, detail?: string) {
     super({
       message: `Serveur MCP « ${server} » indisponible (état : ${status})${detail === undefined ? "" : ` — ${detail}`}`,
-      userMessage: `L'outil demandé dépend du serveur « ${server} », actuellement indisponible. Réessaie plus tard ou utilise un autre moyen.`,
+      userMessage: `The requested tool depends on server "${server}", which is unavailable. Try again later, or use another means.`,
       context: { server, status, detail },
     });
     this.server = server;
@@ -91,7 +91,7 @@ export class McpSchemaError extends AppError {
   constructor(server: string, tool: string, reason: string) {
     super({
       message: `Schéma inexploitable pour ${tool} (${server}) : ${reason}`,
-      userMessage: "Cet outil déclare un schéma que NEXUS ne sait pas interpréter.",
+      userMessage: "This tool declares a schema NEXUS cannot interpret.",
       context: { server, tool, reason },
     });
     this.server = server;
@@ -108,7 +108,7 @@ export class McpSecurityError extends AppError {
   constructor(server: string, reason: string) {
     super({
       message: `Violation de sécurité sur le serveur MCP « ${server} » : ${reason}`,
-      userMessage: `L'exécution du serveur MCP « ${server} » a été bloquée par la politique de sécurité.`,
+      userMessage: `Running MCP server "${server}" was blocked by the security policy.`,
       context: { server, reason },
     });
     this.server = server;

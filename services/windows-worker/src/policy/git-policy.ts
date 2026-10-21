@@ -79,7 +79,7 @@ export class GitPolicy {
     throw new PolicyViolationError({
       rule: "git.readOnly",
       message: `Opération Git modifiante refusée : ${operation}`,
-      userMessage: `Cet appareil est configuré en lecture seule pour Git ; « ${operation} » est refusé.`,
+      userMessage: `This device is read-only for Git; "${operation}" is refused.`,
       context: { operation },
     });
   }
@@ -99,7 +99,7 @@ export class GitPolicy {
       throw new PolicyViolationError({
         rule: "git.remoteScheme",
         message: `Schéma de dépôt refusé : ${raw.slice(0, 32)}`,
-        userMessage: "Ce type d'adresse de dépôt n'est pas autorisé.",
+        userMessage: "That kind of repository address is not allowed.",
       });
     }
 
@@ -112,7 +112,7 @@ export class GitPolicy {
       throw new PolicyViolationError({
         rule: "git.remoteUrl",
         message: "Adresse de dépôt illisible",
-        userMessage: "L'adresse du dépôt est invalide.",
+        userMessage: "The repository address is invalid.",
       });
     }
 
@@ -120,7 +120,7 @@ export class GitPolicy {
       throw new PolicyViolationError({
         rule: "git.remoteHost",
         message: `Hôte de dépôt non autorisé : ${host}`,
-        userMessage: `Les dépôts hébergés sur « ${host} » ne sont pas autorisés.`,
+        userMessage: `Repositories hosted on "${host}" are not allowed.`,
         context: { host, allowed: [...this.#allowedHosts] },
       });
     }

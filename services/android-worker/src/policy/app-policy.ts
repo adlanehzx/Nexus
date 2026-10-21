@@ -102,7 +102,7 @@ export class AppPolicy {
         throw new PolicyViolationError({
           rule: "app.denied",
           message: `Paquet interdit : ${name}`,
-          userMessage: `L'application « ${name} » ne peut pas être ouverte par NEXUS.`,
+          userMessage: `NEXUS cannot open the app "${name}".`,
           context: { packageName: name },
         });
       }
@@ -113,7 +113,7 @@ export class AppPolicy {
         throw new PolicyViolationError({
           rule: "app.sensitive",
           message: `Paquet sensible refusé : ${name}`,
-          userMessage: `L'application « ${name} » ne peut pas être ouverte par NEXUS.`,
+          userMessage: `NEXUS cannot open the app "${name}".`,
           context: { packageName: name, fragment },
         });
       }
@@ -123,7 +123,7 @@ export class AppPolicy {
       throw new PolicyViolationError({
         rule: "app.notAllowed",
         message: `Paquet hors liste autorisée : ${name}`,
-        userMessage: `L'application « ${name} » n'est pas dans la liste autorisée sur cet appareil.`,
+        userMessage: `The app "${name}" is not on the allowed list for this device.`,
         context: { packageName: name },
       });
     }

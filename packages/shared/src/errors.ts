@@ -50,7 +50,7 @@ export class ValidationError extends AppError {
   override readonly severity: ErrorSeverity = "warning";
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "La requête est invalide.", ...options });
+    super({ userMessage: "The request is invalid.", ...options });
   }
 }
 
@@ -68,7 +68,7 @@ export class AuthorizationError extends AppError {
   readonly httpStatus = 403;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Accès refusé.", ...options });
+    super({ userMessage: "Access denied.", ...options });
   }
 }
 
@@ -87,7 +87,7 @@ export class ConflictError extends AppError {
   readonly httpStatus = 409;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Conflit avec l'état actuel de la ressource.", ...options });
+    super({ userMessage: "Conflict with the current state of the resource.", ...options });
   }
 }
 
@@ -98,7 +98,7 @@ export class RateLimitError extends AppError {
   override readonly severity: ErrorSeverity = "warning";
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Trop de requêtes. Réessaie dans un instant.", ...options });
+    super({ userMessage: "Too many requests. Try again in a moment.", ...options });
   }
 }
 
@@ -108,7 +108,7 @@ export class ConfigurationError extends AppError {
   override readonly severity: ErrorSeverity = "fatal";
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Le service est mal configuré.", ...options });
+    super({ userMessage: "The service is misconfigured.", ...options });
   }
 }
 
@@ -118,7 +118,7 @@ export class DependencyError extends AppError {
   override readonly retryable = true;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Un service dont dépend NEXUS est indisponible.", ...options });
+    super({ userMessage: "A service NEXUS depends on is unavailable.", ...options });
   }
 }
 

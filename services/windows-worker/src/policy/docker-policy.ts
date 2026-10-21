@@ -94,7 +94,7 @@ export class DockerPolicy {
       throw new PolicyViolationError({
         rule: "docker.subcommand",
         message: `Sous-commande Docker non autorisée : ${subcommand}`,
-        userMessage: `L'opération Docker « ${subcommand} » n'est pas autorisée sur cet appareil.`,
+        userMessage: `The Docker operation "${subcommand}" is not allowed on this device.`,
         context: { subcommand, allowed: [...this.#allowed] },
       });
     }
@@ -107,7 +107,7 @@ export class DockerPolicy {
           throw new PolicyViolationError({
             rule: "docker.flag",
             message: `Option Docker interdite : ${flag}`,
-            userMessage: "Cette option Docker lèverait l'isolation du conteneur.",
+            userMessage: "That Docker option would lift the container isolation.",
             context: { flag },
           });
         }

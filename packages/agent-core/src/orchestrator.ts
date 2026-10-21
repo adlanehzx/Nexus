@@ -199,7 +199,7 @@ export class AgentOrchestrator {
     if (state.record.status !== "waiting_for_confirmation" || state.pendingConfirmation === null) {
       throw new ConflictError({
         message: `Le run ${runId} n'attend pas de confirmation (statut : ${state.record.status})`,
-        userMessage: "Cette tâche n'attend pas de confirmation.",
+        userMessage: "This task is not waiting for a confirmation.",
         context: { runId, status: state.record.status },
       });
     }
@@ -208,7 +208,7 @@ export class AgentOrchestrator {
     if (options.confirmationId !== undefined && options.confirmationId !== pending.confirmationId) {
       throw new ConflictError({
         message: `Confirmation ${options.confirmationId} sans rapport avec le run ${runId}`,
-        userMessage: "Cette demande de confirmation ne correspond pas à cette tâche.",
+        userMessage: "That confirmation request does not belong to this task.",
         context: { runId },
       });
     }

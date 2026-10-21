@@ -262,7 +262,7 @@ describe("cloisonnement entre utilisateurs", () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json<{ error: { message: string } }>().error.message).toBe(
-      "La ressource demandée n'existe pas.",
+      "The requested resource does not exist.",
     );
   });
 

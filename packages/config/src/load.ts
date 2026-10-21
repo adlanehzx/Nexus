@@ -30,7 +30,7 @@ export function parseConfig(env: NodeJS.ProcessEnv): AppConfig {
 
     throw new ConfigurationError({
       message: `Configuration invalide :\n${details}`,
-      userMessage: "Le service est mal configuré.",
+      userMessage: "The service is misconfigured.",
       context: { issues: result.error.issues },
     });
   }

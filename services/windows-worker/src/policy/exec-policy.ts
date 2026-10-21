@@ -237,7 +237,7 @@ export class ExecPolicy {
       throw new PolicyViolationError({
         rule: "executable.path",
         message: "Un chemin d'exécutable n'est pas accepté ; utiliser un nom autorisé",
-        userMessage: "Indiquez un programme autorisé par son nom, sans chemin.",
+        userMessage: "Name an allowed program, without a path.",
         context: { executable },
       });
     }
@@ -247,7 +247,7 @@ export class ExecPolicy {
       throw new PolicyViolationError({
         rule: "executable.extension",
         message: `Extension refusée : ${executable}`,
-        userMessage: "Les scripts et fichiers de commandes ne sont pas exécutables par NEXUS.",
+        userMessage: "NEXUS does not execute scripts or batch files.",
         context: { executable },
       });
     }
@@ -261,8 +261,8 @@ export class ExecPolicy {
         rule: "executable.livingOffTheLand",
         message: `Programme systématiquement refusé : ${program}`,
         userMessage:
-          `« ${program} » sert à exécuter du code pour le compte d'un autre programme. ` +
-          "NEXUS ne le lance jamais, quelle que soit la configuration.",
+          `"${program}" exists to run code on behalf of another program. ` +
+          "NEXUS never launches it, whatever the configuration says.",
         context: { executable: program },
       });
     }
@@ -322,8 +322,8 @@ export class ExecPolicy {
             rule: "args.codeExecution",
             message: `Argument refusé pour ${program} : ${flag}`,
             userMessage:
-              `« ${flag} » ferait exécuter du code arbitraire par ${program}, ` +
-              "hors de toute politique de fichiers. Lancez un script existant à la place.",
+              `"${flag}" would make ${program} run arbitrary code, ` +
+              "outside any file policy. Run an existing script instead.",
             context: { program, argument: flag },
           });
         }
@@ -338,8 +338,8 @@ export class ExecPolicy {
           rule: "args.installScripts",
           message: `Installation sans --ignore-scripts refusée pour ${program}`,
           userMessage:
-            "Une installation de dépendances exécute les scripts des paquets téléchargés. " +
-            "Ajoutez « --ignore-scripts ».",
+            "Installing dependencies runs the scripts of the downloaded packages. " +
+            'Add "--ignore-scripts".',
           context: { program },
         });
       }
@@ -350,8 +350,8 @@ export class ExecPolicy {
         rule: "args.dockerWrite",
         message: `Sous-commande Docker refusée depuis terminal.execute : ${first ?? "(aucune)"}`,
         userMessage:
-          "Seule la consultation Docker passe par le terminal. " +
-          "Les commandes qui écrivent passent par la capacité « docker.execute ».",
+          "Only read-only Docker goes through the terminal. " +
+          'Commands that write go through the "docker.execute" capability.',
         context: { subcommand: first ?? "" },
       });
     }
@@ -381,7 +381,7 @@ export class ExecPolicy {
         throw new PolicyViolationError({
           rule: "env.notAllowed",
           message: `Variable d'environnement non autorisée : ${name}`,
-          userMessage: `La variable « ${name} » n'est pas autorisée sur cet appareil.`,
+          userMessage: `The variable "${name}" is not allowed on this device.`,
           context: { variable: name },
         });
       }

@@ -162,14 +162,14 @@ export class MissionGrantService {
     if (grant === undefined) {
       throw new AuthorizationError({
         message: `Assertion de mission absente du registre : ${claims.jti}`,
-        userMessage: "Accès refusé.",
+        userMessage: "Access denied.",
         context: { grantId: claims.jti },
       });
     }
     if (grant.status !== "ACTIVE") {
       throw new AuthorizationError({
         message: `Assertion de mission retirée (${grant.status}) : ${claims.jti}`,
-        userMessage: "Accès refusé.",
+        userMessage: "Access denied.",
         context: { grantId: claims.jti, status: grant.status },
       });
     }
@@ -179,7 +179,7 @@ export class MissionGrantService {
     if (grant.expiresAt.getTime() <= this.#now().getTime()) {
       throw new AuthorizationError({
         message: `Assertion de mission expirée : ${claims.jti}`,
-        userMessage: "Accès refusé.",
+        userMessage: "Access denied.",
         context: { grantId: claims.jti },
       });
     }

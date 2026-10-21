@@ -527,6 +527,60 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo check --locked --all-targets
 
+  provenance:
+    name: Provenance (DCO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Pull requests only. The existing history is unsigned and will stay so:
+    # rewriting every hash of an already-merged branch would cost a great deal
+    # and prove nothing.
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Both ends are needed to enumerate the commits of the pull request;
+          # a shallow clone only sees one.
+          fetch-depth: 0
+
+      # A script rather than a third-party action: twenty lines of shell beat
+      # one more dependency in the chain that guards the provenance of the
+      # code. This is exactly where a compromised action would do the most
+      # damage.
+      - name: Check sign-offs
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          while read -r sha; do
+            [ -n "$sha" ] || continue
+            if ! git log -1 --format='%(trailers:key=Signed-off-by)' "$sha" | grep -q .; then
+              echo "::error::$sha has no Signed-off-by: $(git log -1 --format='%s' "$sha")"
+              missing=$((missing + 1))
+            fi
+          done <<< "$(git rev-list "$BASE..$HEAD")"
+
+          if [ "$missing" -gt 0 ]; then
+            {
+              echo "### $missing commit(s) without \`Signed-off-by\`"
+              echo ""
+              echo "The DCO certifies that you have the right to submit what you submit."
+              echo "For machine-generated content, **you** are the one certifying it."
+              echo ""
+              echo "To fix this branch:"
+              echo ""
+              echo '```sh'
+              echo "git rebase --signoff $BASE"
+              echo "git push --force-with-lease"
+              echo '```'
+              echo ""
+              echo "And for the next ones: \`git commit -s\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Every commit is signed off." >> "$GITHUB_STEP_SUMMARY"
+
   security:
     name: Secrets et dépendances
     runs-on: ubuntu-latest

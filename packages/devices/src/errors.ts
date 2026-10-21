@@ -16,7 +16,7 @@ export class DeviceNotFoundError extends AppError {
   constructor(deviceId: string) {
     super({
       message: `Appareil inconnu : ${deviceId}`,
-      userMessage: "Cet appareil n'est pas enregistré.",
+      userMessage: "This device is not registered.",
       context: { deviceId },
     });
     this.deviceId = deviceId;
@@ -42,8 +42,8 @@ export class NoEligibleWorkerError extends AppError {
       message: `Aucun worker éligible pour ${requiredCapabilities.join(", ")}`,
       userMessage:
         reasons.length > 0
-          ? `Aucun appareil ne peut faire ça : ${reasons.join(" ; ")}.`
-          : "Aucun appareil disponible ne peut exécuter cette action.",
+          ? `No device can do this: ${reasons.join("; ")}.`
+          : "No available device can carry out this action.",
       context: { requiredCapabilities, reasons },
     });
     this.requiredCapabilities = requiredCapabilities;
@@ -61,7 +61,7 @@ export class CapabilityNotRegisteredError extends AppError {
   constructor(deviceId: string, capability: string) {
     super({
       message: `L'appareil ${deviceId} ne déclare pas la capacité ${capability}`,
-      userMessage: "Cet appareil ne sait pas faire cette action.",
+      userMessage: "This device cannot do this action.",
       context: { deviceId, capability },
     });
     this.deviceId = deviceId;
@@ -77,7 +77,7 @@ export class DeviceRevokedError extends AppError {
   constructor(deviceId: string) {
     super({
       message: `Appareil révoqué : ${deviceId}`,
-      userMessage: "Cet appareil a été révoqué et ne peut plus rien exécuter.",
+      userMessage: "This device was revoked and can no longer run anything.",
       context: { deviceId },
     });
     this.deviceId = deviceId;
@@ -105,7 +105,7 @@ export class ReplayRejectedError extends AppError {
   readonly httpStatus = 401;
 
   constructor(options: AppErrorOptions) {
-    super({ userMessage: "Requête rejetée : signature déjà utilisée ou périmée.", ...options });
+    super({ userMessage: "Request rejected: signature already used, or stale.", ...options });
   }
 }
 
@@ -118,7 +118,7 @@ export class InvalidTaskPlanError extends AppError {
   constructor(details: readonly string[]) {
     super({
       message: `Plan de tâche invalide : ${details.join(" ; ")}`,
-      userMessage: "Ce plan de tâche est incohérent.",
+      userMessage: "This task plan is inconsistent.",
       context: { details },
     });
     this.details = details;

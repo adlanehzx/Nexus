@@ -116,7 +116,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       // sécurité sur le bon comportement de l'exécutant.
       throw new AuthorizationError({
         message: `Capacités non accordées : ${missing.join(", ")}`,
-        userMessage: `Vous n'avez pas autorisé : ${missing.join(", ")}.`,
+        userMessage: `You have not granted: ${missing.join(", ")}.`,
         context: { missing },
       });
     }

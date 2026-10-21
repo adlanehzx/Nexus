@@ -26,7 +26,7 @@ describe("AppError", () => {
     const publicJson = error.toPublicJSON();
     expect(publicJson).toEqual({
       code: "VALIDATION_ERROR",
-      message: "La requête est invalide.",
+      message: "The request is invalid.",
       retryable: false,
     });
     expect(JSON.stringify(publicJson)).not.toContain("sk-live-123");

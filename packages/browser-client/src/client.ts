@@ -147,7 +147,7 @@ export class BrowserWorkerClient {
         await this.cancelTask(taskId).catch(() => undefined);
         throw new BrowserWorkerError("BROWSER_TASK_CANCELLED", {
           message: `Tâche ${taskId} annulée`,
-          userMessage: "La navigation a été annulée.",
+          userMessage: "Browsing was cancelled.",
         });
       }
 
@@ -200,7 +200,7 @@ export class BrowserWorkerClient {
       if (signal?.aborted === true) {
         throw new BrowserWorkerError("BROWSER_TASK_CANCELLED", {
           message: "Appel au Browser Worker annulé",
-          userMessage: "L'opération a été annulée.",
+          userMessage: "The operation was cancelled.",
           cause: error,
         });
       }
@@ -229,7 +229,7 @@ export class BrowserWorkerClient {
       }
       throw new BrowserWorkerError("BROWSER_WORKER_ERROR", {
         message: `HTTP ${String(response.status)} du Browser Worker`,
-        userMessage: "Le service de navigation a échoué.",
+        userMessage: "The browsing service failed.",
         retryable: response.status >= 500,
       });
     }

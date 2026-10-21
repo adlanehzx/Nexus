@@ -46,7 +46,7 @@ export class LLMProviderError extends AppError {
     options: AppErrorOptions & { retryable?: boolean; status?: number },
   ) {
     super({
-      userMessage: "Le service de génération est momentanément indisponible.",
+      userMessage: "The generation service is temporarily unavailable.",
       ...options,
     });
     this.provider = provider;

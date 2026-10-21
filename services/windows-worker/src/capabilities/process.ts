@@ -180,8 +180,7 @@ export function createProcessStopCapability(
         throw new PolicyViolationError({
           rule: "process.notOwned",
           message: `Processus ${String(input.processId)} non lancé par NEXUS`,
-          userMessage:
-            "NEXUS ne peut arrêter que les processus qu'il a lui-même démarrés sur cet appareil.",
+          userMessage: "NEXUS can only stop processes it started itself on this device.",
           context: { processId: input.processId },
         });
       }

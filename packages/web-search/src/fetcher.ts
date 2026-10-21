@@ -392,14 +392,14 @@ function isRedirect(status: number): boolean {
 function tooLarge(): ValidationError {
   return new ValidationError({
     message: "Web response exceeded the configured byte limit",
-    userMessage: "La page web est trop volumineuse pour être analysée en sécurité.",
+    userMessage: "That web page is too large to be parsed safely.",
   });
 }
 
 function unavailable(message: string, cause?: unknown): DependencyError {
   return new DependencyError({
     message,
-    userMessage: "La page web ne peut pas être récupérée pour le moment.",
+    userMessage: "That web page cannot be fetched right now.",
     ...(cause === undefined ? {} : { cause }),
   });
 }
