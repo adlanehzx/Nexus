@@ -89,6 +89,60 @@ s'installer — exactement ce qu'on veut d'un paquet sans clé.
 `enableV1Signing` reste active : un téléphone sous Android 10 ou plus ancien
 n'installe pas un APK signé uniquement en V2.
 
+## Installateur Windows du worker
+
+Le MSI produit par Tauri installe la **coquille de bureau**. Le worker est autre
+chose : un démon Node sans interface, qui doit tourner sans session ouverte.
+D'où `packaging/windows/nexus-worker.nsi`, un installateur à lui, construit par
+le runner Windows du workflow de publication.
+
+NSIS plutôt que MSI : un MSI demande WiX et une chaîne de construction de plus,
+pour un gain nul ici — il n'y a ni déploiement par stratégie de groupe ni
+désinstallation pilotée à distance.
+
+Quatre décisions y sont explicites, et chacune évite une panne précise.
+
+**Installation par machine.** Un service Windows est une ressource de la
+machine ; l'installer dans le profil d'un utilisateur produirait un service dont
+les fichiers disparaissent quand ce profil est supprimé.
+
+**La configuration vit hors de `Program Files`.** Ce dossier est en lecture
+seule pour les utilisateurs, et un service qui ne peut pas lire sa configuration
+échoue sans dire pourquoi. Elle va dans `%APPDATA%\NEXUS\worker.env`, et une
+réinstallation ne l'écrase pas.
+
+**Node n'est pas embarqué.** L'embarquer figerait une version qu'il faudrait
+mettre à jour nous-mêmes à chaque correctif de sécurité — or ce worker exécute
+des commandes sur la machine, c'est le dernier endroit où l'on veut un runtime
+en retard. L'installateur vérifie sa présence et refuse proprement s'il manque.
+
+**Le service n'est pas installé automatiquement.** Il faut d'abord renseigner
+l'identifiant d'appareil, l'adresse du cœur et le chemin de la clé privée. Un
+service installé et démarré avant cela échoue en boucle, remplit le journal
+d'événements, et donne l'impression que l'installation a raté alors qu'elle a
+réussi. L'installateur affiche les trois commandes à lancer.
+
+La désinstallation arrête et supprime le service **avant** les fichiers —
+l'inverse laisse un service qui redémarre en boucle sur un binaire absent — et
+conserve la configuration : une mise à jour passe par une désinstallation, et
+emporter l'identifiant d'appareil obligerait à réappairer à chaque fois.
+
+## Service Windows
+
+`packaging/windows/install-worker-service.ps1`, via `sc.exe` — présent partout,
+contrairement à un empaqueteur tiers qu'il faudrait installer d'abord.
+
+| décision                                            | raison                                                                                                                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| compte de service, pas `LocalSystem`                | `LocalSystem` donnerait les droits complets de la machine, ce qui annulerait la politique locale : les refus par chemin ne protègent plus rien si le processus peut tout |
+| redémarrage automatique **borné** (5 s, 30 s, 60 s) | un worker qui plante en boucle et redémarre aussitôt transforme un défaut en charge                                                                                      |
+| aucun secret en argument                            | une ligne de commande de service est lisible par tout le monde dans le gestionnaire de tâches ; la clé est désignée par un chemin                                        |
+| `delayed-auto`                                      | démarre après les services système, pour ne pas allonger le démarrage de la machine                                                                                      |
+
+Le script refuse d'installer un service dont le `.env` est absent, et avertit si
+ce fichier hérite des droits de son dossier parent — il désigne le chemin de la
+clé privée de cette machine.
+
 ## iOS et TestFlight
 
 ### Ce qui est fait ici, et ce qui ne peut pas l'être

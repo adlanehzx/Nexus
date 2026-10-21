@@ -114,6 +114,24 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
 
+      # L'installateur du worker, qui n'est pas la coquille de bureau : un démon
+      # Node sans interface, qui doit tourner sans session ouverte. `makensis`
+      # est fourni avec les runners Windows.
+      - name: Installateur du worker
+        if: runner.os == 'Windows'
+        working-directory: packaging/windows
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('../../apps/desktop/src-tauri/tauri.conf.json').version")"
+          makensis -DVERSION="$VERSION" nexus-worker.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-worker-installer
+          path: packaging/windows/*-setup.exe
+          if-no-files-found: ignore
+        if: runner.os == 'Windows'
+
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-desktop-${{ runner.os }}
