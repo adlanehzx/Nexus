@@ -59,6 +59,7 @@ import { PrismaConversationStore } from "./services/persistence/prisma-conversat
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
+import { LocalHashEmbeddingProvider, TransformersEmbeddingProvider } from "@nexus/memory";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
@@ -138,6 +139,16 @@ const notificationDispatcher =
  * instances issues du même PEM produisent des jetons interchangeables.
  */
 const outboundSigner = new TokenService({ privateKeyPem: config.AUTH_SIGNING_KEY });
+const embeddings =
+  config.MEMORY_EMBEDDING_BACKEND === "neural"
+    ? new TransformersEmbeddingProvider({
+        model: config.MEMORY_EMBEDDING_MODEL,
+        ...(config.MEMORY_EMBEDDING_CACHE_DIR === undefined
+          ? {}
+          : { cacheDir: config.MEMORY_EMBEDDING_CACHE_DIR }),
+        localFilesOnly: config.MEMORY_EMBEDDING_LOCAL_ONLY,
+      })
+    : new LocalHashEmbeddingProvider();
 
 const services = new ServiceContainer({
   prisma,
@@ -151,6 +162,7 @@ const services = new ServiceContainer({
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
   telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
+  embeddings,
   observabilityDirectory: resolve(here, "../../../var/observability"),
   tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
   apiVersion: config.API_VERSION,

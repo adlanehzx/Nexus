@@ -1,5 +1,16 @@
 # @nexus/memory
 
+La mémoire persistante utilise par défaut un modèle multilingue ONNX local
+(`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions) et pgvector/HNSW.
+Aucun texte n'est envoyé à un service distant et aucune clé API n'est requise.
+
+Au premier usage, le modèle est téléchargé dans le cache configuré par
+`MEMORY_EMBEDDING_CACHE_DIR`. Après ce téléchargement, définir
+`MEMORY_EMBEDDING_LOCAL_ONLY=true` garantit un fonctionnement hors ligne. Le
+backend déterministe historique reste disponible avec
+`MEMORY_EMBEDDING_BACKEND=hash`, notamment pour les environnements très
+contraints ; ses vecteurs ne sont pas écrits dans la colonne pgvector 384D.
+
 Six choses portent le nom de « mémoire ». Les confondre est la première erreur possible
 dans ce domaine, et ce paquet existe pour l'empêcher.
 

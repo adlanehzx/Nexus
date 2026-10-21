@@ -463,10 +463,11 @@ model Memory {
   sourceUri            String?
   /// Empreinte du contenu normalisé, utilisée pour la déduplication.
   contentHash          String
-  /// Vecteur local et modèle qui l'a produit. Un tableau PostgreSQL garde le
-  /// mode local fonctionnel ; un adaptateur pgvector peut remplacer la recherche
-  /// sans modifier le contrat MemoryProvider.
+  /// Le tableau reste la copie portable utilisée par Prisma et les exports.
+  /// La colonne pgvector est synchronisée par l'adaptateur pour la recherche
+  /// cosinus indexée ; Prisma la laisse volontairement au SQL natif.
   embedding            Float[]           @default([])
+  embeddingVector      Unsupported("vector(384)")? @map("embedding_vector")
   embeddingModel       String?
   extractedAt          DateTime?         @db.Timestamptz(3)
   validFrom            DateTime          @db.Timestamptz(3)

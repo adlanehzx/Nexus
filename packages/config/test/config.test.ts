@@ -19,6 +19,8 @@ describe("parseConfig", () => {
     expect(config.METRICS_ENABLED).toBe(true);
     expect(config.METRICS_PORT).toBe(9464);
     expect(config.MODEL_PRICING_JSON).toEqual({});
+    expect(config.MEMORY_EMBEDDING_BACKEND).toBe("neural");
+    expect(config.MEMORY_EMBEDDING_LOCAL_ONLY).toBe(false);
     // Hors production, les trois coquilles locales sont ouvertes d'office —
     // l'API, la fenêtre Vite du client de bureau, le serveur Expo du mobile —
     // et les origines Tauri s'y ajoutent : sans elles, le client de bureau
@@ -30,6 +32,22 @@ describe("parseConfig", () => {
       "http://tauri.localhost",
       "tauri://localhost",
     ]);
+  });
+
+  it("valide le moteur local d'embeddings", () => {
+    const config = parseConfig({
+      ...minimalEnv,
+      MEMORY_EMBEDDING_BACKEND: "hash",
+      MEMORY_EMBEDDING_LOCAL_ONLY: "true",
+      MEMORY_EMBEDDING_CACHE_DIR: "/tmp/nexus-models",
+    });
+
+    expect(config.MEMORY_EMBEDDING_BACKEND).toBe("hash");
+    expect(config.MEMORY_EMBEDDING_LOCAL_ONLY).toBe(true);
+    expect(config.MEMORY_EMBEDDING_CACHE_DIR).toBe("/tmp/nexus-models");
+    expect(() => parseConfig({ ...minimalEnv, MEMORY_EMBEDDING_BACKEND: "remote" })).toThrow(
+      ConfigurationError,
+    );
   });
 
   it("n'ouvre aucune origine de développement en production", () => {

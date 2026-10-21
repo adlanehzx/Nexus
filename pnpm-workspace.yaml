@@ -32,6 +32,9 @@ overrides:
 allowBuilds:
   "@prisma/engines": true
   esbuild: true
+  # Les binaires CPU sont déjà distribués dans le paquet. Le postinstall ne
+  # sert qu'à récupérer les énormes runtimes GPU/CUDA, inutiles à NEXUS.
+  onnxruntime-node: false
   prisma: true
   # protobufjs : le postinstall n'est pas necessaire a l'execution ; les
   # artefacts JavaScript distribues sont deja construits. Le refuser garde la

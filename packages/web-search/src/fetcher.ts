@@ -14,7 +14,13 @@ export interface SafeWebFetcherOptions {
   fetch?: typeof globalThis.fetch;
   resolver?: HostResolver;
   now?: () => Date;
+  pdfParser?: PdfParser;
 }
+
+type PdfParser = (
+  bytes: Uint8Array,
+  url: URL,
+) => Promise<{ content: string; metadata: WebDocument["metadata"] }>;
 
 /**
  * Client de lecture seule. La résolution DNS est contrôlée avant chaque appel
@@ -26,6 +32,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
   readonly #fetch: typeof globalThis.fetch;
   readonly #resolver: HostResolver | undefined;
   readonly #now: () => Date;
+  readonly #pdfParser: PdfParser;
 
   constructor(options: SafeWebFetcherOptions = {}) {
     this.#timeoutMs = options.timeoutMs ?? 15_000;
@@ -33,6 +40,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#resolver = options.resolver;
     this.#now = options.now ?? (() => new Date());
+    this.#pdfParser = options.pdfParser ?? parsePdf;
   }
 
   async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebDocument> {
@@ -52,7 +60,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
           method: "GET",
           redirect: "manual",
           headers: {
-            accept: "text/html,text/plain;q=0.9",
+            accept: "text/html,application/pdf;q=0.95,text/plain;q=0.9",
             "user-agent": "NEXUS-WebResearch/1.0 (+local read-only fetcher)",
           },
           signal: combined,
@@ -85,17 +93,13 @@ export class SafeWebFetcher implements WebDocumentFetcher {
         throw tooLarge();
       }
       const bytes = await readBoundedBody(response, maxBytes);
-      const decoded = new TextDecoder(detectCharset(response.headers.get("content-type")), {
-        fatal: false,
-      }).decode(bytes);
       const extracted =
-        contentType === "text/html"
-          ? extractHtml(decoded, current)
-          : {
-              content: normalizeText(decoded),
+        contentType === "application/pdf"
+          ? {
+              ...(await this.#pdfParser(bytes, current)),
               canonicalUrl: current.toString(),
-              metadata: emptyMetadata(),
-            };
+            }
+          : extractTextDocument(bytes, response.headers.get("content-type"), contentType, current);
       const content = extracted.content.slice(0, MAX_TEXT_CHARS);
       if (!content) throw unavailable("La page web ne contient aucun texte exploitable.");
       const sha256 = createHash("sha256").update(content).digest("hex");
@@ -281,10 +285,68 @@ function parseContentType(value: string | null): WebDocument["contentType"] {
   const mime = value?.split(";", 1)[0]?.trim().toLowerCase();
   if (mime === "text/html" || mime === "application/xhtml+xml") return "text/html";
   if (mime === "text/plain") return "text/plain";
+  if (mime === "application/pdf") return "application/pdf";
   throw new ValidationError({
     message: `Unsupported web content type: ${mime ?? "missing"}`,
     userMessage: "Ce type de contenu web n’est pas encore pris en charge.",
   });
+}
+
+function extractTextDocument(
+  bytes: Uint8Array,
+  contentTypeHeader: string | null,
+  contentType: "text/html" | "text/plain",
+  current: URL,
+) {
+  const decoded = new TextDecoder(detectCharset(contentTypeHeader), { fatal: false }).decode(bytes);
+  return contentType === "text/html"
+    ? extractHtml(decoded, current)
+    : {
+        content: normalizeText(decoded),
+        canonicalUrl: current.toString(),
+        metadata: emptyMetadata(),
+      };
+}
+
+async function parsePdf(
+  bytes: Uint8Array,
+  url: URL,
+): Promise<{ content: string; metadata: WebDocument["metadata"] }> {
+  const { PDFParse } = await import("pdf-parse");
+  // pdf.js transfère le tampon à son worker. Sous Node 26, un Uint8Array issu
+  // d'un flux fetch peut être adossé à un ArrayBuffer non transférable : une
+  // copie élément par élément garantit un ArrayBuffer ordinaire indépendant.
+  const parser = new PDFParse({ data: Uint8Array.from(bytes) });
+  try {
+    // Le premier appel transfère le buffer au worker PDF.js. Les lancer en
+    // parallèle tenterait de transférer deux fois le même objet sous Node 26.
+    const text = await parser.getText();
+    const info = await parser.getInfo();
+    const pageText = text.pages
+      .map((page) => `--- page ${String(page.num)} ---\n${page.text.trim()}`)
+      .join("\n\n");
+    const documentInfo = (info.info ?? {}) as Record<string, unknown>;
+    return {
+      content: normalizeText(pageText),
+      metadata: {
+        title:
+          metadataString(documentInfo.Title) ?? url.pathname.split("/").at(-1) ?? "Document PDF",
+        description: metadataString(documentInfo.Subject),
+        author: metadataString(documentInfo.Author),
+        publishedAt: info.getDateNode().CreationDate?.toISOString() ?? null,
+        language: null,
+      },
+    };
+  } catch (error) {
+    throw unavailable("Le document PDF ne peut pas être analysé.", error);
+  } finally {
+    await parser.destroy().catch(() => undefined);
+  }
+}
+
+function metadataString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().slice(0, 1_000) || null;
 }
 
 function detectCharset(value: string | null): "utf-8" | "windows-1252" {

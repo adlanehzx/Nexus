@@ -51,6 +51,7 @@ import {
   MemoryService,
   PostgresMemoryProvider,
   ShortTermContext,
+  type EmbeddingProvider,
   type MemoryProvider,
 } from "@nexus/memory";
 import { AuthService } from "./auth-service.js";
@@ -109,6 +110,7 @@ export interface ServiceContainerOptions {
   deviceStore?: DeviceStore;
   runStore?: QueryableAgentRunStore;
   telemetry?: NexusTelemetry;
+  embeddings?: EmbeddingProvider;
 
   /**
    * Registre des réservations de run Agent Core.
@@ -264,7 +266,11 @@ export class ServiceContainer {
       options.memory ??
       (options.prisma === undefined
         ? new InMemoryMemoryProvider()
-        : new PostgresMemoryProvider({ prisma: options.prisma, now }));
+        : new PostgresMemoryProvider({
+            prisma: options.prisma,
+            now,
+            ...(options.embeddings === undefined ? {} : { embeddings: options.embeddings }),
+          }));
     this.shortTerm = new ShortTermContext({ now });
 
     this.auth = new AuthService({

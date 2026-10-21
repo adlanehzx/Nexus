@@ -123,6 +123,19 @@ export const configSchema = z
     ),
     MODEL_PRICING_JSON: modelPricing.default({}),
 
+    // Mémoire sémantique locale. Le backend neural utilise ONNX et un cache
+    // disque ; `hash` reste disponible pour les machines très contraintes.
+    MEMORY_EMBEDDING_BACKEND: z.enum(["neural", "hash"]).default("neural"),
+    MEMORY_EMBEDDING_MODEL: z
+      .string()
+      .min(1)
+      .default("Xenova/paraphrase-multilingual-MiniLM-L12-v2"),
+    MEMORY_EMBEDDING_CACHE_DIR: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(1).optional(),
+    ),
+    MEMORY_EMBEDDING_LOCAL_ONLY: envBoolean.default(false),
+
     DATABASE_URL: z
       .string()
       .refine(isUrl(["postgres:", "postgresql:"]), "doit être une URL postgresql://"),

@@ -9,7 +9,7 @@ name: nexus
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d}
     container_name: nexus-postgres
     restart: unless-stopped
     environment:
@@ -87,6 +87,10 @@ services:
       OTEL_SERVICE_NAME: nexus-api
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       MODEL_PRICING_JSON: ${MODEL_PRICING_JSON:-}
+      MEMORY_EMBEDDING_BACKEND: ${MEMORY_EMBEDDING_BACKEND:-neural}
+      MEMORY_EMBEDDING_MODEL: ${MEMORY_EMBEDDING_MODEL:-Xenova/paraphrase-multilingual-MiniLM-L12-v2}
+      MEMORY_EMBEDDING_CACHE_DIR: /var/lib/nexus/models
+      MEMORY_EMBEDDING_LOCAL_ONLY: ${MEMORY_EMBEDDING_LOCAL_ONLY:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
@@ -103,6 +107,8 @@ services:
       # Le Core n'est pas un service LAN : l'accès distant passe uniquement par
       # Tailscale Serve, qui reverse-proxyifie ensuite vers cette boucle locale.
       - "127.0.0.1:${API_PORT:-3000}:3000"
+    volumes:
+      - nexus-models:/var/lib/nexus/models
     # L'arrêt gracieux dispose du délai qu'il annonce, plus une marge.
     stop_grace_period: 15s
     networks: [nexus]
@@ -264,6 +270,7 @@ volumes:
   tempo-data:
   alloy-data:
   grafana-data:
+  nexus-models:
 
 networks:
   nexus:

@@ -120,7 +120,7 @@ jobs:
     # validerait un PostgreSQL que personne n'exécute.
     services:
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
           POSTGRES_USER: nexus
           POSTGRES_PASSWORD: nexus
@@ -176,7 +176,7 @@ jobs:
     # moteur Python, PostgreSQL, et un vrai redémarrage de processus au milieu.
     services:
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
           POSTGRES_USER: nexus
           POSTGRES_PASSWORD: nexus
@@ -236,7 +236,7 @@ jobs:
     # quand le premier tombe.
     services:
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
           POSTGRES_USER: nexus
           POSTGRES_PASSWORD: nexus
@@ -297,7 +297,7 @@ jobs:
     # crée puis la restaure vraiment, dans une base jetable.
     services:
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
           POSTGRES_USER: nexus
           POSTGRES_PASSWORD: nexus
@@ -395,7 +395,7 @@ jobs:
     # vérifie ce qu'il devait retrouver.
     services:
       postgres:
-        image: postgres:17-alpine
+        image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
         env:
           POSTGRES_USER: nexus
           POSTGRES_PASSWORD: nexus

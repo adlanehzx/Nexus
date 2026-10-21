@@ -7,6 +7,86 @@ export interface EmbeddingProvider {
   embed(texts: readonly string[]): Promise<readonly number[][]>;
 }
 
+interface TensorLike {
+  tolist(): unknown[];
+}
+
+type FeatureExtractor = (
+  texts: string[],
+  options: { pooling: "mean"; normalize: true },
+) => Promise<TensorLike>;
+
+export interface TransformersEmbeddingProviderOptions {
+  model?: string;
+  dimensions?: number;
+  cacheDir?: string;
+  localFilesOnly?: boolean;
+  /** Injection réservée aux tests : évite de télécharger un modèle dans la CI. */
+  load?: () => Promise<FeatureExtractor>;
+}
+
+/**
+ * Embeddings neuronaux multilingues exécutés localement par ONNX.
+ *
+ * Le modèle est chargé paresseusement au premier souvenir. Après son premier
+ * téléchargement, `localFilesOnly` permet une exploitation entièrement hors
+ * ligne. Aucun texte ne quitte la machine et aucune clé API n'est nécessaire.
+ */
+export class TransformersEmbeddingProvider implements EmbeddingProvider {
+  readonly model: string;
+  readonly dimensions: number;
+  readonly #load: () => Promise<FeatureExtractor>;
+  #extractor: Promise<FeatureExtractor> | undefined;
+
+  constructor(options: TransformersEmbeddingProviderOptions = {}) {
+    this.model = options.model ?? "Xenova/paraphrase-multilingual-MiniLM-L12-v2";
+    this.dimensions = options.dimensions ?? 384;
+    if (this.dimensions < 32 || this.dimensions > 4_096) {
+      throw new RangeError("embedding dimensions must be between 32 and 4096");
+    }
+    this.#load =
+      options.load ??
+      (async () => {
+        const { pipeline } = await import("@huggingface/transformers");
+        return pipeline("feature-extraction", this.model, {
+          device: "cpu",
+          dtype: "q8",
+          ...(options.cacheDir === undefined ? {} : { cache_dir: options.cacheDir }),
+          local_files_only: options.localFilesOnly ?? false,
+        });
+      });
+  }
+
+  async embed(texts: readonly string[]): Promise<readonly number[][]> {
+    if (texts.length === 0) return [];
+    this.#extractor ??= this.#load();
+    const tensor = await (
+      await this.#extractor
+    )([...texts], {
+      pooling: "mean",
+      normalize: true,
+    });
+    const values = tensor.tolist();
+    if (!Array.isArray(values) || values.length !== texts.length) {
+      throw new Error("Le modèle d'embedding a renvoyé un lot de taille inattendue.");
+    }
+    return values.map((value) => this.#validateVector(value));
+  }
+
+  #validateVector(value: unknown): number[] {
+    if (
+      !Array.isArray(value) ||
+      value.length !== this.dimensions ||
+      value.some((item) => typeof item !== "number" || !Number.isFinite(item))
+    ) {
+      throw new Error(
+        `Le modèle d'embedding doit renvoyer ${this.dimensions} nombres finis par texte.`,
+      );
+    }
+    return value as number[];
+  }
+}
+
 /**
  * Embeddings locaux sans modèle ni réseau.
  *

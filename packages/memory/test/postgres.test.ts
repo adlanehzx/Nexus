@@ -2,6 +2,22 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDatabaseClient, type PrismaClient } from "@nexus/database";
 import { uuidv7 } from "@nexus/shared";
 import { PostgresMemoryProvider } from "../src/postgres.js";
+import type { EmbeddingProvider } from "../src/embedding.js";
+
+class TestNeuralEmbeddings implements EmbeddingProvider {
+  readonly model = "test-neural-384";
+  readonly dimensions = 384;
+
+  embed(texts: readonly string[]): Promise<readonly number[][]> {
+    return Promise.resolve(
+      texts.map((text) => {
+        const vector = Array.from<number>({ length: this.dimensions }).fill(0);
+        vector[text.toLowerCase().includes("train") ? 0 : 1] = 1;
+        return vector;
+      }),
+    );
+  }
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres = describe.skipIf(databaseUrl === undefined);
@@ -68,6 +84,24 @@ describePostgres("PostgresMemoryProvider", () => {
     expect(hits[0]?.record.sourceRunId).toBe(sourceRunId);
     expect(hits[0]?.record.sourceUri).toBe("https://example.test/source");
     expect(hits[0]?.record.embeddingModel).toMatch(/^nexus-hash-v1-/);
+  });
+
+  it("synchronise et interroge les embeddings neuronaux dans pgvector", async () => {
+    provider = new PostgresMemoryProvider({
+      prisma,
+      embeddings: new TestNeuralEmbeddings(),
+    });
+    const train = await provider.store({
+      userId,
+      kind: "SEMANTIC",
+      content: "Voyage habituel en train",
+    });
+    await provider.store({ userId, kind: "SEMANTIC", content: "Cuisine italienne" });
+
+    const hits = await provider.search({ userId, query: "train de nuit", limit: 1 });
+
+    expect(hits[0]?.record.id).toBe(train.id);
+    expect(hits[0]?.record.embeddingModel).toBe("test-neural-384");
   });
 
   it("persists updates and supersession", async () => {

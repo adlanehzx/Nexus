@@ -54,7 +54,7 @@ export interface WebDocument {
   requestedUrl: string;
   finalUrl: string;
   canonicalUrl: string;
-  contentType: "text/html" | "text/plain";
+  contentType: "text/html" | "text/plain" | "application/pdf";
   fetchedAt: string;
   sha256: string;
   byteLength: number;
