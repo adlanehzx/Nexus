@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo",
     "e2e:confirmation": "node scripts/e2e-confirmation.mjs",
+    "e2e:schedule-grant": "node scripts/e2e-schedule-grant.mjs",
     "e2e:chain": "node scripts/e2e-mission-chain.mjs"
   },
   "dependencies": {
@@ -39,6 +40,13 @@
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
     "@nexus/web-search": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-prometheus": "0.223.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-metrics": "2.12.0",
+    "@opentelemetry/sdk-node": "^0.223.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "fastify": "5.12.1",
     "fastify-plugin": "6.0.0",
     "fastify-type-provider-zod": "7.0.0",

@@ -49,6 +49,17 @@ describe("réponse simple", () => {
       "run.finished",
     ]);
   });
+
+  it("conserve le modèle réellement sélectionné et les bascules du routeur", async () => {
+    const h = makeHarness({
+      turns: [{ kind: "final", text: "ok", fallbackCount: 2 }],
+    });
+
+    const { record } = await h.run();
+
+    expect(record.model).toBe("scripted-model");
+    expect(record.fallbackCount).toBe(2);
+  });
 });
 
 describe("appel d'outil", () => {

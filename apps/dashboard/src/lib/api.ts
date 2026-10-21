@@ -129,6 +129,8 @@ export interface AgentRunRow {
   userId: string;
   conversationId: string;
   correlationId: string;
+  missionExternalKey: string | null;
+  replayOfRunId: string | null;
   status: string;
   stopReason: string | null;
   startedAt: string;
@@ -155,7 +157,39 @@ export interface AgentRunRow {
     cacheWriteTokens: number;
     toolCalls: number;
     failedToolCalls: number;
+    fallbackCount: number;
   };
+}
+
+export interface ObservabilitySummary {
+  generatedAt: string;
+  totals: {
+    runs: number;
+    failedRuns: number;
+    inputTokens: number;
+    outputTokens: number;
+    toolCalls: number;
+    failedToolCalls: number;
+    estimatedApiEquivalentCostUsd: number | null;
+  };
+  rates: { fallback: number; toolError: number; runError: number };
+  agents: {
+    agent: string;
+    runs: number;
+    failures: number;
+    averageLatencyMs: number;
+    p95LatencyMs: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedApiEquivalentCostUsd: number | null;
+  }[];
+  missions: {
+    mission: string;
+    runs: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedApiEquivalentCostUsd: number | null;
+  }[];
 }
 
 export interface ToolRow {
@@ -660,6 +694,16 @@ export class DashboardApi {
 
   runs(): Promise<{ runs: AgentRunRow[] }> {
     return this.#get("/api/v1/dashboard/runs?limit=100");
+  }
+
+  observability(): Promise<ObservabilitySummary> {
+    return this.#get("/api/v1/dashboard/observability");
+  }
+
+  replayRun(runId: string): Promise<AgentRunRow> {
+    return this.#request("POST", `/api/v1/dashboard/runs/${encodeURIComponent(runId)}/replay`, {
+      mode: "analysis_only",
+    });
   }
 
   tools(): Promise<{ tools: ToolRow[] }> {

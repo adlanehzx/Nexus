@@ -4,7 +4,7 @@ import type { NexusPaths } from "./environment.js";
  * Unités systemd, rendues depuis l'emplacement réel de l'installation.
  *
  * Le dépôt portait jusqu'ici une unité contenant une dizaine de chemins absolus
- * — `/home/adlane/Documents/Codex/2026-10-11/…` — ce qui la rendait inutilisable
+ * — `/home/alice/projets/nexus` — ce qui la rendait inutilisable
  * ailleurs et faisait du déplacement du dossier une panne silencieuse. Les
  * chemins sont maintenant **dérivés** de la racine détectée, et l'unité
  * déployée est produite plutôt que recopiée.

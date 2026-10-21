@@ -58,6 +58,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
         supersedesId: null,
       },
     });
+    await this.#writeVector(this.#prisma, record.id, embedding);
 
     return toRecord(record);
   }
@@ -114,6 +115,7 @@ export class PostgresMemoryProvider implements MemoryProvider {
           supersedesId: existing.id,
         },
       });
+      await this.#writeVector(transaction, replacement.id, embedding);
 
       await transaction.memory.update({
         where: { id: existing.id },
@@ -150,6 +152,13 @@ export class PostgresMemoryProvider implements MemoryProvider {
     const [queryVector = []] =
       terms.length === 0 ? [[]] : await this.#embeddings.embed([query.query]);
     const hits: MemoryHit[] = [];
+    const semanticScores =
+      queryVector.length === 384
+        ? await this.#semanticScores(
+            queryVector,
+            records.map((record) => record.id),
+          )
+        : new Map<string, number>();
 
     for (const stored of records) {
       const record = toRecord(stored);
@@ -160,7 +169,10 @@ export class PostgresMemoryProvider implements MemoryProvider {
 
       const recordTerms = new Set(tokenize(record.content));
       const overlap = terms.filter((term) => recordTerms.has(term)).length;
-      const semantic = Math.max(0, cosineSimilarity(queryVector, stored.embedding));
+      const semantic = Math.max(
+        0,
+        semanticScores.get(stored.id) ?? cosineSimilarity(queryVector, stored.embedding),
+      );
       if (overlap === 0 && semantic < 0.08) continue;
 
       hits.push({
@@ -192,6 +204,44 @@ export class PostgresMemoryProvider implements MemoryProvider {
     }
     return Promise.resolve(kept.length > 0 ? kept.join(" ") : input.text.slice(0, budget));
   }
+
+  async #writeVector(
+    client: {
+      $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+    },
+    id: string,
+    embedding: readonly number[],
+  ): Promise<void> {
+    if (embedding.length !== 384) return;
+    await client.$executeRawUnsafe(
+      'UPDATE "memories" SET "embedding_vector" = $1::vector WHERE "id" = $2::uuid',
+      vectorLiteral(embedding),
+      id,
+    );
+  }
+
+  async #semanticScores(
+    queryVector: readonly number[],
+    ids: readonly string[],
+  ): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.#prisma.$queryRawUnsafe<{ id: string; similarity: number }[]>(
+      `SELECT "id", 1 - ("embedding_vector" <=> $1::vector) AS "similarity"
+       FROM "memories"
+       WHERE "id" = ANY($2::uuid[]) AND "embedding_vector" IS NOT NULL
+       ORDER BY "embedding_vector" <=> $1::vector`,
+      vectorLiteral(queryVector),
+      [...ids],
+    );
+    return new Map(rows.map((row) => [row.id, Math.max(-1, Math.min(1, Number(row.similarity)))]));
+  }
+}
+
+function vectorLiteral(vector: readonly number[]): string {
+  if (vector.some((value) => !Number.isFinite(value))) {
+    throw new TypeError("Un vecteur mémoire contient une valeur non finie.");
+  }
+  return `[${vector.join(",")}]`;
 }
 
 function toRecord(record: Prisma.MemoryModel): MemoryRecord {

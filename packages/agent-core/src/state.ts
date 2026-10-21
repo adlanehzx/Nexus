@@ -89,6 +89,10 @@ export interface AgentRunRecord {
    * identité de l'appelant.
    */
   missionExternalKey: string | null;
+  /** Run source lorsqu'il s'agit d'un rejeu d'analyse sans outils. */
+  replayOfRunId?: string | null;
+  /** Nombre de bascules explicites vers une nouvelle tentative ou un autre agent. */
+  fallbackCount?: number;
 }
 
 /**

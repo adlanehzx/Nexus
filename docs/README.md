@@ -3,7 +3,8 @@
 Assistant personnel IA multi-appareils (iPhone, PC, web) capable d'agir réellement
 via un système d'outils gouverné par des permissions.
 
-> **Statut : PROPOSITION — en attente de validation. Aucun code applicatif écrit.**
+> **Statut : implémentation alpha active.** Les documents décrivent l'architecture cible ;
+> les README des services et le tableau de progression indiquent ce qui est effectivement livré.
 
 ## Table des matières
 

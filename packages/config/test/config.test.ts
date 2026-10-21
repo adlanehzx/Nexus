@@ -16,6 +16,11 @@ describe("parseConfig", () => {
     expect(config.API_PORT).toBe(3000);
     expect(config.API_HOST).toBe("0.0.0.0");
     expect(config.SHUTDOWN_TIMEOUT_MS).toBe(10_000);
+    expect(config.METRICS_ENABLED).toBe(true);
+    expect(config.METRICS_PORT).toBe(9464);
+    expect(config.MODEL_PRICING_JSON).toEqual({});
+    expect(config.MEMORY_EMBEDDING_BACKEND).toBe("neural");
+    expect(config.MEMORY_EMBEDDING_LOCAL_ONLY).toBe(false);
     // Hors production, les trois coquilles locales sont ouvertes d'office —
     // l'API, la fenêtre Vite du client de bureau, le serveur Expo du mobile —
     // et les origines Tauri s'y ajoutent : sans elles, le client de bureau
@@ -27,6 +32,22 @@ describe("parseConfig", () => {
       "http://tauri.localhost",
       "tauri://localhost",
     ]);
+  });
+
+  it("valide le moteur local d'embeddings", () => {
+    const config = parseConfig({
+      ...minimalEnv,
+      MEMORY_EMBEDDING_BACKEND: "hash",
+      MEMORY_EMBEDDING_LOCAL_ONLY: "true",
+      MEMORY_EMBEDDING_CACHE_DIR: "/tmp/nexus-models",
+    });
+
+    expect(config.MEMORY_EMBEDDING_BACKEND).toBe("hash");
+    expect(config.MEMORY_EMBEDDING_LOCAL_ONLY).toBe(true);
+    expect(config.MEMORY_EMBEDDING_CACHE_DIR).toBe("/tmp/nexus-models");
+    expect(() => parseConfig({ ...minimalEnv, MEMORY_EMBEDDING_BACKEND: "remote" })).toThrow(
+      ConfigurationError,
+    );
   });
 
   it("n'ouvre aucune origine de développement en production", () => {
@@ -58,6 +79,25 @@ describe("parseConfig", () => {
 
     expect(config.API_PORT).toBe(8080);
     expect(typeof config.API_PORT).toBe("number");
+  });
+
+  it("valide la configuration d'observabilité et les tarifs équivalents", () => {
+    const config = parseConfig({
+      ...minimalEnv,
+      METRICS_ENABLED: "false",
+      METRICS_PORT: "19464",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318",
+      MODEL_PRICING_JSON: JSON.stringify({
+        "modele-local": { inputPerMillionUsd: 1, outputPerMillionUsd: 2 },
+      }),
+    });
+
+    expect(config.METRICS_ENABLED).toBe(false);
+    expect(config.METRICS_PORT).toBe(19_464);
+    expect(config.MODEL_PRICING_JSON["modele-local"]?.outputPerMillionUsd).toBe(2);
+    expect(() => parseConfig({ ...minimalEnv, MODEL_PRICING_JSON: "pas-du-json" })).toThrow(
+      ConfigurationError,
+    );
   });
 
   it("accepte Mission Control en boucle locale et refuse HTTP distant", () => {

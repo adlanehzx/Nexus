@@ -81,9 +81,17 @@ Une demande temporelle explicite peut aussi produire un calendrier durable depui
 le même chat. Le plan structuré distingue `immediate`, `one_shot` et `cron`; une
 ambiguïté retombe toujours sur `immediate` plutôt que d'inventer une récurrence.
 Le fuseau IANA du navigateur accompagne la demande, puis Mission Engine calcule
-les occurrences, les rattrapages et l'historique. Ces calendriers exécutent des
-tâches ACP : les assertions Agent Core, volontairement courtes, ne sont jamais
-persistées comme identifiants longue durée.
+les occurrences, les rattrapages et l'historique. Les assertions Agent Core,
+volontairement courtes, ne sont jamais persistées comme identifiants longue
+durée.
+
+Pour les calendriers qui contiennent une tâche `agent-core`, l'API crée une
+**délégation de calendrier** opaque. PostgreSQL n'en conserve que le hash ; le
+moteur reçoit le secret une seule fois et le garde hors du JSON de mission et
+des réponses. À l'échéance, il présente cette délégation avec l'UUID et la date
+de l'occurrence. L'API recalcule elle-même `external_key`, vérifie le compte et
+émet alors une assertion de mission courte. Un calendrier ne peut donc ni
+choisir un autre utilisateur, ni élargir sa portée, ni survivre à une révocation.
 
 Chaque tâche conserve désormais une liste ordonnée de profils de secours. Une
 erreur ACP est classée localement par le runtime NEXUS

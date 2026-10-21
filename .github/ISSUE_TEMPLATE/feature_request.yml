@@ -1,0 +1,28 @@
+name: Proposition
+description: Proposer une fonctionnalité ou une amélioration
+title: "[Proposition] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème à résoudre
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Résultat attendu
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Permissions, confirmations et données
+      description: Précisez les effets externes, secrets et confirmations nécessaires.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées

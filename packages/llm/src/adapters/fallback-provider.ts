@@ -40,9 +40,13 @@ export class FallbackProvider implements LLMProvider {
   async generate(request: GenerateRequest): Promise<GenerateResponse> {
     let lastError: unknown;
 
-    for (const provider of this.providers) {
+    for (const [index, provider] of this.providers.entries()) {
       try {
-        return await provider.generate(request);
+        const response = await provider.generate(request);
+        return {
+          ...response,
+          fallbackCount: (response.fallbackCount ?? 0) + index,
+        };
       } catch (error) {
         lastError = error;
         // Si l'erreur est non-retryable (ex: abort, ou credentials invalides), on arrête
@@ -63,7 +67,7 @@ export class FallbackProvider implements LLMProvider {
   async *stream(request: GenerateRequest): AsyncIterable<StreamChunk> {
     let lastError: unknown;
 
-    for (const provider of this.providers) {
+    for (const [index, provider] of this.providers.entries()) {
       try {
         const iterable = provider.stream(request);
         // On vérifie le premier yield pour s'assurer que ça ne crash pas
@@ -71,12 +75,12 @@ export class FallbackProvider implements LLMProvider {
         const first = await iterator.next();
 
         if (!first.done) {
-          yield first.value;
+          yield withFallbackCount(first.value, index);
           // On continue de yield le reste
           while (true) {
             const next = await iterator.next();
             if (next.done) break;
-            yield next.value;
+            yield withFallbackCount(next.value, index);
           }
         }
         return;
@@ -121,4 +125,15 @@ export class FallbackProvider implements LLMProvider {
   ): Promise<number> {
     return this.providers[0]!.countTokens(request);
   }
+}
+
+function withFallbackCount(chunk: StreamChunk, count: number): StreamChunk {
+  if (chunk.type !== "done") return chunk;
+  return {
+    ...chunk,
+    response: {
+      ...chunk.response,
+      fallbackCount: (chunk.response.fallbackCount ?? 0) + count,
+    },
+  };
 }

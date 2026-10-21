@@ -102,6 +102,9 @@ export class AgentLoop {
 
         state.record.usage.inputTokens += result.response.usage.inputTokens;
         state.record.usage.outputTokens += result.response.usage.outputTokens;
+        state.record.model = result.response.model;
+        state.record.fallbackCount =
+          (state.record.fallbackCount ?? 0) + (result.response.fallbackCount ?? 0);
         events.emit({
           type: "llm.completed",
           runId: state.record.runId,

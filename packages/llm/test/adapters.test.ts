@@ -155,6 +155,8 @@ describe("LLM Providers Phase 2", () => {
       expect(vi.mocked(successProvider.generate)).toHaveBeenCalled();
       const textContent = res.content[0] as Extract<(typeof res.content)[0], { type: "text" }>;
       expect(textContent.text).toBe("Success!");
+      expect(res.model).toBe("success");
+      expect(res.fallbackCount).toBe(1);
     });
 
     test("Doit crasher directement si l'erreur n'est pas retryable", async () => {

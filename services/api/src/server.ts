@@ -13,6 +13,8 @@ import {
 } from "@nexus/browser-client";
 import { NotificationDispatcher } from "@nexus/notifications";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
+import { initializeTelemetry } from "./services/telemetry-runtime.js";
+import { NexusTelemetry } from "./services/domain-telemetry.js";
 
 /**
  * Point d'entrée du service API.
@@ -28,6 +30,7 @@ loadDotEnv(resolve(here, "../../../.env"));
 // Une configuration invalide doit empêcher le boot, pas produire une erreur
 // obscure à la première requête. On la résout donc avant toute autre chose.
 const config = getConfig();
+const telemetryRuntime = initializeTelemetry(config);
 
 /**
  * Les services d'abord, le logger ensuite.
@@ -50,12 +53,14 @@ import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
 import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "./services/persistence/prisma-mission-grant-registry.js";
+import { PrismaScheduleGrantRegistry } from "./services/persistence/prisma-schedule-grant-registry.js";
 import { PrismaNotificationStore } from "./services/persistence/prisma-notification-store.js";
 import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
+import { LocalHashEmbeddingProvider, TransformersEmbeddingProvider } from "@nexus/memory";
 
 const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 const runtimeConfiguration = new RuntimeConfigurationStore(resolve(here, "../config"));
@@ -135,6 +140,16 @@ const notificationDispatcher =
  * instances issues du même PEM produisent des jetons interchangeables.
  */
 const outboundSigner = new TokenService({ privateKeyPem: config.AUTH_SIGNING_KEY });
+const embeddings =
+  config.MEMORY_EMBEDDING_BACKEND === "neural"
+    ? new TransformersEmbeddingProvider({
+        model: config.MEMORY_EMBEDDING_MODEL,
+        ...(config.MEMORY_EMBEDDING_CACHE_DIR === undefined
+          ? {}
+          : { cacheDir: config.MEMORY_EMBEDDING_CACHE_DIR }),
+        localFilesOnly: config.MEMORY_EMBEDDING_LOCAL_ONLY,
+      })
+    : new LocalHashEmbeddingProvider();
 
 const services = new ServiceContainer({
   prisma,
@@ -145,8 +160,11 @@ const services = new ServiceContainer({
   taskStore: new PrismaTaskStore(prisma),
   agentRunClaims: new PrismaAgentRunClaimStore(prisma),
   missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
+  scheduleGrantRegistry: new PrismaScheduleGrantRegistry(prisma),
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
+  telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
+  embeddings,
   observabilityDirectory: resolve(here, "../../../var/observability"),
   tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
   apiVersion: config.API_VERSION,
@@ -227,7 +245,12 @@ async function main(): Promise<void> {
 
     try {
       await app.close();
-      await Promise.allSettled([services.mcp?.stop(), app.prisma.$disconnect(), app.redis.quit()]);
+      await Promise.allSettled([
+        services.mcp?.stop(),
+        app.prisma.$disconnect(),
+        app.redis.quit(),
+        telemetryRuntime.shutdown(),
+      ]);
       logger.info({ event: "api.shutdown.done" }, "Arrêt terminé");
       process.exit(0);
     } catch (error) {

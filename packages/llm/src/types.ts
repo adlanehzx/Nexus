@@ -79,6 +79,8 @@ export interface GenerateResponse {
   stopReason: StopReason;
   usage: TokenUsage;
   model: string;
+  /** Nombre de fournisseurs ignorés avant d'obtenir cette réponse. */
+  fallbackCount?: number;
 }
 
 export type StreamChunk =

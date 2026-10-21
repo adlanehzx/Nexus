@@ -50,6 +50,7 @@ model User {
   memories       Memory[]
   notifications  Notification[]
   agentRuns      AgentRunSnapshot[]
+  scheduleGrants ScheduleGrant[]
 
   @@map("users")
 }
@@ -443,38 +444,39 @@ enum MemorySensitivity {
 }
 
 model Memory {
-  id                   String            @id @db.Uuid
-  userId               String            @db.Uuid
-  layer                MemoryLayer       @default(LONG_TERM)
+  id                   String                      @id @db.Uuid
+  userId               String                      @db.Uuid
+  layer                MemoryLayer                 @default(LONG_TERM)
   kind                 MemoryKind
   content              String
   importance           Float
   confidence           Float
-  tags                 String[]          @default([])
-  origin               MemoryOrigin      @default(USER)
-  sensitivity          MemorySensitivity @default(ORDINARY)
-  sensitiveCategories  String[]          @default([])
+  tags                 String[]                    @default([])
+  origin               MemoryOrigin                @default(USER)
+  sensitivity          MemorySensitivity           @default(ORDINARY)
+  sensitiveCategories  String[]                    @default([])
   /// Provenance explicite. Ces champs ne contiennent jamais le texte source :
   /// ils permettent de retrouver le run, la conversation ou la ressource qui
   /// a produit le fait sans recopier une donnée potentiellement sensible.
-  sourceRunId          String?           @db.Uuid
-  sourceConversationId String?           @db.Uuid
-  sourceMessageId      String?           @db.Uuid
+  sourceRunId          String?                     @db.Uuid
+  sourceConversationId String?                     @db.Uuid
+  sourceMessageId      String?                     @db.Uuid
   sourceUri            String?
   /// Empreinte du contenu normalisé, utilisée pour la déduplication.
   contentHash          String
-  /// Vecteur local et modèle qui l'a produit. Un tableau PostgreSQL garde le
-  /// mode local fonctionnel ; un adaptateur pgvector peut remplacer la recherche
-  /// sans modifier le contrat MemoryProvider.
-  embedding            Float[]           @default([])
+  /// Le tableau reste la copie portable utilisée par Prisma et les exports.
+  /// La colonne pgvector est synchronisée par l'adaptateur pour la recherche
+  /// cosinus indexée ; Prisma la laisse volontairement au SQL natif.
+  embedding            Float[]                     @default([])
+  embeddingVector      Unsupported("vector(384)")? @map("embedding_vector")
   embeddingModel       String?
-  extractedAt          DateTime?         @db.Timestamptz(3)
-  validFrom            DateTime          @db.Timestamptz(3)
-  validUntil           DateTime?         @db.Timestamptz(3)
-  supersededById       String?           @db.Uuid
-  supersedesId         String?           @db.Uuid
-  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
+  extractedAt          DateTime?                   @db.Timestamptz(3)
+  validFrom            DateTime                    @db.Timestamptz(3)
+  validUntil           DateTime?                   @db.Timestamptz(3)
+  supersededById       String?                     @db.Uuid
+  supersedesId         String?                     @db.Uuid
+  createdAt            DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                    @updatedAt @db.Timestamptz(3)
 
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   supersededBy       Memory?  @relation("MemorySupersededBy", fields: [supersededById], references: [id], onDelete: SetNull)
@@ -542,6 +544,31 @@ enum MissionGrantState {
   /// Retirée parce que la mission est terminée ou annulée. Chemin normal.
   COMPLETED
   /// Retirée parce qu'on ne lui fait plus confiance. Chemin d'incident.
+  REVOKED
+}
+
+/// Délégation durable et révocable accordée à un calendrier.
+/// Seul le hash du secret opaque est conservé. Il ne donne pas directement
+/// accès à Agent Core : il permet d'émettre une assertion courte, bornée à
+/// une occurrence dont la clé est recalculée côté API.
+model ScheduleGrant {
+  id                 String             @id @db.Uuid
+  tokenHash          String             @unique @db.Char(64)
+  userId             String             @db.Uuid
+  missionExternalKey String             @db.VarChar(128)
+  scheduleId         String             @unique @db.Uuid
+  status             ScheduleGrantState @default(ACTIVE)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  revokedAt          DateTime?          @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("schedule_grants")
+}
+
+enum ScheduleGrantState {
+  ACTIVE
   REVOKED
 }
 

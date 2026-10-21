@@ -10,7 +10,7 @@ import {
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
-  createMissionScheduleSchema,
+  publicCreateMissionScheduleSchema,
   missionControlHealthSchema,
   missionSnapshotSchema,
   missionScheduleSchema,
@@ -139,21 +139,39 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
       preHandler: app.requireAdmin,
       schema: {
         tags: ["mission-control"],
-        body: createMissionScheduleSchema,
+        body: publicCreateMissionScheduleSchema,
         response: { 200: okSchema(missionScheduleSchema) },
       },
     },
     async (request) => {
       const { userId } = currentUser(request);
       const scheduleKey = randomUUID();
+      const scheduleId = randomUUID();
       const externalKey = `${missionOwnerPrefix(userId)}-schedule-${scheduleKey}`;
       const workspace = resolve(process.cwd(), ".nexus-workspaces", `schedule-${scheduleKey}`);
       await mkdir(workspace, { recursive: true, mode: 0o700 });
-      const created = await required(app.services.missionControl).createSchedule({
-        ...request.body,
-        mission: { ...request.body.mission, external_key: externalKey, workspace },
-      });
-      return ok(created, request.id);
+      const needsAgentCore = request.body.mission.tasks.some(
+        (task) => task.agent_kind === "agent-core" || task.profile === "agent-core",
+      );
+      const delegation = needsAgentCore
+        ? await app.services.scheduleGrants.issue({
+            userId,
+            missionExternalKey: externalKey,
+            scheduleId,
+          })
+        : undefined;
+      try {
+        const created = await required(app.services.missionControl).createSchedule({
+          ...request.body,
+          schedule_id: scheduleId,
+          ...(delegation === undefined ? {} : { owner_delegation: delegation.token }),
+          mission: { ...request.body.mission, external_key: externalKey, workspace },
+        });
+        return ok(created, request.id);
+      } catch (error) {
+        if (delegation !== undefined) await app.services.scheduleGrants.revoke(delegation.id);
+        throw error;
+      }
     },
   );
 

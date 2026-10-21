@@ -37,9 +37,7 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [editReasoning, setEditReasoning] = useState("");
   const [editAdditionalDirs, setEditAdditionalDirs] = useState("");
   const [editConfigOptions, setEditConfigOptions] = useState("{}");
-  const [testWorkspace, setTestWorkspace] = useState(
-    "/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/nexus-audit",
-  );
+  const [testWorkspace, setTestWorkspace] = useState("");
   const [testPrompt, setTestPrompt] = useState("Réponds uniquement NEXUS_ACP_OK");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

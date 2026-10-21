@@ -125,19 +125,45 @@ export const missionSnapshotsSchema = z.object({
 
 const schedulableMissionSchema = submitMissionSchema.omit({ owner: true });
 
+const missionScheduleFields = {
+  name: z.string().trim().min(1).max(200),
+  mission: schedulableMissionSchema,
+  timezone: z.string().trim().min(1).max(100).default("UTC"),
+  run_at: z.iso.datetime({ offset: true }).optional(),
+  cron_expression: z.string().trim().min(1).max(100).optional(),
+  catch_up_policy: z.enum(["skip", "latest", "all"]).default("latest"),
+  max_catch_up: z.number().int().min(1).max(100).default(10),
+  max_concurrency: z.number().int().min(1).max(32).default(1),
+  misfire_grace_seconds: z.number().int().min(0).max(86_400).default(300),
+} as const;
+
+function validScheduleTiming(value: {
+  run_at?: string | undefined;
+  cron_expression?: string | undefined;
+}): boolean {
+  return (value.run_at === undefined) !== (value.cron_expression === undefined);
+}
+
+/** Surface utilisateur : aucune délégation durable ne peut être fournie par le navigateur. */
+export const publicCreateMissionScheduleSchema = z
+  .object(missionScheduleFields)
+  .refine(validScheduleTiming, {
+    message: "exactly one of run_at or cron_expression is required",
+  });
+
+/**
+ * Contrat interne API → Mission Engine.
+ *
+ * Le jeton opaque n'est ni un owner assertion ni un champ de mission. Il est
+ * conservé à part par le scheduler et échangé juste avant chaque occurrence.
+ */
 export const createMissionScheduleSchema = z
   .object({
-    name: z.string().trim().min(1).max(200),
-    mission: schedulableMissionSchema,
-    timezone: z.string().trim().min(1).max(100).default("UTC"),
-    run_at: z.iso.datetime({ offset: true }).optional(),
-    cron_expression: z.string().trim().min(1).max(100).optional(),
-    catch_up_policy: z.enum(["skip", "latest", "all"]).default("latest"),
-    max_catch_up: z.number().int().min(1).max(100).default(10),
-    max_concurrency: z.number().int().min(1).max(32).default(1),
-    misfire_grace_seconds: z.number().int().min(0).max(86_400).default(300),
+    ...missionScheduleFields,
+    schedule_id: identifier.optional(),
+    owner_delegation: z.string().trim().min(32).max(512).optional(),
   })
-  .refine((value) => (value.run_at === undefined) !== (value.cron_expression === undefined), {
+  .refine(validScheduleTiming, {
     message: "exactly one of run_at or cron_expression is required",
   });
 
@@ -381,6 +407,7 @@ export type MissionSubmission = z.infer<typeof missionSubmissionSchema>;
 export type MissionTask = z.infer<typeof missionTaskSchema>;
 export type MissionSnapshot = z.infer<typeof missionSnapshotSchema>;
 export type CreateMissionSchedule = z.input<typeof createMissionScheduleSchema>;
+export type PublicCreateMissionSchedule = z.input<typeof publicCreateMissionScheduleSchema>;
 export type MissionSchedule = z.infer<typeof missionScheduleSchema>;
 export type ScheduleRun = z.infer<typeof scheduleRunSchema>;
 export type ConfiguredAgent = z.infer<typeof configuredAgentSchema>;

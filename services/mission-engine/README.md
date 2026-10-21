@@ -50,8 +50,12 @@ terminées d'un même calendrier.
 
 Le dispatcher est actif par défaut. Il se configure avec
 `NEXUS_ENGINE_SCHEDULER_ENABLED` et `NEXUS_ENGINE_SCHEDULER_POLL_SECONDS`.
-Par sécurité, une assertion propriétaire Agent Core, qui expire et ne doit pas
-être conservée comme un secret de longue durée, est refusée dans un calendrier.
+Une assertion propriétaire Agent Core, qui expire et ne doit pas devenir un
+secret de longue durée, reste refusée dans un calendrier. Pour une tâche
+`agent-core`, l'API fournit à la place une délégation opaque et révocable,
+liée au calendrier. Juste avant chaque occurrence, le moteur l'échange contre
+une assertion courte dont l'API recalcule la portée exacte. Le navigateur ne
+peut ni fournir ni lire cette délégation.
 
 ## Vérification
 

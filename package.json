@@ -2,7 +2,8 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
-  "description": "NEXUS \u00e2\u20ac\u201d assistant personnel IA multi-appareils",
+  "license": "AGPL-3.0-or-later",
+  "description": "NEXUS — assistant personnel IA multi-appareils",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
@@ -19,6 +20,7 @@
     "test:pg": "pnpm --filter @nexus/api test:pg",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "release:check": "node scripts/check-release-hygiene.mjs",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test",
     "nexus": "node packages/cli/dist/index.js",
     "db:generate": "pnpm --filter @nexus/database generate",
@@ -30,7 +32,8 @@
     "docker:logs": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env logs -f",
     "clean": "turbo run clean && rimraf node_modules",
     "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker",
-    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng"
+    "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng",
+    "docker:observability": "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile observability up -d"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -3,7 +3,8 @@ import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
-import { NotFoundError } from "../../services/stores.js";
+import { ConflictError, NotFoundError } from "../../services/stores.js";
+import { DependencyError } from "@nexus/shared";
 import { BrowserWorkerClient } from "@nexus/browser-client";
 import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 import { notificationsConfigSchema } from "@nexus/notifications";
@@ -152,6 +153,8 @@ const agentRunSchema = z.object({
   userId: z.string(),
   conversationId: z.string(),
   correlationId: z.string(),
+  missionExternalKey: z.string().nullable(),
+  replayOfRunId: z.string().nullable(),
   status: z.string(),
   stopReason: z.string().nullable(),
   startedAt: z.string(),
@@ -187,7 +190,43 @@ const agentRunSchema = z.object({
     cacheWriteTokens: z.number(),
     toolCalls: z.number(),
     failedToolCalls: z.number(),
+    fallbackCount: z.number(),
   }),
+});
+
+const observabilitySummarySchema = z.object({
+  generatedAt: z.string(),
+  totals: z.object({
+    runs: z.number(),
+    failedRuns: z.number(),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    toolCalls: z.number(),
+    failedToolCalls: z.number(),
+    estimatedApiEquivalentCostUsd: z.number().nullable(),
+  }),
+  rates: z.object({ fallback: z.number(), toolError: z.number(), runError: z.number() }),
+  agents: z.array(
+    z.object({
+      agent: z.string(),
+      runs: z.number(),
+      failures: z.number(),
+      averageLatencyMs: z.number(),
+      p95LatencyMs: z.number(),
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      estimatedApiEquivalentCostUsd: z.number().nullable(),
+    }),
+  ),
+  missions: z.array(
+    z.object({
+      mission: z.string(),
+      runs: z.number(),
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      estimatedApiEquivalentCostUsd: z.number().nullable(),
+    }),
+  ),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -388,6 +427,97 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
       if (run === undefined) throw new NotFoundError("Run", request.params.runId);
       return ok(run, request.id);
+    },
+  );
+
+  app.get(
+    "/dashboard/observability",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        summary: "Agrégats de latence, jetons, coûts équivalents et fallbacks",
+        response: { 200: okSchema(observabilitySummarySchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const runs = await app.services.dashboard.listAgentRuns(userId, 200);
+      return ok(app.services.telemetry.summarize(runs), request.id);
+    },
+  );
+
+  /**
+   * Rejeu d'analyse : même demande utilisateur, nouvelle conversation et
+   * budget d'outils à zéro. Il est donc impossible de répéter un effet externe
+   * en cliquant sur « rejouer ». Un vrai rejeu avec effets nécessiterait une
+   * nouvelle mission et ses confirmations ordinaires.
+   */
+  app.post(
+    "/dashboard/runs/:runId/replay",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        params: z.object({ runId: z.string().uuid() }),
+        body: z.object({ mode: z.literal("analysis_only").default("analysis_only") }),
+        response: { 200: okSchema(agentRunSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const source = await app.services.runStore.load(request.params.runId);
+      if (source?.record.userId !== userId) {
+        throw new NotFoundError("Run", request.params.runId);
+      }
+      if (source.record.endTime === null) {
+        throw new ConflictError(
+          "Un run actif ne peut pas être rejoué.",
+          "Attendez la fin du run avant de le rejouer.",
+        );
+      }
+      if (app.services.agentCore === undefined) {
+        throw new DependencyError({
+          message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
+          userMessage: "Le moteur agent généraliste n'est pas disponible.",
+        });
+      }
+      const message = lastUserText(source.messages);
+      if (message === undefined) {
+        throw new ConflictError(
+          "Le message source de ce run n'est plus disponible.",
+          "Ce run ne contient plus de demande rejouable.",
+        );
+      }
+
+      const conversation = await app.services.conversations.create({
+        userId,
+        title: `Rejeu d'analyse ${source.record.runId.slice(0, 8)}`,
+      });
+      const replay = await app.services.agentCore.run({
+        userId,
+        conversationId: conversation.id,
+        message,
+        correlationId: request.id,
+        replayOfRunId: source.record.runId,
+        policy: { maxToolCalls: 0, maxIterations: 3 },
+      });
+      await app.services.conversations.appendMessage({
+        conversationId: conversation.id,
+        role: "user",
+        content: message,
+        originClientDeviceId: null,
+      });
+      if (replay.record.response !== null) {
+        await app.services.conversations.appendMessage({
+          conversationId: conversation.id,
+          role: "assistant",
+          content: replay.record.response,
+          originClientDeviceId: null,
+        });
+      }
+      const projected = await app.services.dashboard.getAgentRun(userId, replay.record.runId);
+      return ok(requireRun(projected), request.id);
     },
   );
 
@@ -1047,6 +1177,26 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
   done();
 };
+
+function lastUserText(messages: readonly unknown[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index] as
+      { role?: unknown; content?: { type?: unknown; text?: unknown }[] } | undefined;
+    if (message?.role !== "user" || !Array.isArray(message.content)) continue;
+    const text = message.content
+      .filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text as string)
+      .join("\n")
+      .trim();
+    if (text.length > 0) return text;
+  }
+  return undefined;
+}
+
+function requireRun<T>(run: T | undefined): T {
+  if (run === undefined) throw new Error("Le run rejoué n'a pas été persisté.");
+  return run;
+}
 
 /** Les secrets sont exclusivement des références de trousseau, jamais du JSON persistant. */
 function withoutInlineSecrets(config: McpServerConfig): McpServerConfig {

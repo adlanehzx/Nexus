@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from nexus_engine.acp import AcpError, AcpGateway
-from nexus_engine.agent_core import AgentCoreGateway, validated_base_url
+from nexus_engine.agent_core import AgentCoreGateway, ScheduleGrantGateway, validated_base_url
 from nexus_engine.config import Settings
 from nexus_engine.database import Database
 from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
@@ -62,6 +62,11 @@ class ScheduleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
+    schedule_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    )
+    owner_delegation: str | None = Field(default=None, min_length=32, max_length=512)
     mission: MissionRequest
     timezone: str = Field(default="UTC", min_length=1, max_length=100)
     run_at: datetime | None = None
@@ -184,7 +189,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     repository = MissionRepository(Database(configured.database_path))
     paper = PaperTradingRepository(repository.db)
     research_runs = ResearchRunRepository(repository.db, paper)
-    schedules = SchedulerRepository(repository.db, repository)
+    api_base_url = validated_base_url(configured.api_base_url)
+    schedules = SchedulerRepository(
+        repository.db,
+        repository,
+        ScheduleGrantGateway(
+            api_base_url,
+            timeout_seconds=min(60, configured.api_timeout_seconds),
+        ),
+    )
     repository.sync_profiles(configured.load_profiles())
     profile_lock = threading.Lock()
     profile_gateway = (
@@ -218,7 +231,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     agent_core_gateway = AgentCoreGateway(
-        validated_base_url(configured.api_base_url),
+        api_base_url,
         timeout_seconds=configured.api_timeout_seconds,
     )
 
@@ -610,6 +623,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 max_catch_up=request.max_catch_up,
                 max_concurrency=request.max_concurrency,
                 misfire_grace_seconds=request.misfire_grace_seconds,
+                schedule_id=request.schedule_id,
+                owner_delegation=request.owner_delegation,
             )
         except ValidationError as exc:
             raise HTTPException(422, str(exc)) from exc

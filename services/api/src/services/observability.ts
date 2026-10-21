@@ -312,6 +312,8 @@ export interface AgentRunView {
   userId: string;
   conversationId: string;
   correlationId: string;
+  missionExternalKey: string | null;
+  replayOfRunId: string | null;
   status: string;
   stopReason: string | null;
   startedAt: string;
@@ -340,6 +342,7 @@ export interface AgentRunView {
     cacheWriteTokens: number;
     toolCalls: number;
     failedToolCalls: number;
+    fallbackCount: number;
   };
 }
 
@@ -357,6 +360,9 @@ export interface ProjectableRun {
     userId: string;
     conversationId: string;
     correlationId: string;
+    missionExternalKey?: string | null;
+    replayOfRunId?: string | null;
+    fallbackCount?: number;
     startTime: string;
     endTime: string | null;
     status: string;
@@ -393,6 +399,8 @@ export function projectAgentRun(run: ProjectableRun): AgentRunView {
     userId: record.userId,
     conversationId: record.conversationId,
     correlationId: record.correlationId,
+    missionExternalKey: record.missionExternalKey ?? null,
+    replayOfRunId: record.replayOfRunId ?? null,
     status: record.status,
     stopReason: record.stopReason,
     startedAt: record.startTime,
@@ -422,6 +430,7 @@ export function projectAgentRun(run: ProjectableRun): AgentRunView {
       cacheWriteTokens: record.usage.cacheWriteTokens ?? 0,
       toolCalls: record.toolsUsed.length,
       failedToolCalls: failed,
+      fallbackCount: record.fallbackCount ?? 0,
     },
   };
 }

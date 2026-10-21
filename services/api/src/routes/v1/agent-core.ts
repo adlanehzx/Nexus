@@ -10,7 +10,7 @@ import {
 } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { ConflictError, NotFoundError, type ConversationStore } from "../../services/stores.js";
-import { DependencyError } from "@nexus/shared";
+import { AuthenticationError, DependencyError } from "@nexus/shared";
 import type { IssuedMissionGrant } from "../../services/mission-grants.js";
 import type { AgentRunResult } from "@nexus/agent-core";
 
@@ -46,6 +46,50 @@ const runSchema = z.object({
 
 export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  /**
+   * Échange une délégation durable de calendrier contre une assertion
+   * courte, strictement bornée à l'occurrence. Le secret opaque n'est jamais
+   * renvoyé et la clé de signature ne quitte jamais l'API.
+   */
+  app.post(
+    "/agent-core/schedule-grants/exchange",
+    {
+      schema: {
+        tags: ["agent-core"],
+        body: z.object({
+          scheduleId: z.string().uuid(),
+          scheduledFor: z.string().datetime({ offset: true }),
+          missionExternalKey: z.string().min(1).max(128),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              userId: z.string().uuid(),
+              assertion: z.string(),
+              expiresAt: z.string(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const exchanged = await app.services.scheduleGrants.exchange({
+        token: opaqueBearer(request.headers.authorization),
+        scheduleId: request.body.scheduleId,
+        scheduledFor: request.body.scheduledFor,
+        missionExternalKey: request.body.missionExternalKey,
+      });
+      return ok(
+        {
+          userId: exchanged.owner.userId,
+          assertion: exchanged.token,
+          expiresAt: exchanged.expiresAt.toISOString(),
+        },
+        request.id,
+      );
+    },
+  );
 
   app.post(
     "/agent-core/runs",
@@ -423,6 +467,17 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
   done();
 };
+
+function opaqueBearer(header: string | undefined): string {
+  if (typeof header !== "string" || !header.startsWith("Bearer ")) {
+    throw new AuthenticationError({ message: "Délégation de calendrier absente" });
+  }
+  const token = header.slice("Bearer ".length).trim();
+  if (!token.startsWith("nsg_") || token.length > 512) {
+    throw new AuthenticationError({ message: "Délégation de calendrier mal formée" });
+  }
+  return token;
+}
 
 function present(result: AgentRunResult, renewed?: IssuedMissionGrant) {
   return {

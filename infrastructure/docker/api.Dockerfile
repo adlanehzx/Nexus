@@ -59,6 +59,7 @@ ENV NODE_ENV=production
 # `dumb-init` fait office de PID 1 : il transmet SIGTERM au processus Node, ce
 # dont dépend l'arrêt gracieux.
 RUN apk add --no-cache dumb-init
+RUN mkdir -p /var/lib/nexus/models && chown -R node:node /var/lib/nexus
 
 WORKDIR /app
 COPY --from=builder --chown=node:node /out ./

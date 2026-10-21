@@ -24,6 +24,7 @@ import { PrismaDeviceStore } from "./services/persistence/prisma-device-store.js
 import { PrismaTaskStore } from "./services/persistence/prisma-task-store.js";
 import { PrismaAgentRunClaimStore } from "./services/persistence/prisma-agent-run-claim-store.js";
 import { PrismaMissionGrantRegistry } from "./services/persistence/prisma-mission-grant-registry.js";
+import { PrismaScheduleGrantRegistry } from "./services/persistence/prisma-schedule-grant-registry.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { ClientChannel } from "./ws/client-channel.js";
 import { WorkerChannel } from "./ws/worker-channel.js";
@@ -43,6 +44,7 @@ import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { missionControlRoutes } from "./routes/v1/mission-control.js";
 import { orchestratorRoutes } from "./routes/v1/orchestrator.js";
 import { agentCoreRoutes } from "./routes/v1/agent-core.js";
+import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -108,6 +110,7 @@ export async function buildApp(options: BuildAppOptions) {
     bodyLimit: 1_048_576,
     ajv: { customOptions: { removeAdditional: false } },
   }).withTypeProvider<ZodTypeProvider>();
+  const requestSpans = new WeakMap<object, ReturnType<typeof startHttpSpan>>();
 
   // Zod devient le moteur de validation ET de sérialisation : un schéma unique
   // valide l'entrée, type le handler et produit la documentation OpenAPI.
@@ -132,6 +135,27 @@ export async function buildApp(options: BuildAppOptions) {
   // de sa requête — HTTP, job, run agent, exécution d'outil.
   app.addHook("onRequest", (request, reply, done) => {
     void reply.header("x-request-id", request.id);
+    requestSpans.set(
+      request,
+      startHttpSpan({
+        method: request.method,
+        route: request.routeOptions.url ?? request.url,
+        correlationId: request.id,
+      }),
+    );
+    done();
+  });
+
+  app.addHook("onResponse", (request, reply, done) => {
+    const active = requestSpans.get(request);
+    if (active !== undefined) {
+      finishHttpSpan(active, {
+        method: request.method,
+        route: request.routeOptions.url ?? request.url,
+        statusCode: reply.statusCode,
+      });
+      requestSpans.delete(request);
+    }
     done();
   });
 
@@ -150,6 +174,7 @@ export async function buildApp(options: BuildAppOptions) {
       taskStore: new PrismaTaskStore(prisma),
       agentRunClaims: new PrismaAgentRunClaimStore(prisma),
       missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
+      scheduleGrantRegistry: new PrismaScheduleGrantRegistry(prisma),
     });
 
   app.decorate(

@@ -117,13 +117,39 @@ describe("SafeWebFetcher", () => {
     ).rejects.toThrow(/byte limit/);
   });
 
-  it("refuse les formats binaires", async () => {
+  it("extrait un PDF borné sans transmettre le binaire à un service externe", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValue(new Response("%PDF", { headers: { "content-type": "application/pdf" } }));
+      .mockResolvedValue(
+        new Response("%PDF-1.7 contenu", { headers: { "content-type": "application/pdf" } }),
+      );
+    const pdfParser = vi.fn().mockResolvedValue({
+      content: "--- page 1 ---\nRapport public vérifiable.",
+      metadata: {
+        title: "Rapport",
+        description: null,
+        author: "NEXUS",
+        publishedAt: null,
+        language: "fr",
+      },
+    });
+    const client = new SafeWebFetcher({ fetch, resolver: publicResolver, pdfParser });
+
+    const document = await client.fetch({ url: "https://example.org/file.pdf" });
+
+    expect(pdfParser).toHaveBeenCalledOnce();
+    expect(document.contentType).toBe("application/pdf");
+    expect(document.content).toContain("page 1");
+    expect(document.metadata.title).toBe("Rapport");
+  });
+
+  it("refuse les autres formats binaires", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(new Response("PK", { headers: { "content-type": "application/zip" } }));
     const client = new SafeWebFetcher({ fetch, resolver: publicResolver });
 
-    await expect(client.fetch({ url: "https://example.org/file.pdf" })).rejects.toThrow(
+    await expect(client.fetch({ url: "https://example.org/file.zip" })).rejects.toThrow(
       /Unsupported web content type/,
     );
   });
