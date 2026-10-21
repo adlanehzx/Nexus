@@ -3,12 +3,11 @@ import { ConfigurationError } from "@nexus/shared";
 import { configSchema, type AppConfig } from "./schema.js";
 
 /**
- * Charge un fichier .env dans process.env s'il existe.
+ * Loads a .env file into process.env if it exists.
  *
- * Utilise `process.loadEnvFile` (natif depuis Node 20.12) plutôt que `dotenv` :
- * une dépendance de moins, et le même comportement que `node --env-file`.
- * Les variables déjà présentes dans l'environnement ne sont pas écrasées côté
- * conteneur, puisqu'en production aucun fichier .env n'est déployé.
+ * Uses native `process.loadEnvFile` (Node 20.12+) rather than `dotenv`:
+ * one less dependency, and identical behavior to `node --env-file`.
+ * Existing environment variables are preserved.
  */
 export function loadDotEnv(path: string): boolean {
   if (!existsSync(path)) return false;
@@ -17,19 +16,19 @@ export function loadDotEnv(path: string): boolean {
 }
 
 /**
- * Valide un environnement et retourne la configuration typée.
- * Fonction pure : c'est elle qu'on teste, sans toucher à `process.env`.
+ * Validates an environment object and returns strongly-typed configuration.
+ * Pure function: testable without mutating `process.env`.
  */
 export function parseConfig(env: NodeJS.ProcessEnv): AppConfig {
   const result = configSchema.safeParse(env);
 
   if (!result.success) {
     const details = result.error.issues
-      .map((issue) => `  ${issue.path.join(".") || "(racine)"} — ${issue.message}`)
+      .map((issue) => `  ${issue.path.join(".") || "(root)"} — ${issue.message}`)
       .join("\n");
 
     throw new ConfigurationError({
-      message: `Configuration invalide :\n${details}`,
+      message: `Invalid configuration:\n${details}`,
       userMessage: "The service is misconfigured.",
       context: { issues: result.error.issues },
     });
@@ -41,15 +40,15 @@ export function parseConfig(env: NodeJS.ProcessEnv): AppConfig {
 let cached: AppConfig | undefined;
 
 /**
- * Configuration du processus courant. Résolue une fois, puis mémorisée :
- * la configuration ne change pas pendant la vie d'un processus.
+ * Current process configuration. Resolved once and cached:
+ * configuration does not change during the lifecycle of a process.
  */
 export function getConfig(): AppConfig {
   cached ??= parseConfig(process.env);
   return cached;
 }
 
-/** Réservé aux tests : oublie la configuration mémorisée. */
+/** Test utility: resets cached configuration. */
 export function resetConfigCache(): void {
   cached = undefined;
 }

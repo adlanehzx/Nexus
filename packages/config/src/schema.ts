@@ -3,23 +3,23 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 
 /**
- * Clé de signature éphémère.
+ * Ephemeral signing key.
  *
- * Produite une fois par processus. En production, `AUTH_SIGNING_KEY` doit être
- * fournie : sans elle, un redémarrage invaliderait toutes les sessions, et deux
- * réplicas n'accepteraient pas les jetons l'un de l'autre.
+ * Generated once per process. In production, `AUTH_SIGNING_KEY` must be
+ * provided: without it, a restart invalidates all sessions, and two replicas
+ * will not accept each other's tokens.
  */
 const ephemeralSigningKey = generateKeyPairSync("ed25519")
   .privateKey.export({ type: "pkcs8", format: "pem" })
   .toString();
 
 /**
- * Schéma de configuration.
+ * Configuration schema.
  *
- * Règle du projet : toute variable d'environnement lue par NEXUS est déclarée ici.
- * Aucun `process.env.X` ne traîne ailleurs dans le code — c'est ce qui garantit
- * que `.env.example` reste vrai et qu'une clé manquante fait échouer le démarrage
- * plutôt que la première requête à 3 h du matin.
+ * Project rule: every environment variable read by NEXUS is declared here.
+ * No `process.env.X` lingers elsewhere in the codebase — ensuring `.env.example`
+ * stays accurate and missing variables fail fast at boot rather than on the
+ * first request at 3 AM.
  */
 
 const isUrl = (protocols: readonly string[]) => (value: string) => {
@@ -46,13 +46,13 @@ const envBoolean = z.preprocess((value) => {
 
 const optionalAbsolutePath = z.preprocess(
   (value) => (value === "" ? undefined : value),
-  z.string().min(1).refine(isAbsolute, "doit être un chemin absolu").optional(),
+  z.string().min(1).refine(isAbsolute, "must be an absolute path").optional(),
 );
 
 const modelPricingSchema = z.record(
   z.string().min(1),
   z.object({
-    /** Equivalent API en USD par million de jetons, jamais une facture réelle. */
+    /** API equivalent in USD per million tokens, never an actual invoice. */
     inputPerMillionUsd: z.number().nonnegative(),
     outputPerMillionUsd: z.number().nonnegative(),
     cacheReadPerMillionUsd: z.number().nonnegative().default(0),
@@ -66,28 +66,27 @@ const modelPricing = z.preprocess((value, ctx) => {
   try {
     return JSON.parse(value) as unknown;
   } catch {
-    ctx.addIssue({ code: "custom", message: "doit contenir un objet JSON valide" });
+    ctx.addIssue({ code: "custom", message: "must contain a valid JSON object" });
     return z.NEVER;
   }
 }, modelPricingSchema);
 
 /**
- * Origines de la coquille de bureau Tauri.
+ * Tauri desktop shell origins.
  *
- * **Toujours acceptées, et non configurables.** Ce ne sont pas des adresses
- * réseau : ce sont les origines que la WebView attribue à l'application
- * installée sur la machine — `http://tauri.localhost` sous Windows,
- * `tauri://localhost` sous macOS et Linux. Elles ne désignent aucun serveur
- * joignable, et un site web ne peut pas les usurper : c'est le navigateur qui
- * pose l'en-tête `Origin`, jamais la page.
+ * **Always accepted, and non-configurable.** These are not network addresses:
+ * they are the origins assigned by WebView to the application installed on the
+ * host — `http://tauri.localhost` on Windows, `tauri://localhost` on macOS and
+ * Linux. They do not target reachable network servers, and a website cannot
+ * spoof them: the browser sets the `Origin` header, never the page.
  *
- * Les inscrire ici plutôt que dans `.env` répare un piège réel : le client
- * Windows empaqueté était refusé par la validation d'origine du canal
- * `/ws/client` — 403 à la poignée de main — parce qu'aucun déploiement ne
- * pensait à les ajouter. Une valeur que tout le monde doit fournir et que
- * personne ne connaît n'est pas une configuration, c'est un défaut.
+ * Hardcoding them here rather than in `.env` avoids a common trap: packaged
+ * Windows desktop clients were rejected during origin validation on `/ws/client`
+ * — 403 on handshake — because deployments omitted them from CORS_ORIGINS.
+ * A value every deployment must provide that no one remembers is not configuration,
+ * it is a defect.
  *
- * La vérification d'origine, elle, reste entière : rien d'autre n'est élargi.
+ * Origin verification remains otherwise strict: nothing else is relaxed.
  */
 export const TAURI_ORIGINS = ["http://tauri.localhost", "tauri://localhost"] as const;
 
@@ -96,26 +95,26 @@ export const configSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
-    // Version exposée par l'API. Le pipeline de déploiement y injecte le SHA du
-    // commit ; en local, la valeur du paquet suffit.
+    // API version. The deployment pipeline injects the commit SHA; in local dev,
+    // the package version suffices.
     API_VERSION: z.string().min(1).default("0.1.0"),
     API_HOST: z.string().min(1).default("0.0.0.0"),
     API_PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
     /**
-     * Origines acceptées, pour CORS **et** pour la poignée de main WebSocket.
+     * Accepted origins for CORS **and** WebSocket handshakes.
      *
-     * Les origines Tauri y sont ajoutées d'office (voir `TAURI_ORIGINS`) : le
-     * client de bureau ne peut pas se connecter sans elles, et les demander à
-     * chaque déploiement revenait à casser l'application par défaut.
+     * Tauri origins are included automatically (see `TAURI_ORIGINS`): the
+     * desktop client cannot connect without them, and requiring them explicitly
+     * in every deployment broke the application out of the box.
      */
     CORS_ORIGINS: csv.optional(),
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(0).max(120_000).default(10_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),
 
-    // Observabilite locale. Prometheus utilise un port distinct, non publie
-    // par defaut ; OTLP reste facultatif pour que le developpement ne depende
-    // jamais d'un collecteur externe.
+    // Local observability. Prometheus uses a distinct port, unpublished by
+    // default; OTLP remains optional so local development never depends on an
+    // external collector.
     METRICS_ENABLED: envBoolean.default(true),
     METRICS_HOST: z.string().min(1).default("127.0.0.1"),
     METRICS_PORT: z.coerce.number().int().min(1).max(65_535).default(9464),
@@ -124,13 +123,13 @@ export const configSchema = z
       (value) => (value === "" ? undefined : value),
       z
         .string()
-        .refine(isUrl(["http:", "https:"]), "doit être une URL HTTP(S)")
+        .refine(isUrl(["http:", "https:"]), "must be an HTTP(S) URL")
         .optional(),
     ),
     MODEL_PRICING_JSON: modelPricing.default({}),
 
-    // Mémoire sémantique locale. Le backend neural utilise ONNX et un cache
-    // disque ; `hash` reste disponible pour les machines très contraintes.
+    // Local semantic memory. The neural backend uses ONNX and disk caching;
+    // `hash` remains available for constrained hardware.
     MEMORY_EMBEDDING_BACKEND: z.enum(["neural", "hash"]).default("neural"),
     MEMORY_EMBEDDING_MODEL: z
       .string()
@@ -144,51 +143,45 @@ export const configSchema = z
 
     DATABASE_URL: z
       .string()
-      .refine(isUrl(["postgres:", "postgresql:"]), "doit être une URL postgresql://"),
+      .refine(isUrl(["postgres:", "postgresql:"]), "must be a postgresql:// URL"),
 
     /**
-     * Clé privée Ed25519 (PEM PKCS8) qui signe les jetons.
+     * Ed25519 private key (PEM PKCS8) signing auth tokens.
      *
-     * Générée au déploiement, jamais commitée. En développement et en test, une
-     * clé éphémère est produite au démarrage : les jetons ne survivent alors pas
-     * à un redémarrage, ce qui est exactement le comportement souhaité hors
-     * production.
+     * Generated upon deployment, never committed. In development and test, an
+     * ephemeral key is generated at startup: tokens do not survive restarts,
+     * which is the desired behavior outside production.
      */
     AUTH_SIGNING_KEY: z.string().min(1).default(ephemeralSigningKey),
 
-    REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
+    REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "must be a redis:// URL"),
 
     /**
-     * Version d'exécutant attendue, pour signaler ceux qui sont en retard.
+     * Expected worker version, used to flag outdated workers.
      *
-     * **Consultative, et c'est tout.** NEXUS ne met pas un worker à jour : il
-     * n'existe aucun canal pour cela, et c'est délibéré — ce serait de
-     * l'exécution de code à distance, exactement ce que la politique locale
-     * existe pour empêcher. Ce réglage sert à *savoir* qu'une machine est en
-     * retard, ce qu'un worker oublié depuis six mois ne signale pas tout seul.
+     * **Advisory only.** NEXUS does not auto-update workers: there is no channel
+     * for remote code execution, by design. This setting simply alerts that an
+     * agent machine is outdated.
      *
-     * Absente, aucun avis n'est rendu. Mieux vaut ne rien dire que d'affirmer
-     * « à jour » sans savoir.
+     * If absent, no opinion is rendered.
      */
     EXPECTED_WORKER_VERSION: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z
         .string()
-        .regex(/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "doit être une version sémantique")
+        .regex(/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "must be a semantic version")
         .optional(),
     ),
 
     /**
-     * Adresse publique de l'API, telle qu'un appareil doit l'appeler.
+     * Public API URL that devices connect to.
      *
-     * Nécessaire pour l'appairage par QR, et explicite plutôt que déduite de
-     * l'en-tête `Host` : cet en-tête est choisi par l'appelant, et un QR qui en
-     * dériverait son adresse laisserait n'importe quelle requête décider où un
-     * téléphone enverra sa clé publique. Un réglage se relit et s'audite ; un
-     * en-tête, non.
+     * Required for QR pairing and explicit rather than inferred from the `Host`
+     * header: callers choose the `Host` header, and deriving pairing addresses
+     * from it would allow any caller to direct pairing traffic to an arbitrary
+     * host. Settings can be reviewed and audited; headers cannot.
      *
-     * Absente, l'appairage par QR est refusé avec un message qui nomme ce
-     * réglage — plutôt que de produire un QR qui mène au mauvais endroit.
+     * If absent, QR pairing is rejected with a message identifying this setting.
      */
     PUBLIC_API_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),
@@ -199,22 +192,22 @@ export const configSchema = z
           const url = new URL(value);
           if (url.username || url.password) return false;
           const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
-          // Un réseau local est le cas d'usage normal : le téléphone et le cœur
-          // sont sur le même Wi-Fi. HTTPS reste exigé dès qu'on sort de là.
+          // Local network is the primary use case: phone and core on the same Wi-Fi.
+          // HTTPS is required whenever outside local loopback or private ranges.
           const privateHost = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname);
           return (
             url.protocol === "https:" || (url.protocol === "http:" && (loopback || privateHost))
           );
-        }, "doit être une URL HTTPS, ou HTTP sur la boucle locale ou un réseau privé")
+        }, "must be an HTTPS URL, or HTTP on loopback or private network")
         .optional(),
     ),
 
-    /** Répertoires persistants, séparés du code dans les images en lecture seule. */
+    /** Persistent directories, decoupled from code in read-only container images. */
     NEXUS_RUNTIME_CONFIG_DIR: optionalAbsolutePath,
     NEXUS_BROWSER_ARTIFACTS_DIR: optionalAbsolutePath,
     NEXUS_OBSERVABILITY_DIR: optionalAbsolutePath,
 
-    /** Moteur NEXUS ACP/paper-trading, optionnel. */
+    /** NEXUS ACP / paper-trading engine, optional. */
     MISSION_CONTROL_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z
@@ -224,11 +217,11 @@ export const configSchema = z
           const url = new URL(value);
           const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
           return url.protocol === "https:" || (url.protocol === "http:" && loopback);
-        }, "doit être une URL HTTPS ou une URL HTTP de boucle locale")
+        }, "must be an HTTPS URL or loopback HTTP URL")
         .optional(),
     ),
 
-    /** Métamoteur local optionnel. Aucun compte ni clé API n'est nécessaire. */
+    /** Optional local SearXNG meta-search engine. No account or API key required. */
     SEARXNG_URL: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z
@@ -244,19 +237,16 @@ export const configSchema = z
             !url.hostname.includes(".") ||
             url.hostname.endsWith(".internal")
           );
-        }, "doit être HTTPS ou un service HTTP local/interne, sans credentials")
+        }, "must be HTTPS or a local/internal HTTP service, without credentials")
         .optional(),
     ),
     SEARXNG_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(15_000),
   })
   /**
-   * Les origines par défaut dépendent de l'environnement, et cet
-   * environnement est celui qu'on vient de lire — pas celui du processus.
+   * Default origins depend on the environment parsed from input — not process.env.
    *
-   * La différence n'est pas théorique : `parseConfig` reçoit un objet
-   * d'environnement explicite, et faire dépendre un défaut de `process.env`
-   * rendait le résultat différent selon le processus qui appelle. Une même
-   * entrée doit produire une même sortie, sous vitest comme en production.
+   * Pure parsing: `parseConfig` receives an explicit env object; relying on
+   * `process.env` made parsing non-deterministic depending on caller state.
    */
   .transform((config) => ({
     ...config,
@@ -264,23 +254,21 @@ export const configSchema = z
       ...new Set([
         ...(config.CORS_ORIGINS ??
           (config.NODE_ENV === "production"
-            ? // En production, rien n'est ouvert par défaut : les origines
-              // réellement servies sont déclarées au déploiement.
+            ? // In production, nothing is open by default: served origins must be declared.
               []
-            : // En développement, les trois coquilles locales — l'API elle-même,
-              // la fenêtre Vite du client de bureau, le serveur Expo du mobile.
+            : // In development, the local shells: API, desktop Vite window, Expo mobile.
               ["http://localhost:3000", "http://localhost:5273", "http://localhost:8081"])),
         ...TAURI_ORIGINS,
       ]),
     ],
   }))
   .superRefine((config, ctx) => {
-    // Un joker CORS en production annule l'intérêt de la liste d'origines.
+    // A CORS wildcard in production defeats origin security.
     if (config.NODE_ENV === "production" && config.CORS_ORIGINS.includes("*")) {
       ctx.addIssue({
         code: "custom",
         path: ["CORS_ORIGINS"],
-        message: "CORS_ORIGINS ne peut pas contenir '*' en production",
+        message: "CORS_ORIGINS cannot contain '*' in production",
       });
     }
   });
