@@ -332,6 +332,56 @@ prédicat `async` rend une promesse, toujours vraie, donc `until(async () =>
 faux)` réussissait immédiatement. Les deux sont corrigés : le prédicat est
 attendu, et l'épuisement lève.
 
+## 7 quinquies. Mises à jour des exécutants
+
+### Le canal qui n'existe pas
+
+Le cœur **constate** la version d'un worker ; il ne la change pas. Il n'y a pas
+de route « installe cette version », et son absence est vérifiée par un test.
+
+Un tel canal serait de l'exécution de code à distance par construction : le
+cœur dirait à une machine de télécharger puis de lancer quelque chose. Or tout
+le plan appareil repose sur l'hypothèse inverse — la politique locale existe
+« pour que si le cœur est compromis, le poste ne devienne pas une machine
+ouverte ». Une mise à jour poussée rendrait cette phrase fausse, et avec elle
+tout le reste : refus par défaut, confiance explicite, capacités déclarées.
+
+### Ce que le cœur apporte quand même
+
+Le vrai manque n'était pas de pouvoir mettre à jour : c'était de **savoir**
+qu'il faut le faire. Un worker en retard de six mois ne se signale pas tout
+seul.
+
+`EXPECTED_WORKER_VERSION` déclare la version attendue, et chaque appareil porte
+un avis :
+
+| statut      | ce que ça veut dire                            | geste                                                                     |
+| ----------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `a-jour`    | même version                                   | aucun                                                                     |
+| `en-retard` | une version plus récente est attendue          | **local** : paquet, installeur, ou `git pull` puis redémarrage du service |
+| `en-avance` | développement local, ou déploiement partiel    | aucun                                                                     |
+| `inconnu`   | version absente, illisible, ou aucune attendue | vérifier que l'exécutant démarre                                          |
+
+Le geste est porté par l'avis, pas construit par l'interface : « en retard »
+sans phrase associée obligerait chaque surface à la réinventer, et à se tromper
+en laissant croire qu'un bouton pourrait mettre à jour.
+
+Sans `EXPECTED_WORKER_VERSION`, le statut est `inconnu` et aucun geste n'est
+proposé. Inventer « à jour » serait affirmer ce qu'on ne sait pas.
+
+### Comparer des versions
+
+C'est un classique des erreurs silencieuses — `"10" < "9"` en comparaison de
+chaînes, et une pré-version qui passe pour plus récente que la version finale.
+La comparaison est donc numérique champ par champ, et `1.2.0-rc.1` précède
+`1.2.0`. Entre deux pré-versions l'ordre est lexicographique, ce qui est
+approximatif et suffisant : la seule question posée est « faut-il mettre à
+jour ? », et un ordre exact entre `rc.9` et `rc.10` ne changerait aucune
+décision.
+
+Une version illisible ne lève pas : c'est une **observation** — un worker a
+annoncé n'importe quoi — et elle devient un statut affichable.
+
 ## 8. Le pont vers l'agent : pas de second système d'outils
 
 Une capacité devient un `ToolDefinition` ordinaire du `ToolRegistry` existant,

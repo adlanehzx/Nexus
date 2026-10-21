@@ -6,6 +6,7 @@ import {
   SUGGESTED_CAPABILITIES,
   deviceCapabilitySchema,
   encodePairingPayload,
+  updateAdvice,
 } from "@nexus/devices";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
@@ -42,23 +43,35 @@ const deviceSchema = z.object({
     .passthrough(),
   lastSeenAt: z.string().datetime().nullable(),
   authenticated: z.boolean(),
+  /** Version annoncée par l'exécutant, et ce qu'il faut en penser. */
+  agentVersion: z.string().nullable(),
+  update: z.object({
+    status: z.enum(["a-jour", "en-retard", "en-avance", "inconnu"]),
+    expected: z.string().nullable(),
+    /** Le geste à faire, ou `null`. Il est toujours **local**. */
+    action: z.string().nullable(),
+  }),
 });
 
 /** Ce qu'un appareil expose au client. Le secret d'appairage n'y figure pas. */
-function present(device: {
-  id: string;
-  name: string;
-  type: string;
-  platform: string;
-  role: string;
-  status: string;
-  trust: string;
-  capabilities: { name: string; enabled: boolean }[];
-  grantedPermissions: string[];
-  health: Record<string, unknown>;
-  lastSeenAt: Date | null;
-  authenticated: boolean;
-}) {
+function present(
+  device: {
+    id: string;
+    name: string;
+    type: string;
+    platform: string;
+    role: string;
+    status: string;
+    trust: string;
+    capabilities: { name: string; enabled: boolean }[];
+    grantedPermissions: string[];
+    health: Record<string, unknown>;
+    lastSeenAt: Date | null;
+    authenticated: boolean;
+    agentVersion: string | null;
+  },
+  expectedWorkerVersion?: string,
+) {
   return {
     id: device.id,
     name: device.name,
@@ -71,6 +84,14 @@ function present(device: {
     grantedPermissions: device.grantedPermissions,
     health: device.health as never,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+    agentVersion: device.agentVersion,
+    // L'avis est calculé par le cœur, qui est le seul à connaître la version
+    // attendue. Le worker, lui, ne reçoit aucune instruction : il n'y a pas de
+    // canal pour lui en donner.
+    update: (() => {
+      const advice = updateAdvice(device.agentVersion, expectedWorkerVersion);
+      return { status: advice.status, expected: advice.expected, action: advice.action };
+    })(),
     authenticated: device.authenticated ?? false,
   };
 }
@@ -99,7 +120,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
           ? all
           : all.filter((device) => device.role === request.query.role);
 
-      const page = paginate(filtered.map(present), request.query, (device) => device.id);
+      const page = paginate(
+        filtered.map((device) => present(device, app.services.expectedWorkerVersion)),
+        request.query,
+        (device) => device.id,
+      );
       return {
         data: page.items,
         meta: { requestId: request.id, nextCursor: page.nextCursor, total: page.total },
@@ -180,7 +205,9 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         context: { deviceId: device.id, type: device.type, platform: device.platform },
       });
 
-      return reply.code(201).send(ok(present(device), request.id));
+      return reply
+        .code(201)
+        .send(ok(present(device, app.services.expectedWorkerVersion), request.id));
     },
   );
 
@@ -359,7 +386,9 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         context: { deviceId: device.id, ticketId: ticket.id, type: device.type },
       });
 
-      return reply.code(201).send(ok(present(device), request.id));
+      return reply
+        .code(201)
+        .send(ok(present(device, app.services.expectedWorkerVersion), request.id));
     },
   );
 
@@ -380,7 +409,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       if (device === undefined) throw new NotFoundError("Appareil", request.params.deviceId);
       assertOwnedBy(device.userId, userId, "Appareil");
 
-      return ok(present(device), request.id);
+      return ok(present(device, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -408,7 +437,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         context: { deviceId: trusted.id },
       });
 
-      return ok(present(trusted), request.id);
+      return ok(present(trusted, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -445,7 +474,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // impossible, quelle que soit la règle qu'on aurait oubliée.
       await app.services.deviceCredentials.revoke(device.id);
 
-      return ok(present(revoked), request.id);
+      return ok(present(revoked, app.services.expectedWorkerVersion), request.id);
     },
   );
 
@@ -469,7 +498,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       const updated = await app.services.deviceRegistry.updateDevice(device.id, {
         grantedPermissions: request.body.grantedPermissions,
       });
-      return ok(present(updated), request.id);
+      return ok(present(updated, app.services.expectedWorkerVersion), request.id);
     },
   );
 

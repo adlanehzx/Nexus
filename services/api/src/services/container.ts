@@ -130,6 +130,8 @@ export interface ServiceContainerOptions {
    * téléphone, loin de la cause.
    */
   publicApiUrl?: string;
+  /** Version d'exécutant attendue. Consultative : voir `@nexus/devices/updates`. */
+  expectedWorkerVersion?: string;
   runStore?: QueryableAgentRunStore;
 
   /**
@@ -222,6 +224,7 @@ export class ServiceContainer {
   readonly deviceCredentials: DeviceCredentialStore;
   readonly pairing: PairingService;
   readonly publicApiUrl: string | undefined;
+  readonly expectedWorkerVersion: string | undefined;
   readonly pause: PauseSwitch;
   readonly selector: DeviceSelector;
   readonly router: EventRouter;
@@ -310,6 +313,7 @@ export class ServiceContainer {
       now,
     });
     this.publicApiUrl = options.publicApiUrl;
+    this.expectedWorkerVersion = options.expectedWorkerVersion;
     this.deviceSessions = new DeviceSessionService({
       registry: this.deviceRegistry,
       verifier: options.deviceVerifier ?? multiAlgorithmVerifier,

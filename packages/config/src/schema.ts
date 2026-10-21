@@ -95,6 +95,26 @@ export const configSchema = z
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "doit être une URL redis://"),
 
     /**
+     * Version d'exécutant attendue, pour signaler ceux qui sont en retard.
+     *
+     * **Consultative, et c'est tout.** NEXUS ne met pas un worker à jour : il
+     * n'existe aucun canal pour cela, et c'est délibéré — ce serait de
+     * l'exécution de code à distance, exactement ce que la politique locale
+     * existe pour empêcher. Ce réglage sert à *savoir* qu'une machine est en
+     * retard, ce qu'un worker oublié depuis six mois ne signale pas tout seul.
+     *
+     * Absente, aucun avis n'est rendu. Mieux vaut ne rien dire que d'affirmer
+     * « à jour » sans savoir.
+     */
+    EXPECTED_WORKER_VERSION: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .string()
+        .regex(/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "doit être une version sémantique")
+        .optional(),
+    ),
+
+    /**
      * Adresse publique de l'API, telle qu'un appareil doit l'appeler.
      *
      * Nécessaire pour l'appairage par QR, et explicite plutôt que déduite de

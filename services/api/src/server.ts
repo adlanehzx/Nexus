@@ -169,6 +169,9 @@ const services = new ServiceContainer({
     new LocalLLMProvider(),
   ]),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
+  ...(config.EXPECTED_WORKER_VERSION === undefined
+    ? {}
+    : { expectedWorkerVersion: config.EXPECTED_WORKER_VERSION }),
   pairingTickets: new PrismaPairingTicketStore(prisma),
   ...(config.MISSION_CONTROL_URL === undefined
     ? {}
