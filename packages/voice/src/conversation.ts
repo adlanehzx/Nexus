@@ -3,36 +3,28 @@ import type { PiperSpeech } from "./piper.js";
 import type { TranscriptionResult, WhisperDictation } from "./whisper.js";
 
 /**
- * Conversation mains libres.
+ * Hands-free conversational loop.
  *
- * ## Ce que « mains libres » veut dire ici, et ne veut pas dire
+ * ## Principles
  *
- * Un tour : on écoute, on transcrit, on répond, on prononce, on réécoute. Sans
- * toucher l'appareil **entre** les tours.
+ * Each turn listens, transcribes, queries the agent, speaks the response,
+ * and resumes listening without manual device interaction between turns.
  *
- * Ce que ça ne veut pas dire : une écoute permanente. La conversation démarre
- * sur un geste explicite et s'arrête d'elle-même — après un silence, après un
- * plafond de tours, après un plafond de durée. Un assistant qui resterait à
- * l'écoute « au cas où » est précisément ce que NEXUS refuse d'être, et aucune
- * méthode ici ne permet de le construire.
+ * This is not always-on listening: conversation begins via explicit trigger
+ * and terminates automatically upon silence, turn limits, or duration timeouts.
  *
- * ## L'interruption vocale
+ * ## Barge-in voice interruption
  *
- * Pendant que NEXUS parle, le micro reste écouté. Si la personne parle, la
- * synthèse est coupée **immédiatement** et son tour commence. C'est la
- * différence entre une conversation et un répondeur : on peut couper la parole.
- *
- * La détection n'est pas un modèle de VAD maison — elle est déléguée au port
- * `onSpeechDetected`, parce que la manière de savoir « quelqu'un parle » dépend
- * de la plateforme, et qu'un seuil d'énergie écrit ici serait faux partout.
+ * While the assistant speaks, microphone input is monitored. If speech is detected,
+ * synthesis is cut off immediately and the user turn begins.
  */
 
 export interface ConversationTurn {
-  /** Ce que la personne a dit. */
+  /** What the user said. */
   heard: string;
-  /** Ce que NEXUS a répondu. */
+  /** What NEXUS responded. */
   answered: string;
-  /** La réponse a-t-elle été coupée par la personne ? */
+  /** Whether speech was interrupted by barge-in. */
   interrupted: boolean;
 }
 
@@ -40,31 +32,22 @@ export interface HandsFreeOptions {
   dictation: WhisperDictation;
   speech: PiperSpeech;
   clock: ClockPort;
-  /** Ce que NEXUS répond. C'est l'agent, injecté. */
+  /** Agent answer handler. */
   answer: (heard: string) => Promise<string>;
-  /**
-   * Durée d'écoute d'un tour.
-   *
-   * Un tour qui n'aurait pas de fin obligerait la personne à dire « terminé »,
-   * c'est-à-dire à parler à une machine au lieu de parler.
-   */
+  /** Listening duration per turn. */
   turnMs?: number;
-  /** Plafond de tours. Une conversation sans fin finit par être une écoute permanente. */
+  /** Maximum turn count limit. */
   maxTurns?: number;
-  /** Plafond de durée totale. Même raison. */
+  /** Maximum total conversation duration limit. */
   maxDurationMs?: number;
   /**
-   * Signale que la personne parle pendant que NEXUS parle.
-   *
-   * Absent, l'interruption vocale est désactivée : mieux vaut pas
-   * d'interruption qu'une interruption qui se déclenche sur le bruit du
-   * ventilateur et coupe chaque phrase.
+   * Voice activity callback when user speaks while NEXUS is speaking.
    */
   onSpeechDetected?: (listener: () => void) => () => void;
   onTurn?: (turn: ConversationTurn) => void;
 }
 
-export type ConversationStop = "demandée" | "silence" | "plafond-de-tours" | "plafond-de-durée";
+export type ConversationStop = "requested" | "silence" | "turn-limit" | "duration-limit";
 
 export class HandsFreeConversation {
   readonly #options: HandsFreeOptions;
@@ -85,7 +68,7 @@ export class HandsFreeConversation {
     return this.#running;
   }
 
-  /** Arrête après le tour en cours. */
+  /** Stops conversation after current turn. */
   stop(): void {
     this.#stopRequested = true;
   }
@@ -99,24 +82,21 @@ export class HandsFreeConversation {
 
     try {
       for (;;) {
-        if (this.#stopRequested) return { turns, stoppedBy: "demandée" };
-        if (turns.length >= this.#maxTurns) return { turns, stoppedBy: "plafond-de-tours" };
+        if (this.#stopRequested) return { turns, stoppedBy: "requested" };
+        if (turns.length >= this.#maxTurns) return { turns, stoppedBy: "turn-limit" };
         if (clock.now() - startedAt >= this.#maxDurationMs) {
-          return { turns, stoppedBy: "plafond-de-durée" };
+          return { turns, stoppedBy: "duration-limit" };
         }
 
         await dictation.start();
         await clock.sleep(this.#turnMs);
         const heard: TranscriptionResult = await dictation.stop();
 
-        // Un silence termine la conversation. C'est la sortie naturelle : on
-        // s'arrête de parler, et ça s'arrête — sans formule magique.
+        // Silence naturally terminates the conversation.
         if (heard.text.length === 0) return { turns, stoppedBy: "silence" };
 
         const answered = await answer(heard.text);
 
-        // L'interruption est armée **avant** de parler, et désarmée après : une
-        // détection qui survivrait au tour couperait le tour suivant.
         const disarm = onSpeechDetected?.(() => {
           void speech.stop();
         });
@@ -136,8 +116,6 @@ export class HandsFreeConversation {
       }
     } finally {
       this.#running = false;
-      // Quoi qu'il arrive, le micro se ferme et la parole s'arrête. Une sortie
-      // par exception ne doit pas laisser un micro ouvert.
       await dictation.cancel();
       await speech.stop();
     }

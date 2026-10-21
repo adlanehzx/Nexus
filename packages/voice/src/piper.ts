@@ -2,45 +2,42 @@ import type { ProcessPort, SpawnedProcess } from "./ports.js";
 import { VoiceUnavailableError } from "./whisper.js";
 
 /**
- * Synthèse vocale locale par Piper.
+ * Local text-to-speech synthesis powered by Piper.
  *
- * ## Pourquoi locale
+ * ## Why local synthesis
  *
- * Même raison que la dictée, dans l'autre sens : lire à voix haute la réponse
- * d'un assistant personnel, c'est prononcer le contenu de ses mails et de son
- * agenda. Une API de synthèse recevrait ce texte-là.
+ * Text-to-speech synthesis delivers spoken responses containing private emails,
+ * messages, or personal calendar items. Using on-device synthesis keeps these
+ * outputs local without shipping them to external synthesis APIs.
  *
- * ## La chaîne
+ * ## Pipeline
  *
- *     texte → piper (stdin) → audio brut (stdout) → lecteur (stdin)
+ *     text -> piper (stdin) -> raw audio (stdout) -> audio player (stdin)
  *
- * Deux processus chaînés par un tube, et **aucun fichier** : la synthèse ne
- * laisse rien sur le disque, parce qu'il n'y a rien à laisser. C'est plus
- * simple que la dictée, où whisper exige un fichier d'entrée.
+ * Piper streams directly into the player via pipes without temporary files on disk.
  *
- * ## L'interruption est le sujet
+ * ## Interruptibility
  *
- * Une synthèse qu'on ne peut pas couper est insupportable à l'usage : on parle
- * par-dessus, et la machine continue. `stop()` tue les deux processus, et
- * `interrupted` dit si la phrase a été coupée — ce qui permet à l'appelant de ne
- * pas enchaîner comme si elle avait été entendue.
+ * Uninterruptible voice output harms conversational usability. `stop()` terminates
+ * both the synthesizer and audio player immediately, and `interrupted` indicates
+ * whether output was cancelled early.
  */
 
 export interface PiperOptions {
   process: ProcessPort;
   binary?: string;
-  /** Modèle de voix `.onnx`. Sans lui, la synthèse est indisponible. */
+  /** Voice model `.onnx` file path. */
   modelPath: string;
-  /** Lecteur audio. Reçoit le flux brut de Piper sur son entrée standard. */
+  /** Audio player reading raw PCM stream from standard input. */
   player?: { command: string; args: readonly string[] };
-  /** Vitesse. Piper l'exprime en « longueur de phonème » : plus petit = plus rapide. */
+  /** Phoneme length scale (smaller = faster). */
   lengthScale?: number;
 }
 
-/** `aplay` accompagne ALSA, donc présent partout où `arecord` l'est. */
+/** `aplay` accompanies ALSA on standard Linux distributions. */
 const DEFAULT_PLAYER = {
   command: "aplay",
-  // Le format est celui que Piper produit : 16 bits, mono, 22,05 kHz.
+  // Format produced by Piper: 16-bit, mono, 22.05 kHz.
   args: ["-q", "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"],
 };
 
@@ -67,7 +64,7 @@ export class PiperSpeech {
     return this.#synthesis !== undefined || this.#playback !== undefined;
   }
 
-  /** La dernière phrase a-t-elle été coupée ? */
+  /** Indicates whether the previous speech was interrupted. */
   get interrupted(): boolean {
     return this.#interrupted;
   }
@@ -76,15 +73,15 @@ export class PiperSpeech {
     if ((await this.#process.which(this.#binary)) === undefined) {
       return {
         ok: false,
-        reason: `binaire ${this.#binary} absent`,
-        remedy: `Installez Piper, puis vérifiez que « ${this.#binary} » est dans le PATH.`,
+        reason: `binary ${this.#binary} missing`,
+        remedy: `Install Piper, then verify "${this.#binary}" is in PATH.`,
       };
     }
     if ((await this.#process.which(this.#player.command)) === undefined) {
       return {
         ok: false,
-        reason: `lecteur ${this.#player.command} absent`,
-        remedy: `Installez « ${this.#player.command} » pour lire l'audio.`,
+        reason: `player ${this.#player.command} missing`,
+        remedy: `Install "${this.#player.command}" to play audio.`,
       };
     }
     return { ok: true };
@@ -95,36 +92,24 @@ export class PiperSpeech {
   }
 
   /**
-   * Prononce un texte, et rend la main quand c'est fini — ou coupé.
-   *
-   * Ne lève pas si l'audio est coupé : une interruption est le comportement
-   * voulu, pas une panne. L'appelant lit `interrupted`.
+   * Synthesizes and speaks text. Resolves upon completion or interruption.
    */
   async speak(text: string): Promise<{ interrupted: boolean }> {
     const available = await this.availability();
     if (!available.ok) {
-      throw new VoiceUnavailableError(available.reason ?? "inconnu", available.remedy ?? "");
+      throw new VoiceUnavailableError(available.reason ?? "unknown", available.remedy ?? "");
     }
-    // Une nouvelle phrase remplace la précédente : parler par-dessus soi-même
-    // est toujours une erreur.
+    // A new utterance cancels any in-progress speech.
     await this.stop();
     this.#interrupted = false;
 
     const args = [
       "--model",
       this.#modelPath,
-      // Flux brut sur la sortie standard : aucun fichier intermédiaire, donc
-      // aucun fichier à supprimer.
       "--output_raw",
       ...(this.#lengthScale === undefined ? [] : ["--length_scale", String(this.#lengthScale)]),
     ];
-    // Références **locales**, et non les champs.
-    //
-    // Deux réponses peuvent arriver coup sur coup : la seconde appelle `stop()`,
-    // qui remet les champs à `undefined` — et la première, réveillée de son
-    // `await`, lisait alors `undefined.exit()`. Lire les champs après une
-    // attente suppose que personne n'a bougé entre-temps, ce qui est faux dès
-    // qu'il y a deux appelants.
+
     const synthesis = this.#process.spawn(this.#binary, args, text);
     const playback = this.#process.spawn(this.#player.command, this.#player.args);
     this.#synthesis = synthesis;
@@ -134,8 +119,6 @@ export class PiperSpeech {
       await synthesis.exit();
       await playback.exit();
     } finally {
-      // Ne nettoyer que si ce sont toujours *nos* processus : sinon on
-      // effacerait la trace de la phrase qui nous a remplacés.
       if (this.#synthesis === synthesis) {
         this.#synthesis = undefined;
         this.#playback = undefined;
@@ -145,12 +128,7 @@ export class PiperSpeech {
   }
 
   /**
-   * Coupe la parole, tout de suite.
-   *
-   * Les deux processus sont tués : ne tuer que la synthèse laisserait le lecteur
-   * vider son tampon, c'est-à-dire continuer à parler une seconde après qu'on
-   * lui a dit de se taire. C'est exactement ce que l'utilisateur perçoit comme
-   * « ça ne m'écoute pas ».
+   * Immediately stops speech and terminates player and synthesis processes.
    */
   async stop(): Promise<void> {
     if (!this.speaking) return;

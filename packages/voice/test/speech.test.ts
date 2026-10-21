@@ -3,15 +3,15 @@ import { PiperSpeech } from "../src/piper.js";
 import { VoiceUnavailableError } from "../src/whisper.js";
 import { FakeProcess } from "./fakes.js";
 
-const VOICE = "/srv/nexus-user/.nexus/voix/fr_FR-siwis-medium.onnx";
+const VOICE = "/srv/nexus-user/.nexus/voices/en_US-lessac-medium.onnx";
 
-/** Attend que la synthèse ait réellement démarré, au lieu de l'espérer. */
+/** Waits until synthesis starts. */
 async function untilSpeaking(piper: PiperSpeech): Promise<void> {
   for (let index = 0; index < 100; index += 1) {
     if (piper.speaking) return;
     await Promise.resolve();
   }
-  throw new Error("la synthèse n'a jamais démarré");
+  throw new Error("synthesis never started");
 }
 
 function speech() {
@@ -21,8 +21,8 @@ function speech() {
   return { piper, process };
 }
 
-describe("disponibilité", () => {
-  it("nomme le binaire manquant et le geste", async () => {
+describe("availability", () => {
+  it("identifies missing binary and remedy", async () => {
     const { piper, process } = speech();
     process.available.delete("piper");
     const availability = await piper.availability();
@@ -30,101 +30,89 @@ describe("disponibilité", () => {
     expect(availability.remedy).toContain("Piper");
   });
 
-  it("distingue le lecteur audio manquant", async () => {
+  it("identifies missing audio player", async () => {
     const { piper, process } = speech();
     process.available.delete("aplay");
     expect((await piper.availability()).reason).toContain("aplay");
   });
 
-  it("refuse de parler plutôt que d'échouer à moitié", async () => {
+  it("fails early when dependencies are missing", async () => {
     const { piper, process } = speech();
     process.available.delete("piper");
-    await expect(piper.speak("Bonjour")).rejects.toBeInstanceOf(VoiceUnavailableError);
+    await expect(piper.speak("Hello")).rejects.toBeInstanceOf(VoiceUnavailableError);
   });
 });
 
-describe("prononcer", () => {
-  it("passe le texte sur l'entrée standard, et ne crée aucun fichier", async () => {
+describe("speaking", () => {
+  it("pipes text to standard input without creating disk files", async () => {
     const { piper, process } = speech();
-    await piper.speak("Trois mails importants.");
+    await piper.speak("Three important emails.");
 
     const synthesis = process.of("piper")[0];
-    expect(synthesis?.stdin).toBe("Trois mails importants.");
-    // `--output_raw` : le flux va au lecteur par un tube. Aucun fichier, donc
-    // aucun fichier à supprimer — contrairement à la dictée.
+    expect(synthesis?.stdin).toBe("Three important emails.");
     expect(synthesis?.args).toContain("--output_raw");
     expect(synthesis?.args.some((arg) => arg.endsWith(".wav"))).toBe(false);
   });
 
-  it("lance le lecteur au format que Piper produit", async () => {
+  it("starts audio player with format matching Piper output", async () => {
     const { piper, process } = speech();
-    await piper.speak("Bonjour");
+    await piper.speak("Hello");
     const player = process.of("aplay")[0];
     expect(player?.args).toEqual(expect.arrayContaining(["-r", "22050", "-f", "S16_LE"]));
   });
 
-  it("remplace une phrase en cours au lieu de parler par-dessus", async () => {
+  it("replaces active utterance instead of speaking over itself", async () => {
     const { piper, process } = speech();
     process.longRunning.add("piper").add("aplay");
 
-    const first = piper.speak("Première phrase");
+    const first = piper.speak("First sentence");
     await untilSpeaking(piper);
-    const second = piper.speak("Deuxième phrase");
+    const second = piper.speak("Second sentence");
     await first;
 
-    // Parler par-dessus soi-même est toujours une erreur : la première phrase
-    // est coupée, la seconde la remplace.
     expect(process.of("piper")[0]?.killed).toBe(true);
     expect(process.of("piper")).toHaveLength(2);
     expect(process.of("piper")[1]?.killed).toBe(false);
 
-    // On termine la seconde, sinon le test attendrait un processus qui, par
-    // construction, ne finit jamais seul.
     await piper.stop();
     await second;
   });
 });
 
 describe("interruption", () => {
-  it("tue la synthèse **et** le lecteur", async () => {
+  it("terminates synthesis and audio player processes immediately", async () => {
     const { piper, process } = speech();
     process.longRunning.add("piper").add("aplay");
 
-    const speaking = piper.speak("Une longue phrase");
+    const speaking = piper.speak("A long sentence");
     await untilSpeaking(piper);
     await piper.stop();
     await speaking;
 
-    // Ne tuer que la synthèse laisserait le lecteur vider son tampon, c'est-à-
-    // dire continuer à parler une seconde après qu'on lui a dit de se taire —
-    // ce que l'utilisateur perçoit comme « ça ne m'écoute pas ».
     expect(process.of("piper")[0]?.killed).toBe(true);
     expect(process.of("aplay")[0]?.killed).toBe(true);
   });
 
-  it("marque la phrase comme coupée, sans lever", async () => {
+  it("marks sentence as interrupted without throwing", async () => {
     const { piper, process } = speech();
     process.longRunning.add("piper").add("aplay");
 
-    const speaking = piper.speak("Une longue phrase");
+    const speaking = piper.speak("A long sentence");
     await untilSpeaking(piper);
     await piper.stop();
     const outcome = await speaking;
 
-    // Une interruption est le comportement voulu, pas une panne — mais
-    // l'appelant doit pouvoir ne pas enchaîner comme si la phrase avait été
-    // entendue.
     expect(outcome.interrupted).toBe(true);
     expect(piper.interrupted).toBe(true);
   });
 
-  it("ne marque rien quand la phrase est allée au bout", async () => {
+  it("marks nothing interrupted when sentence completes normally", async () => {
     const { piper } = speech();
-    const outcome = await piper.speak("Phrase courte");
+    const outcome = await piper.speak("Short sentence");
     expect(outcome.interrupted).toBe(false);
   });
 
-  it("s'arrêter sans parler ne fait rien", async () => {
+  it("stopping while idle does nothing", async () => {
     const { piper, process } = speech();
     await piper.stop();
     expect(process.runs).toHaveLength(0);

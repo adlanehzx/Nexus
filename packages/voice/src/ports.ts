@@ -1,41 +1,40 @@
 /**
- * Ports du plan vocal local.
+ * Local voice subsystem ports.
  *
- * Tout ce qui parle au système — micro, moteur de transcription, synthèse,
- * haut-parleur — passe par un port. Ce n'est pas une préférence
- * architecturale : c'est la seule façon d'éprouver la chaîne vocale, parce
- * qu'aucune suite de tests ne peut brancher un micro. Ce qui est testé est
- * donc le **cycle de vie** — ce qu'on lance, avec quels arguments, ce qu'on
- * tue, ce qu'on supprime — et c'est précisément là que vivent les erreurs qui
- * coûtent cher : un enregistrement qui reste sur le disque, un processus de
- * synthèse qu'on n'arrête pas, un micro qui ne se ferme jamais.
+ * Everything interfacing with the operating system — microphone, transcription engine,
+ * speech synthesizer, speaker — goes through a port. This is not just an architectural
+ * preference: it is the only way to reliably test the voice pipeline, since
+ * automated test suites cannot attach a physical microphone. Testing therefore focuses
+ * on the **lifecycle** — what is spawned, with what arguments, what is killed, and what
+ * is deleted — which is precisely where high-cost failure modes happen: leaked
+ * recordings on disk, unstopped synthesis processes, or orphaned microphone streams.
  */
 
 export interface SpawnedProcess {
-  /** Attend la fin et rend le code de sortie. */
+  /** Waits for completion and returns exit code. */
   exit(): Promise<number>;
-  /** Sortie standard, accumulée. */
+  /** Standard output, accumulated. */
   output(): Promise<string>;
-  /** Erreur standard, accumulée — pour diagnostiquer, jamais pour l'utilisateur. */
+  /** Standard error, accumulated — for diagnostics, never exposed directly to user. */
   stderr(): Promise<string>;
-  /** Arrêt immédiat. Doit être idempotent : on l'appelle sans savoir. */
+  /** Immediate termination. Must be idempotent. */
   kill(): void;
   readonly running: boolean;
 }
 
 export interface ProcessPort {
-  /** Lance une commande. `stdin` est écrit puis fermé, s'il est fourni. */
+  /** Spawns a command. `stdin` is written then closed, if provided. */
   spawn(command: string, args: readonly string[], stdin?: string): SpawnedProcess;
-  /** Le binaire existe-t-il et est-il exécutable ? */
+  /** Checks if a binary exists and is executable. */
   which(command: string): Promise<string | undefined>;
 }
 
 export interface FilePort {
-  /** Crée un dossier, accessible au seul propriétaire. */
+  /** Creates directory restricted to owner permissions (0700). */
   mkdir(path: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   remove(path: string): Promise<void>;
-  /** Taille en octets, ou `undefined` si absent. */
+  /** Size in bytes, or `undefined` if nonexistent. */
   size(path: string): Promise<number | undefined>;
   read(path: string): Promise<string>;
 }

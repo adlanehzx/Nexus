@@ -1,13 +1,11 @@
 import type { ClockPort, FilePort, ProcessPort, SpawnedProcess } from "../src/ports.js";
 
 /**
- * Doublures des ports système.
+ * System port test doubles.
  *
- * Aucune suite de tests ne peut brancher un micro. Ce qui est éprouvé est donc
- * le **cycle de vie** : ce qu'on lance, avec quels arguments, ce qu'on tue, ce
- * qu'on supprime. C'est précisément là que vivent les erreurs coûteuses — un
- * enregistrement qui reste sur le disque, une synthèse qu'on n'arrête pas, un
- * micro qui ne se ferme jamais.
+ * Automated test suites cannot attach a physical microphone. Testing therefore focuses
+ * on the lifecycle: what is spawned, with what arguments, what is killed, and what
+ * is deleted.
  */
 
 export interface FakeRun {
@@ -20,20 +18,15 @@ export interface FakeRun {
 export class FakeProcess implements ProcessPort {
   readonly runs: FakeRun[] = [];
   readonly available = new Set<string>();
-  /** Sortie rendue par commande. */
+  /** Output returned per command. */
   readonly outputs = new Map<string, string>();
-  /** Code de sortie par commande. Défaut : 0. */
+  /** Exit code per command. Default: 0. */
   readonly codes = new Map<string, number>();
-  /** Commandes qui ne terminent pas tant qu'on ne les tue pas. */
+  /** Commands that stay running until killed. */
   readonly longRunning = new Set<string>();
 
   /**
-   * Effets de bord d'une commande, par nom.
-   *
-   * Un enregistreur **écrit un fichier** : sans le modéliser, le second tour
-   * d'une conversation n'entend rien, parce que le WAV du premier a été
-   * supprimé. La doublure doit faire ce que fait le vrai programme, sinon elle
-   * teste autre chose.
+   * Command side-effects, mapped by name.
    */
   readonly effects = new Map<string, (args: readonly string[]) => void>();
 
@@ -66,7 +59,7 @@ export class FakeProcess implements ProcessPort {
     return Promise.resolve(this.available.has(command) ? `/usr/bin/${command}` : undefined);
   }
 
-  /** Tous les lancements d'une commande. */
+  /** All invocations of a given command. */
   of(command: string): FakeRun[] {
     return this.runs.filter((run) => run.command === command);
   }
@@ -76,7 +69,7 @@ export class FakeFiles implements FilePort {
   readonly files = new Map<string, number>();
   readonly directories = new Set<string>();
   readonly removals: string[] = [];
-  /** Chemins dont la suppression échoue silencieusement — le pire des cas. */
+  /** Paths where removal fails silently. */
   readonly undeletable = new Set<string>();
   readonly contents = new Map<string, string>();
 
@@ -106,7 +99,7 @@ export class FakeFiles implements FilePort {
 
 export class FakeClock implements ClockPort {
   #now = 0;
-  /** Durées demandées, dans l'ordre — sans jamais attendre réellement. */
+  /** Requested sleep durations in chronological order. */
   readonly sleeps: number[] = [];
 
   now(): number {

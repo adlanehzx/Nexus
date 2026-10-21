@@ -3,24 +3,22 @@ import { AudioScratch } from "../src/scratch.js";
 import { VoiceUnavailableError, WhisperDictation, cleanTranscript } from "../src/whisper.js";
 import { FakeClock, FakeFiles, FakeProcess } from "./fakes.js";
 
-const MODEL = "/srv/nexus-user/.nexus/modeles/ggml-base.bin";
+const MODEL = "/srv/nexus-user/.nexus/models/ggml-base.bin";
 
 function dictation(options: { segmentMs?: number; maxListeningMs?: number } = {}) {
   const process = new FakeProcess();
   const files = new FakeFiles();
   const clock = new FakeClock();
 
-  // Tout est en place par défaut : les tests d'indisponibilité retirent ce
-  // qu'ils veulent éprouver.
   process.available.add("whisper-cli").add("arecord");
   files.files.set(MODEL, 142_000_000);
   process.longRunning.add("arecord");
-  process.outputs.set("whisper-cli", "Bonjour, range mes mails.");
+  process.outputs.set("whisper-cli", "Hello, organize my emails.");
 
   const scratch = new AudioScratch({
     files,
     directory: "/tmp/nexus-audio",
-    newName: () => "dictee.wav",
+    newName: () => "dictation.wav",
   });
 
   const whisper = new WhisperDictation({
@@ -29,39 +27,37 @@ function dictation(options: { segmentMs?: number; maxListeningMs?: number } = {}
     clock,
     scratch,
     modelPath: MODEL,
-    language: "fr",
+    language: "en",
     ...options,
   });
   return { whisper, process, files, clock };
 }
 
-describe("disponibilité", () => {
-  it("nomme ce qui manque, et le geste qui corrige", async () => {
+describe("availability", () => {
+  it("identifies missing binary and remedy", async () => {
     const { whisper, process } = dictation();
     process.available.delete("whisper-cli");
     const availability = await whisper.availability();
-    // « Dictée indisponible » oblige à chercher ; « installez whisper.cpp »
-    // ferme la question.
     expect(availability.ok).toBe(false);
     expect(availability.reason).toContain("whisper-cli");
     expect(availability.remedy).toContain("whisper.cpp");
   });
 
-  it("distingue le modèle absent du binaire absent", async () => {
+  it("distinguishes missing model from missing binary", async () => {
     const { whisper, files } = dictation();
     files.files.delete(MODEL);
     const availability = await whisper.availability();
-    expect(availability.reason).toContain("modèle");
+    expect(availability.reason).toContain("model");
     expect(availability.remedy).toContain(MODEL);
   });
 
-  it("distingue l'enregistreur absent", async () => {
+  it("distinguishes missing audio recorder", async () => {
     const { whisper, process } = dictation();
     process.available.delete("arecord");
     expect((await whisper.availability()).reason).toContain("arecord");
   });
 
-  it("refuse de démarrer plutôt que d'échouer au milieu", async () => {
+  it("refuses to start when dependencies are missing", async () => {
     const { whisper, process } = dictation();
     process.available.delete("whisper-cli");
     await expect(whisper.start()).rejects.toBeInstanceOf(VoiceUnavailableError);
@@ -69,92 +65,82 @@ describe("disponibilité", () => {
   });
 });
 
-describe("écoute", () => {
-  it("ouvre le micro en 16 kHz mono, le format que whisper attend", async () => {
+describe("listening", () => {
+  it("opens microphone at 16 kHz mono matching whisper requirements", async () => {
     const { whisper, process, files } = dictation({ maxListeningMs: 1 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
 
     const recording = process.of("arecord")[0];
     expect(recording?.args).toContain("16000");
     expect(recording?.args).toContain("S16_LE");
-    expect(recording?.args).toContain("/tmp/nexus-audio/dictee.wav");
+    expect(recording?.args).toContain("/tmp/nexus-audio/dictation.wav");
   });
 
-  it("rend des transcriptions partielles au fil des segments", async () => {
+  it("emits partial transcriptions progressively", async () => {
     const { whisper, files } = dictation({ segmentMs: 2_000, maxListeningMs: 6_000 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
 
     const partials: string[] = [];
     await whisper.start({ onPartial: (text) => partials.push(text) });
-    // La latence perçue est celle d'un segment : c'est ce que « streaming »
-    // veut dire ici, et ce que ce test fixe.
     expect(partials.length).toBeGreaterThanOrEqual(1);
-    expect(partials[0]).toBe("Bonjour, range mes mails.");
+    expect(partials[0]).toBe("Hello, organize my emails.");
   });
 
-  it("ne lance pas whisper sur un WAV qui n'a que son en-tête", async () => {
+  it("does not run whisper on WAV containing only headers", async () => {
     const { whisper, process, files } = dictation({ segmentMs: 1, maxListeningMs: 3 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 44);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 44);
     await whisper.start();
-    // Il n'y a rien à transcrire : lancer un processus pour rendre du vide
-    // coûte une seconde de machine à chaque segment de silence.
     expect(process.of("whisper-cli")).toHaveLength(0);
   });
 
-  it("ferme le micro au plafond de durée, et garde ce qui a été dit", async () => {
+  it("stops microphone upon maximum duration limit and preserves audio", async () => {
     const { whisper, process, files } = dictation({ segmentMs: 1_000, maxListeningMs: 2_000 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
 
-    // Le plafond est un garde-fou contre une interface distraite — mais jeter
-    // la dictée pour la punir serait absurde.
     expect(process.of("arecord")[0]?.killed).toBe(true);
     expect(whisper.listening).toBe(false);
     const result = await whisper.stop();
-    expect(result.text).toContain("Bonjour");
+    expect(result.text).toContain("Hello");
   });
 
-  it("transmet la langue et le modèle à whisper, et n'écrit aucun fichier de sortie", async () => {
+  it("passes language and model flags without writing output files", async () => {
     const { whisper, process, files } = dictation({ segmentMs: 1, maxListeningMs: 3 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
 
     const run = process.of("whisper-cli")[0];
     expect(run?.args).toEqual(
-      expect.arrayContaining(["-m", MODEL, "-f", "/tmp/nexus-audio/dictee.wav", "-l", "fr"]),
+      expect.arrayContaining(["-m", MODEL, "-f", "/tmp/nexus-audio/dictation.wav", "-l", "en"]),
     );
-    // Le texte vient sur la sortie standard : la transcription ne crée donc
-    // aucun fichier qu'il faudrait supprimer ensuite.
     expect(run?.args.some((arg) => arg.startsWith("--output"))).toBe(false);
   });
 
-  it("supprime l'enregistrement quand l'écoute se termine", async () => {
+  it("deletes the recording when listening ends", async () => {
     const { whisper, files } = dictation({ segmentMs: 1, maxListeningMs: 2 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
-    expect(files.files.has("/tmp/nexus-audio/dictee.wav")).toBe(false);
-    expect(files.removals).toContain("/tmp/nexus-audio/dictee.wav");
+    expect(files.files.has("/tmp/nexus-audio/dictation.wav")).toBe(false);
+    expect(files.removals).toContain("/tmp/nexus-audio/dictation.wav");
   });
 });
 
-describe("annulation", () => {
-  it("jette la transcription sans l'envoyer", async () => {
+describe("cancellation", () => {
+  it("discards transcription without returning it", async () => {
     const { whisper, files } = dictation({ segmentMs: 1_000, maxListeningMs: 5_000 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
 
     await whisper.cancel();
     const result = await whisper.stop();
-    // Une transcription déjà calculée ne doit pas partir parce qu'elle était
-    // prête : annuler annule.
     expect(result.text).toBe("");
     expect(result.segments).toEqual([]);
   });
 
-  it("ferme le micro", async () => {
+  it("closes the microphone upon cancellation", async () => {
     const { whisper, process, files } = dictation({ segmentMs: 1_000, maxListeningMs: 5_000 });
-    files.files.set("/tmp/nexus-audio/dictee.wav", 64_000);
+    files.files.set("/tmp/nexus-audio/dictation.wav", 64_000);
     await whisper.start();
     await whisper.cancel();
     expect(process.of("arecord")[0]?.killed).toBe(true);
@@ -162,26 +148,24 @@ describe("annulation", () => {
   });
 });
 
-describe("nettoyage de la sortie de whisper", () => {
-  it("retire les lignes de diagnostic et les marqueurs", () => {
+describe("whisper output cleanup", () => {
+  it("strips diagnostic lines and noise tags", () => {
     const raw = [
       "whisper_init_from_file_with_params_no_state: loading model",
       "[00:00:00.000 --> 00:00:02.000]",
-      " Bonjour, range mes mails.",
+      " Hello, organize my emails.",
       "(silence)",
       "",
     ].join("\n");
-    // Les retirer ici, et non dans l'interface, évite que chaque surface
-    // réinvente le filtre — et en oublie un.
-    expect(cleanTranscript(raw)).toBe("Bonjour, range mes mails.");
+    expect(cleanTranscript(raw)).toBe("Hello, organize my emails.");
   });
 
-  it("rend une chaîne vide quand il n'y a que du bruit", () => {
-    expect(cleanTranscript("(silence)\n(musique)\n")).toBe("");
+  it("returns empty string when output is pure silence/noise", () => {
+    expect(cleanTranscript("(silence)\n(music)\n")).toBe("");
     expect(cleanTranscript("")).toBe("");
   });
 
-  it("recolle plusieurs lignes utiles", () => {
-    expect(cleanTranscript("Bonjour.\nComment vas-tu ?")).toBe("Bonjour. Comment vas-tu ?");
+  it("joins multiple spoken lines", () => {
+    expect(cleanTranscript("Hello.\nHow are you?")).toBe("Hello. How are you?");
   });
 });

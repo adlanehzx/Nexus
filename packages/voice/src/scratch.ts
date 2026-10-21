@@ -2,43 +2,36 @@ import { AppError } from "@nexus/shared";
 import type { FilePort } from "./ports.js";
 
 /**
- * Fichiers audio temporaires, et la garantie qu'il n'en reste aucun.
+ * Temporary audio files and guaranteed cleanup.
  *
- * ## Pourquoi c'est un module à part
+ * ## Why this is an isolated module
  *
- * « Aucun audio conservé » est la promesse la plus facile à faire et la plus
- * facile à trahir. Il suffit d'un `return` anticipé, d'une exception non
- * attrapée, ou d'un processus tué au mauvais moment pour qu'un enregistrement
- * de la cuisine reste sur le disque. Une promesse de ce genre ne tient pas par
- * la discipline : elle tient par un endroit unique qui la fait respecter, et
- * par des tests qui l'attaquent.
+ * "No audio retained" is the easiest promise to make and the easiest to break.
+ * An early return, unhandled exception, or aborted process could easily leave a
+ * room recording on disk. Such a guarantee relies on a single strict abstraction
+ * enforcing cleanup in all cases and verified by rigorous tests.
  *
- * ## Les trois règles
+ * ## Three core principles
  *
- * 1. **Un seul dossier.** Tout l'audio temporaire y vit, en 0700. On sait donc
- *    où regarder, et `purge()` peut tout effacer sans deviner.
- * 2. **La suppression est vérifiée.** Supprimer puis constater que le fichier
- *    a disparu — un `unlink` dont on ignore le résultat n'est pas une
- *    suppression, c'est une intention.
- * 3. **Le nettoyage passe par `finally`.** L'appelant n'a pas le choix : la
- *    méthode `withAudio` prête un chemin et reprend la main quoi qu'il arrive.
+ * 1. **Single dedicated directory:** All temporary audio lives here with 0700 permissions.
+ *    `purge()` can reliably remove leftovers without guessing.
+ * 2. **Verified deletion:** After deletion, the file must be verified gone.
+ * 3. **Cleanup via `finally`:** The `withAudio` helper yields a temporary path and
+ *    guarantees cleanup upon completion or failure.
  *
- * ## Ce que ça ne garantit pas, et il faut le savoir
+ * ## Scope of the guarantee
  *
- * Que les octets ne sont plus récupérables sur le support. Un `unlink` délie un
- * nom, il ne réécrit pas les secteurs — et sur un SSD, aucune réécriture
- * logicielle ne le garantit vraiment. La promesse tenue est « NEXUS ne conserve
- * aucun fichier audio », pas « l'audio est effacé de façon médico-légale ».
- * Confondre les deux serait rassurer à tort.
+ * An unlink unbinds the filesystem reference without overwriting disk blocks.
+ * NEXUS guarantees no audio files are retained on the filesystem, not forensic
+ * multi-pass block wiping.
  */
 
 export type AudioRetention =
-  /** Défaut : rien n'est conservé, et la suppression est vérifiée. */
-  | "aucune"
+  /** Default: nothing is retained, and deletion is strictly verified. */
+  | "none"
   /**
-   * Conserve les enregistrements, pour diagnostiquer un problème de
-   * transcription. Jamais par défaut, et annoncé bruyamment : c'est une
-   * décision, pas une option de confort.
+   * Retains recordings for diagnostic purposes.
+   * Never enabled by default.
    */
   | "diagnostic";
 
@@ -48,7 +41,7 @@ export class AudioNotDeletedError extends AppError {
 
   constructor(path: string) {
     super({
-      message: `l'enregistrement n'a pas pu être supprimé : ${path}`,
+      message: `recording could not be deleted: ${path}`,
       userMessage:
         "NEXUS could not delete a temporary recording. Dictation is stopped as a precaution.",
       context: { path },
@@ -58,12 +51,12 @@ export class AudioNotDeletedError extends AppError {
 
 export interface AudioScratchOptions {
   files: FilePort;
-  /** Dossier des enregistrements temporaires. */
+  /** Directory for temporary recordings. */
   directory: string;
   retention?: AudioRetention;
-  /** Noms uniques, remplaçables pour les tests. */
+  /** Unique name generator, replaceable in tests. */
   newName?: () => string;
-  /** Averti quand la rétention « diagnostic » laisse un fichier derrière elle. */
+  /** Invoked when "diagnostic" retention keeps a file. */
   onRetained?: (path: string) => void;
 }
 
@@ -78,12 +71,12 @@ export class AudioScratch {
   constructor(options: AudioScratchOptions) {
     this.#files = options.files;
     this.#directory = options.directory;
-    this.#retention = options.retention ?? "aucune";
+    this.#retention = options.retention ?? "none";
     this.#newName =
       options.newName ??
       (() => {
         this.#counter += 1;
-        return `dictee-${String(Date.now())}-${String(this.#counter)}.wav`;
+        return `dictation-${String(Date.now())}-${String(this.#counter)}.wav`;
       });
     this.#onRetained = options.onRetained;
   }
@@ -97,11 +90,7 @@ export class AudioScratch {
   }
 
   /**
-   * Prête un chemin audio, puis le reprend.
-   *
-   * `finally` et non un appel de nettoyage laissé à l'appelant : c'est ce qui
-   * rend la garantie vraie même quand la transcription échoue, ce qui est
-   * justement le moment où l'on oublierait.
+   * Allocates a temporary audio path, executes the operation, and guarantees cleanup.
    */
   async withAudio<T>(operation: (path: string) => Promise<T>): Promise<T> {
     await this.#files.mkdir(this.#directory);
@@ -113,7 +102,7 @@ export class AudioScratch {
     }
   }
 
-  /** Efface tout ce qui traîne. Appelé au démarrage, et après un arrêt brutal. */
+  /** Clears leftover files. Called at startup and after abnormal termination. */
   async purge(names: readonly string[]): Promise<number> {
     let removed = 0;
     for (const name of names) {
@@ -133,8 +122,6 @@ export class AudioScratch {
     }
     if (!(await this.#files.exists(path))) return;
     await this.#files.remove(path);
-    // Constater, et non supposer : un `unlink` dont on ignore le résultat est
-    // une intention, pas une suppression.
     if (await this.#files.exists(path)) throw new AudioNotDeletedError(path);
   }
 }

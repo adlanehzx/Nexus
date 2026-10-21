@@ -4,12 +4,12 @@ import { delimiter, join } from "node:path";
 import type { ClockPort, FilePort, ProcessPort, SpawnedProcess } from "./ports.js";
 
 /**
- * Implémentations système des ports vocaux.
+ * System implementations of voice ports.
  *
- * Tout ce qui touche le système est ici, en un seul endroit, pour une raison
- * simple : c'est la partie qu'aucun test ne peut exercer, donc celle qui doit
- * être la plus courte et la plus bête possible. Tout le comportement — ce qu'on
- * lance, ce qu'on tue, ce qu'on supprime — vit dans les modules testés.
+ * All platform-specific system interactions reside here in one place for a
+ * straightforward reason: this is the thin boundary that unit tests do not directly exercise,
+ * so it must remain as simple and minimal as possible. All business behavior —
+ * what is spawned, terminated, or deleted — lives in the unit-tested modules.
  */
 
 export const systemProcess: ProcessPort = {
@@ -25,8 +25,8 @@ export const systemProcess: ProcessPort = {
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
-      // Borné : la sortie d'erreur d'un binaire bavard ne doit pas faire enfler
-      // la mémoire d'une dictée de trente secondes.
+      // Bounded buffer: verbose process error output must not bloat memory
+      // during dictation runs.
       err = (err + chunk).slice(-8_192);
     });
 
@@ -58,8 +58,7 @@ export const systemProcess: ProcessPort = {
       kill: () => {
         if (!running) return;
         child.kill("SIGTERM");
-        // Un `SIGTERM` ignoré laisserait un micro ouvert. Le second coup est ce
-        // qui rend « arrête » vrai.
+        // An unhandled SIGTERM could leave the microphone active; a follow-up SIGKILL guarantees termination.
         const force = setTimeout(() => {
           if (running) child.kill("SIGKILL");
         }, 500);
@@ -73,10 +72,7 @@ export const systemProcess: ProcessPort = {
   },
 
   /**
-   * Cherche un binaire dans le `PATH`, sans passer par un shell.
-   *
-   * `which` via un shell réintroduirait l'interprétation d'une chaîne, pour
-   * trouver un nom de programme — c'est le mauvais échange.
+   * Looks up a binary in `PATH` without spawning a subshell.
    */
   async which(command) {
     if (command.includes("/")) {
@@ -102,7 +98,7 @@ async function executable(path: string): Promise<boolean> {
 }
 
 export const systemFiles: FilePort = {
-  // 0700 : les enregistrements temporaires ne regardent que leur propriétaire.
+  // 0700: Temporary recordings are restricted to the owner.
   mkdir: async (path) => {
     await mkdir(path, { recursive: true, mode: 0o700 });
   },
