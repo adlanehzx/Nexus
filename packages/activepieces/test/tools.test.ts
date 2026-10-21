@@ -3,7 +3,7 @@ import { createActivepiecesTools } from "../src/tools.js";
 import type { ActivepiecesBridgeClient } from "../src/client.js";
 import type { ToolContext, ToolDefinition } from "@nexus/tools";
 
-describe("Outils Activepieces pour les agents NEXUS", () => {
+describe("Activepieces tools for NEXUS agents", () => {
   const createMockContext = (): ToolContext => ({
     runId: "run-ap-1",
     userId: "user-1",
@@ -40,7 +40,7 @@ describe("Outils Activepieces pour les agents NEXUS", () => {
     client: mockClient as unknown as ActivepiecesBridgeClient,
   });
 
-  it("enregistre tous les 4 outils avec leurs permissions", () => {
+  it("registers all 4 tools with correct permissions", () => {
     const names = tools.map((t) => t.name);
     expect(names).toContain("activepieces.list_flows");
     expect(names).toContain("activepieces.trigger_flow");
@@ -48,7 +48,7 @@ describe("Outils Activepieces pour les agents NEXUS", () => {
     expect(names).toContain("activepieces.get_run");
   });
 
-  it("exige une confirmation humaine sur les actions SaaS sensibles", () => {
+  it("requires human confirmation on sensitive SaaS actions", () => {
     const actionTool = tools.find((t) => t.name === "activepieces.execute_action")!;
     expect(typeof actionTool.requiresConfirmation).toBe("function");
 
@@ -75,7 +75,7 @@ describe("Outils Activepieces pour les agents NEXUS", () => {
     }
   });
 
-  it("exécute execute_action et fournit un résumé humain pour la confirmation", async () => {
+  it("executes execute_action and provides clear human confirmation summary", async () => {
     const rawTool = tools.find((t) => t.name === "activepieces.execute_action")!;
     const actionTool = rawTool as unknown as ToolDefinition<
       { pieceName: string; actionName: string; input: Record<string, unknown> },
@@ -85,11 +85,11 @@ describe("Outils Activepieces pour les agents NEXUS", () => {
     const input = {
       pieceName: "slack",
       actionName: "send_message",
-      input: { channel: "#general", text: "Alerte système" },
+      input: { channel: "#general", text: "System alert" },
     };
 
     const summary = actionTool.summarize?.(input);
-    expect(summary).toBe("Envoi d'un message Slack sur le canal « #general »");
+    expect(summary).toBe('Send Slack message to channel "#general"');
 
     const ctx = createMockContext();
     const result = await actionTool.execute(input, ctx);

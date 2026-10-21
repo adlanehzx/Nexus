@@ -18,14 +18,14 @@ export const activepiecesListFlowsOutputSchema = z.object({
 });
 
 export const activepiecesTriggerFlowInputSchema = z.object({
-  flowId: z.string().optional().describe("Identifiant du flux Activepieces"),
-  webhookUrl: z.string().url().optional().describe("URL directe du webhook de déclenchement"),
-  payload: z.record(z.string(), z.unknown()).default({}).describe("Données transmises au flux"),
-  waitForCompletion: z.boolean().default(true).describe("Attendre la fin de l'exécution du flux"),
+  flowId: z.string().optional().describe("Activepieces flow identifier"),
+  webhookUrl: z.string().url().optional().describe("Direct triggering webhook URL"),
+  payload: z.record(z.string(), z.unknown()).default({}).describe("Payload passed to flow"),
+  waitForCompletion: z.boolean().default(true).describe("Wait for flow execution to finish"),
   isSensitive: z
     .boolean()
     .default(false)
-    .describe("Indique si le flux produit des effets externes sensibles"),
+    .describe("Indicates whether flow triggers sensitive external effects"),
 });
 
 export const activepiecesTriggerFlowOutputSchema = z.object({
@@ -38,14 +38,14 @@ export const activepiecesTriggerFlowOutputSchema = z.object({
 });
 
 export const activepiecesExecuteActionInputSchema = z.object({
-  pieceName: z.string().min(1).describe("Nom de la pièce SaaS (ex: slack, notion, stripe, github)"),
+  pieceName: z.string().min(1).describe("SaaS piece name (e.g. slack, notion, stripe, github)"),
   actionName: z
     .string()
     .min(1)
-    .describe("Nom de l'action à exécuter (ex: send_message, create_customer)"),
-  input: z.record(z.string(), z.unknown()).describe("Paramètres d'entrée de l'action"),
-  pieceVersion: z.string().optional().describe("Version optionnelle de la pièce"),
-  isSensitive: z.boolean().optional().describe("Force la demande de confirmation humaine si true"),
+    .describe("Action name to execute (e.g. send_message, create_customer)"),
+  input: z.record(z.string(), z.unknown()).describe("Action input parameters"),
+  pieceVersion: z.string().optional().describe("Optional piece version"),
+  isSensitive: z.boolean().optional().describe("Forces human confirmation request if true"),
 });
 
 export const activepiecesExecuteActionOutputSchema = z.object({
@@ -57,13 +57,13 @@ export const activepiecesExecuteActionOutputSchema = z.object({
 });
 
 export const activepiecesGetRunInputSchema = z.object({
-  runId: z.string().min(1).describe("Identifiant unique de l'exécution de flux"),
+  runId: z.string().min(1).describe("Unique flow run identifier"),
 });
 
 export const activepiecesGetRunOutputSchema = activepiecesTriggerFlowOutputSchema;
 
 /**
- * Crée les outils d'automatisation et de pont SaaS Activepieces pour NEXUS.
+ * Creates Activepieces SaaS automation and bridge tools for NEXUS.
  */
 export function createActivepiecesTools(options: {
   client: ActivepiecesBridgeClient;
@@ -75,14 +75,14 @@ export function createActivepiecesTools(options: {
     {
       name: "activepieces.list_flows",
       version: "1.0.0",
-      description: "Liste tous les flux d'automatisation locaux enregistrés dans Activepieces.",
+      description: "Lists all local automation flows configured in Activepieces.",
       inputSchema: activepiecesListFlowsInputSchema,
       outputSchema: activepiecesListFlowsOutputSchema,
       riskLevel: "SAFE",
       requiredPermissions: ["terminal.execute"],
       requiresConfirmation: false,
       timeoutMs: 15_000,
-      summarize: () => "Consultation des flux Activepieces disponibles",
+      summarize: () => "View available Activepieces flows",
       execute: async (
         _input: z.infer<typeof activepiecesListFlowsInputSchema>,
         context: ToolContext,
@@ -97,7 +97,7 @@ export function createActivepiecesTools(options: {
       name: "activepieces.trigger_flow",
       version: "1.0.0",
       description:
-        "Déclenche un flux d'automatisation Activepieces via webhook ou identifiant. Requiert une confirmation si marqué sensible.",
+        "Triggers an Activepieces automation flow via webhook or flow ID. Requires confirmation if marked sensitive.",
       inputSchema: activepiecesTriggerFlowInputSchema,
       outputSchema: activepiecesTriggerFlowOutputSchema,
       riskLevel: "HIGH",
@@ -106,7 +106,7 @@ export function createActivepiecesTools(options: {
         input.isSensitive === true,
       timeoutMs: 60_000,
       summarize: (input: z.infer<typeof activepiecesTriggerFlowInputSchema>) =>
-        `Déclenchement du flux Activepieces « ${input.flowId ?? "webhook externe"} »`,
+        `Trigger Activepieces flow "${input.flowId ?? "external webhook"}"`,
       execute: async (
         input: z.infer<typeof activepiecesTriggerFlowInputSchema>,
         context: ToolContext,
@@ -115,12 +115,12 @@ export function createActivepiecesTools(options: {
       },
     },
 
-    // 3. activepieces.execute_action (CONFIRMATION DYNAMIQUE)
+    // 3. activepieces.execute_action (DYNAMIC CONFIRMATION)
     {
       name: "activepieces.execute_action",
       version: "1.0.0",
       description:
-        "Exécute une action directe sur un connecteur SaaS (Slack, Notion, Stripe, GitHub, Airtable, etc.). Les actions d'envoi externe ou financières exigent une confirmation humaine.",
+        "Executes a direct action on a SaaS connector (Slack, Notion, Stripe, GitHub, Airtable, etc.). Outbound messaging and financial actions require human confirmation.",
       inputSchema: activepiecesExecuteActionInputSchema,
       outputSchema: activepiecesExecuteActionOutputSchema,
       riskLevel: "HIGH",
@@ -142,7 +142,7 @@ export function createActivepiecesTools(options: {
     {
       name: "activepieces.get_run",
       version: "1.0.0",
-      description: "Interroge le statut et le résultat d'une exécution de flux Activepieces.",
+      description: "Polls status and result of an Activepieces flow execution.",
       inputSchema: activepiecesGetRunInputSchema,
       outputSchema: activepiecesGetRunOutputSchema,
       riskLevel: "SAFE",
@@ -150,7 +150,7 @@ export function createActivepiecesTools(options: {
       requiresConfirmation: false,
       timeoutMs: 15_000,
       summarize: (input: z.infer<typeof activepiecesGetRunInputSchema>) =>
-        `Consultation de l'exécution Activepieces ${input.runId}`,
+        `View Activepieces run ${input.runId}`,
       execute: async (
         input: z.infer<typeof activepiecesGetRunInputSchema>,
         context: ToolContext,

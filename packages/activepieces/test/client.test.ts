@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { ActivepiecesBridgeClient } from "../src/client.js";
 
-describe("Client pont Activepieces local", () => {
-  it("liste les flux configurés", async () => {
+describe("Local Activepieces bridge client", () => {
+  it("lists configured flows", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -11,7 +11,7 @@ describe("Client pont Activepieces local", () => {
           data: [
             {
               id: "flow-1",
-              version: { displayName: "Notification Slack" },
+              version: { displayName: "Slack Notification" },
               status: "ENABLED",
               updated: "2026-10-21T00:00:00Z",
             },
@@ -28,12 +28,12 @@ describe("Client pont Activepieces local", () => {
     const flows = await client.listFlows();
     expect(flows).toHaveLength(1);
     expect(flows[0]?.id).toBe("flow-1");
-    expect(flows[0]?.name).toBe("Notification Slack");
+    expect(flows[0]?.name).toBe("Slack Notification");
     expect(flows[0]?.status).toBe("ENABLED");
     expect(flows[0]?.webhookUrl).toBe("http://127.0.0.1:8080/api/v1/webhooks/flow-1");
   });
 
-  it("déclenche un flux via son webhook et récupère le run", async () => {
+  it("triggers a flow via its webhook and returns the run", async () => {
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes("/webhooks/flow-sync")) {
         return Promise.resolve({
@@ -65,7 +65,7 @@ describe("Client pont Activepieces local", () => {
     expect(result.output).toEqual({ success: true, count: 42 });
   });
 
-  it("exécute une action directe sur une pièce SaaS", async () => {
+  it("executes a direct action on a SaaS piece", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -84,7 +84,7 @@ describe("Client pont Activepieces local", () => {
     const actionResult = await client.executePieceAction({
       pieceName: "slack",
       actionName: "send_channel_message",
-      input: { channel: "#general", text: "Alerte NEXUS" },
+      input: { channel: "#general", text: "NEXUS Alert" },
     });
 
     expect(actionResult.success).toBe(true);

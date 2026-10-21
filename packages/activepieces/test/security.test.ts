@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isSensitiveSaaSAction, summarizeSaaSAction } from "../src/security.js";
 
-describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
-  it("détecte les actions d'écriture externes sensibles comme exigeant confirmation", () => {
+describe("Activepieces SaaS action security and filtering", () => {
+  it("detects sensitive external write actions as requiring confirmation", () => {
     // Slack / Discord message
     expect(
       isSensitiveSaaSAction("slack", "send_channel_message", {
@@ -13,7 +13,7 @@ describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
 
     // Stripe financial
     expect(
-      isSensitiveSaaSAction("stripe", "create_charge", { amount: 5000, currency: "eur" }),
+      isSensitiveSaaSAction("stripe", "create_charge", { amount: 5000, currency: "usd" }),
     ).toBe(true);
 
     // Deletion
@@ -21,11 +21,11 @@ describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
       true,
     );
 
-    // Flag explicite
+    // Explicit flag
     expect(isSensitiveSaaSAction("custom_piece", "read_data", { isSensitive: true })).toBe(true);
   });
 
-  it("laisse les actions de consultation sans confirmation bloquante", () => {
+  it("permits read-only actions without blocking confirmation", () => {
     expect(isSensitiveSaaSAction("notion", "get_database_item", { pageId: "page-123" })).toBe(
       false,
     );
@@ -37,11 +37,11 @@ describe("Sécurité et filtrage des actions SaaS Activepieces", () => {
     ).toBe(false);
   });
 
-  it("génère des résumés clairs pour les confirmations humaines", () => {
+  it("generates clear summaries for human confirmation", () => {
     const slackSummary = summarizeSaaSAction("slack", "send_message", { channel: "#general" });
-    expect(slackSummary).toContain("canal « #general »");
+    expect(slackSummary).toContain('channel "#general"');
 
-    const stripeSummary = summarizeSaaSAction("stripe", "charge", { amount: "150€" });
-    expect(stripeSummary).toContain("150€");
+    const stripeSummary = summarizeSaaSAction("stripe", "charge", { amount: "$150" });
+    expect(stripeSummary).toContain("$150");
   });
 });

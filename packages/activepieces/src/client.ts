@@ -51,14 +51,14 @@ export class ActivepiecesBridgeClient {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`Erreur Activepieces (${response.status}): ${errorBody}`);
+      throw new Error(`Activepieces error (${response.status}): ${errorBody}`);
     }
 
     return response.json();
   }
 
   /**
-   * Liste les flux configurés dans l'instance Activepieces.
+   * Lists flows configured in the Activepieces instance.
    */
   async listFlows(signal?: AbortSignal): Promise<ActivepiecesFlow[]> {
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
@@ -85,7 +85,7 @@ export class ActivepiecesBridgeClient {
   }
 
   /**
-   * Déclenche l'exécution d'un flux Activepieces via son webhook ou son identifiant.
+   * Triggers an Activepieces flow via webhook URL or flow ID.
    */
   async triggerFlow(options: FlowTriggerOptions, signal?: AbortSignal): Promise<FlowRunResult> {
     const targetUrl = options.webhookUrl ?? `${this.#baseUrl}/api/v1/webhooks/${options.flowId}`;
@@ -122,7 +122,7 @@ export class ActivepiecesBridgeClient {
   }
 
   /**
-   * Récupère le statut et le résultat d'un run de flux.
+   * Retrieves status and output of a flow run.
    */
   async getRun(runId: string, signal?: AbortSignal): Promise<FlowRunResult> {
     const reqOptions: RequestInit & { signal?: AbortSignal | undefined } = { method: "GET" };
@@ -148,7 +148,7 @@ export class ActivepiecesBridgeClient {
   }
 
   /**
-   * Interroge régulièrement l'état d'un run jusqu'à complétion.
+   * Polls run status until completion or timeout.
    */
   async pollRun(
     runId: string,
@@ -158,7 +158,7 @@ export class ActivepiecesBridgeClient {
   ): Promise<FlowRunResult> {
     for (let i = 0; i < maxPolls; i++) {
       if (signal?.aborted) {
-        throw new Error("Opération annulée pendant l'attente du run Activepieces");
+        throw new Error("Operation cancelled while waiting for Activepieces run");
       }
 
       const run = await this.getRun(runId, signal);
@@ -173,7 +173,7 @@ export class ActivepiecesBridgeClient {
   }
 
   /**
-   * Exécute une action directe sur un connecteur SaaS (Slack, Notion, Stripe, GitHub, etc.).
+   * Executes a direct action on a SaaS connector piece (Slack, Notion, Stripe, GitHub, etc.).
    */
   async executePieceAction(
     options: PieceActionOptions,
@@ -191,26 +191,18 @@ export class ActivepiecesBridgeClient {
     };
     if (signal) reqOptions.signal = signal;
 
-    try {
-      const data = (await this.#request("/api/v1/pieces-actions/execute", reqOptions)) as {
-        success?: boolean;
-        output?: unknown;
-      };
+    const res = (await this.#request("/api/v1/pieces/actions/execute", reqOptions)) as {
+      success?: boolean;
+      output?: unknown;
+      error?: string;
+    };
 
-      return {
-        success: data.success ?? true,
-        pieceName: options.pieceName,
-        actionName: options.actionName,
-        output: data.output ?? data,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        pieceName: options.pieceName,
-        actionName: options.actionName,
-        output: null,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    return {
+      success: res.success ?? true,
+      pieceName: options.pieceName,
+      actionName: options.actionName,
+      output: res.output ?? null,
+      ...(res.error !== undefined ? { error: res.error } : {}),
+    };
   }
 }

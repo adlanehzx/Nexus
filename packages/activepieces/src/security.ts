@@ -1,5 +1,5 @@
 /**
- * Mots-clés déclenchant obligatoirement une confirmation humaine avant exécution.
+ * Keywords triggering mandatory human confirmation before execution.
  */
 const SENSITIVE_ACTION_PATTERNS = [
   /send[_-]?(message|email|mail|dm|notification|tweet|sms)/i,
@@ -17,8 +17,8 @@ const SENSITIVE_ACTION_PATTERNS = [
 const SENSITIVE_PIECES = ["stripe", "paypal", "slack", "discord", "gmail", "twitter", "x"];
 
 /**
- * Évalue si une action SaaS Activepieces présente un risque externe ou financier
- * nécessitant une confirmation humaine obligatoire.
+ * Assesses whether an Activepieces SaaS action poses external or financial risks
+ * requiring mandatory human confirmation.
  */
 export function isSensitiveSaaSAction(
   pieceName: string,
@@ -30,7 +30,7 @@ export function isSensitiveSaaSAction(
   const normalizedPiece = pieceName.toLowerCase();
   const normalizedAction = actionName.toLowerCase();
 
-  // Les pièces financières ou de diffusion publique sont sensibles par défaut sur les actions d'écriture
+  // Financial and public broadcasting pieces are sensitive by default on write/send actions
   if (SENSITIVE_PIECES.includes(normalizedPiece)) {
     if (
       normalizedAction.startsWith("create") ||
@@ -43,12 +43,12 @@ export function isSensitiveSaaSAction(
     }
   }
 
-  // Vérification des motifs sensibles d'action
+  // Sensitive action pattern matching
   return SENSITIVE_ACTION_PATTERNS.some((pattern) => pattern.test(normalizedAction));
 }
 
 /**
- * Génère un résumé clair et sécurisé destiné à la carte de confirmation utilisateur.
+ * Generates a concise, secure human confirmation summary.
  */
 export function summarizeSaaSAction(
   pieceName: string,
@@ -63,17 +63,17 @@ export function summarizeSaaSAction(
       : undefined;
 
   if (pieceName === "slack" && channel) {
-    return `Envoi d'un message Slack sur le canal « ${channel} »`;
+    return `Send Slack message to channel "${channel}"`;
   }
   if (pieceName === "discord" && channel) {
-    return `Envoi d'un message Discord sur le salon « ${channel} »`;
+    return `Send Discord message to channel "${channel}"`;
   }
   if (pieceName === "stripe" && amount) {
-    return `Exécution d'une transaction financière Stripe d'un montant de ${amount}`;
+    return `Execute Stripe financial transaction for ${amount}`;
   }
   if (to) {
-    return `Action ${pieceName}.${actionName} destinée à « ${to} »`;
+    return `Action ${pieceName}.${actionName} targeting "${to}"`;
   }
 
-  return `Exécution de l'action SaaS externe « ${pieceName}.${actionName} »`;
+  return `Execute external SaaS action "${pieceName}.${actionName}"`;
 }
