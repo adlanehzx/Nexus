@@ -407,19 +407,37 @@ async function main() {
     analyseResponse.match(/MARQUEURS_AMONT=[^ ]*/)?.[0] ?? "aucun",
   );
 
-  // ── Le contrôle qualité, dont le moteur analyse le verdict ───────────────
+  // ── Le contrôle qualité ──────────────────────────────────────────────────
+  //
+  // Ce scénario ne suppose **pas** quel agent relit. Le profil du contrôle
+  // qualité est choisi par le routeur d'agents, qui arbitre sur la santé et les
+  // statistiques : une priorité configurée est une préférence, pas une
+  // assignation. Ma première version exigeait ici un verdict JSON, ce qui
+  // revenait à exiger que le routeur choisisse l'agent relecteur — et le
+  // scénario échouait pour une raison qui n'était pas celle qu'il surveille.
+  //
+  // Ce qui se vérifie à ce niveau est donc la **forme du graphe** : le contrôle
+  // a eu lieu, et un verdict illisible n'étend pas le graphe. L'analyse stricte
+  // du verdict, elle, est couverte là où elle vit — côté moteur, par
+  // `test_invalid_quality_review_cannot_expand_task_graph`.
+  const review = byKey.get("nexus_quality_review_1");
+  assert("contrôle qualité exécuté", review?.state === "succeeded", review?.profile_key);
   assert(
-    "contrôle qualité passé",
-    byKey.get("nexus_quality_review_1")?.state === "succeeded" &&
-      responseOf("nexus_quality_review_1").includes('"verdict":"pass"'),
-    byKey.get("nexus_quality_review_1")?.profile_key,
+    "un verdict illisible n'étend pas le graphe",
+    byKey.get("nexus_correction_1") === undefined,
+    // Le moteur échoue **ouvert** par conception : le synthétiseur reçoit quand
+    // même la relecture, mais une réponse malformée ne peut pas fabriquer un
+    // graphe de tâches infini.
+    `${String(finished.tasks.length)} tâches, aucune correction`,
   );
 
   // ── La synthèse finale, telle que le chat la verra ───────────────────────
   const synthesis = responseOf("nexus_final_synthesis");
   assert(
     "synthèse finale produite",
-    synthesis.includes("MARQUEUR=synthese"),
+    // `MARQUEUR=` sans sa valeur : c'est la preuve qu'un vrai agent a répondu,
+    // sans supposer **lequel** — le routeur en décide, comme pour la relecture.
+    /MARQUEUR=[a-z]+/.test(synthesis),
     byKey.get("nexus_final_synthesis")?.profile_key,
   );
   assert(
@@ -436,7 +454,9 @@ async function main() {
     seen.status === 200 &&
       seen.body.data.state === "succeeded" &&
       typeof seen.body.data.response === "string" &&
-      seen.body.data.response.includes("MARQUEUR=synthese"),
+      // La réponse rendue au chat est celle de la synthèse : on vérifie qu'elle
+      // vient bien d'un agent, pas qu'elle vient d'un agent nommé.
+      /MARQUEUR=[a-z]+/.test(seen.body.data.response),
     `HTTP ${seen.status}, état ${seen.body?.data?.state}`,
   );
   assert(

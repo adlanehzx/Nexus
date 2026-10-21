@@ -506,9 +506,46 @@ jobs:
       # `cargo check` et non `tauri build` : on vérifie que ça **compile** sur
       # une autre plateforme que Windows, pas qu'on sait fabriquer un paquet —
       # ce dernier point est le travail du workflow de publication.
+      #
+      # Sans `--locked`, et c'est une dette assumée plutôt que cachée. Déclarer
+      # `keyring` par plateforme change le graphe de dépendances, donc
+      # `Cargo.lock` doit être régénéré — ce qui demande une chaîne Rust. Celle
+      # qui a écrit ce job n'en avait pas, et un verrou fabriqué à la main serait
+      # pire qu'un verrou absent. L'étape suivante dit si le verrou a bougé et
+      # publie celui que ce job a calculé.
       - name: Compiler la coquille
         working-directory: apps/desktop/src-tauri
-        run: cargo check --locked --all-targets
+        run: cargo check --all-targets
+
+      - name: Le verrou Cargo a-t-il bougé ?
+        id: lock
+        working-directory: apps/desktop/src-tauri
+        run: |
+          if git diff --quiet -- Cargo.lock; then
+            echo "À jour." >> "$GITHUB_STEP_SUMMARY"
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "### ⚠️ \`apps/desktop/src-tauri/Cargo.lock\` doit être mis à jour"
+              echo ""
+              echo "Le graphe de dépendances a changé (déclaration de \`keyring\` par"
+              echo "plateforme). Le verrou calculé par ce job est publié comme"
+              echo "artefact \`cargo-lock\` : récupérez-le, committez-le, et"
+              echo "rétablissez \`--locked\` dans ce job."
+              echo ""
+              echo "Tant que ce n'est pas fait, la construction n'est pas"
+              echo "reproductible : rien ne garantit que deux exécutions résolvent"
+              echo "les mêmes versions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: steps.lock.outputs.drifted == 'true'
+        with:
+          name: cargo-lock
+          path: apps/desktop/src-tauri/Cargo.lock
+          if-no-files-found: error
 
   security:
     name: Secrets et dépendances

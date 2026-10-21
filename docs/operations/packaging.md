@@ -37,6 +37,25 @@ pour que cette classe d'erreur ne puisse plus passer inaperçue. Il fait
 plateforme que Windows, pas qu'on sait fabriquer un paquet — ce dernier point
 est le travail du workflow de publication.
 
+### Une dette assumée : `Cargo.lock`
+
+Le job tourne **sans `--locked`**, et il faut savoir pourquoi.
+
+Déclarer `keyring` par plateforme change le graphe de dépendances : le verrou
+doit donc être régénéré, ce qui demande une chaîne Rust. Celle qui a écrit ce
+job n'en avait pas, et un verrou fabriqué à la main serait pire qu'un verrou
+absent — il affirmerait des versions et des empreintes qui n'ont été résolues
+par personne.
+
+Le job détecte donc la dérive, le dit dans son résumé, et **publie le verrou
+qu'il a calculé** comme artefact `cargo-lock`. Le geste qui ferme la dette :
+récupérer cet artefact, le committer, et rétablir `--locked`.
+
+Tant que ce n'est pas fait, la construction de la coquille n'est pas
+reproductible : rien ne garantit que deux exécutions résolvent les mêmes
+versions. C'est la seule partie de ce document qui décrive un état
+intermédiaire.
+
 ## Signature des exécutables
 
 ### Ce que la signature apporte, et ce qu'elle n'apporte pas
