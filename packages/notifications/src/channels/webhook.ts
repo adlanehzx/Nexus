@@ -7,7 +7,7 @@ export interface WebhookChannelOptions {
 }
 
 /**
- * Canal de notification par webhook externe (Discord, Telegram, Apprise ou JSON générique).
+ * External webhook notification channel (Discord, Telegram, Apprise, or generic JSON).
  */
 export class WebhookChannel {
   readonly #config: WebhookChannelConfig;
@@ -27,14 +27,14 @@ export class WebhookChannel {
   }
 
   /**
-   * Transmet la notification au webhook configuré.
+   * Delivers notification to configured webhook.
    */
   async send(message: NotificationMessage): Promise<ChannelDeliveryResult> {
     if (!this.enabled || !this.#config.url) {
       return {
         channel: this.name,
         success: false,
-        skippedReason: "Canal webhook non configuré ou inactif.",
+        skippedReason: "Webhook channel unconfigured or inactive.",
       };
     }
 
@@ -61,7 +61,7 @@ export class WebhookChannel {
         return {
           channel: this.name,
           success: false,
-          error: `Erreur HTTP ${response.status} du webhook: ${text.slice(0, 200)}`,
+          error: `HTTP error ${response.status} from webhook: ${text.slice(0, 200)}`,
         };
       }
 
@@ -71,7 +71,7 @@ export class WebhookChannel {
       return {
         channel: this.name,
         success: false,
-        error: `Échec d'envoi webhook vers ${this.#config.url}: ${err}`,
+        error: `Webhook send failed to ${this.#config.url}: ${err}`,
       };
     }
   }
@@ -119,7 +119,7 @@ export class WebhookChannel {
   #formatTelegram(message: NotificationMessage): Record<string, unknown> {
     let text = `<b>${this.#escapeHtml(message.title)}</b>\n${this.#escapeHtml(message.body)}`;
     if (message.url) {
-      const label = message.actionTitle ?? "Accéder au dashboard NEXUS";
+      const label = message.actionTitle ?? "Access NEXUS dashboard";
       text += `\n\n<a href="${message.url}">${this.#escapeHtml(label)}</a>`;
     }
 
@@ -137,17 +137,12 @@ export class WebhookChannel {
       type = "warning";
     }
 
-    const payload: Record<string, unknown> = {
+    return {
       title: message.title,
       body: message.body,
       type,
+      ...(message.url ? { url: message.url } : {}),
     };
-
-    if (message.url) {
-      payload.url = message.url;
-    }
-
-    return payload;
   }
 
   #formatGeneric(message: NotificationMessage): Record<string, unknown> {
@@ -157,12 +152,11 @@ export class WebhookChannel {
       body: message.body,
       priority: message.priority ?? "default",
       tags: message.tags ?? [],
-      url: message.url,
-      actionTitle: message.actionTitle,
-      groupKey: message.groupKey,
-      timestamp: (message.createdAt ?? new Date()).toISOString(),
-      userId: message.userId,
-      metadata: message.metadata,
+      url: message.url ?? null,
+      actionTitle: message.actionTitle ?? null,
+      groupKey: message.groupKey ?? null,
+      createdAt: (message.createdAt ?? new Date()).toISOString(),
+      source: "nexus",
     };
   }
 

@@ -41,7 +41,7 @@ export class NotificationDispatcher {
   }
 
   /**
-   * Distribue une notification vers tous les canaux configurés et autorisés.
+   * Dispatches a notification to all configured and authorized channels.
    */
   async dispatch(message: NotificationMessage, now = new Date()): Promise<DeliveryReport> {
     const timestamp = now.toISOString();
@@ -54,13 +54,13 @@ export class NotificationDispatcher {
           {
             channel: "all",
             success: false,
-            skippedReason: "Système de notifications externes désactivé globalement.",
+            skippedReason: "External notification system is globally disabled.",
           },
         ],
       };
     }
 
-    // 1. Plages silencieuses
+    // 1. Quiet hours evaluation
     const inQuietHours = isQuietHours(now, this.#config.quietHours);
     const isUrgent = message.priority === "urgent" || message.priority === "high";
 
@@ -72,13 +72,13 @@ export class NotificationDispatcher {
           {
             channel: "all",
             success: false,
-            skippedReason: `Notification ignorée : plage silencieuse active (${this.#config.quietHours.start} - ${this.#config.quietHours.end} ${this.#config.quietHours.timezone}).`,
+            skippedReason: `Notification skipped: quiet hours active (${this.#config.quietHours.start} - ${this.#config.quietHours.end} ${this.#config.quietHours.timezone}).`,
           },
         ],
       };
     }
 
-    // 2. Régulation de flux (throttling / regroupement)
+    // 2. Flow regulation (throttling / grouping)
     let dispatchedMessage = message;
     if (this.#config.grouping.enabled && message.groupKey) {
       const throttle = this.#throttler.evaluate(
@@ -95,7 +95,7 @@ export class NotificationDispatcher {
             {
               channel: "all",
               success: false,
-              skippedReason: `Notification regroupée (${throttle.suppressedCount} occurrences dans la fenêtre de ${this.#config.grouping.windowSeconds}s).`,
+              skippedReason: `Notification grouped (${throttle.suppressedCount} occurrences within ${this.#config.grouping.windowSeconds}s window).`,
             },
           ],
         };
@@ -104,12 +104,12 @@ export class NotificationDispatcher {
       if (throttle.suppressedCount > 0) {
         dispatchedMessage = {
           ...message,
-          title: `${message.title} (+${throttle.suppressedCount} similaire(s))`,
+          title: `${message.title} (+${throttle.suppressedCount} similar)`,
         };
       }
     }
 
-    // 3. Résolution des canaux actifs
+    // 3. Resolve active channels
     const channels = await this.#buildActiveChannels();
     if (channels.length === 0) {
       return {
@@ -119,13 +119,13 @@ export class NotificationDispatcher {
           {
             channel: "none",
             success: false,
-            skippedReason: "Aucun canal de notification externe n'est activé.",
+            skippedReason: "No external notification channels are enabled.",
           },
         ],
       };
     }
 
-    // 4. Dispatch parallèle
+    // 4. Parallel dispatch
     const results = await Promise.allSettled(
       channels.map(async (c) => {
         try {
@@ -135,7 +135,7 @@ export class NotificationDispatcher {
           return {
             channel: c.name,
             success: false,
-            error: `Exception inattendue dans le canal ${c.name}: ${err}`,
+            error: `Dispatch error: ${err}`,
           };
         }
       }),
@@ -148,7 +148,7 @@ export class NotificationDispatcher {
       return {
         channel: channels[idx]?.name ?? "unknown",
         success: false,
-        error: res.reason instanceof Error ? res.reason.message : String(res.reason),
+        error: String(res.reason),
       };
     });
 
@@ -160,17 +160,17 @@ export class NotificationDispatcher {
   }
 
   /**
-   * Émet un message de test sur tous les canaux actifs.
+   * Emits a test message across all active channels.
    */
   async sendTest(): Promise<DeliveryReport> {
     const testMessage: NotificationMessage = {
       id: "test-" + Date.now(),
-      title: "Test de notification NEXUS",
-      body: "Ce message confirme la bonne liaison de vos canaux de notification externes NEXUS.",
+      title: "NEXUS notification test",
+      body: "This message confirms that your NEXUS external notification channels are properly linked.",
       priority: "high",
       tags: ["test", "nexus"],
       url: `${this.#config.dashboardBaseUrl.replace(/\/$/, "")}/dashboard`,
-      actionTitle: "Ouvrir NEXUS",
+      actionTitle: "Open NEXUS",
       createdAt: new Date(),
     };
 

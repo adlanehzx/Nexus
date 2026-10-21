@@ -12,10 +12,10 @@ export interface NtfyChannelOptions {
 }
 
 /**
- * Canal de notifications mobiles push via le protocole ouvert ntfy.
+ * Mobile push notification channel via the open ntfy protocol.
  *
- * Fonctionne avec le service public gratuit https://ntfy.sh ou n'importe
- * quelle instance auto-hébergée, sans compte développeur Apple ou Google.
+ * Works with public ntfy instances (e.g. https://ntfy.sh) or self-hosted
+ * instances without requiring Apple or Google developer accounts.
  */
 export class NtfyChannel {
   readonly #config: NtfyChannelConfig;
@@ -35,14 +35,14 @@ export class NtfyChannel {
   }
 
   /**
-   * Publie une notification push vers le sujet ntfy configuré.
+   * Publishes a push notification to configured ntfy topic.
    */
   async send(message: NotificationMessage): Promise<ChannelDeliveryResult> {
     if (!this.enabled) {
       return {
         channel: this.name,
         success: false,
-        skippedReason: "Canal ntfy désactivé.",
+        skippedReason: "ntfy channel disabled.",
       };
     }
 
@@ -68,7 +68,7 @@ export class NtfyChannel {
 
     if (message.url) {
       headers.Click = message.url;
-      const actionLabel = message.actionTitle ?? "Ouvrir";
+      const actionLabel = message.actionTitle ?? "Open";
       headers.Actions = `view, ${actionLabel}, ${message.url}`;
     }
 
@@ -85,7 +85,7 @@ export class NtfyChannel {
         return {
           channel: this.name,
           success: false,
-          error: `Erreur HTTP ${response.status} de ntfy: ${text.slice(0, 200)}`,
+          error: `HTTP error ${response.status} from ntfy: ${text.slice(0, 200)}`,
         };
       }
 
@@ -95,7 +95,7 @@ export class NtfyChannel {
       return {
         channel: this.name,
         success: false,
-        error: `Échec d'envoi ntfy vers ${targetUrl}: ${err}`,
+        error: `ntfy send failed to ${targetUrl}: ${err}`,
       };
     }
   }
@@ -103,15 +103,15 @@ export class NtfyChannel {
   #mapPriority(priority: NotificationPriority): string {
     switch (priority) {
       case "urgent":
-        return "5";
+        return "5"; // max
       case "high":
-        return "4";
+        return "4"; // high
       case "default":
-        return "3";
+        return "3"; // default
       case "low":
-        return "2";
+        return "2"; // low
       case "min":
-        return "1";
+        return "1"; // min
       default:
         return "3";
     }

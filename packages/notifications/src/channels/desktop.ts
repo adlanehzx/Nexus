@@ -12,7 +12,7 @@ export interface DesktopChannelOptions {
 }
 
 /**
- * Canal de notifications bureau Linux natif via notify-send.
+ * Native Linux desktop notification channel via notify-send.
  */
 export class DesktopChannel {
   readonly #config: DesktopChannelConfig;
@@ -30,14 +30,14 @@ export class DesktopChannel {
   }
 
   /**
-   * Émet une notification sur le bureau.
+   * Emits a desktop notification.
    */
   async send(message: NotificationMessage): Promise<ChannelDeliveryResult> {
     if (!this.enabled) {
       return {
         channel: this.name,
         success: false,
-        skippedReason: "Canal bureau désactivé.",
+        skippedReason: "Desktop channel disabled.",
       };
     }
 
@@ -65,7 +65,7 @@ export class DesktopChannel {
       return {
         channel: this.name,
         success: false,
-        error: `Échec notify-send: ${err}`,
+        error: `notify-send failed: ${err}`,
       };
     }
   }
@@ -99,24 +99,26 @@ export class DesktopChannel {
     }
   }
 
-  async #runCommand(path: string, args: string[]): Promise<void> {
+  #runCommand(command: string, args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(path, args, {
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env },
+      const child = spawn(command, args, { stdio: "ignore" });
+
+      const timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(new Error("notify-send process timed out after 5s"));
+      }, 5_000);
+
+      child.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
       });
 
-      let stderr = "";
-      proc.stderr?.on("data", (chunk: Buffer | string) => {
-        stderr += chunk.toString();
-      });
-
-      proc.once("error", reject);
-      proc.once("close", (code) => {
+      child.on("close", (code) => {
+        clearTimeout(timeout);
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Exit code ${code}: ${stderr.trim()}`));
+          reject(new Error(`notify-send exited with code ${code}`));
         }
       });
     });

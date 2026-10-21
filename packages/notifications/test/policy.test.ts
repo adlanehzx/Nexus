@@ -3,7 +3,7 @@ import { isQuietHours, NotificationThrottler } from "../src/policy.js";
 import type { QuietHoursConfig, NotificationMessage } from "../src/types.js";
 
 describe("isQuietHours", () => {
-  it("retourne toujours false quand la fonctionnalité est désactivée", () => {
+  it("always returns false when feature is disabled", () => {
     const config: QuietHoursConfig = {
       enabled: false,
       start: "22:00",
@@ -15,7 +15,7 @@ describe("isQuietHours", () => {
     expect(isQuietHours(date, config)).toBe(false);
   });
 
-  it("gère correctement les plages de nuit franchissant minuit (22:00 à 08:00)", () => {
+  it("correctly handles nighttime ranges crossing midnight (22:00 to 08:00)", () => {
     const config: QuietHoursConfig = {
       enabled: true,
       start: "22:00",
@@ -24,20 +24,20 @@ describe("isQuietHours", () => {
       allowUrgent: true,
     };
 
-    // 23:30 UTC -> silencieux
+    // 23:30 UTC -> quiet
     expect(isQuietHours(new Date("2026-10-20T23:30:00Z"), config)).toBe(true);
 
-    // 04:15 UTC -> silencieux
+    // 04:15 UTC -> quiet
     expect(isQuietHours(new Date("2026-10-20T04:15:00Z"), config)).toBe(true);
 
-    // 08:00 UTC -> fin de la plage (non silencieux)
+    // 08:00 UTC -> end of range (not quiet)
     expect(isQuietHours(new Date("2026-10-20T08:00:00Z"), config)).toBe(false);
 
-    // 14:00 UTC -> plein jour (non silencieux)
+    // 14:00 UTC -> daytime (not quiet)
     expect(isQuietHours(new Date("2026-10-20T14:00:00Z"), config)).toBe(false);
   });
 
-  it("gère les plages au cours d'une même journée (01:00 à 05:00)", () => {
+  it("handles ranges within the same day (01:00 to 05:00)", () => {
     const config: QuietHoursConfig = {
       enabled: true,
       start: "01:00",
@@ -53,12 +53,12 @@ describe("isQuietHours", () => {
 });
 
 describe("NotificationThrottler", () => {
-  it("autorise immédiatement les notifications sans groupKey", () => {
+  it("immediately allows notifications without groupKey", () => {
     const throttler = new NotificationThrottler();
     const msg: NotificationMessage = {
       id: "1",
-      title: "Titre",
-      body: "Corps",
+      title: "Title",
+      body: "Body",
     };
 
     const res1 = throttler.evaluate(msg, 30, 1000);
@@ -68,31 +68,31 @@ describe("NotificationThrottler", () => {
     expect(res2.shouldSend).toBe(true);
   });
 
-  it("agrège et filtre les notifications rapprochées sous la même clé", () => {
+  it("aggregates and throttles closely-spaced notifications sharing same groupKey", () => {
     const throttler = new NotificationThrottler();
     const msg: NotificationMessage = {
       id: "1",
-      title: "Erreur tâche",
-      body: "Échec 1",
+      title: "Task error",
+      body: "Failure 1",
       groupKey: "task-123-error",
     };
 
-    // 1er appel à t=0 : envoyé
+    // 1st call at t=0: sent
     const res1 = throttler.evaluate(msg, 30, 10_000);
     expect(res1.shouldSend).toBe(true);
     expect(res1.suppressedCount).toBe(0);
 
-    // 2e appel à t=5s : filtré
+    // 2nd call at t=5s: throttled
     const res2 = throttler.evaluate(msg, 30, 15_000);
     expect(res2.shouldSend).toBe(false);
     expect(res2.suppressedCount).toBe(2);
 
-    // 3e appel à t=10s : filtré
+    // 3rd call at t=10s: throttled
     const res3 = throttler.evaluate(msg, 30, 20_000);
     expect(res3.shouldSend).toBe(false);
     expect(res3.suppressedCount).toBe(3);
 
-    // 4e appel à t=45s (> 30s après t=0) : envoyé avec le décompte des messages supprimés
+    // 4th call at t=45s (> 30s after t=0): sent with count of suppressed messages
     const res4 = throttler.evaluate(msg, 30, 45_000);
     expect(res4.shouldSend).toBe(true);
     expect(res4.suppressedCount).toBe(2);

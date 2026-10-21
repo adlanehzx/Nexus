@@ -1,19 +1,19 @@
 import type { QuietHoursConfig, NotificationMessage } from "./types.js";
 
 /**
- * Détermine si une date donnée se situe dans la plage silencieuse configurée.
+ * Determines whether a given timestamp falls within configured quiet hours.
  *
- * Gère correctement :
- * 1. La conversion d'horodatage selon le fuseau horaire spécifié (ex: Europe/Paris).
- * 2. Le chevauchement de minuit (ex: début 22:00, fin 08:00 le lendemain).
- * 3. Les plages diurnes intra-journalières (ex: 13:00 à 14:00).
+ * Handles:
+ * 1. Timestamp conversion matching specified timezone (e.g. Europe/Paris).
+ * 2. Midnight crossover ranges (e.g. start 22:00, end 08:00 next morning).
+ * 3. Intra-day diurnal ranges (e.g. 13:00 to 14:00).
  */
 export function isQuietHours(now: Date, config: QuietHoursConfig): boolean {
   if (!config.enabled) {
     return false;
   }
 
-  // Extraction de l'heure et des minutes dans le fuseau demandé
+  // Extract hour and minute components in requested timezone
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: config.timezone,
     hour: "2-digit",
@@ -34,11 +34,11 @@ export function isQuietHours(now: Date, config: QuietHoursConfig): boolean {
   const endMinutes = (endHour ?? 0) * 60 + (endMinute ?? 0);
 
   if (startMinutes <= endMinutes) {
-    // Plage au cours de la même journée (ex: 01:00 à 06:00)
+    // Single-day interval (e.g. 01:00 to 06:00)
     return currentMinutes >= startMinutes && currentMinutes < endMinutes;
   }
 
-  // Plage chevauchant minuit (ex: 22:00 à 08:00)
+  // Midnight-spanning interval (e.g. 22:00 to 08:00)
   return currentMinutes >= startMinutes || currentMinutes < endMinutes;
 }
 
@@ -53,17 +53,17 @@ export interface ThrottleResult {
 }
 
 /**
- * Régulateur de flux anti-inondation pour notifications regroupées.
+ * Rate-limiting and anti-flood regulator for grouped notifications.
  *
- * Si plusieurs notifications arrivent rapidement avec le même `groupKey`
- * dans la fenêtre temporelle spécifiée, seule la première est transmise immédiatement,
- * évitant de submerger l'utilisateur de vibrations ou de bannières desktop.
+ * If multiple notifications arrive rapidly sharing the same `groupKey`
+ * within the specified time window, only the first is delivered immediately,
+ * preventing notification storms.
  */
 export class NotificationThrottler {
   readonly #history = new Map<string, GroupEntry>();
 
   /**
-   * Évalue si la notification doit être envoyée ou filtrée par regroupement.
+   * Evaluates whether notification should be dispatched or throttled.
    */
   evaluate(message: NotificationMessage, windowSeconds: number, now = Date.now()): ThrottleResult {
     const key = message.groupKey;
@@ -85,7 +85,7 @@ export class NotificationThrottler {
   }
 
   /**
-   * Nettoie les entrées expirées pour libérer la mémoire.
+   * Purges expired entries to release memory.
    */
   cleanup(now = Date.now(), maxAgeMs = 3600_000): void {
     for (const [key, entry] of this.#history.entries()) {

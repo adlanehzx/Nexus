@@ -31,7 +31,7 @@ describe("NotificationDispatcher", () => {
     dashboardBaseUrl: "http://localhost:3000",
   };
 
-  it("ignore tout quand le dispatcher est désactivé globalement", async () => {
+  it("ignores all notifications when dispatcher is globally disabled", async () => {
     const dispatcher = new NotificationDispatcher({
       config: { ...baseConfig, enabled: false },
     });
@@ -39,14 +39,14 @@ describe("NotificationDispatcher", () => {
     const report = await dispatcher.dispatch({
       id: "1",
       title: "Test",
-      body: "Corps",
+      body: "Body",
     });
 
     expect(report.channels).toHaveLength(1);
-    expect(report.channels[0]?.skippedReason).toContain("désactivé globalement");
+    expect(report.channels[0]?.skippedReason).toContain("globally disabled");
   });
 
-  it("bloque les notifications ordinaires pendant les plages silencieuses mais laisse passer les urgentes", async () => {
+  it("blocks normal notifications during quiet hours while allowing urgent ones", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
     const dispatcher = new NotificationDispatcher({
       config: {
@@ -64,24 +64,24 @@ describe("NotificationDispatcher", () => {
 
     const midnight = new Date("2026-10-20T23:30:00Z");
 
-    // 1. Notification normale -> bloquée
+    // 1. Normal notification -> blocked
     const report1 = await dispatcher.dispatch(
       {
         id: "msg-normal",
         title: "Info",
-        body: "Message ordinaire",
+        body: "Ordinary message",
         priority: "low",
       },
       midnight,
     );
-    expect(report1.channels[0]?.skippedReason).toContain("plage silencieuse active");
+    expect(report1.channels[0]?.skippedReason).toContain("quiet hours active");
 
-    // 2. Notification urgente -> autorisée
+    // 2. Urgent notification -> allowed
     const report2 = await dispatcher.dispatch(
       {
         id: "msg-urgent",
-        title: "Action critique requise",
-        body: "Confirmation humaine requise",
+        title: "Critical action required",
+        body: "Human confirmation required",
         priority: "urgent",
       },
       midnight,
@@ -89,7 +89,7 @@ describe("NotificationDispatcher", () => {
     expect(report2.channels[0]?.success).toBe(true);
   });
 
-  it("résout le jeton depuis le coffre et dispatche vers ntfy et webhook", async () => {
+  it("resolves secret token from vault and dispatches to ntfy and webhook", async () => {
     const capturedHeaders: Record<string, string>[] = [];
     const mockFetch = vi.fn().mockImplementation((_url, init) => {
       capturedHeaders.push(init.headers as Record<string, string>);
@@ -109,20 +109,20 @@ describe("NotificationDispatcher", () => {
 
     const msg: NotificationMessage = {
       id: "dispatch-1",
-      title: "Mission achevée",
-      body: "Analyse terminée avec 5 citations.",
+      title: "Mission completed",
+      body: "Analysis finished with 5 citations.",
       priority: "default",
     };
 
     const report = await dispatcher.dispatch(msg);
 
-    expect(report.channels).toHaveLength(2); // ntfy et webhook
+    expect(report.channels).toHaveLength(2); // ntfy and webhook
     expect(report.channels.every((c) => c.success)).toBe(true);
     expect(resolveSecret).toHaveBeenCalledWith("vault://nexus/ntfy-token");
     expect(capturedHeaders.some((h) => h.Authorization === "Bearer secret-ntfy-key")).toBe(true);
   });
 
-  it("envoie une notification de test via sendTest()", async () => {
+  it("sends a test notification via sendTest()", async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
     const dispatcher = new NotificationDispatcher({
       config: baseConfig,
