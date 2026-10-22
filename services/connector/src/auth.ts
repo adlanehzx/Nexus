@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual, verify as verifySignature } from "node:crypto";
+import { verify as verifySignature } from "node:crypto";
 import { AppError } from "@nexus/shared";
 import type { ConnectorAuthFailureReason } from "./protocol.js";
 
@@ -188,16 +188,4 @@ export function verifyEd25519(publicKey: string, data: Buffer, signature: string
     // an exception to handle somewhere up the stack.
     return false;
   }
-}
-
-/**
- * Constant-time comparison of two short strings.
- *
- * Available for any future shared-token path. It hashes first so the comparison
- * does not leak the inputs' lengths, which a naive `timingSafeEqual` on raw
- * buffers would do by throwing on a length mismatch.
- */
-export function constantTimeEquals(left: string, right: string): boolean {
-  const hash = (value: string): Buffer => createHash("sha256").update(value, "utf8").digest();
-  return timingSafeEqual(hash(left), hash(right));
 }
