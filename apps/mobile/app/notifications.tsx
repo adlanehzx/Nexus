@@ -3,11 +3,10 @@ import { useNexus } from "../lib/nexus.js";
 import { theme } from "../theme/index.js";
 
 /**
- * Les notifications.
+ * Notifications view.
  *
- * L'état « lu » vit **au centre**, pas sur l'appareil : marquer une alerte comme
- * lue sur l'iPhone la marque aussi sur le portable. C'est ce qui évite de lire
- * deux fois la même chose.
+ * Read state is synchronized with the server: marking a notification as read
+ * on mobile updates all attached clients.
  */
 export default function NotificationsScreen() {
   const nexus = useNexus();
@@ -23,7 +22,7 @@ export default function NotificationsScreen() {
             style={[styles.card, item.readAt === null && styles.unread]}
             onPress={() => void nexus.markNotificationRead(item.id)}
             accessibilityRole="button"
-            accessibilityLabel={`${item.title}. ${item.readAt === null ? "Non lue" : "Lue"}`}
+            accessibilityLabel={`${item.title}. ${item.readAt === null ? "Unread" : "Read"}`}
           >
             <View style={styles.header}>
               <Text style={styles.title} numberOfLines={2}>
@@ -36,7 +35,7 @@ export default function NotificationsScreen() {
             </Text>
           </Pressable>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>Aucune notification.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>No notifications.</Text>}
       />
     </View>
   );

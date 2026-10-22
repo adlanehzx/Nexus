@@ -1,25 +1,15 @@
 /**
- * Statut de l'exécutant local, tel que l'interface l'affiche.
+ * Status of the local worker as displayed by the UI.
  *
- * Un point mérite d'être explicite : **cette information vient du cœur**, pas du
- * démon qui tourne à côté. L'interface ne l'interroge pas, ne lit pas ses
- * journaux, ne compte pas ses processus. Elle lit la liste d'appareils que le
- * backend lui renvoie et y reconnaît sa propre machine.
- *
- * Ce détour n'est pas de la bureaucratie. Si la fenêtre lisait l'état du démon
- * en direct, elle afficherait « en ligne » alors que le cœur, lui, considère la
- * machine injoignable — et l'utilisateur ne comprendrait pas pourquoi ses tâches
- * partent ailleurs. La vérité affichée doit être **celle qui décide**.
- *
- * Corollaire utile : ce module se teste entièrement, sans démon, sans réseau.
+ * Sourced directly from the core rather than polling the local daemon.
  */
 
 export type LocalWorkerState =
-  /** Aucun démon installé sur ce poste — le client fonctionne seul. */
+  /** No daemon installed on this host — client operates standalone. */
   | "absent"
-  /** Un démon existe mais le cœur ne connaît pas encore cet appareil. */
+  /** Daemon exists but core does not yet recognize this device. */
   | "unpaired"
-  /** Appairé, en attente d'approbation humaine. */
+  /** Paired, pending human approval. */
   | "pending"
   | "offline"
   | "degraded"
@@ -27,11 +17,7 @@ export type LocalWorkerState =
   | "revoked";
 
 /**
- * Un appareil vu par le cœur.
- *
- * Structurel : `DeviceView` (canal temps réel) comme `ApiDevice` (REST) le
- * satisfont. Écrire l'union des deux ici les ferait diverger au premier champ
- * ajouté d'un côté seulement.
+ * Device representation from core.
  */
 export interface ObservedDevice {
   id: string;
@@ -55,16 +41,16 @@ export interface LocalWorkerStatus {
   capabilities: readonly string[];
   activeTasks: number;
   maxConcurrentTasks: number;
-  /** Vrai quand l'appareil peut réellement recevoir une étape maintenant. */
+  /** True when the device can accept an execution step right now. */
   acceptingTasks: boolean;
-  /** Phrase affichable telle quelle, sans reformulation dans le composant. */
+  /** Display-ready sentence. */
   summary: string;
 }
 
 export interface LocalWorkerInput {
-  /** Identifiant lu dans l'état du démon local. `null` = pas de démon. */
+  /** Identifier read from local daemon state. `null` = no daemon. */
   localWorkerDeviceId: string | null;
-  /** Appareils tels que le cœur les décrit. */
+  /** Devices as described by the core. */
   devices: readonly ObservedDevice[];
 }
 
@@ -76,7 +62,7 @@ const ABSENT: LocalWorkerStatus = {
   activeTasks: 0,
   maxConcurrentTasks: 0,
   acceptingTasks: false,
-  summary: "Aucun exécutant NEXUS installé sur ce poste.",
+  summary: "No NEXUS worker installed on this machine.",
 };
 
 export function localWorkerStatus(input: LocalWorkerInput): LocalWorkerStatus {
@@ -90,8 +76,8 @@ export function localWorkerStatus(input: LocalWorkerInput): LocalWorkerStatus {
       state: "unpaired",
       deviceId: input.localWorkerDeviceId,
       summary:
-        "Un exécutant est installé sur ce poste mais le cœur ne le connaît pas encore. " +
-        "Lancez l'appairage depuis le démon.",
+        "A worker is installed on this machine but the core does not recognize it yet. " +
+        "Start pairing from the daemon.",
     };
   }
 
@@ -105,8 +91,6 @@ export function localWorkerStatus(input: LocalWorkerInput): LocalWorkerStatus {
     capabilities: device.capabilities,
     activeTasks: health.activeTasks,
     maxConcurrentTasks: health.maxConcurrentTasks,
-    // Deux conditions, et la seconde est celle qu'on oublie : un exécutant en
-    // ligne mais saturé n'accepte rien de plus, et le cœur le sait avant nous.
     acceptingTasks: state === "online" && health.activeTasks < health.maxConcurrentTasks,
     summary: summaryOf(state, device, health),
   };
@@ -125,23 +109,21 @@ function summaryOf(
   device: ObservedDevice,
   health: { activeTasks: number; maxConcurrentTasks: number },
 ): string {
-  const load = `${String(health.activeTasks)}/${String(health.maxConcurrentTasks)} tâche(s)`;
+  const load = `${String(health.activeTasks)}/${String(health.maxConcurrentTasks)} task(s)`;
 
   switch (state) {
     case "revoked":
-      return "Exécutant révoqué. Il n'exécutera plus rien tant qu'il n'est pas réappairé.";
+      return "Worker revoked. It will not execute anything until re-paired.";
     case "pending":
-      return "Exécutant en attente d'approbation. Approuvez-le pour qu'il reçoive des tâches.";
+      return "Worker pending approval. Approve it to receive tasks.";
     case "degraded":
-      return `Exécutant dégradé — ${load}. Le cœur préférera une autre machine.`;
+      return `Worker degraded — ${load}. The core will prefer another machine.`;
     case "online":
       return health.activeTasks >= health.maxConcurrentTasks
-        ? `Exécutant saturé — ${load}. Les nouvelles étapes iront ailleurs.`
-        : `Exécutant prêt — ${load}, ${String(device.capabilities.length)} capacité(s).`;
+        ? `Worker saturated — ${load}. New steps will be routed elsewhere.`
+        : `Worker ready — ${load}, ${String(device.capabilities.length)} capability(ies).`;
     case "offline":
-      return "Exécutant hors ligne. Le démon NEXUS ne tourne pas, ou n'atteint pas le cœur.";
-    // `absent` et `unpaired` sont traités avant l'appel ; les nommer ici évite
-    // qu'un ajout futur à l'union passe en silence.
+      return "Worker offline. The NEXUS daemon is not running or cannot reach the core.";
     case "absent":
     case "unpaired":
       return ABSENT.summary;
@@ -149,11 +131,7 @@ function summaryOf(
 }
 
 /**
- * Les autres exécutants de la flotte.
- *
- * Le poste fixe et le Redmi apparaissent ici. L'interface les **montre**, elle
- * ne les pilote pas : il n'existe aucun bouton « exécuter sur cette machine ».
- * On demande une capacité, le cœur choisit — voir `taskRequestBody`.
+ * Remote workers in the fleet.
  */
 export function remoteWorkers(input: LocalWorkerInput): ObservedDevice[] {
   return input.devices.filter(

@@ -1,10 +1,8 @@
 /**
- * Les feuilles de style importées pour leur effet de bord.
+ * Stylesheets imported for side effects.
  *
- * Vite les prend en charge à la compilation ; TypeScript, lui, ne connaît que
- * des modules. On lui décrit la forme plutôt que d'ajouter `vite/client` en
- * entier, qui ferait entrer tout un environnement global dans la portée pour un
- * seul import.
+ * Handled by Vite during build; TypeScript only knows ES modules.
+ * Explicitly typed here rather than importing all of `vite/client`.
  */
 declare module "*.css";
 

@@ -1,26 +1,10 @@
 import type { MessageView } from "@nexus/client-core";
 
 /**
- * Fusion de l'historique et du direct.
+ * Merging history and live stream messages.
  *
- * Deux sources décrivent la même conversation, et elles se recouvrent :
- *
- *  - le **REST** rend ce qui a été dit avant l'ouverture de la fenêtre ;
- *  - le **temps réel** rend ce qui arrive depuis.
- *
- * Elles se chevauchent toujours d'un message ou deux, parce que la requête
- * d'historique et l'ouverture de la socket ne sont pas simultanées. Concaténer
- * naïvement afficherait ce chevauchement en double — le défaut classique d'un
- * client de discussion, et celui qu'on remarque immédiatement.
- *
- * Deux règles suffisent :
- *
- *  1. **l'identifiant fait foi.** Deux entrées de même `id` sont un seul
- *     message.
- *  2. **le direct gagne.** Une entrée du flux porte l'état de streaming en
- *     cours ; l'historique, lui, ne connaît que du texte figé. Laisser
- *     l'historique écraser le direct ferait disparaître le curseur d'un message
- *     encore en train de s'écrire.
+ * Sourced from REST history and WebSocket real-time updates.
+ * De-duplicates by ID and lets live stream override history entries.
  */
 
 export interface HistoryMessage {
@@ -38,7 +22,7 @@ export function mergeHistory(
   const merged = new Map<string, MessageView>();
 
   for (const message of history) merged.set(message.id, fromHistory(message));
-  // Le direct passe en second : il écrase, il n'est pas écrasé.
+  // Live stream comes second: it overwrites, it is not overwritten.
   for (const message of live) merged.set(message.id, message);
 
   return [...merged.values()].sort(byTime);
@@ -56,11 +40,11 @@ function fromHistory(message: HistoryMessage): MessageView {
 }
 
 /**
- * Tri chronologique stable.
+ * Stable chronological sort.
  *
- * À horodatage égal — deux messages écrits dans la même milliseconde, ce qui
- * arrive quand le cœur répond aussitôt — l'identifiant tranche. Un tri
- * instable ferait sauter les deux messages d'une place à chaque rendu.
+ * For equal timestamps — two messages written in the same millisecond, which
+ * happens when the engine responds immediately — the identifier breaks ties.
+ * An unstable sort would cause the two messages to swap places on each render.
  */
 function byTime(left: MessageView, right: MessageView): number {
   if (left.createdAt === right.createdAt) return left.id < right.id ? -1 : 1;

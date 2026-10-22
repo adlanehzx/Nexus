@@ -4,15 +4,10 @@ import type { VoiceState } from "@nexus/client-core";
 import { theme } from "../theme/index.js";
 
 /**
- * La zone de saisie.
+ * Composer input bar.
  *
- * Trois entrées, une seule sortie : le texte tapé, le texte dicté et
- * l'annulation aboutissent tous à `onSend` ou à rien. Un composant qui aurait
- * deux chemins d'envoi finirait par en avoir un mal testé.
- *
- * Le micro suit le principe du reste du système : **il n'écoute que pendant
- * l'appui**. Il n'y a pas de mode « mains libres », et le bouton le dit — il
- * affiche « Relâchez pour envoyer » tant qu'il est enfoncé.
+ * All inputs converge onto `onSend`.
+ * The microphone only listens while held; no persistent listening mode exists.
  */
 
 export interface ComposerProps {
@@ -22,12 +17,12 @@ export interface ComposerProps {
   onCancelListening: () => void | Promise<void>;
   voiceState: VoiceState;
   partialTranscript: string;
-  /** Faux quand le réseau ou la connexion manque : on grise plutôt que de mentir. */
+  /** False when disconnected: inputs are disabled rather than accepting unsent messages. */
   enabled: boolean;
-  /** Vrai pendant qu'une réponse arrive : le bouton devient « Arrêter ». */
+  /** True while response is streaming: send button switches to "Stop". */
   busy?: boolean;
   onCancelResponse?: () => void;
-  /** Absent = le micro n'est pas disponible sur cet appareil. */
+  /** False if microphone is unavailable on device. */
   microphoneAvailable: boolean;
 }
 
@@ -45,14 +40,13 @@ export function Composer(props: ComposerProps) {
 
   return (
     <View style={styles.container}>
-      {/* Ce que la reconnaissance entend, affiché au fil de la parole. Rien
-          n'est envoyé tant que l'utilisateur n'a pas relâché. */}
+      {/* Realtime voice transcription stream */}
       {listening && (
         <View style={styles.transcriptRow}>
           <View style={styles.recordingDot} />
           <Text style={styles.transcript} numberOfLines={2}>
             {props.partialTranscript.length === 0
-              ? "Parlez… relâchez pour envoyer"
+              ? "Speak… release to send"
               : props.partialTranscript}
           </Text>
           <Pressable
@@ -60,10 +54,10 @@ export function Composer(props: ComposerProps) {
               void props.onCancelListening();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Annuler la dictée"
+            accessibilityLabel="Cancel voice input"
             style={styles.linkButton}
           >
-            <Text style={styles.linkText}>Annuler</Text>
+            <Text style={styles.linkText}>Cancel</Text>
           </Pressable>
         </View>
       )}
@@ -73,19 +67,17 @@ export function Composer(props: ComposerProps) {
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder={props.enabled ? "Demandez quelque chose à NEXUS…" : "Hors ligne"}
+          placeholder={props.enabled ? "Ask NEXUS anything…" : "Offline"}
           placeholderTextColor={theme.color.textFaint}
           editable={props.enabled && !listening}
           multiline
           maxLength={4_000}
           onSubmitEditing={submit}
-          accessibilityLabel="Message à envoyer à NEXUS"
+          accessibilityLabel="Message for NEXUS"
         />
 
         {props.microphoneAvailable && (
           <Pressable
-            // Appui maintenu : le micro s'ouvre au contact et se ferme au
-            // relâchement. Aucun état « écoute » ne survit au geste.
             onPressIn={() => {
               void props.onStartListening();
             }}
@@ -95,8 +87,8 @@ export function Composer(props: ComposerProps) {
             disabled={!props.enabled}
             style={[styles.micButton, listening && styles.micButtonActive]}
             accessibilityRole="button"
-            accessibilityLabel="Maintenir pour dicter"
-            accessibilityHint="Le micro n'écoute que pendant l'appui"
+            accessibilityLabel="Hold to dictate"
+            accessibilityHint="Microphone only listens while held"
           >
             <Text style={styles.micGlyph}>{listening ? "●" : "🎙"}</Text>
           </Pressable>
@@ -107,7 +99,7 @@ export function Composer(props: ComposerProps) {
             style={[styles.sendButton, styles.stopButton]}
             onPress={props.onCancelResponse}
             accessibilityRole="button"
-            accessibilityLabel="Arrêter la réponse"
+            accessibilityLabel="Stop response"
           >
             <ActivityIndicator size="small" color={theme.color.text} />
           </Pressable>
@@ -120,7 +112,7 @@ export function Composer(props: ComposerProps) {
             onPress={submit}
             disabled={!props.enabled || text.trim().length === 0}
             accessibilityRole="button"
-            accessibilityLabel="Envoyer"
+            accessibilityLabel="Send"
           >
             <Text style={styles.sendGlyph}>↑</Text>
           </Pressable>
@@ -128,9 +120,7 @@ export function Composer(props: ComposerProps) {
       </View>
 
       {!props.microphoneAvailable && (
-        // Un bouton qui ne fait rien est pire qu'un bouton absent : on explique
-        // au lieu de laisser deviner.
-        <Text style={styles.hint}>La dictée n'est pas disponible sur cet appareil.</Text>
+        <Text style={styles.hint}>Voice input is not available on this device.</Text>
       )}
     </View>
   );

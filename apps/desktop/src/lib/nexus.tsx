@@ -38,28 +38,14 @@ import { mergeHistory } from "./history.js";
 import { taskRequestBody, type TaskDraft } from "./tasks.js";
 
 /**
- * Le contexte NEXUS, côté poste Windows.
+ * NEXUS context for Windows desktop client.
  *
- * Même cœur que l'iPhone, mot pour mot : `@nexus/client-core` fournit la
- * session, la reconnexion, le magasin d'état et le pipeline vocal. Ce fichier
- * ne fait que du câblage et de la présentation à React.
- *
- * **Ce que ce fichier ne contient pas** mérite d'être dit, parce que la machine
- * qui l'exécute est aussi un exécutant NEXUS : aucun appel système, aucune
- * exécution, aucun accès au démon worker autre que la lecture de son
- * identifiant public. Quand l'utilisateur demande quelque chose au poste depuis
- * cette fenêtre, la demande part sur le réseau, remonte au cœur, redescend par
- * le canal worker, et revient. Le trajet est absurde à l'échelle d'une seule
- * machine ; il est ce qui garantit qu'aucune fenêtre ne devient un shell.
+ * Uses `@nexus/client-core` for sessions, reconnection, state store, and voice pipeline.
+ * Contains no direct system execution or local daemon access.
  */
 
 /**
- * Adresse du cœur.
- *
- * Remplacée à la compilation par Vite. Ce n'est pas un secret — et c'est
- * précisément pour cela qu'elle peut figurer dans le paquet : **aucun secret du
- * serveur n'est embarqué**. Un exécutable de bureau se désassemble aussi bien
- * qu'une application mobile.
+ * Core backend address.
  */
 function backendUrl(): string {
   return import.meta.env.VITE_NEXUS_URL ?? "https://nexus.local";
@@ -81,17 +67,17 @@ export interface NexusContextValue {
 
   ready: boolean;
   authenticated: boolean;
-  /** `null` tant qu'aucun appareil n'est rattaché à cette fenêtre. */
+  /** `null` until a device is bound to this window. */
   boundDeviceId: string | null;
 
-  /** État de l'exécutant installé sur ce poste, tel que le cœur le voit. */
+  /** Status of worker installed on this host, as seen by the core. */
   worker: LocalWorkerStatus;
-  /** Les autres exécutants — poste fixe, Redmi. Affichés, jamais pilotés. */
+  /** Remote workers across the fleet. */
   fleet: ReturnType<typeof remoteWorkers>;
 
   conversations: ApiConversation[];
   activeConversationId: string | null;
-  /** Historique et direct déjà fusionnés, prêts à afficher. */
+  /** Merged history and live stream. */
   timeline: MessageView[];
 
   signIn: (email: string, password: string) => Promise<void>;
@@ -131,17 +117,12 @@ export function NexusProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<MessageView[]>([]);
 
   /**
-   * Les services sont construits **une fois**.
-   *
-   * `useRef` et non `useMemo` : React se réserve le droit de rejouer un
-   * `useMemo`, et rouvrir une socket à chaque rendu ferait battre la connexion.
+   * Services are constructed once per session lifecycle.
    */
   const services = useRef<Services | null>(null);
 
   if (services.current === null) {
     const shell = detectShell();
-    // Validée plutôt que concaténée : une adresse distante en clair
-    // transporterait le jeton d'accès dans la première trame du canal.
     const url = backendHttpUrl(backendUrl());
 
     const session = new SessionManager({
@@ -167,7 +148,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       voice: new VoicePipeline({
         speechToText: new WebSpeechToText(),
         textToSpeech: new WebTextToSpeech(),
-        locale: "fr-FR",
+        locale: "en-US",
         onStateChange: setVoiceState,
         onPartial: setPartialTranscript,
       }),
@@ -176,13 +157,13 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 
   const { shell, session, api, realtime, voice } = services.current;
 
-  // ── Démarrage ───────────────────────────────────────────────────────────
+  // ── Startup ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      const [restored, workerId, micro] = await Promise.all([
+      const [restored, workerId, micAvailable] = await Promise.all([
         session.restore().catch(() => false),
         shell.localWorkerDeviceId().catch(() => null),
         voice.isSpeechAvailable().catch(() => false),
@@ -190,14 +171,11 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       setLocalWorkerId(workerId);
-      setVoiceAvailable(micro);
+      setVoiceAvailable(micAvailable);
       setAuthenticated(restored);
       setBoundDeviceId(session.deviceId);
       setReady(true);
 
-      // Le démon a déjà appairé cette machine : la fenêtre reprend le même
-      // identifiant plutôt que d'en créer un second, qui apparaîtrait comme un
-      // appareil fantôme dans la liste de l'utilisateur.
       if (restored && session.deviceId === null && workerId !== null) {
         await session.bindDevice(workerId).catch(() => undefined);
         if (!cancelled) setBoundDeviceId(workerId);
@@ -208,11 +186,11 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
-      realtime.stop("fenêtre fermée");
+      realtime.stop("window closed");
     };
   }, [session, realtime, shell, voice]);
 
-  // ── Notifications du système ────────────────────────────────────────────
+  // ── System notifications ─────────────────────────────────────────────────
 
   const lastNotifiedRef = useRef<string | null>(null);
 
@@ -221,16 +199,12 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     if (latest === undefined || latest.id === lastNotifiedRef.current) return;
 
     lastNotifiedRef.current = latest.id;
-    // Une notification est **produite au centre** et poussée aux deux clients.
-    // Cette fenêtre ne fait que la relayer au système ; elle n'en fabrique
-    // aucune, sans quoi l'iPhone et le portable en afficheraient de
-    // différentes pour le même événement.
     void shell
       .notify({ title: latest.title, body: latest.body, severity: latest.severity })
       .catch(() => undefined);
   }, [state.notifications, shell]);
 
-  // ── Actions ─────────────────────────────────────────────────────────────
+  // ── Actions ──────────────────────────────────────────────────────────────
 
   const refreshDevices = useCallback(async () => {
     const devices = await api.listDevices();
@@ -253,15 +227,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   /**
-   * Rattrapage à chaque retour de connexion.
-   *
-   * Le canal ne rejoue rien : une tâche achevée pendant que le poste dormait
-   * resterait affichée « en cours », définitivement. On relit donc auprès du
-   * cœur l'état des tâches qu'on croit encore actives.
-   *
-   * `state.tasks` n'est volontairement pas dans les dépendances : l'effet se
-   * déclenche sur le **passage** à « connecté », sinon chaque trame de
-   * progression relancerait un rattrapage.
+   * Resync active tasks whenever connection is restored.
    */
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -279,19 +245,9 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 
       if (session.deviceId === null) {
         if (localWorkerId !== null) {
-          // Le démon exécutant tourne sur cette machine : sa ligne d'appareil
-          // existe déjà, et elle détient la clé privée du poste. On la reprend
-          // — en créer une seconde ferait apparaître deux fois la même machine.
           await session.bindDevice(localWorkerId);
           setBoundDeviceId(localWorkerId);
         } else {
-          // Pas de démon : cette fenêtre est un client pur. `WINDOWS_PC` est le
-          // type que le cœur connaît pour un poste — « DESKTOP » n'existe dans
-          // aucun des deux énumérés et faisait échouer la compilation.
-          //
-          // `ensureDevice` plutôt que `registerDevice` : une réinstallation de
-          // la coquille reprend le poste déjà enregistré au lieu d'en empiler
-          // un nouveau à chaque fois.
           const machineName = await shell.machineName();
           const device = await session.ensureDevice({
             name: `${machineName} (client)`,
@@ -310,7 +266,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    realtime.stop("déconnexion");
+    realtime.stop("sign out");
     await session.logout();
     setAuthenticated(false);
     setConversations([]);
@@ -322,9 +278,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     async (deviceId: string) => {
       await session.bindDevice(deviceId);
       setBoundDeviceId(deviceId);
-      // La poignée de main porte l'appareil : il faut la refaire pour que le
-      // cœur sache d'où l'on parle désormais.
-      realtime.stop("changement d'appareil");
+      realtime.stop("device changed");
       await realtime.start();
     },
     [session, realtime],
@@ -350,8 +304,6 @@ export function NexusProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (trimmed.length === 0) return;
 
-      // Le message s'affiche immédiatement : attendre l'accusé donnerait
-      // l'impression que la fenêtre n'a rien reçu.
       dispatch({
         kind: "localMessage",
         message: {
@@ -364,8 +316,6 @@ export function NexusProvider({ children }: { children: ReactNode }) {
         },
       });
 
-      // Deux gestes, et l'ordre compte. Le message est d'abord **inscrit dans
-      // la conversation** — c'est la trace, elle appartient à l'historique.
       const result = await realtime.sendMessage({
         conversationId: activeConversationId,
         text: trimmed,
@@ -376,11 +326,8 @@ export function NexusProvider({ children }: { children: ReactNode }) {
         await loadConversations();
       }
 
-      // Puis l'instruction part au cœur, qui planifie, autorise et exécute. Le
-      // client ne planifie pas : il transmet la phrase. Sans cet appel, le
-      // message serait archivé et rien ne se passerait.
       if (session.deviceId === null) {
-        throw new Error("Rattachez cette fenêtre à un appareil avant de demander une action.");
+        throw new Error("Bind this window to a device before requesting an action.");
       }
 
       await api.instruct({
@@ -395,12 +342,9 @@ export function NexusProvider({ children }: { children: ReactNode }) {
   const submitTask = useCallback(
     async (draft: TaskDraft) => {
       if (session.deviceId === null) {
-        throw new Error("Rattachez cette fenêtre à un appareil avant de lancer une tâche.");
+        throw new Error("Bind this window to a device before creating a task.");
       }
 
-      // Le corps ne nomme aucun exécutant : il déclare des capacités, et le
-      // cœur choisit. C'est ce qui permet de « piloter » le poste fixe ou le
-      // Redmi depuis ici sans jamais leur parler.
       await api.createTask(taskRequestBody(draft, session.deviceId));
     },
     [api, session],
@@ -433,7 +377,7 @@ export function NexusProvider({ children }: { children: ReactNode }) {
     dispatch({ kind: "clearError" });
   }, []);
 
-  // ── Dérivations ─────────────────────────────────────────────────────────
+  // ── Derived state ────────────────────────────────────────────────────────
 
   const worker = useMemo(
     () => localWorkerStatus({ localWorkerDeviceId: localWorkerId, devices: state.devices }),
@@ -514,15 +458,12 @@ export function NexusProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * Accès au contexte.
- *
- * Lève hors du fournisseur : un écran monté au mauvais endroit doit échouer
- * bruyamment, pas afficher un état vide qu'on mettra une heure à diagnostiquer.
+ * Access the NEXUS context.
  */
 export function useNexus(): NexusContextValue {
   const value = useContext(NexusContext);
   if (value === undefined) {
-    throw new Error("useNexus doit être utilisé à l'intérieur de <NexusProvider>");
+    throw new Error("useNexus must be used within <NexusProvider>");
   }
   return value;
 }

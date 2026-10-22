@@ -1,44 +1,24 @@
 import type { SecureStorage } from "@nexus/client-core";
 
 /**
- * Ce que la coquille de bureau apporte, et **rien de plus**.
+ * Desktop shell contract.
  *
- * Ce port est la frontière entre l'interface et le système d'exploitation. Sa
- * définition est donc autant une liste de ce qui est offert qu'une liste de ce
- * qui est refusé.
- *
- * Ce qui n'y figure pas, et n'y figurera pas :
- *
- *  - exécuter une commande, lancer un processus, tuer un processus ;
- *  - lire ou écrire un fichier arbitraire ;
- *  - parler à Docker, à Git, au démon worker.
- *
- * Le portable est à la fois client et exécutant, mais **ce sont deux processus
- * distincts avec deux secrets distincts**. L'interface tient les jetons de
- * l'utilisateur ; le démon tient la clé privée de la machine. Si cette fenêtre
- * pouvait exécuter localement, la séparation ne vaudrait plus rien : une page
- * compromise deviendrait un shell, et la chaîne
- * `cœur → autorisation → capacité → exécution` serait contournable depuis le
- * poste lui-même.
- *
- * Le seul chemin de l'interface vers la machine passe donc par le réseau, par
- * le cœur, et par les mêmes contrôles que depuis l'iPhone. C'est plus long. Il
- * n'y a pas de raccourci, et c'est le but.
+ * Defines the boundary between the renderer and the host OS.
+ * The desktop client does not execute tasks locally; it requests capabilities
+ * through the core like any client device.
  */
 export interface DesktopShell {
-  /** Coquille réellement en place. L'interface s'y adapte, sans se dégrader en silence. */
+  /** Shell kind in effect. */
   readonly kind: ShellKind;
 
   /**
-   * Coffre local.
+   * Secure local vault.
    *
-   * Sous Tauri, le gestionnaire d'identifiants de Windows — chiffré par le
-   * système, lié au compte utilisateur. Dans un navigateur, la mémoire du
-   * processus : voir `VolatileStorage`.
+   * Backed by Windows Credential Manager under Tauri, or volatile in-memory storage in browser.
    */
   readonly storage: SecureStorage;
 
-  /** Notification du système. Silencieuse si la coquille n'en sait rien faire. */
+  /** System notification. */
   notify(input: {
     title: string;
     body: string;
@@ -46,32 +26,21 @@ export interface DesktopShell {
   }): Promise<void>;
 
   /**
-   * Identifiant de l'exécutant installé sur cette machine, s'il y en a un.
-   *
-   * Lu dans le fichier d'état public du démon. **Un identifiant, jamais un
-   * secret** : il ne donne aucun droit, il permet seulement à l'interface de
-   * reconnaître « cette machine » dans la liste que le cœur lui renvoie. La clé
-   * privée du worker vit ailleurs et n'est jamais lisible d'ici.
+   * Device ID of worker installed on this machine, if any.
    */
   localWorkerDeviceId(): Promise<string | null>;
 
-  /** Nom de la machine, proposé au moment de l'appairage. */
+  /** Machine name proposed during pairing. */
   machineName(): Promise<string>;
 
-  /** Ouvre une URL dans le navigateur par défaut. */
+  /** Opens a URL in the default browser. */
   openExternal(url: string): Promise<void>;
 }
 
 export type ShellKind = "tauri" | "web";
 
 /**
- * Coffre volatil, pour l'exécution hors coquille native.
- *
- * Il **oublie tout** à la fermeture de l'onglet, et c'est délibéré : écrire un
- * jeton de rafraîchissement dans `localStorage` le rendrait lisible par
- * n'importe quel script de la page, pour trente jours. Un développeur qui doit
- * se reconnecter à chaque rechargement est un inconvénient ; un jeton de longue
- * durée en clair est une faille.
+ * Volatile memory-only storage used when running outside native Tauri.
  */
 export class VolatileStorage implements SecureStorage {
   readonly #values = new Map<string, string>();

@@ -10,42 +10,41 @@ import { TaskCard } from "./cards.js";
 import type { LocalWorkerState } from "../lib/worker-status.js";
 
 /**
- * Les écrans secondaires.
+ * Secondary screens.
  *
- * Tâches, appareils, notifications, mémoire, exécutant local, réglages. Aucun
- * ne prend de décision : ils lisent l'état publié par le cœur et l'affichent.
+ * Tasks, devices, notifications, memory, local worker, settings. None
+ * make autonomous decisions: they read the state published by the core and display it.
  *
- * Un point est constant d'un écran à l'autre : **rien ici ne s'adresse à une
- * machine.** Ni la liste d'appareils, ni l'écran de l'exécutant local ne
- * proposent « exécuter ici ». Une action part toujours vers le cœur, qui
- * autorise et choisit.
+ * One rule is constant across screens: **nothing here targets a specific machine directly.**
+ * Neither the device list nor the local worker screen offers "run here". An action
+ * is always routed to the core, which authorizes and schedules it.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tâches
+// Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Tasks() {
   const nexus = useNexus();
-  const enCours = activeTasks(nexus.state);
-  const terminees = finishedTasks(nexus.state);
+  const running = activeTasks(nexus.state);
+  const completed = finishedTasks(nexus.state);
 
-  const nom = (deviceId: string | null) =>
+  const getDeviceName = (deviceId: string | null) =>
     deviceId === null
       ? undefined
       : (nexus.state.devices.find((device) => device.id === deviceId)?.name ?? deviceId);
 
   return (
     <div className="contenu">
-      <h3>En cours ({enCours.length})</h3>
-      {enCours.length === 0 ? (
-        <p className="faible">Aucune tâche en cours.</p>
+      <h3>In progress ({running.length})</h3>
+      {running.length === 0 ? (
+        <p className="faible">No tasks in progress.</p>
       ) : (
-        enCours.map((task) => (
+        running.map((task) => (
           <TaskCard
             key={task.id}
             task={task}
-            deviceName={nom(task.workerDeviceId)}
+            deviceName={getDeviceName(task.workerDeviceId)}
             onCancel={(taskId) => {
               void nexus.cancelTask(taskId);
             }}
@@ -53,12 +52,12 @@ export function Tasks() {
         ))
       )}
 
-      <h3 style={{ marginTop: 24 }}>Terminées ({terminees.length})</h3>
-      {terminees.length === 0 ? (
-        <p className="faible">Rien encore.</p>
+      <h3 style={{ marginTop: 24 }}>Completed ({completed.length})</h3>
+      {completed.length === 0 ? (
+        <p className="faible">Nothing yet.</p>
       ) : (
-        terminees.map((task) => (
-          <TaskCard key={task.id} task={task} deviceName={nom(task.workerDeviceId)} />
+        completed.map((task) => (
+          <TaskCard key={task.id} task={task} deviceName={getDeviceName(task.workerDeviceId)} />
         ))
       )}
     </div>
@@ -66,29 +65,29 @@ export function Tasks() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Appareils
+// Devices
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Devices() {
   const nexus = useNexus();
-  const [occupe, setOccupe] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void nexus.refreshDevices().catch(() => undefined);
-    // Chargement au montage uniquement : `refreshDevices` est recréée à chaque
-    // rendu et l'inclure relancerait une requête en boucle.
+    // Initial fetch only: `refreshDevices` identity changes on re-renders,
+    // so including it would cause a polling loop.
   }, []);
 
-  const revoquer = (deviceId: string, nom: string) => {
-    if (!globalThis.confirm(`Révoquer « ${nom} » ? Il faudra le réappairer.`)) return;
+  const revoke = (deviceId: string, name: string) => {
+    if (!globalThis.confirm(`Revoke "${name}"? You will need to pair it again.`)) return;
 
-    setOccupe(true);
+    setBusy(true);
     void nexus.api
       .revokeDevice(deviceId)
       .then(() => nexus.refreshDevices())
       .catch(() => undefined)
       .finally(() => {
-        setOccupe(false);
+        setBusy(false);
       });
   };
 
@@ -98,15 +97,15 @@ export function Devices() {
         <button
           type="button"
           className="bouton"
-          disabled={occupe}
+          disabled={busy}
           onClick={() => {
             void nexus.refreshDevices().catch(() => undefined);
           }}
         >
-          Actualiser
+          Refresh
         </button>
         <span className="faible">
-          Un appareil se rattache à cette fenêtre depuis les Réglages ; il ne s'y pilote pas.
+          A device is attached to this window from Settings; it is not controlled from here.
         </span>
       </div>
 
@@ -115,8 +114,8 @@ export function Devices() {
           <header>
             <strong>
               {device.name}
-              {device.id === nexus.boundDeviceId ? " — cette fenêtre" : ""}
-              {device.id === nexus.worker.deviceId ? " — exécutant de ce poste" : ""}
+              {device.id === nexus.boundDeviceId ? " — this window" : ""}
+              {device.id === nexus.worker.deviceId ? " — worker for this machine" : ""}
             </strong>
             <span className={`etiquette ${device.status === "ONLINE" ? "ok" : "attention"}`}>
               {device.status}
@@ -124,12 +123,12 @@ export function Devices() {
           </header>
 
           <div className="faible">
-            rôle {device.role}
-            {device.lastSeenAt === null ? "" : ` · vu ${device.lastSeenAt}`}
+            role {device.role}
+            {device.lastSeenAt === null ? "" : ` · seen ${device.lastSeenAt}`}
           </div>
           <div className="faible">
             {device.capabilities.length === 0
-              ? "aucune capacité déclarée"
+              ? "no declared capabilities"
               : device.capabilities.join(", ")}
           </div>
 
@@ -137,18 +136,18 @@ export function Devices() {
             <button
               type="button"
               className="bouton danger"
-              disabled={occupe}
+              disabled={busy}
               onClick={() => {
-                revoquer(device.id, device.name);
+                revoke(device.id, device.name);
               }}
             >
-              Révoquer
+              Revoke
             </button>
           </div>
         </article>
       ))}
 
-      {nexus.state.devices.length === 0 ? <p className="vide">Aucun appareil.</p> : null}
+      {nexus.state.devices.length === 0 ? <p className="vide">No devices.</p> : null}
     </div>
   );
 }
@@ -163,8 +162,8 @@ export function Notifications() {
   return (
     <div className="contenu">
       <p className="faible">
-        Les notifications sont produites par le cœur et poussées à tous vos appareils. Marquée lue
-        ici, une notification l'est aussi sur l'iPhone.
+        Notifications are generated by the core and pushed to all your devices. Marked as read
+        here, a notification is also marked as read on mobile.
       </p>
 
       {nexus.state.notifications.map((notification) => (
@@ -194,54 +193,54 @@ export function Notifications() {
                   void nexus.markNotificationRead(notification.id);
                 }}
               >
-                Marquer comme lue
+                Mark as read
               </button>
             ) : (
-              <span className="faible">lue</span>
+              <span className="faible">read</span>
             )}
           </div>
         </article>
       ))}
 
-      {nexus.state.notifications.length === 0 ? <p className="vide">Rien à signaler.</p> : null}
+      {nexus.state.notifications.length === 0 ? <p className="vide">Nothing to report.</p> : null}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mémoire
+// Memory
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Memory() {
   const nexus = useNexus();
-  const [requete, setRequete] = useState("");
-  const [resultats, setResultats] = useState<ApiMemoryHit[]>([]);
-  const [nouveau, setNouveau] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ApiMemoryHit[]>([]);
+  const [newMemory, setNewMemory] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const chercher = () => {
-    if (requete.trim().length === 0) return;
+  const search = () => {
+    if (query.trim().length === 0) return;
     void nexus.api
-      .searchMemory(requete.trim())
-      .then(setResultats)
+      .searchMemory(query.trim())
+      .then(setResults)
       .catch(() => {
-        setMessage("Recherche impossible.");
+        setStatusMessage("Search failed.");
       });
   };
 
-  const enregistrer = () => {
-    if (nouveau.trim().length === 0) return;
+  const save = () => {
+    if (newMemory.trim().length === 0) return;
     void nexus.api
-      .storeMemory({ content: nouveau.trim() })
+      .storeMemory({ content: newMemory.trim() })
       .then(() => {
-        setNouveau("");
-        setMessage("Souvenir enregistré.");
+        setNewMemory("");
+        setStatusMessage("Memory saved.");
       })
       .catch((cause: unknown) => {
-        // Le cœur explique pourquoi il refuse — secret, ou information
-        // personnelle sans accord. Remplacer son message par « échec »
-        // priverait l'utilisateur de la seule information utile.
-        setMessage(cause instanceof Error ? cause.message : "Enregistrement impossible.");
+        // The core provides reasons for rejection — secrets, or personal
+        // data without consent. Replacing its error message with a generic failure
+        // would hide the actionable diagnostic.
+        setStatusMessage(cause instanceof Error ? cause.message : "Save failed.");
       });
   };
 
@@ -250,21 +249,21 @@ export function Memory() {
       <div className="rangee" style={{ marginBottom: 14 }}>
         <input
           className="champ"
-          value={requete}
-          placeholder="Rechercher dans la mémoire…"
+          value={query}
+          placeholder="Search memory…"
           onChange={(event) => {
-            setRequete(event.target.value);
+            setQuery(event.target.value);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter") chercher();
+            if (event.key === "Enter") search();
           }}
         />
-        <button type="button" className="bouton primaire" onClick={chercher}>
-          Chercher
+        <button type="button" className="bouton primaire" onClick={search}>
+          Search
         </button>
       </div>
 
-      {resultats.map((hit) => (
+      {results.map((hit) => (
         <article key={hit.id} className="carte">
           <header>
             <span className="etiquette">{hit.kind}</span>
@@ -274,31 +273,31 @@ export function Memory() {
         </article>
       ))}
 
-      <h3 style={{ marginTop: 24 }}>Ajouter un souvenir</h3>
+      <h3 style={{ marginTop: 24 }}>Add a memory</h3>
       <textarea
         className="champ"
         rows={3}
-        value={nouveau}
-        placeholder="Ce que NEXUS doit retenir…"
+        value={newMemory}
+        placeholder="What NEXUS should remember…"
         onChange={(event) => {
-          setNouveau(event.target.value);
+          setNewMemory(event.target.value);
         }}
       />
       <div className="rangee" style={{ marginTop: 8 }}>
-        <button type="button" className="bouton" onClick={enregistrer}>
-          Enregistrer
+        <button type="button" className="bouton" onClick={save}>
+          Save
         </button>
-        {message === null ? null : <span className="faible">{message}</span>}
+        {statusMessage === null ? null : <span className="faible">{statusMessage}</span>}
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exécutant local
+// Local worker
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TON_ETAT: Record<LocalWorkerState, string> = {
+const STATE_TONE: Record<LocalWorkerState, string> = {
   absent: "",
   unpaired: "attention",
   pending: "attention",
@@ -309,15 +308,15 @@ const TON_ETAT: Record<LocalWorkerState, string> = {
 };
 
 /**
- * Supervision de l'exécutant installé sur ce poste.
+ * Supervise the worker daemon installed on this machine.
  *
- * Écran de **lecture**. On y voit ce que le cœur sait de la machine : son état,
- * ses capacités, sa charge. On n'y trouve ni bouton « exécuter », ni console, ni
- * accès aux journaux du démon — l'interface et l'exécutant sont deux processus
- * séparés, et la fenêtre n'a pas de prise sur le second.
+ * **Read-only** screen. Displays what the core knows about the machine: state,
+ * capabilities, load. Contains no "run here" button, terminal console, or daemon log
+ * viewer — UI and worker daemon are separate processes, and this window cannot
+ * force actions onto the worker.
  *
- * Pour arrêter l'exécutant, on révoque l'appareil : la décision passe alors par
- * le cœur, elle est tracée, et l'iPhone la voit aussi.
+ * To stop the worker, revoke the device: the action routes through the core,
+ * is audited, and is visible on all clients.
  */
 export function Worker() {
   const nexus = useNexus();
@@ -327,23 +326,23 @@ export function Worker() {
     <div className="contenu">
       <article className="carte">
         <header>
-          <strong>{worker.name ?? "Exécutant local"}</strong>
-          <span className={`etiquette ${TON_ETAT[worker.state]}`}>{worker.state}</span>
+          <strong>{worker.name ?? "Local worker"}</strong>
+          <span className={`etiquette ${STATE_TONE[worker.state]}`}>{worker.state}</span>
         </header>
         <div>{worker.summary}</div>
 
         {worker.deviceId === null ? null : (
           <>
             <div className="faible" style={{ marginTop: 8 }}>
-              appareil {worker.deviceId}
+              device {worker.deviceId}
             </div>
             <div className="faible">
-              {worker.activeTasks}/{worker.maxConcurrentTasks} tâche(s) —{" "}
-              {worker.acceptingTasks ? "accepte de nouvelles étapes" : "n'en accepte pas"}
+              {worker.activeTasks}/{worker.maxConcurrentTasks} task(s) —{" "}
+              {worker.acceptingTasks ? "accepting new steps" : "not accepting steps"}
             </div>
             <div className="faible">
               {worker.capabilities.length === 0
-                ? "aucune capacité déclarée"
+                ? "no declared capabilities"
                 : worker.capabilities.join(", ")}
             </div>
           </>
@@ -351,12 +350,12 @@ export function Worker() {
       </article>
 
       <p className="faible">
-        Cet écran affiche ce que <strong>le cœur</strong> sait de l'exécutant, pas ce que le démon
-        raconte de lui-même. C'est la vue du cœur qui décide où partent les tâches ; afficher autre
-        chose ferait mentir l'interface.
+        This screen displays what <strong>the core</strong> knows about the worker, not what the daemon
+        reports on its own. The core view decides task routing; displaying anything else would
+        mislead the interface.
       </p>
 
-      <h3 style={{ marginTop: 24 }}>Autres exécutants ({nexus.fleet.length})</h3>
+      <h3 style={{ marginTop: 24 }}>Other workers ({nexus.fleet.length})</h3>
       {nexus.fleet.map((device) => (
         <article key={device.id} className="carte">
           <header>
@@ -367,54 +366,54 @@ export function Worker() {
           </header>
           <div className="faible">
             {device.capabilities.length === 0
-              ? "aucune capacité déclarée"
+              ? "no declared capabilities"
               : device.capabilities.join(", ")}
           </div>
         </article>
       ))}
 
       <p className="faible">
-        Le poste fixe et le téléphone apparaissent ici. Ils ne se pilotent pas depuis cette liste :
-        une tâche déclare les capacités dont elle a besoin, et le cœur choisit la machine.
+        Your workstation and phone appear here. They are not controlled from this list:
+        a task declares required capabilities, and the core chooses the machine.
       </p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Réglages
+// Settings
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Settings() {
   const nexus = useNexus();
-  const [lecture, setLecture] = useState(nexus.voice.speakRepliesEnabled);
+  const [speakReplies, setSpeakReplies] = useState(nexus.voice.speakRepliesEnabled);
 
   return (
     <div className="contenu">
       <article className="carte">
         <header>
-          <strong>Cette fenêtre</strong>
+          <strong>This window</strong>
         </header>
         <div className="faible">
-          coquille : {nexus.shell.kind === "tauri" ? "Tauri (fenêtre native)" : "navigateur"}
+          shell: {nexus.shell.kind === "tauri" ? "Tauri (native window)" : "browser"}
         </div>
+
         {nexus.shell.kind === "web" ? (
           <p className="faible">
-            Hors coquille native, les jetons restent <strong>en mémoire</strong> et disparaissent au
-            rechargement. C'est volontaire : écrire un jeton de rafraîchissement dans le stockage du
-            navigateur le rendrait lisible par n'importe quel script de la page.
+            Outside the native shell, tokens stay <strong>in memory</strong> and are cleared on
+            page reload. This is intentional: storing a refresh token in browser storage would
+            expose it to any script on the page.
           </p>
         ) : null}
       </article>
 
       <article className="carte">
         <header>
-          <strong>Appareil rattaché</strong>
+          <strong>Attached device</strong>
         </header>
         <p className="faible">
-          Cette fenêtre parle au cœur au nom d'un appareil. Sur ce poste, c'est celui que le démon
-          exécutant a appairé — le même identifiant sert aux deux canaux, avec deux secrets
-          différents.
+          This window speaks to the core on behalf of a device. On this machine, it is the one paired
+          by the worker daemon — the same ID serves both channels, with distinct secrets.
         </p>
 
         <select
@@ -426,7 +425,7 @@ export function Settings() {
             }
           }}
         >
-          <option value="">— aucun —</option>
+          <option value="">— none —</option>
           {nexus.state.devices.map((device) => (
             <option key={device.id} value={device.id}>
               {device.name} ({device.role})
@@ -437,26 +436,26 @@ export function Settings() {
 
       <article className="carte">
         <header>
-          <strong>Voix</strong>
+          <strong>Voice</strong>
         </header>
         <div className="faible">
-          reconnaissance vocale :{" "}
-          {nexus.voiceAvailable ? "disponible" : "indisponible sur ce poste"}
+          speech recognition:{" "}
+          {nexus.voiceAvailable ? "available" : "unavailable on this machine"}
         </div>
         <label className="rangee" style={{ marginTop: 8 }}>
           <input
             type="checkbox"
-            checked={lecture}
+            checked={speakReplies}
             onChange={(event) => {
-              setLecture(event.target.checked);
+              setSpeakReplies(event.target.checked);
               nexus.voice.setSpeakReplies(event.target.checked);
             }}
           />
-          Lire les réponses à voix haute
+          Read responses aloud
         </label>
         <p className="faible">
-          Le micro ne s'active que tant que le bouton est maintenu. Il n'existe aucune écoute
-          permanente, et le port de reconnaissance vocale n'en propose pas.
+          The microphone activates only while holding the button. No background listening exists,
+          and the speech recognition port provides none.
         </p>
       </article>
 
@@ -471,7 +470,7 @@ export function Settings() {
             void nexus.signOut().catch(() => undefined);
           }}
         >
-          Se déconnecter
+          Sign out
         </button>
       </article>
     </div>

@@ -352,14 +352,16 @@ button:disabled {
   border-color: var(--nexus-accent);
   box-shadow: 0 0 0 3px rgba(125, 232, 255, 0.1);
 }
-.banniere {
+.banniere,
+.banner {
   padding: 9px 28px;
   border-bottom: 1px solid var(--nexus-line);
   background: rgba(125, 232, 255, 0.055);
   color: var(--nexus-muted);
   font-size: 12px;
 }
-.banniere.erreur {
+.banniere.erreur,
+.banner.error {
   color: var(--nexus-danger);
   background: rgba(255, 127, 143, 0.08);
 }

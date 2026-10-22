@@ -5,11 +5,9 @@ import { TaskCard } from "../components/cards.js";
 import { theme } from "../theme/index.js";
 
 /**
- * Toutes les tâches, groupées par ce que l'utilisateur peut encore en faire.
+ * All tasks, grouped by active and completed status.
  *
- * « En cours » d'abord : ce sont les seules sur lesquelles il peut agir. Les
- * terminées suivent, par ordre chronologique inverse — la dernière chose faite
- * est celle qu'on cherche le plus souvent.
+ * "In progress" first, followed by "Completed" in reverse chronological order.
  */
 export default function TasksScreen() {
   const nexus = useNexus();
@@ -19,8 +17,8 @@ export default function TasksScreen() {
   const finished = finishedTasks(state);
 
   const sections: { title: string; data: TaskView[] }[] = [
-    ...(running.length > 0 ? [{ title: "En cours", data: running }] : []),
-    ...(finished.length > 0 ? [{ title: "Terminées", data: finished }] : []),
+    ...(running.length > 0 ? [{ title: "In progress", data: running }] : []),
+    ...(finished.length > 0 ? [{ title: "Completed", data: finished }] : []),
   ];
 
   const deviceNameOf = (deviceId: string | null): string | undefined =>
@@ -50,7 +48,7 @@ export default function TasksScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Aucune tâche pour l'instant. Demandez quelque chose à NEXUS depuis la conversation.
+            No tasks yet. Ask NEXUS anything in the conversation.
           </Text>
         }
       />

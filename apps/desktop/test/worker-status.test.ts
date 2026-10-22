@@ -2,19 +2,17 @@ import { describe, expect, it } from "vitest";
 import { localWorkerStatus, remoteWorkers, type ObservedDevice } from "../src/lib/worker-status.js";
 
 /**
- * L'exécutant local, vu depuis la fenêtre.
+ * Local worker view from desktop UI.
  *
- * Ce que ces tests fixent : l'interface décrit la machine **d'après le cœur**,
- * jamais d'après le démon qui tourne à côté. Toutes les entrées viennent donc
- * d'une liste d'appareils telle que le backend la renvoie.
+ * Verifies core-reported status, state mapping, and fleet filtering.
  */
 
-const PORTABLE = "device-portable";
+const LAPTOP = "device-laptop";
 
 function device(patch: Partial<ObservedDevice> = {}): ObservedDevice {
   return {
-    id: PORTABLE,
-    name: "Portable Windows",
+    id: LAPTOP,
+    name: "Windows Laptop",
     role: "BOTH",
     status: "ONLINE",
     capabilities: ["terminal.execute", "filesystem.read"],
@@ -23,140 +21,127 @@ function device(patch: Partial<ObservedDevice> = {}): ObservedDevice {
   };
 }
 
-describe("détection", () => {
-  it("annonce l'absence d'exécutant plutôt que de l'inventer", () => {
-    const statut = localWorkerStatus({ localWorkerDeviceId: null, devices: [device()] });
+describe("detection", () => {
+  it("reports absent worker instead of fabricating one", () => {
+    const status = localWorkerStatus({ localWorkerDeviceId: null, devices: [device()] });
 
-    expect(statut.state).toBe("absent");
-    expect(statut.deviceId).toBeNull();
-    expect(statut.acceptingTasks).toBe(false);
+    expect(status.state).toBe("absent");
+    expect(status.deviceId).toBeNull();
+    expect(status.acceptingTasks).toBe(false);
   });
 
-  it("distingue « démon installé » de « appareil connu du cœur »", () => {
-    // Cas réel du premier démarrage : le démon existe sur le disque, mais
-    // l'appairage n'a pas eu lieu. Afficher « hors ligne » enverrait
-    // l'utilisateur chercher une panne réseau au lieu de lancer l'appairage.
-    const statut = localWorkerStatus({ localWorkerDeviceId: PORTABLE, devices: [] });
+  it("distinguishes installed daemon from core-recognized device", () => {
+    const status = localWorkerStatus({ localWorkerDeviceId: LAPTOP, devices: [] });
 
-    expect(statut.state).toBe("unpaired");
-    expect(statut.summary).toContain("appairage");
+    expect(status.state).toBe("unpaired");
+    expect(status.summary).toContain("pairing");
   });
 
-  it("reconnaît cette machine dans la liste du cœur", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
-      devices: [device({ id: "device-fixe", name: "Poste fixe" }), device()],
+  it("recognizes this machine in core device list", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
+      devices: [device({ id: "device-desktop", name: "Desktop Workstation" }), device()],
     });
 
-    expect(statut.state).toBe("online");
-    expect(statut.name).toBe("Portable Windows");
-    expect(statut.capabilities).toContain("terminal.execute");
+    expect(status.state).toBe("online");
+    expect(status.name).toBe("Windows Laptop");
+    expect(status.capabilities).toContain("terminal.execute");
   });
 });
 
-describe("états", () => {
-  it("hors ligne quand le cœur ne le voit plus", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+describe("states", () => {
+  it("reports offline when core loses connection", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ status: "OFFLINE" })],
     });
 
-    expect(statut.state).toBe("offline");
-    expect(statut.acceptingTasks).toBe(false);
+    expect(status.state).toBe("offline");
+    expect(status.acceptingTasks).toBe(false);
   });
 
-  it("dégradé n'est pas hors ligne", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+  it("distinguishes degraded from offline", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ status: "DEGRADED" })],
     });
 
-    expect(statut.state).toBe("degraded");
-    // Dégradé signifie « joignable mais à éviter » : le cœur préférera une
-    // autre machine, et l'interface doit le dire plutôt que de laisser croire
-    // à une panne.
-    expect(statut.summary).toContain("autre machine");
+    expect(status.state).toBe("degraded");
+    expect(status.summary).toContain("another machine");
   });
 
-  it("en attente d'approbation quand la confiance n'est pas accordée", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+  it("reports pending approval when trust is not granted", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ trust: "PENDING" })],
     });
 
-    expect(statut.state).toBe("pending");
+    expect(status.state).toBe("pending");
   });
 
-  it("révoqué prime sur tout le reste", () => {
-    // Un appareil révoqué peut rester marqué ONLINE le temps que la
-    // déconnexion se propage. Afficher « prêt » pendant ces secondes-là serait
-    // le pire moment pour se tromper.
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+  it("revoked status overrides all other statuses", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ status: "ONLINE", trust: "REVOKED" })],
     });
 
-    expect(statut.state).toBe("revoked");
-    expect(statut.acceptingTasks).toBe(false);
+    expect(status.state).toBe("revoked");
+    expect(status.acceptingTasks).toBe(false);
   });
 });
 
-describe("charge", () => {
-  it("un exécutant saturé n'accepte plus rien", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+describe("load", () => {
+  it("saturated worker stops accepting tasks", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ health: { activeTasks: 2, maxConcurrentTasks: 2 } })],
     });
 
-    expect(statut.state).toBe("online");
-    expect(statut.acceptingTasks).toBe(false);
-    expect(statut.summary).toContain("saturé");
+    expect(status.state).toBe("online");
+    expect(status.acceptingTasks).toBe(false);
+    expect(status.summary).toContain("saturated");
   });
 
-  it("compte les tâches en cours", () => {
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
+  it("counts active tasks", () => {
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
       devices: [device({ health: { activeTasks: 1, maxConcurrentTasks: 4 } })],
     });
 
-    expect(statut.activeTasks).toBe(1);
-    expect(statut.maxConcurrentTasks).toBe(4);
-    expect(statut.acceptingTasks).toBe(true);
+    expect(status.activeTasks).toBe(1);
+    expect(status.maxConcurrentTasks).toBe(4);
+    expect(status.acceptingTasks).toBe(true);
   });
 
-  it("survit à un appareil sans état de santé", () => {
-    // Le canal temps réel envoie `device.updated` sans santé : l'écran ne doit
-    // pas se vider pour autant.
-    const { health: _health, ...sansSante } = device();
-    const statut = localWorkerStatus({
-      localWorkerDeviceId: PORTABLE,
-      devices: [sansSante],
+  it("survives devices missing health data", () => {
+    const { health: _health, ...withoutHealth } = device();
+    const status = localWorkerStatus({
+      localWorkerDeviceId: LAPTOP,
+      devices: [withoutHealth],
     });
 
-    expect(statut.state).toBe("online");
-    expect(statut.maxConcurrentTasks).toBe(1);
+    expect(status.state).toBe("online");
+    expect(status.maxConcurrentTasks).toBe(1);
   });
 });
 
-describe("le reste de la flotte", () => {
-  const flotte: ObservedDevice[] = [
+describe("remainder of fleet", () => {
+  const fleet: ObservedDevice[] = [
     device(),
-    device({ id: "device-fixe", name: "Poste fixe", role: "WORKER" }),
+    device({ id: "device-desktop", name: "Desktop Workstation", role: "WORKER" }),
     device({ id: "device-redmi", name: "Redmi Note 10S", role: "WORKER" }),
     device({ id: "device-iphone", name: "iPhone", role: "CLIENT", capabilities: [] }),
   ];
 
-  it("liste les autres exécutants sans se compter", () => {
-    const autres = remoteWorkers({ localWorkerDeviceId: PORTABLE, devices: flotte });
+  it("lists remote workers without self-inclusion", () => {
+    const remotes = remoteWorkers({ localWorkerDeviceId: LAPTOP, devices: fleet });
 
-    expect(autres.map((appareil) => appareil.name)).toEqual(["Poste fixe", "Redmi Note 10S"]);
+    expect(remotes.map((dev) => dev.name)).toEqual(["Desktop Workstation", "Redmi Note 10S"]);
   });
 
-  it("exclut les clients purs", () => {
-    // L'iPhone n'exécute rien : le faire figurer parmi les exécutants ferait
-    // croire qu'on peut lui envoyer une tâche.
-    const autres = remoteWorkers({ localWorkerDeviceId: PORTABLE, devices: flotte });
+  it("excludes pure clients", () => {
+    const remotes = remoteWorkers({ localWorkerDeviceId: LAPTOP, devices: fleet });
 
-    expect(autres.some((appareil) => appareil.role === "CLIENT")).toBe(false);
+    expect(remotes.some((dev) => dev.role === "CLIENT")).toBe(false);
   });
 });

@@ -14,140 +14,118 @@ import { useNexus } from "../lib/nexus.js";
 import { theme } from "../theme/index.js";
 
 /**
- * La mémoire, vue depuis l'iPhone.
+ * Memory inspection and management.
  *
- * Un assistant qui retient des choses sans qu'on puisse les voir est une boîte
- * noire ; cet écran est ce qui l'en empêche. Trois principes le gouvernent :
- *
- *  1. **Tout est visible.** Ce que NEXUS retient s'affiche en clair, y compris
- *     ce qu'il a *déduit* — signalé comme tel, parce qu'une inférence n'a pas
- *     l'autorité d'une phrase dictée.
- *  2. **Tout est effaçable.** Un souvenir se supprime d'un geste, et l'écran dit
- *     ce qui a disparu.
- *  3. **Rien de sensible n'entre en silence.** Un contenu personnel déclenche
- *     une question ; un secret est refusé, avec l'explication du cœur.
- *
- * Les préférences sont séparées des souvenirs, parce qu'elles n'ont pas la même
- * fonction : une préférence est une consigne permanente, un souvenir est un
- * fait. Les mélanger ferait perdre les trois lignes qui comptent au milieu de
- * cinquante.
+ * All memories are visible and deletable. Sensitive items require explicit user consent.
+ * Preferences are displayed separately from general factual memories.
  */
 
-type Onglet = "LONG_TERM" | "PREFERENCE";
+type MemoryTab = "LONG_TERM" | "PREFERENCE";
 
 export default function MemoryScreen() {
   const nexus = useNexus();
 
-  const [onglet, setOnglet] = useState<Onglet>("LONG_TERM");
-  const [souvenirs, setSouvenirs] = useState<ApiMemory[]>([]);
-  const [chargement, setChargement] = useState(true);
-  const [saisie, setSaisie] = useState("");
-  const [occupe, setOccupe] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [tab, setTab] = useState<MemoryTab>("LONG_TERM");
+  const [memories, setMemories] = useState<ApiMemory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const charger = useCallback(async () => {
-    setChargement(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      setSouvenirs(await nexus.api.listMemory(onglet));
-      setErreur(null);
+      setMemories(await nexus.api.listMemory(tab));
+      setError(null);
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "Mémoire illisible.");
+      setError(cause instanceof Error ? cause.message : "Failed to load memory.");
     } finally {
-      setChargement(false);
+      setLoading(false);
     }
-  }, [nexus.api, onglet]);
+  }, [nexus.api, tab]);
 
   useEffect(() => {
-    void charger();
-  }, [charger]);
+    void load();
+  }, [load]);
 
   /**
-   * Enregistre, en posant la question quand il le faut.
-   *
-   * Le premier appel part **sans** accord. Si le cœur répond
-   * `MEMORY_CONSENT_REQUIRED`, on montre son explication et on demande ; ce
-   * n'est qu'après un « oui » que le second appel porte `acknowledgedSensitive`.
-   * Envoyer l'accord dès le départ viderait la règle de son sens.
+   * Store a memory, prompting for consent if sensitive data is detected.
    */
-  const enregistrer = async (acknowledged = false) => {
-    const contenu = saisie.trim();
-    if (contenu.length === 0) return;
+  const save = async (acknowledged = false) => {
+    const content = input.trim();
+    if (content.length === 0) return;
 
-    setOccupe(true);
+    setBusy(true);
     try {
       await nexus.api.storeMemory({
-        content: contenu,
-        layer: onglet,
+        content,
+        layer: tab,
         acknowledgedSensitive: acknowledged,
       });
-      setSaisie("");
-      setErreur(null);
-      await charger();
+      setInput("");
+      setError(null);
+      await load();
     } catch (cause) {
       const code = (cause as { code?: string }).code;
-      const message = cause instanceof Error ? cause.message : "Enregistrement impossible.";
+      const message = cause instanceof Error ? cause.message : "Failed to save memory.";
 
       if (code === "MEMORY_CONSENT_REQUIRED") {
-        Alert.alert("Information personnelle", message, [
-          { text: "Annuler", style: "cancel" },
+        Alert.alert("Personal information", message, [
+          { text: "Cancel", style: "cancel" },
           {
-            text: "Mémoriser quand même",
+            text: "Remember anyway",
             onPress: () => {
-              void enregistrer(true);
+              void save(true);
             },
           },
         ]);
       } else {
-        // Un refus de secret n'est pas négociable : on affiche l'explication du
-        // cœur, qui dit quoi faire à la place.
-        setErreur(message);
+        setError(message);
       }
     } finally {
-      setOccupe(false);
+      setBusy(false);
     }
   };
 
-  const oublier = (souvenir: ApiMemory) => {
-    Alert.alert("Oublier ce souvenir ?", souvenir.content, [
-      { text: "Annuler", style: "cancel" },
+  const forget = (memory: ApiMemory) => {
+    Alert.alert("Forget this memory?", memory.content, [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "Oublier",
+        text: "Forget",
         style: "destructive",
         onPress: () => {
           void nexus.api
-            .forgetMemory(souvenir.id)
-            .then(charger)
+            .forgetMemory(memory.id)
+            .then(load)
             .catch(() => {
-              setErreur("Suppression impossible.");
+              setError("Failed to delete.");
             });
         },
       },
     ]);
   };
 
-  const toutOublier = () => {
-    // Deux fenêtres, délibérément. Un souvenir effacé se redit ; une mémoire
-    // entière ne se reconstitue pas, et un seul appui ne doit pas suffire.
+  const forgetAll = () => {
     Alert.alert(
-      "Tout oublier ?",
-      "NEXUS perdra tout ce qu'il sait de vous. Cette action est définitive.",
+      "Forget everything?",
+      "NEXUS will clear all stored memories. This action is permanent.",
       [
-        { text: "Annuler", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Continuer",
+          text: "Continue",
           style: "destructive",
           onPress: () => {
-            Alert.alert("Confirmer", "Dernière vérification : effacer toute la mémoire ?", [
-              { text: "Annuler", style: "cancel" },
+            Alert.alert("Confirm", "Final check: clear all memory?", [
+              { text: "Cancel", style: "cancel" },
               {
-                text: "Effacer tout",
+                text: "Clear all",
                 style: "destructive",
                 onPress: () => {
                   void nexus.api
                     .forgetAllMemory(true)
-                    .then(charger)
+                    .then(load)
                     .catch(() => {
-                      setErreur("Effacement impossible.");
+                      setError("Failed to clear memory.");
                     });
                 },
               },
@@ -161,73 +139,73 @@ export default function MemoryScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.tabs}>
-        <Onglets actif={onglet} onChange={setOnglet} />
+        <Tabs active={tab} onChange={setTab} />
       </View>
 
-      {erreur === null ? null : (
+      {error === null ? null : (
         <Pressable
           style={styles.error}
           onPress={() => {
-            setErreur(null);
+            setError(null);
           }}
         >
-          <Text style={styles.errorText}>{erreur}</Text>
+          <Text style={styles.errorText}>{error}</Text>
         </Pressable>
       )}
 
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
-          value={saisie}
+          value={input}
           placeholder={
-            onglet === "PREFERENCE"
-              ? "Une consigne permanente…  (ex. réponds toujours en français)"
-              : "Quelque chose que NEXUS doit retenir…"
+            tab === "PREFERENCE"
+              ? "A persistent instruction… (e.g. always reply concisely)"
+              : "Something NEXUS should remember…"
           }
           placeholderTextColor={theme.color.textFaint}
           multiline
-          onChangeText={setSaisie}
+          onChangeText={setInput}
         />
         <Pressable
-          style={[styles.button, (occupe || saisie.trim().length === 0) && styles.buttonDisabled]}
-          disabled={occupe || saisie.trim().length === 0}
+          style={[styles.button, (busy || input.trim().length === 0) && styles.buttonDisabled]}
+          disabled={busy || input.trim().length === 0}
           onPress={() => {
-            void enregistrer();
+            void save();
           }}
           accessibilityRole="button"
-          accessibilityLabel="Mémoriser"
+          accessibilityLabel="Remember"
         >
-          {occupe ? (
+          {busy ? (
             <ActivityIndicator color={theme.color.text} />
           ) : (
-            <Text style={styles.buttonText}>Mémoriser</Text>
+            <Text style={styles.buttonText}>Remember</Text>
           )}
         </Pressable>
       </View>
 
-      {chargement ? (
+      {loading ? (
         <ActivityIndicator style={styles.loader} color={theme.color.accent} />
       ) : (
         <FlatList
-          data={souvenirs}
-          keyExtractor={(souvenir) => souvenir.id}
+          data={memories}
+          keyExtractor={(memory) => memory.id}
           contentContainerStyle={styles.list}
           onRefresh={() => {
-            void charger();
+            void load();
           }}
           refreshing={false}
-          renderItem={({ item }) => <Souvenir souvenir={item} onForget={oublier} />}
+          renderItem={({ item }) => <MemoryCard memory={item} onForget={forget} />}
           ListEmptyComponent={
             <Text style={styles.empty}>
-              {onglet === "PREFERENCE"
-                ? "Aucune préférence. Une consigne posée ici vaut pour toutes vos conversations."
-                : "NEXUS ne retient rien pour l'instant."}
+              {tab === "PREFERENCE"
+                ? "No preferences. Instructions set here apply across all conversations."
+                : "NEXUS has no stored memories yet."}
             </Text>
           }
           ListFooterComponent={
-            souvenirs.length === 0 ? null : (
-              <Pressable style={styles.dangerButton} onPress={toutOublier}>
-                <Text style={styles.dangerText}>Tout oublier</Text>
+            memories.length === 0 ? null : (
+              <Pressable style={styles.dangerButton} onPress={forgetAll}>
+                <Text style={styles.dangerText}>Forget everything</Text>
               </Pressable>
             )
           }
@@ -237,72 +215,70 @@ export default function MemoryScreen() {
   );
 }
 
-function Onglets({ actif, onChange }: { actif: Onglet; onChange: (onglet: Onglet) => void }) {
+function Tabs({ active, onChange }: { active: MemoryTab; onChange: (tab: MemoryTab) => void }) {
   return (
     <>
       {(
         [
-          ["LONG_TERM", "Souvenirs"],
-          ["PREFERENCE", "Préférences"],
+          ["LONG_TERM", "Memories"],
+          ["PREFERENCE", "Preferences"],
         ] as const
-      ).map(([valeur, libelle]) => (
+      ).map(([value, label]) => (
         <Pressable
-          key={valeur}
-          style={[styles.tab, actif === valeur && styles.tabActive]}
+          key={value}
+          style={[styles.tab, active === value && styles.tabActive]}
           onPress={() => {
-            onChange(valeur);
+            onChange(value);
           }}
           accessibilityRole="tab"
-          accessibilityState={{ selected: actif === valeur }}
+          accessibilityState={{ selected: active === value }}
         >
-          <Text style={[styles.tabText, actif === valeur && styles.tabTextActive]}>{libelle}</Text>
+          <Text style={[styles.tabText, active === value && styles.tabTextActive]}>{label}</Text>
         </Pressable>
       ))}
     </>
   );
 }
 
-function Souvenir({
-  souvenir,
+function MemoryCard({
+  memory,
   onForget,
 }: {
-  souvenir: ApiMemory;
-  onForget: (souvenir: ApiMemory) => void;
+  memory: ApiMemory;
+  onForget: (memory: ApiMemory) => void;
 }) {
-  const deduit = souvenir.origin === "AGENT";
-  const sensible = souvenir.sensitivity === "PERSONAL";
+  const deduced = memory.origin === "AGENT";
+  const sensitive = memory.sensitivity === "PERSONAL";
 
   return (
-    <View style={[styles.card, sensible && styles.cardSensitive]}>
-      <Text style={styles.content}>{souvenir.content}</Text>
+    <View style={[styles.card, sensitive && styles.cardSensitive]}>
+      <Text style={styles.content}>{memory.content}</Text>
 
       <View style={styles.meta}>
-        {deduit ? (
-          // Une inférence n'engage pas l'utilisateur. Le dire lui permet de
-          // corriger ce que NEXUS a cru comprendre.
-          <Text style={styles.badge}>déduit par NEXUS</Text>
+        {deduced ? (
+          <Text style={styles.badge}>deduced by NEXUS</Text>
         ) : (
-          <Text style={styles.badge}>vous l'avez dit</Text>
+          <Text style={styles.badge}>you stated this</Text>
         )}
 
-        {sensible ? (
+        {sensitive ? (
           <Text style={[styles.badge, styles.badgeSensitive]}>
-            personnel · {souvenir.sensitiveCategories.join(", ")}
+            personal · {memory.sensitiveCategories.join(", ")}
           </Text>
         ) : null}
 
-        {souvenir.supersedesId === null ? null : <Text style={styles.badge}>corrigé</Text>}
+        {memory.supersedesId === null ? null : <Text style={styles.badge}>corrected</Text>}
       </View>
 
       <Pressable
         style={styles.forget}
         onPress={() => {
-          onForget(souvenir);
+          onForget(memory);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`Oublier : ${souvenir.content}`}
+        accessibilityLabel={`Forget: ${memory.content}`}
       >
-        <Text style={styles.forgetText}>Oublier</Text>
+        <Text style={styles.forgetText}>Forget</Text>
       </Pressable>
     </View>
   );

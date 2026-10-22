@@ -10,12 +10,12 @@ import { nexusVisualState } from "./visual-state.js";
 
 const TITRES: Record<Screen, string> = {
   chat: "Conversation",
-  tasks: "Tâches",
-  devices: "Appareils",
+  tasks: "Tasks",
+  devices: "Devices",
   notifications: "Notifications",
-  memory: "Mémoire",
-  worker: "Exécutant local",
-  settings: "Réglages",
+  memory: "Memory",
+  worker: "Local Worker",
+  settings: "Settings",
 };
 const NAVIGATION: { screen: Screen; icon: string }[] = [
   { screen: "chat", icon: "◌" },
@@ -30,7 +30,7 @@ const NAVIGATION: { screen: Screen; icon: string }[] = [
 export function App() {
   const nexus = useNexus();
   const [ecran, setEcran] = useState<Screen>("chat");
-  if (!nexus.ready) return <p className="vide">Ouverture de NEXUS…</p>;
+  if (!nexus.ready) return <p className="vide">Opening NEXUS…</p>;
   if (!nexus.authenticated) return <Login />;
 
   const attente = pendingConfirmations(nexus.state).length;
@@ -45,7 +45,7 @@ export function App() {
   });
   return (
     <div className="app nexus-background">
-      <nav className="laterale" aria-label="Navigation NEXUS">
+      <nav className="laterale" aria-label="NEXUS Navigation">
         <div className="brand-lockup">
           <NexusOrb state={visualState} compact />
           <div>
@@ -53,7 +53,7 @@ export function App() {
             <span>Personal intelligence OS</span>
           </div>
         </div>
-        <div className="nav-section-label">Système</div>
+        <div className="nav-section-label">System</div>
         {NAVIGATION.map(({ screen, icon }) => (
           <NavItem
             key={screen}
@@ -69,7 +69,7 @@ export function App() {
             <span
               className={`presence-dot ${nexus.worker.state === "online" ? "is-online" : ""}`}
             />
-            <span>Exécutant local</span>
+            <span>Local worker</span>
           </div>
           <div className="faible">{nexus.worker.state}</div>
         </div>
@@ -82,7 +82,7 @@ export function App() {
           </div>
           <div className="system-state" aria-live="polite">
             <span className={`presence-dot ${nexus.state.online ? "is-online" : ""}`} />
-            {nexus.boundDeviceId === null ? "Appareil non rattaché" : nexus.state.connection}
+            {nexus.boundDeviceId === null ? "Device not bound" : nexus.state.connection}
           </div>
         </header>
         <ConnectionBanner connection={nexus.state.connection} online={nexus.state.online} />

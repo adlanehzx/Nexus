@@ -5,21 +5,19 @@ import { useNexus } from "../lib/nexus.js";
 import { theme } from "../theme/index.js";
 
 /**
- * Réglages et session.
+ * Settings and session management.
  *
- * Peu de choses, volontairement. Ce qui s'y trouve touche à la sécurité — la
- * session, l'enregistrement de l'appareil — ou à un choix que l'application ne
- * peut pas deviner : lire ou non les réponses à voix haute.
+ * Focuses on security (session, device identity) and accessibility preferences (voice read aloud).
  */
 export default function SettingsScreen() {
   const nexus = useNexus();
   const [speakReplies, setSpeakReplies] = useState(nexus.voice.speakRepliesEnabled);
 
   const confirmSignOut = () => {
-    Alert.alert("Se déconnecter ?", "Vos jetons seront effacés de cet appareil.", [
-      { text: "Annuler", style: "cancel" },
+    Alert.alert("Sign out?", "Your session tokens will be removed from this device.", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "Se déconnecter",
+        text: "Sign out",
         style: "destructive",
         onPress: () => {
           void nexus.signOut().then(() => router.replace("/login"));
@@ -30,10 +28,10 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.screen}>
-      <Section title="Voix">
+      <Section title="Voice">
         <Row
-          label="Lire les réponses à voix haute"
-          hint="Désactivé par défaut : lire dans un lieu public ce que NEXUS répond est rarement souhaité."
+          label="Read responses aloud"
+          hint="Disabled by default: reading answers aloud in public places is usually undesirable."
         >
           <Switch
             value={speakReplies}
@@ -41,32 +39,32 @@ export default function SettingsScreen() {
               setSpeakReplies(value);
               nexus.voice.setSpeakReplies(value);
             }}
-            accessibilityLabel="Lire les réponses à voix haute"
+            accessibilityLabel="Read responses aloud"
           />
         </Row>
       </Section>
 
-      <Section title="Cet appareil">
+      <Section title="This device">
         <Text style={styles.value}>
-          {nexus.session.deviceId ?? "non enregistré auprès de NEXUS"}
+          {nexus.session.deviceId ?? "not registered with NEXUS"}
         </Text>
         <Text style={styles.hint}>
-          Les jetons de session sont conservés dans le trousseau iOS, chiffrés par le système et
-          exclus des sauvegardes iCloud.
+          Session tokens are stored in the iOS Keychain, encrypted by the system and
+          excluded from iCloud backups.
         </Text>
       </Section>
 
-      <Section title="Connexion">
+      <Section title="Connection">
         <Row
-          label="État"
-          hint={`${nexus.state.connection} · ${nexus.state.online ? "en ligne" : "hors ligne"}`}
+          label="Status"
+          hint={`${nexus.state.connection} · ${nexus.state.online ? "online" : "offline"}`}
         >
           <View />
         </Row>
       </Section>
 
       <Pressable style={styles.signOut} onPress={confirmSignOut} accessibilityRole="button">
-        <Text style={styles.signOutText}>Se déconnecter</Text>
+        <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
     </View>
   );

@@ -4,12 +4,11 @@ import type { ConfirmationView, MessageView, TaskView, ToolCallView } from "@nex
 import { riskColor, statusColor, statusLabel, theme } from "../theme/index.js";
 
 /**
- * Les cartes de la conversation.
+ * Conversation cards.
  *
- * Une règle traverse ce fichier : **une carte montre ce qui se passe, jamais les
- * arguments bruts**. Un `terminal.execute` affiche « Lancer les tests sur le
- * poste fixe », pas la ligne de commande — le serveur n'envoie d'ailleurs que le
- * résumé, et c'est délibéré.
+ * One core rule: **a card shows what is happening, never raw internal arguments**.
+ * A `terminal.execute` shows "Run test suite on workstation", not the raw command line.
+ * The server sends formatted summaries intentionally.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,7 +23,7 @@ export function MessageBubble({ message }: { message: MessageView }) {
       <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
         <Text style={styles.bubbleText}>{message.content}</Text>
 
-        {/* Un curseur pendant le flux : l'utilisateur voit que ça avance. */}
+        {/* Streaming cursor */}
         {message.streaming && <Text style={styles.cursor}>▌</Text>}
       </View>
     </View>
@@ -32,7 +31,7 @@ export function MessageBubble({ message }: { message: MessageView }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tâche
+// Task
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function TaskCard({
@@ -57,9 +56,8 @@ export function TaskCard({
         </Text>
       </View>
 
-      {/* L'exécutant est nommé : savoir *où* une commande tourne fait partie de
-          ce que l'utilisateur a le droit de voir. */}
-      {deviceName !== undefined && <Text style={styles.cardMeta}>sur {deviceName}</Text>}
+      {/* Target worker is named */}
+      {deviceName !== undefined && <Text style={styles.cardMeta}>on {deviceName}</Text>}
 
       {task.label !== null && (
         <Text style={styles.cardMeta} numberOfLines={1}>
@@ -69,8 +67,6 @@ export function TaskCard({
 
       {running && (
         <View style={styles.progressTrack}>
-          {/* React Native type une largeur en pourcentage comme `${number}%` ;
-              une chaîne construite doit donc être annoncée comme telle. */}
           <View style={[styles.progressFill, { width: `${task.percent}%` }]} />
         </View>
       )}
@@ -94,9 +90,9 @@ export function TaskCard({
               onCancel(task.id);
             }}
             accessibilityRole="button"
-            accessibilityLabel={`Annuler ${task.title}`}
+            accessibilityLabel={`Cancel ${task.title}`}
           >
-            <Text style={styles.linkText}>Annuler</Text>
+            <Text style={styles.linkText}>Cancel</Text>
           </Pressable>
         )}
       </View>
@@ -105,7 +101,7 @@ export function TaskCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Appel d'outil
+// Tool Call
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ToolCard({ call }: { call: ToolCallView }) {
@@ -118,7 +114,6 @@ export function ToolCard({ call }: { call: ToolCallView }) {
         </Text>
       </View>
 
-      {/* Le résumé, jamais les arguments : le serveur n'envoie que celui-là. */}
       <Text style={styles.cardMeta} numberOfLines={3}>
         {call.summary}
       </Text>
@@ -127,11 +122,11 @@ export function ToolCard({ call }: { call: ToolCallView }) {
         {call.status === "running" ? (
           <View style={styles.inline}>
             <ActivityIndicator size="small" color={theme.color.accent} />
-            <Text style={styles.cardFaint}>{call.label ?? "en cours"}</Text>
+            <Text style={styles.cardFaint}>{call.label ?? "running"}</Text>
           </View>
         ) : (
           <Text style={[styles.cardFaint, { color: statusColor(call.status) }]}>
-            {call.status === "succeeded" ? "terminé" : "échoué"}
+            {call.status === "succeeded" ? "completed" : "failed"}
             {call.durationMs === null ? "" : ` · ${formatDuration(call.durationMs)}`}
           </Text>
         )}
@@ -145,18 +140,12 @@ export function ToolCard({ call }: { call: ToolCallView }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Demande de confirmation.
+ * Confirmation request.
  *
- * Trois protections contre l'approbation accidentelle, et aucune n'est
- * décorative :
- *
- *  1. **Approuver est à droite, Annuler à gauche.** Le pouce d'une main droite
- *     tombe naturellement à droite ; on inverse donc pour les actions à haut
- *     risque, où le geste facile doit être le geste sûr.
- *  2. **Au-dessus de MEDIUM, il faut deux appuis.** Le premier arme, le second
- *     confirme. Un appui isolé ne peut pas lancer une commande destructrice.
- *  3. **Le risque est écrit en toutes lettres**, coloré comme partout ailleurs
- *     dans NEXUS.
+ * Three safeguards against accidental approvals:
+ *  1. Reject is positioned for safe default interaction.
+ *  2. Above MEDIUM risk, two taps are required (arm + confirm).
+ *  3. Explicit risk level and consistent coloring.
  */
 export function ConfirmationCard({
   confirmation,
@@ -180,7 +169,7 @@ export function ConfirmationCard({
     <View
       style={[styles.card, styles.confirmCard, { borderColor: riskColor(confirmation.riskLevel) }]}
     >
-      <Text style={styles.confirmIntro}>NEXUS demande à :</Text>
+      <Text style={styles.confirmIntro}>NEXUS requests to:</Text>
       <Text style={styles.confirmAction}>{confirmation.action}</Text>
 
       {confirmation.description !== confirmation.action && (
@@ -190,7 +179,7 @@ export function ConfirmationCard({
       )}
 
       <View style={styles.riskRow}>
-        <Text style={styles.cardFaint}>Risque</Text>
+        <Text style={styles.cardFaint}>Risk</Text>
         <Text style={[styles.riskValue, { color: riskColor(confirmation.riskLevel) }]}>
           {confirmation.riskLevel}
         </Text>
@@ -198,22 +187,20 @@ export function ConfirmationCard({
 
       {armed && (
         <Text style={styles.armedNotice}>
-          Appuyez à nouveau sur « Approuver » pour confirmer cette action à risque{" "}
-          {confirmation.riskLevel}.
+          Tap "Approve" again to confirm this {confirmation.riskLevel} risk action.
         </Text>
       )}
 
       <View style={styles.confirmActions}>
-        {/* Refuser occupe la position du pouce : le geste facile est le geste sûr. */}
         <Pressable
           style={[styles.button, styles.buttonNeutral]}
           onPress={() => {
             onAnswer(confirmation.id, "rejected");
           }}
           accessibilityRole="button"
-          accessibilityLabel="Refuser cette action"
+          accessibilityLabel="Reject this action"
         >
-          <Text style={styles.buttonNeutralText}>Refuser</Text>
+          <Text style={styles.buttonNeutralText}>Reject</Text>
         </Pressable>
 
         <Pressable
@@ -225,10 +212,10 @@ export function ConfirmationCard({
           onPress={approve}
           accessibilityRole="button"
           accessibilityLabel={
-            armed ? "Confirmer définitivement cette action" : "Approuver cette action"
+            armed ? "Confirm this action" : "Approve this action"
           }
         >
-          <Text style={styles.buttonApproveText}>{armed ? "Confirmer" : "Approuver"}</Text>
+          <Text style={styles.buttonApproveText}>{armed ? "Confirm" : "Approve"}</Text>
         </Pressable>
       </View>
     </View>
@@ -236,7 +223,7 @@ export function ConfirmationCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Erreur
+// Error
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ErrorBanner({
@@ -257,31 +244,31 @@ export function ErrorBanner({
       <View style={styles.inline}>
         {onRetry !== undefined && (
           <Pressable style={styles.linkButton} onPress={onRetry} accessibilityRole="button">
-            <Text style={styles.linkText}>Réessayer</Text>
+            <Text style={styles.linkText}>Retry</Text>
           </Pressable>
         )}
         <Pressable
           style={styles.linkButton}
           onPress={onDismiss}
           accessibilityRole="button"
-          accessibilityLabel="Masquer l'erreur"
+          accessibilityLabel="Dismiss error"
         >
-          <Text style={styles.bannerDismiss}>Masquer</Text>
+          <Text style={styles.bannerDismiss}>Dismiss</Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-/** Bandeau d'état de connexion. Visible seulement quand ça ne va pas. */
+/** Connection status banner. Visible only when disconnected or reconnecting. */
 export function ConnectionBanner({ connection, online }: { connection: string; online: boolean }) {
   if (online && connection === "connected") return null;
 
   const message = !online
-    ? "Hors ligne — NEXUS reprendra dès le retour du réseau."
+    ? "Offline — NEXUS will resume when network reconnects."
     : connection === "reconnecting"
-      ? "Reconnexion à NEXUS…"
-      : "Connexion à NEXUS…";
+      ? "Reconnecting to NEXUS…"
+      : "Connecting to NEXUS…";
 
   return (
     <View style={styles.connectionBanner}>
@@ -298,7 +285,7 @@ function formatTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    : date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDuration(ms: number): string {

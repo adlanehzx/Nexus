@@ -13,35 +13,31 @@ import type {
 } from "@nexus/client-core";
 
 /**
- * Les cinq ports de `@nexus/client-core`, implémentés pour iOS.
+ * Five ports of `@nexus/client-core`, implemented for iOS.
  *
- * Ce fichier ne contient **aucune décision** : session, reconnexion, état,
- * pipeline vocal vivent dans le cœur client, qui est testé. Ici on ne fait que
- * combler les trous que la plateforme seule peut combler.
+ * This file contains **no domain logic**: session lifecycle, reconnection,
+ * state machines, and voice pipelines live in client core, which is fully unit tested.
+ * Here we only bridge platform-specific APIs.
  *
- * C'est le même découpage que pour les workers Windows et Android, et pour la
- * même raison : ce qui touche au système ne se teste pas ici, donc on en met le
- * moins possible.
+ * This matches the architecture of the Windows and Android worker ports.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Trousseau
+// Keychain
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Trousseau iOS.
+ * iOS Keychain storage.
  *
- * `expo-secure-store` s'appuie sur le Keychain : chiffré par le système, lié à
- * l'appareil, inaccessible aux autres applications.
+ * `expo-secure-store` backs onto Keychain: encrypted by iOS, hardware-bound,
+ * isolated from other applications.
  *
- * `WHEN_UNLOCKED_THIS_DEVICE_ONLY` est délibéré. « This device only » exclut la
- * clé des sauvegardes iCloud : un jeton NEXUS ne doit pas se retrouver sur un
- * autre téléphone via une restauration. « When unlocked » interdit la lecture
- * écran verrouillé — le client n'en a pas besoin, il n'agit que quand
- * l'utilisateur regarde.
+ * `WHEN_UNLOCKED_THIS_DEVICE_ONLY` is deliberate. "This device only" excludes the
+ * key from iCloud backups: a NEXUS token must not migrate to another device via restore.
+ * "When unlocked" prevents reads while the screen is locked.
  *
- * **Jamais `AsyncStorage`** : il écrit en clair dans le bac à sable, qu'une
- * sauvegarde non chiffrée exporte tel quel.
+ * **Never use `AsyncStorage`** for credentials: it stores plaintext in sandbox storage
+ * which unencrypted backups export as-is.
  */
 export class KeychainStorage implements SecureStorage {
   readonly #options: SecureStore.SecureStoreOptions = {
@@ -63,7 +59,7 @@ export class KeychainStorage implements SecureStorage {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Réseau
+// Network
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class FetchHttpClient implements HttpClient {
@@ -84,8 +80,8 @@ export class FetchHttpClient implements HttpClient {
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
 
-    // Une réponse sans corps JSON — 204, ou une erreur d'infrastructure — ne
-    // doit pas faire échouer l'appelant sur une exception d'analyse.
+    // Responses without JSON body (204 or infrastructure errors) must not fail
+    // caller on parse exceptions.
     const body: unknown = await response.json().catch(() => null);
 
     return { status: response.status, body };
@@ -93,11 +89,10 @@ export class FetchHttpClient implements HttpClient {
 }
 
 /**
- * WebSocket natif.
+ * Native WebSocket transport.
  *
- * React Native fournit `WebSocket` ; il ne manque que la mise en forme du port.
- * Le jeton voyage dans la **première trame**, pas dans l'URL : une URL finit
- * dans les journaux de proxy et dans l'historique de connexion.
+ * React Native provides `WebSocket`. The auth token is sent in the initial frame,
+ * not in the URL, to prevent leaking credentials in proxy logs or connection histories.
  */
 export class NativeSocket implements SocketTransport {
   #socket: WebSocket | undefined;
@@ -122,21 +117,19 @@ export class NativeSocket implements SocketTransport {
       };
 
       socket.onerror = () => {
-        // `onerror` puis `onclose` : on rejette ici et on laisse `onclose`
-        // notifier la fermeture, sans double signalement.
-        if (this.#state === "connecting") reject(new Error("connexion impossible"));
+        // `onerror` then `onclose`: reject here and let `onclose` notify close without duplicate reporting.
+        if (this.#state === "connecting") reject(new Error("connection failed"));
       };
 
       socket.onmessage = (event: { data: unknown }) => {
         if (typeof event.data === "string") this.#onMessage?.(event.data);
       };
 
-      // Le code de fermeture accompagne la raison : c'est lui qui dit au cœur
-      // client si la session a été refusée — auquel cas il fait tourner le
-      // jeton — ou si le réseau a simplement coupé.
+      // The close code accompanies the reason: it informs client-core whether
+      // the session was rejected or the connection dropped unexpectedly.
       socket.onclose = (event: { reason?: string; code?: number }) => {
         this.#state = "closed";
-        this.#onClose?.(event.reason ?? "socket fermée", event.code);
+        this.#onClose?.(event.reason ?? "socket closed", event.code);
       };
     });
   }
@@ -161,13 +154,11 @@ export class NativeSocket implements SocketTransport {
 }
 
 /**
- * État du réseau.
+ * Network monitor.
  *
- * Volontairement minimal — pas de `@react-native-community/netinfo`. Une
- * dépendance native de plus pour une information qu'on obtient déjà en observant
- * les échecs de connexion n'en vaut pas le coût. Le jour où la distinction
- * « pas de réseau » / « serveur muet » devient importante à l'usage, elle
- * s'ajoutera derrière ce même port.
+ * Intentionally minimal without `@react-native-community/netinfo`.
+ * An extra native dependency for connectivity status already observed via
+ * connection attempts is unnecessary overhead.
  */
 export class OptimisticNetworkMonitor implements NetworkMonitor {
   #online = true;
@@ -181,7 +172,7 @@ export class OptimisticNetworkMonitor implements NetworkMonitor {
     this.#handler = handler;
   }
 
-  /** Appelé par la couche réseau quand une connexion échoue ou aboutit. */
+  /** Called by network layer when connection succeeds or fails. */
   report(online: boolean): void {
     if (this.#online === online) return;
     this.#online = online;
@@ -190,14 +181,13 @@ export class OptimisticNetworkMonitor implements NetworkMonitor {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Voix
+// Voice
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Synthèse vocale iOS, via `expo-speech`.
+ * iOS Text-to-Speech via `expo-speech`.
  *
- * `stop()` est appelé avant chaque énoncé : deux réponses qui se chevauchent
- * sont incompréhensibles, et l'utilisateur n'a aucun moyen de démêler.
+ * `stop()` is called before each utterance to prevent overlapping audio.
  */
 export class ExpoTextToSpeech implements TextToSpeechProvider {
   isAvailable(): Promise<boolean> {
@@ -209,7 +199,7 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
 
     return new Promise<void>((resolve, reject) => {
       Speech.speak(text, {
-        language: options?.locale ?? "fr-FR",
+        language: options?.locale ?? "en-US",
         rate: options?.rate ?? 1,
         onDone: () => {
           resolve();
@@ -218,7 +208,7 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
           resolve();
         },
         onError: () => {
-          reject(new Error("synthèse vocale indisponible"));
+          reject(new Error("speech synthesis unavailable"));
         },
       });
     });
@@ -234,18 +224,14 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
 }
 
 /**
- * Reconnaissance vocale.
+ * Speech recognition stub.
  *
- * **Non implémentée.** `expo-speech` synthétise, il ne transcrit pas ; la
- * reconnaissance sur iOS demande `SFSpeechRecognizer`, donc un module natif.
+ * **Not implemented.** `expo-speech` synthesizes text but does not transcribe.
+ * Speech recognition on iOS requires `SFSpeechRecognizer` via a native module.
  *
- * Ce substitut annonce honnêtement son indisponibilité plutôt que de faire
- * croire à un micro qui marche : `isAvailable()` répond `false`, le pipeline
- * lève `MicrophoneUnavailableError`, et l'interface grise le bouton en
- * expliquant pourquoi. Un bouton qui ne fait rien est pire qu'un bouton absent.
- *
- * Le jour où le module natif existe, il remplace cette classe sans que rien
- * d'autre ne bouge — c'est l'intérêt du port.
+ * This placeholder transparently reports unavailability rather than failing
+ * silently: `isAvailable()` returns `false`, the pipeline raises `MicrophoneUnavailableError`,
+ * and the UI disables the microphone button with explanatory feedback.
  */
 export class UnavailableSpeechToText implements SpeechToTextProvider {
   isAvailable(): Promise<boolean> {
@@ -257,7 +243,7 @@ export class UnavailableSpeechToText implements SpeechToTextProvider {
   }
 
   start(): Promise<void> {
-    return Promise.reject(new Error("reconnaissance vocale non disponible"));
+    return Promise.reject(new Error("speech recognition unavailable"));
   }
 
   stop(): Promise<TranscriptionResult> {

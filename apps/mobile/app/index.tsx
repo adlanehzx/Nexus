@@ -23,16 +23,10 @@ import {
 import { theme } from "../theme/index.js";
 
 /**
- * L'écran principal : la conversation.
+ * Main screen: conversation timeline.
  *
- * Tout ce que NEXUS fait passe ici — messages, appels d'outils, tâches,
- * confirmations — dans **un seul flux chronologique**. Séparer les tâches dans
- * un onglet obligerait l'utilisateur à surveiller deux endroits pour comprendre
- * une seule action.
- *
- * Les confirmations restent **en tête**, hors du flux : une demande qui remonte
- * avec le défilement finit par sortir de l'écran, et une action attend alors
- * indéfiniment sans que personne ne le sache.
+ * Messages, tool calls, tasks, and confirmations stream into a single chronological feed.
+ * Confirmations are pinned at the top to prevent losing actionable requests in scroll history.
  */
 export default function ChatScreen() {
   const nexus = useNexus();
@@ -44,13 +38,6 @@ export default function ChatScreen() {
   const unread = unreadNotifications(state).length;
   const interactive = canInteract(state);
 
-  /**
-   * Le flux, assemblé en un seul tableau.
-   *
-   * Messages, outils et tâches partagent la même chronologie : c'est ce qui
-   * permet de lire « j'ai demandé ceci → NEXUS a lancé cela → voilà le
-   * résultat » d'un seul mouvement du pouce.
-   */
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [
       ...state.messages.map((message) => ({ kind: "message" as const, id: message.id, message })),
@@ -60,8 +47,6 @@ export default function ChatScreen() {
     return items;
   }, [state.messages, state.toolCalls, state.tasks]);
 
-  // Le flux suit la réponse qui arrive : on ne veut pas faire défiler à la main
-  // pendant que le texte s'écrit.
   useEffect(() => {
     if (feed.length > 0) listRef.current?.scrollToEnd({ animated: true });
   }, [feed.length, state.messages]);
@@ -77,15 +62,13 @@ export default function ChatScreen() {
       <ConnectionBanner connection={state.connection} online={state.online} />
 
       <View style={styles.toolbar}>
-        <NavChip label="Tâches" badge={running.length} onPress={() => router.push("/tasks")} />
-        <NavChip label="Appareils" onPress={() => router.push("/devices")} />
-        <NavChip label="Alertes" badge={unread} onPress={() => router.push("/notifications")} />
-        <NavChip label="Mémoire" onPress={() => router.push("/memory")} />
-        <NavChip label="Réglages" onPress={() => router.push("/settings")} />
+        <NavChip label="Tasks" badge={running.length} onPress={() => router.push("/tasks")} />
+        <NavChip label="Devices" onPress={() => router.push("/devices")} />
+        <NavChip label="Alerts" badge={unread} onPress={() => router.push("/notifications")} />
+        <NavChip label="Memory" onPress={() => router.push("/memory")} />
+        <NavChip label="Settings" onPress={() => router.push("/settings")} />
       </View>
 
-      {/* Hors du flux, toujours visibles : une confirmation qui sort de l'écran
-          bloque une action sans que personne ne s'en aperçoive. */}
       {confirmations.length > 0 && (
         <View style={styles.confirmations}>
           {confirmations.map((confirmation) => (
@@ -135,10 +118,10 @@ export default function ChatScreen() {
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Que puis-je faire ?</Text>
+            <Text style={styles.emptyTitle}>What can I do?</Text>
             <Text style={styles.emptyText}>
-              Demandez à NEXUS de lancer les tests sur le poste fixe, d'ouvrir une application sur
-              votre téléphone, ou de vous prévenir quand c'est terminé.
+              Ask NEXUS to run tests on your workstation, trigger actions on your phone,
+              or notify you when tasks complete.
             </Text>
           </View>
         }

@@ -6,10 +6,9 @@ import { theme } from "../theme/index.js";
 import { NexusOrb } from "../components/nexus-orb.js";
 
 /**
- * Écran de connexion.
+ * Sign in screen.
  *
- * Le mot de passe n'est jamais conservé : `SessionManager` l'échange contre des
- * jetons, qui vont dans le trousseau. Le champ est vidé dès l'envoi.
+ * Password is exchanged for tokens stored in Keychain via `SessionManager`.
  */
 export default function LoginScreen() {
   const { signIn } = useNexus();
@@ -28,7 +27,7 @@ export default function LoginScreen() {
       router.replace("/");
     } catch (cause) {
       setPassword("");
-      setError(cause instanceof Error ? cause.message : "Connexion impossible.");
+      setError(cause instanceof Error ? cause.message : "Sign in failed.");
     } finally {
       setBusy(false);
     }
@@ -41,29 +40,29 @@ export default function LoginScreen() {
       </View>
       <Text style={styles.eyebrow}>PERSONAL INTELLIGENCE OS</Text>
       <Text style={styles.title}>NEXUS</Text>
-      <Text style={styles.subtitle}>Votre console personnelle, sur tous vos appareils.</Text>
+      <Text style={styles.subtitle}>Your personal intelligence OS, across all your devices.</Text>
 
       <TextInput
         style={styles.input}
         value={email}
         onChangeText={setEmail}
-        placeholder="Adresse"
+        placeholder="Email address"
         placeholderTextColor={theme.color.textFaint}
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
-        accessibilityLabel="Adresse électronique"
+        accessibilityLabel="Email address"
       />
 
       <TextInput
         style={styles.input}
         value={password}
         onChangeText={setPassword}
-        placeholder="Mot de passe"
+        placeholder="Password"
         placeholderTextColor={theme.color.textFaint}
         secureTextEntry
         autoComplete="current-password"
-        accessibilityLabel="Mot de passe"
+        accessibilityLabel="Password"
       />
 
       {error !== undefined && <Text style={styles.error}>{error}</Text>}
@@ -77,7 +76,7 @@ export default function LoginScreen() {
         {busy ? (
           <ActivityIndicator color={theme.color.text} />
         ) : (
-          <Text style={styles.buttonText}>Établir la connexion</Text>
+          <Text style={styles.buttonText}>Sign in</Text>
         )}
       </Pressable>
     </View>

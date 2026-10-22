@@ -2,15 +2,10 @@ import type { SecureStorage } from "@nexus/client-core";
 import { VolatileStorage, type DesktopShell, type ShellKind } from "./shell.js";
 
 /**
- * Les deux coquilles possibles, et la façon de choisir.
+ * Shell implementations and detection.
  *
- * En production, Tauri : la fenêtre native, le gestionnaire d'identifiants
- * Windows, les notifications du système. En développement, un navigateur
- * ordinaire, avec des capacités réduites et **annoncées comme telles**.
- *
- * Rien ici ne dégrade la sécurité en silence. La coquille web ne fait pas
- * semblant d'avoir un coffre : elle garde les jetons en mémoire et les perd au
- * rechargement. C'est gênant, c'est voulu, et c'est écrit à l'écran.
+ * In production: native Tauri window with Windows Credential Manager and native notifications.
+ * In development: standard browser fallback with explicit volatile storage.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,13 +13,7 @@ import { VolatileStorage, type DesktopShell, type ShellKind } from "./shell.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pont vers la coquille Rust.
- *
- * Quatre commandes, pas une de plus. La liste est le contrat de sécurité de
- * l'application : ce que le moteur de rendu peut demander au système est
- * exactement ce qui est énuméré ici, et la coquille Rust n'expose rien d'autre.
- *
- * On y cherchera en vain une commande d'exécution : l'interface n'exécute pas.
+ * Bridge to native Rust shell.
  */
 interface TauriBridge {
   invoke(command: TauriCommand, args?: Record<string, unknown>): Promise<unknown>;
@@ -40,23 +29,14 @@ type TauriCommand =
   | "open_external";
 
 /**
- * Le pont exposé par la coquille native, s'il y en a une.
- *
- * `__TAURI__` n'existe que parce que `tauri.conf.json` déclare
- * `app.withGlobalTauri: true`. C'est délibéré : le frontend passe par cette
- * globale plutôt que par le paquet `@tauri-apps/api` — une dépendance de moins,
- * et la surface atteignable reste celle des sept commandes énumérées ci-dessus.
- *
- * Le drapeau se supprime sans rien casser au build : `detectShell()` retomberait
- * simplement sur `WebShell`, et l'application empaquetée perdrait en silence le
- * trousseau Windows et les notifications natives. D'où ce rappel ici.
+ * Native bridge exposed via window.__TAURI__.
  */
 function tauriBridge(): TauriBridge | undefined {
   const scope = globalThis as unknown as { __TAURI__?: { core?: TauriBridge } };
   return scope.__TAURI__?.core;
 }
 
-/** Coffre adossé au gestionnaire d'identifiants de Windows. */
+/** Vault backed by Windows Credential Manager via native Tauri command. */
 class KeyringStorage implements SecureStorage {
   readonly #bridge: TauriBridge;
 
@@ -103,7 +83,7 @@ class TauriShell implements DesktopShell {
 
   async machineName(): Promise<string> {
     const value = await this.#bridge.invoke("machine_name");
-    return typeof value === "string" && value.length > 0 ? value : "Poste Windows";
+    return typeof value === "string" && value.length > 0 ? value : "Windows PC";
   }
 
   async openExternal(url: string): Promise<void> {
@@ -112,20 +92,11 @@ class TauriShell implements DesktopShell {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Navigateur
+// Browser fallback
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Coquille de repli.
- *
- * Utilisée quand l'interface tourne dans un navigateur ordinaire — le mode de
- * développement. Trois différences, toutes visibles :
- *
- *  - les jetons vivent en mémoire et disparaissent au rechargement ;
- *  - il n'y a pas d'exécutant local à découvrir, puisqu'un navigateur ne lit
- *    pas le disque ;
- *  - les notifications passent par l'API du navigateur, si l'utilisateur l'a
- *    autorisée.
+ * Browser fallback shell for development.
  */
 class WebShell implements DesktopShell {
   readonly kind: ShellKind = "web";
@@ -143,19 +114,12 @@ class WebShell implements DesktopShell {
     new Notification(input.title, { body: input.body });
   }
 
-  /**
-   * Toujours `null`.
-   *
-   * Un navigateur ne lit pas l'état d'un démon sur le disque, et c'est une
-   * bonne chose. L'interface affichera « aucun exécutant détecté », ce qui est
-   * la vérité de ce contexte d'exécution.
-   */
   localWorkerDeviceId(): Promise<string | null> {
     return Promise.resolve(null);
   }
 
   machineName(): Promise<string> {
-    return Promise.resolve("Poste Windows");
+    return Promise.resolve("Windows PC");
   }
 
   openExternal(url: string): Promise<void> {
@@ -164,7 +128,7 @@ class WebShell implements DesktopShell {
   }
 }
 
-/** Choisit la coquille disponible. Tauri s'il est là, le navigateur sinon. */
+/** Detects and instantiates the available desktop shell. */
 export function detectShell(): DesktopShell {
   const bridge = tauriBridge();
   return bridge === undefined ? new WebShell() : new TauriShell(bridge);

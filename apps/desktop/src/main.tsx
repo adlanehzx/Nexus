@@ -5,16 +5,15 @@ import { App } from "./ui/App.js";
 import "./ui/theme.css";
 
 /**
- * Point d'entrée du moteur de rendu.
+ * Renderer entry point.
  *
- * Rien d'autre que du montage. La coquille Tauri sert ce paquet depuis le
- * disque ; aucune ressource n'est chargée depuis Internet, et la politique de
- * sécurité du contenu déclarée dans `index.html` le garantit à l'exécution.
+ * Mounts the root component. The Tauri shell serves this bundle from disk;
+ * no remote resources are loaded, guaranteed by the Content Security Policy.
  */
-const racine = document.getElementById("root");
-if (racine === null) throw new Error("élément racine introuvable");
+const rootElement = document.getElementById("root");
+if (rootElement === null) throw new Error("root element not found");
 
-createRoot(racine).render(
+createRoot(rootElement).render(
   <StrictMode>
     <NexusProvider>
       <App />

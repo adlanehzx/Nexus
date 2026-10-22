@@ -7,39 +7,23 @@ import type {
   TranscriptionResult,
 } from "@nexus/client-core";
 
-// `FetchHttpClient` vit desormais dans `@nexus/client-core` : trois copies
-// identiques dans trois applications finissent toujours par diverger sur un
-// detail, et c'est celle qu'on n'a pas relue qui casse.
+// `FetchHttpClient` lives in `@nexus/client-core`.
 export { FetchHttpClient } from "@nexus/client-core";
 
 /**
- * Les ports de `@nexus/client-core`, implémentés pour la fenêtre Windows.
+ * Platform ports for the Windows desktop client.
  *
- * Même découpage que sur iOS, et pour la même raison : ce qui touche à la
- * plateforme ne se teste pas, donc on en met le moins possible. Session,
- * reconnexion, corrélation des demandes, état — tout cela vit dans le cœur
- * client, qui est éprouvé.
- *
- * Ce fichier ne prend **aucune décision d'autorisation**. Il ne sait pas ce
- * qu'est une tâche, une capacité ou un exécutant. Il ouvre une socket et fait
- * des requêtes.
+ * Implements WebSocket transport, network monitoring, and browser speech APIs.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Réseau
+// Network
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * WebSocket du moteur de rendu.
+ * Renderer WebSocket transport.
  *
- * Le jeton voyage dans la **première trame**, jamais dans l'URL : une URL de
- * WebSocket apparaît dans les journaux de proxy et dans l'historique de
- * connexion, un cadre applicatif non.
- *
- * Le **code** de fermeture est propagé au cœur client. C'est ce qui lui permet
- * de distinguer « le réseau a coupé » de « le cœur a refusé la session », et de
- * faire tourner le jeton dans le second cas plutôt que de reconnecter en boucle
- * avec un secret périmé — le scénario exact d'un poste laissé ouvert la nuit.
+ * Auth token is exchanged during the initial frame, not in the URL.
  */
 export class BrowserSocket implements SocketTransport {
   #socket: WebSocket | undefined;
@@ -64,10 +48,7 @@ export class BrowserSocket implements SocketTransport {
       };
 
       socket.onerror = () => {
-        // `onerror` est suivi de `onclose` : on rejette ici, et `onclose`
-        // notifie la fermeture. Signaler aux deux endroits ferait compter deux
-        // coupures pour une.
-        if (this.#state === "connecting") reject(new Error("connexion impossible"));
+        if (this.#state === "connecting") reject(new Error("connection failed"));
       };
 
       socket.onmessage = (event) => {
@@ -76,7 +57,7 @@ export class BrowserSocket implements SocketTransport {
 
       socket.onclose = (event) => {
         this.#state = "closed";
-        this.#onClose?.(event.reason.length > 0 ? event.reason : "socket fermée", event.code);
+        this.#onClose?.(event.reason.length > 0 ? event.reason : "socket closed", event.code);
       };
     });
   }
@@ -88,7 +69,6 @@ export class BrowserSocket implements SocketTransport {
   close(reason: string): void {
     if (this.#state === "closed") return;
     this.#state = "closed";
-    // 1000 : fermeture normale. Les codes 4xxx sont réservés au serveur.
     this.#socket?.close(1000, reason);
   }
 
@@ -102,13 +82,7 @@ export class BrowserSocket implements SocketTransport {
 }
 
 /**
- * État du réseau, tel que le moteur de rendu le voit.
- *
- * `navigator.onLine` est notoirement optimiste — il dit surtout « une interface
- * réseau existe ». Il suffit néanmoins à ce dont le client a besoin : ne pas
- * composer dans le vide quand le câble est débranché. Le reste — un serveur
- * joignable mais muet — se détecte par l'échec de connexion, pas par le
- * navigateur.
+ * Network state monitoring.
  */
 export class BrowserNetworkMonitor implements NetworkMonitor {
   #handler: ((online: boolean) => void) | undefined;
@@ -132,14 +106,11 @@ export class BrowserNetworkMonitor implements NetworkMonitor {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Voix
+// Voice
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Synthèse vocale du moteur de rendu.
- *
- * WebView2 est du Chromium : `speechSynthesis` s'y appuie sur les voix
- * installées dans Windows, hors ligne et sans service tiers.
+ * Speech synthesis via Web Speech API.
  */
 export class WebTextToSpeech implements TextToSpeechProvider {
   isAvailable(): Promise<boolean> {
@@ -147,19 +118,17 @@ export class WebTextToSpeech implements TextToSpeechProvider {
   }
 
   speak(text: string, options?: { locale?: string; rate?: number }): Promise<void> {
-    // Deux réponses qui se chevauchent sont incompréhensibles, et l'utilisateur
-    // n'a aucun moyen de démêler.
     globalThis.speechSynthesis.cancel();
 
     return new Promise<void>((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = options?.locale ?? "fr-FR";
+      utterance.lang = options?.locale ?? "en-US";
       utterance.rate = options?.rate ?? 1;
       utterance.onend = () => {
         resolve();
       };
       utterance.onerror = () => {
-        reject(new Error("synthèse vocale indisponible"));
+        reject(new Error("speech synthesis unavailable"));
       };
       globalThis.speechSynthesis.speak(utterance);
     });
@@ -176,11 +145,7 @@ export class WebTextToSpeech implements TextToSpeechProvider {
 }
 
 /**
- * Forme minimale de l'API de reconnaissance vocale du moteur de rendu.
- *
- * Déclarée ici plutôt qu'importée : `SpeechRecognition` ne figure pas dans les
- * types DOM standard, parce que l'API n'est pas normalisée. On décrit donc ce
- * qu'on utilise, et rien de plus.
+ * Minimal Web Speech Recognition interface.
  */
 interface WebSpeechRecognition {
   lang: string;
@@ -213,16 +178,7 @@ function recognitionConstructor(): RecognitionConstructor | undefined {
 }
 
 /**
- * Reconnaissance vocale du moteur de rendu.
- *
- * **Pas d'écoute permanente.** `continuous` est mis à `false` et le port lui-même
- * n'offre que `start` / `stop` / `cancel` : l'utilisateur maintient le bouton, il
- * parle, il relâche. Aucun chemin de ce fichier ne démarre une écoute que
- * l'utilisateur n'a pas déclenchée.
- *
- * L'API n'étant pas normalisée, sa présence est détectée à l'exécution. Quand
- * elle manque, on l'annonce (`isAvailable() === false`) et l'interface grise le
- * micro en disant pourquoi — plutôt que d'offrir un bouton qui ne fait rien.
+ * Speech-to-text via Web Speech API.
  */
 export class WebSpeechToText implements SpeechToTextProvider {
   #recognition: WebSpeechRecognition | undefined;
@@ -235,11 +191,7 @@ export class WebSpeechToText implements SpeechToTextProvider {
   }
 
   /**
-   * Autorisation micro.
-   *
-   * `getUserMedia` déclenche la demande système, puis la piste est **coupée
-   * immédiatement** : on voulait l'autorisation, pas le flux. Un micro laissé
-   * ouvert allume la diode d'enregistrement sans que rien n'écoute.
+   * Microphone permission check.
    */
   async requestPermission(): Promise<boolean> {
     try {
@@ -254,11 +206,11 @@ export class WebSpeechToText implements SpeechToTextProvider {
   start(options?: { locale?: string; onPartial?: (text: string) => void }): Promise<void> {
     const Recognition = recognitionConstructor();
     if (Recognition === undefined) {
-      return Promise.reject(new Error("reconnaissance vocale non disponible"));
+      return Promise.reject(new Error("speech recognition unavailable"));
     }
 
     const recognition = new Recognition();
-    recognition.lang = options?.locale ?? "fr-FR";
+    recognition.lang = options?.locale ?? "en-US";
     recognition.continuous = false;
     recognition.interimResults = true;
 
@@ -280,8 +232,6 @@ export class WebSpeechToText implements SpeechToTextProvider {
       }
     };
 
-    // Le moteur signale la fin de façon asynchrone : `stop()` doit l'attendre,
-    // sinon la transcription rendue serait tronquée du dernier mot.
     this.#ended = new Promise<void>((resolve) => {
       recognition.onend = () => {
         resolve();

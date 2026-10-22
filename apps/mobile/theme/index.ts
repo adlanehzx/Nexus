@@ -1,10 +1,9 @@
 /**
- * Le thème.
+ * Theme configuration.
  *
- * Sombre par défaut : NEXUS s'utilise beaucoup le soir et sur un téléphone tenu
- * à bout de bras. Les couleurs de risque sont les mêmes que dans les journaux du
- * serveur — un HIGH doit avoir la même teinte partout, sinon l'utilisateur
- * réapprend l'échelle à chaque écran.
+ * Dark by default: NEXUS is often used at night and on handheld mobile devices.
+ * Risk colors match those in server logs — a HIGH must share the same hue everywhere,
+ * avoiding confusion across screens.
  */
 export const theme = {
   color: {
@@ -31,12 +30,12 @@ export const theme = {
   radius: { sm: 10, md: 16, lg: 24, pill: 999 },
 } as const;
 
-/** Couleur d'un niveau de risque, avec un repli lisible. */
+/** Color for a risk level, with readable fallback. */
 export function riskColor(level: string): string {
   return theme.risk[level] ?? theme.color.textMuted;
 }
 
-/** Couleur d'un état de tâche. */
+/** Color for a task status. */
 export function statusColor(status: string): string {
   switch (status) {
     case "succeeded":
@@ -52,16 +51,16 @@ export function statusColor(status: string): string {
   }
 }
 
-/** Libellé français d'un état de tâche. */
+/** Human-readable label for a task status. */
 export function statusLabel(status: string): string {
   const labels: Record<string, string> = {
-    pending: "en attente",
-    running: "en cours",
-    waiting_for_confirmation: "attente de confirmation",
-    succeeded: "terminée",
-    partial: "partiellement terminée",
-    failed: "échouée",
-    cancelled: "annulée",
+    pending: "queued",
+    running: "running",
+    waiting_for_confirmation: "awaiting confirmation",
+    succeeded: "completed",
+    partial: "partially completed",
+    failed: "failed",
+    cancelled: "cancelled",
   };
   return labels[status] ?? status;
 }

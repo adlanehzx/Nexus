@@ -4,44 +4,44 @@ import { useNexus } from "../lib/nexus.js";
 import { ConfirmationCard, MessageBubble, TaskCard, ToolCard } from "./cards.js";
 
 /**
- * L'écran de conversation.
+ * The conversation screen.
  *
- * Trois colonnes, ce qu'un écran de bureau permet et qu'un téléphone
- * n'autorise pas : la liste des conversations à gauche, le fil au centre, le
- * contexte vivant — tâches en cours, appels d'outils — à droite.
+ * Three columns, which a desktop screen enables and a phone cannot:
+ * conversation list on the left, thread in the center, living context —
+ * active tasks, tool calls — on the right.
  *
- * Les confirmations restent **au-dessus du fil**, hors du défilement. Une
- * demande qui remonte avec l'historique finit par sortir de l'écran, et une
- * action attend alors indéfiniment sans que personne ne le sache.
+ * Confirmations stay **above the thread**, out of scrolling. A request
+ * that scrolls away with history ends up off-screen, and an action then
+ * waits indefinitely without anyone noticing.
  */
 export function Chat() {
   const nexus = useNexus();
   const { state } = nexus;
-  const [texte, setTexte] = useState("");
-  const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const filRef = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
 
   const confirmations = pendingConfirmations(state);
-  const enCours = activeTasks(state);
-  const interactif = canInteract(state) && nexus.boundDeviceId !== null;
+  const activeTaskList = activeTasks(state);
+  const interactive = canInteract(state) && nexus.boundDeviceId !== null;
 
-  // Le fil suit la réponse pendant qu'elle s'écrit.
+  // The thread follows the response while it streams.
   useEffect(() => {
-    const fil = filRef.current;
-    if (fil !== null) fil.scrollTop = fil.scrollHeight;
+    const thread = threadRef.current;
+    if (thread !== null) thread.scrollTop = thread.scrollHeight;
   }, [nexus.timeline]);
 
-  const envoyer = () => {
-    const contenu = texte;
-    if (contenu.trim().length === 0 || !interactif) return;
+  const sendCurrentMessage = () => {
+    const content = text;
+    if (content.trim().length === 0 || !interactive) return;
 
-    setTexte("");
-    setEnvoiEnCours(true);
+    setText("");
+    setIsSending(true);
     void nexus
-      .send(contenu)
+      .send(content)
       .catch(() => undefined)
       .finally(() => {
-        setEnvoiEnCours(false);
+        setIsSending(false);
       });
   };
 
@@ -56,7 +56,7 @@ export function Chat() {
             void nexus.openConversation(null);
           }}
         >
-          Nouvelle conversation
+          New conversation
         </button>
 
         {nexus.conversations.map((conversation) => (
@@ -88,11 +88,11 @@ export function Chat() {
           </div>
         )}
 
-        <div className="messages" ref={filRef}>
+        <div className="messages" ref={threadRef}>
           {nexus.timeline.length === 0 ? (
             <p className="vide">
-              Demandez quelque chose à NEXUS. Les tâches qui en découlent s'exécuteront sur la
-              machine capable de les faire — ce poste, le poste fixe, ou le téléphone.
+              Ask NEXUS anything. Resulting tasks will execute on the capable device — this machine,
+              your workstation, or phone.
             </p>
           ) : (
             nexus.timeline.map((message) => <MessageBubble key={message.id} message={message} />)
@@ -102,11 +102,11 @@ export function Chat() {
             <ToolCard key={call.callId} call={call} />
           ))}
 
-          {enCours.map((task) => (
+          {activeTaskList.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
-              deviceName={nomAppareil(nexus, task.workerDeviceId)}
+              deviceName={getDeviceName(nexus, task.workerDeviceId)}
               onCancel={(taskId) => {
                 void nexus.cancelTask(taskId);
               }}
@@ -117,20 +117,20 @@ export function Chat() {
         <div className="compositeur">
           <textarea
             className="champ"
-            value={texte}
+            value={text}
             placeholder={
-              interactif
-                ? "Écrivez à NEXUS…  (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)"
-                : "Connexion au cœur NEXUS…"
+              interactive
+                ? "Message NEXUS…  (Enter to send, Shift+Enter for a new line)"
+                : "Connecting to NEXUS core…"
             }
-            disabled={!interactif}
+            disabled={!interactive}
             onChange={(event) => {
-              setTexte(event.target.value);
+              setText(event.target.value);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                envoyer();
+                sendCurrentMessage();
               }
             }}
           />
@@ -140,10 +140,10 @@ export function Chat() {
           <button
             type="button"
             className="bouton primaire"
-            disabled={!interactif || envoiEnCours || texte.trim().length === 0}
-            onClick={envoyer}
+            disabled={!interactive || isSending || text.trim().length === 0}
+            onClick={sendCurrentMessage}
           >
-            Envoyer
+            Send
           </button>
         </div>
       </div>
@@ -152,16 +152,16 @@ export function Chat() {
 }
 
 /**
- * Le micro.
+ * Microphone button.
  *
- * **Maintenu, jamais commuté.** L'écoute démarre au `pointerdown` et s'arrête au
- * `pointerup` : il n'existe aucun état « micro allumé » qui survivrait au geste.
- * C'est le même choix que sur l'iPhone, pour la même raison — un assistant
- * personnel qui écoute en permanence n'est pas un assistant.
+ * **Hold to talk, never toggled.** Listening begins on `pointerdown` and stops on
+ * `pointerup`: no "mic on" state outlives the gesture.
+ * This is the same choice as on iOS, for the same reason — a personal assistant
+ * that listens permanently is not an assistant.
  */
 function MicroButton() {
   const nexus = useNexus();
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!nexus.voiceAvailable) {
     return (
@@ -169,14 +169,14 @@ function MicroButton() {
         type="button"
         className="bouton"
         disabled
-        title="Ce poste ne fournit pas de reconnaissance vocale."
+        title="Speech recognition is not available on this device."
       >
         🎤
       </button>
     );
   }
 
-  const relacher = () => {
+  const releaseMicrophone = () => {
     void nexus.voice
       .stopListening()
       .then(async (transcription) => {
@@ -191,14 +191,14 @@ function MicroButton() {
     <button
       type="button"
       className={`bouton ${nexus.voiceState === "listening" ? "primaire" : ""}`}
-      title={erreur ?? "Maintenir pour parler"}
+      title={error ?? "Hold to talk"}
       onPointerDown={() => {
-        setErreur(null);
+        setError(null);
         void nexus.voice.startListening().catch((cause: unknown) => {
-          setErreur(cause instanceof Error ? cause.message : "micro indisponible");
+          setError(cause instanceof Error ? cause.message : "microphone unavailable");
         });
       }}
-      onPointerUp={relacher}
+      onPointerUp={releaseMicrophone}
       onPointerLeave={() => {
         if (nexus.voice.isListening) void nexus.voice.cancelListening().catch(() => undefined);
       }}
@@ -208,7 +208,7 @@ function MicroButton() {
   );
 }
 
-function nomAppareil(
+function getDeviceName(
   nexus: ReturnType<typeof useNexus>,
   deviceId: string | null,
 ): string | undefined {

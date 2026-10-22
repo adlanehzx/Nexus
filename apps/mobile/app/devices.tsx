@@ -5,15 +5,10 @@ import { useNexus } from "../lib/nexus.js";
 import { theme } from "../theme/index.js";
 
 /**
- * Gestion de la flotte.
+ * Fleet device management.
  *
- * L'iPhone est le centre de contrôle : c'est ici qu'on approuve un appareil
- * fraîchement appairé, qu'on révoque un téléphone perdu, et qu'on voit ce que
- * chaque machine sait faire.
- *
- * **La révocation demande une confirmation explicite**, et pour la même raison
- * qu'ailleurs dans NEXUS : elle est irréversible. Un appareil révoqué ne se
- * réapprouve pas, il se réappaire.
+ * Approves newly paired devices, revokes lost devices, and inspects reported capabilities.
+ * Revocation requires explicit confirmation as it is irreversible.
  */
 export default function DevicesScreen() {
   const nexus = useNexus();
@@ -27,34 +22,32 @@ export default function DevicesScreen() {
       setDevices(await nexus.api.listDevices());
       setError(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Impossible de charger les appareils.");
+      setError(cause instanceof Error ? cause.message : "Failed to load devices.");
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Chargement initial uniquement. `load` est recréée à chaque rendu ;
-  // l'inclure dans les dépendances relancerait une requête en boucle.
   useEffect(() => {
     void load();
   }, []);
 
   const confirmRevoke = (device: ApiDevice) => {
     Alert.alert(
-      `Révoquer ${device.name} ?`,
-      "L'appareil ne pourra plus exécuter de tâche ni recevoir d'événement. " +
-        "La révocation est définitive : il faudra le réappairer.",
+      `Revoke ${device.name}?`,
+      "The device will no longer execute tasks or receive events. " +
+        "Revocation is permanent: you will need to pair it again.",
       [
-        { text: "Annuler", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Révoquer",
+          text: "Revoke",
           style: "destructive",
           onPress: () => {
             void nexus.api
               .revokeDevice(device.id)
               .then(load)
               .catch((cause: unknown) => {
-                setError(cause instanceof Error ? cause.message : "Révocation impossible.");
+                setError(cause instanceof Error ? cause.message : "Revocation failed.");
               });
           },
         },
@@ -101,15 +94,13 @@ export default function DevicesScreen() {
               {item.type} · {statusLabel(item.status)} · {trustLabel(item.trust)}
             </Text>
 
-            {/* La santé, quand elle veut dire quelque chose. Un poste fixe sur
-                secteur n'a pas de batterie à montrer. */}
             <Text style={styles.meta}>
-              {item.health.activeTasks}/{item.health.maxConcurrentTasks} tâche
+              {item.health.activeTasks}/{item.health.maxConcurrentTasks} task
               {item.health.maxConcurrentTasks > 1 ? "s" : ""}
               {item.health.batteryPercent === undefined
                 ? ""
-                : ` · batterie ${String(item.health.batteryPercent)} %${
-                    item.health.onBattery === true ? "" : " (en charge)"
+                : ` · battery ${String(item.health.batteryPercent)}%${
+                    item.health.onBattery === true ? "" : " (charging)"
                   }`}
             </Text>
 
@@ -127,7 +118,7 @@ export default function DevicesScreen() {
             )}
 
             <Text style={styles.faint}>
-              {item.lastSeenAt === null ? "jamais vu" : `vu ${formatRelative(item.lastSeenAt)}`}
+              {item.lastSeenAt === null ? "never seen" : `seen ${formatRelative(item.lastSeenAt)}`}
             </Text>
 
             <View style={styles.actions}>
@@ -139,7 +130,7 @@ export default function DevicesScreen() {
                   }}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.approveText}>Approuver</Text>
+                  <Text style={styles.approveText}>Approve</Text>
                 </Pressable>
               )}
 
@@ -150,9 +141,9 @@ export default function DevicesScreen() {
                     confirmRevoke(item);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Révoquer ${item.name}`}
+                  accessibilityLabel={`Revoke ${item.name}`}
                 >
-                  <Text style={styles.revokeText}>Révoquer</Text>
+                  <Text style={styles.revokeText}>Revoke</Text>
                 </Pressable>
               )}
             </View>
@@ -160,8 +151,7 @@ export default function DevicesScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            Aucun appareil enregistré. Appairez votre ordinateur ou votre téléphone depuis leur
-            écran NEXUS.
+            No registered devices. Pair your computer or phone from their NEXUS client.
           </Text>
         }
       />
@@ -172,40 +162,40 @@ export default function DevicesScreen() {
 function roleLabel(role: string): string {
   const labels: Record<string, string> = {
     CLIENT: "client",
-    WORKER: "exécutant",
-    BOTH: "client et exécutant",
+    WORKER: "worker",
+    BOTH: "client & worker",
   };
   return labels[role] ?? role;
 }
 
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
-    ONLINE: "en ligne",
-    OFFLINE: "hors ligne",
-    DEGRADED: "dégradé",
-    REVOKED: "révoqué",
+    ONLINE: "online",
+    OFFLINE: "offline",
+    DEGRADED: "degraded",
+    REVOKED: "revoked",
   };
   return labels[status] ?? status;
 }
 
 function trustLabel(trust: string): string {
   const labels: Record<string, string> = {
-    PENDING: "en attente d'approbation",
-    TRUSTED: "approuvé",
-    REVOKED: "révoqué",
+    PENDING: "pending approval",
+    TRUSTED: "approved",
+    REVOKED: "revoked",
   };
   return labels[trust] ?? trust;
 }
 
 function formatRelative(iso: string): string {
   const seen = new Date(iso).getTime();
-  if (Number.isNaN(seen)) return "à une date inconnue";
+  if (Number.isNaN(seen)) return "unknown date";
 
   const minutes = Math.round((Date.now() - seen) / 60_000);
-  if (minutes < 1) return "à l'instant";
-  if (minutes < 60) return `il y a ${String(minutes)} min`;
-  if (minutes < 1_440) return `il y a ${String(Math.round(minutes / 60))} h`;
-  return `il y a ${String(Math.round(minutes / 1_440))} j`;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${String(minutes)}m ago`;
+  if (minutes < 1_440) return `${String(Math.round(minutes / 60))}h ago`;
+  return `${String(Math.round(minutes / 1_440))}d ago`;
 }
 
 const styles = StyleSheet.create({

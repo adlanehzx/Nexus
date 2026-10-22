@@ -4,45 +4,34 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Le cloisonnement entre le client et l'exécutant, vérifié à la source.
+ * Boundary between client UI and execution runtime, verified at the source.
  *
- * Le portable est les deux à la fois. C'est justement pour cela qu'il faut
- * l'éprouver : sur cette machine, et sur elle seule, la tentation existe
- * d'écrire un raccourci — « puisque le worker tourne à côté, appelons-le
- * directement ». Ce raccourci ferait de la fenêtre un shell, et rendrait
- * contournable toute la chaîne `cœur → autorisation → capacité → exécution`.
- *
- * Ces tests sont **structurels**. Ils ne vérifient pas qu'un chemin d'exécution
- * se comporte bien : ils vérifient qu'il n'existe pas. Une garantie qui repose
- * sur le fait que personne n'écrira le mauvais appel n'est pas une garantie ;
- * une garantie qui casse le build quand quelqu'un l'écrit en est une.
+ * Ensures the desktop client never directly invokes the worker runtime,
+ * never imports OS process/filesystem modules, and strictly preserves
+ * the architectural path: UI -> core -> authorization -> worker.
  */
 
-const racine = fileURLToPath(new URL("..", import.meta.url));
+const root = fileURLToPath(new URL("..", import.meta.url));
 
-function fichiersSources(dossier: string): string[] {
-  const trouves: string[] = [];
+function sourceFiles(directory: string): string[] {
+  const found: string[] = [];
 
-  for (const entree of readdirSync(dossier)) {
-    const chemin = join(dossier, entree);
-    if (statSync(chemin).isDirectory()) {
-      trouves.push(...fichiersSources(chemin));
-    } else if (/\.tsx?$/.test(entree)) {
-      trouves.push(chemin);
+  for (const entry of readdirSync(directory)) {
+    const filePath = join(directory, entry);
+    if (statSync(filePath).isDirectory()) {
+      found.push(...sourceFiles(filePath));
+    } else if (/\.tsx?$/.test(entry)) {
+      found.push(filePath);
     }
   }
 
-  return trouves;
+  return found;
 }
 
 /**
- * Retire commentaires et chaînes.
- *
- * Sans cela, la prose qui explique *pourquoi* `child_process` est proscrit
- * ferait échouer le test qui l'interdit — et on finirait par supprimer
- * l'explication pour faire passer la vérification.
+ * Strips comments and strings to prevent prose from triggering lint assertions.
  */
-function codeSeul(source: string): string {
+function codeOnly(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/\/\/[^\n]*/g, " ")
@@ -51,17 +40,15 @@ function codeSeul(source: string): string {
     .replace(/`(?:[^`\\]|\\.)*`/g, "``");
 }
 
-const sources = fichiersSources(join(racine, "src")).map((chemin) => ({
-  chemin: chemin.slice(racine.length).replace(/\\/g, "/"),
-  code: codeSeul(readFileSync(chemin, "utf8")),
-  brut: readFileSync(chemin, "utf8"),
+const sources = sourceFiles(join(root, "src")).map((filePath) => ({
+  filePath: filePath.slice(root.length).replace(/\\/g, "/"),
+  code: codeOnly(readFileSync(filePath, "utf8")),
+  raw: readFileSync(filePath, "utf8"),
 }));
 
-describe("l'interface n'atteint pas l'exécutant", () => {
-  it("n'importe aucun module du worker", () => {
-    // Importer le cœur worker suffirait : ses capacités seraient alors
-    // appelables depuis un gestionnaire de clic.
-    const interdits = [
+describe("UI isolation from worker runtime", () => {
+  it("imports no worker modules", () => {
+    const forbidden = [
       "@nexus/worker-core",
       "@nexus/windows-worker",
       "@nexus/android-worker",
@@ -70,18 +57,15 @@ describe("l'interface n'atteint pas l'exécutant", () => {
       "@nexus/tools",
     ];
 
-    const fautifs = sources.filter((fichier) =>
-      interdits.some((module) => fichier.code.includes(module)),
+    const offenders = sources.filter((file) =>
+      forbidden.some((moduleName) => file.code.includes(moduleName)),
     );
 
-    expect(fautifs.map((fichier) => fichier.chemin)).toEqual([]);
+    expect(offenders.map((file) => file.filePath)).toEqual([]);
   });
 
-  it("n'importe aucun module Node qui touche au système", () => {
-    // Le moteur de rendu n'en a pas l'accès de toute façon ; l'interdire à la
-    // source évite qu'un jour quelqu'un déplace ce code dans le processus
-    // principal en croyant ne rien changer.
-    const interdits = [
+  it("imports no system-level Node modules", () => {
+    const forbidden = [
       "node:child_process",
       "node:fs",
       "node:os",
@@ -91,45 +75,43 @@ describe("l'interface n'atteint pas l'exécutant", () => {
       "execa",
     ];
 
-    const fautifs = sources.filter((fichier) =>
-      interdits.some((module) => new RegExp(`["']${module}["']`).test(fichier.brut)),
+    const offenders = sources.filter((file) =>
+      forbidden.some((moduleName) => new RegExp(`["']${moduleName}["']`).test(file.raw)),
     );
 
-    expect(fautifs.map((fichier) => fichier.chemin)).toEqual([]);
+    expect(offenders.map((file) => file.filePath)).toEqual([]);
   });
 
-  it("ne déclare aucune de ces dépendances", () => {
-    const manifeste = JSON.parse(readFileSync(join(racine, "package.json"), "utf8")) as {
+  it("declares none of the forbidden dependencies", () => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
 
-    const declarees = Object.keys({
-      ...manifeste.dependencies,
-      ...manifeste.devDependencies,
+    const declared = Object.keys({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
     });
 
-    for (const interdit of [
+    for (const forbidden of [
       "@nexus/worker-core",
       "@nexus/windows-worker",
       "@nexus/devices",
       "ws",
     ]) {
-      expect(declarees).not.toContain(interdit);
+      expect(declared).not.toContain(forbidden);
     }
   });
 });
 
-describe("la surface de la coquille", () => {
-  const port = readFileSync(join(racine, "src/lib/shell.ts"), "utf8");
-  const shells = readFileSync(join(racine, "src/lib/shells.ts"), "utf8");
+describe("shell surface area", () => {
+  const port = readFileSync(join(root, "src/lib/shell.ts"), "utf8");
+  const shells = readFileSync(join(root, "src/lib/shells.ts"), "utf8");
 
-  it("n'expose rien qui ressemble à une exécution", () => {
-    // On cherche dans le **code**, pas dans la prose : le port explique
-    // longuement ce qu'il refuse, et cette explication doit rester lisible.
-    const code = codeSeul(port);
+  it("exposes no execution or process spawning capabilities", () => {
+    const code = codeOnly(port);
 
-    for (const verbe of [
+    for (const verb of [
       "exec",
       "spawn",
       "runCommand",
@@ -140,34 +122,28 @@ describe("la surface de la coquille", () => {
       "startProcess",
       "killProcess",
     ]) {
-      expect(code).not.toContain(verbe);
+      expect(code).not.toContain(verb);
     }
   });
 
-  it("n'expose que les commandes natives énumérées", () => {
-    // La liste TypeScript et la liste Rust doivent coïncider. Si la coquille
-    // native gagnait une commande que le port ne nomme pas, elle serait
-    // atteignable par un `invoke` arbitraire sans que rien ici ne le signale.
-    //
-    // On lit l'union `TauriCommand` sur la source **brute** : c'est là que les
-    // noms vivent, et `codeSeul` vide justement les chaînes.
+  it("only exposes enumerated native commands", () => {
     const union = /type TauriCommand =([^;]+);/.exec(shells);
     expect(union).not.toBeNull();
 
-    const declarees = [...(union?.[1] ?? "").matchAll(/"([a-z_]+)"/g)]
-      .map((correspondance) => correspondance[1])
-      .filter((nom): nom is string => nom !== undefined);
+    const declared = [...(union?.[1] ?? "").matchAll(/"([a-z_]+)"/g)]
+      .map((match) => match[1])
+      .filter((name): name is string => name !== undefined);
 
-    const rust = readFileSync(join(racine, "src-tauri/src/main.rs"), "utf8");
-    const bloc = /invoke_handler\(tauri::generate_handler!\[([^\]]+)\]\)/.exec(rust);
-    expect(bloc).not.toBeNull();
+    const rust = readFileSync(join(root, "src-tauri/src/main.rs"), "utf8");
+    const block = /invoke_handler\(tauri::generate_handler!\[([^\]]+)\]\)/.exec(rust);
+    expect(block).not.toBeNull();
 
-    const exposees = (bloc?.[1] ?? "")
+    const exposed = (block?.[1] ?? "")
       .split(",")
-      .map((nom) => nom.trim())
-      .filter((nom) => nom.length > 0);
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
 
-    expect([...exposees].sort()).toEqual(
+    expect([...exposed].sort()).toEqual(
       [
         "local_worker_device_id",
         "machine_name",
@@ -179,20 +155,18 @@ describe("la surface de la coquille", () => {
       ].sort(),
     );
 
-    // Toute commande native doit être nommée côté TypeScript : une commande que
-    // le port ignore est une porte que personne ne surveille.
-    for (const commande of exposees) {
-      expect(declarees).toContain(commande);
+    for (const command of exposed) {
+      expect(declared).toContain(command);
     }
   });
 
-  it("la coquille native ne sait pas exécuter", () => {
-    const rust = readFileSync(join(racine, "src-tauri/src/main.rs"), "utf8")
+  it("native shell does not execute processes", () => {
+    const rust = readFileSync(join(root, "src-tauri/src/main.rs"), "utf8")
       .replace(/\/\/[^\n]*/g, " ")
       .replace(/"(?:[^"\\\n]|\\.)*"/g, '""');
 
-    for (const interdit of ["Command::new", "std::process::Command", "shell_execute"]) {
-      expect(rust).not.toContain(interdit);
+    for (const forbidden of ["Command::new", "std::process::Command", "shell_execute"]) {
+      expect(rust).not.toContain(forbidden);
     }
   });
 });

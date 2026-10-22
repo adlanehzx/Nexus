@@ -4,20 +4,17 @@ import { InvalidTaskDraftError, taskRequestBody } from "../src/lib/tasks.js";
 import { mergeHistory } from "../src/lib/history.js";
 
 /**
- * Ce que la fenêtre envoie au cœur, et ce qu'elle affiche.
+ * Outgoing requests to core and displayed state.
  *
- * Le premier bloc éprouve la propriété centrale de ce lot côté client : une
- * demande partie du portable ne désigne **aucune machine**. C'est ce qui rend
- * impossible, depuis l'interface, le contournement de la sélection et de
- * l'autorisation du cœur.
+ * Verifies requests express required capabilities rather than targeting specific devices.
  */
 
-describe("composition d'une tâche", () => {
-  const brouillon = {
-    title: "Lancer les tests du dépôt",
+describe("task composition", () => {
+  const draft = {
+    title: "Run repository test suite",
     steps: [
       {
-        description: "Exécuter pnpm test",
+        description: "Execute pnpm test",
         requiredCapabilities: ["terminal.execute"],
         tool: "terminal.execute",
         arguments: { command: "pnpm", args: ["test"] },
@@ -25,13 +22,11 @@ describe("composition d'une tâche", () => {
     ],
   };
 
-  it("déclare des capacités, jamais un exécutant", () => {
-    const corps = taskRequestBody(brouillon, "device-portable");
-    const serialise = JSON.stringify(corps);
+  it("declares capabilities, never a worker destination", () => {
+    const body = taskRequestBody(draft, "device-laptop");
+    const serialized = JSON.stringify(body);
 
-    // Aucun champ de ciblage, sous aucun nom. Le jour où quelqu'un en ajoute
-    // un, ce test tombe — et c'est exactement le moment où il faut en parler.
-    for (const champ of [
+    for (const field of [
       "targetDeviceId",
       "deviceId",
       "workerDeviceId",
@@ -39,120 +34,111 @@ describe("composition d'une tâche", () => {
       "runOn",
       "selectedDeviceId",
     ]) {
-      expect(serialise).not.toContain(champ);
+      expect(serialized).not.toContain(field);
     }
 
-    expect(corps.steps[0]?.requiredCapabilities).toEqual(["terminal.execute"]);
+    expect(body.steps[0]?.requiredCapabilities).toEqual(["terminal.execute"]);
   });
 
-  it("transmet l'appareil d'origine, qui désigne la source et non la cible", () => {
-    const corps = taskRequestBody(brouillon, "device-portable");
+  it("transmits origin device indicating source rather than target", () => {
+    const body = taskRequestBody(draft, "device-laptop");
 
-    expect(corps.originClientDeviceId).toBe("device-portable");
+    expect(body.originClientDeviceId).toBe("device-laptop");
   });
 
-  it("refuse une étape sans capacité requise", () => {
-    // Sans capacité, le sélecteur n'a aucun critère : la tâche partirait
-    // n'importe où, ou nulle part. Mieux vaut refuser côté client, où
-    // l'utilisateur peut encore corriger.
+  it("rejects step missing required capabilities", () => {
     expect(() =>
       taskRequestBody(
         {
-          title: "Tâche floue",
-          steps: [{ description: "faire le nécessaire", requiredCapabilities: [], tool: "x" }],
+          title: "Vague task",
+          steps: [{ description: "do the necessary", requiredCapabilities: [], tool: "x" }],
         },
-        "device-portable",
+        "device-laptop",
       ),
     ).toThrow(InvalidTaskDraftError);
   });
 
-  it("refuse un titre vide et une tâche sans étape", () => {
-    expect(() => taskRequestBody({ title: "  ", steps: brouillon.steps }, "d")).toThrow(
+  it("rejects empty title and step-less task", () => {
+    expect(() => taskRequestBody({ title: "  ", steps: draft.steps }, "d")).toThrow(
       InvalidTaskDraftError,
     );
-    expect(() => taskRequestBody({ title: "Titre", steps: [] }, "d")).toThrow(
+    expect(() => taskRequestBody({ title: "Title", steps: [] }, "d")).toThrow(
       InvalidTaskDraftError,
     );
   });
 
-  it("normalise les dépendances absentes", () => {
-    const corps = taskRequestBody(brouillon, "device-portable");
+  it("normalizes absent dependencies", () => {
+    const body = taskRequestBody(draft, "device-laptop");
 
-    expect(corps.steps[0]?.dependsOn).toEqual([]);
+    expect(body.steps[0]?.dependsOn).toEqual([]);
   });
 
-  it("n'invente pas de champ optionnel", () => {
-    // `exactOptionalPropertyTypes` interdit `undefined` explicite ; le serveur,
-    // lui, refuserait un `riskLevel: undefined` à la validation Zod.
-    const corps = taskRequestBody(brouillon, "device-portable");
+  it("does not fabricate optional fields", () => {
+    const body = taskRequestBody(draft, "device-laptop");
 
-    expect(Object.keys(corps.steps[0] ?? {})).not.toContain("riskLevel");
-    expect(Object.keys(corps)).not.toContain("conversationId");
+    expect(Object.keys(body.steps[0] ?? {})).not.toContain("riskLevel");
+    expect(Object.keys(body)).not.toContain("conversationId");
   });
 });
 
-describe("fusion de l'historique et du direct", () => {
+describe("history and live stream merging", () => {
   const live: MessageView[] = [
     {
       id: "m2",
       role: "assistant",
-      content: "Je lance",
+      content: "Starting now",
       streaming: true,
       createdAt: "2026-09-02T10:00:02.000Z",
       originClientDeviceId: null,
     },
   ];
 
-  const histoire = [
+  const history = [
     {
       id: "m1",
       role: "user",
-      content: "Lance les tests",
+      content: "Run tests",
       createdAt: "2026-09-02T10:00:01.000Z",
       originClientDeviceId: "device-iphone",
     },
     {
       id: "m2",
       role: "assistant",
-      content: "Je",
+      content: "Start",
       createdAt: "2026-09-02T10:00:02.000Z",
     },
   ];
 
-  it("ne double pas ce que les deux sources décrivent", () => {
-    const fil = mergeHistory(live, histoire);
+  it("does not duplicate messages present in both sources", () => {
+    const thread = mergeHistory(live, history);
 
-    expect(fil.map((message) => message.id)).toEqual(["m1", "m2"]);
+    expect(thread.map((message) => message.id)).toEqual(["m1", "m2"]);
   });
 
-  it("le direct l'emporte sur l'historique", () => {
-    // L'historique connaît « Je », le flux en est à « Je lance » et n'a pas
-    // fini. Laisser l'historique gagner effacerait le texte sous les yeux de
-    // l'utilisateur.
-    const fil = mergeHistory(live, histoire);
-    const dernier = fil.at(-1);
+  it("live stream takes precedence over history", () => {
+    const thread = mergeHistory(live, history);
+    const last = thread.at(-1);
 
-    expect(dernier?.content).toBe("Je lance");
-    expect(dernier?.streaming).toBe(true);
+    expect(last?.content).toBe("Starting now");
+    expect(last?.streaming).toBe(true);
   });
 
-  it("préserve l'appareil d'origine venu de l'historique", () => {
-    // C'est ce qui permet au portable d'afficher « posé depuis l'iPhone ».
-    const fil = mergeHistory(live, histoire);
+  it("preserves origin client device from history", () => {
+    const thread = mergeHistory(live, history);
 
-    expect(fil[0]?.originClientDeviceId).toBe("device-iphone");
+    expect(thread[0]?.originClientDeviceId).toBe("device-iphone");
   });
 
-  it("ordonne chronologiquement, y compris à horodatage égal", () => {
-    const memeInstant = [
+  it("orders chronologically, including identical timestamps", () => {
+    const sameTimestamp = [
       { id: "b", role: "user", content: "second", createdAt: "2026-09-02T10:00:00.000Z" },
-      { id: "a", role: "user", content: "premier", createdAt: "2026-09-02T10:00:00.000Z" },
+      { id: "a", role: "user", content: "first", createdAt: "2026-09-02T10:00:00.000Z" },
     ];
 
-    expect(mergeHistory([], memeInstant).map((message) => message.id)).toEqual(["a", "b"]);
+    expect(mergeHistory([], sameTimestamp).map((message) => message.id)).toEqual(["a", "b"]);
   });
 
-  it("rend un fil vide sans rien inventer", () => {
+  it("returns empty array for empty inputs", () => {
     expect(mergeHistory([], [])).toEqual([]);
   });
 });
