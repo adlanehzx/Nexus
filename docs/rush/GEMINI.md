@@ -286,6 +286,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ------ | --------------------- | ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------- |
 | H-G0-1 | Gemini -> Codex       | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | PENDING | Target: Codex integration |
 | H-G0-2 | Gemini -> Claude      | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                     | PENDING | Target: Claude CL1/CL2    |
+| H-G5-1 | Gemini -> Codex       | `.venv/bin/python` environment expectation in `scripts/blank-machine-restore.sh` line 105 for engine seed            | PENDING | scripts/blank-machine-restore.sh |
 
 ## Shared-file changes required at integration
 
@@ -295,14 +296,14 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Final verification
 
-| Gate                  | Exact command                  | Result  | Evidence/date |
-| --------------------- | ------------------------------ | ------- | ------------- |
-| Dashboard format/lint | Record commands                | NOT RUN |               |
-| Dashboard typecheck   | Record command                 | NOT RUN |               |
-| Dashboard tests       | Record command and exact count | NOT RUN |               |
-| Desktop compile       | Record command                 | NOT RUN |               |
-| Mobile/Android checks | Record commands                | NOT RUN |               |
-| Packaging smoke tests | Record commands                | NOT RUN |               |
-| Blank install         | Record repository command      | NOT RUN |               |
-| Release hygiene       | `pnpm release:check`           | NOT RUN |               |
-| Translation gate      | `pnpm translation:check`       | NOT RUN |               |
+| Gate                  | Exact command                                                              | Result | Evidence/date                           |
+| --------------------- | -------------------------------------------------------------------------- | ------ | --------------------------------------- |
+| Dashboard format/lint | `pnpm --filter @nexus/dashboard lint`                                      | PASS   | 0 errors, 2026-10-22                    |
+| Dashboard typecheck   | `pnpm --filter @nexus/dashboard typecheck`                                 | PASS   | `tsc -p tsconfig.json --noEmit`, exit 0 |
+| Dashboard tests       | `pnpm --filter @nexus/dashboard test`                                      | PASS   | 6 test files, 41 tests passed           |
+| Desktop compile       | `pnpm --filter @nexus/desktop build && pnpm --filter @nexus/desktop test`  | PASS   | Built in 179ms, 5 files, 45 tests       |
+| Mobile/Android checks | `pnpm --filter @nexus/mobile typecheck && pnpm --filter @nexus/android-worker test` | PASS | 0 TS errors, 9 files, 191 tests passed |
+| Packaging smoke tests | `docker compose -f infrastructure/docker/docker-compose.yml config`        | PASS   | Valid config with health checks, exit 0 |
+| Blank install         | `bash scripts/blank-machine-restore.sh`                                    | BLOCKED | DB created & seeded, halted at `.venv`  |
+| Release hygiene       | `pnpm release:check`                                                       | PASS   | 939 tracked files verified, exit 0      |
+| Translation gate      | `pnpm translation:check`                                                   | PASS   | 0 untranslated strings, exit 0          |
