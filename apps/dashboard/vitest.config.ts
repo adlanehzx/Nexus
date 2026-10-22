@@ -1,11 +1,11 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * Les tests ne montent aucun composant.
+ * Tests do not mount any component.
  *
- * Ce qui mérite d'être éprouvé ici est du TypeScript sans DOM : le formatage des
- * mesures, le classement des états de santé, et le fait que l'application ne
- * demande jamais un champ qu'elle n'a pas le droit de voir.
+ * What deserves verification here is DOM-less TypeScript: metrics formatting,
+ * health status categorization, and ensuring the application never requests a
+ * field it is not permitted to observe.
  */
 export default defineConfig({
   test: { include: ["test/**/*.test.ts"], environment: "node" },

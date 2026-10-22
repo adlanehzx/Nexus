@@ -22,18 +22,17 @@ import {
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.js";
 
 /**
- * Les sections de supervision.
+ * Supervision sections.
  *
- * Chacune charge la sienne : une section qui échoue n'emporte pas les autres, et
- * un serveur MCP injoignable ne doit pas vider l'écran des exécutants.
+ * Each loads its own data: a failure in one section does not take down the others,
+ * and an unreachable MCP server must not clear the workers screen.
  *
- * Les actions d'administration réutilisent les routes métier existantes. Les
- * opérations irréversibles restent confirmées explicitement ; aucune section
- * ne contourne les permissions ni les validations du cœur.
+ * Admin actions reuse existing business routes. Irreversible operations remain
+ * explicitly confirmed; no section bypasses core permissions or validations.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Vue d'ensemble
+// 1. Overview
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Overview({ api }: { api: DashboardApi }) {
@@ -45,30 +44,30 @@ export function Overview({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="mesures">
-              <Metric value={formatCount(data.devices.online)} label="appareils en ligne" />
-              <Metric value={formatCount(data.workers.connected)} label="exécutants connectés" />
-              <Metric value={formatCount(data.tasks.running)} label="tâches en cours" />
+              <Metric value={formatCount(data.devices.online)} label="online devices" />
+              <Metric value={formatCount(data.workers.connected)} label="connected workers" />
+              <Metric value={formatCount(data.tasks.running)} label="running tasks" />
               <Metric
                 value={formatCount(data.tasks.failed)}
-                label="tâches en échec"
+                label="failed tasks"
                 alert={data.tasks.failed > 0}
               />
-              <Metric value={formatCount(data.agentRuns.running)} label="runs agent actifs" />
+              <Metric value={formatCount(data.agentRuns.running)} label="active agent runs" />
               <Metric
                 value={formatCount(data.agentRuns.waitingForConfirmation)}
-                label="en attente de confirmation"
+                label="pending confirmation"
                 alert={data.agentRuns.waitingForConfirmation > 0}
               />
-              <Metric value={formatCount(data.notifications.unread)} label="alertes non lues" />
+              <Metric value={formatCount(data.notifications.unread)} label="unread alerts" />
               <Metric
                 value={HEALTH_LABELS[levelOf(overallHealth(data.health))]}
-                label="santé globale"
+                label="overall health"
                 alert={overallHealth(data.health) === "down"}
               />
             </div>
 
-            <h3>Santé des sous-systèmes</h3>
-            <Table head={["Sous-système", "État", "Détail"]}>
+            <h3>Subsystem Health</h3>
+            <Table head={["Subsystem", "State", "Detail"]}>
               {data.health.map((entry) => (
                 <tr key={entry.name}>
                   <td>{entry.name}</td>
@@ -80,11 +79,11 @@ export function Overview({ api }: { api: DashboardApi }) {
               ))}
             </Table>
 
-            <h3>Activité récente</h3>
+            <h3>Recent Activity</h3>
             {data.recentActivity.length === 0 ? (
-              <Empty>Rien à signaler.</Empty>
+              <Empty>Nothing to report.</Empty>
             ) : (
-              <Table head={["Quand", "Source", "Événement"]}>
+              <Table head={["When", "Source", "Event"]}>
                 {sortActivity(data.recentActivity).map((entry, index) => (
                   <tr key={`${entry.at}-${String(index)}`}>
                     <td className="faible">{formatAge(entry.at)}</td>
@@ -106,13 +105,13 @@ export function Overview({ api }: { api: DashboardApi }) {
   );
 }
 
-/** L'état global emprunte le vocabulaire des sous-systèmes pour son libellé. */
+/** Overall health borrows subsystem terminology for its label. */
 function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH_LABELS {
   return overall === "unknown" ? "unconfigured" : overall;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. Appareils
+// 2. Devices
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Devices({ api }: { api: DashboardApi }) {
@@ -136,7 +135,7 @@ export function Devices({ api }: { api: DashboardApi }) {
       .createPairingTicket(pairingLabel)
       .then(setPairing)
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Appairage impossible."),
+        setActionError(cause instanceof Error ? cause.message : "Pairing failed."),
       )
       .finally(() => setPairingBusy(false));
   };
@@ -159,30 +158,30 @@ export function Devices({ api }: { api: DashboardApi }) {
     void operation()
       .then(() => state.reload())
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+        setActionError(cause instanceof Error ? cause.message : "Action failed."),
       );
   };
 
   return (
     <div className="contenu">
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="card pairing-card" aria-labelledby="pairing-title">
         <div className="pairing-heading">
           <div>
-            <span className="eyebrow">NOUVEL EXÉCUTANT</span>
-            <h3 id="pairing-title">Ajouter une machine</h3>
+            <span className="eyebrow">NEW WORKER</span>
+            <h3 id="pairing-title">Add machine</h3>
             <p className="faible">
-              Le code expire après cinq minutes et ne peut servir qu’une fois. La machine restera en
-              attente jusqu’à ton approbation ci-dessous.
+              The code expires after five minutes and can only be used once. The machine will remain
+              pending until approved below.
             </p>
           </div>
           <div className="pairing-create">
-            <label htmlFor="pairing-label">Nom attendu</label>
+            <label htmlFor="pairing-label">Expected name</label>
             <input
               id="pairing-label"
               className="champ"
               value={pairingLabel}
-              placeholder="PC bureau"
+              placeholder="Office PC"
               onChange={(event) => setPairingLabel(event.target.value)}
             />
             <button
@@ -191,7 +190,7 @@ export function Devices({ api }: { api: DashboardApi }) {
               disabled={pairingBusy}
               onClick={issuePairing}
             >
-              {pairingBusy ? "Création…" : "Créer un code"}
+              {pairingBusy ? "Creating…" : "Generate code"}
             </button>
           </div>
         </div>
@@ -199,24 +198,24 @@ export function Devices({ api }: { api: DashboardApi }) {
           <div className="pairing-platforms">
             <div>
               <strong>Windows</strong>
-              <span>Installateur + service automatique</span>
+              <span>Installer + automatic service</span>
             </div>
             <div>
               <strong>Android worker</strong>
-              <span>APK NEXUS puis lien d’appairage</span>
+              <span>NEXUS APK then pairing link</span>
             </div>
             <div>
               <strong>iOS client</strong>
-              <span>Application NEXUS puis connexion</span>
+              <span>NEXUS app then connection</span>
             </div>
             <div>
               <strong>Linux / NAS / Raspberry Pi</strong>
-              <span>Image Docker isolée, amd64 et arm64</span>
+              <span>Isolated Docker image, amd64 and arm64</span>
             </div>
           </div>
         ) : (
           <div className="pairing-ticket" role="status">
-            <strong>Commande Windows à lancer en administrateur</strong>
+            <strong>Windows command to run as Administrator</strong>
             <code>{windowsCommand}</code>
             <div className="table-actions">
               <button
@@ -224,45 +223,45 @@ export function Devices({ api }: { api: DashboardApi }) {
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(windowsCommand)}
               >
-                Copier la commande
+                Copy command
               </button>
               <button
                 className="bouton"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(pairing.payload)}
               >
-                Copier le lien Android
+                Copy Android link
               </button>
               <button
                 className="bouton"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(linuxCommand)}
               >
-                Copier la commande Linux
+                Copy Linux command
               </button>
               <button className="bouton" type="button" onClick={() => setPairing(null)}>
-                Masquer le code
+                Hide code
               </button>
             </div>
-            <small>Expire à {new Date(pairing.expiresAt).toLocaleTimeString()}.</small>
+            <small>Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}.</small>
           </div>
         )}
       </section>
       <Section state={state}>
         {(data) =>
           data.devices.length === 0 ? (
-            <Empty>Aucun appareil appairé.</Empty>
+            <Empty>No paired devices.</Empty>
           ) : (
             <Table
               head={[
-                "Appareil",
-                "Rôle",
-                "Plateforme",
-                "Statut",
-                "Confiance",
-                "Capacités",
-                "Dernier battement",
-                "Santé",
+                "Device",
+                "Role",
+                "Platform",
+                "Status",
+                "Trust",
+                "Capabilities",
+                "Last Heartbeat",
+                "Health",
                 "Permissions",
                 "Actions",
               ]}
@@ -309,13 +308,13 @@ export function Devices({ api }: { api: DashboardApi }) {
                   </td>
                   <td className="faible">{formatAge(device.lastHeartbeatAt)}</td>
                   <td className="faible">
-                    {device.health.activeTasks}/{device.health.maxConcurrentTasks} tâche(s)
+                    {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
                     {device.health.cpuLoad === null
                       ? ""
                       : ` · CPU ${String(Math.round(device.health.cpuLoad * 100))} %`}
                     {device.health.batteryPercent === null
                       ? ""
-                      : ` · batterie ${String(device.health.batteryPercent)} %`}
+                      : ` · battery ${String(device.health.batteryPercent)} %`}
                   </td>
                   <td className="mono faible">
                     {device.grantedPermissions.length === 0
@@ -330,7 +329,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={() => act(() => api.trustDevice(device.id))}
                         >
-                          Approuver
+                          Approve
                         </button>
                       ) : null}
                       {device.trust !== "REVOKED" ? (
@@ -340,7 +339,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                             type="button"
                             onClick={() => {
                               const value = window.prompt(
-                                "Permissions séparées par des virgules",
+                                "Comma-separated permissions",
                                 device.grantedPermissions.join(", "),
                               );
                               if (value !== null)
@@ -361,11 +360,11 @@ export function Devices({ api }: { api: DashboardApi }) {
                             className="bouton danger"
                             type="button"
                             onClick={() => {
-                              if (window.confirm(`Révoquer définitivement ${device.name} ?`))
+                              if (window.confirm(`Permanently revoke ${device.name}?`))
                                 act(() => api.revokeDevice(device.id));
                             }}
                           >
-                            Révoquer
+                            Revoke
                           </button>
                         </>
                       ) : null}
@@ -382,7 +381,7 @@ export function Devices({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Exécutants
+// 3. Workers
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Workers({ api }: { api: DashboardApi }) {
@@ -393,9 +392,9 @@ export function Workers({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.workers.length === 0 ? (
-            <Empty>Aucun exécutant appairé.</Empty>
+            <Empty>No paired workers.</Empty>
           ) : (
-            <Table head={["Exécutant", "État", "Canal", "Charge", "Capacités", "Vu"]}>
+            <Table head={["Worker", "State", "Channel", "Load", "Capabilities", "Seen"]}>
               {data.workers.map((worker) => {
                 const derived = workerState(worker);
                 return (
@@ -408,10 +407,10 @@ export function Workers({ api }: { api: DashboardApi }) {
                       <State tone={derived} label={WORKER_LABELS[derived]} />
                     </td>
                     <td className="faible">
-                      {/* Le rôle déclaré et le canal réellement ouvert sont deux
-                          choses : un exécutant appairé mais déconnecté n'exécutera
-                          rien, et n'afficher que le rôle ferait croire l'inverse. */}
-                      {worker.connected ? "ouvert" : "fermé"}
+                      {/* The declared role and open channel are two different things:
+                          a paired but disconnected worker will not execute anything,
+                          and showing only the role would suggest otherwise. */}
+                      {worker.connected ? "open" : "closed"}
                     </td>
                     <td>
                       <Bar
@@ -443,7 +442,7 @@ export function Workers({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Tâches
+// 4. Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Tasks({ api }: { api: DashboardApi }) {
@@ -453,15 +452,15 @@ export function Tasks({ api }: { api: DashboardApi }) {
 
   return (
     <div className="contenu">
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) =>
           data.tasks.length === 0 ? (
-            <Empty>Aucune tâche.</Empty>
+            <Empty>No tasks.</Empty>
           ) : (
             <>
               <Table
-                head={["Tâche", "Statut", "Progression", "Origine", "Créée", "Durée", "Actions"]}
+                head={["Task", "Status", "Progress", "Origin", "Created", "Duration", "Actions"]}
               >
                 {data.tasks.map((task) => (
                   <tr
@@ -485,7 +484,7 @@ export function Tasks({ api }: { api: DashboardApi }) {
                     </td>
                     <td className="faible mono">
                       {task.source === "acp"
-                        ? "orchestrateur"
+                        ? "orchestrator"
                         : task.originClientDeviceId.slice(0, 8)}
                     </td>
                     <td className="faible">{formatAge(task.createdAt)}</td>
@@ -507,18 +506,18 @@ export function Tasks({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (!window.confirm(`Annuler « ${task.title} » ?`)) return;
+                            if (!window.confirm(`Cancel "${task.title}"?`)) return;
                             void api
                               .cancelTask(task.id)
                               .then(() => state.reload())
                               .catch((cause: unknown) =>
                                 setActionError(
-                                  cause instanceof Error ? cause.message : "Annulation impossible.",
+                                  cause instanceof Error ? cause.message : "Cancellation failed.",
                                 ),
                               );
                           }}
                         >
-                          Annuler
+                          Cancel
                         </button>
                       ) : (
                         "—"
@@ -545,10 +544,9 @@ function taskTone(status: string): string {
 }
 
 /**
- * Le détail d'une tâche.
+ * Task details.
  *
- * C'est la page que la consigne décrit : le plan, ses étapes, les exécutants
- * retenus, la progression, le journal d'exécution, les résultats, les erreurs.
+ * Execution plan, steps, assigned workers, progress, execution log, results, and errors.
  */
 function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) {
   const state = useSection<TaskDetail>(() => api.task(taskId));
@@ -557,11 +555,11 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
     <Section state={state}>
       {(task) => (
         <>
-          <h3>Exécutants retenus</h3>
+          <h3>Selected Workers</h3>
           {selectedWorkers(task).length === 0 ? (
-            <Empty>Aucun exécutant retenu — la tâche n&apos;a pas encore été dispatchée.</Empty>
+            <Empty>No workers selected — the task has not been dispatched yet.</Empty>
           ) : (
-            <Table head={["Exécutant", "Étapes"]}>
+            <Table head={["Worker", "Steps"]}>
               {selectedWorkers(task).map((worker) => (
                 <tr key={worker.id}>
                   <td>{worker.name}</td>
@@ -571,8 +569,8 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
             </Table>
           )}
 
-          <h3>Étapes</h3>
-          <Table head={["#", "Description", "Outil", "Capacités", "Statut", "Exécutant", "Risque"]}>
+          <h3>Steps</h3>
+          <Table head={["#", "Description", "Tool", "Capabilities", "Status", "Worker", "Risk"]}>
             {task.steps.map((step, index) => (
               <tr key={step.id}>
                 <td className="faible">{index + 1}</td>
@@ -588,11 +586,11 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
             ))}
           </Table>
 
-          <h3>Journal d&apos;exécution</h3>
+          <h3>Execution Log</h3>
           {task.executions.length === 0 ? (
-            <Empty>Aucune exécution enregistrée.</Empty>
+            <Empty>No recorded executions.</Empty>
           ) : (
-            <Table head={["Étape", "Exécutant", "Statut", "Durée", "Résultat", "Erreur"]}>
+            <Table head={["Step", "Worker", "Status", "Duration", "Result", "Error"]}>
               {task.executions.map((execution) => (
                 <tr key={execution.id}>
                   <td className="mono">{execution.stepId}</td>
@@ -618,8 +616,8 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
 
           {failedSteps(task).length === 0 ? null : (
             <>
-              <h3>Erreurs</h3>
-              <Table head={["Étape", "Code", "Message"]}>
+              <h3>Errors</h3>
+              <Table head={["Step", "Code", "Message"]}>
                 {failedSteps(task).map((step) => (
                   <tr key={step.id}>
                     <td>{step.description}</td>
@@ -637,7 +635,7 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. Runs d'agent
+// 5. Agent Runs
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Runs({ api }: { api: DashboardApi }) {
@@ -649,43 +647,43 @@ export function Runs({ api }: { api: DashboardApi }) {
   const replay = async (runId: string): Promise<void> => {
     if (
       !globalThis.confirm(
-        "Créer un rejeu d'analyse ? Les outils seront totalement désactivés pour empêcher tout effet externe.",
+        "Create an analysis replay? Tools will be completely disabled to prevent any external effect.",
       )
     )
       return;
-    setAction("Rejeu en cours…");
+    setAction("Replay in progress…");
     try {
       const result = await api.replayRun(runId);
-      setAction(`Rejeu ${result.runId.slice(0, 8)} terminé : ${result.status}.`);
+      setAction(`Replay ${result.runId.slice(0, 8)} completed: ${result.status}.`);
       state.reload();
       observability.reload();
     } catch (cause) {
-      setAction(cause instanceof Error ? cause.message : "Rejeu impossible.");
+      setAction(cause instanceof Error ? cause.message : "Replay failed.");
     }
   };
 
   return (
     <div className="contenu">
       <p className="faible" style={{ marginTop: 0 }}>
-        Statut, actions, outils, progression, résultat, erreurs et métriques. Le raisonnement du
-        modèle n&apos;est pas exposé — le serveur ne le transmet pas.
+        Status, actions, tools, progress, results, errors, and metrics. The model's reasoning is not
+        exposed — the server does not transmit it.
       </p>
 
       <Section state={observability}>
         {(summary) => (
           <>
             <div className="mesures">
-              <Metric value={formatCount(summary.totals.runs)} label="runs analysés" />
-              <Metric value={asPercent(summary.rates.fallback)} label="taux de fallback" />
+              <Metric value={formatCount(summary.totals.runs)} label="analyzed runs" />
+              <Metric value={asPercent(summary.rates.fallback)} label="fallback rate" />
               <Metric
                 value={asPercent(summary.rates.toolError)}
-                label="erreurs d'outils"
+                label="tool errors"
                 alert={summary.rates.toolError > 0.1}
               />
-              <Metric value={asPercent(summary.rates.runError)} label="runs en échec" />
+              <Metric value={asPercent(summary.rates.runError)} label="failed runs" />
               <Metric
                 value={formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
-                label="coût API équivalent"
+                label="equivalent API cost"
               />
             </div>
             {summary.agents.length === 0 ? null : (
@@ -693,11 +691,11 @@ export function Runs({ api }: { api: DashboardApi }) {
                 head={[
                   "Agent",
                   "Runs",
-                  "Échecs",
-                  "Latence moyenne",
+                  "Failures",
+                  "Average latency",
                   "p95",
-                  "Jetons",
-                  "Coût équiv.",
+                  "Tokens",
+                  "Equiv. cost",
                 ]}
               >
                 {summary.agents.map((agent) => (
@@ -722,10 +720,10 @@ export function Runs({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.runs.length === 0 ? (
-            <Empty>Aucun run enregistré.</Empty>
+            <Empty>No recorded runs.</Empty>
           ) : (
             <>
-              <Table head={["Run", "Statut", "Arrêt", "Itérations", "Outils", "Durée", "Jetons"]}>
+              <Table head={["Run", "Status", "Stop Reason", "Iterations", "Tools", "Duration", "Tokens"]}>
                 {data.runs.map((run) => (
                   <tr
                     key={run.runId}
@@ -745,7 +743,7 @@ export function Runs({ api }: { api: DashboardApi }) {
                       {run.metrics.failedToolCalls > 0 ? (
                         <span style={{ color: "var(--hs)" }}>
                           {" "}
-                          ({run.metrics.failedToolCalls} en échec)
+                          ({run.metrics.failedToolCalls} failed)
                         </span>
                       ) : null}
                     </td>
@@ -764,17 +762,17 @@ export function Runs({ api }: { api: DashboardApi }) {
                   <div key={run.runId}>
                     <h3>Actions</h3>
                     {run.tools.length === 0 ? (
-                      <Empty>Aucun outil appelé.</Empty>
+                      <Empty>No tools called.</Empty>
                     ) : (
                       <Table
                         head={[
-                          "Outil",
+                          "Tool",
                           "Action",
-                          "Statut",
-                          "Risque",
-                          "Durée",
-                          "Tentatives",
-                          "Erreur",
+                          "Status",
+                          "Risk",
+                          "Duration",
+                          "Attempts",
+                          "Error",
                         ]}
                       >
                         {run.tools.map((tool) => (
@@ -796,22 +794,22 @@ export function Runs({ api }: { api: DashboardApi }) {
                       </Table>
                     )}
 
-                    <h3>Résultat</h3>
-                    <p>{run.response ?? <span className="faible">Aucune réponse finale.</span>}</p>
+                    <h3>Result</h3>
+                    <p>{run.response ?? <span className="faible">No final response.</span>}</p>
 
                     <button className="bouton" type="button" onClick={() => void replay(run.runId)}>
-                      Rejouer en analyse seule
+                      Replay (analysis only)
                     </button>
                     {run.replayOfRunId === null ? null : (
                       <p className="faible">
-                        Rejeu du run <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
+                        Replay of run <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
                       </p>
                     )}
 
                     {run.errors.length === 0 ? null : (
                       <>
-                        <h3>Erreurs</h3>
-                        <Table head={["Quand", "Itération", "Code", "Message"]}>
+                        <h3>Errors</h3>
+                        <Table head={["When", "Iteration", "Code", "Message"]}>
                           {run.errors.map((error, index) => (
                             <tr key={`${error.at}-${String(index)}`}>
                               <td className="faible">{formatAge(error.at)}</td>
@@ -824,18 +822,18 @@ export function Runs({ api }: { api: DashboardApi }) {
                       </>
                     )}
 
-                    <h3>Métriques</h3>
+                    <h3>Metrics</h3>
                     <div className="mesures">
-                      <Metric value={run.metrics.model} label="modèle" />
+                      <Metric value={run.metrics.model} label="model" />
                       <Metric
                         value={formatCount(run.metrics.inputTokens)}
-                        label="jetons en entrée"
+                        label="input tokens"
                       />
                       <Metric
                         value={formatCount(run.metrics.outputTokens)}
-                        label="jetons en sortie"
+                        label="output tokens"
                       />
-                      <Metric value={formatCount(run.metrics.cacheReadTokens)} label="cache lu" />
+                      <Metric value={formatCount(run.metrics.cacheReadTokens)} label="cache read" />
                     </div>
                   </div>
                 ))}
@@ -859,11 +857,11 @@ function asPercent(rate: number): string {
 }
 
 function formatEstimatedCost(cost: number | null): string {
-  return cost === null ? "non configuré" : `${cost.toFixed(4)} $`;
+  return cost === null ? "not configured" : `${cost.toFixed(4)} $`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Outils
+// 6. Tools
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Tools({ api }: { api: DashboardApi }) {
@@ -875,10 +873,10 @@ export function Tools({ api }: { api: DashboardApi }) {
         {(data) =>
           data.tools.length === 0 ? (
             <Empty>
-              Aucun outil enregistré. Le catalogue se remplit quand le service agent démarre.
+              No registered tools. The catalog populates when the agent service starts.
             </Empty>
           ) : (
-            <Table head={["Outil", "Source", "Description", "Risque", "Permissions", "Autorisé"]}>
+            <Table head={["Tool", "Source", "Description", "Risk", "Permissions", "Allowed"]}>
               {data.tools.map((tool) => (
                 <tr key={tool.name}>
                   <td className="mono">{tool.name}</td>
@@ -889,7 +887,7 @@ export function Tools({ api }: { api: DashboardApi }) {
                   <td>
                     <State
                       tone={tool.allowed ? "ok" : "degraded"}
-                      label={tool.allowed ? "oui" : "non"}
+                      label={tool.allowed ? "yes" : "no"}
                     />
                   </td>
                 </tr>
@@ -925,7 +923,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
         state.reload();
       })
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+        setActionError(cause instanceof Error ? cause.message : "Action failed."),
       );
   };
 
@@ -934,7 +932,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
     try {
       refs = secretRefs.trim() === "" ? {} : (JSON.parse(secretRefs) as Record<string, string>);
     } catch {
-      setActionError("Les références de secrets doivent être un objet JSON.");
+      setActionError("Secret references must be a JSON object.");
       return;
     }
     const common = {
@@ -967,18 +965,18 @@ export function Mcp({ api }: { api: DashboardApi }) {
             envRefs: refs,
           }
         : { ...common, transport, url: target, headers: {}, headerRefs: refs };
-    act(() => api.saveMcp(config), `Serveur ${name} enregistré et connecté.`);
+    act(() => api.saveMcp(config), `Server ${name} saved and connected.`);
   };
 
   return (
     <div className="contenu">
-      {message === null ? null : <p className="banniere succes">{message}</p>}
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
-        <h3>Ajouter ou remplacer un serveur MCP</h3>
+        <h3>Add or Replace an MCP Server</h3>
         <div className="settings-grid">
           <label>
-            Nom
+            Name
             <input
               className="champ mono"
               value={name}
@@ -999,7 +997,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
             </select>
           </label>
           <label className="settings-wide">
-            {transport === "stdio" ? "Commande" : "URL"}
+            {transport === "stdio" ? "Command" : "URL"}
             <input
               className="champ mono"
               value={target}
@@ -1009,7 +1007,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           </label>
           {transport === "stdio" ? (
             <label className="settings-wide">
-              Arguments · un par ligne
+              Arguments · one per line
               <textarea
                 className="champ mono"
                 rows={3}
@@ -1019,7 +1017,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
             </label>
           ) : null}
           <label className="settings-wide">
-            {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON vers vault://nexus/…
+            {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON to vault://nexus/…
             <textarea
               className="champ mono"
               rows={3}
@@ -1036,26 +1034,26 @@ export function Mcp({ api }: { api: DashboardApi }) {
             disabled={name === "" || target === ""}
             onClick={save}
           >
-            Enregistrer et connecter
+            Save and connect
           </button>
         </div>
       </section>
       <Section state={state}>
         {(data) =>
           data.configurations.length === 0 ? (
-            // Non configuré n'est pas en panne. Le dire évite d'envoyer chercher
-            // un incident qui n'existe pas.
-            <Empty>Aucun serveur MCP configuré.</Empty>
+            // Unconfigured is not broken. Saying so prevents looking for an
+            // incident that does not exist.
+            <Empty>No MCP servers configured.</Empty>
           ) : (
             <Table
               head={[
-                "Serveur",
-                "État",
-                "Outils",
-                "Échecs",
-                "Reconnexions",
+                "Server",
+                "State",
+                "Tools",
+                "Failures",
+                "Reconnects",
                 "Circuit",
-                "Dernière erreur",
+                "Last error",
                 "Actions",
               ]}
             >
@@ -1080,8 +1078,8 @@ export function Mcp({ api }: { api: DashboardApi }) {
                   <td>{server.reconnectAttempts}</td>
                   <td className="faible">
                     {server.circuitOpenUntil === null
-                      ? "fermé"
-                      : `ouvert jusqu'à ${server.circuitOpenUntil}`}
+                      ? "closed"
+                      : `open until ${server.circuitOpenUntil}`}
                   </td>
                   <td className="faible">{server.lastError ?? "—"}</td>
                   <td>
@@ -1089,20 +1087,20 @@ export function Mcp({ api }: { api: DashboardApi }) {
                       className="bouton compact"
                       type="button"
                       onClick={() =>
-                        act(() => api.reconnectMcp(server.name), `${server.name} reconnecté.`)
+                        act(() => api.reconnectMcp(server.name), `${server.name} reconnected.`)
                       }
                     >
-                      Reconnecter
+                      Reconnect
                     </button>{" "}
                     <button
                       className="bouton compact danger"
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Supprimer le serveur ${server.name} ?`))
-                          act(() => api.removeMcp(server.name), `${server.name} supprimé.`);
+                        if (window.confirm(`Delete server ${server.name}?`))
+                          act(() => api.removeMcp(server.name), `${server.name} deleted.`);
                       }}
                     >
-                      Supprimer
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -1150,19 +1148,19 @@ export function Browser({ api }: { api: DashboardApi }) {
         state.reload();
       })
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+        setActionError(cause instanceof Error ? cause.message : "Action failed."),
       );
   };
 
   return (
     <div className="contenu">
-      {message === null ? null : <p className="banniere succes">{message}</p>}
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
-        <h3>Configurer Browser Use</h3>
+        <h3>Configure Browser Use</h3>
         <p className="faible">
-          Le mode local utilise le harness officiel avec Codex ou Claude comme cerveau. Il ne
-          demande aucune clé API et conserve un profil Chromium NEXUS séparé.
+          Local mode uses the official harness with Codex or Claude as the brain. It requires no
+          API keys and maintains a separate NEXUS Chromium profile.
         </p>
         <div className="settings-grid">
           <label className="settings-wide">
@@ -1172,13 +1170,13 @@ export function Browser({ api }: { api: DashboardApi }) {
               value={mode}
               onChange={(event) => setMode(event.target.value as "local-harness" | "remote-worker")}
             >
-              <option value="local-harness">Navigateur local — sans clé API</option>
-              <option value="remote-worker">Worker autonome — fournisseur LLM requis</option>
+              <option value="local-harness">Local browser — no API key</option>
+              <option value="remote-worker">Autonomous worker — LLM provider required</option>
             </select>
           </label>
           {mode === "local-harness" ? (
             <label className="settings-wide">
-              URL CDP locale
+              Local CDP URL
               <input
                 className="champ mono"
                 value={cdpUrl}
@@ -1188,7 +1186,7 @@ export function Browser({ api }: { api: DashboardApi }) {
           ) : (
             <>
               <label className="settings-wide">
-                URL du worker
+                Worker URL
                 <input
                   className="champ mono"
                   value={baseUrl}
@@ -1196,7 +1194,7 @@ export function Browser({ api }: { api: DashboardApi }) {
                 />
               </label>
               <label className="settings-wide">
-                Référence du jeton
+                Token reference
                 <input
                   className="champ mono"
                   value={tokenRef}
@@ -1211,7 +1209,7 @@ export function Browser({ api }: { api: DashboardApi }) {
               checked={enabled}
               onChange={(event) => setEnabled(event.target.checked)}
             />
-            Activer Browser Use
+            Enable Browser Use
           </label>
         </div>
         <div className="settings-actions">
@@ -1226,18 +1224,18 @@ export function Browser({ api }: { api: DashboardApi }) {
                       ? { enabled, mode, cdpUrl }
                       : { enabled, mode, baseUrl, tokenRef },
                   ),
-                "Configuration navigateur enregistrée.",
+                "Browser configuration saved.",
               )
             }
           >
-            Enregistrer
+            Save
           </button>
           <button
             className="bouton"
             type="button"
-            onClick={() => act(() => api.testBrowser(), "Worker navigateur joignable.")}
+            onClick={() => act(() => api.testBrowser(), "Browser worker reachable.")}
           >
-            Tester
+            Test
           </button>
         </div>
       </section>
@@ -1245,10 +1243,10 @@ export function Browser({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="mesures">
-              <Metric value={data.configured ? "oui" : "non"} label="configuré" />
+              <Metric value={data.configured ? "yes" : "no"} label="configured" />
               <Metric
-                value={data.reachable ? "prêt" : "injoignable"}
-                label="navigateur"
+                value={data.reachable ? "ready" : "unreachable"}
+                label="browser"
                 alert={data.configured && !data.reachable}
               />
             </div>
@@ -1256,13 +1254,13 @@ export function Browser({ api }: { api: DashboardApi }) {
             <p className="faible">{data.detail}</p>
             {data.configuration?.mode === "remote-worker" ? (
               <p className="faible">
-                Secret : {data.tokenConfigured ? "présent dans le trousseau" : "absent"}
+                Secret: {data.tokenConfigured ? "present in keyring" : "missing"}
               </p>
             ) : null}
 
             {data.health === null ? null : (
               <>
-                <h3>Santé rapportée</h3>
+                <h3>Reported Health</h3>
                 <pre className="mono scroll-x" style={{ padding: 12, margin: 0 }}>
                   {JSON.stringify(data.health, null, 2)}
                 </pre>
@@ -1281,7 +1279,7 @@ export function Browser({ api }: { api: DashboardApi }) {
 
 export function MissionControl({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.missionControl());
-  const [accountName, setAccountName] = useState("Portefeuille NEXUS");
+  const [accountName, setAccountName] = useState("NEXUS Portfolio");
   const [bankroll, setBankroll] = useState("50.00");
   const [marketQuestion, setMarketQuestion] = useState("");
   const [marketClose, setMarketClose] = useState("");
@@ -1303,13 +1301,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
     void operation()
       .then(() => state.reload())
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action impossible."),
+        setActionError(cause instanceof Error ? cause.message : "Action failed."),
       );
   };
 
   return (
     <div className="contenu">
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) => {
           const cash = data.accounts.reduce(
@@ -1327,61 +1325,61 @@ export function MissionControl({ api }: { api: DashboardApi }) {
           return (
             <>
               <div className="mesures">
-                <Metric value={data.configured ? "oui" : "non"} label="configuré" />
+                <Metric value={data.configured ? "yes" : "no"} label="configured" />
                 <Metric
-                  value={data.reachable ? "joignable" : "injoignable"}
-                  label="moteur ACP"
+                  value={data.reachable ? "reachable" : "unreachable"}
+                  label="ACP engine"
                   alert={data.configured && !data.reachable}
                 />
                 <Metric
-                  value={data.health?.worker_enabled === true ? "actifs" : "arrêtés"}
+                  value={data.health?.worker_enabled === true ? "active" : "stopped"}
                   label="workers"
                   alert={data.configured && data.health?.worker_enabled !== true}
                 />
-                <Metric value={String(data.health?.worker_concurrency ?? 0)} label="concurrence" />
+                <Metric value={String(data.health?.worker_concurrency ?? 0)} label="concurrency" />
                 <Metric
-                  value={data.audit?.valid === true ? "valide" : "invalide"}
-                  label="chaîne d'audit"
+                  value={data.audit?.valid === true ? "valid" : "invalid"}
+                  label="audit chain"
                   alert={data.configured && data.audit?.valid !== true}
                 />
-                <Metric value={formatCount(data.audit?.checked ?? 0)} label="événements audités" />
-                <Metric value={`${(cash / 100).toFixed(2)} €`} label="cash fictif" />
-                <Metric value={`${(exposure / 100).toFixed(2)} €`} label="exposition fictive" />
-                <Metric value={formatCount(activeRuns)} label="missions actives" />
+                <Metric value={formatCount(data.audit?.checked ?? 0)} label="audited events" />
+                <Metric value={`${(cash / 100).toFixed(2)} €`} label="paper cash" />
+                <Metric value={`${(exposure / 100).toFixed(2)} €`} label="paper exposure" />
+                <Metric value={formatCount(activeRuns)} label="active missions" />
               </div>
 
               <p className="faible">{data.detail}</p>
 
-              <h3>NEXUS · profils ACP</h3>
+              <h3>NEXUS · ACP profiles</h3>
               <p className="mono faible">
                 {data.health === null || data.health.profiles.length === 0
-                  ? "aucun"
+                  ? "none"
                   : data.health.profiles.join(", ")}
               </p>
 
-              <h3>Calendriers autonomes</h3>
+              <h3>Autonomous Schedules</h3>
               <div className="admin-form-card schedule-form-card">
                 <div className="inline-admin-form schedule-form">
                   <input
                     className="champ"
                     value={scheduleName}
                     onChange={(event) => setScheduleName(event.target.value)}
-                    placeholder="Nom du calendrier"
+                    placeholder="Schedule name"
                   />
                   <select
                     className="champ"
                     value={scheduleKind}
                     onChange={(event) => setScheduleKind(event.target.value as "one_shot" | "cron")}
                   >
-                    <option value="cron">Récurrent · cron</option>
-                    <option value="one_shot">Une seule fois</option>
+                    <option value="cron">Recurring · cron</option>
+                    <option value="one_shot">One-shot</option>
                   </select>
                   <select
                     className="champ"
                     value={scheduleProfile}
                     onChange={(event) => setScheduleProfile(event.target.value)}
                   >
-                    <option value="">Choisir automatiquement le premier profil</option>
+                    <option value="">Automatically select first profile</option>
                     {(data.health?.profiles ?? []).map((profile) => (
                       <option value={profile} key={profile}>
                         {profile}
@@ -1416,16 +1414,16 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                       setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
                     }
                   >
-                    <option value="skip">Ignorer les occurrences manquées</option>
-                    <option value="latest">Rattraper seulement la dernière</option>
-                    <option value="all">Rattraper les dernières occurrences</option>
+                    <option value="skip">Skip missed occurrences</option>
+                    <option value="latest">Catch up latest occurrence only</option>
+                    <option value="all">Catch up all missed occurrences</option>
                   </select>
                 </div>
                 <textarea
                   className="champ schedule-instruction"
                   value={scheduleInstruction}
                   onChange={(event) => setScheduleInstruction(event.target.value)}
-                  placeholder="Mission à exécuter automatiquement"
+                  placeholder="Mission to execute automatically"
                   rows={3}
                 />
                 <button
@@ -1447,8 +1445,8 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                       api.createSchedule({
                         name: scheduleName.trim(),
                         mission: {
-                          // Le serveur remplace systématiquement cette valeur
-                          // par une clé liée au compte authentifié.
+                          // The server systematically replaces this value
+                          // with a key tied to the authenticated account.
                           external_key: "dashboard-owned-server-side",
                           title: scheduleName.trim(),
                           workspace: "/tmp/nexus-scheduled",
@@ -1473,15 +1471,15 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                     );
                   }}
                 >
-                  Créer le calendrier
+                  Create schedule
                 </button>
                 {data.health?.scheduler_enabled === true ? null : (
-                  <p className="faible">Le dispatcher de calendriers est désactivé.</p>
+                  <p className="faible">Schedule dispatcher is disabled.</p>
                 )}
               </div>
 
               {data.schedules.length === 0 ? (
-                <Empty>Aucun calendrier pour ce compte.</Empty>
+                <Empty>No schedules for this account.</Empty>
               ) : (
                 <div className="stack">
                   {data.schedules.map((schedule) => (
@@ -1498,14 +1496,14 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                           label={schedule.state}
                         />{" "}
                         {schedule.name} ·{" "}
-                        {schedule.schedule_kind === "cron" ? schedule.cron_expression : "une fois"}
+                        {schedule.schedule_kind === "cron" ? schedule.cron_expression : "one-shot"}
                       </summary>
                       <div className="schedule-details">
                         <p className="faible">
-                          Fuseau : {schedule.timezone} · prochaine exécution :{" "}
+                          Timezone: {schedule.timezone} · Next run:{" "}
                           {schedule.next_run_at === null
-                            ? "aucune"
-                            : new Date(schedule.next_run_at).toLocaleString("fr-FR")}
+                            ? "none"
+                            : new Date(schedule.next_run_at).toLocaleString()}
                         </p>
                         <p>{schedule.mission.tasks[0]?.instruction ?? schedule.mission.title}</p>
                         <div className="actions-row">
@@ -1515,7 +1513,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                               type="button"
                               onClick={() => act(() => api.pauseSchedule(schedule.id))}
                             >
-                              Mettre en pause
+                              Pause
                             </button>
                           ) : schedule.state === "paused" ? (
                             <button
@@ -1523,7 +1521,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                               type="button"
                               onClick={() => act(() => api.resumeSchedule(schedule.id))}
                             >
-                              Reprendre
+                              Resume
                             </button>
                           ) : null}
                           <button
@@ -1543,23 +1541,23 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                                   setActionError(
                                     cause instanceof Error
                                       ? cause.message
-                                      : "Historique indisponible.",
+                                      : "History unavailable.",
                                   ),
                                 );
                             }}
                           >
-                            Charger l’historique
+                            Load history
                           </button>
                         </div>
                         {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
                             schedule.id
                           ]?.length === 0 ? (
-                          <p className="faible">Aucune occurrence exécutée.</p>
+                          <p className="faible">No occurrences executed.</p>
                         ) : (
-                          <Table head={["Prévue", "État", "Mission", "Erreur"]}>
+                          <Table head={["Scheduled", "State", "Mission", "Error"]}>
                             {scheduleHistory[schedule.id]?.map((run) => (
                               <tr key={run.id}>
-                                <td>{new Date(run.scheduled_for).toLocaleString("fr-FR")}</td>
+                                <td>{new Date(run.scheduled_for).toLocaleString()}</td>
                                 <td>
                                   <State
                                     tone={
@@ -1588,9 +1586,9 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </div>
               )}
 
-              <h3>Chronologie unifiée des missions</h3>
+              <h3>Unified Mission Timeline</h3>
               {data.missions.length === 0 ? (
-                <Empty>Aucune mission ACP NEXUS pour ce compte.</Empty>
+                <Empty>No NEXUS ACP missions for this account.</Empty>
               ) : (
                 <div className="stack">
                   {data.missions.map((mission) => (
@@ -1606,11 +1604,11 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                           }
                           label={mission.state}
                         />{" "}
-                        {mission.title} · {mission.tasks.length} étape(s) ·{" "}
+                        {mission.title} · {mission.tasks.length} step(s) ·{" "}
                         {formatAge(mission.created_at)}
                       </summary>
                       <Table
-                        head={["Étape", "Agent", "État", "Dépendances", "Tentatives", "Durée"]}
+                        head={["Step", "Agent", "State", "Dependencies", "Attempts", "Duration"]}
                       >
                         {mission.tasks.map((task) => {
                           const first = task.attempts[0];
@@ -1656,13 +1654,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </div>
               )}
 
-              <h3>Portefeuilles fictifs</h3>
+              <h3>Paper Portfolios</h3>
               <div className="inline-admin-form">
                 <input
                   className="champ"
                   value={accountName}
                   onChange={(event) => setAccountName(event.target.value)}
-                  placeholder="Nom du portefeuille"
+                  placeholder="Portfolio name"
                 />
                 <input
                   className="champ"
@@ -1680,13 +1678,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                     )
                   }
                 >
-                  Créer
+                  Create
                 </button>
               </div>
               {data.accounts.length === 0 ? (
-                <Empty>Aucun portefeuille de recherche.</Empty>
+                <Empty>No research portfolios.</Empty>
               ) : (
-                <Table head={["Nom", "Cash", "Exposition", "P&L réalisé", "Mode"]}>
+                <Table head={["Name", "Cash", "Exposure", "Realized P&L", "Mode"]}>
                   {data.accounts.map((account) => (
                     <tr key={account.id}>
                       <td>{account.name}</td>
@@ -1701,11 +1699,11 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </Table>
               )}
 
-              <h3>Missions récentes</h3>
+              <h3>Recent Missions</h3>
               {data.recent_runs.length === 0 ? (
-                <Empty>Aucune mission ACP exécutée.</Empty>
+                <Empty>No ACP missions executed.</Empty>
               ) : (
-                <Table head={["Créée", "État", "Mission", "Erreur"]}>
+                <Table head={["Created", "State", "Mission", "Error"]}>
                   {data.recent_runs.map((run) => (
                     <tr key={run.id}>
                       <td className="faible">{formatAge(run.created_at)}</td>
@@ -1730,13 +1728,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </Table>
               )}
 
-              <h3>Marché de recherche fictif</h3>
+              <h3>Paper Research Market</h3>
               <div className="inline-admin-form market-form">
                 <input
                   className="champ"
                   value={marketQuestion}
                   onChange={(event) => setMarketQuestion(event.target.value)}
-                  placeholder="Question du marché"
+                  placeholder="Market question"
                 />
                 <input
                   className="champ"
@@ -1758,13 +1756,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                     setMarketQuestion("");
                   }}
                 >
-                  Créer
+                  Create
                 </button>
               </div>
 
               <p className="faible">
-                La création des missions et des portefeuilles fictifs passe par l’API administrateur
-                NEXUS. Aucun chemin de trading réel n’est exposé.
+                Creation of missions and paper portfolios uses the NEXUS administrator API. No live
+                trading paths are exposed.
               </p>
             </>
           );
@@ -1788,7 +1786,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
         const res = await api.missionCollaboration(missionId);
         setCollab(res);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Erreur de chargement");
+        setError(err instanceof Error ? err.message : "Loading error");
       } finally {
         setLoading(false);
       }
@@ -1807,26 +1805,26 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
         onClick={() => void toggle()}
       >
         {open
-          ? "Masquer les artefacts et la collaboration"
-          : "Artefacts partagés & Collaboration inter-agents"}
+          ? "Hide artifacts and collaboration"
+          : "Shared Artifacts & Cross-Agent Collaboration"}
       </button>
 
       {loading ? (
         <p className="faible" style={{ marginTop: "6px" }}>
-          Chargement de l'espace de collaboration…
+          Loading collaboration workspace…
         </p>
       ) : null}
       {error ? <p style={{ color: "var(--danger, #ff5555)", marginTop: "6px" }}>{error}</p> : null}
 
       {open && collab ? (
         <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* Artefacts */}
+          {/* Artifacts */}
           <div>
             <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem" }}>
-              Artefacts partagés ({collab.artifacts.length})
+              Shared Artifacts ({collab.artifacts.length})
             </h4>
             {collab.artifacts.length === 0 ? (
-              <p className="faible">Aucun fichier généré dans cette mission.</p>
+              <p className="faible">No files generated in this mission.</p>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {collab.artifacts.map((art) => (
@@ -1855,7 +1853,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                       className="bouton primary"
                       style={{ fontSize: "0.75rem", padding: "2px 8px" }}
                     >
-                      Ouvrir
+                      Open
                     </a>
                   </div>
                 ))}
@@ -1863,7 +1861,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
             )}
           </div>
 
-          {/* Débats contradictoires */}
+          {/* Adversarial debates */}
           {collab.debates.length > 0 ? (
             <div
               style={{
@@ -1874,7 +1872,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
               }}
             >
               <h4 style={{ margin: "0 0 6px 0", color: "orange", fontSize: "0.95rem" }}>
-                Débat contradictoire détecté
+                Adversarial debate detected
               </h4>
               {collab.debates.map((d) => (
                 <div key={d.id} style={{ fontSize: "0.85rem" }}>
@@ -1887,11 +1885,11 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
             </div>
           ) : null}
 
-          {/* Sous-tâches proposées */}
+          {/* Dynamic subtasks */}
           {collab.proposedSubtasks.length > 0 ? (
             <div>
               <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem" }}>
-                Sous-tâches dynamiques proposées ({collab.proposedSubtasks.length})
+                Dynamic subtasks proposed ({collab.proposedSubtasks.length})
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {collab.proposedSubtasks.map((st) => (
@@ -1920,7 +1918,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 9. Mémoire
+// 9. Memory
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Memory({ api }: { api: DashboardApi }) {
@@ -1934,27 +1932,27 @@ export function Memory({ api }: { api: DashboardApi }) {
   return (
     <div className="contenu">
       <div className="admin-form-card">
-        <h3>Ajouter un souvenir</h3>
+        <h3>Add Memory</h3>
         <div className="inline-admin-form memory-form">
           <input
             className="champ"
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            placeholder="Ce que NEXUS doit retenir"
+            placeholder="What NEXUS should remember"
           />
           <select
             className="champ"
             value={layer}
             onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
           >
-            <option value="LONG_TERM">Long terme</option>
-            <option value="PREFERENCE">Préférence</option>
+            <option value="LONG_TERM">Long-term</option>
+            <option value="PREFERENCE">Preference</option>
           </select>
           <input
             className="champ"
             value={tags}
             onChange={(event) => setTags(event.target.value)}
-            placeholder="tags, séparés, par virgule"
+            placeholder="tags, comma, separated"
           />
           <label className="check-label">
             <input
@@ -1962,7 +1960,7 @@ export function Memory({ api }: { api: DashboardApi }) {
               checked={acknowledgedSensitive}
               onChange={(event) => setAcknowledgedSensitive(event.target.checked)}
             />
-            contenu sensible vérifié
+            sensitive content verified
           </label>
           <button
             className="bouton primary"
@@ -1987,34 +1985,34 @@ export function Memory({ api }: { api: DashboardApi }) {
                 })
                 .catch((cause: unknown) =>
                   setActionError(
-                    cause instanceof Error ? cause.message : "Enregistrement impossible.",
+                    cause instanceof Error ? cause.message : "Unable to save.",
                   ),
                 );
             }}
           >
-            Mémoriser
+            Remember
           </button>
         </div>
       </div>
-      {actionError === null ? null : <p className="banniere erreur">{actionError}</p>}
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) => (
           <>
             <div className="mesures">
-              <Metric value={formatCount(data.total)} label="souvenirs" />
-              <Metric value={formatCount(data.byLayer.PREFERENCE ?? 0)} label="préférences" />
-              <Metric value={formatCount(data.byOrigin.AGENT ?? 0)} label="déduits par l'agent" />
+              <Metric value={formatCount(data.total)} label="memories" />
+              <Metric value={formatCount(data.byLayer.PREFERENCE ?? 0)} label="preferences" />
+              <Metric value={formatCount(data.byOrigin.AGENT ?? 0)} label="inferred by agent" />
               <Metric
                 value={formatCount(data.bySensitivity.PERSONAL ?? 0)}
-                label="marqués personnels"
+                label="marked personal"
               />
             </div>
 
-            <h3>Souvenirs récents</h3>
+            <h3>Recent Memories</h3>
             {data.recent.length === 0 ? (
-              <Empty>NEXUS ne retient rien.</Empty>
+              <Empty>No memories stored.</Empty>
             ) : (
-              <Table head={["Contenu", "Couche", "Origine", "Créé", "Actions"]}>
+              <Table head={["Content", "Layer", "Origin", "Created", "Actions"]}>
                 {data.recent.map((record) => (
                   <tr key={record.id}>
                     <td>{record.content}</td>
@@ -2026,18 +2024,18 @@ export function Memory({ api }: { api: DashboardApi }) {
                         className="bouton danger"
                         type="button"
                         onClick={() => {
-                          if (!window.confirm("Oublier définitivement ce souvenir ?")) return;
+                          if (!window.confirm("Permanently forget this memory?")) return;
                           void api
                             .forget(record.id)
                             .then(() => state.reload())
                             .catch((cause: unknown) =>
                               setActionError(
-                                cause instanceof Error ? cause.message : "Suppression impossible.",
+                                cause instanceof Error ? cause.message : "Deletion failed.",
                               ),
                             );
                         }}
                       >
-                        Oublier
+                        Forget
                       </button>
                     </td>
                   </tr>
@@ -2068,12 +2066,12 @@ export function Notifications({ api }: { api: DashboardApi }) {
       const summary = report.channels
         .map(
           (c) =>
-            `${c.channel}: ${c.success ? "✓ succès" : c.skippedReason ? `(ignoré: ${c.skippedReason})` : `✗ erreur (${c.error ?? ""})`}`,
+            `${c.channel}: ${c.success ? "✓ success" : c.skippedReason ? `(skipped: ${c.skippedReason})` : `✗ error (${c.error ?? ""})`}`,
         )
         .join(" | ");
-      setTestResult(`Rapport : ${summary}`);
+      setTestResult(`Report: ${summary}`);
     } catch (err) {
-      setTestResult(`Échec du test : ${err instanceof Error ? err.message : String(err)}`);
+      setTestResult(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setTesting(false);
     }
@@ -2085,8 +2083,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
         <div>
           <h2>Notifications</h2>
           <p className="faible">
-            Journal central et diffusion vers les canaux externes (desktop, mobile push ntfy,
-            webhooks).
+            Central log and broadcast to external channels (desktop, mobile push ntfy, webhooks).
           </p>
         </div>
         <button
@@ -2095,12 +2092,12 @@ export function Notifications({ api }: { api: DashboardApi }) {
           disabled={testing}
           onClick={() => void handleTest()}
         >
-          {testing ? "Test en cours..." : "Tester canaux externes"}
+          {testing ? "Testing..." : "Test external channels"}
         </button>
       </div>
 
       {testResult !== null ? (
-        <p className="banniere succes" style={{ marginBottom: "1rem" }}>
+        <p className="banner success" style={{ marginBottom: "1rem" }}>
           {testResult}
         </p>
       ) : null}
@@ -2109,14 +2106,14 @@ export function Notifications({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="mesures">
-              <Metric value={formatCount(data.unread)} label="non lues" />
-              <Metric value={formatCount(data.notifications.length)} label="retenues" />
+              <Metric value={formatCount(data.unread)} label="unread" />
+              <Metric value={formatCount(data.notifications.length)} label="stored" />
             </div>
 
             {data.notifications.length === 0 ? (
-              <Empty>Aucune notification.</Empty>
+              <Empty>No notifications.</Empty>
             ) : (
-              <Table head={["Quand", "Gravité", "Titre", "Corps", "Lue", "Actions"]}>
+              <Table head={["When", "Severity", "Title", "Body", "Read", "Actions"]}>
                 {data.notifications.map((notification) => (
                   <tr key={notification.id}>
                     <td className="faible">{formatAge(notification.createdAt)}</td>
@@ -2134,7 +2131,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     </td>
                     <td>{notification.title}</td>
                     <td className="faible">{notification.body}</td>
-                    <td className="faible">{notification.readAt === null ? "non" : "oui"}</td>
+                    <td className="faible">{notification.readAt === null ? "no" : "yes"}</td>
                     <td>
                       {notification.readAt === null ? (
                         <button
@@ -2146,7 +2143,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
                               .then(() => state.reload())
                           }
                         >
-                          Marquer lue
+                          Mark read
                         </button>
                       ) : (
                         "—"
@@ -2164,7 +2161,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. Sécurité
+// 11. Security
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Security({ api }: { api: DashboardApi }) {
@@ -2176,34 +2173,34 @@ export function Security({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="mesures">
-              <Metric value={formatCount(data.trust.trusted)} label="appareils approuvés" />
+              <Metric value={formatCount(data.trust.trusted)} label="trusted devices" />
               <Metric
                 value={formatCount(data.trust.pending)}
-                label="en attente d'approbation"
+                label="pending approval"
                 alert={data.trust.pending > 0}
               />
-              <Metric value={formatCount(data.trust.revoked)} label="révoqués" />
+              <Metric value={formatCount(data.trust.revoked)} label="revoked" />
               <Metric
                 value={formatCount(data.byKind["auth.login_failed"] ?? 0)}
-                label="connexions refusées"
+                label="login failures"
                 alert={(data.byKind["auth.login_failed"] ?? 0) > 0}
               />
               <Metric
                 value={formatCount(data.byKind["memory.refused"] ?? 0)}
-                label="mémorisations refusées"
+                label="rejected memories"
               />
             </div>
 
-            <h3>Permissions effectives</h3>
+            <h3>Effective Permissions</h3>
             <p className="mono faible">
-              {data.permissions.length === 0 ? "aucune" : data.permissions.join(", ")}
+              {data.permissions.length === 0 ? "none" : data.permissions.join(", ")}
             </p>
 
-            <h3>Événements</h3>
+            <h3>Events</h3>
             {data.events.length === 0 ? (
-              <Empty>Aucun événement de sécurité.</Empty>
+              <Empty>No security events.</Empty>
             ) : (
-              <Table head={["Quand", "Type", "Résumé"]}>
+              <Table head={["When", "Type", "Summary"]}>
                 {data.events.map((event, index) => (
                   <tr key={`${event.at}-${String(index)}`}>
                     <td className="faible">{formatAge(event.at)}</td>
@@ -2221,7 +2218,7 @@ export function Security({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 12. Journaux
+// 12. Logs
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Logs({ api }: { api: DashboardApi }) {
@@ -2241,21 +2238,22 @@ export function Logs({ api }: { api: DashboardApi }) {
             setLevel(event.target.value);
           }}
         >
-          <option value="">tous les niveaux</option>
-          <option value="info">info et au-dessus</option>
-          <option value="warn">avertissements</option>
-          <option value="error">erreurs</option>
+          <option value="">all levels</option>
+          <option value="info">info and above</option>
+          <option value="warn">warnings</option>
+          <option value="error">errors</option>
         </select>
 
         <input
           className="champ"
           style={{ flex: 1 }}
           value={search}
-          placeholder="Rechercher dans les messages…"
+          placeholder="Search messages…"
           onChange={(event) => {
             setSearch(event.target.value);
           }}
-        />
+        >
+        </input>
 
         <button
           type="button"
@@ -2268,16 +2266,16 @@ export function Logs({ api }: { api: DashboardApi }) {
             state.reload();
           }}
         >
-          Filtrer
+          Filter
         </button>
       </div>
 
       <Section state={state}>
         {(data) =>
           data.entries.length === 0 ? (
-            <Empty>Aucune ligne retenue.</Empty>
+            <Empty>No log lines matched.</Empty>
           ) : (
-            <Table head={["Quand", "Niveau", "Message", "Corrélation"]}>
+            <Table head={["When", "Level", "Message", "Correlation"]}>
               {data.entries.map((entry, index) => (
                 <tr key={`${entry.at}-${String(index)}`}>
                   <td className="faible mono">{entry.at.slice(11, 23)}</td>

@@ -3,10 +3,10 @@ import { createRoot } from "react-dom/client";
 import { App } from "./ui/App.js";
 import "./ui/theme.css";
 
-const racine = document.getElementById("root");
-if (racine === null) throw new Error("élément racine introuvable");
+const root = document.getElementById("root");
+if (root === null) throw new Error("root element not found");
 
-createRoot(racine).render(
+createRoot(root).render(
   <StrictMode>
     <App />
   </StrictMode>,

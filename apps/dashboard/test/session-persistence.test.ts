@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSession } from "../src/lib/api.js";
 
-describe("session du tableau de bord", () => {
+describe("dashboard session", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("survit à la recréation de l'application dans le même onglet", async () => {
+  it("survives application recreation within the same tab", async () => {
     const values = new Map<string, string>();
     vi.stubGlobal("window", {
       sessionStorage: {
@@ -36,7 +36,7 @@ describe("session du tableau de bord", () => {
     expect(afterRefresh.isAuthenticated).toBe(true);
   });
 
-  it("efface la session de l'onglet à la déconnexion", async () => {
+  it("clears tab session on logout", async () => {
     const values = new Map([
       ["nexus.access", "access-for-test"],
       ["nexus.refresh", "refresh-for-test"],

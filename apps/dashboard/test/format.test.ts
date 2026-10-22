@@ -12,33 +12,25 @@ import {
 import type { HealthEntry, TaskRow, WorkerRow } from "../src/lib/api.js";
 
 /**
- * Les décisions du tableau de bord.
- *
- * Elles paraissent mineures — une couleur, un libellé, un ordre — et elles ne le
- * sont pas : un écran de supervision qui se trompe se trompe précisément au
- * moment où l'on a besoin de lui, et personne ne s'en aperçoit avant.
+ * Dashboard formatting and status resolution tests.
  */
 
 function health(level: HealthEntry["level"], name = "X"): HealthEntry {
   return { name, level, detail: "" };
 }
 
-describe("santé globale", () => {
-  it("le pire l'emporte", () => {
-    // Un système dont un composant est à terre n'est pas « partiellement en
-    // ligne ».
+describe("overall health", () => {
+  it("worst state wins", () => {
     expect(overallHealth([health("ok"), health("degraded"), health("down")])).toBe("down");
     expect(overallHealth([health("ok"), health("degraded")])).toBe("degraded");
     expect(overallHealth([health("ok"), health("ok")])).toBe("ok");
   });
 
-  it("un composant non configuré ne compte pas", () => {
-    // Ne jamais avoir branché de serveur MCP n'est pas une panne. Le peindre en
-    // rouge enverrait chercher un incident qui n'existe pas.
+  it("unconfigured components do not count as failures", () => {
     expect(overallHealth([health("ok"), health("unconfigured")])).toBe("ok");
   });
 
-  it("ne rien mesurer se dit, plutôt que de s'afficher en vert", () => {
+  it("reports unknown when nothing is measured", () => {
     expect(overallHealth([health("unconfigured"), health("unconfigured")])).toBe("unknown");
     expect(overallHealth([])).toBe("unknown");
   });
@@ -49,7 +41,7 @@ describe("santé globale", () => {
 function worker(patch: Partial<WorkerRow> = {}): WorkerRow {
   return {
     id: "w1",
-    name: "Portable",
+    name: "Laptop",
     role: "BOTH",
     type: "WINDOWS_PC",
     platform: "WINDOWS",
@@ -79,27 +71,22 @@ function worker(patch: Partial<WorkerRow> = {}): WorkerRow {
   };
 }
 
-describe("état d'un exécutant", () => {
-  it("disponible quand le canal est ouvert et la charge tient", () => {
+describe("worker state", () => {
+  it("available when channel is open and capacity allows", () => {
     expect(workerState(worker())).toBe("accepting");
   });
 
-  it("un canal fermé prime sur un statut en ligne", () => {
-    // Le registre peut encore le croire `ONLINE` alors que la socket est tombée.
-    // Un exécutant déconnecté n'exécutera rien.
+  it("closed channel takes precedence over online registry status", () => {
     expect(workerState(worker({ connected: false }))).toBe("disconnected");
   });
 
-  it("la révocation prime sur tout le reste", () => {
-    // Un appareil révoqué reste marqué `ONLINE` le temps que la déconnexion se
-    // propage. L'afficher comme disponible pendant ces secondes-là serait le
-    // pire moment pour se tromper.
+  it("revocation takes precedence over all other states", () => {
     expect(workerState(worker({ trust: "REVOKED", status: "ONLINE", connected: true }))).toBe(
       "revoked",
     );
   });
 
-  it("saturé n'est pas dégradé", () => {
+  it("distinguishes saturated from degraded", () => {
     const saturated = worker({
       health: { ...worker().health, activeTasks: 2, maxConcurrentTasks: 2 },
     });
@@ -113,7 +100,7 @@ describe("état d'un exécutant", () => {
 function task(steps: TaskRow["steps"]): TaskRow {
   return {
     id: "t1",
-    title: "Tâche",
+    title: "Task",
     status: "running",
     originClientDeviceId: "device-iphone",
     correlationId: "corr-1",
@@ -129,7 +116,7 @@ function task(steps: TaskRow["steps"]): TaskRow {
 function step(patch: Partial<TaskRow["steps"][number]> = {}): TaskRow["steps"][number] {
   return {
     id: "s1",
-    description: "Étape",
+    description: "Step",
     tool: "device.terminal.execute",
     requiredCapabilities: ["terminal.execute"],
     status: "succeeded",
@@ -141,42 +128,37 @@ function step(patch: Partial<TaskRow["steps"][number]> = {}): TaskRow["steps"][n
   };
 }
 
-describe("exécutants retenus", () => {
-  it("compte les étapes par machine", () => {
-    // Le plan déclare des capacités ; c'est le cœur qui choisit. La page doit
-    // montrer ce qui a été **décidé**, sans quoi on ne peut pas répondre à
-    // « pourquoi ça a tourné là ? ».
-    const retenus = selectedWorkers(
+describe("selected workers", () => {
+  it("counts steps per worker machine", () => {
+    const assigned = selectedWorkers(
       task([
-        step({ id: "s1", selectedDeviceId: "d1", selectedDeviceName: "Portable" }),
-        step({ id: "s2", selectedDeviceId: "d1", selectedDeviceName: "Portable" }),
-        step({ id: "s3", selectedDeviceId: "d2", selectedDeviceName: "Poste fixe" }),
+        step({ id: "s1", selectedDeviceId: "d1", selectedDeviceName: "Laptop" }),
+        step({ id: "s2", selectedDeviceId: "d1", selectedDeviceName: "Laptop" }),
+        step({ id: "s3", selectedDeviceId: "d2", selectedDeviceName: "Workstation" }),
       ]),
     );
 
-    expect(retenus).toEqual([
-      { id: "d1", name: "Portable", steps: 2 },
-      { id: "d2", name: "Poste fixe", steps: 1 },
+    expect(assigned).toEqual([
+      { id: "d1", name: "Laptop", steps: 2 },
+      { id: "d2", name: "Workstation", steps: 1 },
     ]);
   });
 
-  it("ignore les étapes non dispatchées", () => {
+  it("ignores undispatched steps", () => {
     expect(selectedWorkers(task([step()]))).toEqual([]);
   });
 
-  it("se rabat sur l'identifiant quand le nom manque", () => {
-    // Un appareil supprimé après coup n'a plus de nom. Afficher un vide ferait
-    // perdre l'information ; l'identifiant, lui, reste exploitable.
-    const retenus = selectedWorkers(
-      task([step({ selectedDeviceId: "d-disparu", selectedDeviceName: null })]),
+  it("falls back to device identifier when name is missing", () => {
+    const assigned = selectedWorkers(
+      task([step({ selectedDeviceId: "d-missing", selectedDeviceName: null })]),
     );
 
-    expect(retenus[0]?.name).toBe("d-disparu");
+    expect(assigned[0]?.name).toBe("d-missing");
   });
 });
 
-describe("étapes en échec", () => {
-  it("retient celles qui portent une erreur ou un statut d'échec", () => {
+describe("failed steps", () => {
+  it("filters steps carrying an error or failed status", () => {
     const found = failedSteps(
       task([
         step({ id: "ok", status: "succeeded" }),
@@ -191,41 +173,40 @@ describe("étapes en échec", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("mise en forme", () => {
-  it("les durées passent à l'échelle", () => {
+describe("formatting", () => {
+  it("formats durations across orders of magnitude", () => {
     expect(formatDuration(null)).toBe("—");
     expect(formatDuration(450)).toBe("450 ms");
     expect(formatDuration(4_200)).toBe("4.2 s");
     expect(formatDuration(125_000)).toBe("2 min 5 s");
   });
 
-  it("les âges se lisent d'un coup d'œil", () => {
+  it("formats relative timestamps readably", () => {
     const now = new Date("2026-09-03T12:00:00.000Z");
 
-    expect(formatAge(null)).toBe("jamais");
-    expect(formatAge("2026-09-03T11:59:30.000Z", now)).toBe("il y a 30 s");
-    expect(formatAge("2026-09-03T11:45:00.000Z", now)).toBe("il y a 15 min");
-    expect(formatAge("2026-09-03T09:00:00.000Z", now)).toBe("il y a 3 h");
-    expect(formatAge("2026-09-01T12:00:00.000Z", now)).toBe("il y a 2 j");
+    expect(formatAge(null)).toBe("never");
+    expect(formatAge("2026-09-03T11:59:30.000Z", now)).toBe("30s ago");
+    expect(formatAge("2026-09-03T11:45:00.000Z", now)).toBe("15m ago");
+    expect(formatAge("2026-09-03T09:00:00.000Z", now)).toBe("3h ago");
+    expect(formatAge("2026-09-01T12:00:00.000Z", now)).toBe("2d ago");
   });
 
-  it("un horodatage illisible ne casse pas la ligne", () => {
-    expect(formatAge("pas une date")).toBe("—");
+  it("handles unparseable timestamps gracefully", () => {
+    expect(formatAge("not a date")).toBe("—");
   });
 
-  it("les compteurs restent compacts", () => {
-    // Un compteur à six chiffres déborde toutes les colonnes.
+  it("keeps counters compact", () => {
     expect(formatCount(42)).toBe("42");
     expect(formatCount(1_500)).toBe("1.5 k");
     expect(formatCount(2_400_000)).toBe("2.4 M");
   });
 
-  it("l'activité est chronologique, la plus fraîche d'abord", () => {
+  it("sorts activity chronologically, newest first", () => {
     const sorted = sortActivity([
-      { at: "2026-09-03T10:00:00.000Z", kind: "task", summary: "vieille", level: "info" },
-      { at: "2026-09-03T12:00:00.000Z", kind: "run", summary: "récente", level: "info" },
+      { at: "2026-09-03T10:00:00.000Z", kind: "task", summary: "older", level: "info" },
+      { at: "2026-09-03T12:00:00.000Z", kind: "run", summary: "newer", level: "info" },
     ]);
 
-    expect(sorted.map((entry) => entry.summary)).toEqual(["récente", "vieille"]);
+    expect(sorted.map((entry) => entry.summary)).toEqual(["newer", "older"]);
   });
 });

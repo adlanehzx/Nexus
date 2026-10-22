@@ -38,7 +38,7 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [editAdditionalDirs, setEditAdditionalDirs] = useState("");
   const [editConfigOptions, setEditConfigOptions] = useState("{}");
   const [testWorkspace, setTestWorkspace] = useState("");
-  const [testPrompt, setTestPrompt] = useState("Réponds uniquement NEXUS_ACP_OK");
+  const [testPrompt, setTestPrompt] = useState("Reply only NEXUS_ACP_OK");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +59,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       .providerAccounts()
       .then((res) => setAccounts(res.accounts))
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Impossible de charger les comptes.");
+        setError(cause instanceof Error ? cause.message : "Unable to load provider accounts.");
       });
   };
 
@@ -69,7 +69,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       .agents()
       .then(setRegistry)
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
+        setError(cause instanceof Error ? cause.message : "Unable to load agents.");
       });
     refreshAccounts();
     refreshRouting();
@@ -81,7 +81,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       .agents()
       .then(setRegistry)
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Impossible de charger les agents.");
+        setError(cause instanceof Error ? cause.message : "Unable to load agents.");
       });
     refreshAccounts();
     refreshRouting();
@@ -94,21 +94,21 @@ export function Agents({ api }: { api: DashboardApi }) {
       const res = await api.evaluateRouting(testRoutingInstruction.trim());
       setRoutingEvaluation(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur d'évaluation du routage.");
+      setError(err instanceof Error ? err.message : "Routing evaluation error.");
     } finally {
       setRoutingLoading(false);
     }
   };
 
   const handleResetRouting = async (): Promise<void> => {
-    if (!window.confirm("Réinitialiser l'historique d'apprentissage du routage ?")) return;
+    if (!window.confirm("Reset routing learning history?")) return;
     try {
       await api.resetRoutingStats();
-      setRoutingResetMsg("Historique réinitialisé.");
+      setRoutingResetMsg("History reset.");
       refreshRouting();
       setTimeout(() => setRoutingResetMsg(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la réinitialisation.");
+      setError(err instanceof Error ? err.message : "Error during reset.");
     }
   };
 
@@ -117,10 +117,10 @@ export function Agents({ api }: { api: DashboardApi }) {
     setAccountFeedback(null);
     try {
       const res = await api.testProviderAccount(id);
-      setAccountFeedback(`Identité "${res.id}" testée : statut "${res.authStatus}"`);
+      setAccountFeedback(`Identity "${res.id}" tested: status "${res.authStatus}"`);
       refreshAccounts();
     } catch (err) {
-      setAccountFeedback(`Échec du test : ${err instanceof Error ? err.message : String(err)}`);
+      setAccountFeedback(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setAccActionLoading(false);
     }
@@ -130,13 +130,13 @@ export function Agents({ api }: { api: DashboardApi }) {
     setAccActionLoading(true);
     setAccountFeedback(null);
     try {
-      await api.toggleProviderAccountCooldown(id, !currentlyActive, 300, "Pause manuelle");
+      await api.toggleProviderAccountCooldown(id, !currentlyActive, 300, "Manual pause");
       setAccountFeedback(
-        !currentlyActive ? `Pause activée sur "${id}" (5 min)` : `Pause levée sur "${id}"`,
+        !currentlyActive ? `Cooldown enabled on "${id}" (5 min)` : `Cooldown lifted on "${id}"`,
       );
       refreshAccounts();
     } catch (err) {
-      setAccountFeedback(`Erreur : ${err instanceof Error ? err.message : String(err)}`);
+      setAccountFeedback(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setAccActionLoading(false);
     }
@@ -154,12 +154,12 @@ export function Agents({ api }: { api: DashboardApi }) {
         profileKey: newAccProvider,
         priority: newAccPriority,
       });
-      setAccountFeedback(`Identité "${newAccId.trim()}" créée.`);
+      setAccountFeedback(`Identity "${newAccId.trim()}" created.`);
       setNewAccId("");
       setNewAccName("");
       refreshAccounts();
     } catch (err) {
-      setAccountFeedback(`Erreur création : ${err instanceof Error ? err.message : String(err)}`);
+      setAccountFeedback(`Creation error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setAccActionLoading(false);
     }
@@ -170,11 +170,11 @@ export function Agents({ api }: { api: DashboardApi }) {
     setAccountFeedback(null);
     try {
       await api.deleteProviderAccount(id);
-      setAccountFeedback(`Identité "${id}" supprimée.`);
+      setAccountFeedback(`Identity "${id}" deleted.`);
       refreshAccounts();
     } catch (err) {
       setAccountFeedback(
-        `Erreur suppression : ${err instanceof Error ? err.message : String(err)}`,
+        `Deletion error: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
       setAccActionLoading(false);
@@ -208,7 +208,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         setKey("");
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Ajout impossible.");
+        setError(cause instanceof Error ? cause.message : "Unable to add agent.");
       })
       .finally(() => setBusy(false));
   };
@@ -232,7 +232,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         setModel("");
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Création impossible.");
+        setError(cause instanceof Error ? cause.message : "Unable to create agent.");
       })
       .finally(() => setBusy(false));
   };
@@ -258,7 +258,7 @@ export function Agents({ api }: { api: DashboardApi }) {
     try {
       configOptions = JSON.parse(editConfigOptions) as Record<string, string>;
     } catch {
-      setError("Les options ACP doivent être un objet JSON.");
+      setError("ACP options must be a JSON object.");
       return;
     }
     setBusy(true);
@@ -282,10 +282,10 @@ export function Agents({ api }: { api: DashboardApi }) {
       })
       .then((next) => {
         setRegistry(next);
-        setTestResult("Configuration enregistrée. Une sauvegarde locale a été créée.");
+        setTestResult("Configuration saved. A local backup was created.");
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Enregistrement impossible.");
+        setError(cause instanceof Error ? cause.message : "Unable to save.");
       })
       .finally(() => setBusy(false));
   };
@@ -295,7 +295,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       return;
     setBusy(true);
     setError(null);
-    setTestResult("Test ACP en cours…");
+    setTestResult("Testing ACP…");
     void api
       .testAgentProfile(editing, {
         workspace: testWorkspace.trim(),
@@ -305,13 +305,13 @@ export function Agents({ api }: { api: DashboardApi }) {
       .then((result) => setTestResult(result.response))
       .catch((cause: unknown) => {
         setTestResult(null);
-        setError(cause instanceof Error ? cause.message : "Test ACP impossible.");
+        setError(cause instanceof Error ? cause.message : "ACP test failed.");
       })
       .finally(() => setBusy(false));
   };
 
   const disable = (keyToDisable: string): void => {
-    if (!window.confirm(`Désactiver ${keyToDisable} pour les nouvelles missions ?`)) return;
+    if (!window.confirm(`Disable ${keyToDisable} for new missions?`)) return;
     setBusy(true);
     setError(null);
     void api
@@ -321,7 +321,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         setEditing(null);
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Désactivation impossible.");
+        setError(cause instanceof Error ? cause.message : "Unable to disable agent.");
       })
       .finally(() => setBusy(false));
   };
@@ -332,16 +332,16 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div>
           <h2>Agents</h2>
           <p className="faible">
-            Les profils que l’orchestrateur peut sélectionner pour tes missions.
+            Profiles available for the orchestrator to select for your missions.
           </p>
         </div>
         <button className="bouton" type="button" onClick={refresh}>
-          Actualiser
+          Refresh
         </button>
       </div>
 
-      {error !== null ? <div className="banniere erreur">{error}</div> : null}
-      {registry === null ? <div className="vide">Chargement du registre…</div> : null}
+      {error !== null ? <div className="banner error">{error}</div> : null}
+      {registry === null ? <div className="vide">Loading registry…</div> : null}
 
       <div className="agent-grid">
         {registry?.configured.map((agent) => {
@@ -361,11 +361,11 @@ export function Agents({ api }: { api: DashboardApi }) {
                 <div>
                   <h3>{agent.key}</h3>
                   <div className="faible">
-                    {profile?.name ?? "Profil NEXUS"} · {profile?.agent_kind ?? "ACP"}
+                    {profile?.name ?? "NEXUS Profile"} · {profile?.agent_kind ?? "ACP"}
                   </div>
                 </div>
                 <span className={`agent-status ${state}`}>
-                  {state === "active" ? "En mission" : healthLabel(agent.status)}
+                  {state === "active" ? "On mission" : healthLabel(agent.status)}
                 </span>
               </div>
               <div className="agent-stats">
@@ -373,16 +373,16 @@ export function Agents({ api }: { api: DashboardApi }) {
                   <strong>{agent.running_tasks}</strong> active
                 </span>
                 <span>
-                  <strong>{agent.queued_tasks}</strong> en attente
+                  <strong>{agent.queued_tasks}</strong> queued
                 </span>
                 <span>
-                  <strong>{agent.last_task_state ?? "—"}</strong> dernier état
+                  <strong>{agent.last_task_state ?? "—"}</strong> last state
                 </span>
                 <span>
-                  <strong>{percent(agent.remaining_5h_percent)}</strong> fenêtre 5 h
+                  <strong>{percent(agent.remaining_5h_percent)}</strong> 5h window
                 </span>
                 <span>
-                  <strong>{percent(agent.remaining_week_percent)}</strong> semaine
+                  <strong>{percent(agent.remaining_week_percent)}</strong> week
                 </span>
               </div>
               <div className="agent-card-actions">
@@ -391,7 +391,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   type="button"
                   onClick={() => edit(agent.agent_profile_id)}
                 >
-                  Configurer
+                  Configure
                 </button>
                 <button
                   className="bouton danger"
@@ -399,7 +399,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   disabled={busy || agent.running_tasks > 0}
                   onClick={() => disable(agent.key)}
                 >
-                  Désactiver
+                  Disable
                 </button>
               </div>
             </article>
@@ -411,20 +411,20 @@ export function Agents({ api }: { api: DashboardApi }) {
         <section className="settings-panel">
           <div className="settings-panel-heading">
             <div>
-              <h3>Configuration ACP · {editing}</h3>
+              <h3>ACP Settings · {editing}</h3>
               <p className="faible">
-                Les modifications sont persistantes et sauvegardées. Les identifiants restent dans
-                les trousseaux des CLI et ne sont jamais affichés ici.
+                Modifications are persistent and saved. Credentials remain in CLI keyrings and are
+                never displayed here.
               </p>
             </div>
             <button className="bouton" type="button" onClick={() => setEditing(null)}>
-              Fermer
+              Close
             </button>
           </div>
 
           <div className="settings-grid">
             <label>
-              Nom visible
+              Display name
               <input
                 className="champ"
                 value={editName}
@@ -432,16 +432,16 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label>
-              Modèle ACP
+              ACP model
               <input
                 className="champ"
                 value={editModel}
-                placeholder="Modèle par défaut de l’adaptateur"
+                placeholder="Default adapter model"
                 onChange={(event) => setEditModel(event.target.value.slice(0, 200))}
               />
             </label>
             <label className="settings-wide">
-              Commande
+              Command
               <input
                 className="champ mono"
                 value={editCommand}
@@ -449,7 +449,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Arguments · un argument par ligne
+              Arguments · one per line
               <textarea
                 className="champ mono settings-textarea"
                 value={editArgs}
@@ -457,13 +457,13 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label>
-              Effort de raisonnement
+              Reasoning effort
               <select
                 className="champ"
                 value={editReasoning}
                 onChange={(event) => setEditReasoning(event.target.value)}
               >
-                <option value="">Valeur par défaut</option>
+                <option value="">Default value</option>
                 <option value="minimal">minimal</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
@@ -474,7 +474,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               </select>
             </label>
             <label className="settings-wide">
-              Prompt système propre à cet agent
+              System prompt specific to this agent
               <textarea
                 className="champ settings-textarea"
                 value={editSystemPrompt}
@@ -482,7 +482,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Dossiers supplémentaires autorisés · chemins absolus, un par ligne
+              Additional allowed directories · absolute paths, one per line
               <textarea
                 className="champ mono"
                 rows={3}
@@ -491,7 +491,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Options ACP avancées · JSON, appliquées seulement si l’adaptateur les annonce
+              Advanced ACP options · JSON, applied only if supported by adapter
               <textarea
                 className="champ mono"
                 rows={4}
@@ -500,24 +500,24 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <div className="settings-wide policy-box">
-              <strong>Permissions : workspace + dossiers explicitement autorisés</strong>
+              <strong>Permissions: workspace + explicitly allowed directories</strong>
               <span className="faible">
-                Écriture autorisée dans le workspace de la mission. Les suppressions sans chemin et
-                les accès extérieurs sont refusés. Cette protection n’est pas désactivable.
+                Write access allowed inside mission workspace. Pathless deletions and outside access
+                are denied. This guardrail cannot be disabled.
               </span>
             </div>
           </div>
 
           <div className="settings-actions">
             <button className="bouton primary" type="button" disabled={busy} onClick={saveProfile}>
-              Enregistrer
+              Save
             </button>
           </div>
 
-          <h3>Test de connexion réel</h3>
+          <h3>Live connection test</h3>
           <div className="settings-grid">
             <label className="settings-wide">
-              Workspace du test
+              Test workspace
               <input
                 className="champ mono"
                 value={testWorkspace}
@@ -525,7 +525,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Message de test
+              Test prompt
               <input
                 className="champ"
                 value={testPrompt}
@@ -535,7 +535,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           </div>
           <div className="settings-actions">
             <button className="bouton" type="button" disabled={busy} onClick={testProfile}>
-              Tester l’agent
+              Test agent
             </button>
           </div>
           {testResult === null ? null : <pre className="test-result">{testResult}</pre>}
@@ -544,10 +544,10 @@ export function Agents({ api }: { api: DashboardApi }) {
 
       <div className="agent-add">
         <div>
-          <h3>Créer un agent ACP dans NEXUS</h3>
+          <h3>Create an ACP agent in NEXUS</h3>
           <p className="faible">
-            Pars d’un adaptateur ACP déjà sécurisé. NEXUS crée le profil et l’ajoute directement à
-            l’orchestrateur, sans demander tes identifiants fournisseur.
+            Start from a secured ACP adapter. NEXUS creates the profile and registers it directly
+            with the orchestrator, without requesting your provider credentials.
           </p>
         </div>
         <div className="agent-create-form">
@@ -556,7 +556,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             value={template}
             onChange={(event) => setTemplate(event.target.value)}
           >
-            <option value="">Type d’agent…</option>
+            <option value="">Agent type…</option>
             {templates.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
@@ -566,7 +566,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           <input
             className="champ"
             value={newName}
-            placeholder="Nom du profil"
+            placeholder="Profile name"
             onChange={(event) => {
               const value = normalizeProfileName(event.target.value);
               setNewName(value);
@@ -576,13 +576,13 @@ export function Agents({ api }: { api: DashboardApi }) {
           <input
             className="champ"
             value={newKey}
-            placeholder="nom-nexus"
+            placeholder="nexus-name"
             onChange={(event) => setNewKey(normalizeKey(event.target.value))}
           />
           <input
             className="champ"
             value={model}
-            placeholder="Modèle optionnel"
+            placeholder="Optional model"
             onChange={(event) => setModel(event.target.value.slice(0, 200))}
           />
           <button
@@ -591,18 +591,18 @@ export function Agents({ api }: { api: DashboardApi }) {
             disabled={busy || template.length === 0 || newName.length === 0 || newKey.length === 0}
             onClick={create}
           >
-            {busy ? "Création…" : "Créer et ajouter"}
+            {busy ? "Creating…" : "Create and register"}
           </button>
         </div>
       </div>
 
       <div className="agent-add secondary">
         <div>
-          <h3>Importer un profil ACP existant</h3>
-          <p className="faible">Pour un adaptateur personnalisé déjà configuré dans NEXUS.</p>
+          <h3>Import existing ACP profile</h3>
+          <p className="faible">For a custom adapter already configured in NEXUS.</p>
         </div>
         {candidates.length === 0 ? (
-          <div className="faible">Tous les profils ACP disponibles sont déjà enregistrés.</div>
+          <div className="faible">All available ACP profiles are already registered.</div>
         ) : (
           <div className="agent-add-form">
             <select
@@ -610,7 +610,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               value={selected}
               onChange={(event) => choose(event.target.value)}
             >
-              <option value="">Choisir un profil ACP…</option>
+              <option value="">Select an ACP profile…</option>
               {candidates.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name} · {agent.agent_kind}
@@ -620,7 +620,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <input
               className="champ"
               value={key}
-              placeholder="nom-court"
+              placeholder="short-name"
               pattern="[a-z][a-z0-9_-]{0,63}"
               onChange={(event) => setKey(normalizeKey(event.target.value))}
             />
@@ -630,26 +630,26 @@ export function Agents({ api }: { api: DashboardApi }) {
               disabled={busy || selected.length === 0 || key.length === 0}
               onClick={register}
             >
-              {busy ? "Ajout…" : "Ajouter à NEXUS"}
+              {busy ? "Adding…" : "Add to NEXUS"}
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Gestion multi-comptes fournisseurs (Chantier 12) ── */}
+      {/* ── Multi-account provider management ── */}
       <div className="settings-panel" style={{ marginTop: "28px" }}>
         <div className="settings-panel-heading">
           <div>
-            <h3>Comptes Fournisseurs & Identités Isolées</h3>
+            <h3>Provider Accounts & Isolated Identities</h3>
             <p className="faible">
-              Gestion multi-comptes (Antigravity, Claude, Codex) avec sessions CLI locales étanches,
-              suivi d'authentification, quotas, cooldowns et fiabilité.
+              Multi-account management (Antigravity, Claude, Codex) with isolated local CLI
+              sessions, authentication tracking, quotas, cooldowns, and reliability.
             </p>
           </div>
         </div>
 
         {accountFeedback !== null ? (
-          <div className="banniere succes" style={{ marginBottom: "16px" }}>
+          <div className="banner success" style={{ marginBottom: "16px" }}>
             {accountFeedback}
           </div>
         ) : null}
@@ -667,14 +667,14 @@ export function Agents({ api }: { api: DashboardApi }) {
                   ? "active"
                   : "idle";
             const statusLabel = isCooldown
-              ? "En pause"
+              ? "Cooling down"
               : isExhausted
-                ? "Quota atteint"
+                ? "Quota exhausted"
                 : isAuthOk
-                  ? "Authentifié"
+                  ? "Authenticated"
                   : acc.authStatus === "expired"
-                    ? "Expiré"
-                    : "Non vérifié";
+                    ? "Expired"
+                    : "Unverified";
 
             return (
               <article className="agent-card" key={acc.id}>
@@ -685,7 +685,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   <div>
                     <h3>{acc.name}</h3>
                     <div className="faible">
-                      {acc.id} · Priorité P{acc.priority}
+                      {acc.id} · Priority P{acc.priority}
                     </div>
                   </div>
                   <span className={`agent-status ${statusClass}`}>{statusLabel}</span>
@@ -693,14 +693,14 @@ export function Agents({ api }: { api: DashboardApi }) {
 
                 <div className="agent-stats">
                   <span>
-                    <strong>{Math.round(acc.reliability.score * 100)} %</strong> fiabilité (
+                    <strong>{Math.round(acc.reliability.score * 100)} %</strong> reliability (
                     {acc.reliability.successCount}/{acc.reliability.totalRuns})
                   </span>
                   <span>
-                    <strong>{acc.reliability.consecutiveFailures}</strong> erreurs conséc.
+                    <strong>{acc.reliability.consecutiveFailures}</strong> consec. errors
                   </span>
                   <span>
-                    <strong>{acc.cooldown.active ? "Actif" : "Non"}</strong> cooldown
+                    <strong>{acc.cooldown.active ? "Active" : "No"}</strong> cooldown
                   </span>
                 </div>
 
@@ -709,7 +709,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                     className="faible"
                     style={{ marginTop: "8px", fontSize: "11px", color: "var(--degrade)" }}
                   >
-                    Raison cooldown : {acc.cooldown.reason}
+                    Cooldown reason: {acc.cooldown.reason}
                   </div>
                 ) : null}
 
@@ -720,7 +720,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                     disabled={accActionLoading}
                     onClick={() => void handleTestAccount(acc.id)}
                   >
-                    Tester connexion
+                    Test connection
                   </button>
                   <button
                     className="bouton"
@@ -728,7 +728,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                     disabled={accActionLoading}
                     onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
                   >
-                    {acc.cooldown.active ? "Lever pause" : "Mettre en pause"}
+                    {acc.cooldown.active ? "Resume" : "Pause"}
                   </button>
                   {!["antigravity-personnel", "claude-principal", "codex-principal"].includes(
                     acc.id,
@@ -739,7 +739,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                       disabled={accActionLoading}
                       onClick={() => void handleDeleteAccount(acc.id)}
                     >
-                      Supprimer
+                      Delete
                     </button>
                   ) : null}
                 </div>
@@ -750,8 +750,8 @@ export function Agents({ api }: { api: DashboardApi }) {
 
         <div className="agent-add" style={{ marginTop: "16px" }}>
           <div>
-            <h3>Ajouter une identité fournisseur</h3>
-            <p className="faible">Ex: antigravity-secondaire, claude-backup, codex-dev.</p>
+            <h3>Add provider identity</h3>
+            <p className="faible">e.g. antigravity-secondary, claude-backup, codex-dev.</p>
           </div>
           <div className="agent-add-form">
             <select
@@ -759,23 +759,23 @@ export function Agents({ api }: { api: DashboardApi }) {
               value={newAccProvider}
               onChange={(e) => {
                 setNewAccProvider(e.target.value);
-                if (!newAccId) setNewAccId(`${e.target.value}-secondaire`);
+                if (!newAccId) setNewAccId(`${e.target.value}-secondary`);
               }}
             >
               <option value="antigravity">Antigravity (Google AI Pro)</option>
-              <option value="claude">Claude (Abonnement Claude Pro)</option>
-              <option value="codex">Codex (Abonnement ChatGPT Plus)</option>
+              <option value="claude">Claude (Claude Pro subscription)</option>
+              <option value="codex">Codex (ChatGPT Plus subscription)</option>
             </select>
             <input
               className="champ"
               value={newAccId}
-              placeholder="identifiant-unique"
+              placeholder="unique-identifier"
               onChange={(e) => setNewAccId(normalizeKey(e.target.value))}
             />
             <input
               className="champ"
               value={newAccName}
-              placeholder="Nom complet (ex: Claude Backup)"
+              placeholder="Full name (e.g. Claude Backup)"
               onChange={(e) => setNewAccName(e.target.value)}
             />
             <input
@@ -785,7 +785,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               max={10}
               value={newAccPriority}
               style={{ width: "80px" }}
-              title="Priorité (1 = haute priorité)"
+              title="Priority (1 = high priority)"
               onChange={(e) => setNewAccPriority(Number(e.target.value) || 1)}
             />
             <button
@@ -794,12 +794,12 @@ export function Agents({ api }: { api: DashboardApi }) {
               disabled={accActionLoading || !newAccId.trim() || !newAccName.trim()}
               onClick={() => void handleCreateAccount()}
             >
-              {accActionLoading ? "Création…" : "Créer l'identité"}
+              {accActionLoading ? "Creating…" : "Create identity"}
             </button>
           </div>
         </div>
 
-        {/* Section 4 : Routage Intelligent & Matrice d'Affinité */}
+        {/* Section 4: Smart Routing & Affinity Matrix */}
         <div
           style={{
             marginTop: "40px",
@@ -816,29 +816,29 @@ export function Agents({ api }: { api: DashboardApi }) {
             }}
           >
             <div>
-              <h3>Routage Intelligent & Feedback Learning</h3>
+              <h3>Smart Routing & Feedback Learning</h3>
               <p className="faible">
-                Scoring dynamique multi-critères (affinités, auth, quotas 5h/hebdo, cooldowns,
-                latence, historique) remplaçant les priorités statiques.
+                Dynamic multi-criteria scoring (affinities, auth, 5h/weekly quotas, cooldowns,
+                latency, history) replacing static priorities.
               </p>
             </div>
             <button
               className="bouton"
               type="button"
               onClick={() => void handleResetRouting()}
-              title="Réinitialise les métriques de succès et scores appris"
+              title="Resets success metrics and learned scores"
             >
-              Réinitialiser l'apprentissage
+              Reset learning
             </button>
           </div>
 
           {routingResetMsg ? (
-            <div className="banniere succes" style={{ marginBottom: "16px" }}>
+            <div className="banner success" style={{ marginBottom: "16px" }}>
               {routingResetMsg}
             </div>
           ) : null}
 
-          {/* Matrice d'affinité */}
+          {/* Affinity matrix */}
           <div style={{ overflowX: "auto", marginBottom: "24px" }}>
             <table
               className="nexus-table"
@@ -846,14 +846,14 @@ export function Agents({ api }: { api: DashboardApi }) {
             >
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border, #444)" }}>
-                  <th style={{ padding: "8px" }}>Profil</th>
+                  <th style={{ padding: "8px" }}>Profile</th>
                   <th style={{ padding: "8px" }}>Auth</th>
                   <th style={{ padding: "8px" }}>Code</th>
-                  <th style={{ padding: "8px" }}>Recherche</th>
-                  <th style={{ padding: "8px" }}>Revue</th>
-                  <th style={{ padding: "8px" }}>Navigateur</th>
-                  <th style={{ padding: "8px" }}>Synthèse</th>
-                  <th style={{ padding: "8px" }}>Runs / Succès</th>
+                  <th style={{ padding: "8px" }}>Research</th>
+                  <th style={{ padding: "8px" }}>Review</th>
+                  <th style={{ padding: "8px" }}>Browser</th>
+                  <th style={{ padding: "8px" }}>Synthesis</th>
+                  <th style={{ padding: "8px" }}>Runs / Success</th>
                 </tr>
               </thead>
               <tbody>
@@ -867,7 +867,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                         color: "var(--text-muted, #888)",
                       }}
                     >
-                      Aucune donnée de routage disponible.
+                      No routing data available.
                     </td>
                   </tr>
                 ) : (
@@ -881,7 +881,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                       </td>
                       <td style={{ padding: "8px" }}>
                         <span
-                          className={`badge ${r.authStatus === "authenticated" ? "succes" : "attention"}`}
+                          className={`badge ${r.authStatus === "authenticated" ? "success" : "attention"}`}
                         >
                           {r.authStatus}
                         </span>
@@ -912,16 +912,15 @@ export function Agents({ api }: { api: DashboardApi }) {
             className="carte"
             style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}
           >
-            <h4 style={{ margin: "0 0 10px 0" }}>Simulateur d'évaluation du routage</h4>
+            <h4 style={{ margin: "0 0 10px 0" }}>Routing Evaluation Simulator</h4>
             <p className="faible" style={{ marginBottom: "12px" }}>
-              Testez quelle route et quel agent l'orchestrateur sélectionne pour une instruction
-              donnée.
+              Test which route and agent the orchestrator selects for a given instruction.
             </p>
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
               <input
                 className="champ"
                 type="text"
-                placeholder="Ex : Corrige le bug dans services/api/src/auth.ts et ajoute un test vitest"
+                placeholder="e.g. Fix the bug in services/api/src/auth.ts and add a vitest test"
                 value={testRoutingInstruction}
                 onChange={(e) => setTestRoutingInstruction(e.target.value)}
                 onKeyDown={(e) => {
@@ -935,7 +934,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                 disabled={routingLoading || !testRoutingInstruction.trim()}
                 onClick={() => void handleEvaluateRouting()}
               >
-                {routingLoading ? "Évaluation…" : "Évaluer"}
+                {routingLoading ? "Evaluating…" : "Evaluate"}
               </button>
             </div>
 
@@ -951,18 +950,18 @@ export function Agents({ api }: { api: DashboardApi }) {
                   style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}
                 >
                   <div>
-                    <strong>Catégorie :</strong>{" "}
+                    <strong>Category:</strong>{" "}
                     <span className="badge">
                       {routingEvaluation.classification.primaryCategory}
                     </span>
                   </div>
                   <div>
-                    <strong>Complexité :</strong>{" "}
+                    <strong>Complexity:</strong>{" "}
                     {routingEvaluation.classification.estimatedComplexity}
                   </div>
                   <div>
-                    <strong>Navigateur requis :</strong>{" "}
-                    {routingEvaluation.classification.requiresBrowser ? "Oui" : "Non"}
+                    <strong>Browser required:</strong>{" "}
+                    {routingEvaluation.classification.requiresBrowser ? "Yes" : "No"}
                   </div>
                 </div>
 
@@ -992,7 +991,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                         </strong>{" "}
                         {idx === 0 && agent.isAvailable ? (
                           <span style={{ color: "#28a745", fontWeight: "bold", marginLeft: "6px" }}>
-                            ★ Recommandé
+                            ★ Recommended
                           </span>
                         ) : null}
                         {!agent.isAvailable ? (
@@ -1003,7 +1002,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                         <div className="faible" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
                           Compat: {agent.breakdown.compatibility} · Auth:{" "}
                           {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·
-                          Fiabilité: {agent.breakdown.health} · Perf: {agent.breakdown.performance}
+                          Reliability: {agent.breakdown.health} · Perf: {agent.breakdown.performance}
                         </div>
                       </div>
                       <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
@@ -1039,22 +1038,22 @@ function normalizeProfileName(value: string): string {
 }
 
 function percent(value: number | null): string {
-  return value === null ? "inconnu" : `${value} %`;
+  return value === null ? "unknown" : `${value} %`;
 }
 
 function healthLabel(status: AgentRegistry["configured"][number]["status"]): string {
   switch (status) {
     case "available":
-      return "Disponible";
+      return "Available";
     case "degraded":
-      return "Dégradé";
+      return "Degraded";
     case "cooldown":
-      return "En pause";
+      return "Cooling down";
     case "quota_exhausted":
-      return "Quota atteint";
+      return "Quota exhausted";
     case "auth_required":
-      return "Connexion requise";
+      return "Authentication required";
     default:
-      return "Non mesuré";
+      return "Unmeasured";
   }
 }

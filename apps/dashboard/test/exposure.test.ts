@@ -4,42 +4,33 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Ce que le tableau de bord ne demande pas.
+ * Structural assertions verifying dashboard isolation.
  *
- * La vraie garantie de non-divulgation du raisonnement est **côté serveur** : la
- * projection ne lit jamais le transcript, et le schéma Zod de la réponse ne
- * contient pas de champ pour le porter. Un client ne peut pas afficher ce qu'on
- * ne lui envoie pas.
+ * The primary guarantee of reasoning non-disclosure is server-side: the projection
+ * never reads transcripts, and the response schema contains no field to carry it.
+ * A client cannot display what the server does not send.
  *
- * Ces tests sont la seconde barrière. Ils ne remplacent pas la première ; ils
- * empêchent qu'on la contourne un jour depuis ce côté-ci — en ajoutant une route
- * « pour déboguer », en lisant un champ qui n'aurait pas dû exister, en tapant
- * dans une API voisine. Ce sont des vérifications **structurelles** : elles ne
- * décrivent pas un comportement, elles constatent une absence.
+ * These tests act as a defense-in-depth barrier preventing regression from the UI side.
  */
 
-const racine = fileURLToPath(new URL("..", import.meta.url));
+const root = fileURLToPath(new URL("..", import.meta.url));
 
-function fichiers(dossier: string): string[] {
-  const trouves: string[] = [];
+function walkFiles(dir: string): string[] {
+  const found: string[] = [];
 
-  for (const entree of readdirSync(dossier)) {
-    const chemin = join(dossier, entree);
-    if (statSync(chemin).isDirectory()) trouves.push(...fichiers(chemin));
-    else if (/\.tsx?$/.test(entree)) trouves.push(chemin);
+  for (const entry of readdirSync(dir)) {
+    const filePath = join(dir, entry);
+    if (statSync(filePath).isDirectory()) found.push(...walkFiles(filePath));
+    else if (/\.tsx?$/.test(entry)) found.push(filePath);
   }
 
-  return trouves;
+  return found;
 }
 
 /**
- * Retire commentaires et chaînes.
- *
- * Sans cela, la prose qui explique *pourquoi* `providerBlocks` est proscrit
- * ferait échouer le test qui l'interdit — et on finirait par supprimer
- * l'explication pour faire passer la vérification.
+ * Strips comments and string literals to inspect AST tokens only.
  */
-function codeSeul(source: string): string {
+function stripCommentsAndStrings(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/\/\/[^\n]*/g, " ")
@@ -48,83 +39,78 @@ function codeSeul(source: string): string {
     .replace(/`(?:[^`\\]|\\.)*`/g, "``");
 }
 
-const sources = fichiers(join(racine, "src")).map((chemin) => ({
-  chemin: chemin.slice(racine.length).replace(/\\/g, "/"),
-  code: codeSeul(readFileSync(chemin, "utf8")),
-  brut: readFileSync(chemin, "utf8"),
+const sources = walkFiles(join(root, "src")).map((filePath) => ({
+  path: filePath.slice(root.length).replace(/\\/g, "/"),
+  code: stripCommentsAndStrings(readFileSync(filePath, "utf8")),
+  raw: readFileSync(filePath, "utf8"),
 }));
 
-describe("le raisonnement n'est jamais demandé", () => {
-  it("aucun champ de transcript n'est lu", () => {
-    const interdits = ["providerBlocks", "callSignatures", "pendingConfirmation", "thinking"];
+describe("reasoning is never requested", () => {
+  it("never reads transcript fields", () => {
+    const forbidden = ["providerBlocks", "callSignatures", "pendingConfirmation", "thinking"];
 
-    const fautifs = sources.filter((fichier) =>
-      interdits.some((champ) => fichier.code.includes(champ)),
+    const violations = sources.filter((file) =>
+      forbidden.some((field) => file.code.includes(field)),
     );
 
-    expect(fautifs.map((fichier) => fichier.chemin)).toEqual([]);
+    expect(violations.map((file) => file.path)).toEqual([]);
   });
 
-  it("le type d'un run ne déclare aucun champ interdit", () => {
-    const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
-    const bloc = /export interface AgentRunRow \{([\s\S]*?)\n\}/.exec(api);
+  it("agent run row type does not declare forbidden fields", () => {
+    const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
+    const block = /export interface AgentRunRow \{([\s\S]*?)\n\}/.exec(api);
 
-    expect(bloc).not.toBeNull();
+    expect(block).not.toBeNull();
 
-    // Le contrat, lu depuis le code : ce qui n'est pas ici ne s'affiche pas.
-    for (const champ of ["messages", "transcript", "providerBlocks", "content"]) {
-      expect(bloc?.[1] ?? "").not.toContain(champ);
+    for (const field of ["messages", "transcript", "providerBlocks", "content"]) {
+      expect(block?.[1] ?? "").not.toContain(field);
     }
   });
 });
 
-describe("l'administration reste bornée", () => {
-  it("les mutations passent toutes par le client authentifié", () => {
-    const source = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+describe("administration scope remains bounded", () => {
+  it("all mutations go through authenticated client", () => {
+    const source = readFileSync(join(root, "src/lib/api.ts"), "utf8");
     expect(source).not.toContain("fetch(");
     expect(source).not.toContain("XMLHttpRequest");
     expect(source).toContain("authorizedRequest");
   });
 
-  it("n'appelle que les surfaces d'administration explicitement autorisées", () => {
-    const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
-    const chemins = [...api.matchAll(/"(\/api\/v1\/[^"`]*)"/g)].map((match) => match[1] ?? "");
-    const gabarits = [...api.matchAll(/`(\/api\/v1\/[^`]*)`/g)].map((match) => match[1] ?? "");
+  it("only calls explicitly permitted administrative routes", () => {
+    const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
+    const paths = [...api.matchAll(/"(\/api\/v1\/[^"`]*)"/g)].map((match) => match[1] ?? "");
+    const templates = [...api.matchAll(/`(\/api\/v1\/[^`]*)`/g)].map((match) => match[1] ?? "");
 
-    for (const chemin of [...chemins, ...gabarits]) {
-      expect(chemin, chemin).toMatch(
+    for (const route of [...paths, ...templates]) {
+      expect(route, route).toMatch(
         /^\/api\/v1\/(dashboard|orchestrator|devices|tasks|memory|notifications|mission-control)(\/|$)/,
       );
     }
   });
 
-  it("la session est la seule exception, et elle passe par le cœur client", () => {
-    // `SessionManager` porte la connexion et le rafraîchissement : un second
-    // mécanisme serait un second endroit où se tromper sur l'expiration.
-    const client = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+  it("session is the only exception and delegates to client-core", () => {
+    const client = readFileSync(join(root, "src/lib/api.ts"), "utf8");
 
     expect(client).toContain("SessionManager");
     expect(client).not.toContain("/api/v1/auth/login");
   });
 });
 
-describe("aucun secret embarqué", () => {
-  it("le paquet ne contient pas de jeton en dur", () => {
-    for (const fichier of sources) {
+describe("no embedded secrets", () => {
+  it("package contains no hardcoded credentials", () => {
+    for (const file of sources) {
       expect(
-        /(api[_-]?key|secret|password|token)\s*[:=]\s*["'][^"']{8,}/i.test(fichier.code),
-        fichier.chemin,
+        /(api[_-]?key|secret|password|token)\s*[:=]\s*["'][^"']{8,}/i.test(file.code),
+        file.path,
       ).toBe(false);
     }
   });
 
-  it("les jetons ne sont jamais écrits dans un stockage navigateur permanent", () => {
-    // La session de l'onglet permet de survivre à F5, mais la fermeture de
-    // l'onglet efface les jetons. Le stockage permanent reste interdit.
-    for (const fichier of sources) {
-      expect(fichier.code, fichier.chemin).not.toContain("localStorage");
+  it("tokens are never stored in permanent browser storage", () => {
+    for (const file of sources) {
+      expect(file.code, file.path).not.toContain("localStorage");
     }
-    const api = readFileSync(join(racine, "src/lib/api.ts"), "utf8");
+    const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
     expect(api).toContain("sessionStorage");
   });
 });

@@ -79,7 +79,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         setActiveMission(mission.missionId);
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "NEXUS n'a pas pu démarrer la mission.");
+        setError(cause instanceof Error ? cause.message : "NEXUS could not start the mission.");
       });
   };
 
@@ -89,16 +89,16 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         {messages.length === 0 ? (
           <div className="chat-welcome">
             <div className="nexus-mark">N</div>
-            <h2>Que veux-tu accomplir&nbsp;?</h2>
+            <h2>What would you like to accomplish?</h2>
             <p>
-              Parle à NEXUS. Il choisit les agents, répartit le travail, confronte leurs réponses et
-              te livre un seul résultat.
+              Talk to NEXUS. It selects agents, distributes work, compares their answers, and
+              delivers a single outcome.
             </p>
           </div>
         ) : null}
         {messages.map((message) => (
           <article key={message.id} className={`chat-message ${message.role}`}>
-            <div className="chat-role">{message.role === "user" ? "Toi" : "NEXUS"}</div>
+            <div className="chat-role">{message.role === "user" ? "You" : "NEXUS"}</div>
             {message.mission === undefined ? <div className="chat-text">{message.text}</div> : null}
             {message.mission !== undefined ? <MissionReply mission={message.mission} /> : null}
           </article>
@@ -115,11 +115,11 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         }}
       >
         <textarea
-          aria-label="Mission à confier à NEXUS"
+          aria-label="Mission for NEXUS"
           value={draft}
           disabled={activeMission !== null}
           placeholder={
-            activeMission === null ? "Donne une mission à NEXUS…" : "Les agents travaillent…"
+            activeMission === null ? "Give NEXUS a mission…" : "Agents are working…"
           }
           rows={3}
           onChange={(event) => setDraft(event.target.value)}
@@ -131,7 +131,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           }}
         />
         <button type="submit" disabled={activeMission !== null || draft.trim().length === 0}>
-          Envoyer
+          Send
         </button>
       </form>
     </section>
@@ -146,7 +146,7 @@ function readMissionFromUrl(): string | null {
 function pendingMission(missionId: string): OrchestratedMission {
   return {
     missionId,
-    title: "Mission NEXUS",
+    title: "NEXUS Mission",
     state: "pending",
     profiles: [],
     completedTasks: 0,
@@ -159,7 +159,7 @@ function pendingMission(missionId: string): OrchestratedMission {
 function MissionReply({ mission }: { mission: OrchestratedMission }) {
   if (mission.response !== null) return <div className="chat-text">{mission.response}</div>;
   if (mission.error !== null || mission.state === "failed") {
-    return <div className="chat-error">{mission.error ?? "La mission a échoué."}</div>;
+    return <div className="chat-error">{mission.error ?? "Mission failed."}</div>;
   }
   const percent =
     mission.totalTasks === 0 ? 0 : Math.round((mission.completedTasks / mission.totalTasks) * 100);
@@ -173,7 +173,7 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
       <div
         className="progress-track"
         role="progressbar"
-        aria-label="Progression de la mission"
+        aria-label="Mission progress"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
@@ -181,7 +181,7 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
         <div style={{ width: `${String(percent)}%` }} />
       </div>
       <div className="faible">
-        NEXUS orchestre la mission · {mission.completedTasks}/{mission.totalTasks} tâches terminées
+        NEXUS orchestrating mission · {mission.completedTasks}/{mission.totalTasks} tasks completed
       </div>
     </div>
   );

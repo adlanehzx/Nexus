@@ -2,20 +2,16 @@ import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-
 import type { HttpClient, SecureStorage } from "@nexus/client-core";
 
 /**
- * Le client du tableau de bord.
+ * Dashboard API client.
  *
- * Il réutilise `SessionManager` de `@nexus/client-core` — même connexion, même
- * rafraîchissement transparent, même trousseau — parce qu'un second mécanisme de
- * session serait un second endroit où se tromper sur l'expiration d'un jeton.
+ * Reuses `SessionManager` from `@nexus/client-core` — same connection, same
+ * transparent refresh, same keyring — avoiding separate token expiration logic.
  *
- * Les mutations sont volontairement centralisées ici. Elles passent toutes par
- * la session administrateur, les validations du cœur et, pour les opérations
- * irréversibles, une confirmation explicite dans l'interface.
+ * Mutations are centralized here. They flow through the administrator session,
+ * core validations, and explicit user confirmations for irreversible actions.
  *
- * Les types décrivent ce que le serveur envoie **réellement** — c'est-à-dire ce
- * qu'il a le droit d'envoyer. On n'y trouvera ni transcript, ni bloc de
- * raisonnement : la frontière est tenue côté serveur, et ces types en sont le
- * reflet, pas la garantie.
+ * Types represent what the server actually sends. No transcripts or reasoning
+ * blocks appear here; the boundary is enforced on the server.
  */
 
 export interface HealthEntry {
@@ -125,11 +121,10 @@ export interface TaskDetail extends TaskRow {
 }
 
 /**
- * Un run, tel que le serveur le rend.
+ * An agent run as reported by the server.
  *
- * À lire pour ce qui **n'y est pas** : ni `messages`, ni `providerBlocks`, ni
- * transcript. Seulement statut, action, outil, progression, résultat, erreur,
- * métriques.
+ * Note what is omitted: no `messages`, no `providerBlocks`, no
+ * transcript. Only status, action, tool, progress, result, error, and metrics.
  */
 export interface AgentRunRow {
   runId: string;
@@ -687,7 +682,7 @@ export class DashboardApi {
 
   cancelTask(taskId: string): Promise<{ cancelled: boolean }> {
     return this.#request("POST", `/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
-      reason: "annulé depuis la supervision NEXUS",
+      reason: "cancelled from NEXUS supervision",
     });
   }
 
@@ -1043,10 +1038,10 @@ export class DashboardApi {
     const response = await this.#session.authorizedRequest({ method, path, body });
 
     if (response.status === 403 || response.status === 404) {
-      // Le serveur ne distingue pas « pas administrateur » de « n'existe pas » —
-      // délibérément, pour ne pas annoncer la surface d'administration. Le
-      // client hérite de cette prudence et n'invente pas la distinction.
-      throw new ForbiddenError("Cette section n'est pas accessible avec ce compte.");
+      // The server does not distinguish "not admin" from "does not exist" —
+      // deliberately avoiding disclosing the administrative surface. The client
+      // preserves this distinction without leaking details.
+      throw new ForbiddenError("This section is not accessible with this account.");
     }
 
     if (response.status < 200 || response.status >= 300) {
@@ -1064,15 +1059,14 @@ function messageOf(body: unknown): string {
       return String(error.message);
     }
   }
-  return "La requête a échoué.";
+  return "Request failed.";
 }
 
 /**
- * Assemble une session pour le tableau de bord.
+ * Assembles a session for the dashboard.
  *
- * Les jetons sont limités à la session de l'onglet : ils survivent à un
- * rafraîchissement, mais disparaissent à sa fermeture. Aucun jeton n'est écrit
- * dans le stockage permanent du navigateur.
+ * Tokens are scoped to the browser tab session: they survive refreshes but
+ * are cleared when the tab closes. No tokens are written to permanent storage.
  */
 export function createSession(
   baseUrl: string,
@@ -1080,8 +1074,8 @@ export function createSession(
 ): SessionManager {
   const http: HttpClient = new FetchHttpClient(baseUrl);
   return new SessionManager({
-    http,
     storage: new TabSessionStorage(),
+    http,
     ...(onSignedOut === undefined ? {} : { onSignedOut }),
   });
 }
@@ -1109,7 +1103,7 @@ class TabSessionStorage implements SecureStorage {
     try {
       window.sessionStorage.removeItem(key);
     } catch {
-      // Le stockage peut être indisponible ; le repli est vidé ci-dessous.
+      // Storage may be unavailable; fallback is cleared below.
     }
     await this.#fallback.remove(key);
   }

@@ -1,35 +1,29 @@
 import type { ActivityEntry, HealthEntry, TaskRow, WorkerRow } from "./api.js";
 
 /**
- * Le peu de logique que le tableau de bord contient.
+ * Core presentation logic for the dashboard.
  *
- * Un écran de supervision doit trancher : à quoi la barre d'état ressemble-t-elle
- * quand un exécutant est déconnecté et qu'un serveur MCP n'a jamais été branché ?
- * Ce genre de question a une bonne réponse et plusieurs mauvaises, et les
- * mauvaises ne se voient qu'au moment où l'on a besoin du tableau de bord —
- * c'est-à-dire trop tard. Elles sont donc résolues ici, et éprouvées.
+ * A monitoring screen must make definitive decisions: what does the status bar
+ * look like when a worker is disconnected and an MCP server has never been connected?
+ * These decisions are resolved here and covered by automated tests.
  *
- * Les composants, eux, ne décident de rien.
+ * Presentation components stay strictly declarative.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Santé
+// Health
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type OverallHealth = "ok" | "degraded" | "down" | "unknown";
 
 /**
- * Santé globale à partir des sous-systèmes.
+ * Computes overall health from subsystem status entries.
  *
- * Deux règles, et la seconde est celle qu'on oublie :
- *
- *  1. **le pire l'emporte.** Un système dont un composant est à terre n'est pas
- *     « partiellement en ligne » ;
- *  2. **un composant non configuré ne compte pas.** Ne jamais avoir branché de
- *     serveur MCP n'est pas une panne, et le peindre en rouge enverrait chercher
- *     un incident qui n'existe pas. S'il n'y a *que* du non-configuré, la
- *     réponse est `unknown` — on ne sait rien, et le dire vaut mieux que
- *     d'afficher un vert qui ne repose sur rien.
+ * Two rules:
+ *  1. **Worst state wins.** A system with a down component is not "partially online".
+ *  2. **Unconfigured components do not count as failures.** Never having connected
+ *     an MCP server is not an incident. If only unconfigured components exist,
+ *     the status is `unknown`.
  */
 export function overallHealth(entries: readonly HealthEntry[]): OverallHealth {
   const measured = entries.filter((entry) => entry.level !== "unconfigured");
@@ -41,26 +35,23 @@ export function overallHealth(entries: readonly HealthEntry[]): OverallHealth {
 }
 
 export const HEALTH_LABELS: Record<HealthEntry["level"], string> = {
-  ok: "opérationnel",
-  degraded: "dégradé",
-  down: "hors service",
-  unconfigured: "non configuré",
+  ok: "operational",
+  degraded: "degraded",
+  down: "down",
+  unconfigured: "unconfigured",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exécutants
+// Workers
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type WorkerState = "accepting" | "saturated" | "degraded" | "disconnected" | "revoked";
 
 /**
- * État affiché d'un exécutant.
+ * Displayed worker state.
  *
- * L'ordre des tests **est** la décision. Un appareil révoqué peut rester marqué
- * `ONLINE` le temps que la déconnexion se propage ; l'afficher comme disponible
- * pendant ces quelques secondes serait le pire moment pour se tromper. La
- * révocation prime donc sur tout, puis la connexion réelle du canal, puis
- * seulement la charge.
+ * Revocation takes precedence over everything else, followed by actual
+ * connection status, and finally current capacity load.
  */
 export function workerState(worker: WorkerRow): WorkerState {
   if (worker.trust === "REVOKED" || worker.status === "REVOKED") return "revoked";
@@ -71,23 +62,19 @@ export function workerState(worker: WorkerRow): WorkerState {
 }
 
 export const WORKER_LABELS: Record<WorkerState, string> = {
-  accepting: "disponible",
-  saturated: "saturé",
-  degraded: "dégradé",
-  disconnected: "déconnecté",
-  revoked: "révoqué",
+  accepting: "available",
+  saturated: "saturated",
+  degraded: "degraded",
+  disconnected: "disconnected",
+  revoked: "revoked",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tâches
+// Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Les exécutants réellement retenus pour une tâche.
- *
- * Le plan déclare des capacités ; c'est le cœur qui choisit. La page de tâche
- * doit donc montrer **ce qui a été décidé**, pas ce qui avait été demandé — sans
- * quoi on ne peut pas répondre à « pourquoi ça a tourné là ? ».
+ * Computes assigned workers for a task.
  */
 export function selectedWorkers(task: TaskRow): { id: string; name: string; steps: number }[] {
   const counts = new Map<string, { name: string; steps: number }>();
@@ -105,16 +92,16 @@ export function selectedWorkers(task: TaskRow): { id: string; name: string; step
   return [...counts.entries()].map(([id, value]) => ({ id, ...value }));
 }
 
-/** Étapes en échec, celles qu'on vient chercher en premier. */
+/** Failed steps within a task. */
 export function failedSteps(task: TaskRow): TaskRow["steps"] {
   return task.steps.filter((step) => step.error !== null || step.status === "failed");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mise en forme
+// Formatting
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Durée lisible. Les millisecondes n'apprennent rien au-delà de la seconde. */
+/** Human-readable duration. */
 export function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
   if (ms < 1_000) return `${String(Math.round(ms))} ms`;
@@ -126,27 +113,23 @@ export function formatDuration(ms: number | null): string {
 }
 
 /**
- * Âge d'un horodatage, en relatif.
- *
- * « il y a 3 min » se lit d'un coup d'œil ; une date absolue oblige à calculer.
- * Sur un écran de supervision, ce calcul est justement ce qu'on n'a pas le temps
- * de faire.
+ * Relative age of an ISO timestamp.
  */
 export function formatAge(iso: string | null, now: Date = new Date()): string {
-  if (iso === null) return "jamais";
+  if (iso === null) return "never";
 
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "—";
 
   const seconds = Math.max(0, Math.round((now.getTime() - then) / 1_000));
-  if (seconds < 60) return `il y a ${String(seconds)} s`;
-  if (seconds < 3_600) return `il y a ${String(Math.floor(seconds / 60))} min`;
-  if (seconds < 86_400) return `il y a ${String(Math.floor(seconds / 3_600))} h`;
+  if (seconds < 60) return `${String(seconds)}s ago`;
+  if (seconds < 3_600) return `${String(Math.floor(seconds / 60))}m ago`;
+  if (seconds < 86_400) return `${String(Math.floor(seconds / 3_600))}h ago`;
 
-  return `il y a ${String(Math.floor(seconds / 86_400))} j`;
+  return `${String(Math.floor(seconds / 86_400))}d ago`;
 }
 
-/** Nombre compact. Un compteur à six chiffres déborde toutes les colonnes. */
+/** Compact number formatter. */
 export function formatCount(value: number): string {
   if (value < 1_000) return String(value);
   if (value < 1_000_000) return `${(value / 1_000).toFixed(1)} k`;
@@ -154,11 +137,7 @@ export function formatCount(value: number): string {
 }
 
 /**
- * Activité récente, la plus fraîche d'abord.
- *
- * Le tri est fait côté serveur, mais il est refait ici : les entrées de
- * plusieurs sources se rejoignent, et une liste de supervision qui n'est pas
- * chronologique induit en erreur bien plus qu'elle n'informe.
+ * Sorts recent activity in descending chronological order.
  */
 export function sortActivity(entries: readonly ActivityEntry[]): ActivityEntry[] {
   return [...entries].sort((left, right) => (left.at < right.at ? 1 : -1));

@@ -2,11 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
- * Build du tableau de bord.
+ * Dashboard build configuration.
  *
- * `base: "./"` : il est servi indifféremment à la racine d'un domaine ou sous un
- * sous-chemin derrière un reverse proxy, et des chemins absolus casseraient le
- * second cas sans prévenir.
+ * `base: "./"`: it is served either at a domain root or under a subpath behind
+ * a reverse proxy, and absolute paths would silently break the second case.
  */
 export default defineConfig({
   plugins: [react()],

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Les briques du tableau de bord.
+ * Dashboard UI building blocks.
  *
- * Elles ne décident de rien : `lib/format.ts` tranche, elles dessinent. C'est ce
- * qui permet d'éprouver les décisions sans monter un DOM.
+ * Presentation-only components that render decisions determined by `lib/format.ts`.
  */
 
 export function Metric(props: { value: string; label: string; alert?: boolean }) {
@@ -16,7 +15,7 @@ export function Metric(props: { value: string; label: string; alert?: boolean })
   );
 }
 
-/** Pastille d'état. La classe porte la couleur, le texte porte le sens. */
+/** Status badge with tone color and descriptive label. */
 export function State({ tone, label }: { tone: string; label: string }) {
   return (
     <span className="etat">
@@ -33,7 +32,7 @@ export function Bar({ percent }: { percent: number }) {
       className="jauge"
       title={`${String(value)} %`}
       role="progressbar"
-      aria-label="Utilisation"
+      aria-label="Usage"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={value}
@@ -45,8 +44,6 @@ export function Bar({ percent }: { percent: number }) {
 
 export function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
-    // Un tableau large défile dans son propre conteneur : la page, elle, ne doit
-    // jamais défiler horizontalement.
     <div className="scroll-x">
       <table>
         <thead>
@@ -65,21 +62,14 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 export function Empty({ children }: { children: React.ReactNode }) {
   return (
     <div className="vide">
-      <strong>Aucune donnée</strong>
+      <strong>No data</strong>
       <span>{children}</span>
     </div>
   );
 }
 
 /**
- * Chargement d'une section.
- *
- * Une section qui échoue n'emporte pas les autres : chacune porte son état, et
- * un serveur MCP injoignable ne doit pas vider l'écran des exécutants.
- *
- * `reload` est exposé pour le rafraîchissement manuel — et il n'y a **pas** de
- * rafraîchissement automatique par défaut : un tableau qui se réordonne pendant
- * qu'on le lit fait perdre la ligne qu'on suivait.
+ * Section loader hook with isolated error and reload states.
  */
 export function useSection<T>(load: () => Promise<T>): {
   data: T | undefined;
@@ -104,7 +94,7 @@ export function useSection<T>(load: () => Promise<T>): {
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
-        setError(cause instanceof Error ? cause.message : "Chargement impossible.");
+        setError(cause instanceof Error ? cause.message : "Failed to load.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -113,8 +103,6 @@ export function useSection<T>(load: () => Promise<T>): {
     return () => {
       cancelled = true;
     };
-    // `load` est recréée à chaque rendu par les appelants ; l'inclure
-    // relancerait la requête en boucle. `tick` est le déclencheur explicite.
   }, [tick]);
 
   const reload = useCallback(() => {
@@ -124,30 +112,30 @@ export function useSection<T>(load: () => Promise<T>): {
   return { data, error, loading, reload };
 }
 
-/** Enveloppe une section : chargement, erreur, contenu. */
+/** Wraps a section: loading, error, and content rendering. */
 export function Section<T>(props: {
   state: ReturnType<typeof useSection<T>>;
   children: (data: T) => React.ReactNode;
 }) {
   if (props.state.error !== undefined) {
     return (
-      <div className="banniere erreur section-error" role="alert">
+      <div className="banner error section-error" role="alert">
         <span>{props.state.error}</span>
         <button className="bouton compact" type="button" onClick={props.state.reload}>
-          Réessayer
+          Retry
         </button>
       </div>
     );
   }
   if (props.state.data === undefined) {
     return props.state.loading ? (
-      <div className="loading-state" role="status" aria-label="Chargement en cours">
+      <div className="loading-state" role="status" aria-label="Loading in progress">
         <span />
         <span />
         <span />
       </div>
     ) : (
-      <Empty>Aucune donnée disponible pour cette section.</Empty>
+      <Empty>No data available for this section.</Empty>
     );
   }
   return <>{props.children(props.state.data)}</>;

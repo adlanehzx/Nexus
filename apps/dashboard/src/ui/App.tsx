@@ -28,31 +28,31 @@ function backendUrl(): string {
 
 const SUPERVISION_SECTIONS = [
   {
-    label: "Piloter",
+    label: "Control",
     items: [
-      ["overview", "Vue d’ensemble", "overview"],
-      ["tasks", "Tâches", "tasks"],
-      ["runs", "Runs agents", "runs"],
-      ["mission-control", "Missions ACP", "missions"],
+      ["overview", "Overview", "overview"],
+      ["tasks", "Tasks", "tasks"],
+      ["runs", "Agent runs", "runs"],
+      ["mission-control", "ACP missions", "missions"],
     ],
   },
   {
     label: "Infrastructure",
     items: [
-      ["devices", "Appareils", "devices"],
-      ["workers", "Exécutants", "workers"],
-      ["tools", "Outils", "tools"],
+      ["devices", "Devices", "devices"],
+      ["workers", "Workers", "workers"],
+      ["tools", "Tools", "tools"],
       ["mcp", "MCP", "mcp"],
-      ["browser", "Navigateur", "browser"],
+      ["browser", "Browser", "browser"],
     ],
   },
   {
-    label: "Gouvernance",
+    label: "Governance",
     items: [
-      ["memory", "Mémoire", "memory"],
+      ["memory", "Memory", "memory"],
       ["notifications", "Notifications", "notifications"],
-      ["security", "Sécurité", "security"],
-      ["logs", "Journaux", "logs"],
+      ["security", "Security", "security"],
+      ["logs", "Logs", "logs"],
     ],
   },
 ] as const;
@@ -61,34 +61,34 @@ type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
 type SectionId = SupervisionId | "chat" | "agents" | "settings";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
-  chat: { title: "Conversation", description: "Confie une mission, NEXUS orchestre le reste." },
-  agents: { title: "Agents", description: "Capacités, disponibilité et quotas de ton équipe IA." },
-  settings: { title: "Configuration", description: "Règles persistantes du moteur multi-agents." },
+  chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
+  agents: { title: "Agents", description: "Capabilities, availability, and quotas of your AI team." },
+  settings: { title: "Settings", description: "Persistent rules of the multi-agent engine." },
   overview: {
-    title: "Vue d’ensemble",
-    description: "État opérationnel de NEXUS en un coup d’œil.",
+    title: "Overview",
+    description: "Operational state of NEXUS at a glance.",
   },
-  devices: { title: "Appareils", description: "Machines appairées, confiance et permissions." },
-  workers: { title: "Exécutants", description: "Capacité disponible pour exécuter les tâches." },
-  tasks: { title: "Tâches", description: "File de travail, dépendances et résultats." },
-  runs: { title: "Runs agents", description: "Exécutions unitaires et confirmations en attente." },
+  devices: { title: "Devices", description: "Paired machines, trust levels, and permissions." },
+  workers: { title: "Workers", description: "Available capacity to execute tasks." },
+  tasks: { title: "Tasks", description: "Work queue, dependencies, and results." },
+  runs: { title: "Agent runs", description: "Execution traces and pending confirmations." },
   tools: {
-    title: "Outils",
-    description: "Capacités natives, ACP et navigateur exposées aux agents.",
+    title: "Tools",
+    description: "Native, ACP, and browser capabilities exposed to agents.",
   },
-  mcp: { title: "MCP", description: "Serveurs de contexte et outils connectés." },
-  browser: { title: "Navigateur", description: "Sessions Chromium pilotables sans clé API LLM." },
+  mcp: { title: "MCP", description: "Context servers and connected tools." },
+  browser: { title: "Browser", description: "Controllable Chromium sessions without LLM API key." },
   "mission-control": {
-    title: "Missions ACP",
-    description: "Orchestration, progression et reprise des missions autonomes.",
+    title: "ACP missions",
+    description: "Orchestration, progress, and recovery of autonomous missions.",
   },
   memory: {
-    title: "Mémoire",
-    description: "Contexte durable réinjecté dans les prochaines missions.",
+    title: "Memory",
+    description: "Durable context re-injected into upcoming missions.",
   },
-  notifications: { title: "Notifications", description: "Événements qui demandent ton attention." },
-  security: { title: "Sécurité", description: "Audit des accès, secrets et garde-fous." },
-  logs: { title: "Journaux", description: "Diagnostic corrélé de l’ensemble de la plateforme." },
+  notifications: { title: "Notifications", description: "Events requiring your attention." },
+  security: { title: "Security", description: "Audit logs, secrets, and guardrails." },
+  logs: { title: "Logs", description: "Correlated platform-wide diagnostic logs." },
 };
 
 export function App() {
@@ -114,7 +114,7 @@ export function App() {
 
   if (restoringSession) {
     return (
-      <main className="session-restoring" role="status" aria-label="Restauration de la session">
+      <main className="session-restoring" role="status" aria-label="Restoring session">
         <span className="brand-mark" aria-hidden="true">
           N
         </span>
@@ -148,11 +148,11 @@ export function App() {
             <small>Mission control</small>
           </span>
         </button>
-        <nav className="navigation" aria-label="Navigation principale">
+        <nav className="navigation" aria-label="Main navigation">
           <div className="nav-group nav-primary">
             <NavItem
               id="chat"
-              label="Conversation"
+              label="Chat"
               icon="chat"
               current={section}
               onSelect={navigate}
@@ -166,7 +166,7 @@ export function App() {
             />
             <NavItem
               id="settings"
-              label="Configuration"
+              label="Settings"
               icon="settings"
               current={section}
               onSelect={navigate}
@@ -191,8 +191,8 @@ export function App() {
         <div className="sidebar-footer">
           <span className="system-dot" aria-hidden="true" />
           <span>
-            <strong>Système local</strong>
-            <small>Connecté</small>
+            <strong>Local system</strong>
+            <small>Connected</small>
           </span>
         </div>
       </aside>
@@ -201,7 +201,7 @@ export function App() {
         <header className="entete">
           <div>
             <div className="eyebrow">
-              NEXUS / {section === "chat" ? "ESPACE DE TRAVAIL" : "SUPERVISION"}
+              NEXUS / {section === "chat" ? "WORKSPACE" : "SUPERVISION"}
             </div>
             <h1>{meta.title}</h1>
             <p>{meta.description}</p>
@@ -222,7 +222,7 @@ export function App() {
                 >
                   <path d="M20 6v5h-5M4 18v-5h5M6.1 9a7 7 0 0 1 11.6-2.5L20 11M4 13l2.3 4.5A7 7 0 0 0 18 15" />
                 </svg>
-                Actualiser
+                Refresh
               </button>
             )}
             <button
@@ -230,7 +230,7 @@ export function App() {
               className="bouton logout-button"
               onClick={() => void session.logout().finally(() => setAuthenticated(false))}
             >
-              Déconnexion
+              Sign out
             </button>
           </div>
         </header>
@@ -356,11 +356,11 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
           <span>NEXUS</span>
         </div>
         <div className="login-intro">
-          <h1>Bon retour.</h1>
-          <p>Connecte-toi pour piloter tes agents et suivre leurs missions.</p>
+          <h1>Welcome back.</h1>
+          <p>Sign in to supervise your agents and track their missions.</p>
         </div>
         <form
-          className="connexion"
+          className="login-form"
           onSubmit={(event) => {
             event.preventDefault();
             setBusy(true);
@@ -369,24 +369,24 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
             setPassword("");
             void onSignIn(email.trim(), secret)
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Connexion impossible."),
+                setError(cause instanceof Error ? cause.message : "Sign-in failed."),
               )
               .finally(() => setBusy(false));
           }}
         >
           <label>
-            Adresse e-mail
+            Email address
             <input
               className="champ"
               type="email"
               autoComplete="username"
-              placeholder="nom@exemple.fr"
+              placeholder="name@example.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
           <label>
-            Mot de passe
+            Password
             <input
               className="champ"
               type="password"
@@ -401,15 +401,15 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
             className="bouton primary login-submit"
             disabled={busy || email.trim().length === 0 || password.length === 0}
           >
-            {busy ? "Connexion…" : "Se connecter"}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
           {error === null ? null : (
-            <div className="banniere erreur" role="alert">
+            <div className="banner error" role="alert">
               {error}
             </div>
           )}
         </form>
-        <p className="login-security">Session administrateur locale et sécurisée.</p>
+        <p className="login-security">Local secure administrator session.</p>
       </div>
     </main>
   );

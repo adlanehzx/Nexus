@@ -482,19 +482,26 @@ tbody tr:hover {
   color: #b8c6d6;
   font-size: 12px;
 }
-.banniere {
+.banniere,
+.banner {
   margin: 10px 0;
   padding: 10px 12px;
   border: 1px solid var(--bordure);
   border-radius: 9px;
   background: var(--surface-2);
 }
-.banniere.erreur {
+.banniere.erreur,
+.banniere.error,
+.banner.erreur,
+.banner.error {
   border-color: rgb(255 112 112 / 28%);
   background: rgb(255 112 112 / 7%);
   color: #ff9696;
 }
-.banniere.succes {
+.banniere.succes,
+.banniere.success,
+.banner.succes,
+.banner.success {
   border-color: rgb(80 216 144 / 28%);
   background: rgb(80 216 144 / 7%);
   color: var(--ok);
@@ -992,7 +999,7 @@ details.card[open] > summary {
   accent-color: var(--accent);
 }
 
-/* Connexion */
+/* Sign in */
 .login-page {
   display: grid;
   min-height: 100%;
@@ -1025,13 +1032,15 @@ details.card[open] > summary {
   color: var(--texte-faible);
   font-size: 13px;
 }
-.connexion {
+.connexion,
+.login-form {
   display: flex;
   width: 100%;
   flex-direction: column;
   gap: 15px;
 }
-.connexion label {
+.connexion label,
+.login-form label {
   display: grid;
   gap: 7px;
   color: #aebdcd;

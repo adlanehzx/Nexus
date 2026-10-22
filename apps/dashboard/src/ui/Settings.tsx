@@ -10,11 +10,11 @@ export function Settings({ api }: { api: DashboardApi }) {
     <div className="contenu settings-page">
       <div className="agents-heading">
         <div>
-          <h2>Configuration</h2>
-          <p className="faible">Paramètres persistants du moteur multi-agents NEXUS.</p>
+          <h2>Settings</h2>
+          <p className="faible">Persistent settings for the NEXUS multi-agent engine.</p>
         </div>
         <button className="bouton" type="button" onClick={state.reload}>
-          Actualiser
+          Refresh
         </button>
       </div>
       <Section state={state}>
@@ -42,17 +42,17 @@ function SecretsForm({
   const [error, setError] = useState<string | null>(null);
 
   const fail = (cause: unknown): void =>
-    setError(cause instanceof Error ? cause.message : "Action impossible.");
+    setError(cause instanceof Error ? cause.message : "Action failed.");
   return (
     <section className="settings-panel">
-      <h3>Coffre de secrets local</h3>
+      <h3>Local secret vault</h3>
       <p className="faible">
-        Les valeurs sont écrites dans le trousseau Linux et ne sont jamais relues par le navigateur.
-        Seuls les noms apparaissent ici.
+        Values are written to the Linux keyring and are never read back by the browser.
+        Only secret names appear here.
       </p>
       <div className="settings-grid">
         <label>
-          Nom
+          Name
           <input
             className="champ mono"
             value={name}
@@ -61,7 +61,7 @@ function SecretsForm({
           />
         </label>
         <label>
-          Valeur secrète
+          Secret value
           <input
             className="champ mono"
             type="password"
@@ -82,17 +82,17 @@ function SecretsForm({
               .saveSecret(name, secret)
               .then(() => {
                 setSecret("");
-                setMessage(`Secret ${name} enregistré.`);
+                setMessage(`Secret ${name} saved.`);
                 reload();
               })
               .catch(fail);
           }}
         >
-          Enregistrer
+          Save
         </button>
       </div>
       {names.length === 0 ? (
-        <p className="vide">Aucun secret enregistré.</p>
+        <p className="vide">No secrets stored.</p>
       ) : (
         <ul>
           {names.map((item) => (
@@ -102,24 +102,24 @@ function SecretsForm({
                 className="bouton danger"
                 type="button"
                 onClick={() => {
-                  if (window.confirm(`Supprimer le secret ${item} ?`))
+                  if (window.confirm(`Delete secret ${item}?`))
                     void api
                       .removeSecret(item)
                       .then(() => {
-                        setMessage(`Secret ${item} supprimé.`);
+                        setMessage(`Secret ${item} deleted.`);
                         reload();
                       })
                       .catch(fail);
                 }}
               >
-                Supprimer
+                Delete
               </button>
             </li>
           ))}
         </ul>
       )}
-      {message === null ? null : <p className="banniere succes">{message}</p>}
-      {error === null ? null : <p className="banniere erreur">{error}</p>}
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {error === null ? null : <p className="banner error">{error}</p>}
     </section>
   );
 }
@@ -167,7 +167,7 @@ function SettingsForm({
     <section className="settings-panel" style={{ marginTop: 0 }}>
       <div className="settings-grid">
         <label>
-          Délai maximal d’une tâche · secondes
+          Max task timeout · seconds
           <input
             className="champ"
             type="number"
@@ -178,7 +178,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Nombre maximal de tentatives
+          Max attempts
           <input
             className="champ"
             type="number"
@@ -189,7 +189,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Délai entre tentatives · secondes
+          Retry delay · seconds
           <input
             className="champ"
             type="number"
@@ -200,7 +200,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Budget de contexte · caractères
+          Context budget · characters
           <input
             className="champ"
             type="number"
@@ -218,10 +218,10 @@ function SettingsForm({
               setValue((current) => ({ ...current, quality_review: event.target.checked }))
             }
           />
-          Ajouter une revue qualité indépendante avant la synthèse finale
+          Add an independent quality review before final synthesis
         </label>
         <label className="settings-wide">
-          Priorité recherche · profils séparés par des virgules
+          Research priority · comma-separated profiles
           <input
             className="champ mono"
             value={value.research_priority.join(", ")}
@@ -229,7 +229,7 @@ function SettingsForm({
           />
         </label>
         <label className="settings-wide">
-          Priorité revue critique
+          Critical review priority
           <input
             className="champ mono"
             value={value.review_priority.join(", ")}
@@ -237,7 +237,7 @@ function SettingsForm({
           />
         </label>
         <label className="settings-wide">
-          Priorité synthèse finale
+          Final synthesis priority
           <input
             className="champ mono"
             value={value.synthesis_priority.join(", ")}
@@ -245,10 +245,10 @@ function SettingsForm({
           />
         </label>
         <div className="settings-wide policy-box">
-          <strong>Garde-fous non désactivables</strong>
+          <strong>Non-disableable guardrails</strong>
           <span className="faible">
-            Exécution ACP limitée au workspace, suppression sans chemin refusée, secrets absents des
-            réponses API, trading réel désactivé et authentification administrateur obligatoire.
+            ACP execution restricted to workspace, pathless deletion rejected, secrets excluded from
+            API responses, live trading disabled, and administrator authentication mandatory.
           </span>
         </div>
       </div>
@@ -265,20 +265,20 @@ function SettingsForm({
               .updateRuntimeSettings(value)
               .then((saved) => {
                 setValue(saved);
-                setMessage("Configuration enregistrée et appliquée aux prochaines missions.");
+                setMessage("Settings saved and applied to upcoming missions.");
                 reload();
               })
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Enregistrement impossible."),
+                setError(cause instanceof Error ? cause.message : "Unable to save settings."),
               )
               .finally(() => setBusy(false));
           }}
         >
-          {busy ? "Enregistrement…" : "Enregistrer"}
+          {busy ? "Saving…" : "Save"}
         </button>
       </div>
-      {message === null ? null : <p className="banniere succes">{message}</p>}
-      {error === null ? null : <p className="banniere erreur">{error}</p>}
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {error === null ? null : <p className="banner error">{error}</p>}
     </section>
   );
 }
