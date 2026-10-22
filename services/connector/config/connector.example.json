@@ -1,0 +1,15 @@
+{
+  "clients": [
+    {
+      "clientId": "nexus-desktop",
+      "comment": "Example only. Replace with the public key your own client generated.",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA3K1feBk+I762BaDsiA0ArngGUS5fF6+42j+l/jHpwSM=\n-----END PUBLIC KEY-----"
+    }
+  ],
+  "listen": {
+    "kind": "loopback",
+    "port": 8787
+  },
+  "acceptanceWindowMs": 30000,
+  "clockSkewMs": 5000
+}
