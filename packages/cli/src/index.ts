@@ -8,6 +8,8 @@ import { createBackup, restoreBackup, verifyBackup } from "./backup.js";
 import { policyCommand } from "./policy.js";
 import { voiceCommand } from "./voice.js";
 import { BROWSER_UNIT, MISSION_ENGINE_UNIT } from "./systemd.js";
+import { checkPrerequisites } from "./prerequisites.js";
+import { detectTailscale } from "./tailscale.js";
 
 /**
  * `nexus` — installation, diagnostics, and management of a NEXUS instance.
@@ -15,8 +17,8 @@ import { BROWSER_UNIT, MISSION_ENGINE_UNIT } from "./systemd.js";
 
 const USAGE = `nexus — installation, diagnostics, and management of a NEXUS instance
 
-  nexus doctor              diagnoses the installation and reports issues
-  nexus setup [options]     brings installation into compliance (idempotent)
+  nexus doctor              diagnoses the installation and reports actionable issues
+  nexus setup [options]     brings installation into compliance (idempotent, safe)
   nexus start [service]     starts services (engine, browser)
   nexus stop [service]      stops services
   nexus backup [options]    complete backup with automated rotation
@@ -30,9 +32,12 @@ Common Options
   --root <path>             target installation root instead of current directory
 
 Setup Options
+  --mode <docker|dev>       target environment (default: docker)
   --dry-run                 preview execution plan without writing changes
   --rotate-keys             regenerate existing persistent signing key
-  --api-url <url>           API base URL configured in systemd unit
+  --api-url <url>           API base URL configured in systemd unit and .env
+  --tailscale               automatically detect and propose Tailscale IP for PUBLIC_API_URL
+  --admin-email <email>     initial administrator email for onboarding guidance
 
 Backup Options
   --passphrase <word>       encrypt archive (AES-256-GCM, scrypt)
@@ -99,7 +104,66 @@ async function setupCommand(
 ): Promise<number> {
   const dryRun = args.includes("--dry-run");
   const rotateKeys = args.includes("--rotate-keys");
-  const apiUrl = valueOf(args, "--api-url");
+  const rawApiUrl = valueOf(args, "--api-url");
+  const rawMode = valueOf(args, "--mode");
+  const mode = rawMode === "dev" ? "dev" : "docker";
+  const useTailscale = args.includes("--tailscale") || args.includes("--use-tailscale");
+  const adminEmail = valueOf(args, "--admin-email");
+  const adminPassword = valueOf(args, "--admin-password");
+
+  process.stdout.write(`\nNEXUS — ${dryRun ? "setup plan" : "setup"}\n`);
+  process.stdout.write(`  installation: ${paths.root}\n\n`);
+
+  // 1. Verify prerequisites
+  const prereqs = await checkPrerequisites(async (cmd, cmdArgs) => {
+    const stdout = await systemProbes.command(cmd, cmdArgs);
+    return { stdout: stdout ?? "", exitCode: stdout !== undefined ? 0 : 1 };
+  });
+
+  process.stdout.write("Prerequisites\n");
+  process.stdout.write(
+    `  ${prereqs.nodeVersion.meetsRequirement ? "✓" : "✗"} Node.js ${prereqs.nodeVersion.current} (${prereqs.nodeVersion.required})\n`,
+  );
+  if (!prereqs.nodeVersion.meetsRequirement) {
+    process.stderr.write(
+      "  Error: Node.js version >= 22.13.0 is required. Please update Node before proceeding.\n",
+    );
+    return 1;
+  }
+
+  if (prereqs.pnpm.installed) {
+    process.stdout.write(`  ✓ pnpm ${prereqs.pnpm.version}\n`);
+  }
+  if (mode === "docker") {
+    process.stdout.write(
+      `  ${prereqs.docker.daemonRunning ? "✓" : "!"} Docker: ${prereqs.docker.details ?? "not running"}\n`,
+    );
+    if (!prereqs.docker.daemonRunning) {
+      process.stdout.write(
+        "      → Start Docker daemon or run with '--mode dev' for local process execution\n",
+      );
+    }
+  }
+
+  // 2. Tailscale discovery
+  let tailscaleUrl: string | undefined;
+  if (useTailscale || rawApiUrl === undefined) {
+    const tailscaleExec = async (cmd: string, cmdArgs: string[]) => {
+      const stdout = await systemProbes.command(cmd, cmdArgs);
+      return { stdout: stdout ?? "", stderr: "", exitCode: stdout !== undefined ? 0 : 1 };
+    };
+    const tailscale = await detectTailscale(tailscaleExec);
+    if (tailscale.running && tailscale.suggestedUrl) {
+      if (useTailscale) {
+        tailscaleUrl = tailscale.suggestedUrl;
+        process.stdout.write(`  ✓ Tailscale active: using ${tailscaleUrl} for PUBLIC_API_URL\n`);
+      } else {
+        process.stdout.write(
+          `  ! Tailscale detected (${tailscale.ip}): pass '--tailscale' to configure remote access\n`,
+        );
+      }
+    }
+  }
 
   const pnpmPath = (await systemProbes.command("sh", ["-c", "command -v pnpm"])) ?? "pnpm";
 
@@ -108,12 +172,14 @@ async function setupCommand(
     dryRun,
     rotateKeys,
     pnpmPath,
-    ...(apiUrl === undefined ? {} : { apiUrl }),
+    mode,
+    ...(rawApiUrl !== undefined ? { apiUrl: rawApiUrl } : {}),
+    ...(tailscaleUrl !== undefined ? { tailscaleUrl } : {}),
+    ...(adminEmail !== undefined ? { adminEmail } : {}),
+    ...(adminPassword !== undefined ? { adminPassword } : {}),
   });
 
-  process.stdout.write(`\nNEXUS — ${dryRun ? "setup plan" : "setup"}\n`);
-  process.stdout.write(`  installation: ${paths.root}\n\n`);
-
+  process.stdout.write("\nConfiguration and secrets\n");
   for (const action of plan.actions) {
     const mark = action.needed ? (dryRun ? "·" : "→") : "✓";
     const suffix = action.needed ? "" : " (already configured)";
@@ -125,15 +191,14 @@ async function setupCommand(
   if (!dryRun) {
     const { applied, skipped } = applyPlan(plan);
     process.stdout.write(`\n${applied.length} action(s) applied, ${skipped.length} unchanged\n`);
-    if (applied.length > 0) {
-      process.stdout.write(
-        "\nReload systemd user daemon to activate updated service units:\n" +
-          "  systemctl --user daemon-reload && nexus start\n",
-      );
-    }
   }
 
   for (const warning of plan.warnings) process.stdout.write(`\n  ! ${warning}\n`);
+
+  process.stdout.write("\nNext steps to run NEXUS:\n");
+  for (const step of plan.summary.nextSteps) {
+    process.stdout.write(`  • ${step}\n`);
+  }
   process.stdout.write("\n");
   return 0;
 }

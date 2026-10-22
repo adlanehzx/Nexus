@@ -9,7 +9,8 @@ import { MISSION_ENGINE_UNIT, renderMissionEngineUnit } from "./systemd.js";
 /**
  * Installation and compliance management for a NEXUS instance.
  *
- * Idempotent, never destroys secrets, and describes each action before applying.
+ * Idempotent, never destroys secrets, never prints secrets to stdout,
+ * and describes each action before applying.
  */
 
 export interface SetupOptions {
@@ -21,6 +22,10 @@ export interface SetupOptions {
   pnpmPath: string;
   apiUrl?: string;
   servicePath?: string;
+  mode?: "docker" | "dev";
+  tailscaleUrl?: string;
+  adminEmail?: string;
+  adminPassword?: string;
 }
 
 export interface SetupAction {
@@ -33,6 +38,14 @@ export interface SetupAction {
 export interface SetupPlan {
   actions: SetupAction[];
   warnings: string[];
+  summary: SetupSummary;
+}
+
+export interface SetupSummary {
+  mode: "docker" | "dev";
+  dashboardUrl: string;
+  apiUrl: string;
+  nextSteps: string[];
 }
 
 export function planSetup(options: SetupOptions): SetupPlan {
@@ -92,6 +105,15 @@ export function planSetup(options: SetupOptions): SetupPlan {
     });
   }
 
+  // Backups directory
+  const backupsNeeded = !existsSync(paths.backupsDir);
+  actions.push({
+    label: "create backups directory",
+    needed: backupsNeeded,
+    detail: paths.backupsDir,
+    apply: () => mkdirSync(paths.backupsDir, { recursive: true, mode: 0o700 }),
+  });
+
   // ── Signing key ──────────────────────────────────────────────────────────
   const existingKey = env.AUTH_SIGNING_KEY;
   const hasKey = typeof existingKey === "string" && existingKey.includes("BEGIN PRIVATE KEY");
@@ -129,6 +151,44 @@ export function planSetup(options: SetupOptions): SetupPlan {
       needed: false,
       detail: "already present — use --rotate-keys to replace",
       apply: () => undefined,
+    });
+  }
+
+  // ── Master key (AES-256 for vault/credential encryption) ──────────────────
+  const existingMasterKey = env.MASTER_KEY;
+  const hasMasterKey = typeof existingMasterKey === "string" && existingMasterKey.trim().length >= 32;
+  actions.push({
+    label: hasMasterKey ? "persistent master encryption key" : "generate a persistent master encryption key",
+    needed: !hasMasterKey,
+    detail: hasMasterKey ? "already present" : "AES-256 key for vault secrets, written to .env with mode 0600",
+    apply: () => {
+      const generated = randomBytes(32).toString("hex");
+      const updated = upsertEnvValue(
+        readFileSyncOr(paths.envFile, envContent),
+        "MASTER_KEY",
+        generated,
+      );
+      writeSecret(paths.envFile, updated);
+    },
+  });
+
+  // ── SearXNG secret (for local web search) ─────────────────────────────────
+  const existingSearxngSecret = env.SEARXNG_SECRET;
+  const hasSearxngSecret = typeof existingSearxngSecret === "string" && existingSearxngSecret.trim().length >= 16;
+  if (!hasSearxngSecret) {
+    actions.push({
+      label: "generate SearXNG secret",
+      needed: true,
+      detail: "random secret for web search container",
+      apply: () => {
+        const generated = randomBytes(32).toString("hex");
+        const updated = upsertEnvValue(
+          readFileSyncOr(paths.envFile, envContent),
+          "SEARXNG_SECRET",
+          generated,
+        );
+        writeSecret(paths.envFile, updated);
+      },
     });
   }
 
@@ -170,17 +230,33 @@ export function planSetup(options: SetupOptions): SetupPlan {
       needed: true,
       detail: "random 24-byte password",
       apply: () => {
-        const updated = upsertEnvValue(
-          readFileSyncOr(paths.envFile, envContent),
-          "DATABASE_URL",
-          url,
-        );
-        writeSecret(paths.envFile, updated);
+        let content = readFileSyncOr(paths.envFile, envContent);
+        content = upsertEnvValue(content, "DATABASE_URL", url);
+        content = upsertEnvValue(content, "POSTGRES_PASSWORD", password);
+        writeSecret(paths.envFile, content);
       },
     });
     warnings.push(
       "PostgreSQL password was generated: restart docker compose for the database to adopt it",
     );
+  }
+
+  // ── Public API URL (Tailscale / Custom URL) ───────────────────────────────
+  const targetApiUrl = options.apiUrl ?? options.tailscaleUrl;
+  if (targetApiUrl !== undefined && targetApiUrl.length > 0 && env.PUBLIC_API_URL !== targetApiUrl) {
+    actions.push({
+      label: "configure public API URL",
+      needed: true,
+      detail: targetApiUrl,
+      apply: () => {
+        const updated = upsertEnvValue(
+          readFileSyncOr(paths.envFile, envContent),
+          "PUBLIC_API_URL",
+          targetApiUrl,
+        );
+        writeSecret(paths.envFile, updated);
+      },
+    });
   }
 
   // ── Systemd unit ─────────────────────────────────────────────────────────
@@ -204,7 +280,40 @@ export function planSetup(options: SetupOptions): SetupPlan {
     },
   });
 
-  return { actions, warnings };
+  const selectedMode = options.mode ?? "docker";
+  const finalApiUrl = targetApiUrl ?? env.PUBLIC_API_URL ?? "http://localhost:3000";
+  const dashboardUrl = selectedMode === "docker" ? "http://localhost:8080" : "http://localhost:5173";
+
+  const nextSteps =
+    selectedMode === "docker"
+      ? [
+          "Start platform with: pnpm docker:platform",
+          "Open Dashboard at: " + dashboardUrl,
+          "Verify installation health with: nexus doctor",
+        ]
+      : [
+          "Start infrastructure: pnpm docker:infra",
+          "Apply database schema: pnpm db:migrate",
+          "Start dev servers: pnpm dev",
+          "Open Dashboard at: " + dashboardUrl,
+        ];
+
+  if (!env.ADMIN_EMAIL && !options.adminEmail) {
+    nextSteps.push(
+      "Create your admin account: the first user to register on the dashboard becomes Administrator automatically.",
+    );
+  }
+
+  return {
+    actions,
+    warnings,
+    summary: {
+      mode: selectedMode,
+      dashboardUrl,
+      apiUrl: finalApiUrl,
+      nextSteps,
+    },
+  };
 }
 
 /**

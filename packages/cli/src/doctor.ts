@@ -7,12 +7,13 @@ import { hasPersistentSigningKey } from "./environment.js";
 import { hostAndPort, unitState, type Probes } from "./probes.js";
 import { foreignPaths, BROWSER_UNIT, MISSION_ENGINE_UNIT } from "./systemd.js";
 import { fail, ok, skip, warn, type CheckGroup, type CheckResult } from "./report.js";
+import { detectTailscale, type CommandExecutor } from "./tailscale.js";
 
 /**
  * NEXUS installation diagnostics.
  *
  * Organized into functional groups: Configuration, Data and services,
- * Agents and tools, Security, and Systemd services.
+ * Agents and tools, Security, Network and discovery, and Systemd services.
  */
 
 export interface DoctorContext {
@@ -27,6 +28,7 @@ export async function runDoctor(context: DoctorContext): Promise<CheckGroup[]> {
     { title: "Data and services", results: await dataChecks(context) },
     { title: "Agents and tools", results: await agentChecks(context) },
     { title: "Security", results: await securityChecks(context) },
+    { title: "Network and discovery", results: await networkChecks(context) },
     { title: "Systemd services", results: await systemdChecks(context) },
   ];
 }
@@ -233,6 +235,27 @@ async function securityChecks({ paths, probes, env }: DoctorContext): Promise<Ch
     );
   }
 
+  const masterKey = env.MASTER_KEY;
+  if (masterKey === undefined || masterKey.trim().length === 0) {
+    results.push(
+      warn(
+        "master encryption key",
+        "missing: required for credential vault encryption",
+        "nexus setup — generates persistent master key",
+      ),
+    );
+  } else if (masterKey.trim().length < 32) {
+    results.push(
+      fail(
+        "master encryption key",
+        "too short: must be at least 32 characters (AES-256)",
+        "nexus setup — regenerates secure key",
+      ),
+    );
+  } else {
+    results.push(ok("master encryption key", "configured (AES-256)"));
+  }
+
   const engineUrl = env.MISSION_CONTROL_URL;
   if (engineUrl !== undefined && engineUrl.length > 0) {
     const probe = await probes.http(`${engineUrl.replace(/\/$/, "")}/v1/settings`);
@@ -240,6 +263,64 @@ async function securityChecks({ paths, probes, env }: DoctorContext): Promise<Ch
       probe === undefined
         ? skip("API → engine authentication", "engine unreachable")
         : ok("API → engine authentication", "engine responded; verified at service startup"),
+    );
+  }
+
+  return results;
+}
+
+async function networkChecks({ probes, env }: DoctorContext): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+
+  const publicUrl = env.PUBLIC_API_URL;
+  if (!publicUrl) {
+    results.push(
+      warn(
+        "PUBLIC_API_URL",
+        "not configured (defaults to loopback)",
+        "nexus setup --api-url <url> — required for mobile clients and remote workers",
+      ),
+    );
+  } else if (/localhost|127\.0\.0\.1/i.test(publicUrl)) {
+    results.push(
+      warn(
+        "PUBLIC_API_URL",
+        `configured as loopback (${publicUrl})`,
+        "mobile phones and remote workers cannot connect to loopback; configure Tailscale or LAN IP",
+      ),
+    );
+  } else {
+    results.push(ok("PUBLIC_API_URL", publicUrl));
+  }
+
+  // Tailscale probe via probes.command
+  const tailscaleExec: CommandExecutor = async (cmd, args) => {
+    const stdout = await probes.command(cmd, args, 3_000);
+    return { stdout: stdout ?? "", stderr: "", exitCode: stdout !== undefined ? 0 : 1 };
+  };
+
+  const tailscale = await detectTailscale(tailscaleExec);
+  if (tailscale.running) {
+    results.push(
+      ok(
+        "Tailscale network",
+        `active${tailscale.ip ? ` (${tailscale.ip})` : ""}`,
+      ),
+    );
+  } else if (tailscale.installed) {
+    results.push(
+      warn(
+        "Tailscale network",
+        "installed but service is offline",
+        "sudo tailscale up — enables zero-config remote worker access",
+      ),
+    );
+  } else {
+    results.push(
+      skip(
+        "Tailscale network",
+        "not installed (optional: install for secure remote access without port forwarding)",
+      ),
     );
   }
 
