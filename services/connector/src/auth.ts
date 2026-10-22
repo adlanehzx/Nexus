@@ -43,11 +43,19 @@ export class ConnectorAuthError extends AppError {
   }
 }
 
-/** A client allowed to talk to this connector. Public keys only — never a secret. */
+/**
+ * A client allowed to talk to this connector. Public keys only — never a secret.
+ *
+ * `publicKeys` is a list because rotation needs an overlap: a client cannot
+ * atomically swap its key at the same instant the connector does, so for a
+ * while both the old and the new key must verify. Revocation is the opposite
+ * operation and happens before this point — a revoked key is simply absent
+ * from the list.
+ */
 export interface ConnectorClient {
   clientId: string;
-  /** SPKI PEM Ed25519 public key. */
-  publicKey: string;
+  /** SPKI PEM Ed25519 public keys, any of which may verify a request. */
+  publicKeys: readonly string[];
 }
 
 /**
@@ -242,7 +250,14 @@ export class RequestAuthenticator {
     const client = this.#clients.get(input.clientId);
     if (!client) throw new ConnectorAuthError("unknown_client", "unknown client");
 
-    if (!verifyEd25519(client.publicKey, input.canonical, input.signature)) {
+    // Any current key may verify. The loop runs every candidate rather than
+    // stopping at a mismatch in a way that depends on order, and a client with
+    // no usable keys left — every key revoked, or the client disabled — simply
+    // has nothing that can match.
+    const verified = client.publicKeys.some((publicKey) =>
+      verifyEd25519(publicKey, input.canonical, input.signature),
+    );
+    if (!verified) {
       throw new ConnectorAuthError("invalid_signature", "signature does not verify");
     }
 

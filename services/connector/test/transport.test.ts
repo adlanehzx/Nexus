@@ -86,7 +86,7 @@ function connectorFor(options: { dir?: string; maxConcurrentExecutions?: number 
   const server = new ConnectorServer({
     detector,
     authenticator: new RequestAuthenticator({
-      clients: [{ clientId: client.clientId, publicKey: client.publicKey }],
+      clients: [{ clientId: client.clientId, publicKeys: [client.publicKey] }],
     }),
     ...(options.maxConcurrentExecutions === undefined
       ? {}

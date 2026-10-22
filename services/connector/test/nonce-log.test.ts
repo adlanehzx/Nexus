@@ -134,7 +134,7 @@ posixOnly("fail-closed when the store is unavailable", () => {
   it("refuses the request instead of accepting an unrecorded nonce", () => {
     const client = createTestClient();
     const authenticator = new RequestAuthenticator({
-      clients: [{ clientId: client.clientId, publicKey: client.publicKey }],
+      clients: [{ clientId: client.clientId, publicKeys: [client.publicKey] }],
       noncePersistence: broken,
     });
     const request = client.sign({ method: "health" });
@@ -162,7 +162,7 @@ posixOnly("fail-closed when the store is unavailable", () => {
   it("records the cause distinctly from a replay", () => {
     const client = createTestClient();
     const authenticator = new RequestAuthenticator({
-      clients: [{ clientId: client.clientId, publicKey: client.publicKey }],
+      clients: [{ clientId: client.clientId, publicKeys: [client.publicKey] }],
       noncePersistence: broken,
     });
     const request = client.sign({ method: "health" });

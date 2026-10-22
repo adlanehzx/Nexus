@@ -97,6 +97,39 @@ would leak how busy the connector is to anyone who asked.
 All limits are injectable, which is how they are tested: the suite uses 300 ms
 timeouts and 256-byte bodies rather than waiting on realistic ones.
 
+## Administration
+
+The four operations a future installer will drive live in `src/admin.ts`, as a
+library rather than a CLI: the installer, a dashboard and the test suite all
+need them, and the one thing that must not happen is three implementations of
+"register a key" disagreeing about what a valid key is.
+
+| Operation           | What it does                                            |
+| ------------------- | ------------------------------------------------------- |
+| `initConnector`     | creates a configuration that accepts nobody             |
+| `registerClientKey` | adds a client's public key; also the rotation primitive |
+| `revokeClientKey`   | withdraws one key by fingerprint, keeping the record    |
+| `setClientEnabled`  | pauses a client without touching its keys               |
+| `connectorStatus`   | reports what would be accepted, as fingerprints only    |
+
+Three deliberate refusals. There is **no key generation**: a client generates
+its own pair and hands over the public half, because a connector that minted
+keys would at some point have held private ones. `initConnector` **refuses to
+overwrite**, since an installer re-run would otherwise wipe keys registered
+months ago. And `status` reports **fingerprints, never keys** — an operator
+confirming "the key I registered is the one in use" needs to compare, not to
+read, and a full key in a terminal ends up in a screenshot.
+
+Rotation is adding a key and then revoking the old one. Both are valid in
+between, which is the point: a client cannot swap its key at the same instant
+the connector does. Revoked entries are kept and marked rather than deleted,
+so somebody reading the file after an incident can see that a key was
+withdrawn and when.
+
+Disabling and revoking are separate. Disabling is reversible and says nothing
+about whether key material is compromised; conflating them would force an
+operator who wanted to pause a client to re-register it.
+
 ## Configuration
 
 See [`config/connector.example.json`](config/connector.example.json). It holds

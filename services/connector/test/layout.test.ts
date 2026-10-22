@@ -32,6 +32,7 @@ const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
 /** The modules this package is supposed to contain. */
 const CANONICAL_MODULES = [
+  "admin.ts",
   "auth.ts",
   "config.ts",
   "http.ts",

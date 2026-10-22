@@ -80,8 +80,8 @@ async function harness(
     detector,
     authenticator: new RequestAuthenticator({
       clients: [
-        { clientId: client.clientId, publicKey: client.publicKey },
-        { clientId: other.clientId, publicKey: other.publicKey },
+        { clientId: client.clientId, publicKeys: [client.publicKey] },
+        { clientId: other.clientId, publicKeys: [other.publicKey] },
       ],
       now,
       ...(options.acceptanceWindowMs === undefined

@@ -44,11 +44,57 @@ export const connectorConfigSchema = z
               .min(1)
               .max(128)
               .regex(/^[A-Za-z0-9._:-]+$/, "must be a plain client identifier"),
-            publicKey: publicKeySchema,
+            /**
+             * The client's single key, in the original one-key shape.
+             *
+             * Kept so existing configuration files keep working: this is an
+             * additive migration, not a replacement. Exactly one of
+             * `publicKey` or `keys` must be present, and `keys` is what
+             * rotation uses.
+             */
+            publicKey: publicKeySchema.optional(),
+            /**
+             * The client's keys, newest last.
+             *
+             * Rotation is adding a key and revoking the old one, which means
+             * both are briefly valid — that overlap is the whole reason
+             * rotation needs more than one slot. A revoked key never verifies
+             * again, and revoked entries are kept rather than deleted so an
+             * operator can see that a key was withdrawn instead of wondering
+             * whether it ever existed.
+             */
+            keys: z
+              .array(
+                z
+                  .object({
+                    publicKey: publicKeySchema,
+                    /** ISO 8601. Informational; verification does not depend on it. */
+                    addedAt: z.string().datetime().optional(),
+                    /** ISO 8601. Present means revoked, and a revoked key is refused. */
+                    revokedAt: z.string().datetime().optional(),
+                    label: z.string().max(100).optional(),
+                  })
+                  .strict(),
+              )
+              .max(8)
+              .optional(),
+            /**
+             * Whether this client may talk to the connector at all.
+             *
+             * Separate from revoking its keys: disabling is reversible and
+             * says nothing about whether the key material is compromised.
+             */
+            enabled: z.boolean().default(true),
             /** Free-text note for whoever reads this file in a year. */
             comment: z.string().max(200).optional(),
           })
-          .strict(),
+          .strict()
+          .refine((client) => (client.publicKey === undefined) !== (client.keys === undefined), {
+            // Both would be ambiguous about which one rotation should touch;
+            // neither would be a client that can never authenticate, which is
+            // a configuration mistake worth naming rather than tolerating.
+            message: "declare exactly one of publicKey or keys",
+          }),
       )
       .max(32),
     listen: z
@@ -114,4 +160,29 @@ export async function readConnectorConfig(path: string): Promise<ConnectorConfig
 /** The listen target, in the shape `startConnector` expects. */
 export function listenTargetFrom(config: ConnectorConfig): ConnectorListenTarget {
   return config.listen;
+}
+
+/**
+ * Flattens a configured client into the keys that may verify a request today.
+ *
+ * One place decides what "usable key" means, so the authenticator cannot drift
+ * from the admin tooling. A disabled client contributes nothing, and a revoked
+ * key contributes nothing — both are refusals, reached by different routes and
+ * reversed by different actions.
+ */
+export function usableKeysFor(client: ConnectorConfig["clients"][number]): string[] {
+  if (!client.enabled) return [];
+  if (client.publicKey !== undefined) return [client.publicKey];
+  return (client.keys ?? [])
+    .filter((key) => key.revokedAt === undefined)
+    .map((key) => key.publicKey);
+}
+
+/** Every client that can currently authenticate, in the authenticator's shape. */
+export function authenticatorClientsFrom(
+  config: ConnectorConfig,
+): { clientId: string; publicKeys: string[] }[] {
+  return config.clients
+    .map((client) => ({ clientId: client.clientId, publicKeys: usableKeysFor(client) }))
+    .filter((client) => client.publicKeys.length > 0);
 }
