@@ -3,6 +3,7 @@ import { DashboardApi, createSession } from "../lib/api.js";
 import { Agents } from "./Agents.js";
 import { Connections } from "./Connections.js";
 import { NexusChat } from "./NexusChat.js";
+import { SetupWizard } from "./SetupWizard.js";
 import {
   Browser,
   Devices,
@@ -59,10 +60,11 @@ const SUPERVISION_SECTIONS = [
 ] as const;
 
 type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
-type SectionId = SupervisionId | "chat" | "agents" | "connections" | "settings";
+type SectionId = SupervisionId | "chat" | "agents" | "connections" | "settings" | "setup";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
+  setup: { title: "Setup wizard", description: "Guided installation and onboarding assistant." },
   agents: {
     title: "Agents",
     description: "Capabilities, availability, and quotas of your AI team.",
@@ -106,6 +108,15 @@ export function App() {
   const api = useMemo(() => new DashboardApi(session), [session]);
   const [section, setSection] = useState<SectionId>("chat");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [authMode, setAuthMode] = useState<"login" | "setup">(() => {
+    try {
+      const active = window.sessionStorage.getItem("nexus.setup.step");
+      if (active !== null) return "setup";
+    } catch {
+      // Storage unavailable
+    }
+    return "login";
+  });
 
   useEffect(() => {
     let active = true;
@@ -131,12 +142,28 @@ export function App() {
   }
 
   if (!authenticated) {
+    if (authMode === "setup") {
+      return (
+        <SetupWizard
+          session={session}
+          api={api}
+          onComplete={() => {
+            setAuthenticated(true);
+            setAuthMode("login");
+            setSection("chat");
+          }}
+          onSwitchToLogin={() => setAuthMode("login")}
+        />
+      );
+    }
+
     return (
       <Login
         onSignIn={async (email, password) => {
           await session.login(email, password);
           setAuthenticated(true);
         }}
+        onSwitchToSetup={() => setAuthMode("setup")}
       />
     );
   }
@@ -177,6 +204,13 @@ export function App() {
               id="settings"
               label="Settings"
               icon="settings"
+              current={section}
+              onSelect={navigate}
+            />
+            <NavItem
+              id="setup"
+              label="Setup wizard"
+              icon="setup"
               current={section}
               onSelect={navigate}
             />
@@ -244,15 +278,29 @@ export function App() {
           </div>
         </header>
         <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
-          {renderSection(section, api)}
+          {renderSection(section, api, session, navigate)}
         </div>
       </main>
     </div>
   );
 }
 
-function renderSection(section: SectionId, api: DashboardApi) {
+function renderSection(
+  section: SectionId,
+  api: DashboardApi,
+  session: SessionManager,
+  navigate: (next: SectionId) => void,
+) {
   switch (section) {
+    case "setup":
+      return (
+        <SetupWizard
+          session={session}
+          api={api}
+          onComplete={() => navigate("chat")}
+          onSwitchToLogin={() => navigate("chat")}
+        />
+      );
     case "chat":
       return <NexusChat api={api} />;
     case "agents":
@@ -321,6 +369,7 @@ function NavIcon({ name }: { name: string }) {
     chat: "M4 5h16v11H8l-4 4V5Z",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
+    setup: "M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
     overview: "M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
@@ -354,7 +403,13 @@ function NavIcon({ name }: { name: string }) {
   );
 }
 
-function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Promise<void> }) {
+function Login({
+  onSignIn,
+  onSwitchToSetup,
+}: {
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSwitchToSetup: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -421,6 +476,17 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
             </div>
           )}
         </form>
+
+        <div style={{ marginTop: "16px", textAlign: "center" }}>
+          <button
+            type="button"
+            className="button compact"
+            onClick={onSwitchToSetup}
+          >
+            First time? Run setup wizard
+          </button>
+        </div>
+
         <p className="login-security">Local secure administrator session.</p>
       </div>
     </main>

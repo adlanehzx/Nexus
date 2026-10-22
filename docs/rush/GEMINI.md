@@ -31,8 +31,8 @@ mission scheduling, context compression or routing decisions.
 
 | ID  | Deliverable                                   | Status | Commit  | Evidence                                                                    |
 | --- | --------------------------------------------- | ------ | ------- | --------------------------------------------------------------------------- |
-| G0  | UX inventory and executable onboarding states | DONE   | d147a69 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
-| G1  | First-run setup wizard                        | TODO   |         |                                                                             |
+| G0  | UX inventory and executable onboarding states | DONE   | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
+| G1  | First-run setup wizard                        | DONE   | 45e46d9 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
 | G2  | Dashboard configuration and connection UX     | TODO   |        |          |
 | G3  | Device discovery, pairing and worker install  | TODO   |        |          |
 | G4  | Desktop, mobile and voice completion          | TODO   |        |          |
@@ -117,10 +117,19 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-22T22:19:30+02:00
+- Completed at: 2026-10-22T22:25:50+02:00
+- Commit: 45e46d9
+- Commands and results:
+  - `pnpm --filter @nexus/dashboard test`: 4 test files passed, 35 tests passed
+  - `pnpm --filter @nexus/dashboard build`: exit 0 (built in 218ms)
+  - `pnpm --filter @nexus/client-core test`: 9 test files passed, 168 tests passed
+- Notes:
+  - Implemented 5-step resumable SetupWizard (`apps/dashboard/src/ui/SetupWizard.tsx`): system readiness, admin registration, agent discovery & official login, optional capabilities (browser, MCP, worker pairing), review & launch.
+  - Added `classifyConnection` in `lib/format.ts` to strictly distinguish all 7 required states (not installed, detected, adapter missing, connection required, connected, degraded, failed).
+  - Integrated `SessionManager.checkReadiness()` and `SessionManager.register()` in `@nexus/client-core`.
+  - Added copyable sanitized diagnostic JSON and recovery actions on error banners without credential exposure.
 - Commands and results:
 - Notes:
 
@@ -220,6 +229,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID     | Task | Severity | Status   | Description                                                               | Reproduction or evidence                  | Fix commit |
 | ------ | ---- | -------- | -------- | ------------------------------------------------------------------------- | ----------------------------------------- | ---------- |
 | F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration | packages/client-core/test/session.test.ts | d147a69    |
+| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states    | apps/dashboard/test/format.test.ts        | 45e46d9    |
 
 ## Improvements for the adjustment phase
 

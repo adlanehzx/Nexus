@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyConnection,
   failedSteps,
   formatAge,
   formatCount,
@@ -208,5 +209,110 @@ describe("formatting", () => {
     ]);
 
     expect(sorted.map((entry) => entry.summary)).toEqual(["newer", "older"]);
+  });
+});
+
+describe("classifyConnection distinguishes all 7 mandatory states", () => {
+  it("distinguishes not installed", () => {
+    const uninstalled = classifyConnection({
+      supportedOnThisHost: true,
+      observation: { state: "not_installed" },
+    });
+    expect(uninstalled.key).toBe("not_installed");
+    expect(uninstalled.label).toBe("Not installed");
+
+    const unsupported = classifyConnection({
+      supportedOnThisHost: false,
+      observation: null,
+    });
+    expect(unsupported.key).toBe("not_installed");
+  });
+
+  it("distinguishes detected", () => {
+    const detected = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "detected",
+        adapter: { availability: "available" },
+        authStatus: "authenticated",
+      },
+    });
+    expect(detected.key).toBe("detected");
+    expect(detected.label).toBe("Detected");
+  });
+
+  it("distinguishes missing adapter", () => {
+    const missing = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "detected",
+        adapter: { availability: "missing" },
+        authStatus: "authenticated",
+      },
+    });
+    expect(missing.key).toBe("missing_adapter");
+    expect(missing.label).toBe("Adapter missing");
+  });
+
+  it("distinguishes connection required", () => {
+    const authRequired = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "authentication_required",
+        adapter: { availability: "available" },
+        authStatus: "unauthenticated",
+      },
+    });
+    expect(authRequired.key).toBe("connection_required");
+    expect(authRequired.label).toBe("Connection required");
+
+    const expired = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "expired",
+        adapter: { availability: "available" },
+        authStatus: "expired",
+      },
+    });
+    expect(expired.key).toBe("connection_required");
+  });
+
+  it("distinguishes connected", () => {
+    const connected = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "connected",
+        adapter: { availability: "available" },
+        authStatus: "authenticated",
+      },
+    });
+    expect(connected.key).toBe("connected");
+    expect(connected.label).toBe("Connected");
+  });
+
+  it("distinguishes degraded", () => {
+    const degraded = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "degraded",
+        adapter: { availability: "available" },
+        authStatus: "authenticated",
+      },
+    });
+    expect(degraded.key).toBe("degraded");
+    expect(degraded.label).toBe("Degraded");
+  });
+
+  it("distinguishes failed", () => {
+    const failed = classifyConnection({
+      supportedOnThisHost: true,
+      observation: {
+        state: "error",
+        adapter: { availability: "available" },
+        authStatus: "authenticated",
+      },
+    });
+    expect(failed.key).toBe("failed");
+    expect(failed.label).toBe("Failed");
   });
 });

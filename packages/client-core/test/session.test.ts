@@ -335,3 +335,55 @@ describe("device registration", () => {
     expect(http.countOf("POST", "/api/v1/devices")).toBe(before);
   });
 });
+
+describe("readiness check", () => {
+  it("reports ok when all dependencies are up", async () => {
+    const { http, session } = makeSession();
+    http.on("GET", "/api/v1/health", {
+      status: 200,
+      body: {
+        status: "ok",
+        version: "1.0.0",
+        uptimeSeconds: 42,
+        dependencies: {
+          database: { status: "up", latencyMs: 3 },
+          redis: { status: "up", latencyMs: 1 },
+        },
+      },
+    });
+
+    const result = await session.checkReadiness();
+    expect(result.status).toBe("ok");
+    expect(result.version).toBe("1.0.0");
+    expect(result.dependencies?.database?.status).toBe("up");
+  });
+
+  it("reports degraded when dependencies are down", async () => {
+    const { http, session } = makeSession();
+    http.on("GET", "/api/v1/health", {
+      status: 503,
+      body: {
+        status: "degraded",
+        version: "1.0.0",
+        dependencies: {
+          database: { status: "down" },
+          redis: { status: "up" },
+        },
+      },
+    });
+
+    const result = await session.checkReadiness();
+    expect(result.status).toBe("degraded");
+    expect(result.dependencies?.database?.status).toBe("down");
+    expect(result.diagnostic).toContain("503");
+  });
+
+  it("reports down with sanitized diagnostic when server fails to respond", async () => {
+    const { http, session } = makeSession();
+    http.failNext = true;
+
+    const result = await session.checkReadiness();
+    expect(result.status).toBe("down");
+    expect(result.diagnostic).toBeDefined();
+  });
+});

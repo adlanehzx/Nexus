@@ -42,6 +42,145 @@ export const HEALTH_LABELS: Record<HealthEntry["level"], string> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Connection Classification (7 core states)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ConnectionStatusKey =
+  | "not_installed"
+  | "detected"
+  | "missing_adapter"
+  | "connection_required"
+  | "connected"
+  | "degraded"
+  | "failed";
+
+export interface ConnectionStatusBadge {
+  key: ConnectionStatusKey;
+  label: string;
+  tone: "good" | "warning" | "danger" | "muted";
+  description: string;
+}
+
+/**
+ * Classifies an agent connection into one of the 7 required distinct states:
+ *  - not installed
+ *  - detected
+ *  - missing adapter
+ *  - connection required
+ *  - connected
+ *  - degraded
+ *  - failed
+ */
+export function classifyConnection(entry: {
+  supportedOnThisHost?: boolean;
+  adapter?: { availability?: string; provenance?: string; provenanceEvidence?: string } | null;
+  observation?: {
+    state: string;
+    authStatus?: string;
+    adapter?: { availability?: string } | null;
+  } | null;
+}): ConnectionStatusBadge {
+  if (entry.supportedOnThisHost === false) {
+    return {
+      key: "not_installed",
+      label: "Unsupported host",
+      tone: "muted",
+      description: "Provider is not supported on this host platform.",
+    };
+  }
+
+  const observation = entry.observation;
+  if (!observation) {
+    return {
+      key: "not_installed",
+      label: "Not installed",
+      tone: "muted",
+      description: "Provider has not been detected or verified.",
+    };
+  }
+
+  if (observation.state === "not_installed") {
+    return {
+      key: "not_installed",
+      label: "Not installed",
+      tone: "muted",
+      description: "CLI executable was not found on this system.",
+    };
+  }
+
+  // Check if adapter is missing
+  if (
+    observation.adapter?.availability === "missing" ||
+    entry.adapter?.availability === "missing"
+  ) {
+    return {
+      key: "missing_adapter",
+      label: "Adapter missing",
+      tone: "warning",
+      description: "CLI binary exists, but the NEXUS ACP adapter is missing.",
+    };
+  }
+
+  // Check if login / authentication is required
+  if (
+    observation.state === "authentication_required" ||
+    observation.state === "expired" ||
+    observation.authStatus === "unauthenticated" ||
+    observation.authStatus === "expired"
+  ) {
+    return {
+      key: "connection_required",
+      label: "Connection required",
+      tone: "warning",
+      description: "Sign-in is required through the provider CLI.",
+    };
+  }
+
+  if (observation.state === "connected") {
+    return {
+      key: "connected",
+      label: "Connected",
+      tone: "good",
+      description: "Authenticated and ready to execute missions.",
+    };
+  }
+
+  if (observation.state === "degraded") {
+    return {
+      key: "degraded",
+      label: "Degraded",
+      tone: "warning",
+      description: "Operational with warnings or limited capabilities.",
+    };
+  }
+
+  if (observation.state === "error" || observation.state === "disconnected") {
+    return {
+      key: "failed",
+      label: "Failed",
+      tone: "danger",
+      description: "Connection probe failed or reported an unrecoverable error.",
+    };
+  }
+
+  if (observation.state === "detected") {
+    return {
+      key: "detected",
+      label: "Detected",
+      tone: "good",
+      description: "CLI executable detected and ready for adapter checks.",
+    };
+  }
+
+  return {
+    key: "failed",
+    label: observation.state.replaceAll("_", " "),
+    tone: "danger",
+    description: "Provider reported an unrecognized state.",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Workers
 // ─────────────────────────────────────────────────────────────────────────────
 

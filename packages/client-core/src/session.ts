@@ -103,6 +103,17 @@ export interface SessionManagerOptions {
   onSignedOut?: (reason: string) => void;
 }
 
+export interface ServerReadiness {
+  status: "ok" | "degraded" | "down";
+  version?: string | undefined;
+  uptimeSeconds?: number | undefined;
+  dependencies?: {
+    database?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
+    redis?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
+  } | undefined;
+  diagnostic?: string | undefined;
+}
+
 export class SessionManager {
   readonly #http: HttpClient;
   readonly #storage: SecureStorage;
@@ -230,6 +241,50 @@ export class SessionManager {
     });
 
     if (accountChanged) await this.#storage.remove(DEVICE_KEY);
+  }
+
+  /**
+   * Probes the server readiness probe without exposing secrets.
+   */
+  async checkReadiness(): Promise<ServerReadiness> {
+    try {
+      const response = await this.#http.request({
+        method: "GET",
+        path: "/api/v1/health",
+      });
+
+      const body = response.body as {
+        status?: "ok" | "degraded";
+        version?: string;
+        uptimeSeconds?: number;
+        dependencies?: {
+          database?: { status: "up" | "down"; latencyMs?: number };
+          redis?: { status: "up" | "down"; latencyMs?: number };
+        };
+      } | null;
+
+      if (response.status === 200 && body?.status === "ok") {
+        return {
+          status: "ok",
+          version: body.version,
+          uptimeSeconds: body.uptimeSeconds,
+          dependencies: body.dependencies,
+        };
+      }
+
+      return {
+        status: "degraded",
+        version: body?.version,
+        uptimeSeconds: body?.uptimeSeconds,
+        dependencies: body?.dependencies,
+        diagnostic: `Readiness returned HTTP ${response.status} (${body?.status ?? "unknown"})`,
+      };
+    } catch (cause) {
+      return {
+        status: "down",
+        diagnostic: cause instanceof Error ? cause.message : "Service unreachable",
+      };
+    }
   }
 
   /**

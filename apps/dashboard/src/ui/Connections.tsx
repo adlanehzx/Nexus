@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, ConnectionObservation, DashboardApi } from "../lib/api.js";
+import { classifyConnection } from "../lib/format.js";
 
 export function Connections({ api }: { api: DashboardApi }) {
   const [connections, setConnections] = useState<ConnectionCatalogEntry[] | null>(null);
@@ -179,16 +180,8 @@ function ConnectionDetail({ label, value }: { label: string; value: string }) {
 }
 
 function connectionState(entry: ConnectionCatalogEntry): { label: string; tone: string } {
-  if (!entry.supportedOnThisHost) return { label: "Unsupported", tone: "muted" };
-  const state = entry.observation?.state;
-  if (state === undefined) return { label: "Not checked", tone: "muted" };
-  if (state === "connected") return { label: "Connected", tone: "good" };
-  if (state === "detected") return { label: "Detected", tone: "good" };
-  if (state === "authentication_required" || state === "expired") {
-    return { label: "Action needed", tone: "warning" };
-  }
-  if (state === "not_installed") return { label: "Not installed", tone: "muted" };
-  return { label: state.replaceAll("_", " "), tone: "danger" };
+  const classified = classifyConnection(entry);
+  return { label: classified.label, tone: classified.tone };
 }
 
 function authLabel(observation: ConnectionObservation | null): string {
