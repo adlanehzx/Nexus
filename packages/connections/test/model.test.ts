@@ -20,6 +20,7 @@ function validConnection() {
     platform: "linux" as const,
     lastCheckedAt: "2026-10-22T00:00:00.000Z",
     lastSuccessAt: null,
+    authStatus: "unknown" as const,
     errorCategory: null,
     userMessage: null,
     requiresHumanAction: false,
@@ -112,5 +113,45 @@ describe("adapter availability", () => {
         adapter: { ...connection.adapter, availability: "probably" },
       }),
     ).toThrow();
+  });
+});
+
+describe("authentication status", () => {
+  it.each(["authenticated", "unauthenticated", "expired", "unknown"])(
+    "accepts %s",
+    (authStatus) => {
+      expect(() => connectionSchema.parse({ ...validConnection(), authStatus })).not.toThrow();
+    },
+  );
+
+  it("refuses a value outside the shared vocabulary", () => {
+    // The four values match authStatusSchema in the API's provider-accounts
+    // service, so the two surfaces cannot disagree about what "expired" means.
+    expect(() =>
+      connectionSchema.parse({ ...validConnection(), authStatus: "signed_in" }),
+    ).toThrow();
+  });
+
+  it("requires the field rather than defaulting it", () => {
+    const { authStatus: _dropped, ...withoutStatus } = validConnection();
+
+    // A default would let a caller forget it and get "unknown" for free, which
+    // reads the same as a deliberate "we did not look" and hides the omission.
+    expect(() => connectionSchema.parse(withoutStatus)).toThrow();
+  });
+
+  it("is a separate field from the state", () => {
+    // Related, not identical: these two pairings are both legitimate and a
+    // single value could not express either.
+    expect(() =>
+      connectionSchema.parse({
+        ...validConnection(),
+        state: "authentication_required",
+        authStatus: "unknown",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      connectionSchema.parse({ ...validConnection(), state: "detected", authStatus: "unknown" }),
+    ).not.toThrow();
   });
 });

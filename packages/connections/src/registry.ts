@@ -58,6 +58,14 @@ export interface ProbeInterpretation {
   version?: string;
   /** True only when the output positively states an active session. */
   authenticated?: boolean;
+  /**
+   * True only when the output positively states a session that has lapsed.
+   *
+   * Distinct from `authenticated: false`, which means "no session". A person
+   * who has signed in before and needs to again is in a different situation
+   * from one who never has, and the sentence they should read differs.
+   */
+  sessionExpired?: boolean;
   capabilities?: readonly string[];
 }
 

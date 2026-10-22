@@ -322,6 +322,9 @@ posixOnly("output a provider's own answer cannot be represented", () => {
     expect(connection.state).toBe("error");
     expect(connection.errorCategory).toBe("invalid_output");
     expect(connection.version).toBeNull();
+    // Nothing was learned about the session either, and a result we could not
+    // represent is the last place to start claiming one.
+    expect(connection.authStatus).toBe("unknown");
   });
 
   it("still returns something the schema accepts", async () => {
@@ -607,5 +610,202 @@ posixOnly("the record of a past success survives a later failure", () => {
     // A `Connection` satisfies `PreviousObservation`, so a caller that stores
     // connections passes them through without adapting anything.
     expect(second?.lastSuccessAt).toBe(first?.lastSuccessAt);
+  });
+});
+
+posixOnly("what is known about the session", () => {
+  /** A provider with a session probe whose answer the test chooses. */
+  function withSession(
+    verification: "verified" | "unverified",
+    answer: { authenticated?: boolean; sessionExpired?: boolean } | undefined,
+  ): ProviderDefinition {
+    return fixtureProvider({
+      authenticate: {
+        command: { file: "fixture-session", args: [] },
+        verification,
+        interpret: () => answer,
+      },
+    });
+  }
+
+  async function withBoth() {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-session", 'echo "status"');
+    return bin;
+  }
+
+  it("says unknown when no session probe exists", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("detected");
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("never treats a present CLI as a sign-in", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.executablePath).not.toBeNull();
+    expect(connection.authStatus).not.toBe("authenticated");
+  });
+
+  it("says authenticated only for a verified positive answer", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("connected");
+    expect(connection.authStatus).toBe("authenticated");
+  });
+
+  it("refuses to say authenticated on an unverified positive answer", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("unverified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("detected");
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("says unauthenticated for a verified negative answer", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: false }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("authentication_required");
+    expect(connection.authStatus).toBe("unauthenticated");
+  });
+
+  it("says unknown for an unverified negative answer, while still asking for a sign-in", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("unverified", { authenticated: false }));
+
+    const connection = await detector.detect("fixture");
+
+    // The pairing the review asked to keep distinct: the state may be reached
+    // heuristically because prompting someone to check is cheap; the status
+    // only moves on verified evidence.
+    expect(connection.state).toBe("authentication_required");
+    expect(connection.authStatus).toBe("unknown");
+    expect(connection.requiresHumanAction).toBe(true);
+  });
+
+  it("says expired for verified evidence of a lapsed session", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("verified", { sessionExpired: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("expired");
+    expect(connection.authStatus).toBe("expired");
+  });
+
+  it("does not say expired on an unverified claim of expiry", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("unverified", { sessionExpired: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.authStatus).toBe("unknown");
+    expect(connection.state).toBe("authentication_required");
+  });
+
+  it("distinguishes a lapsed session from one that never existed", async () => {
+    const bin = await withBoth();
+    const expired = await detectorFor(
+      bin.dir,
+      withSession("verified", { sessionExpired: true }),
+    ).detector.detect("fixture");
+    const never = await detectorFor(
+      bin.dir,
+      withSession("verified", { authenticated: false }),
+    ).detector.detect("fixture");
+
+    expect(expired.authStatus).not.toBe(never.authStatus);
+  });
+
+  it("says unknown when the session probe could not run", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    // No fixture-session binary: the probe fails rather than answering.
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("says unknown when a quota error merely implies a session", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-session", 'echo "429 rate limit" >&2; exit 1');
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    // Tempting to call this authenticated — the tool arguably answered as
+    // somebody signed in — but that is an inference from an error message, and
+    // this field does not do inference.
+    expect(connection.state).toBe("degraded");
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("says unknown when the CLI is not installed", async () => {
+    const bin = await createFakeBinDir();
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("not_installed");
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("says unknown when the answer could not be read", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("verified", undefined));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.errorCategory).toBe("invalid_output");
+    expect(connection.authStatus).toBe("unknown");
+  });
+
+  it("holds the invariant that connected implies authenticated", async () => {
+    // The one direction that must not come apart: `connected` is only reachable
+    // through a verified session probe, which is the same evidence
+    // `authenticated` requires.
+    const bin = await withBoth();
+    for (const answer of [{ authenticated: true }, { authenticated: false }]) {
+      const connection = await detectorFor(
+        bin.dir,
+        withSession("verified", answer),
+      ).detector.detect("fixture");
+      if (connection.state === "connected") expect(connection.authStatus).toBe("authenticated");
+      if (connection.authStatus === "authenticated") expect(connection.state).toBe("connected");
+    }
+  });
+
+  it("never carries a session path or an environment into the connection", async () => {
+    const bin = await withBoth();
+    const { detector } = detectorFor(bin.dir, withSession("verified", { authenticated: true }));
+
+    const connection = await detector.detect("fixture");
+
+    const keys = Object.keys(connection);
+    for (const forbidden of FORBIDDEN_CONNECTION_FIELDS) {
+      expect(keys).not.toContain(forbidden);
+    }
+    expect(JSON.stringify(connection)).not.toMatch(/sessionDir|\/\.config\/|HOME=/);
   });
 });

@@ -1,6 +1,7 @@
 import type {
   AdapterAvailability,
   Connection,
+  ConnectionAuthStatus,
   ConnectionErrorCategory,
   ConnectionPlatform,
   ConnectionState,
@@ -162,6 +163,9 @@ export class ConnectionDetector {
         // Nothing ran, so nothing is known about the adapter either. The
         // provider not running here says nothing about what is installed.
         adapterAvailability: "unknown",
+        // Nothing probed a session, so nothing is claimed about one. In
+        // particular, a CLI being present is not evidence anybody signed in.
+        authStatus: "unknown",
         previous,
       });
     }
@@ -184,6 +188,9 @@ export class ConnectionDetector {
         // The CLI is absent. That is a fact about the CLI, and the adapter is a
         // separate install — we did not look, so we do not claim.
         adapterAvailability: "unknown",
+        // Nothing probed a session, so nothing is claimed about one. In
+        // particular, a CLI being present is not evidence anybody signed in.
+        authStatus: "unknown",
         previous,
       });
     }
@@ -219,6 +226,9 @@ export class ConnectionDetector {
         succeeded: false,
         // The presence probe failed, so the adapter was never looked at.
         adapterAvailability: "unknown",
+        // Nothing probed a session, so nothing is claimed about one. In
+        // particular, a CLI being present is not evidence anybody signed in.
+        authStatus: "unknown",
         previous,
       });
     }
@@ -236,6 +246,9 @@ export class ConnectionDetector {
         capabilities: [],
         succeeded: false,
         adapterAvailability: "unknown",
+        // Nothing probed a session, so nothing is claimed about one. In
+        // particular, a CLI being present is not evidence anybody signed in.
+        authStatus: "unknown",
         previous,
       });
     }
@@ -257,6 +270,9 @@ export class ConnectionDetector {
         capabilities: interpretation.capabilities ?? [],
         succeeded: true,
         adapterAvailability,
+        // Installed and runnable. That is a fact about the install, not about
+        // a session, and this is the pairing the review asked to keep distinct.
+        authStatus: "unknown",
         previous,
       });
     }
@@ -271,6 +287,7 @@ export class ConnectionDetector {
       capabilities: state.capabilities,
       succeeded: state.state === "connected" || state.state === "degraded",
       adapterAvailability,
+      authStatus: state.authStatus,
       previous,
       probeVerification: sessionProbe.verification,
     });
@@ -308,18 +325,33 @@ export class ConnectionDetector {
     return parsed.available ? "available" : "missing";
   }
 
+  /**
+   * Interprets a session probe into a state and an auth status.
+   *
+   * The two move on different evidence, deliberately. The state may be
+   * heuristic — reaching `authentication_required` from a message that looks
+   * like a sign-in prompt is cheap and recoverable for a reader. The auth
+   * status may not: it changes only on a positive statement from a probe the
+   * registry marks `verified`. Everything else is `unknown`, which is why
+   * `authentication_required` paired with `unknown` is a legitimate result
+   * rather than an inconsistency.
+   */
   #sessionState(
     outcome: ProbeOutcome,
     verification: "verified" | "unverified",
     interpret:
-      | ((
-          stdout: string,
-        ) =>
-          | { authenticated?: boolean; version?: string; capabilities?: readonly string[] }
+      | ((stdout: string) =>
+          | {
+              authenticated?: boolean;
+              sessionExpired?: boolean;
+              version?: string;
+              capabilities?: readonly string[];
+            }
           | undefined)
       | undefined,
   ): {
     state: ConnectionState;
+    authStatus: ConnectionAuthStatus;
     errorCategory: ConnectionErrorCategory | null;
     version: string | undefined;
     capabilities: readonly string[];
@@ -334,16 +366,38 @@ export class ConnectionDetector {
             : category === "network_unreachable"
               ? "disconnected"
               : "error";
-      return { state, errorCategory: category, version: undefined, capabilities: [] };
+      // A failed probe is not a statement about a session, even when its
+      // stderr reads like one. `quota_exhausted` is the tempting case — the
+      // tool arguably answered as somebody signed in — but that is an
+      // inference from an error message, and this field does not do inference.
+      return {
+        state,
+        authStatus: "unknown",
+        errorCategory: category,
+        version: undefined,
+        capabilities: [],
+      };
     }
 
     const parsed = interpret?.(outcome.stdout);
     if (parsed === undefined) {
       return {
         state: "error",
+        authStatus: "unknown",
         errorCategory: "invalid_output",
         version: undefined,
         capabilities: [],
+      };
+    }
+    if (parsed.sessionExpired === true) {
+      // Distinct from "no session": somebody who signed in before and must
+      // again reads a different sentence from somebody who never has.
+      return {
+        state: verification === "verified" ? "expired" : "authentication_required",
+        authStatus: verification === "verified" ? "expired" : "unknown",
+        errorCategory: "authentication_required",
+        version: parsed.version,
+        capabilities: parsed.capabilities ?? [],
       };
     }
     if (parsed.authenticated !== true) {
@@ -351,6 +405,7 @@ export class ConnectionDetector {
       // nobody has signed into yet, and it needs a person, not a retry.
       return {
         state: "authentication_required",
+        authStatus: verification === "verified" ? "unauthenticated" : "unknown",
         errorCategory: "authentication_required",
         version: parsed.version,
         capabilities: parsed.capabilities ?? [],
@@ -362,6 +417,7 @@ export class ConnectionDetector {
       // reason is recorded rather than hidden.
       return {
         state: "detected",
+        authStatus: "unknown",
         errorCategory: null,
         version: parsed.version,
         capabilities: parsed.capabilities ?? [],
@@ -369,6 +425,8 @@ export class ConnectionDetector {
     }
     return {
       state: "connected",
+      // The only path to this value: a verified probe that positively said so.
+      authStatus: "authenticated",
       errorCategory: null,
       version: parsed.version,
       capabilities: parsed.capabilities ?? [],
@@ -406,6 +464,7 @@ export class ConnectionDetector {
       capabilities: readonly string[];
       succeeded: boolean;
       adapterAvailability: AdapterAvailability;
+      authStatus: ConnectionAuthStatus;
       previous: PreviousObservation;
       probeVerification?: "verified" | "unverified";
     },
@@ -436,6 +495,7 @@ export class ConnectionDetector {
       // "it worked at 14:02 and has failed since" is the useful fact and
       // overwriting it with null destroys exactly that.
       lastSuccessAt: result.succeeded ? now : result.previous.lastSuccessAt,
+      authStatus: result.authStatus,
       errorCategory: result.errorCategory,
       userMessage: result.errorCategory === null ? null : USER_MESSAGES[result.errorCategory],
       requiresHumanAction: stateRequiresHumanAction(result.state),
@@ -481,6 +541,8 @@ export class ConnectionDetector {
       // would be the worst version of this bug rather than a fix for it. Not
       // forced to null either — an earlier success is still a fact.
       lastSuccessAt: previous.lastSuccessAt,
+      // Nothing was learned about the session either.
+      authStatus: "unknown",
       errorCategory: "invalid_output",
       userMessage: USER_MESSAGES.invalid_output,
       requiresHumanAction: stateRequiresHumanAction("error"),

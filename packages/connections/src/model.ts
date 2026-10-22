@@ -131,6 +131,54 @@ export type AdapterProvenance = z.infer<typeof adapterProvenanceSchema>;
  * as the other. The only way to reach `available` is evidence from an adapter
  * probe; absence of evidence yields `unknown`.
  */
+/**
+ * What is known about the provider's own sign-in session.
+ *
+ * ## Why this is separate from the state
+ *
+ * Installation and authentication are related and not identical, and the model
+ * says so rather than leaving a reader to infer one from the other. A tool can
+ * be installed and signed out, installed with a lapsed session, or installed
+ * with no way for NEXUS to tell. Folding that into the state would force a
+ * single value to answer two questions, and the one that loses is whichever a
+ * surface happens not to be asking.
+ *
+ * The state is allowed to be heuristic: `authentication_required` can be
+ * reached from a stderr message that merely looks like a sign-in prompt,
+ * because prompting a person to check is cheap and recoverable. This field is
+ * not: it only moves on evidence from a probe the registry marks `verified`.
+ * So `authentication_required` with `unknown` is a legitimate pairing — "you
+ * may need to sign in, and we are not claiming to know".
+ *
+ * ## Vocabulary, and the consolidation still owed
+ *
+ * These are exactly the four values of `authStatusSchema` in
+ * `services/api/src/services/provider-accounts.ts`, chosen so the two surfaces
+ * never disagree about what "expired" means. The schema is re-declared here
+ * rather than imported, because that module also exports a `ProviderAccount`
+ * carrying `env` and `sessionDir` — a full environment map and a path to a
+ * session file — and a domain package has no business depending on a type that
+ * can hold credentials.
+ *
+ * The consolidation that is owed: move this four-value schema into
+ * `@nexus/shared` and have both the API service and this package import it.
+ * That is deliberately not done here, since it means editing a package outside
+ * this batch's scope while `packages/` is being translated elsewhere. Until
+ * then the duplication is one enum of four strings, and the comment on both
+ * sides is the contract.
+ */
+export const connectionAuthStatusSchema = z.enum([
+  /** A verified probe positively reported an active session. */
+  "authenticated",
+  /** A verified probe positively reported no session. */
+  "unauthenticated",
+  /** A verified probe positively reported a lapsed session. */
+  "expired",
+  /** Nobody looked, or what came back was not evidence. The default. */
+  "unknown",
+]);
+export type ConnectionAuthStatus = z.infer<typeof connectionAuthStatusSchema>;
+
 export const adapterAvailabilitySchema = z.enum(["available", "missing", "unknown"]);
 export type AdapterAvailability = z.infer<typeof adapterAvailabilitySchema>;
 
@@ -176,6 +224,15 @@ export const connectionSchema = z
     lastCheckedAt: z.string().datetime().nullable(),
     /** ISO 8601 of the last probe that actually succeeded. */
     lastSuccessAt: z.string().datetime().nullable(),
+
+    /**
+     * What is known about the session, as opposed to about the installation.
+     *
+     * Never inferred from `state`, from `executablePath`, or from the adapter.
+     * The presence of a CLI says nothing about whether anybody has signed into
+     * it.
+     */
+    authStatus: connectionAuthStatusSchema,
 
     errorCategory: connectionErrorCategorySchema.nullable(),
     /** One sentence, already redacted, safe to display verbatim. */
