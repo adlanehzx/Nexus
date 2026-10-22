@@ -33,8 +33,8 @@ import { BUILT_IN_PROVIDERS, createBuiltInRegistry } from "../src/providers.js";
  * trusting it.
  */
 
-const DISCOVERY = process.env["NEXUS_REAL_AGENT_SMOKE"] === "1";
-const CONVERSATION = process.env["NEXUS_REAL_AGENT_CONVERSATION"] === "1";
+const DISCOVERY = process.env.NEXUS_REAL_AGENT_SMOKE === "1";
+const CONVERSATION = process.env.NEXUS_REAL_AGENT_CONVERSATION === "1";
 
 const discovery = DISCOVERY ? describe : describe.skip;
 const conversation = DISCOVERY && CONVERSATION ? describe : describe.skip;
@@ -59,7 +59,7 @@ function detector(): ConnectionDetector {
       clock,
       // Mirrors how the API wires this, so the smoke test measures production
       // behaviour rather than a more permissive variant of it.
-      envAllowlist: extendEnvAllowlist(process.env["NEXUS_PROBE_ENV_ALLOWLIST"]),
+      envAllowlist: extendEnvAllowlist(process.env.NEXUS_PROBE_ENV_ALLOWLIST),
     }),
     clock,
     platform:
