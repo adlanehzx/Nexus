@@ -30,7 +30,7 @@ installers or device pairing here.
 
 | ID  | Deliverable                                    | Status | Commit | Evidence |
 | --- | ---------------------------------------------- | ------ | ------ | -------- |
-| C0  | Baseline and executable acceptance scenarios   | TODO   |        |          |
+| C0  | Baseline and executable acceptance scenarios   | IN_PROGRESS |        | Base `f34e3a3c20a02702019e04a88ce38f4bbbf6fa4e` |
 | C1  | Durable mission lifecycle and restart recovery | TODO   |        |          |
 | C2  | Context, memory and token-budget management    | TODO   |        |          |
 | C3  | Health, quota-aware routing and agent fallback | TODO   |        |          |
@@ -52,12 +52,12 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-22T22:11:32+02:00
 - Completed at:
 - Commit:
 - Commands and results:
-- Notes:
+- Notes: Base commit: `f34e3a3c20a02702019e04a88ce38f4bbbf6fa4e`.
 
 ## C1 — Durable mission lifecycle and restart recovery
 

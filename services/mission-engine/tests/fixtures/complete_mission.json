@@ -1,0 +1,98 @@
+{
+  "plan": {
+    "external_key": "acceptance-complete-mission",
+    "title": "Deterministic complete mission",
+    "workspace": "/tmp/nexus-acceptance-workspace",
+    "owner": {
+      "user_id": "fixture-user",
+      "assertion": "TEST_ONLY_DELEGATION_ASSERTION"
+    },
+    "defaults": {
+      "profile": "codex",
+      "timeout_seconds": 60,
+      "max_attempts": 3,
+      "retry_delay_seconds": 1,
+      "context_budget_chars": 4000
+    },
+    "tasks": [
+      {
+        "key": "discover",
+        "instruction": "Collect the deterministic source facts.",
+        "depends_on": [],
+        "fallback_profiles": ["claude"]
+      },
+      {
+        "key": "analyze",
+        "instruction": "Analyze the source facts and preserve citations.",
+        "depends_on": ["discover"]
+      },
+      {
+        "key": "prepare_action",
+        "instruction": "Prepare the exact external action payload.",
+        "depends_on": ["discover"]
+      },
+      {
+        "key": "perform_action",
+        "agent_kind": "agent-core",
+        "instruction": "Execute the approved fixture.write action exactly once.",
+        "depends_on": ["analyze", "prepare_action"]
+      },
+      {
+        "key": "verify",
+        "profile": "claude",
+        "instruction": "Verify the result and return cited evidence.",
+        "depends_on": ["perform_action"]
+      }
+    ]
+  },
+  "script": [
+    {
+      "event": "agent_failure",
+      "task": "discover",
+      "profile": "codex",
+      "category": "rate_limited"
+    },
+    {
+      "event": "agent_success",
+      "task": "discover",
+      "profile": "claude"
+    },
+    {
+      "event": "parallel_ready",
+      "tasks": ["analyze", "prepare_action"]
+    },
+    {
+      "event": "tool_call",
+      "task": "perform_action",
+      "tool": "fixture.write",
+      "risk": "high",
+      "arguments": {
+        "target": "fixture://result",
+        "content": "deterministic-result"
+      }
+    },
+    {
+      "event": "awaiting_confirmation",
+      "task": "perform_action",
+      "confirmation_id": "fixture-confirmation-1"
+    },
+    {
+      "event": "restart_checkpoint",
+      "task": "perform_action"
+    },
+    {
+      "event": "confirmation_approved",
+      "task": "perform_action",
+      "confirmation_id": "fixture-confirmation-1"
+    },
+    {
+      "event": "tool_result",
+      "task": "perform_action",
+      "idempotency_key": "fixture-attempt-id"
+    },
+    {
+      "event": "mission_succeeded",
+      "task": "verify"
+    }
+  ]
+}

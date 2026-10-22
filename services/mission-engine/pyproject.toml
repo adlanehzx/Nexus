@@ -19,6 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["httpx>=0.28,<1", "pytest>=8.3,<9"]
 
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8.3,<9"]
+
 [project.scripts]
 nexus-mission-engine = "nexus_engine.api:main"
 
