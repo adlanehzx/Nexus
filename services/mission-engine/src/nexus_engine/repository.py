@@ -672,6 +672,7 @@ class MissionRepository:
         candidates = [str(row["profile_key"]), *json.loads(str(row["fallback_profiles_json"]))]
         selected: str | None = None
         unavailable_until: list[str] = []
+        observations: list[dict[str, Any]] = []
         for profile_key in candidates:
             health = connection.execute(
                 """
@@ -683,6 +684,7 @@ class MissionRepository:
                 (profile_key,),
             ).fetchone()
             if health is None:
+                observations.append({"profile": profile_key, "status": "not_configured"})
                 continue
             status = str(health["status"])
             cooldown_until = health["cooldown_until"]
@@ -696,8 +698,10 @@ class MissionRepository:
                 )
                 status = "available"
             if status in {"available", "degraded", "unknown"}:
+                observations.append({"profile": profile_key, "status": status})
                 selected = profile_key
                 break
+            observations.append({"profile": profile_key, "status": status})
             for value in (
                 health["cooldown_until"],
                 health["resets_5h_at"],
@@ -706,6 +710,15 @@ class MissionRepository:
                 if value and str(value) > current_text:
                     unavailable_until.append(str(value))
         if selected is None:
+            MissionRepository._record_routing_decision(
+                connection,
+                str(row["id"]),
+                candidates,
+                observations,
+                None,
+                "all_candidates_unavailable",
+                current_text,
+            )
             wake_at = min(unavailable_until) if unavailable_until else timestamp(current + timedelta(minutes=5))
             connection.execute(
                 """
@@ -714,6 +727,15 @@ class MissionRepository:
                 (wake_at, current_text, row["id"]),
             )
             return None
+        MissionRepository._record_routing_decision(
+            connection,
+            str(row["id"]),
+            candidates,
+            observations,
+            selected,
+            "selected_primary" if selected == candidates[0] else "selected_fallback",
+            current_text,
+        )
         if selected != row["profile_key"]:
             profile = connection.execute(
                 "SELECT agent_profile_id FROM profiles WHERE profile_key=?", (selected,)
@@ -744,6 +766,33 @@ class MissionRepository:
                 (row["id"],),
             ).fetchone()
         return row
+
+    @staticmethod
+    def _record_routing_decision(
+        connection: sqlite3.Connection,
+        task_id: str,
+        candidates: list[str],
+        observations: list[dict[str, Any]],
+        selected_profile: str | None,
+        reason: str,
+        created_at: str,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO routing_decisions(
+                id,task_id,selected_profile,candidates_json,observations_json,reason,created_at
+            ) VALUES (?,?,?,?,?,?,?)
+            """,
+            (
+                str(uuid.uuid4()),
+                task_id,
+                selected_profile,
+                canonical_json(candidates),
+                canonical_json(observations),
+                reason,
+                created_at,
+            ),
+        )
 
     def mark_running(self, lease: Lease) -> None:
         self._lease_update(lease, "running")
@@ -1440,11 +1489,19 @@ class MissionRepository:
                 """,
                 (task_id,),
             ).fetchall()
+            routing = connection.execute(
+                """
+                SELECT selected_profile,candidates_json,observations_json,reason,created_at
+                FROM routing_decisions WHERE task_id=? ORDER BY created_at,id
+                """,
+                (task_id,),
+            ).fetchall()
             snapshots.append(
                 {
                     **dict(task),
                     "depends_on": [str(row["task_key"]) for row in dependencies],
                     "attempts": [dict(row) for row in attempts],
+                    "routing_decisions": [dict(row) for row in routing],
                 }
             )
         return {**dict(mission), "tasks": snapshots}

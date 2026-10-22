@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -205,6 +206,31 @@ def test_router_skips_exhausted_primary_before_first_attempt(
     lease = repository.acquire("worker-a")
     assert lease is not None
     assert lease.profile_key == "claude"
+    snapshot = repository.mission(lease.mission_id)["tasks"][0]
+    decision = snapshot["routing_decisions"][0]
+    assert decision["selected_profile"] == "claude"
+    assert decision["reason"] == "selected_fallback"
+    assert json.loads(decision["observations_json"]) == [
+        {"profile": "codex", "status": "quota_exhausted"},
+        {"profile": "claude", "status": "unknown"},
+    ]
+
+
+def test_unknown_quota_is_preserved_and_does_not_mean_unlimited(
+    repository: MissionRepository,
+) -> None:
+    repository.submit(spec(), "unknown-quota")
+    lease = repository.acquire("worker-a")
+    assert lease is not None
+
+    activity = {item["key"]: item for item in repository.profile_activity()}
+    assert activity["codex"]["status"] == "unknown"
+    assert activity["codex"]["remaining_5h_percent"] is None
+    assert activity["codex"]["remaining_week_percent"] is None
+    decision = repository.mission(lease.mission_id)["tasks"][0]["routing_decisions"][0]
+    assert json.loads(decision["observations_json"]) == [
+        {"profile": "codex", "status": "unknown"}
+    ]
 
 
 def test_dependency_context_is_compacted_to_task_budget(repository: MissionRepository) -> None:

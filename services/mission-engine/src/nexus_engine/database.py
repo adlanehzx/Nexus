@@ -150,6 +150,19 @@ CREATE INDEX IF NOT EXISTS idx_tasks_schedulable ON tasks(state, next_attempt_at
 CREATE INDEX IF NOT EXISTS idx_attempts_lease ON attempts(state, lease_expires_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(delivered_at, available_at);
 
+CREATE TABLE IF NOT EXISTS routing_decisions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    selected_profile TEXT,
+    candidates_json TEXT NOT NULL CHECK (json_valid(candidates_json)),
+    observations_json TEXT NOT NULL CHECK (json_valid(observations_json)),
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_decisions_task
+    ON routing_decisions(task_id, created_at);
+
 CREATE TABLE IF NOT EXISTS mission_schedules (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
