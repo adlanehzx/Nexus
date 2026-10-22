@@ -9,6 +9,7 @@ import {
   ToolRegistry,
   type ToolDefinition,
 } from "@nexus/tools";
+import type { ContextAssembler } from "@nexus/memory";
 import { AgentOrchestrator, InMemoryAgentRunStore, type AgentEvent } from "../src/index.js";
 import type { ExecutionPolicy } from "../src/policy.js";
 
@@ -174,6 +175,7 @@ export interface HarnessOptions {
   policy?: Partial<ExecutionPolicy>;
   now?: () => number;
   autoApproveMaxRisk?: Parameters<typeof makePermissions>[1];
+  context?: ContextAssembler;
 }
 
 function makePermissions(granted: string[], autoApproveMaxRisk: "SAFE" | "LOW" | "MEDIUM" = "LOW") {
@@ -224,6 +226,7 @@ export function makeHarness(options: HarnessOptions): Harness {
     store,
     ...(options.policy ? { policy: options.policy } : {}),
     ...(options.now ? { now: options.now } : {}),
+    ...(options.context ? { context: options.context } : {}),
   });
 
   orchestrator.on((event) => events.push(event));

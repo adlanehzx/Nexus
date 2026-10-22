@@ -32,7 +32,7 @@ installers or device pairing here.
 | --- | ---------------------------------------------- | ------ | --------- | ----------------------------------------------------- |
 | C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
 | C1  | Durable mission lifecycle and restart recovery | DONE   | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
-| C2  | Context, memory and token-budget management    | TODO   |           |                                                       |
+| C2  | Context, memory and token-budget management    | IN_PROGRESS |           |                                                       |
 | C3  | Health, quota-aware routing and agent fallback | TODO   |           |                                                       |
 | C4  | Human confirmation and safe retry semantics    | TODO   |           |                                                       |
 | C5  | Cross-agent integration and full product E2E   | TODO   |           |                                                       |
@@ -125,8 +125,8 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-22T22:17:40+02:00
 - Completed at:
 - Commit:
 - Commands and results:

@@ -78,6 +78,23 @@ export interface AgentRunRecord {
   replayOfRunId?: string | null;
   /** Explicit fallback count to alternative agents or retry configurations. */
   fallbackCount?: number;
+  /** Bounded context accounting. It intentionally excludes raw context text. */
+  contextUsage?: {
+    chars: number;
+    tokens: number;
+    tokenBudget: number;
+    compacted: boolean;
+    sections: { name: string; chars: number; tokens: number; dropped: number }[];
+  };
+}
+
+export interface AgentContextSnapshot {
+  /** Governed run context, retained only with the durable run state. */
+  text: string;
+  chars: number;
+  tokens: number;
+  tokenBudget: number;
+  sections: { name: string; chars: number; tokens: number; dropped: number }[];
 }
 
 /**
@@ -87,6 +104,8 @@ export interface AgentState {
   record: AgentRunRecord;
   /** Current conversation transcript presented to the model. */
   messages: LlmMessage[];
+  /** Exact bounded background required to resume deterministically. */
+  contextSnapshot?: AgentContextSnapshot | null;
   /** Pending tool call awaiting human authorization. */
   pendingConfirmation: {
     confirmationId: string;

@@ -372,6 +372,54 @@ describe("permissions", () => {
 });
 
 describe("confirmation", () => {
+  it("persists bounded context accounting and restores critical context after suspension", async () => {
+    const email = makeEmailTool();
+    const context = {
+      assemble: () =>
+        Promise.resolve({
+          text: "Decision: use the approved address. Citation: fixture://decision-1",
+          chars: 66,
+          tokens: 18,
+          tokenBudget: 64,
+          sections: [
+            {
+              name: "shortTerm",
+              title: "Current session context",
+              lines: ["Decision", "Citation"],
+              chars: 66,
+              tokens: 18,
+              dropped: 1,
+            },
+          ],
+        }),
+    };
+    const h = makeHarness({
+      turns: [
+        callTurn("email.send", { to: "a@b.c", subject: "Subject", body: "Body" }),
+        { kind: "final", text: "Email sent with preserved context." },
+      ],
+      tools: asTools(email.tool),
+      permissions: ["email.send"],
+      context: context as never,
+    });
+
+    const first = await h.run("Send the approved message");
+    const stored = await h.store.require(first.record.runId);
+    expect(stored.contextSnapshot?.text).toContain("fixture://decision-1");
+    expect(stored.record.contextUsage).toMatchObject({
+      chars: 66,
+      tokens: 18,
+      tokenBudget: 64,
+      compacted: true,
+    });
+    expect(JSON.stringify(stored.record.contextUsage)).not.toContain("approved address");
+
+    await h.orchestrator.resume(first.record.runId, "approved");
+
+    expect(h.llm.requests).toHaveLength(2);
+    expect(h.llm.requests[1]?.system).toContain("fixture://decision-1");
+  });
+
   it("suspends the run and exposes the request", async () => {
     const email = makeEmailTool();
     const h = makeHarness({

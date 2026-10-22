@@ -134,6 +134,7 @@ export class AgentOrchestrator {
         fallbackCount: 0,
       },
       messages: [],
+      contextSnapshot: null,
       pendingConfirmation: null,
       consecutiveToolFailures: 0,
       toolCallCount: 0,
@@ -379,6 +380,25 @@ export class AgentOrchestrator {
           model: state.record.model,
         });
         context.setBackground(assembled.text);
+        state.contextSnapshot = {
+          text: assembled.text,
+          chars: assembled.chars,
+          tokens: assembled.tokens,
+          tokenBudget: assembled.tokenBudget,
+          sections: assembled.sections.map(({ name, chars, tokens, dropped }) => ({
+            name,
+            chars,
+            tokens,
+            dropped,
+          })),
+        };
+        state.record.contextUsage = {
+          chars: assembled.chars,
+          tokens: assembled.tokens,
+          tokenBudget: assembled.tokenBudget,
+          compacted: assembled.sections.some((section) => section.dropped > 0),
+          sections: state.contextSnapshot.sections,
+        };
       } else if (this.#options.memory !== undefined) {
         const hits = await this.#options.memory.search({
           userId: state.record.userId,
@@ -389,6 +409,8 @@ export class AgentOrchestrator {
       }
 
       context.addUserMessage(firstMessage);
+    } else if (state.contextSnapshot !== null && state.contextSnapshot !== undefined) {
+      context.setBackground(state.contextSnapshot.text);
     }
 
     return context;

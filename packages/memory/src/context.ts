@@ -76,6 +76,8 @@ export interface AssembledContext {
   chars: number;
   /** Local estimate or exact count if the adapter injects its tokenizer. */
   tokens: number;
+  /** Sum of the independent section token fences. */
+  tokenBudget: number;
 }
 
 export interface ContextAssemblerOptions {
@@ -153,7 +155,13 @@ export class ContextAssembler {
       .map((section) => `## ${section.title}\n${section.lines.join("\n")}`)
       .join("\n\n");
 
-    return { sections, text, chars: text.length, tokens: this.#tokens.count(text, input.model) };
+    return {
+      sections,
+      text,
+      chars: text.length,
+      tokens: this.#tokens.count(text, input.model),
+      tokenBudget: Object.values(this.#tokenBudget).reduce((total, value) => total + value, 0),
+    };
   }
 
   // ── 4. Preferences ───────────────────────────────────────────────────────
