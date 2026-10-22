@@ -102,7 +102,8 @@ const USER_MESSAGES: Record<ConnectionErrorCategory, string> = {
   not_found: "This tool is not installed on this machine.",
   permission_denied: "NEXUS is not allowed to run this tool on this machine.",
   authentication_required: "Sign in to this tool with its own command line, then check again.",
-  timeout: "This tool did not answer in time.",
+  timeout:
+    "This tool did not answer in time. If it is installed through a version manager, NEXUS may need extra environment variables to run it.",
   unsupported_platform: "This tool does not run on this kind of machine.",
   invalid_output: "This tool answered in a form NEXUS does not recognise.",
   quota_exhausted: "This tool reports that its usage limit is reached.",

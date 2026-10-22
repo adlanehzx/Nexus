@@ -3,6 +3,7 @@ import { NodeProcessPort, SystemClock } from "../src/node-process.js";
 import {
   DEFAULT_ENV_ALLOWLIST,
   SafeCommandRunner,
+  extendEnvAllowlist,
   classifyFailure,
   type ProbeAuditEntry,
 } from "../src/probes.js";
@@ -292,5 +293,59 @@ describe("failure classification", () => {
 
   it("says internal rather than guessing", () => {
     expect(classifyFailure({ timedOut: false, exitCode: 9, stderr: "flurb" })).toBe("internal");
+  });
+});
+
+describe("host-declared environment additions", () => {
+  it("returns the default list when nothing is declared", () => {
+    expect(extendEnvAllowlist(undefined)).toEqual(DEFAULT_ENV_ALLOWLIST);
+    expect(extendEnvAllowlist("  ")).toEqual(DEFAULT_ENV_ALLOWLIST);
+  });
+
+  it("adds declared names", () => {
+    const extended = extendEnvAllowlist("__MISE_DIFF, ASDF_DIR");
+
+    expect(extended).toContain("__MISE_DIFF");
+    expect(extended).toContain("ASDF_DIR");
+    // The defaults are kept, not replaced: a host adding one name must not
+    // lose PATH.
+    expect(extended).toContain("PATH");
+  });
+
+  it.each(["GITHUB_TOKEN", "MY_API_KEY", "DB_PASSWORD", "SESSION_ID", "AUTH_HEADER"])(
+    "refuses to admit %s however it is declared",
+    (name) => {
+      // The hatch widens which ordinary variables reach a child. It cannot
+      // widen the rule about secrets, which is the only reason it is safe to
+      // read this from the environment at all.
+      expect(extendEnvAllowlist(name)).not.toContain(name);
+    },
+  );
+
+  it("still strips a declared secret name at build time", () => {
+    const runner = new SafeCommandRunner({
+      process: new NodeProcessPort({ path: "", platform: "linux" }),
+      clock: new FakeClock(),
+      envAllowlist: extendEnvAllowlist("GITHUB_TOKEN,__MISE_DIFF"),
+    });
+
+    const env = runner.buildEnv({ GITHUB_TOKEN: "leak", __MISE_DIFF: "state" });
+
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.__MISE_DIFF).toBe("state");
+  });
+
+  it("ignores names that are not environment variable names", () => {
+    const extended = extendEnvAllowlist("not-a-name, PATH;rm -rf /, VALID_NAME");
+
+    expect(extended).toContain("VALID_NAME");
+    expect(extended).not.toContain("not-a-name");
+    expect(extended.some((name) => name.includes(";"))).toBe(false);
+  });
+
+  it("does not duplicate a name already in the defaults", () => {
+    const extended = extendEnvAllowlist("PATH,HOME");
+
+    expect(extended.filter((name) => name === "PATH")).toHaveLength(1);
   });
 });

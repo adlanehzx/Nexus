@@ -5,6 +5,7 @@ import {
   SafeCommandRunner,
   SystemClock,
   createBuiltInRegistry,
+  extendEnvAllowlist,
   type Connection,
   type ConnectionAction,
   type ConnectionKind,
@@ -70,6 +71,11 @@ export class LocalConnectionManager implements ConnectionCatalogService {
       runner: new SafeCommandRunner({
         process: new NodeProcessPort({ platform: process.platform }),
         clock,
+        // Hosts whose agent CLIs are version-manager shims need a few extra
+        // ordinary variables for those shims to run at all; without them the
+        // probe times out on a tool that works. Secret-shaped names are still
+        // stripped, so this cannot be used to hand a token to a child.
+        envAllowlist: extendEnvAllowlist(process.env["NEXUS_PROBE_ENV_ALLOWLIST"]),
       }),
       clock,
       platform: this.#platform,

@@ -120,6 +120,43 @@ export const DEFAULT_ENV_ALLOWLIST = [
 const ALWAYS_STRIPPED =
   /(^|_)(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|COOKIE|SESSION|PRIVATE_?KEY|AUTH)(_|$)/i;
 
+/**
+ * Adds host-declared names to the default allowlist.
+ *
+ * ## Why this escape hatch exists
+ *
+ * Because a minimal environment can make a perfectly installed CLI hang, and
+ * this was observed rather than imagined. On the machine this was written on,
+ * `codex` and `claude` are shims that run `mise use -g`; with the default
+ * allowlist they never answer `--version` and detection correctly reports a
+ * timeout — correctly, and uselessly, because the tools work fine. Restoring
+ * one variable the shim needs brings the probe back to about fifty
+ * milliseconds.
+ *
+ * Version-manager shims (mise, asdf, volta) are a normal way these tools get
+ * installed, and no portable variable describes how a parent's PATH was built.
+ * So the host declares what its shims need, by name, and nothing else changes.
+ *
+ * ## Why this cannot be used to leak a credential
+ *
+ * The names pass through the same secret-shaped filter as everything else, so
+ * declaring `GITHUB_TOKEN` here admits nothing. The hatch widens which
+ * *ordinary* variables reach a child; it cannot widen the rule about secrets,
+ * and a test asserts exactly that.
+ */
+export function extendEnvAllowlist(
+  declared: string | undefined,
+  base: readonly string[] = DEFAULT_ENV_ALLOWLIST,
+): readonly string[] {
+  if (declared === undefined || declared.trim().length === 0) return base;
+  const extra = declared
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+    .filter((name) => !ALWAYS_STRIPPED.test(name));
+  return [...new Set([...base, ...extra])];
+}
+
 export class SafeCommandRunner {
   readonly #process: ProcessPort;
   readonly #clock: ClockPort;
