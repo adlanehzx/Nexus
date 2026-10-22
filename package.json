@@ -39,7 +39,8 @@
     "k8s:images": "docker build -f infrastructure/docker/api.Dockerfile -t nexus-api:local . && docker build -f infrastructure/docker/dashboard.Dockerfile -t nexus-dashboard:local . && docker build -f infrastructure/docker/migrate.Dockerfile -t nexus-migrate:local .",
     "worker:image": "docker build -f infrastructure/docker/worker.Dockerfile -t nexus-worker:local .",
     "k8s:render": "kubectl kustomize infrastructure/kubernetes",
-    "translation:status": "bash scripts/translation-status.sh"
+    "translation:status": "bash scripts/translation-status.sh",
+    "translation:check": "bash scripts/translation-status.sh --check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
