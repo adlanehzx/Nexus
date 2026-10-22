@@ -74,7 +74,9 @@ export class TaskRunner {
     const startedAt = Date.now();
 
     if (this.#completedRequests.has(payload.requestId)) {
-      this.#logger.info("dispatched order already completed, ignoring", { requestId: payload.requestId });
+      this.#logger.info("dispatched order already completed, ignoring", {
+        requestId: payload.requestId,
+      });
       return;
     }
 

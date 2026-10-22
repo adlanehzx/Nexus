@@ -11,7 +11,7 @@ import {
 import type { ToolContext } from "@nexus/tools";
 
 describe("BrowserSecurityPolicy", () => {
-  it("autorise les URL publiques HTTP et HTTPS", () => {
+  it("allows public HTTP and HTTPS URLs", () => {
     const policy = new BrowserSecurityPolicy();
     expect(policy.assertUrlSafe("https://example.com").toString()).toBe("https://example.com/");
     expect(policy.assertUrlSafe("http://sub.domain.org/path?q=1").toString()).toBe(

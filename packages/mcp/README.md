@@ -109,16 +109,16 @@ These presets serve as blueprints: copy `src/presets.ts` to configure new server
 
 ## Security Invariants
 
-| Security Rule                  | Implementation Mechanics                                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Zero Secrets in Logs           | `describeConfig()` yields only configuration **keys** for `env`/`headers`, never raw values. Tested in CI.                                                         |
-| Isolated Credentials           | Secrets pass through `envRefs`/`headerRefs` resolved at boot time via vault. They are neither stored in plaintext config nor visible to model prompts.             |
-| Zero Environment Inheritance   | Spawned child processes receive only `getDefaultEnvironment()` + explicit parameters. Backend environment keys do not leak. **Tested against real processes.**    |
-| Untrusted Tool Descriptions    | Tool descriptions originate from third parties: bounded character length, XML/HTML tags stripped, and provenance clearly demarcated.                                |
-| Untrusted Server Annotations   | `destructiveHint` can **escalate** risk; `readOnlyHint` can never downgrade it. Official MCP specification: _"Clients should never make tool use decisions based on ToolAnnotations received from untrusted servers."_ |
-| Input Argument Validation      | Inputs validate against the **server's native JSON Schema** using `@cfworker/json-schema` — ensuring identical verdicts on client and server.                     |
-| No Blind Automatic Retries     | A tool is only automatically retried if classified by human policy as `SAFE` or `LOW`.                                                                             |
-| Bounded Operational Delays     | `connectTimeoutMs` for handshake, `requestTimeoutMs` (or per-tool overrides) on execution calls.                                                                   |
+| Security Rule                | Implementation Mechanics                                                                                                                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Zero Secrets in Logs         | `describeConfig()` yields only configuration **keys** for `env`/`headers`, never raw values. Tested in CI.                                                                                                             |
+| Isolated Credentials         | Secrets pass through `envRefs`/`headerRefs` resolved at boot time via vault. They are neither stored in plaintext config nor visible to model prompts.                                                                 |
+| Zero Environment Inheritance | Spawned child processes receive only `getDefaultEnvironment()` + explicit parameters. Backend environment keys do not leak. **Tested against real processes.**                                                         |
+| Untrusted Tool Descriptions  | Tool descriptions originate from third parties: bounded character length, XML/HTML tags stripped, and provenance clearly demarcated.                                                                                   |
+| Untrusted Server Annotations | `destructiveHint` can **escalate** risk; `readOnlyHint` can never downgrade it. Official MCP specification: _"Clients should never make tool use decisions based on ToolAnnotations received from untrusted servers."_ |
+| Input Argument Validation    | Inputs validate against the **server's native JSON Schema** using `@cfworker/json-schema` — ensuring identical verdicts on client and server.                                                                          |
+| No Blind Automatic Retries   | A tool is only automatically retried if classified by human policy as `SAFE` or `LOW`.                                                                                                                                 |
+| Bounded Operational Delays   | `connectTimeoutMs` for handshake, `requestTimeoutMs` (or per-tool overrides) on execution calls.                                                                                                                       |
 
 ---
 
@@ -175,10 +175,10 @@ Can be disabled per server via `exposeResources: false`.
 
 ## Troubleshooting Diagnostics
 
-| Symptom                          | Probable Cause                                                                    |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| `status: "failed"` at startup    | Executable not found, or child process crashed immediately — inspect `lastError`  |
-| Tools missing from registry      | Permission grants missing (tools are hidden from model), or `disabled: true`      |
-| Confirmation prompt on every run | Default `MEDIUM` risk: downgrade read-only tools in `toolPolicies` configuration  |
-| `MCP_SCHEMA_UNSUPPORTED`         | Input schema unsupported; tool discarded while server remains operational         |
-| `status: "circuit_open"`         | Consecutive failure threshold exceeded; invoke `reconnect()` to force reset       |
+| Symptom                          | Probable Cause                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `status: "failed"` at startup    | Executable not found, or child process crashed immediately — inspect `lastError` |
+| Tools missing from registry      | Permission grants missing (tools are hidden from model), or `disabled: true`     |
+| Confirmation prompt on every run | Default `MEDIUM` risk: downgrade read-only tools in `toolPolicies` configuration |
+| `MCP_SCHEMA_UNSUPPORTED`         | Input schema unsupported; tool discarded while server remains operational        |
+| `status: "circuit_open"`         | Consecutive failure threshold exceeded; invoke `reconnect()` to force reset      |

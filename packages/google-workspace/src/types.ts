@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * Scopes OAuth 2.0 officiels minimaux stricts pour Google Workspace.
- * Aucun scope excessif (pas de https://mail.google.com/ ni https://www.googleapis.com/auth/calendar complet).
+ * Strict minimum official OAuth 2.0 scopes for Google Workspace.
+ * No excessive scopes (no https://mail.google.com/ or full https://www.googleapis.com/auth/calendar).
  */
 export const GOOGLE_WORKSPACE_SCOPES = {
   GMAIL_READONLY: "https://www.googleapis.com/auth/gmail.readonly",

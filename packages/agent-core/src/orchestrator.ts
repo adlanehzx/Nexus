@@ -266,7 +266,11 @@ export class AgentOrchestrator {
         });
 
         for (const skipped of pending.remainingCalls) {
-          context.addToolResult(skipped, "Skipped: an action in the same batch was rejected.", true);
+          context.addToolResult(
+            skipped,
+            "Skipped: an action in the same batch was rejected.",
+            true,
+          );
         }
         pending.remainingCalls.length = 0;
       }

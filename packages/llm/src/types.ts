@@ -61,7 +61,7 @@ export interface TokenUsage {
 }
 
 export type StopReason =
-  | "end_turn" | "tool_call" | "max_tokens" | "stop_sequence" | "refusal" | "aborted";
+  "end_turn" | "tool_call" | "max_tokens" | "stop_sequence" | "refusal" | "aborted";
 
 export interface GenerateRequest {
   messages: LlmMessage[];

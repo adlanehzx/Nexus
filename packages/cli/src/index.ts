@@ -124,9 +124,7 @@ async function setupCommand(
 
   if (!dryRun) {
     const { applied, skipped } = applyPlan(plan);
-    process.stdout.write(
-      `\n${applied.length} action(s) applied, ${skipped.length} unchanged\n`,
-    );
+    process.stdout.write(`\n${applied.length} action(s) applied, ${skipped.length} unchanged\n`);
     if (applied.length > 0) {
       process.stdout.write(
         "\nReload systemd user daemon to activate updated service units:\n" +
@@ -184,9 +182,7 @@ async function backupCommand(
     process.stdout.write(`  ✓ ${entry.name.padEnd(42)} ${formatBytes(entry.bytes)}\n`);
   }
   if (outcome.rotated.length > 0) {
-    process.stdout.write(
-      `\n  ${outcome.rotated.length} older archive(s) pruned\n`,
-    );
+    process.stdout.write(`\n  ${outcome.rotated.length} older archive(s) pruned\n`);
   }
   for (const warning of outcome.warnings) process.stdout.write(`\n  ! ${warning}\n`);
   process.stdout.write(

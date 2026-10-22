@@ -93,7 +93,9 @@ describe("content", () => {
 
   it("detects corrupted byte in encrypted payload", () => {
     const archive = flipByte(Buffer.from(archiveOf({ passphrase: PASSPHRASE })), 10);
-    expect(() => extractEntries(readArchive(archive), PASSPHRASE)).toThrow(/corrupted|tampered|incorrect/i);
+    expect(() => extractEntries(readArchive(archive), PASSPHRASE)).toThrow(
+      /corrupted|tampered|incorrect/i,
+    );
   });
 
   it("detects corrupted entry in unencrypted archive", () => {
@@ -120,7 +122,7 @@ describe("rotation", () => {
   });
 
   it("ignores non-nexus archive files", () => {
-    const mixed = [...names, "autre-fichier.tar.gz", "nexus-backup-mal-nomme.nxbk"];
+    const mixed = [...names, "other-file.tar.gz", "nexus-backup-bad-name.nxbk"];
     expect(rotationVictims(mixed, 2)).toEqual(["nexus-backup-20261018T100000Z.nxbk"]);
   });
 

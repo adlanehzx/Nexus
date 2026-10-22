@@ -385,10 +385,7 @@ except Exception as e:
 `;
     const res = await this.#execPython(script, 15_000);
     if (!res.success) {
-      throw new BrowserHarnessDriverError(
-        `Type failed: ${res.error ?? "unknown"}`,
-        "TYPE_FAILED",
-      );
+      throw new BrowserHarnessDriverError(`Type failed: ${res.error ?? "unknown"}`, "TYPE_FAILED");
     }
     return {
       typed: true,
@@ -535,7 +532,10 @@ except Exception as e:
       .filter(Boolean);
     const lastLine = lines[lines.length - 1];
     if (!lastLine) {
-      throw new BrowserHarnessDriverError("Empty output received from browser-harness.", "EMPTY_OUTPUT");
+      throw new BrowserHarnessDriverError(
+        "Empty output received from browser-harness.",
+        "EMPTY_OUTPUT",
+      );
     }
     try {
       return JSON.parse(lastLine) as ExecPythonResponse;

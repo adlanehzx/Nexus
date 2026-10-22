@@ -57,12 +57,7 @@ export const DEFAULT_BUDGET: ContextBudget = {
 };
 
 export type ContextSectionName =
-  | "preferences"
-  | "shortTerm"
-  | "longTerm"
-  | "devices"
-  | "tasks"
-  | "conversation";
+  "preferences" | "shortTerm" | "longTerm" | "devices" | "tasks" | "conversation";
 
 export interface ContextSection {
   name: ContextSectionName;

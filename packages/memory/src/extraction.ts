@@ -116,7 +116,11 @@ function inferKind(text: string): MemoryKind {
   if (/\b(?:toujours|jamais|quand|proc[\u00e9e]dure|procedure|always|never|when)\b/i.test(text)) {
     return "PROCEDURAL";
   }
-  if (/\b(?:hier|aujourd'hui|demain|la semaine|en \d{4}|yesterday|today|tomorrow|last week|next week|in \d{4})\b/i.test(text)) {
+  if (
+    /\b(?:hier|aujourd'hui|demain|la semaine|en \d{4}|yesterday|today|tomorrow|last week|next week|in \d{4})\b/i.test(
+      text,
+    )
+  ) {
     return "EPISODIC";
   }
   return "SEMANTIC";

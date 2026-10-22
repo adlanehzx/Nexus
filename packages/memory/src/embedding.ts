@@ -78,9 +78,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       value.length !== this.dimensions ||
       value.some((item) => typeof item !== "number" || !Number.isFinite(item))
     ) {
-      throw new Error(
-        `Embedding model must return ${this.dimensions} finite numbers per text.`,
-      );
+      throw new Error(`Embedding model must return ${this.dimensions} finite numbers per text.`);
     }
     return value as number[];
   }

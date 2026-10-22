@@ -1,14 +1,14 @@
--- Reservation d'un run Agent Core par tentative de tache.
+-- Reservation of an Agent Core run per task attempt.
 --
--- Additive : aucune table existante n'est touchee. La contrainte d'unicite est
--- le coeur de la migration — c'est elle qui empeche deux workers, dont l'un a
--- repris un bail expire pendant un appel long, de lancer deux runs pour le meme
--- travail. Sans contrainte, une verification applicative laisserait passer les
--- deux requetes concurrentes.
+-- Additive: no existing table is modified. The uniqueness constraint is the
+-- core of the migration — preventing two workers (e.g. when one acquires an
+-- expired lease during a long call) from launching two runs for the same
+-- task attempt. Without this constraint, application-level checks would allow
+-- concurrent requests through.
 --
--- Pas de cle etrangere vers users : la reservation doit survivre a la lecture
--- meme si le compte disparait, et c'est `requireMissionGrant` qui refuse alors
--- d'agir. Une cascade effacerait silencieusement la trace de ce qui a tourne.
+-- No foreign key to users: the reservation must remain readable even if the
+-- account is deleted, and `requireMissionGrant` refuses execution. A cascade
+-- delete would silently erase the audit trail of what was executed.
 CREATE TABLE "agent_core_run_claims" (
     "id" UUID NOT NULL,
     "missionExternalKey" VARCHAR(128) NOT NULL,

@@ -104,8 +104,7 @@ export function createDocumentTools(options: {
     {
       name: "document.extract_tables",
       version: "1.0.0",
-      description:
-        "Extracts all structured tables (headers, columns, and rows) from a document.",
+      description: "Extracts all structured tables (headers, columns, and rows) from a document.",
       inputSchema: documentExtractTablesInputSchema,
       outputSchema: documentExtractTablesOutputSchema,
       riskLevel: "SAFE",

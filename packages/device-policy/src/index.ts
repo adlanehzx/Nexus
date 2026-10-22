@@ -275,9 +275,7 @@ export async function loadDevicePolicy(path: string): Promise<LoadedPolicy> {
   if (!parsed.success) {
     throw new DevicePolicyFileError(
       path,
-      parsed.error.issues.map(
-        (issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`,
-      ),
+      parsed.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`),
     );
   }
   return { policy: parsed.data, source: "file", path };
@@ -311,12 +309,8 @@ export function describePolicy(loaded: LoadedPolicy): string {
   lines.push(
     `  executables          ${list(policy.exec.allowedExecutables, "default worker list")}`,
   );
-  lines.push(
-    `  environment          ${list(policy.exec.allowedEnv, "default worker list")}`,
-  );
-  lines.push(
-    `  workdir roots        ${list(policy.exec.workdirRoots, "allowed roots above")}`,
-  );
+  lines.push(`  environment          ${list(policy.exec.allowedEnv, "default worker list")}`);
+  lines.push(`  workdir roots        ${list(policy.exec.workdirRoots, "allowed roots above")}`);
   lines.push(`  timeout              ${String(policy.exec.timeoutSec)} s`);
   lines.push("");
   lines.push("git and docker");

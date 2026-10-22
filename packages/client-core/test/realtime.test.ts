@@ -81,7 +81,7 @@ describe("connection", () => {
     expect(h.client.state).toBe("connected");
     // Handshake carries access token, never password.
     const hello = h.socket.lastOfType("client.hello");
-    expect(hello?.payload.accessToken).toBe("jeton-acces-1");
+    expect(hello?.payload.accessToken).toBe("access-token-1");
   });
 
   it("transitions through connecting then authenticating", async () => {

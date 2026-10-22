@@ -133,8 +133,7 @@ export class Outbox {
     if (isConfirmation(request.path)) {
       return {
         ok: false,
-        reason:
-          "a confirmation must be made online with current context, not hours later",
+        reason: "a confirmation must be made online with current context, not hours later",
       };
     }
     if (!this.#idempotent.has(request.path)) {

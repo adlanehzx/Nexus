@@ -190,7 +190,11 @@ describe("execution", () => {
 
   it("authenticates each call", async () => {
     const { tools, calls } = makeTools();
-    await executor.execute(byName(tools, "browser.read"), { instructions: "Read the page" }, context);
+    await executor.execute(
+      byName(tools, "browser.read"),
+      { instructions: "Read the page" },
+      context,
+    );
 
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {

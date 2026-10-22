@@ -143,7 +143,7 @@ describe("token-aware context", () => {
 
     const result = await compactor.compact({
       userId: "u1",
-      text: "Une phrase utile. ".repeat(30),
+      text: "A useful sentence. ".repeat(30),
       maxTokens: 100,
       sourceRunId: "run-1",
     });
@@ -151,7 +151,7 @@ describe("token-aware context", () => {
     expect(result.artifactId).toBeDefined();
     expect(result.compactedTokens).toBeLessThanOrEqual(100);
     expect((await artifacts.get({ userId: "u1", id: result.artifactId! }))?.content).toContain(
-      "Une phrase utile",
+      "A useful sentence",
     );
     expect(await artifacts.get({ userId: "u2", id: result.artifactId! })).toBeUndefined();
   });

@@ -179,18 +179,14 @@ export class GoogleTokenManager {
   async getValidAccessToken(): Promise<string> {
     const rawTokens = await this.#resolveSecret(this.#tokensRef);
     if (!rawTokens) {
-      throw new Error(
-        `No Google tokens found in vault under reference "${this.#tokensRef}"`,
-      );
+      throw new Error(`No Google tokens found in vault under reference "${this.#tokensRef}"`);
     }
 
     let tokens: GoogleOAuthTokens;
     try {
       tokens = googleOAuthTokensSchema.parse(JSON.parse(rawTokens));
     } catch {
-      throw new Error(
-        `Invalid Google token format in vault under "${this.#tokensRef}"`,
-      );
+      throw new Error(`Invalid Google token format in vault under "${this.#tokensRef}"`);
     }
 
     // Safety margin of 5 minutes (300,000 ms) before expiration
@@ -208,9 +204,7 @@ export class GoogleTokenManager {
 
     const clientSecret = await this.#resolveSecret(this.#clientSecretRef);
     if (!clientSecret) {
-      throw new Error(
-        `Google client secret "${this.#clientSecretRef}" not found in vault`,
-      );
+      throw new Error(`Google client secret "${this.#clientSecretRef}" not found in vault`);
     }
 
     const refreshed = await refreshAccessToken({

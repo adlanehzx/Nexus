@@ -201,8 +201,7 @@ function finalize(task: BrowserTask, sessionId: string, visitedUrl: string | nul
   if (task.status !== "succeeded") {
     throw new BrowserWorkerError(task.error?.code ?? "BROWSER_TASK_FAILED", {
       message: task.error?.message ?? `Browser task finished with status ${task.status}`,
-      userMessage:
-        task.error?.message ?? `Browsing finished without a result (${task.status}).`,
+      userMessage: task.error?.message ?? `Browsing finished without a result (${task.status}).`,
       retryable: task.error?.retryable ?? false,
     });
   }

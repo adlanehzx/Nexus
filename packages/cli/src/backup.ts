@@ -109,13 +109,9 @@ export async function createBackup(options: BackupOptions): Promise<BackupOutcom
         content: readFileSync(paths.envFile),
       });
     }
-    warnings.push(
-      "archive contains .env: treat archive as confidential",
-    );
+    warnings.push("archive contains .env: treat archive as confidential");
     if (options.passphrase === undefined) {
-      warnings.push(
-        "secrets included WITHOUT encryption: provide --passphrase",
-      );
+      warnings.push("secrets included WITHOUT encryption: provide --passphrase");
     }
   }
 

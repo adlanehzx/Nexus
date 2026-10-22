@@ -59,7 +59,7 @@ describe("remember", () => {
     const { service, provider } = makeService();
 
     await expect(
-      service.remember({ userId: USER_ID, content: "Mon mot de passe est Tr0ub4dor3xy" }),
+      service.remember({ userId: USER_ID, content: "My password is Tr0ub4dor3xy" }),
     ).rejects.toThrow(SensitiveMemoryRefusedError);
 
     expect(provider.size).toBe(0);
@@ -69,7 +69,7 @@ describe("remember", () => {
     const { service, audit } = makeService();
 
     await service
-      .remember({ userId: USER_ID, content: "Mon mot de passe est Tr0ub4dor3xy" })
+      .remember({ userId: USER_ID, content: "My password is Tr0ub4dor3xy" })
       .catch(() => undefined);
 
     const refusal = audit.find((event) => event.action === "refuse");
@@ -119,7 +119,7 @@ describe("update", () => {
       service.update({
         userId: USER_ID,
         id: record.id,
-        content: "Mon mot de passe est Tr0ub4dor3xy",
+        content: "My password is Tr0ub4dor3xy",
       }),
     ).rejects.toThrow(SensitiveMemoryRefusedError);
   });

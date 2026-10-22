@@ -15,17 +15,17 @@ tools under explicit permission policies.
 
 ## Package Architecture
 
-| Component           | Role                                                                    | Source File           |
-| ------------------- | ----------------------------------------------------------------------- | --------------------- |
+| Component           | Role                                                                   | Source File           |
+| ------------------- | ---------------------------------------------------------------------- | --------------------- |
 | `AgentOrchestrator` | Run lifecycle management: create, resume, cancel, trace                | `src/orchestrator.ts` |
-| `AgentLoop`         | Core execution loop: observe → reason → authorize → execute             | `src/loop.ts`         |
-| `AgentContext`      | Model prompt context: system prompt, memories, conversation transcript  | `src/context.ts`      |
-| `AgentState`        | Serializable run state — the foundation of durable suspension           | `src/state.ts`        |
-| `Planner`           | Translates state into LLM calls, and outputs into typed decisions       | `src/planner.ts`      |
-| `ExecutionPolicy`   | Execution budgets and safeguards defined as **data**                    | `src/policy.ts`       |
-| `AgentRunStore`     | Persistence port interface (in-memory implementation included)          | `src/store.ts`        |
-| `AgentEventEmitter` | Real-time observability: iterations, tool calls, confirmation prompts   | `src/events.ts`       |
-| `redact`            | Credential masking applied prior to logging and tracing                 | `src/redaction.ts`    |
+| `AgentLoop`         | Core execution loop: observe → reason → authorize → execute            | `src/loop.ts`         |
+| `AgentContext`      | Model prompt context: system prompt, memories, conversation transcript | `src/context.ts`      |
+| `AgentState`        | Serializable run state — the foundation of durable suspension          | `src/state.ts`        |
+| `Planner`           | Translates state into LLM calls, and outputs into typed decisions      | `src/planner.ts`      |
+| `ExecutionPolicy`   | Execution budgets and safeguards defined as **data**                   | `src/policy.ts`       |
+| `AgentRunStore`     | Persistence port interface (in-memory implementation included)         | `src/store.ts`        |
+| `AgentEventEmitter` | Real-time observability: iterations, tool calls, confirmation prompts  | `src/events.ts`       |
+| `redact`            | Credential masking applied prior to logging and tracing                | `src/redaction.ts`    |
 
 The capability plane — `ToolRegistry`, `ToolExecutor`, `PermissionService`, `ConfirmationService`,
 `ToolDefinition` — lives in [`@nexus/tools`](../tools).
@@ -135,16 +135,16 @@ matching (`sk-…`, `ghp_…`, JWT tokens).
 
 ## Budgets and Thresholds
 
-| Safeguard                    | Default Value                    | Trigger Behavior                             |
-| ---------------------------- | -------------------------------- | -------------------------------------------- |
-| `maxIterations`              | 12                               | `incomplete` + synthesis                     |
-| `globalTimeoutMs`            | 180,000                          | `incomplete`                                 |
-| `maxToolCalls`               | 25                               | `incomplete`                                 |
-| `maxConsecutiveToolFailures` | 3                                | `incomplete`                                 |
-| `maxIdenticalToolCalls`      | 2                                | Tool call denied, explicit observation added |
-| `defaultToolTimeoutMs`       | 30,000                           | `TOOL_TIMEOUT`, retryable                    |
-| `retry`                      | 3 attempts, 2x backoff + jitter  | Terminal failure on exhaustion               |
-| `autoApproveMaxRisk`         | `LOW`                            | Above this tier: requires confirmation       |
+| Safeguard                    | Default Value                   | Trigger Behavior                             |
+| ---------------------------- | ------------------------------- | -------------------------------------------- |
+| `maxIterations`              | 12                              | `incomplete` + synthesis                     |
+| `globalTimeoutMs`            | 180,000                         | `incomplete`                                 |
+| `maxToolCalls`               | 25                              | `incomplete`                                 |
+| `maxConsecutiveToolFailures` | 3                               | `incomplete`                                 |
+| `maxIdenticalToolCalls`      | 2                               | Tool call denied, explicit observation added |
+| `defaultToolTimeoutMs`       | 30,000                          | `TOOL_TIMEOUT`, retryable                    |
+| `retry`                      | 3 attempts, 2x backoff + jitter | Terminal failure on exhaustion               |
+| `autoApproveMaxRisk`         | `LOW`                           | Above this tier: requires confirmation       |
 
 Time spent awaiting human confirmation is **restored to the budget**: wall-clock limits measure agent
 compute duration, not human deliberation delays.

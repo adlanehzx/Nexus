@@ -66,7 +66,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
           signal: combined,
         });
       } catch (error) {
-        throw unavailable("La page web est injoignable.", error);
+        throw unavailable("Web page is unreachable.", error);
       }
 
       if (isRedirect(response.status)) {
@@ -101,7 +101,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
             }
           : extractTextDocument(bytes, response.headers.get("content-type"), contentType, current);
       const content = extracted.content.slice(0, MAX_TEXT_CHARS);
-      if (!content) throw unavailable("La page web ne contient aucun texte exploitable.");
+      if (!content) throw unavailable("Web page contains no usable text.");
       const sha256 = createHash("sha256").update(content).digest("hex");
 
       return {
@@ -121,7 +121,7 @@ export class SafeWebFetcher implements WebDocumentFetcher {
         },
       };
     }
-    throw unavailable("La page web contient trop de redirections.");
+    throw unavailable("Web page contains too many redirects.");
   }
 
   #validate(value: string | URL): Promise<URL> {
@@ -288,7 +288,7 @@ function parseContentType(value: string | null): WebDocument["contentType"] {
   if (mime === "application/pdf") return "application/pdf";
   throw new ValidationError({
     message: `Unsupported web content type: ${mime ?? "missing"}`,
-    userMessage: "Ce type de contenu web n’est pas encore pris en charge.",
+    userMessage: "This web content type is not yet supported.",
   });
 }
 

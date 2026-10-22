@@ -137,8 +137,7 @@ async function initPolicy(path: string, force: boolean): Promise<number> {
     const existing = await readFile(path, "utf8").catch(() => undefined);
     if (existing !== undefined) {
       process.stderr.write(
-        `${path} already exists.\n` +
-          "Rerun with --force to overwrite, or edit it directly.\n",
+        `${path} already exists.\n` + "Rerun with --force to overwrite, or edit it directly.\n",
       );
       return 1;
     }
@@ -221,9 +220,7 @@ function reportFileError(error: unknown): number {
   if (error instanceof DevicePolicyFileError) {
     process.stderr.write(`\nUnreadable policy: ${error.path}\n\n`);
     for (const problem of error.problems) process.stderr.write(`  ✗ ${problem}\n`);
-    process.stderr.write(
-      "\n  Nothing is applied until this file is valid.\n\n",
-    );
+    process.stderr.write("\n  Nothing is applied until this file is valid.\n\n");
     return 1;
   }
   throw error;

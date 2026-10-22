@@ -189,7 +189,7 @@ describe("parseConfig", () => {
 
   it("identifies faulty variable in error message", () => {
     try {
-      parseConfig({ ...minimalEnv, LOG_LEVEL: "verbose" as any });
+      parseConfig({ ...minimalEnv, LOG_LEVEL: "verbose" });
       expect.unreachable("parseConfig should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(ConfigurationError);

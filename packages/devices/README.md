@@ -45,7 +45,13 @@ const device = await registry.registerDevice({
       enabled: true,
       metadata: {},
     },
-    { name: "git.execute", version: "1", description: "Git Operations", enabled: true, metadata: {} },
+    {
+      name: "git.execute",
+      version: "1",
+      description: "Git Operations",
+      enabled: true,
+      metadata: {},
+    },
   ],
   grantedPermissions: ["terminal.execute", "git.execute"],
 });
@@ -97,6 +103,7 @@ Every rejection includes a specific reason — `selection.rejected` answers "why
 without code instrumentation.
 
 Survivors are scored: Explicit User Preference (1000) ≫ Availability (300) > Health (200) > Latency (150)
+
 > AC Power (100) > Specialization (50). User preferences override rankings, **never hard security filters**.
 
 ---
@@ -191,24 +198,24 @@ perform a full state resynchronization upon return rather than replaying large h
 
 ## API Overview
 
-| Component                   | Purpose                                                                          |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `DeviceRegistry`            | Registration, capabilities, health probes, trust status, heartbeats              |
-| `DeviceSelector`            | `select` · `trySelect` · `listEligible`                                          |
-| `TaskCoordinator`           | Executes `TaskPlan`: selection, confirmation gates, dispatch, retry, failover    |
-| `EventRouter`               | `attach` · `detach` · `emit` · `publish` · `sendTo` · `pendingFor`               |
-| `DeviceSessionService`      | Challenges, asymmetric authentication, token rotation, revocation, anti-replay    |
-| `createDeviceTools`         | Capability → `ToolDefinition` adapters for central `ToolRegistry`                |
-| `DeviceStore` · `TaskStore` | Persistence port interfaces (in-memory implementations included)                 |
+| Component                   | Purpose                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `DeviceRegistry`            | Registration, capabilities, health probes, trust status, heartbeats            |
+| `DeviceSelector`            | `select` · `trySelect` · `listEligible`                                        |
+| `TaskCoordinator`           | Executes `TaskPlan`: selection, confirmation gates, dispatch, retry, failover  |
+| `EventRouter`               | `attach` · `detach` · `emit` · `publish` · `sendTo` · `pendingFor`             |
+| `DeviceSessionService`      | Challenges, asymmetric authentication, token rotation, revocation, anti-replay |
+| `createDeviceTools`         | Capability → `ToolDefinition` adapters for central `ToolRegistry`              |
+| `DeviceStore` · `TaskStore` | Persistence port interfaces (in-memory implementations included)               |
 
 ---
 
 ## Troubleshooting Diagnostics
 
-| Symptom                        | Probable Cause                                                     |
-| ------------------------------ | ------------------------------------------------------------------ |
-| `NoEligibleWorkerError`        | Check `rejected` array: lists explicit rejection reasons per device|
-| Device never selected          | `trust` still in `PENDING` state, or `authenticated: false`        |
-| Device transitions offline     | Zero heartbeats received within `heartbeatTimeoutMs` window (60s)  |
-| Client receives zero events    | Configured as `WORKER` role: workers do not receive broadcast logs |
-| Task plan finishes `partial`   | A prerequisite step failed, causing dependent steps to be skipped  |
+| Symptom                      | Probable Cause                                                      |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `NoEligibleWorkerError`      | Check `rejected` array: lists explicit rejection reasons per device |
+| Device never selected        | `trust` still in `PENDING` state, or `authenticated: false`         |
+| Device transitions offline   | Zero heartbeats received within `heartbeatTimeoutMs` window (60s)   |
+| Client receives zero events  | Configured as `WORKER` role: workers do not receive broadcast logs  |
+| Task plan finishes `partial` | A prerequisite step failed, causing dependent steps to be skipped   |

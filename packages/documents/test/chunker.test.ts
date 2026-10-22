@@ -58,10 +58,7 @@ describe("hierarchical chunking and document citations", () => {
     // Verify chunk 1.1 and its preserved parent hierarchy
     const chunkSub = chunks[1];
     expect(chunkSub?.sectionTitle).toBe("1.1 MCP Isolation");
-    expect(chunkSub?.sectionHierarchy).toEqual([
-      "Chapter 1: Overview",
-      "1.1 MCP Isolation",
-    ]);
+    expect(chunkSub?.sectionHierarchy).toEqual(["Chapter 1: Overview", "1.1 MCP Isolation"]);
     expect(chunkSub?.citationUri).toBe("doc://doc-test-1/page/1#1-1-mcp-isolation");
     expect(chunkSub?.citationLabel).toContain(
       "Architecture_Manual.pdf (Page 1, § 1.1 MCP Isolation)",

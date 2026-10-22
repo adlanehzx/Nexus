@@ -11,8 +11,7 @@
  */
 
 export type MemoryCommand =
-  | { kind: "remember"; content: string }
-  | { kind: "forget"; target: string; all: boolean };
+  { kind: "remember"; content: string } | { kind: "forget"; target: string; all: boolean };
 
 /**
  * Recognized patterns for "remember".

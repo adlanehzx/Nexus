@@ -171,19 +171,14 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
   const clickInputSchema = z.object({
     target: z
       .union([
-        z
-          .string()
-          .describe("CSS selector of target element (e.g. 'button.submit', '#confirm')"),
+        z.string().describe("CSS selector of target element (e.g. 'button.submit', '#confirm')"),
         z
           .object({ x: z.number(), y: z.number() })
           .describe("Pixel coordinates (x, y) within viewport"),
       ])
       .describe("Click target"),
     sessionId: z.string().optional().describe("Browser session identifier"),
-    waitLoad: z
-      .boolean()
-      .default(true)
-      .describe("Wait for page load triggered by click"),
+    waitLoad: z.boolean().default(true).describe("Wait for page load triggered by click"),
   });
 
   const clickOutputSchema = z.object({
@@ -317,8 +312,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     z.infer<typeof screenshotOutputSchema>
   > = {
     name: "browser.screenshot",
-    description:
-      "Captures a screenshot of the active tab and persists it as a mission artifact.",
+    description: "Captures a screenshot of the active tab and persists it as a mission artifact.",
     riskLevel: "SAFE",
     requiredPermissions: ["browser.navigate"],
     requiresConfirmation: false,

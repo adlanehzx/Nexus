@@ -305,7 +305,9 @@ export class WorkerRuntime {
         taskId: payload.taskId,
         stepId: payload.stepId,
       });
-      throw new WorkerNotAuthenticatedError("task dispatch received prior to session establishment");
+      throw new WorkerNotAuthenticatedError(
+        "task dispatch received prior to session establishment",
+      );
     }
 
     await this.#runner.handleDispatch(payload);

@@ -33,11 +33,11 @@ that fixes applied to one platform would diverge from the other. This package pr
 
 Platform adapters implement three specific ports:
 
-| Port Interface     | Responsibility                      | Windows Node Provider | Android Mobile Provider      |
-| ------------------ | ----------------------------------- | --------------------- | ---------------------------- |
-| `CredentialSigner` | Cryptographic challenge signing     | Ed25519 PEM key file  | Hardware KeyStore, NIST P-256|
-| `HealthSource`     | System health and saturation status | `node:os` metrics     | Battery level, power saver   |
-| `TimerPort`        | Task and heartbeat timers           | Native `setTimeout`   | Injected timer interface     |
+| Port Interface     | Responsibility                      | Windows Node Provider | Android Mobile Provider       |
+| ------------------ | ----------------------------------- | --------------------- | ----------------------------- |
+| `CredentialSigner` | Cryptographic challenge signing     | Ed25519 PEM key file  | Hardware KeyStore, NIST P-256 |
+| `HealthSource`     | System health and saturation status | `node:os` metrics     | Battery level, power saver    |
+| `TimerPort`        | Task and heartbeat timers           | Native `setTimeout`   | Injected timer interface      |
 
 All remaining execution mechanics are identical.
 
@@ -55,15 +55,15 @@ Automated CI tests statically scan the codebase to enforce zero Node runtime imp
 
 ## API Overview
 
-| Component                             | Role                                                                                        |
-| ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `WorkerRuntime`                       | Complete lifecycle: connect, authenticate, register, heartbeats, execute, resume           |
-| `LocalCapabilityRegistry`             | Machine capabilities catalog, including runtime availability probes                         |
-| `LocalCapability`                     | Capability contract: input schema, risk level, health probe, execution logic                |
-| `TaskRunner`                          | Step execution pipeline: schema parsing, timeout racing, cancellation, output validation    |
-| `WorkerLink` · `LoopbackLink`         | Transport port interface alongside its in-memory testing implementation                      |
-| `Backoff`                             | Exponential backoff calculation with upper-half jitter                                      |
-| `WorkerLogger` · `MemoryWorkerLogger` | Redacted structured logging engine                                                          |
+| Component                             | Role                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `WorkerRuntime`                       | Complete lifecycle: connect, authenticate, register, heartbeats, execute, resume         |
+| `LocalCapabilityRegistry`             | Machine capabilities catalog, including runtime availability probes                      |
+| `LocalCapability`                     | Capability contract: input schema, risk level, health probe, execution logic             |
+| `TaskRunner`                          | Step execution pipeline: schema parsing, timeout racing, cancellation, output validation |
+| `WorkerLink` · `LoopbackLink`         | Transport port interface alongside its in-memory testing implementation                  |
+| `Backoff`                             | Exponential backoff calculation with upper-half jitter                                   |
+| `WorkerLogger` · `MemoryWorkerLogger` | Redacted structured logging engine                                                       |
 
 ### Security Capabilities
 

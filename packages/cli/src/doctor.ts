@@ -36,11 +36,7 @@ function configurationChecks({ paths, env }: DoctorContext): CheckResult[] {
 
   if (Object.keys(env).length === 0) {
     results.push(
-      fail(
-        ".env",
-        `missing (${paths.envFile})`,
-        "nexus setup — creates file from .env.example",
-      ),
+      fail(".env", `missing (${paths.envFile})`, "nexus setup — creates file from .env.example"),
     );
     return results;
   }
@@ -243,10 +239,7 @@ async function securityChecks({ paths, probes, env }: DoctorContext): Promise<Ch
     results.push(
       probe === undefined
         ? skip("API → engine authentication", "engine unreachable")
-        : ok(
-            "API → engine authentication",
-            "engine responded; verified at service startup",
-          ),
+        : ok("API → engine authentication", "engine responded; verified at service startup"),
     );
   }
 

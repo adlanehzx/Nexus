@@ -19,7 +19,7 @@ function policy(overrides: Record<string, unknown> = {}) {
   return devicePolicySchema.parse({
     version: 1,
     filesystem: {
-      allow: ["~/projets", "~/Documents/nexus"],
+      allow: ["~/projects", "~/Documents/nexus"],
       deny: { under: ["~/.ssh", "~/.aws"], segments: ["node_modules"], names: [".env*"] },
     },
     ...overrides,
@@ -28,7 +28,7 @@ function policy(overrides: Record<string, unknown> = {}) {
 
 describe("default closed posture", () => {
   it("denies all paths without declared roots", () => {
-    const decision = checkPath(CLOSED_POLICY, "/srv/nexus-user/projets/a.txt", HOME);
+    const decision = checkPath(CLOSED_POLICY, "/srv/nexus-user/projects/a.txt", HOME);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toContain("no allowed roots");
   });
@@ -45,17 +45,17 @@ describe("default closed posture", () => {
 
 describe("paths", () => {
   it("allows paths under declared roots", () => {
-    expect(checkPath(policy(), "~/projets/nexus/README.md", HOME).allowed).toBe(true);
-    expect(checkPath(policy(), "/srv/nexus-user/projets", HOME).allowed).toBe(true);
+    expect(checkPath(policy(), "~/projects/nexus/README.md", HOME).allowed).toBe(true);
+    expect(checkPath(policy(), "/srv/nexus-user/projects", HOME).allowed).toBe(true);
   });
 
   it("denies paths outside declared roots", () => {
     expect(checkPath(policy(), "/etc/passwd", HOME).allowed).toBe(false);
-    expect(checkPath(policy(), "~/autre", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "~/other", HOME).allowed).toBe(false);
   });
 
   it("does not match raw string prefixes across directory boundaries", () => {
-    expect(checkPath(policy(), "/srv/nexus-user/projets2/secret", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "/srv/nexus-user/projects2/secret", HOME).allowed).toBe(false);
   });
 
   it("deny rules take precedence even under allowed roots", () => {
@@ -63,23 +63,23 @@ describe("paths", () => {
       version: 1,
       filesystem: { allow: ["~"], deny: { under: ["~/.ssh"] } },
     });
-    expect(checkPath(withSshInside, "~/un-fichier", HOME).allowed).toBe(true);
+    expect(checkPath(withSshInside, "~/a-file", HOME).allowed).toBe(true);
     const refused = checkPath(withSshInside, "~/.ssh/id_ed25519", HOME);
     expect(refused.allowed).toBe(false);
     expect(refused.reason).toContain("~/.ssh");
   });
 
   it("denies matching segment anywhere in path", () => {
-    const refused = checkPath(policy(), "~/projets/app/node_modules/paquet/index.js", HOME);
+    const refused = checkPath(policy(), "~/projects/app/node_modules/pkg/index.js", HOME);
     expect(refused.allowed).toBe(false);
     expect(refused.reason).toContain("node_modules");
-    expect(checkPath(policy(), "~/projets/node_modules_doc/notes.md", HOME).allowed).toBe(true);
+    expect(checkPath(policy(), "~/projects/node_modules_doc/notes.md", HOME).allowed).toBe(true);
   });
 
   it("denies filename matching trailing wildcard", () => {
-    expect(checkPath(policy(), "~/projets/.env", HOME).allowed).toBe(false);
-    expect(checkPath(policy(), "~/projets/.env.local", HOME).allowed).toBe(false);
-    expect(checkPath(policy(), "~/projets/environnement.md", HOME).allowed).toBe(true);
+    expect(checkPath(policy(), "~/projects/.env", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "~/projects/.env.local", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "~/projects/environment.md", HOME).allowed).toBe(true);
   });
 
   it("denies exact filename without wildcard", () => {
@@ -102,19 +102,19 @@ describe("paths", () => {
   });
 
   it("denies paths case-insensitively", () => {
-    expect(checkPath(policy(), "~/projets/.ENV", HOME).allowed).toBe(false);
-    expect(checkPath(policy(), "~/projets/NODE_MODULES/x", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "~/projects/.ENV", HOME).allowed).toBe(false);
+    expect(checkPath(policy(), "~/projects/NODE_MODULES/x", HOME).allowed).toBe(false);
     expect(checkPath(policy(), "~/.SSH/id_ed25519", HOME).allowed).toBe(false);
   });
 
   it("expands tilde to home directory", () => {
     expect(expandPath("~/x", HOME)).toBe("/srv/nexus-user/x");
     expect(expandPath("~", HOME)).toBe(HOME);
-    expect(expandPath("/absolu", HOME)).toBe("/absolu");
+    expect(expandPath("/absolute", HOME)).toBe("/absolute");
   });
 
   it("normalizes path traversal attacks", () => {
-    expect(checkPath(policy(), "/srv/nexus-user/projets/../.ssh/id_ed25519", HOME).allowed).toBe(
+    expect(checkPath(policy(), "/srv/nexus-user/projects/../.ssh/id_ed25519", HOME).allowed).toBe(
       false,
     );
   });

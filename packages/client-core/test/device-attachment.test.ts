@@ -51,8 +51,8 @@ function makeSession(storage = new FakeSecureStorage()) {
 describe("1. sign in with existing attached device", () => {
   it("registers nothing and skips querying fleet", async () => {
     const storage = new FakeSecureStorage();
-    storage.values.set("nexus.access", "jeton-acces-1");
-    storage.values.set("nexus.refresh", "jeton-rafraichissement-1");
+    storage.values.set("nexus.access", "access-token-1");
+    storage.values.set("nexus.refresh", "refresh-token-1");
     storage.values.set("nexus.device", "device-already-there");
     storage.values.set("nexus.user", "u1");
 

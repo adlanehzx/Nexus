@@ -1,14 +1,13 @@
--- Registre des assertions de mission.
+-- Registry of mission assertions.
 --
--- Additive. Ce que la table apporte est une capacite qui manquait : retirer une
--- assertion avant son expiration. Jusqu'ici le `jti` identifiait l'assertion
--- sans que personne ne le consulte, donc une assertion volee restait
--- exploitable vingt-quatre heures.
+-- Additive. This table provides a previously missing capability: revoking an
+-- assertion before its expiration. Previously, `jti` identified assertions
+-- without revocation checks, allowing compromised assertions to remain usable
+-- for 24 hours.
 --
--- Pas de cle etrangere vers users : le registre est une trace de ce qui a ete
--- emis, et il doit survivre a la suppression d'un compte. C'est
--- `requireMissionGrant` qui refuse alors d'agir, en verifiant separement que le
--- proprietaire existe et est actif.
+-- No foreign key to users: the registry is an audit trace of issued grants,
+-- and must survive account deletion. `requireMissionGrant` then refuses
+-- execution by verifying separately that the owner exists and is active.
 CREATE TYPE "MissionGrantState" AS ENUM ('ACTIVE', 'COMPLETED', 'REVOKED');
 
 CREATE TABLE "mission_grants" (
@@ -21,8 +20,8 @@ CREATE TABLE "mission_grants" (
     "status" "MissionGrantState" NOT NULL DEFAULT 'ACTIVE',
     "retiredAt" TIMESTAMPTZ(3),
     CONSTRAINT "mission_grants_pkey" PRIMARY KEY ("id"),
-    -- Un retrait porte toujours une date, et une assertion active n'en a
-    -- jamais : l'etat et l'horodatage ne peuvent pas se contredire.
+    -- A retired grant always has a timestamp, and an active grant never
+    -- does: status and timestamp must remain consistent.
     CONSTRAINT "mission_grants_retired_consistency" CHECK (
         ("status" = 'ACTIVE' AND "retiredAt" IS NULL)
         OR ("status" <> 'ACTIVE' AND "retiredAt" IS NOT NULL)

@@ -221,7 +221,11 @@ describe("update", () => {
 describe("delete", () => {
   it("deletes a memory record", async () => {
     const { provider } = makeProvider();
-    const record = await provider.store({ userId: USER_ID, kind: "SEMANTIC", content: "To forget" });
+    const record = await provider.store({
+      userId: USER_ID,
+      kind: "SEMANTIC",
+      content: "To forget",
+    });
 
     expect(await provider.delete({ userId: USER_ID, id: record.id })).toBe(true);
     expect(await provider.search({ userId: USER_ID, query: "forget" })).toEqual([]);

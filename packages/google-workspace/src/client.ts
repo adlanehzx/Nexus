@@ -8,10 +8,10 @@ import {
 } from "./types.js";
 
 /**
- * Nettoie et encadre le contenu d'un email externe pour neutraliser les tentatives de prompt injection.
+ * Sanitizes and frames external email content to neutralize prompt injection attempts.
  */
 export function sanitizeUntrustedEmail(rawText: string, from?: string, subject?: string): string {
-  // Neutralise les marqueurs d'instructions courantes dans les injections indirectes
+  // Neutralize common instruction markers in indirect prompt injections
   const safeText = rawText
     .replace(/<system>[\s\S]*?<\/system>/gi, "[BLOCKED_SYSTEM_TAG]")
     .replace(/\[INST\][\s\S]*?\[\/INST\]/gi, "[BLOCKED_INST_TAG]");
@@ -209,7 +209,7 @@ export class GoogleWorkspaceClient {
     const subject = getHeader("subject");
     const date = getHeader("date");
 
-    // Extraction du corps texte
+    // Extract body text
     let bodyText = "";
     if (data.payload?.body?.data) {
       bodyText = Buffer.from(data.payload.body.data, "base64url").toString("utf-8");
@@ -253,7 +253,7 @@ export class GoogleWorkspaceClient {
 
     const messages: GmailMessage[] = [];
     const participants = new Set<string>();
-    let subject = "Sans objet";
+    let subject = "No subject";
 
     if (data.messages) {
       for (const m of data.messages) {
@@ -261,14 +261,14 @@ export class GoogleWorkspaceClient {
         messages.push(msg);
         if (msg.from) participants.add(msg.from);
         if (msg.to) msg.to.forEach((t) => participants.add(t));
-        if (msg.subject && subject === "Sans objet") subject = msg.subject;
+        if (msg.subject && subject === "No subject") subject = msg.subject;
       }
     }
 
     const summary = messages
       .map(
         (m, idx) =>
-          `Message #${idx + 1} (${m.date ?? "Date inconnue"}) de ${m.from ?? "Inconnu"}:\n${m.snippet}`,
+          `Message #${idx + 1} (${m.date ?? "Unknown date"}) from ${m.from ?? "Unknown"}:\n${m.snippet}`,
       )
       .join("\n\n");
 
@@ -396,7 +396,7 @@ export class GoogleWorkspaceClient {
     return data.items.map((item) => ({
       id: item.id,
       calendarId: options.calendarId ?? "primary",
-      summary: item.summary ?? "Sans titre",
+      summary: item.summary ?? "Untitled",
       ...(item.description !== undefined ? { description: item.description } : {}),
       ...(item.location !== undefined ? { location: item.location } : {}),
       start: item.start?.dateTime ?? item.start?.date ?? "",
@@ -432,7 +432,7 @@ export class GoogleWorkspaceClient {
     return {
       id: item.id,
       calendarId: options.calendarId ?? "primary",
-      summary: item.summary ?? "Sans titre",
+      summary: item.summary ?? "Untitled",
       ...(item.description !== undefined ? { description: item.description } : {}),
       ...(item.location !== undefined ? { location: item.location } : {}),
       start: item.start?.dateTime ?? item.start?.date ?? "",

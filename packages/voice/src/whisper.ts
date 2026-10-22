@@ -233,7 +233,9 @@ export function cleanTranscript(raw: string): string {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .filter((line) => !line.startsWith("whisper_") && !line.startsWith("["))
-    .map((line) => line.replace(/\((?:silence|musique|rires|bruit|music|laughter|noise)\)/gi, "").trim())
+    .map((line) =>
+      line.replace(/\((?:silence|musique|rires|bruit|music|laughter|noise)\)/gi, "").trim(),
+    )
     .filter((line) => line.length > 0)
     .join(" ")
     .replace(/\s+/g, " ")

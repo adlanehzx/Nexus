@@ -90,10 +90,7 @@ export const gmailSendOutputSchema = z.object({
 // ==========================================
 
 export const calendarListEventsInputSchema = z.object({
-  calendarId: z
-    .string()
-    .default("primary")
-    .describe("Calendar ID ('primary' by default)"),
+  calendarId: z.string().default("primary").describe("Calendar ID ('primary' by default)"),
   timeMin: z.string().optional().describe("Lower time bound in ISO 8601 format"),
   timeMax: z.string().optional().describe("Upper time bound in ISO 8601 format"),
   query: z.string().optional().describe("Text query filter"),
@@ -180,16 +177,14 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "gmail.search",
       version: "1.0.0",
-      description:
-        "Searches emails in user's Gmail mailbox by keywords or labels.",
+      description: "Searches emails in user's Gmail mailbox by keywords or labels.",
       inputSchema: gmailSearchInputSchema,
       outputSchema: gmailSearchOutputSchema,
       riskLevel: "SAFE",
       requiredPermissions: ["email.read"],
       requiresConfirmation: false,
       timeoutMs: 20_000,
-      summarize: (input: z.infer<typeof gmailSearchInputSchema>) =>
-        `Search emails: ${input.query}`,
+      summarize: (input: z.infer<typeof gmailSearchInputSchema>) => `Search emails: ${input.query}`,
       execute: async (input: z.infer<typeof gmailSearchInputSchema>, context: ToolContext) => {
         return client.searchEmails(input, context.signal);
       },
@@ -207,8 +202,7 @@ export function createGoogleWorkspaceTools(options: {
       requiredPermissions: ["email.read"],
       requiresConfirmation: false,
       timeoutMs: 20_000,
-      summarize: (input: z.infer<typeof gmailReadInputSchema>) =>
-        `Read email ${input.messageId}`,
+      summarize: (input: z.infer<typeof gmailReadInputSchema>) => `Read email ${input.messageId}`,
       execute: async (input: z.infer<typeof gmailReadInputSchema>, context: ToolContext) => {
         return client.getEmail(input, context.signal);
       },
@@ -218,8 +212,7 @@ export function createGoogleWorkspaceTools(options: {
     {
       name: "gmail.summarize",
       version: "1.0.0",
-      description:
-        "Provides chronological thread history and summary for a Gmail thread.",
+      description: "Provides chronological thread history and summary for a Gmail thread.",
       inputSchema: gmailSummarizeInputSchema,
       outputSchema: gmailSummarizeOutputSchema,
       riskLevel: "SAFE",

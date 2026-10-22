@@ -1,4 +1,4 @@
--- L'appareil d'origine appartient au message : l'information doit survivre au
--- redemarrage au meme titre que son contenu. La colonne reste nullable pour les
--- messages systeme, outil et assistant, ainsi que pour l'historique existant.
+-- The origin device belongs to the message: this information must persist
+-- across restarts just like message content. The column remains nullable for
+-- system, tool, and assistant messages, as well as for existing history.
 ALTER TABLE "messages" ADD COLUMN "originClientDeviceId" UUID;

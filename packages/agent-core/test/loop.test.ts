@@ -350,10 +350,7 @@ describe("permissions", () => {
 
   it("allows a tool whose permission is granted", async () => {
     const h = makeHarness({
-      turns: [
-        callTurn("calendar.list", { day: "tomorrow" }),
-        { kind: "final", text: "1 event." },
-      ],
+      turns: [callTurn("calendar.list", { day: "tomorrow" }), { kind: "final", text: "1 event." }],
       tools: asTools(calendarListTool),
       permissions: ["calendar.read"],
     });

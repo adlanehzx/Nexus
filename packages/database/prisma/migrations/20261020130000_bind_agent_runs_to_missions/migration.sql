@@ -1,8 +1,8 @@
--- La mission d'origine d'un run Agent Core.
+-- Origin mission of an Agent Core run.
 --
--- Additive et nullable : les runs existants ont tous ete lances par une
--- personne, et doivent le rester. L'index sert la verification de portee d'une
--- assertion de mission, qui lit par (mission, proprietaire).
+-- Additive and nullable: existing runs were all launched by a user,
+-- and must remain so. The index serves scope verification of a
+-- mission assertion, querying by (mission, owner).
 ALTER TABLE "agent_run_snapshots" ADD COLUMN "missionExternalKey" VARCHAR(128);
 
 CREATE INDEX "agent_run_snapshots_missionExternalKey_idx"

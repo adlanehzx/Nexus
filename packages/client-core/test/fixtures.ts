@@ -296,8 +296,8 @@ export class FakeTextToSpeech implements TextToSpeechProvider {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOKENS = {
-  access: "jeton-acces-1",
-  refresh: "jeton-rafraichissement-1",
+  access: "access-token-1",
+  refresh: "refresh-token-1",
 };
 
 export function loginResponse(tokens = TOKENS): HttpResponse {

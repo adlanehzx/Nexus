@@ -433,7 +433,8 @@ export class AgentLoop {
       case "provider_error":
       case "internal_error":
         state.record.status = "failed";
-        state.record.response ??= "I could not complete the task: the model generation service failed.";
+        state.record.response ??=
+          "I could not complete the task: the model generation service failed.";
         break;
       default:
         state.record.status = "incomplete";

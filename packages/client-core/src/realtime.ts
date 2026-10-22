@@ -363,9 +363,7 @@ export class RealtimeClient {
     this.#dispatch({
       kind: "error",
       code: "CONNECTION_LOST",
-      message: `Connection lost (${reason}). Retrying in ${String(
-        Math.round(delay / 1000),
-      )} s.`,
+      message: `Connection lost (${reason}). Retrying in ${String(Math.round(delay / 1000))} s.`,
       at: this.#now().toISOString(),
     });
 

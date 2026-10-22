@@ -13,14 +13,14 @@ environments; its vectors are not written to the 384D pgvector column.
 Six distinct mechanisms are often referred to as "memory". Conflating them is the most common
 architectural mistake in agent design, which this package is designed to prevent:
 
-| #   | Layer                      | Owner                                         | Eviction Policy                    |
-| --- | -------------------------- | --------------------------------------------- | ---------------------------------- |
-| 1   | Conversation History       | `ConversationStore` (API)                     | Indefinite — user archived         |
-| 2   | Short-Term Working Context | `ShortTermContext` **here**                   | On TTL expiration or session close |
-| 3   | Long-Term Memory           | `MemoryProvider` **here**                     | Upon explicit user deletion        |
-| 4   | User Preferences           | `MemoryProvider` **here**, `PREFERENCE` tier  | When modified or superseded        |
-| 5   | Device Fleet Metadata      | `DeviceRegistry` (`@nexus/devices`)           | Upon device revocation             |
-| 6   | Task Execution History     | `TaskStore` (`@nexus/devices`)                | Upon scheduled purge               |
+| #   | Layer                      | Owner                                        | Eviction Policy                    |
+| --- | -------------------------- | -------------------------------------------- | ---------------------------------- |
+| 1   | Conversation History       | `ConversationStore` (API)                    | Indefinite — user archived         |
+| 2   | Short-Term Working Context | `ShortTermContext` **here**                  | On TTL expiration or session close |
+| 3   | Long-Term Memory           | `MemoryProvider` **here**                    | Upon explicit user deletion        |
+| 4   | User Preferences           | `MemoryProvider` **here**, `PREFERENCE` tier | When modified or superseded        |
+| 5   | Device Fleet Metadata      | `DeviceRegistry` (`@nexus/devices`)          | Upon device revocation             |
+| 6   | Task Execution History     | `TaskStore` (`@nexus/devices`)               | Upon scheduled purge               |
 
 **Only layers 2, 3, and 4 reside in this package.** The other three maintain explicit owners elsewhere
 in the architecture. Duplicating them would create split-brain state that drifts over time.
@@ -36,11 +36,11 @@ Practical benefit: Context assembly is tested without a live database, device re
 
 Three deterministic classifications:
 
-| Verdict       | Scope                                                                        | System Behavior                                       |
-| ------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `FORBIDDEN`   | Passwords, API tokens, session keys, recovery seed phrases, payment cards   | **Always rejected**                                   |
-| `PERSONAL`    | Health, financial balances, legal identity, home address, personal beliefs   | Stored **only if** caller sets `acknowledgedSensitive`|
-| `ORDINARY`    | General user facts, technical preferences, working notes                     | Stored normally                                       |
+| Verdict     | Scope                                                                      | System Behavior                                        |
+| ----------- | -------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `FORBIDDEN` | Passwords, API tokens, session keys, recovery seed phrases, payment cards  | **Always rejected**                                    |
+| `PERSONAL`  | Health, financial balances, legal identity, home address, personal beliefs | Stored **only if** caller sets `acknowledgedSensitive` |
+| `ORDINARY`  | General user facts, technical preferences, working notes                   | Stored normally                                        |
 
 `FORBIDDEN` has **zero user override exemptions**. NEXUS is not a password manager: it does not
 provide hardware-backed encryption at rest, automatic rotation, or zero-knowledge revocation.
@@ -67,13 +67,13 @@ should be persisted. Bypassing the service layer would undermine the rule of sil
 
 ### The Five Core Methods
 
-| Method      | Semantics                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------- |
-| `search`    | Empty query = browse chronological entries from newest to oldest                            |
-| `store`     | Enforces sensitivity policy prior to persisting new items                                   |
-| `update`    | Modifying **content** supersedes the record; modifying **metadata** updates in place       |
-| `delete`    | Removes entry and associated vector index                                                   |
-| `summarize` | Extractive summary, non-generative: this port does not depend on LLMs                      |
+| Method      | Semantics                                                                            |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `search`    | Empty query = browse chronological entries from newest to oldest                     |
+| `store`     | Enforces sensitivity policy prior to persisting new items                            |
+| `update`    | Modifying **content** supersedes the record; modifying **metadata** updates in place |
+| `delete`    | Removes entry and associated vector index                                            |
+| `summarize` | Extractive summary, non-generative: this port does not depend on LLMs                |
 
 All methods require `userId`, including those accepting a record ID. This redundancy is deliberate:
 guessable UUIDs must never allow reading or deleting another tenant's memories.
@@ -161,7 +161,7 @@ when `DATABASE_URL` is configured.
 | -------------------------- | ------------------------------------------------------------------------- |
 | `test/provider.test.ts`    | Store, search, update, delete, supersession, multi-user isolation         |
 | `test/sensitivity.test.ts` | The three sensitivity tiers, explicit commands, false positive rejection  |
-| `test/service.test.ts`     | Policy enforcement: denials, consents, forget handling, audit logging    |
+| `test/service.test.ts`     | Policy enforcement: denials, consents, forget handling, audit logging     |
 | `test/context.test.ts`     | Layer separation, token budgets, short-term context handling              |
 | `test/semantic.test.ts`    | Local hybrid scoring, provenance, extraction, tokens, artifact management |
 
