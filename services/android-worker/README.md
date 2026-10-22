@@ -35,12 +35,12 @@ device record with type `ANDROID` and role `WORKER`.
 
 ## Shared Architecture with Other Workers
 
-|                                                    | Source                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------- |
-| Lifecycle, handshake, reconnect, heartbeats        | `@nexus/worker-core` — **identical code to Windows worker**   |
-| Capability registry, step execution, idempotency   | `@nexus/worker-core`                                          |
-| Authentication, sessions, anti-replay              | `DeviceSessionService` from `@nexus/devices`, unmodified      |
-| Wire protocol, event framing                       | `@nexus/protocol`, unmodified                                 |
+|                                                  | Source                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| Lifecycle, handshake, reconnect, heartbeats      | `@nexus/worker-core` — **identical code to Windows worker** |
+| Capability registry, step execution, idempotency | `@nexus/worker-core`                                        |
+| Authentication, sessions, anti-replay            | `DeviceSessionService` from `@nexus/devices`, unmodified    |
+| Wire protocol, event framing                     | `@nexus/protocol`, unmodified                               |
 
 This package only introduces Android-specific adaptations: four Android ports, three security
 policies, seven capabilities, battery status monitoring, and availability checks.
@@ -52,15 +52,15 @@ policies, seven capabilities, battery status monitoring, and availability checks
 Android deliberately prohibits arbitrary remote control. This worker does not attempt to
 circumvent these OS sandboxing principles; it bases its architecture upon them.
 
-| Capability              | Android Mechanism                             | Permission                                   | Granted by                                                                          |
-| ----------------------- | --------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `android.app.list`      | `queryIntentActivities`                       | `<queries>` on `MAIN`/`LAUNCHER`             | App manifest, no user action required                                               |
-| `android.app.open`      | `getLaunchIntentForPackage` + `startActivity` | — (+ background start exemption)             | Active accessibility service or OEM background popup permission                     |
-| `android.ui.click`      | `AccessibilityNodeInfo.ACTION_CLICK`          | `BIND_ACCESSIBILITY_SERVICE`                 | **User**, Settings → Accessibility                                                  |
-| `android.ui.input`      | `ACTION_SET_TEXT`                             | same                                         | same                                                                                |
-| `android.ui.scroll`     | `ACTION_SCROLL_*` / `dispatchGesture`         | same                                         | same                                                                                |
-| `android.ui.screenshot` | `AccessibilityService.takeScreenshot()`       | same + Android 11+                           | same                                                                                |
-| `android.notification`  | `NotificationManager.notify()`                | `POST_NOTIFICATIONS` (Android 13+)           | User prompt upon request                                                            |
+| Capability              | Android Mechanism                             | Permission                         | Granted by                                                      |
+| ----------------------- | --------------------------------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| `android.app.list`      | `queryIntentActivities`                       | `<queries>` on `MAIN`/`LAUNCHER`   | App manifest, no user action required                           |
+| `android.app.open`      | `getLaunchIntentForPackage` + `startActivity` | — (+ background start exemption)   | Active accessibility service or OEM background popup permission |
+| `android.ui.click`      | `AccessibilityNodeInfo.ACTION_CLICK`          | `BIND_ACCESSIBILITY_SERVICE`       | **User**, Settings → Accessibility                              |
+| `android.ui.input`      | `ACTION_SET_TEXT`                             | same                               | same                                                            |
+| `android.ui.scroll`     | `ACTION_SCROLL_*` / `dispatchGesture`         | same                               | same                                                            |
+| `android.ui.screenshot` | `AccessibilityService.takeScreenshot()`       | same + Android 11+                 | same                                                            |
+| `android.notification`  | `NotificationManager.notify()`                | `POST_NOTIFICATIONS` (Android 13+) | User prompt upon request                                        |
 
 ### `QUERY_ALL_PACKAGES` Is Not Requested
 
@@ -71,12 +71,12 @@ discovering launchable apps and nothing else.
 
 ### `MediaProjection` Was Rejected
 
-|                         | `takeScreenshot()`                      | `MediaProjection`            |
-| ----------------------- | --------------------------------------- | ---------------------------- |
-| Permission              | Accessibility Service (already granted) | Dedicated system dialog      |
-| Scope                   | **Single frame upon discrete call**     | Continuous video capture     |
-| Token                   | None                                    | Retained after capture       |
-| Foreground service      | No                                      | Yes, permanent notification  |
+|                    | `takeScreenshot()`                      | `MediaProjection`           |
+| ------------------ | --------------------------------------- | --------------------------- |
+| Permission         | Accessibility Service (already granted) | Dedicated system dialog     |
+| Scope              | **Single frame upon discrete call**     | Continuous video capture    |
+| Token              | None                                    | Retained after capture      |
+| Foreground service | No                                      | Yes, permanent notification |
 
 `MediaProjection` yields continuous streaming; NEXUS requires point-in-time screenshots.
 Relying on it would establish persistent screen recording privileges for intermittent needs.
@@ -194,11 +194,11 @@ to prevent accidental introduction.
 
 A battery at 8% remains online, but UI automation would quickly drain the device and disable alarms.
 
-| Battery Level                      | Status     | Behavioral Effect                                                    |
-| ---------------------------------- | ---------- | -------------------------------------------------------------------- |
-| > 20%, or plugged in / charging    | Normal     | Accepts standard tasks                                               |
-| ≤ 20% on battery, or Power Saver   | **Degraded** | Advertised task capacity throttled to 1; selector prefers alternatives |
-| ≤ 10% on battery                   | Saturated  | Rejects all new tasks                                                |
+| Battery Level                    | Status       | Behavioral Effect                                                      |
+| -------------------------------- | ------------ | ---------------------------------------------------------------------- |
+| > 20%, or plugged in / charging  | Normal       | Accepts standard tasks                                                 |
+| ≤ 20% on battery, or Power Saver | **Degraded** | Advertised task capacity throttled to 1; selector prefers alternatives |
+| ≤ 10% on battery                 | Saturated    | Rejects all new tasks                                                  |
 
 No additional private telemetry is reported: no GPS coordinates, no Wi-Fi SSIDs, no hardware serials.
 
@@ -210,32 +210,32 @@ No additional private telemetry is reported: no GPS coordinates, no Wi-Fi SSIDs,
 verify logic via emulators; physical hardware behavior (especially vendor background execution
 restrictions) must be verified before production deployment:
 
-| #   | Step                                       | Expected Behavior                                                 |
-| --- | ------------------------------------------ | ----------------------------------------------------------------- |
-| 1   | Install APK                                | Application boots cleanly                                         |
-| 2   | Pair device with NEXUS                     | Public key renders, Core accepts registration                     |
-| 3   | Approve device in Core                     | Status transitions to `TRUSTED`                                   |
-| 4   | Grant notification permissions             | Status indicator updates to granted                               |
-| 5   | Enable Accessibility Service               | Status updates; UI capabilities register                          |
-| 6   | Verify screenshot permission               | Status updates to granted (Android 11+)                           |
-| 7   | Start worker daemon                        | Status shows "Ready"                                              |
-| 8   | Inspect Core dashboard                     | Device displays as `ONLINE`                                       |
-| 9   | Verify advertised capabilities             | All 7 capabilities reported                                       |
-| 10  | `android.app.open` (Spotify)               | Target app opens in foreground                                    |
-| 11  | `android.ui.screenshot`                    | Legible PNG image returned to client                              |
-| 12  | `android.ui.click` on identified node      | Node tap successfully dispatched                                  |
-| 13  | `android.ui.input` in text input field     | Text populated; verify absent from all logs                       |
-| 14  | `android.ui.scroll`                        | Viewport scrolls accordingly                                      |
-| 15  | `android.notification`                     | System notification displayed in tray                             |
-| 16  | Disable Accessibility Service              | 3 UI capabilities deregister from Core within 60s                 |
-| 17  | Verify client event stream                 | `device.capabilities_changed` emitted                             |
-| 18  | Re-enable Accessibility Service            | UI capabilities restored                                          |
-| 19  | Disconnect Wi-Fi and mobile data           | Worker enters `reconnecting` state                                |
-| 20  | Restore network connectivity               | Reconnects and completes full authentication handshake            |
-| 21  | Revoke device in Core                      | Active session terminated                                         |
-| 22  | Dispatch task to revoked worker            | Rejected immediately                                              |
-| 23  | Allow battery to drop below 20%            | Worker reports degraded status                                    |
-| 24  | Lock screen for 30 minutes                 | Connection sustained without OS termination                       |
+| #   | Step                                   | Expected Behavior                                      |
+| --- | -------------------------------------- | ------------------------------------------------------ |
+| 1   | Install APK                            | Application boots cleanly                              |
+| 2   | Pair device with NEXUS                 | Public key renders, Core accepts registration          |
+| 3   | Approve device in Core                 | Status transitions to `TRUSTED`                        |
+| 4   | Grant notification permissions         | Status indicator updates to granted                    |
+| 5   | Enable Accessibility Service           | Status updates; UI capabilities register               |
+| 6   | Verify screenshot permission           | Status updates to granted (Android 11+)                |
+| 7   | Start worker daemon                    | Status shows "Ready"                                   |
+| 8   | Inspect Core dashboard                 | Device displays as `ONLINE`                            |
+| 9   | Verify advertised capabilities         | All 7 capabilities reported                            |
+| 10  | `android.app.open` (Spotify)           | Target app opens in foreground                         |
+| 11  | `android.ui.screenshot`                | Legible PNG image returned to client                   |
+| 12  | `android.ui.click` on identified node  | Node tap successfully dispatched                       |
+| 13  | `android.ui.input` in text input field | Text populated; verify absent from all logs            |
+| 14  | `android.ui.scroll`                    | Viewport scrolls accordingly                           |
+| 15  | `android.notification`                 | System notification displayed in tray                  |
+| 16  | Disable Accessibility Service          | 3 UI capabilities deregister from Core within 60s      |
+| 17  | Verify client event stream             | `device.capabilities_changed` emitted                  |
+| 18  | Re-enable Accessibility Service        | UI capabilities restored                               |
+| 19  | Disconnect Wi-Fi and mobile data       | Worker enters `reconnecting` state                     |
+| 20  | Restore network connectivity           | Reconnects and completes full authentication handshake |
+| 21  | Revoke device in Core                  | Active session terminated                              |
+| 22  | Dispatch task to revoked worker        | Rejected immediately                                   |
+| 23  | Allow battery to drop below 20%        | Worker reports degraded status                         |
+| 24  | Lock screen for 30 minutes             | Connection sustained without OS termination            |
 
 ---
 
@@ -262,11 +262,11 @@ and event handling reside in `WorkerRuntime`, shared with the Windows worker.
 
 Three specific safeguards:
 
-| Safeguard                    | Rule                                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Cleartext remote links banned| Enforced — phones connect from untrusted networks. `localhost` and `10.0.2.2` are developer exceptions|
-| Connection establishment timeout | 15s. Avoids hanging indefinitely behind captive portals                                           |
-| Inbound frame limit          | 256 KB max, text frames only                                                                         |
+| Safeguard                        | Rule                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Cleartext remote links banned    | Enforced — phones connect from untrusted networks. `localhost` and `10.0.2.2` are developer exceptions |
+| Connection establishment timeout | 15s. Avoids hanging indefinitely behind captive portals                                                |
+| Inbound frame limit              | 256 KB max, text frames only                                                                           |
 
 ### Certificate Pinning
 

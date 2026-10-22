@@ -100,16 +100,16 @@ in environment variables easily leak into shell history, scheduler logs, or cras
 
 | Variable                       | Purpose                                                                                             |
 | ------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `NEXUS_BACKEND_URL`            | NEXUS Core URL. Remote addresses **must** use `wss://` — worker refuses to boot over insecure links  |
+| `NEXUS_BACKEND_URL`            | NEXUS Core URL. Remote addresses **must** use `wss://` — worker refuses to boot over insecure links |
 | `DEVICE_ID`                    | Assigned during pairing. Public identifier: never used for authentication                           |
 | `DEVICE_CREDENTIAL_PATH`       | Filesystem path to the local Ed25519 private key                                                    |
 | `WORKER_ALLOWED_PATHS`         | Allowed root paths for read and write operations. All other paths are rejected                      |
 | `WORKER_CAPABILITIES`          | Exposed capabilities list. Empty = all locally verified capabilities                                |
 | `WORKER_ALLOWED_EXECUTABLES`   | Allowlisted executables. Empty = default safe binary list                                           |
-| `WORKER_ALLOWED_ENV`           | Whitelist of environment variables propagated to child processes                                   |
+| `WORKER_ALLOWED_ENV`           | Whitelist of environment variables propagated to child processes                                    |
 | `WORKER_HEARTBEAT_INTERVAL_MS` | Default: 20000 (20s)                                                                                |
 | `WORKER_TASK_TIMEOUT_MS`       | Default: 300000 (5 min)                                                                             |
-| `WORKER_MAX_CONCURRENT_TASKS`  | Concurrency ceiling. When reached, worker rejects additional tasks — Core routes elsewhere         |
+| `WORKER_MAX_CONCURRENT_TASKS`  | Concurrency ceiling. When reached, worker rejects additional tasks — Core routes elsewhere          |
 | `WORKER_DOCKER_ALLOWED`        | Allowed Docker subcommands. Default: inspection only                                                |
 | `WORKER_GIT_ALLOW_WRITE`       | Allows mutating git commands (`pull`, `checkout`, `commit`, `clone`). Default: false                |
 
@@ -128,7 +128,7 @@ it is maintained in the Core registry. A worker must never self-assign or escala
 | `process.list`                       | SAFE   | Process table inspection                                                        |
 | `process.start`                      | HIGH   | Detached execution: survives worker restart                                     |
 | `process.stop`                       | HIGH   | **Strictly limited** to processes spawned by NEXUS                              |
-| `docker.execute`                     | HIGH   | Read-only by default; `--privileged` and socket mounting are always forbidden    |
+| `docker.execute`                     | HIGH   | Read-only by default; `--privileged` and socket mounting are always forbidden   |
 | `git.status` `git.diff` `git.branch` | SAFE   | Read-only Git operations                                                        |
 | `git.pull` `git.clone` `git.commit`  | MEDIUM | Mutating Git operations, disabled by default                                    |
 | `git.checkout`                       | HIGH   | Only operation capable of discarding uncommitted workspace changes              |
@@ -273,11 +273,11 @@ no IPC control channel exists between the desktop UI and daemon. It serves purel
 
 ## Diagnostics
 
-| Symptom                         | Likely Cause                                                                                         |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Worker stuck in `authenticating`| Public key missing on Core, or device still in `PENDING` status                                     |
-| Worker stuck in `reconnecting`  | `NEXUS_BACKEND_URL` unreachable; inspect `attempt` count in logs                                    |
-| `CAPABILITY_UNAVAILABLE`        | Three distinct causes distinguishable via error context: unimplemented, locally disabled, or missing binary |
-| `PATH_NOT_ALLOWED`              | Specific rejection reason detailed in `context.reason`                                              |
-| `WORKER_SATURATED`              | `WORKER_MAX_CONCURRENT_TASKS` reached; retryable on alternative worker                              |
-| Docker capability absent        | Docker daemon is not running: health probe failed, capability withheld                              |
+| Symptom                          | Likely Cause                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Worker stuck in `authenticating` | Public key missing on Core, or device still in `PENDING` status                                             |
+| Worker stuck in `reconnecting`   | `NEXUS_BACKEND_URL` unreachable; inspect `attempt` count in logs                                            |
+| `CAPABILITY_UNAVAILABLE`         | Three distinct causes distinguishable via error context: unimplemented, locally disabled, or missing binary |
+| `PATH_NOT_ALLOWED`               | Specific rejection reason detailed in `context.reason`                                                      |
+| `WORKER_SATURATED`               | `WORKER_MAX_CONCURRENT_TASKS` reached; retryable on alternative worker                                      |
+| Docker capability absent         | Docker daemon is not running: health probe failed, capability withheld                                      |

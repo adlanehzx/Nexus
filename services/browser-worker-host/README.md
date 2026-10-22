@@ -14,16 +14,16 @@ the real Python worker.
 The Browser Use worker already existed — a full Python service with session management,
 intent policies, and 75 tests — but lived **adjacent to** NEXUS rather than within it:
 
-|                               | Before                        | Now                                      |
-| ----------------------------- | ----------------------------- | ---------------------------------------- |
-| Core authentication           | Static service token          | **Ed25519 challenge signature**          |
-| Identity                      | None                          | Registered device in registry, revocable |
-| Session                       | None                          | `DeviceSessionService`, with rotation    |
-| Capabilities                  | Not advertised                | **Advertised and registered**            |
-| Selection                     | Never selected by Core        | `DeviceSelector`, capability-matched     |
-| Permissions                   | Outside permission model      | `browser.*`, standard capability names   |
-| Human confirmations           | Isolated custom tool          | `ConfirmationBroker`, risk-tiered        |
-| Health & availability         | Invisible                     | Heartbeats and probes                    |
+|                       | Before                   | Now                                      |
+| --------------------- | ------------------------ | ---------------------------------------- |
+| Core authentication   | Static service token     | **Ed25519 challenge signature**          |
+| Identity              | None                     | Registered device in registry, revocable |
+| Session               | None                     | `DeviceSessionService`, with rotation    |
+| Capabilities          | Not advertised           | **Advertised and registered**            |
+| Selection             | Never selected by Core   | `DeviceSelector`, capability-matched     |
+| Permissions           | Outside permission model | `browser.*`, standard capability names   |
+| Human confirmations   | Isolated custom tool     | `ConfirmationBroker`, risk-tiered        |
+| Health & availability | Invisible                | Heartbeats and probes                    |
 
 The `BROWSER_WORKER` device type existed in `@nexus/devices` since inception, with the
 comment: "Browser Use is a full-fledged worker from the selector's perspective". Nothing
@@ -83,7 +83,7 @@ intents.
 
 ### Why Policy Enforcement Belongs in the Worker
 
-The Core decides *what is intended*; the worker decides *what is physically permitted*.
+The Core decides _what is intended_; the worker decides _what is physically permitted_.
 A compromised Core must not be able to escalate a read intent into a purchase. Duplicating
 the enforcement policy in the host would lead to divergence — and the more permissive policy
 always wins. A test asserts that no action restriction rules are reimplemented here.
@@ -128,19 +128,19 @@ node -e "import('@nexus/browser-worker-host').then(m => m.runBrowserWorkerHost()
 
 ## Security
 
-| Property                       | Implementation                                                     |
-| ------------------------------ | ------------------------------------------------------------------ |
-| No shared secrets with Core    | Ed25519 challenge signing; private key never traverses network     |
-| Two links, two secrets         | Python worker token never crosses into Core boundary               |
-| No inbound listening ports     | `connect()` exists, `listen()` does not — verified by test         |
-| No process execution           | Neither `child_process` nor `exec` — verified across entire source |
-| Single disk access             | Device private key in `link.ts` — verified across entire source    |
-| No generic capabilities        | Four explicitly named capabilities, none accept arbitrary actions  |
-| URL scheme restriction         | Only `http`/`https`; `javascript:`, `file:`, `data:` rejected      |
-| Cleartext remote links banned  | Enforced for both Core connection and Python worker connection     |
-| Secrets excluded from logs     | `describeConfig()` masks values, exposing only keys and presence   |
-| CAPTCHA, MFA                   | Never bypassed — triggers `BROWSER_NEEDS_HUMAN`, non-retryable     |
-| Model chain-of-thought         | Truncated to 120 characters in progress reports                    |
+| Property                      | Implementation                                                     |
+| ----------------------------- | ------------------------------------------------------------------ |
+| No shared secrets with Core   | Ed25519 challenge signing; private key never traverses network     |
+| Two links, two secrets        | Python worker token never crosses into Core boundary               |
+| No inbound listening ports    | `connect()` exists, `listen()` does not — verified by test         |
+| No process execution          | Neither `child_process` nor `exec` — verified across entire source |
+| Single disk access            | Device private key in `link.ts` — verified across entire source    |
+| No generic capabilities       | Four explicitly named capabilities, none accept arbitrary actions  |
+| URL scheme restriction        | Only `http`/`https`; `javascript:`, `file:`, `data:` rejected      |
+| Cleartext remote links banned | Enforced for both Core connection and Python worker connection     |
+| Secrets excluded from logs    | `describeConfig()` masks values, exposing only keys and presence   |
+| CAPTCHA, MFA                  | Never bypassed — triggers `BROWSER_NEEDS_HUMAN`, non-retryable     |
+| Model chain-of-thought        | Truncated to 120 characters in progress reports                    |
 
 ---
 

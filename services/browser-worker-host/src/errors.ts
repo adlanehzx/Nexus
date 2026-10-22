@@ -87,7 +87,7 @@ export class BrowserWorkerUnreachableError extends AppError {
   constructor(cause?: string) {
     super({
       message: "le worker Browser Use ne répond pas",
-      userMessage: "Le service de navigation n'est pas disponible pour le moment.",
+      userMessage: "The browsing service is temporarily unavailable.",
       // L'URL n'y figure pas : elle nomme un service interne.
       context: cause === undefined ? {} : { cause },
     });

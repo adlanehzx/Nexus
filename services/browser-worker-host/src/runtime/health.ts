@@ -42,7 +42,7 @@ export class BrowserHealthSource implements HealthSource {
   }
 
   get status(): string {
-    return this.#status ?? "inconnu";
+    return this.#status ?? "unknown";
   }
 
   get browserUseVersion(): string | null {

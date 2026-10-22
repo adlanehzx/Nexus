@@ -88,7 +88,7 @@ export class AppPolicy {
       throw new PolicyViolationError({
         rule: "app.packageName",
         message: `Nom de paquet invalide : ${name.slice(0, 64)}`,
-        userMessage: "Ce nom d'application n'est pas valide.",
+        userMessage: "This application name is not valid.",
         context: { packageName: name.slice(0, 128) },
       });
     }

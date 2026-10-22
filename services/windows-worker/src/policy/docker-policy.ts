@@ -118,7 +118,7 @@ export class DockerPolicy {
           throw new PolicyViolationError({
             rule: "docker.mount",
             message: "Montage du socket Docker interdit",
-            userMessage: "Monter le socket Docker dans un conteneur est interdit.",
+            userMessage: "Mounting the Docker socket into a container is prohibited.",
             context: { target },
           });
         }
@@ -129,7 +129,7 @@ export class DockerPolicy {
         throw new PolicyViolationError({
           rule: "docker.rootMount",
           message: "Montage d'une racine de disque interdit",
-          userMessage: "Monter la racine d'un disque dans un conteneur est interdit.",
+          userMessage: "Mounting a drive root into a container is prohibited.",
         });
       }
     }

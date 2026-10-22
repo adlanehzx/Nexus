@@ -34,9 +34,9 @@ export class InvalidCredentialsError extends AppError {
   constructor() {
     super({
       message: "Identifiants refusés",
-      // Un message unique pour « adresse inconnue » et « mot de passe faux » :
-      // les distinguer révélerait quelles adresses ont un compte.
-      userMessage: "Adresse ou mot de passe incorrect.",
+      // A single message for "unknown address" and "wrong password":
+      // distinguishing them would reveal which addresses have an account.
+      userMessage: "Incorrect email or password.",
     });
   }
 }

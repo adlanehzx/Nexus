@@ -69,17 +69,17 @@ This is deliberate — **never expose this service directly to the Internet.**
 All configuration variables are prefixed with `BROWSER_WORKER_` and validated at startup:
 a missing mandatory parameter prevents startup rather than failing on the first incoming request.
 
-| Variable                       | Default             | Purpose                                                  |
-| ------------------------------ | ------------------- | -------------------------------------------------------- |
-| `AUTH_TOKEN`                   | —                   | **Mandatory**, minimum 16 characters. Shared auth token  |
-| `LLM_MODEL`                    | `claude-sonnet-4-5` | Model used by browser-use to navigate                    |
-| `LLM_API_KEY`                  | —                   | Provider API key                                         |
-| `HEADLESS`                     | `true`              | Set `false` to display the UI (useful for debugging)     |
-| `MAX_SESSIONS`                 | `5`                 | Maximum simultaneous browser instances                   |
-| `SESSION_TTL_SECONDS`          | `600`               | Idle session lifetime                                    |
-| `DEFAULT_TASK_TIMEOUT_SECONDS` | `180`               | Maximum task execution timeout                           |
-| `ALLOW_PRIVATE_HOSTS`          | `false`             | **Testing only.** Allows `127.0.0.1` private addresses   |
-| `LOG_LEVEL`                    | `INFO`              | Log verbosity level                                      |
+| Variable                       | Default             | Purpose                                                 |
+| ------------------------------ | ------------------- | ------------------------------------------------------- |
+| `AUTH_TOKEN`                   | —                   | **Mandatory**, minimum 16 characters. Shared auth token |
+| `LLM_MODEL`                    | `claude-sonnet-4-5` | Model used by browser-use to navigate                   |
+| `LLM_API_KEY`                  | —                   | Provider API key                                        |
+| `HEADLESS`                     | `true`              | Set `false` to display the UI (useful for debugging)    |
+| `MAX_SESSIONS`                 | `5`                 | Maximum simultaneous browser instances                  |
+| `SESSION_TTL_SECONDS`          | `600`               | Idle session lifetime                                   |
+| `DEFAULT_TASK_TIMEOUT_SECONDS` | `180`               | Maximum task execution timeout                          |
+| `ALLOW_PRIVATE_HOSTS`          | `false`             | **Testing only.** Allows `127.0.0.1` private addresses  |
+| `LOG_LEVEL`                    | `INFO`              | Log verbosity level                                     |
 
 ---
 
@@ -106,15 +106,15 @@ replays none. Event types: `started`, `navigation`, `thinking`, `action`, `progr
 
 ## Intents: Security at the Right Layer
 
-The backend decides *what the user intends to do*; the worker decides *what actions are physically permitted*.
+The backend decides _what the user intends to do_; the worker decides _what actions are physically permitted_.
 A compromised backend cannot unilaterally escalate a read intent into a purchase.
 
-| Intent     | Agent Tool         | Risk Level | Confirmation | Stripped Actions                     |
-| ---------- | ------------------ | ---------- | ------------ | ------------------------------------ |
-| `read`     | `browser.read`     | SAFE       | No           | click, input, tabs, JS eval, file ops|
-| `interact` | `browser.interact` | MEDIUM     | Yes          | JS eval, file ops                    |
-| `login`    | `browser.login`    | HIGH       | Yes          | JS eval, file ops                    |
-| `purchase` | `browser.purchase` | CRITICAL   | Yes          | JS eval, file ops                    |
+| Intent     | Agent Tool         | Risk Level | Confirmation | Stripped Actions                      |
+| ---------- | ------------------ | ---------- | ------------ | ------------------------------------- |
+| `read`     | `browser.read`     | SAFE       | No           | click, input, tabs, JS eval, file ops |
+| `interact` | `browser.interact` | MEDIUM     | Yes          | JS eval, file ops                     |
+| `login`    | `browser.login`    | HIGH       | Yes          | JS eval, file ops                     |
+| `purchase` | `browser.purchase` | CRITICAL   | Yes          | JS eval, file ops                     |
 
 **`evaluate` (arbitrary JavaScript execution) is stripped across all intents.** It would bypass
 all interface restrictions and could be exploited to exfiltrate cookies and session tokens. File operations
@@ -149,12 +149,12 @@ The worker contains zero CAPTCHA solving code and will not include any.
 
 ## Secrets Management
 
-| Rule                                    | Implementation                                                                                                                |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| LLM never receives raw credentials      | Passed to browser-use via `sensitive_data`, which substitutes values upon form submission                                     |
-| No secret leakage in output             | `redact_text()` applied to task output, error messages, and events, matching known sensitive task inputs                      |
-| Zero secrets logged                     | Log redaction filter on root logger: by parameter key name **and** regex pattern (`sk-...`, `ghp_...`, JWTs, credit card numbers) |
-| Configuration values never leak         | `describe()` exports parameter names and flags, never secret values                                                           |
+| Rule                               | Implementation                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| LLM never receives raw credentials | Passed to browser-use via `sensitive_data`, which substitutes values upon form submission                                         |
+| No secret leakage in output        | `redact_text()` applied to task output, error messages, and events, matching known sensitive task inputs                          |
+| Zero secrets logged                | Log redaction filter on root logger: by parameter key name **and** regex pattern (`sk-...`, `ghp_...`, JWTs, credit card numbers) |
+| Configuration values never leak    | `describe()` exports parameter names and flags, never secret values                                                               |
 
 ---
 
@@ -209,10 +209,10 @@ the agent to extract flight prices — then verifies that a `read` task is stric
 
 ## Diagnostics
 
-| Symptom                                | Likely Cause                                                                                                                |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `status: "degraded"` on `/v1/health`   | `browser-use` is not installed — worker boots in degraded mode to remain diagnostic-friendly                                |
-| Worker refuses to start                | `BROWSER_WORKER_AUTH_TOKEN` missing or under 16 characters                                                                  |
-| `BROWSER_SESSION_BUSY`                 | Session limit reached, or a task is already running in the selected session                                                 |
-| Chromium crashes in container          | Insufficient shared memory (`shm_size`) — minimum 1 GB configured in compose                                                |
-| Log: "restricted actions not found"    | Upstream browser-use update modified action names. **Resolve immediately**: an intent restriction may be rendered inactive |
+| Symptom                              | Likely Cause                                                                                                               |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `status: "degraded"` on `/v1/health` | `browser-use` is not installed — worker boots in degraded mode to remain diagnostic-friendly                               |
+| Worker refuses to start              | `BROWSER_WORKER_AUTH_TOKEN` missing or under 16 characters                                                                 |
+| `BROWSER_SESSION_BUSY`               | Session limit reached, or a task is already running in the selected session                                                |
+| Chromium crashes in container        | Insufficient shared memory (`shm_size`) — minimum 1 GB configured in compose                                               |
+| Log: "restricted actions not found"  | Upstream browser-use update modified action names. **Resolve immediately**: an intent restriction may be rendered inactive |

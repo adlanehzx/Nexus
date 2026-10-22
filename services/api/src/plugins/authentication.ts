@@ -77,7 +77,7 @@ function bearerToken(request: FastifyRequest): string {
   if (typeof header !== "string" || !header.startsWith("Bearer ")) {
     throw new AuthenticationError({
       message: "En-tête Authorization absent ou mal formé",
-      userMessage: "Authentification requise.",
+      userMessage: "Authentication required.",
     });
   }
 

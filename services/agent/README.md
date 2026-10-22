@@ -17,4 +17,3 @@ the HTTP service would make every deployment destructive and obscure API p99 lat
 
 Architecture: [`docs/architecture/03-agent.md`](../../docs/architecture/03-agent.md)
 Roadmap: [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
-

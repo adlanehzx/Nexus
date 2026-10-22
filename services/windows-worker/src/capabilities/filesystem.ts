@@ -93,7 +93,7 @@ export function createFilesystemReadCapability(
         throw new PolicyViolationError({
           rule: "filesystem.missing",
           message: "Fichier introuvable",
-          userMessage: "Ce fichier n'existe pas.",
+          userMessage: "This file does not exist.",
           context: { path: resolved },
         });
       }
@@ -101,7 +101,7 @@ export function createFilesystemReadCapability(
         throw new PolicyViolationError({
           rule: "filesystem.directory",
           message: "Le chemin désigne un dossier",
-          userMessage: "Ce chemin est un dossier, pas un fichier.",
+          userMessage: "This path is a directory, not a file.",
           context: { path: resolved },
         });
       }

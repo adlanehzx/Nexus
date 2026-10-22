@@ -144,6 +144,6 @@ function hash(token: string): string {
 function invalidDelegation(reason: string): AuthenticationError {
   return new AuthenticationError({
     message: `Délégation de calendrier refusée : ${reason}`,
-    userMessage: "Authentification requise.",
+    userMessage: "Authentication required.",
   });
 }

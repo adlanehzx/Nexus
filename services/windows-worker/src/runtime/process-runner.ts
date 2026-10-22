@@ -219,7 +219,7 @@ export function parseTasklistCsv(csv: string): ProcessInfo[] {
     const memory = Number.parseInt((fields[4] ?? "").replace(/[^\d]/g, ""), 10);
     processes.push({
       processId,
-      name: fields[0] ?? "inconnu",
+      name: fields[0] ?? "unknown",
       ...(Number.isNaN(memory) ? {} : { memoryKb: memory }),
     });
   }
