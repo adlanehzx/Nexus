@@ -59,30 +59,67 @@ export interface ConnectorClient {
  * decision, which this batch does not make.
  */
 export class NonceStore {
-  readonly #seen = new Map<string, number>();
+  /**
+   * Nonces per client: `clientId` → (`nonce` → expiry).
+   *
+   * ## Why nested rather than a composite string key
+   *
+   * A single map keyed by `${clientId}:${nonce}` would be ambiguous, and not
+   * theoretically: `clientId` admits `.`, `_`, `-` and `:` (see the protocol
+   * schema), so *every* single-character separator appears in the alphabet of
+   * the thing being joined. Client `a:b` with nonce `c` and client `a` with
+   * nonce `b:c` would collide, which means one client could consume another's
+   * nonce — turning a replay defence into a denial-of-service primitive
+   * usable by any authorised client against any other.
+   *
+   * Length-prefixing would fix the ambiguity. A nested map removes the question
+   * entirely, which is cheaper to review than an encoding nobody re-derives.
+   */
+  readonly #seen = new Map<string, Map<string, number>>();
   readonly #ttlMs: number;
 
   constructor(ttlMs: number) {
     this.#ttlMs = ttlMs;
   }
 
-  /** True when the nonce is fresh. A second call with the same nonce is false. */
-  remember(nonce: string, now: number): boolean {
+  /**
+   * True when this client has not used this nonce.
+   *
+   * Scoped per client on purpose. Nonces are chosen by clients independently,
+   * so two honest clients picking the same value is a coincidence, not an
+   * attack, and must not make the second one fail.
+   */
+  remember(clientId: string, nonce: string, now: number): boolean {
     this.#evict(now);
-    if (this.#seen.has(nonce)) return false;
-    this.#seen.set(nonce, now + this.#ttlMs);
+    const forClient = this.#seen.get(clientId) ?? new Map<string, number>();
+    if (forClient.has(nonce)) return false;
+    forClient.set(nonce, now + this.#ttlMs);
+    this.#seen.set(clientId, forClient);
     return true;
   }
 
+  /** Total remembered nonces across all clients. For tests and diagnostics. */
   get size(): number {
+    let total = 0;
+    for (const forClient of this.#seen.values()) total += forClient.size;
+    return total;
+  }
+
+  /** Number of clients currently holding at least one nonce. */
+  get clientCount(): number {
     return this.#seen.size;
   }
 
   #evict(now: number): void {
     // Eviction on write rather than on a timer: a timer in a long-lived process
     // is one more thing to shut down, and the store is only read on write.
-    for (const [nonce, expiresAt] of this.#seen) {
-      if (expiresAt <= now) this.#seen.delete(nonce);
+    for (const [clientId, forClient] of this.#seen) {
+      for (const [nonce, expiresAt] of forClient) {
+        if (expiresAt <= now) forClient.delete(nonce);
+      }
+      // Drop the client's map too, or an inactive client leaks an empty map
+      // for as long as the process lives.
+      if (forClient.size === 0) this.#seen.delete(clientId);
     }
   }
 }
@@ -162,7 +199,7 @@ export class RequestAuthenticator {
     // Nonce last, and only after the signature verifies. Recording a nonce for
     // an unverified request would let an unauthenticated caller burn the nonce
     // of a request it merely observed, and so deny the real client its retry.
-    if (!this.#nonces.remember(input.nonce, now)) {
+    if (!this.#nonces.remember(client.clientId, input.nonce, now)) {
       throw new ConnectorAuthError("replayed_nonce", "nonce already used");
     }
 

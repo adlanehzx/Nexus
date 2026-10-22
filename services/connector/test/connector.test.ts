@@ -54,6 +54,8 @@ interface Harness {
   server: ConnectorServer;
   audit: ConnectorAuditEvent[];
   client: ReturnType<typeof createTestClient>;
+  /** A second authorised client, for the tests about per-client scoping. */
+  other: ReturnType<typeof createTestClient>;
   now: () => number;
 }
 
@@ -62,6 +64,7 @@ async function harness(
 ): Promise<Harness> {
   const dir = options.dir ?? (await fakeToolDir());
   const client = createTestClient();
+  const other = createTestClient("second-client");
   const audit: ConnectorAuditEvent[] = [];
   const now = options.now ?? (() => Date.now());
   const detector = new ConnectionDetector({
@@ -76,7 +79,10 @@ async function harness(
   const server = new ConnectorServer({
     detector,
     authenticator: new RequestAuthenticator({
-      clients: [{ clientId: client.clientId, publicKey: client.publicKey }],
+      clients: [
+        { clientId: client.clientId, publicKey: client.publicKey },
+        { clientId: other.clientId, publicKey: other.publicKey },
+      ],
       now,
       ...(options.acceptanceWindowMs === undefined
         ? {}
@@ -85,7 +91,7 @@ async function harness(
     now,
     onAudit: (event) => audit.push(event),
   });
-  return { server, audit, client, now };
+  return { server, audit, client, other, now };
 }
 
 describe("protocol surface", () => {
@@ -148,21 +154,77 @@ describe("protocol surface", () => {
 });
 
 describe("nonce store", () => {
-  it("accepts a nonce once", () => {
+  it("accepts a nonce once per client", () => {
     const store = new NonceStore(1_000);
 
-    expect(store.remember("n", 0)).toBe(true);
-    expect(store.remember("n", 0)).toBe(false);
+    expect(store.remember("client-a", "n", 0)).toBe(true);
+    expect(store.remember("client-a", "n", 0)).toBe(false);
+  });
+
+  it("lets two clients use the same nonce", () => {
+    const store = new NonceStore(1_000);
+
+    // Clients pick nonces independently, so a collision between two honest
+    // clients is a coincidence, not an attack.
+    expect(store.remember("client-a", "shared", 0)).toBe(true);
+    expect(store.remember("client-b", "shared", 0)).toBe(true);
+    expect(store.size).toBe(2);
+  });
+
+  it("keeps one client out of another's namespace", () => {
+    const store = new NonceStore(1_000);
+    store.remember("client-a", "n", 0);
+
+    // Otherwise any authorised client could burn every nonce another client
+    // was about to use — a replay defence turned into a denial-of-service tool.
+    expect(store.remember("client-b", "n", 0)).toBe(true);
+    expect(store.remember("client-a", "n", 0)).toBe(false);
+  });
+
+  it("is not fooled by a separator inside a client id", () => {
+    const store = new NonceStore(1_000);
+    // The ambiguity a composite string key would have: client "a:b" with nonce
+    // "c" versus client "a" with nonce "b:c". The protocol alphabet for a
+    // client id contains ":", ".", "_" and "-", so no single-character
+    // separator is safe.
+    store.remember("a:b", "c", 0);
+
+    expect(store.remember("a", "b:c", 0)).toBe(true);
+    expect(store.remember("a.b", "c", 0)).toBe(true);
+    expect(store.remember("a", "b.c", 0)).toBe(true);
   });
 
   it("forgets a nonce once its window has passed", () => {
     const store = new NonceStore(1_000);
-    store.remember("n", 0);
+    store.remember("client-a", "n", 0);
 
     // Not a weakness: the timestamp check refuses the old request anyway, and
     // remembering every nonce forever is an unbounded map.
-    expect(store.remember("n", 1_001)).toBe(true);
+    expect(store.remember("client-a", "n", 1_001)).toBe(true);
     expect(store.size).toBe(1);
+  });
+
+  it("evicts one client's expired nonces without touching another's", () => {
+    const store = new NonceStore(1_000);
+    store.remember("stale", "n", 0);
+    store.remember("fresh", "n", 900);
+
+    // Writing at 1_001 expires the first but not the second.
+    store.remember("writer", "trigger", 1_001);
+
+    expect(store.remember("stale", "n", 1_001)).toBe(true);
+    expect(store.remember("fresh", "n", 1_001)).toBe(false);
+  });
+
+  it("drops a client's map once it holds nothing", () => {
+    const store = new NonceStore(1_000);
+    store.remember("gone", "n", 0);
+
+    store.remember("writer", "trigger", 1_001);
+
+    // Otherwise every client that ever connected leaks an empty map for the
+    // lifetime of the process.
+    expect(store.clientCount).toBe(1);
   });
 });
 
@@ -487,5 +549,65 @@ posixOnly("authentication failures look identical from outside", () => {
     expect(JSON.stringify(response)).not.toMatch(
       /unknown_client|invalid_signature|replayed|expired_timestamp|future_timestamp/,
     );
+  });
+});
+
+posixOnly("nonces are scoped to the client that used them", () => {
+  it("refuses the same client replaying its own nonce", async () => {
+    const { server, client } = await harness();
+    const request = client.sign({ method: "health" });
+
+    expect((await server.handle(request)).ok).toBe(true);
+    const replayed = await server.handle(request);
+
+    expect(!replayed.ok && replayed.error.code).toBe("authentication_failed");
+  });
+
+  it("accepts two authorised clients using the same nonce", async () => {
+    const { server, client, other } = await harness();
+    const nonce = randomBytes(16).toString("hex");
+
+    // Both signatures are valid over their own canonical bytes; the shared
+    // nonce is a coincidence between independent clients, and refusing the
+    // second would be a bug the first client could trigger at will.
+    const first = await server.handle(client.sign({ method: "health" }, { nonce }));
+    const second = await server.handle(other.sign({ method: "health" }, { nonce }));
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+  });
+
+  it("does not let one client burn another's nonce", async () => {
+    const { server, client, other, audit } = await harness();
+    const nonce = randomBytes(16).toString("hex");
+    await server.handle(other.sign({ method: "health" }, { nonce }));
+
+    const mine = await server.handle(client.sign({ method: "health" }, { nonce }));
+
+    expect(mine.ok).toBe(true);
+    expect(audit.filter((event) => event.authFailureReason === "replayed_nonce")).toEqual([]);
+  });
+
+  it("does not consume a nonce when the signature fails", async () => {
+    const { server, client } = await harness();
+    const nonce = randomBytes(16).toString("hex");
+
+    await server.handle(client.sign({ method: "health" }, { nonce, signature: "AAAA" }));
+    const legitimate = await server.handle(client.sign({ method: "health" }, { nonce }));
+
+    // An eavesdropper must not be able to deny the real client its own request
+    // by replaying it badly first.
+    expect(legitimate.ok).toBe(true);
+  });
+
+  it("does not consume a nonce when the client is unknown", async () => {
+    const { server, client } = await harness();
+    const stranger = createTestClient("not-registered");
+    const nonce = randomBytes(16).toString("hex");
+
+    await server.handle(stranger.sign({ method: "health" }, { nonce }));
+    const legitimate = await server.handle(client.sign({ method: "health" }, { nonce }));
+
+    expect(legitimate.ok).toBe(true);
   });
 });
