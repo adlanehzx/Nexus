@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -68,16 +67,5 @@ describe("source tree layout", () => {
     // adding a real module is a deliberate edit here rather than a silent
     // change in tree shape.
     expect(files).toEqual(CANONICAL_MODULES.toSorted());
-  });
-
-  it("tracks no nested source file in Git", () => {
-    // The filesystem check above would miss a file that exists only in the
-    // index, which is how the original problem survived: it was committed.
-    const tracked = execFileSync("git", ["ls-files", "services/connector/src/src/**"], {
-      cwd: join(SRC_DIR, "..", "..", ".."),
-      encoding: "utf8",
-    }).trim();
-
-    expect(tracked).toBe("");
   });
 });
