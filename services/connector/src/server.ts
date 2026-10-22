@@ -49,6 +49,19 @@ export interface ConnectorAuditEvent {
 export interface ConnectorServerOptions {
   detector: ConnectionDetector;
   authenticator: RequestAuthenticator;
+  /**
+   * How many probe-running requests may be in flight at once.
+   *
+   * Each one spawns processes on a machine somebody is using, so this is a
+   * limit on what a client can make the host do, not a throughput tuning knob.
+   * Two is enough for a dashboard refreshing while a person clicks "test", and
+   * low enough that a loop cannot turn the connector into a fork bomb.
+   *
+   * The gate lives here rather than in the transport on purpose: the method is
+   * only trustworthy after the signature verifies, so a limit applied to an
+   * unauthenticated body could be bypassed by claiming `health`.
+   */
+  maxConcurrentExecutions?: number;
   now?: () => number;
   onAudit?: (event: ConnectorAuditEvent) => void;
 }
@@ -61,6 +74,8 @@ const ERROR_MESSAGES: Record<ConnectorErrorCode, string> = {
   authentication_failed: "This request was refused.",
   unknown_method: "This connector does not provide that method.",
   unknown_provider: "This connection type is not available in this installation.",
+  capacity_exhausted:
+    "The connector is already running as many checks as it allows. Try again shortly.",
   internal_error: "The connector could not complete this request.",
 };
 
@@ -71,10 +86,13 @@ export class ConnectorServer {
   readonly #onAudit: ((event: ConnectorAuditEvent) => void) | undefined;
   /** Last observed state per provider. `connection.list` reports this and runs nothing. */
   readonly #observed = new Map<string, Connection>();
+  readonly #maxConcurrentExecutions: number;
+  #executing = 0;
 
   constructor(options: ConnectorServerOptions) {
     this.#detector = options.detector;
     this.#authenticator = options.authenticator;
+    this.#maxConcurrentExecutions = options.maxConcurrentExecutions ?? 2;
     this.#now = options.now ?? (() => Date.now());
     this.#onAudit = options.onAudit;
   }
@@ -147,6 +165,14 @@ export class ConnectorServer {
 
     frame.executed = EXECUTING_METHODS.includes(method);
 
+    // Only probe-running methods are counted. A read of what was already
+    // observed spawns nothing, so rate-limiting it would protect nothing and
+    // would make a dashboard stutter for no reason.
+    if (frame.executed && this.#executing >= this.#maxConcurrentExecutions) {
+      return this.#fail(request.requestId, "capacity_exhausted", frame);
+    }
+    if (frame.executed) this.#executing += 1;
+
     try {
       const result = await this.#dispatch(request.params);
       this.#audit({ ...frame, requestId: request.requestId, ok: true, errorCode: null });
@@ -159,7 +185,17 @@ export class ConnectorServer {
     } catch (error) {
       const code = error instanceof UnknownProviderError ? "unknown_provider" : "internal_error";
       return this.#fail(request.requestId, code, frame);
+    } finally {
+      // `finally`, so a throw cannot leak a slot. A counter that only
+      // decrements on the happy path wedges the connector shut after the first
+      // failure, which is the bug this kind of gate usually ships with.
+      if (frame.executed) this.#executing -= 1;
     }
+  }
+
+  /** In-flight probe-running requests. For tests and diagnostics. */
+  get executing(): number {
+    return this.#executing;
   }
 
   async #dispatch(params: Parameters<typeof canonicalRequestBytes>[0]["params"]): Promise<unknown> {

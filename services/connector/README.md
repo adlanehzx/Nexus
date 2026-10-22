@@ -35,6 +35,9 @@ One endpoint, `POST /rpc`, carrying a signed envelope.
 | `connection.detect` | yes            | runs the declared presence probes             |
 | `connection.test`   | yes            | re-runs the declared probes for one provider  |
 
+The two methods marked "runs a process" are the ones subject to the concurrency
+limit below.
+
 Every request carries `requestId`, `issuedAt` and `nonce`. They are not
 interchangeable: `requestId` makes a request traceable, `issuedAt` bounds how
 long a captured request stays usable, and `nonce` stops a replay inside that
@@ -58,6 +61,41 @@ The precise reason is kept, in the local audit trail only, as
 `expired_timestamp`, `future_timestamp`, `malformed_timestamp` or
 `replayed_nonce`. An operator still needs to tell a clock problem from an
 attack; that information moved, it did not disappear.
+
+## Bounded by construction
+
+The transport refuses to be an unbounded resource for an unauthenticated
+caller:
+
+- **Size, twice.** A declared `Content-Length` over the limit is refused before
+  a byte is read; the streaming limit then enforces the same ceiling on what
+  actually arrives, because a header is a claim by the peer and chunked
+  encoding lets them omit it entirely. An overflowing body has its socket
+  destroyed rather than drained.
+- **Time, with a resolution.** `headersTimeout` and `requestTimeout` are set,
+  and so is `connectionsCheckingInterval` — without that last one Node checks
+  connections every 30 seconds by default, so a five-second timeout actually
+  lands somewhere under thirty-five. Verified: a 300 ms header timeout with the
+  default interval did not fire within five seconds.
+- **Headers.** `maxHeaderSize` is bounded, as is the keep-alive idle time.
+- **Concurrent probes.** Two at a time by default. Each one spawns processes on
+  a machine somebody is using, so this limits what a client can make the host
+  do. Exceeding it returns `capacity_exhausted`, a distinct code because the
+  right response differs: retry shortly, with nothing to fix. Read-only methods
+  are not counted — they spawn nothing.
+- **Failures.** Every rejection from the request handler is caught inside the
+  `createServer` callback. Without that, one malformed request becomes an
+  unhandled rejection, which by default ends the process. The reply is a fixed
+  `internal_error` with no detail from the exception, since a message or a
+  stack can carry a path or a provider's output.
+
+The capacity gate runs **after** authentication, deliberately. The method is
+only trustworthy once the signature verifies, so a limit applied to an
+unauthenticated body could be bypassed by claiming a read-only method — and
+would leak how busy the connector is to anyone who asked.
+
+All limits are injectable, which is how they are tested: the suite uses 300 ms
+timeouts and 256-byte bodies rather than waiting on realistic ones.
 
 ## Configuration
 

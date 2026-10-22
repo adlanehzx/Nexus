@@ -124,6 +124,13 @@ export const connectorErrorCodeSchema = z.enum([
   "authentication_failed",
   "unknown_method",
   "unknown_provider",
+  /**
+   * Too many probes already running.
+   *
+   * A distinct, stable code rather than a generic failure, because the right
+   * client response is different: retry shortly, with nothing to fix.
+   */
+  "capacity_exhausted",
   "internal_error",
 ]);
 export type ConnectorErrorCode = z.infer<typeof connectorErrorCodeSchema>;
