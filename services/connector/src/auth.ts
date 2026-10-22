@@ -1,6 +1,7 @@
 import { verify as verifySignature } from "node:crypto";
 import { AppError } from "@nexus/shared";
 import type { ConnectorAuthFailureReason } from "./protocol.js";
+import { InMemoryNoncePersistence, type NoncePersistence } from "./nonce-log.js";
 
 /**
  * Authenticating a local request.
@@ -52,11 +53,14 @@ export interface ConnectorClient {
 /**
  * Remembers nonces for at least the acceptance window.
  *
- * In memory, and that is a deliberate limit worth stating: a connector restart
- * forgets its nonces, so a request captured seconds before a restart could be
- * replayed once afterwards. Within the window, the timestamp check still bounds
- * that to a few seconds. Persisting it belongs with the connector's own storage
- * decision, which this batch does not make.
+ * Backed by a `NoncePersistence` so the memory survives a restart. Without
+ * one, restarting inside the acceptance window — which a crash loop, an
+ * update or a `systemctl restart` does — hands an attacker a fresh namespace
+ * and makes a captured request work once more.
+ *
+ * Fail-closed: if a spent nonce cannot be recorded durably, the request is
+ * refused. Accepting one whose nonce was not written is accepting a replay
+ * nobody will ever detect.
  */
 export class NonceStore {
   /**
@@ -77,9 +81,36 @@ export class NonceStore {
    */
   readonly #seen = new Map<string, Map<string, number>>();
   readonly #ttlMs: number;
+  readonly #persistence: NoncePersistence;
 
-  constructor(ttlMs: number) {
+  #hydrated = false;
+
+  constructor(ttlMs: number, persistence: NoncePersistence = new InMemoryNoncePersistence()) {
     this.#ttlMs = ttlMs;
+    this.#persistence = persistence;
+  }
+
+  /**
+   * Loads prior records, once, using the caller's notion of now.
+   *
+   * Lazy rather than in the constructor, and that is not a performance
+   * choice. `remember` is given the current time by its caller — which a test
+   * sets and a service reads from a clock — while a constructor would have to
+   * reach for `Date.now()` itself. Two notions of time in one store means
+   * records are filtered against a different clock than they are compared
+   * with, and the symptom is a restored nonce that silently never matches.
+   *
+   * It still happens before the first request is judged, so a nonce spent
+   * before a restart is refused by the first request after it.
+   */
+  #hydrate(now: number): void {
+    if (this.#hydrated) return;
+    this.#hydrated = true;
+    for (const entry of this.#persistence.load(now)) {
+      const forClient = this.#seen.get(entry.clientId) ?? new Map<string, number>();
+      forClient.set(entry.nonce, entry.expiresAt);
+      this.#seen.set(entry.clientId, forClient);
+    }
   }
 
   /**
@@ -90,10 +121,18 @@ export class NonceStore {
    * attack, and must not make the second one fail.
    */
   remember(clientId: string, nonce: string, now: number): boolean {
+    this.#hydrate(now);
     this.#evict(now);
     const forClient = this.#seen.get(clientId) ?? new Map<string, number>();
     if (forClient.has(nonce)) return false;
-    forClient.set(nonce, now + this.#ttlMs);
+
+    const expiresAt = now + this.#ttlMs;
+    // Durable first, in memory second. The other order would let the connector
+    // admit a request whose nonce is not yet on disk, and a crash in that gap
+    // loses exactly the record that would have refused the replay. A throw
+    // here propagates: the caller refuses the request rather than guessing.
+    this.#persistence.append({ clientId, nonce, expiresAt });
+    forClient.set(nonce, expiresAt);
     this.#seen.set(clientId, forClient);
     return true;
   }
@@ -126,6 +165,14 @@ export class NonceStore {
 
 export interface RequestAuthenticatorOptions {
   clients: readonly ConnectorClient[];
+  /**
+   * Where spent nonces are kept.
+   *
+   * Defaults to memory, which is correct for a test and wrong for a service:
+   * a connector that is expected to survive restarts must be given a
+   * `FileNoncePersistence`.
+   */
+  noncePersistence?: NoncePersistence;
   /** How long a signed request stays acceptable. */
   acceptanceWindowMs?: number;
   /** Tolerated clock difference in either direction. */
@@ -149,7 +196,10 @@ export class RequestAuthenticator {
     this.#now = options.now ?? (() => Date.now());
     // The nonce must outlive the window it protects, skew included, or a
     // forgotten nonce becomes a replay the timestamp check still accepts.
-    this.#nonces = new NonceStore(this.#acceptanceWindowMs + this.#clockSkewMs);
+    this.#nonces = new NonceStore(
+      this.#acceptanceWindowMs + this.#clockSkewMs,
+      options.noncePersistence,
+    );
   }
 
   /**
@@ -199,8 +249,20 @@ export class RequestAuthenticator {
     // Nonce last, and only after the signature verifies. Recording a nonce for
     // an unverified request would let an unauthenticated caller burn the nonce
     // of a request it merely observed, and so deny the real client its retry.
-    if (!this.#nonces.remember(client.clientId, input.nonce, now)) {
-      throw new ConnectorAuthError("replayed_nonce", "nonce already used");
+    try {
+      if (!this.#nonces.remember(client.clientId, input.nonce, now)) {
+        throw new ConnectorAuthError("replayed_nonce", "nonce already used");
+      }
+    } catch (error) {
+      if (error instanceof ConnectorAuthError) throw error;
+      // The store is unavailable. Fail closed: a request admitted without a
+      // durable record is a replay nobody can detect afterwards. The reason is
+      // distinct in the audit trail — an operator needs to tell a full disk
+      // from an attack — while the response stays uniform.
+      throw new ConnectorAuthError(
+        "nonce_store_unavailable",
+        error instanceof Error ? error.message : "unknown failure",
+      );
     }
 
     return client;

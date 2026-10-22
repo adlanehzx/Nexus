@@ -149,6 +149,14 @@ export const connectorAuthFailureReasonSchema = z.enum([
   "future_timestamp",
   "malformed_timestamp",
   "replayed_nonce",
+  /**
+   * The spent-nonce store could not record this request.
+   *
+   * Not an attack and not the client's fault — a full disk, a read-only mount,
+   * a permission change. It is still a refusal, because admitting a request
+   * whose nonce is not durable admits a replay nobody will detect.
+   */
+  "nonce_store_unavailable",
 ]);
 export type ConnectorAuthFailureReason = z.infer<typeof connectorAuthFailureReasonSchema>;
 

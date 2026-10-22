@@ -132,9 +132,12 @@ whose job is running local binaries.
   tested with fake binaries; adding a probe is a change to one file.
 - **The `agy` presence probe is marked `unverified`.** `--version` follows the
   convention the other two use, but it has not been observed on a real install.
-- **Nonces are held in memory.** A restart forgets them, so a request captured
-  seconds beforehand could be replayed once afterwards; the timestamp check
-  bounds that to the acceptance window.
+- **Nonces are durable.** They are appended synchronously to a JSON-lines log
+  before a request is admitted, so a restart inside the acceptance window no
+  longer hands back a fresh namespace. If the log cannot be written the request
+  is refused: admitting one whose nonce is not recorded admits a replay nobody
+  can detect. A `FileNoncePersistence` must be supplied for this; the default
+  is in memory, which is right for a test and wrong for a service.
 - **Windows is not supported.** npm installs its executables there as `.cmd`
   shims, a `.cmd` cannot be started without `cmd.exe`, and quoting arguments for
   `cmd.exe` is the problem CVE-2024-27980 exists about. Declaring support would
