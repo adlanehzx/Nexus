@@ -145,7 +145,7 @@ export class MemoryService {
   async remember(input: RememberInput): Promise<MemoryRecord> {
     const content = input.content.trim();
     if (content.length === 0) {
-      throw new SensitiveMemoryRefusedError("There is nothing to remember.", ["empty-content"], "");
+      throw new SensitiveMemoryRefusedError("There is nothing to remember.", ["empty-content", "contenu-vide"], "");
     }
 
     const verdict = classify(content);
