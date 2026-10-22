@@ -159,16 +159,16 @@ An **invalid syntax file** halts the worker startup immediately and is never sil
 
 ## 5. Reliability and Fault Tolerance
 
-| Aspect            | Mechanism                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| Heartbeat         | Every 20s; updates `lastSeenAt` in database; marked offline after 60s                      |
-| Reconnection      | Exponential backoff with jitter, capped at 30s, indefinite retry loop                      |
-| Task Resumption   | Upon reconnecting, the agent reports the status of active in-flight tasks (`taskId`)        |
-| Idempotency       | Unique `idemKey` per task; previously executed tasks return cached results (1h TTL)        |
-| Cancellation      | `device.task.cancel` → SIGTERM followed by SIGKILL after grace period; tree-kill for childs|
-| Local Queue       | Bounded concurrent tasks; excess tasks rejected explicitly rather than queueing infinitely |
-| Audit Logs        | Local rotating audit file + structured server telemetry; fully inspectable by user         |
-| Offline Handling  | If no device is online, `device.*` tools vanish from registry and planner explains why     |
+| Aspect           | Mechanism                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| Heartbeat        | Every 20s; updates `lastSeenAt` in database; marked offline after 60s                       |
+| Reconnection     | Exponential backoff with jitter, capped at 30s, indefinite retry loop                       |
+| Task Resumption  | Upon reconnecting, the agent reports the status of active in-flight tasks (`taskId`)        |
+| Idempotency      | Unique `idemKey` per task; previously executed tasks return cached results (1h TTL)         |
+| Cancellation     | `device.task.cancel` → SIGTERM followed by SIGKILL after grace period; tree-kill for childs |
+| Local Queue      | Bounded concurrent tasks; excess tasks rejected explicitly rather than queueing infinitely  |
+| Audit Logs       | Local rotating audit file + structured server telemetry; fully inspectable by user          |
+| Offline Handling | If no device is online, `device.*` tools vanish from registry and planner explains why      |
 
 ## 6. Explicit Non-Goals for Device Agent
 

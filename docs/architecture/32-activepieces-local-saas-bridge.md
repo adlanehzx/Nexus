@@ -20,12 +20,12 @@ Activepieces provides NEXUS with an ecosystem of hundreds of turnkey SaaS connec
 
 ## 2. Native Tools for NEXUS Agents
 
-| Tool                          | Domain             | Risk Level | Human Confirmation                | Description                                                |
-| ----------------------------- | ------------------ | ---------- | --------------------------------- | ---------------------------------------------------------- |
-| `activepieces.list_flows`     | `terminal.execute` | `SAFE`     | No                                | Lists available local automation flows                     |
-| `activepieces.trigger_flow`   | `terminal.execute` | `HIGH`     | Conditional (`isSensitive`)       | Triggers a full flow via webhook or ID                     |
-| `activepieces.execute_action` | `terminal.execute` | `HIGH`     | **Dynamic / Mandatory if scoped** | Executes a direct SaaS action (Slack, Stripe, Notion, etc.)|
-| `activepieces.get_run`        | `terminal.execute` | `SAFE`     | No                                | Queries status and output of a specific run                |
+| Tool                          | Domain             | Risk Level | Human Confirmation                | Description                                                 |
+| ----------------------------- | ------------------ | ---------- | --------------------------------- | ----------------------------------------------------------- |
+| `activepieces.list_flows`     | `terminal.execute` | `SAFE`     | No                                | Lists available local automation flows                      |
+| `activepieces.trigger_flow`   | `terminal.execute` | `HIGH`     | Conditional (`isSensitive`)       | Triggers a full flow via webhook or ID                      |
+| `activepieces.execute_action` | `terminal.execute` | `HIGH`     | **Dynamic / Mandatory if scoped** | Executes a direct SaaS action (Slack, Stripe, Notion, etc.) |
+| `activepieces.get_run`        | `terminal.execute` | `SAFE`     | No                                | Queries status and output of a specific run                 |
 
 ## 3. Isolated Local Deployment
 

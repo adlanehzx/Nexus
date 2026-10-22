@@ -2,13 +2,13 @@
 
 ## 1. Two Processes, Two Responsibilities
 
-|                             | `apps/api`                                           | `apps/worker`                             |
-| --------------------------- | ---------------------------------------------------- | ----------------------------------------- |
-| Role                        | Network boundary: REST, WebSockets, auth, validation | Execution of agent runs and long jobs     |
-| Operation duration          | Milliseconds                                         | Seconds to minutes                        |
-| Scaling                     | Horizontal, sticky sessions not required             | Horizontal by queue concurrency           |
-| May call an LLM?            | No                                                   | Yes                                       |
-| May execute a tool?         | No                                                   | Yes                                       |
+|                     | `apps/api`                                           | `apps/worker`                         |
+| ------------------- | ---------------------------------------------------- | ------------------------------------- |
+| Role                | Network boundary: REST, WebSockets, auth, validation | Execution of agent runs and long jobs |
+| Operation duration  | Milliseconds                                         | Seconds to minutes                    |
+| Scaling             | Horizontal, sticky sessions not required             | Horizontal by queue concurrency       |
+| May call an LLM?    | No                                                   | Yes                                   |
+| May execute a tool? | No                                                   | Yes                                   |
 
 Separating these two is not gratuitous complexity: an agent run lasts between 5 and 120 seconds and
 consumes significant context memory. Co-locating it within the HTTP process makes deployments
@@ -34,17 +34,17 @@ via the **transactional outbox** pattern (§4).
 
 ## 3. Technology Choices
 
-| Requirement      | Choice                                       | Justification                                                 |
-| ---------------- | -------------------------------------------- | ------------------------------------------------------------- |
-| HTTP Framework   | Fastify 5                                    | High throughput, encapsulated plugins, native schema parsing  |
-| Schema Validation| Zod + `fastify-type-provider-zod`            | Types inferred directly from schemas, single source of truth  |
-| API Docs         | `@fastify/swagger` generated from schemas    | Docs are guaranteed up-to-date with runtime validation        |
-| ORM / Database   | Prisma                                       | Type safety, migrations, pgvector via `Unsupported` & queries|
-| Queue Engine     | BullMQ                                       | Retries, exponential backoff, priority, cron, job DAGs        |
-| Cache & PubSub   | ioredis                                      | Unified Redis instance for queues, pubsub, streams, rate limit|
-| WebSockets       | `@fastify/websocket` (ws)                    | Native standard ws, avoiding unnecessary Socket.IO lock-in    |
-| Authentication   | Short-lived JWTs + rotating refresh tokens   | See [09-security](09-security-permissions.md)                |
-| Logging          | Pino                                         | Structured JSON, native high-performance redaction pipeline   |
+| Requirement       | Choice                                     | Justification                                                  |
+| ----------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| HTTP Framework    | Fastify 5                                  | High throughput, encapsulated plugins, native schema parsing   |
+| Schema Validation | Zod + `fastify-type-provider-zod`          | Types inferred directly from schemas, single source of truth   |
+| API Docs          | `@fastify/swagger` generated from schemas  | Docs are guaranteed up-to-date with runtime validation         |
+| ORM / Database    | Prisma                                     | Type safety, migrations, pgvector via `Unsupported` & queries  |
+| Queue Engine      | BullMQ                                     | Retries, exponential backoff, priority, cron, job DAGs         |
+| Cache & PubSub    | ioredis                                    | Unified Redis instance for queues, pubsub, streams, rate limit |
+| WebSockets        | `@fastify/websocket` (ws)                  | Native standard ws, avoiding unnecessary Socket.IO lock-in     |
+| Authentication    | Short-lived JWTs + rotating refresh tokens | See [09-security](09-security-permissions.md)                  |
+| Logging           | Pino                                       | Structured JSON, native high-performance redaction pipeline    |
 
 ## 4. Reliability: Outbox, Idempotency, and Distributed Locks
 

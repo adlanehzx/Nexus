@@ -60,13 +60,13 @@ Server-asserted `idempotentHint` attributes are treated as untrusted.
 
 ## 5. Fault Tolerance and Circuit Breaker
 
-| Event Trigger             | System Response                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
-| Connection Drop           | Lifecycle event logged, followed by automated reconnection with capped exponential backoff         |
-| Active Downtime           | Returns `MCP_SERVER_UNAVAILABLE` — retryable, actionable error message for the agent                |
-| N Consecutive Failures    | Circuit breaker trips open: server tools are **temporarily removed from registry**                |
-| Reset Timeout Elapsed     | Circuit resets to half-open, permitting a single probe execution                                   |
-| Startup Probing           | Servers connect concurrently in parallel; an unresponsive server never blocks overall service boot |
+| Event Trigger          | System Response                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| Connection Drop        | Lifecycle event logged, followed by automated reconnection with capped exponential backoff         |
+| Active Downtime        | Returns `MCP_SERVER_UNAVAILABLE` — retryable, actionable error message for the agent               |
+| N Consecutive Failures | Circuit breaker trips open: server tools are **temporarily removed from registry**                 |
+| Reset Timeout Elapsed  | Circuit resets to half-open, permitting a single probe execution                                   |
+| Startup Probing        | Servers connect concurrently in parallel; an unresponsive server never blocks overall service boot |
 
 An internal connection state guard (`connecting`) prevents initial handshake failures from spawning
 concurrent reconnect loops alongside `start()`, ensuring deterministic health status reporting.
@@ -88,12 +88,12 @@ unit tests with canary environment variables.
 
 ## 7. Refinements from Design Spec (Doc 04)
 
-| Dimension              | Document 04                  | Implemented Code                               | Justification                                                                                   |
-| ---------------------- | ---------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Default Risk Tier      | `CONFIRM`                    | `MEDIUM`                                       | Aligns with the 5-tier risk hierarchy ([16](16-agent-core.md) §2)                               |
-| Schema Parsing         | JSON Schema → Zod            | Validates against native JSON Schema           | Eliminates translation edge cases (§3)                                                          |
-| Resources              | Unspecified                  | Exposed as two `SAFE` tools                    | Agent core interacts uniformly with tools                                                       |
-| Container Sandboxing   | Dedicated `mcp-runner` image | Process-level environment isolation in v1     | Sandboxed containers configured for deployment targets; process isolation active immediately     |
+| Dimension            | Document 04                  | Implemented Code                          | Justification                                                                                |
+| -------------------- | ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Default Risk Tier    | `CONFIRM`                    | `MEDIUM`                                  | Aligns with the 5-tier risk hierarchy ([16](16-agent-core.md) §2)                            |
+| Schema Parsing       | JSON Schema → Zod            | Validates against native JSON Schema      | Eliminates translation edge cases (§3)                                                       |
+| Resources            | Unspecified                  | Exposed as two `SAFE` tools               | Agent core interacts uniformly with tools                                                    |
+| Container Sandboxing | Dedicated `mcp-runner` image | Process-level environment isolation in v1 | Sandboxed containers configured for deployment targets; process isolation active immediately |
 
 ## 8. Server Registration Guide
 

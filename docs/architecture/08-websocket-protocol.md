@@ -47,16 +47,16 @@ tokens. Run events are retained for 15 minutes in a per-run Redis Stream.
 
 ## 4. Client → Server Messages
 
-| Type                                         | Payload                                                      | Notes                           |
-| -------------------------------------------- | ------------------------------------------------------------ | ------------------------------- |
-| `auth`                                       | `{ accessToken }`                                            | Mandatory as initial frame      |
-| `subscribe` / `unsubscribe`                  | `{ channels[], since? }`                                     | Authorization checked per channel|
-| `message.send`                               | `{ conversationId, content, clientMessageId, attachments? }` | `clientMessageId` = idempotency |
-| `run.cancel`                                 | `{ runId, reason? }`                                         | Graceful cooperative abort      |
-| `confirmation.respond`                       | `{ confirmationId, decision, remember?, nonce }`             | Mirrors REST API route          |
-| `voice.start` / `voice.chunk` / `voice.stop` | Binary audio frames                                          | Streaming STT dictation         |
-| `typing`                                     | `{ conversationId }`                                         | Cross-device presence indicators|
-| `ping`                                       | `{}`                                                         | Heartbeat ping, every 25s       |
+| Type                                         | Payload                                                      | Notes                             |
+| -------------------------------------------- | ------------------------------------------------------------ | --------------------------------- |
+| `auth`                                       | `{ accessToken }`                                            | Mandatory as initial frame        |
+| `subscribe` / `unsubscribe`                  | `{ channels[], since? }`                                     | Authorization checked per channel |
+| `message.send`                               | `{ conversationId, content, clientMessageId, attachments? }` | `clientMessageId` = idempotency   |
+| `run.cancel`                                 | `{ runId, reason? }`                                         | Graceful cooperative abort        |
+| `confirmation.respond`                       | `{ confirmationId, decision, remember?, nonce }`             | Mirrors REST API route            |
+| `voice.start` / `voice.chunk` / `voice.stop` | Binary audio frames                                          | Streaming STT dictation           |
+| `typing`                                     | `{ conversationId }`                                         | Cross-device presence indicators  |
+| `ping`                                       | `{}`                                                         | Heartbeat ping, every 25s         |
 
 ## 5. Server → Client Messages
 
@@ -71,7 +71,7 @@ tokens. Run events are retained for 15 minutes in a per-run Redis Stream.
 | `agent.token`                   | `{ runId, messageId, delta, index }`                                     | Streamed text tokens; coalesced (§7)          |
 | `agent.message`                 | `Message`                                                                | Final assistant message, persisted in DB      |
 | `tool.started`                  | `{ execId, runId, tool, title, riskLevel, argsPreview }`                 | Redacted argument preview                     |
-| `tool.progress`                 | `{ execId, pct?, label?, chunk?, screenshotUrl? }`                       | Browser screenshots, shell stdout chunks     |
+| `tool.progress`                 | `{ execId, pct?, label?, chunk?, screenshotUrl? }`                       | Browser screenshots, shell stdout chunks      |
 | `tool.result`                   | `{ execId, ok, summary, artifacts[], durationMs }`                       | Final tool result                             |
 | `confirmation.requested`        | `{ confirmationId, title, summary, diff?, riskLevel, expiresAt, nonce }` | Triggers prompt card + push notification      |
 | `confirmation.resolved`         | `{ confirmationId, decision, by }`                                       | Dismisses prompt card across all user devices |
@@ -85,17 +85,17 @@ tokens. Run events are retained for 15 minutes in a per-run Redis Stream.
 
 ## 6. Device Channel (`/ws/device`)
 
-| Direction | Type                                 | Role                                                            |
-| --------- | ------------------------------------ | --------------------------------------------------------------- |
-| →         | `device.auth`                        | Ed25519 cryptographic challenge signature                       |
-| ←         | `device.ready`                       | Policy acknowledgment and protocol version negotiation          |
-| →         | `device.heartbeat`                   | Every 20s: system load, version, active running tasks           |
-| ←         | `device.task.assign`                 | `{ taskId, tool, args, idemKey, deadline }`                     |
-| →         | `device.task.accepted` / `.rejected` | Rejection with explanation (local policy denial, missing deps)  |
-| →         | `device.task.progress`               | stdout/stderr chunks and execution percentage                   |
-| →         | `device.task.result`                 | `{ ok, output, exitCode, metrics }`                             |
-| ←         | `device.task.cancel`                 | Cooperative task cancellation                                   |
-| ←         | `device.policy.sync`                 | Server queries current active local policy (read-only)          |
+| Direction | Type                                 | Role                                                           |
+| --------- | ------------------------------------ | -------------------------------------------------------------- |
+| →         | `device.auth`                        | Ed25519 cryptographic challenge signature                      |
+| ←         | `device.ready`                       | Policy acknowledgment and protocol version negotiation         |
+| →         | `device.heartbeat`                   | Every 20s: system load, version, active running tasks          |
+| ←         | `device.task.assign`                 | `{ taskId, tool, args, idemKey, deadline }`                    |
+| →         | `device.task.accepted` / `.rejected` | Rejection with explanation (local policy denial, missing deps) |
+| →         | `device.task.progress`               | stdout/stderr chunks and execution percentage                  |
+| →         | `device.task.result`                 | `{ ok, output, exitCode, metrics }`                            |
+| ←         | `device.task.cancel`                 | Cooperative task cancellation                                  |
+| ←         | `device.policy.sync`                 | Server queries current active local policy (read-only)         |
 
 The server **never** modifies local security policy over this channel. This is an invariant architectural constraint.
 
@@ -113,14 +113,14 @@ The server **never** modifies local security policy over this channel. This is a
 
 ## 8. WebSocket Close Codes
 
-| Code | Meaning                                                               |
-| ---- | --------------------------------------------------------------------- |
-| 4400 | Incompatible protocol version → client upgrade required               |
-| 4401 | Missing or invalid authentication token                               |
-| 4403 | Unauthorized channel subscription attempt                             |
-| 4408 | Authentication handshake timeout                                      |
-| 4429 | Rate limit exceeded                                                   |
-| 4500 | Server error → client reconnects with exponential backoff             |
+| Code | Meaning                                                   |
+| ---- | --------------------------------------------------------- |
+| 4400 | Incompatible protocol version → client upgrade required   |
+| 4401 | Missing or invalid authentication token                   |
+| 4403 | Unauthorized channel subscription attempt                 |
+| 4408 | Authentication handshake timeout                          |
+| 4429 | Rate limit exceeded                                       |
+| 4500 | Server error → client reconnects with exponential backoff |
 
 Clients reconnect using exponential backoff with jitter (1s → 30s), **except** on 4400 (fatal) and
 4401 (triggers a token refresh cycle prior to one retry attempt).

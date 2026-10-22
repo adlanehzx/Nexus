@@ -168,17 +168,17 @@ suites pass cleanly; a complete blank-machine restoration drill is performed suc
 
 ## Overview Summary
 
-| Phase                        | Duration  | Cumulative | Deliverable                  |
-| ---------------------------- | --------- | ---------- | ---------------------------- |
-| 0 · Foundations              | 1.5 wks   | 1.5        | deployable skeleton          |
-| 1 · Conversation             | 2 wks     | 3.5        | **chat with assistant**      |
-| 2 · Agent + Permissions      | 3 wks     | 6.5        | **acts, strictly governed**  |
-| 3 · Mobile                   | 2.5 wks   | 9          | **daily mobile app**         |
-| 4 · Devices                  | 2.5 wks   | 11.5       | **acts on workstation**      |
-| 5 · MCP + Browser            | 2.5 wks   | 14         | **extensible web runner**    |
-| 6 · Memory + Tasks           | 2 wks     | 16         | **remembers long term**      |
-| 7 · Voice                    | 2 wks     | 18         | **spoken interaction**       |
-| 8 · Desktop + Hardening      | 3 wks     | 21         | **reliable and observable**  |
+| Phase                   | Duration | Cumulative | Deliverable                 |
+| ----------------------- | -------- | ---------- | --------------------------- |
+| 0 · Foundations         | 1.5 wks  | 1.5        | deployable skeleton         |
+| 1 · Conversation        | 2 wks    | 3.5        | **chat with assistant**     |
+| 2 · Agent + Permissions | 3 wks    | 6.5        | **acts, strictly governed** |
+| 3 · Mobile              | 2.5 wks  | 9          | **daily mobile app**        |
+| 4 · Devices             | 2.5 wks  | 11.5       | **acts on workstation**     |
+| 5 · MCP + Browser       | 2.5 wks  | 14         | **extensible web runner**   |
+| 6 · Memory + Tasks      | 2 wks    | 16         | **remembers long term**     |
+| 7 · Voice               | 2 wks    | 18         | **spoken interaction**      |
+| 8 · Desktop + Hardening | 3 wks    | 21         | **reliable and observable** |
 
 ≈ **5 months part-time**, with a useful working product available from week 6.5.
 

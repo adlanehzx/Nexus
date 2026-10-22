@@ -99,16 +99,16 @@ NEXUS reports "unconfigured" rather than guessing.
 
 ## 5. Critical Alerts
 
-| Alert Condition             | Threshold          | Justification                                        |
-| --------------------------- | ------------------ | ---------------------------------------------------- |
-| Run failure rate            | > 10% over 15m     | Functional regression or upstream provider outage    |
-| Hourly cost anomaly         | > 3× rolling median| Looping agent or unintentional overuse               |
-| Expired confirmations       | > 20%              | Push notifications failing or UX friction            |
-| Runs stuck in `RUNNING`     | > 10m              | Worker crash without releasing distributed lock      |
-| Queue backlog depth         | > 100 jobs         | Worker capacity under-provisioned                    |
-| Upstream `PROVIDER` errors  | > 5%               | Model outage requiring automatic provider fallback   |
-| Outbox event lag            | > 60s              | Asynchronous outbox dispatcher stalled               |
-| Unexpected device offline   | Immediate          | Workstation capability unavailable                   |
+| Alert Condition            | Threshold           | Justification                                      |
+| -------------------------- | ------------------- | -------------------------------------------------- |
+| Run failure rate           | > 10% over 15m      | Functional regression or upstream provider outage  |
+| Hourly cost anomaly        | > 3× rolling median | Looping agent or unintentional overuse             |
+| Expired confirmations      | > 20%               | Push notifications failing or UX friction          |
+| Runs stuck in `RUNNING`    | > 10m               | Worker crash without releasing distributed lock    |
+| Queue backlog depth        | > 100 jobs          | Worker capacity under-provisioned                  |
+| Upstream `PROVIDER` errors | > 5%                | Model outage requiring automatic provider fallback |
+| Outbox event lag           | > 60s               | Asynchronous outbox dispatcher stalled             |
+| Unexpected device offline  | Immediate           | Workstation capability unavailable                 |
 
 ## 6. Run Inspection and Replay
 

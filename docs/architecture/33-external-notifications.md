@@ -96,8 +96,8 @@ This decoupling guarantees:
 
 The following administrative endpoints manage external notifications from the dashboard:
 
-| Method  | Route                                    | Description                                           |
-| ------- | ---------------------------------------- | ----------------------------------------------------- |
-| `GET`   | `/api/v1/dashboard/notifications/config` | Reads current external channel configuration          |
-| `PUT`   | `/api/v1/dashboard/notifications/config` | Updates external channels dynamically                 |
-| `POST`  | `/api/v1/dashboard/notifications/test`   | Dispatches a live test notification and returns stats |
+| Method | Route                                    | Description                                           |
+| ------ | ---------------------------------------- | ----------------------------------------------------- |
+| `GET`  | `/api/v1/dashboard/notifications/config` | Reads current external channel configuration          |
+| `PUT`  | `/api/v1/dashboard/notifications/config` | Updates external channels dynamically                 |
+| `POST` | `/api/v1/dashboard/notifications/test`   | Dispatches a live test notification and returns stats |

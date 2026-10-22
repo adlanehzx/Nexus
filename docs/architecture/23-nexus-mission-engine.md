@@ -260,6 +260,7 @@ Operators approve or reject confirmations through the standard dashboard route:
 Automated integration test suites validate the end-to-end architecture against real processes:
 
 `services/api/scripts/e2e-confirmation.mjs` executes the full human-in-the-loop lifecycle across two real processes:
+
 ```
 Mission → Agent Core Task → Risk Tool → awaiting_confirmation
 → Engine Restart (SIGTERM + Reboot) → User Approval via Dashboard API
@@ -267,6 +268,7 @@ Mission → Agent Core Task → Risk Tool → awaiting_confirmation
 ```
 
 `services/api/scripts/e2e-mission-chain.mjs` validates standard collaborative missions:
+
 ```
 Chat Message → Validated DAG Plan → Parallel ACP Agents
 → Dependent Task Receiving Prior Outputs → Profile Failure Simulation

@@ -22,14 +22,14 @@ engine combining:
 
 The classifier evaluates task prompts through weighted lexical token matching and intent analysis:
 
-| Category    | Primary Lexical Signals                                               | Default Benchmark Profile                        |
-| ----------- | --------------------------------------------------------------------- | ------------------------------------------------ |
-| `browser`   | Navigation keywords, chromium, clicks, input forms, web scraping      | `codex`, `claude` (equipped with local harness)  |
-| `code`      | Source files (.ts, .py, etc.), refactoring, builds, git, vitest tests | `codex` (92), `claude` (90), `antigravity` (85)  |
-| `research`  | Codebase audits, architecture design, documentation, exploration      | `antigravity` (95), `claude` (90), `codex` (80)  |
-| `review`    | Critique, security auditing, error and regression detection           | `claude` (95), `codex` (85), `antigravity` (80)  |
-| `synthesis` | Executive summaries, final synthesis, conclusions, reports           | `claude` (95), `antigravity` (85), `codex` (80)  |
-| `general`   | Versatile unspecialized tasks                                         | `claude` (85), `antigravity` (85), `codex` (85)  |
+| Category    | Primary Lexical Signals                                               | Default Benchmark Profile                       |
+| ----------- | --------------------------------------------------------------------- | ----------------------------------------------- |
+| `browser`   | Navigation keywords, chromium, clicks, input forms, web scraping      | `codex`, `claude` (equipped with local harness) |
+| `code`      | Source files (.ts, .py, etc.), refactoring, builds, git, vitest tests | `codex` (92), `claude` (90), `antigravity` (85) |
+| `research`  | Codebase audits, architecture design, documentation, exploration      | `antigravity` (95), `claude` (90), `codex` (80) |
+| `review`    | Critique, security auditing, error and regression detection           | `claude` (95), `codex` (85), `antigravity` (80) |
+| `synthesis` | Executive summaries, final synthesis, conclusions, reports            | `claude` (95), `antigravity` (85), `codex` (80) |
+| `general`   | Versatile unspecialized tasks                                         | `claude` (85), `antigravity` (85), `codex` (85) |
 
 ---
 

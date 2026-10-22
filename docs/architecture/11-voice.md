@@ -53,12 +53,12 @@ Choosing a backend is a configuration option, not a code rewrite.
 
 ## 4. Latency Budget
 
-| Pipeline Stage                       | Target      | Architectural Lever                          |
-| ------------------------------------ | ----------- | -------------------------------------------- |
-| End of speech → Final transcript     | < 400 ms    | Streaming STT, local endpointing             |
-| Transcript → First token emitted     | < 800 ms    | Pre-warmed context, fast routing model       |
-| First token → First audio frame      | < 500 ms    | Sentence-by-sentence TTS streaming           |
-| **Total Perceived Latency**          | **< 1.5 s** |                                              |
+| Pipeline Stage                   | Target      | Architectural Lever                    |
+| -------------------------------- | ----------- | -------------------------------------- |
+| End of speech → Final transcript | < 400 ms    | Streaming STT, local endpointing       |
+| Transcript → First token emitted | < 800 ms    | Pre-warmed context, fast routing model |
+| First token → First audio frame  | < 500 ms    | Sentence-by-sentence TTS streaming     |
+| **Total Perceived Latency**      | **< 1.5 s** |                                        |
 
 When an agent must execute external tools, latency naturally increases: we bridge the gap with
 **local voice status announcements** ("Checking your upcoming calendar…") generated from `tool.started`
@@ -137,12 +137,12 @@ touch interaction between conversational exchanges.
 
 Exit conditions ensure microphones do not remain indefinitely open:
 
-| Exit Trigger       | Condition                                                        |
-| ------------------ | ---------------------------------------------------------------- |
-| `silence`          | A turn registers no input speech — conversation halts naturally  |
-| `turn_ceiling`     | 20 turns by default                                              |
-| `duration_ceiling` | 10 minutes maximum duration                                      |
-| `explicit_stop`    | User invokes `stop()` or taps pause                              |
+| Exit Trigger       | Condition                                                       |
+| ------------------ | --------------------------------------------------------------- |
+| `silence`          | A turn registers no input speech — conversation halts naturally |
+| `turn_ceiling`     | 20 turns by default                                             |
+| `duration_ceiling` | 10 minutes maximum duration                                     |
+| `explicit_stop`    | User invokes `stop()` or taps pause                             |
 
 A `finally` block terminates recording handles and audio channels under all conditions, including unhandled
 agent exceptions.

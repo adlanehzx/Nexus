@@ -38,12 +38,12 @@ A forged `worker.task_result` frame sent across a client WebSocket fails schema 
 
 ## 3. Two Distinct Authentication Boundaries
 
-| Feature                     | User Sessions              | Device Worker Sessions        |
-| --------------------------- | -------------------------- | ----------------------------- |
-| Credential Proof            | Password → EdDSA JWT token | Signed Ed25519/P-256 challenge|
-| Validity Lifespan           | 15 minutes, rotating       | 30 minutes, rotating          |
-| Route Guard                 | `requireUser`              | `requireDevice`               |
-| Act on Behalf of Other?     | Prohibited                 | Prohibited                    |
+| Feature                 | User Sessions              | Device Worker Sessions         |
+| ----------------------- | -------------------------- | ------------------------------ |
+| Credential Proof        | Password → EdDSA JWT token | Signed Ed25519/P-256 challenge |
+| Validity Lifespan       | 15 minutes, rotating       | 30 minutes, rotating           |
+| Route Guard             | `requireUser`              | `requireDevice`                |
+| Act on Behalf of Other? | Prohibited                 | Prohibited                     |
 
 `verifyAccessToken` rejects device tokens, and device validators reject user tokens. Generic guards
 that conflate the two identities do not exist.

@@ -73,4 +73,3 @@ for 30 days.
 `src-tauri/` **has not been compiled in CI**: the Rust toolchain is not preinstalled in the default
 environment used for repository-wide checks. Everything above the `DesktopShell` abstraction port is
 fully covered and verified.
-

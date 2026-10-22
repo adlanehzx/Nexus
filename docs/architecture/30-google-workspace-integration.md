@@ -25,19 +25,19 @@ Google Workspace integration allows NEXUS agents to directly query Gmail and Goo
 
 ## 2. Native NEXUS Tools (`@nexus/google-workspace`)
 
-| Tool                          | Domain           | Risk Level | Human Confirmation    | Description                                   |
-| ----------------------------- | ---------------- | ---------- | --------------------- | --------------------------------------------- |
-| `gmail.search`                | `email.read`     | `SAFE`     | No                    | Search emails by query string or label        |
-| `gmail.read`                  | `email.read`     | `SAFE`     | No                    | Securely read and sanitize email contents     |
-| `gmail.summarize`             | `email.read`     | `SAFE`     | No                    | Chronological summary of email threads        |
-| `gmail.draft`                 | `email.send`     | `MEDIUM`   | No                    | Prepare an un-sent draft                      |
-| `gmail.send`                  | `email.send`     | `HIGH`     | **Yes (Mandatory)**   | Send an email message                         |
-| `calendar.list_events`        | `calendar.read`  | `SAFE`     | No                    | List upcoming calendar events                 |
-| `calendar.get_event`          | `calendar.read`  | `SAFE`     | No                    | Get details for a specific event              |
-| `calendar.check_availability` | `calendar.read`  | `SAFE`     | No                    | Calculate free and busy slots                 |
-| `calendar.create_event`       | `calendar.write` | `HIGH`     | **Yes (Mandatory)**   | Create a calendar appointment                 |
-| `calendar.update_event`       | `calendar.write` | `HIGH`     | **Yes (Mandatory)**   | Update an existing appointment                |
-| `calendar.delete_event`       | `calendar.write` | `CRITICAL` | **Yes (Mandatory)**   | Delete a calendar appointment                 |
+| Tool                          | Domain           | Risk Level | Human Confirmation  | Description                               |
+| ----------------------------- | ---------------- | ---------- | ------------------- | ----------------------------------------- |
+| `gmail.search`                | `email.read`     | `SAFE`     | No                  | Search emails by query string or label    |
+| `gmail.read`                  | `email.read`     | `SAFE`     | No                  | Securely read and sanitize email contents |
+| `gmail.summarize`             | `email.read`     | `SAFE`     | No                  | Chronological summary of email threads    |
+| `gmail.draft`                 | `email.send`     | `MEDIUM`   | No                  | Prepare an un-sent draft                  |
+| `gmail.send`                  | `email.send`     | `HIGH`     | **Yes (Mandatory)** | Send an email message                     |
+| `calendar.list_events`        | `calendar.read`  | `SAFE`     | No                  | List upcoming calendar events             |
+| `calendar.get_event`          | `calendar.read`  | `SAFE`     | No                  | Get details for a specific event          |
+| `calendar.check_availability` | `calendar.read`  | `SAFE`     | No                  | Calculate free and busy slots             |
+| `calendar.create_event`       | `calendar.write` | `HIGH`     | **Yes (Mandatory)** | Create a calendar appointment             |
+| `calendar.update_event`       | `calendar.write` | `HIGH`     | **Yes (Mandatory)** | Update an existing appointment            |
+| `calendar.delete_event`       | `calendar.write` | `CRITICAL` | **Yes (Mandatory)** | Delete a calendar appointment             |
 
 ## 3. Token Manager (`GoogleTokenManager`)
 

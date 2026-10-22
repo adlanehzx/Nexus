@@ -45,11 +45,11 @@ Capability ──▶ createDeviceTools ──▶ ToolDefinition ──▶ ToolRe
 
 Conflating these three dimensions prevents fleets from scaling cleanly:
 
-| Axis           | Semantic Question                       | Concrete Example           |
-| -------------- | --------------------------------------- | -------------------------- |
-| **Role**       | Is the device authorized to execute?   | `CLIENT`, `WORKER`, `BOTH` |
-| **Type**       | What hardware/OS platform is it?        | `IPHONE`, `WINDOWS_PC`     |
-| **Capability** | What actions can the machine perform?   | `terminal.execute`         |
+| Axis           | Semantic Question                     | Concrete Example           |
+| -------------- | ------------------------------------- | -------------------------- |
+| **Role**       | Is the device authorized to execute?  | `CLIENT`, `WORKER`, `BOTH` |
+| **Type**       | What hardware/OS platform is it?      | `IPHONE`, `WINDOWS_PC`     |
+| **Capability** | What actions can the machine perform? | `terminal.execute`         |
 
 A primary laptop configured with role `BOTH` acts as an interactive client chat interface _and_
 executes background worker tasks. A device configured strictly as `CLIENT` is never selected as an
@@ -125,10 +125,10 @@ The signing algorithm is inferred from the cryptographic key itself, not client-
 
 ### Key Rotation and Revocation
 
-| Action                                     | Database State                                                                 | Effect on Verification                  |
-| ------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------- |
-| `set` on a device with an existing key     | Prior key receives `rotatedAt` and `revokedAt`; new row is created             | New key verifies; old key rejected      |
-| `revoke`                                   | `revokedAt` applied across all active key rows                                 | All inbound handshakes rejected         |
+| Action                                 | Database State                                                     | Effect on Verification             |
+| -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- |
+| `set` on a device with an existing key | Prior key receives `rotatedAt` and `revokedAt`; new row is created | New key verifies; old key rejected |
+| `revoke`                               | `revokedAt` applied across all active key rows                     | All inbound handshakes rejected    |
 
 **Single Active Key**: Devices maintain exactly one active key to avoid ambiguous verification states.
 **Revocation Preserves Audit Trails**: Public keys are historical records; revoked keys are marked
@@ -165,12 +165,12 @@ only the ticket itself — because the scanning device does not yet possess an i
 
 ### Tight Security Window
 
-| Property                             | Threat Mitigated                                                                                     |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Single-Use** (`consumedAt`)        | A QR photographed over a shoulder cannot be reused once paired                                       |
-| **5-Minute TTL**                     | Exceeds pairing workflow time while minimizing exposure windows                                      |
-| **Hashed at Rest**                   | Only SHA-256 hashes are stored; lookups evaluate via hashes, preventing timing side-channel attacks   |
-| **Ownership Embedded in Ticket**     | Presenters cannot select which user account the device binds to                                      |
+| Property                         | Threat Mitigated                                                                                    |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Single-Use** (`consumedAt`)    | A QR photographed over a shoulder cannot be reused once paired                                      |
+| **5-Minute TTL**                 | Exceeds pairing workflow time while minimizing exposure windows                                     |
+| **Hashed at Rest**               | Only SHA-256 hashes are stored; lookups evaluate via hashes, preventing timing side-channel attacks |
+| **Ownership Embedded in Ticket** | Presenters cannot select which user account the device binds to                                     |
 
 Tickets verify physical presence and key delivery; they do not grant automatic trust. Enrolled devices
 arrive in `PENDING` status awaiting explicit user approval.
@@ -201,12 +201,12 @@ policies exist to ensure that even if the central server is compromised, worker 
 
 The server reports version status against `EXPECTED_WORKER_VERSION`:
 
-| Status          | Meaning                                        | Operator Action                                              |
-| --------------- | ---------------------------------------------- | ------------------------------------------------------------ |
-| `up-to-date`    | Version matches expected release               | None                                                         |
-| `outdated`      | Newer release is available                     | Local package update, installer run, or git pull and restart |
-| `ahead`         | Local development or canary build              | None                                                         |
-| `unknown`       | Missing or unparseable version string          | Verify worker service status                                 |
+| Status       | Meaning                               | Operator Action                                              |
+| ------------ | ------------------------------------- | ------------------------------------------------------------ |
+| `up-to-date` | Version matches expected release      | None                                                         |
+| `outdated`   | Newer release is available            | Local package update, installer run, or git pull and restart |
+| `ahead`      | Local development or canary build     | None                                                         |
+| `unknown`    | Missing or unparseable version string | Verify worker service status                                 |
 
 Semver comparisons evaluate numerically segment-by-segment (`1.2.0-rc.1` properly precedes `1.2.0`),
 preventing lexical string comparison errors.

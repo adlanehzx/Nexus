@@ -2,14 +2,14 @@
 
 ## What is Automated, and What Cannot Be
 
-| Artifact         | Produced By                                          | Signed By                                  |
-| ---------------- | ---------------------------------------------------- | ------------------------------------------ |
-| AppImage, `.deb` | "Packages" workflow, Linux runner                    | Tauri key (`TAURI_SIGNING_PRIVATE_KEY`)    |
-| Arch package     | `packaging/arch/PKGBUILD`, built on host             | None — Arch builds directly from source    |
-| MSI, NSIS        | Windows runner                                       | Code signing certificate                   |
-| `.dmg`           | macOS runner                                         | Apple certificate, followed by notarization|
-| APK              | Linux runner + Gradle                                | Android keystore                           |
-| TestFlight       | **Manual**, see below                                | Apple certificate                          |
+| Artifact         | Produced By                              | Signed By                                   |
+| ---------------- | ---------------------------------------- | ------------------------------------------- |
+| AppImage, `.deb` | "Packages" workflow, Linux runner        | Tauri key (`TAURI_SIGNING_PRIVATE_KEY`)     |
+| Arch package     | `packaging/arch/PKGBUILD`, built on host | None — Arch builds directly from source     |
+| MSI, NSIS        | Windows runner                           | Code signing certificate                    |
+| `.dmg`           | macOS runner                             | Apple certificate, followed by notarization |
+| APK              | Linux runner + Gradle                    | Android keystore                            |
+| TestFlight       | **Manual**, see below                    | Apple certificate                           |
 
 **No secrets are required to run the build pipeline.** In the absence of certificates or keystores,
 packages are built **unsigned**: functional for local testing, but flagged by SmartScreen and
@@ -133,12 +133,12 @@ files so version updates do not require re-pairing the device.
 `packaging/windows/install-worker-service.ps1`, orchestrated via native `sc.exe` — available on all
 Windows editions without third-party wrapper dependencies.
 
-| Decision                                            | Reason                                                                                                                                                       |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dedicated service account, not `LocalSystem`        | `LocalSystem` grants unrestricted machine privileges, invalidating local path policies: filesystem restrictions provide no protection if the process is root|
-| Bounded automatic restarts (5s, 30s, 60s)           | A continuously crashing worker restarting immediately transforms an isolated defect into an aggressive CPU/log denial of service                           |
-| No secrets passed in command-line arguments         | Service command lines are visible to any unprivileged user via Task Manager; private keys are referenced strictly by filesystem path                        |
-| `delayed-auto` startup mode                         | Boots following essential system services to avoid lengthening host boot times                                                                              |
+| Decision                                     | Reason                                                                                                                                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dedicated service account, not `LocalSystem` | `LocalSystem` grants unrestricted machine privileges, invalidating local path policies: filesystem restrictions provide no protection if the process is root |
+| Bounded automatic restarts (5s, 30s, 60s)    | A continuously crashing worker restarting immediately transforms an isolated defect into an aggressive CPU/log denial of service                             |
+| No secrets passed in command-line arguments  | Service command lines are visible to any unprivileged user via Task Manager; private keys are referenced strictly by filesystem path                         |
+| `delayed-auto` startup mode                  | Boots following essential system services to avoid lengthening host boot times                                                                               |
 
 The script halts if `.env` configuration is missing, and warns if permissions on the file are insecurely
 inherited from the parent folder.

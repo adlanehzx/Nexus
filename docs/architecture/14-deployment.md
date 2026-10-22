@@ -38,18 +38,18 @@ and live within an internal network without ingress routing; egress traffic is s
 
 ## 3. Services
 
-| Service          | Container Image                     | Operational Notes                                                                |
-| ---------------- | ----------------------------------- | -------------------------------------------------------------------------------- |
-| `caddy`          | caddy:2                             | Automated Let's Encrypt TLS, reverse proxy, WebSocket upgrades, compression      |
-| `api`            | node:22-alpine (distroless in prod) | 2 replicas, `/healthz` probe, non-root user                                      |
-| `worker`         | node:22-alpine                      | BullMQ concurrency tuning, graceful drain termination                            |
-| `browser-worker` | python:3.12 + Playwright            | `shm_size: 1g`, memory limits, seccomp filters, non-root                         |
+| Service          | Container Image                     | Operational Notes                                                               |
+| ---------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
+| `caddy`          | caddy:2                             | Automated Let's Encrypt TLS, reverse proxy, WebSocket upgrades, compression     |
+| `api`            | node:22-alpine (distroless in prod) | 2 replicas, `/healthz` probe, non-root user                                     |
+| `worker`         | node:22-alpine                      | BullMQ concurrency tuning, graceful drain termination                           |
+| `browser-worker` | python:3.12 + Playwright            | `shm_size: 1g`, memory limits, seccomp filters, non-root                        |
 | `mcp-runner`     | node:22-alpine                      | Hosts stdio MCP servers, minimal environment variables, isolated network        |
-| `postgres`       | pgvector/pgvector:pg16              | Persistent volume, scheduled `pg_dump`, continuous WAL archiving                 |
-| `redis`          | redis:7-alpine                      | AOF `everysec`; job queues and streaming state are fully reconstructible         |
-| `minio`          | minio                               | Artifacts, audio buffers, screenshots; interchangeable with S3/R2                |
-| `migrate`        | node:22-alpine                      | One-shot schema migration job before app boot (`depends_on: service_completed`)  |
-| `backup`         | alpine + cron                       | Automated encrypted backups pushed to offsite object storage                     |
+| `postgres`       | pgvector/pgvector:pg16              | Persistent volume, scheduled `pg_dump`, continuous WAL archiving                |
+| `redis`          | redis:7-alpine                      | AOF `everysec`; job queues and streaming state are fully reconstructible        |
+| `minio`          | minio                               | Artifacts, audio buffers, screenshots; interchangeable with S3/R2               |
+| `migrate`        | node:22-alpine                      | One-shot schema migration job before app boot (`depends_on: service_completed`) |
+| `backup`         | alpine + cron                       | Automated encrypted backups pushed to offsite object storage                    |
 
 Hardened defaults: `restart: unless-stopped`, explicit healthchecks, CPU/memory quotas, structured
 JSON logging with log-rotation, non-root execution, and read-only container root filesystems where possible.
@@ -89,12 +89,12 @@ active steps to finish or re-enqueue tasks into BullMQ without state loss.
 
 ## 6. Backup & Disaster Recovery
 
-| Data Component            | Frequency           | Retention Window         | Backup Destination            |
-| ------------------------- | ------------------- | ------------------------ | ----------------------------- |
-| PostgreSQL (Encrypted DB) | Every 6 hours       | 30 days + 1 monthly/year | Offsite S3 / Cloudflare R2    |
-| Continuous WAL Archives   | Streaming           | 7 days                   | Offsite S3 (PITR recovery)    |
-| MinIO Artifact Storage    | Daily               | 30 days                  | Offsite S3                    |
-| Deployment `.env` Secrets | On every change     | Indefinite               | Secure offline password vault |
+| Data Component            | Frequency       | Retention Window         | Backup Destination            |
+| ------------------------- | --------------- | ------------------------ | ----------------------------- |
+| PostgreSQL (Encrypted DB) | Every 6 hours   | 30 days + 1 monthly/year | Offsite S3 / Cloudflare R2    |
+| Continuous WAL Archives   | Streaming       | 7 days                   | Offsite S3 (PITR recovery)    |
+| MinIO Artifact Storage    | Daily           | 30 days                  | Offsite S3                    |
+| Deployment `.env` Secrets | On every change | Indefinite               | Secure offline password vault |
 
 Restoration drills are **tested monthly** using `infra/scripts/restore-drill.sh`, bootstrapping a clean
 instance from encrypted backups. An untested backup is not a valid backup.

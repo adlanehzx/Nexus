@@ -97,25 +97,25 @@ server cannot degrade overall platform reliability.
 
 ## 4. Default Tool Catalog
 
-| Tool                            | Risk Level                           | Confirmation Required | Notes                                      |
-| ------------------------------- | ------------------------------------ | --------------------- | ------------------------------------------ |
-| `search.web`                    | SAFE                                 | No                    | External search provider                   |
-| `http.request`                  | CONFIRM                              | GET no / Others yes   | Domain allowlist validation                |
-| `weather.get`                   | SAFE                                 | No                    | Read-only utility                          |
-| `calendar.list`                 | SAFE                                 | No                    | Google Calendar OAuth                      |
-| `calendar.create` / `.update`   | CONFIRM                              | Yes                   | Scoped event manipulation                  |
-| `calendar.delete`               | CONFIRM → CRITICAL if recurring      | Yes                   | Irreversible for recurring events          |
-| `mail.list` / `mail.read`       | SAFE                                 | No                    | Read-only email access                     |
-| `mail.send`                     | CONFIRM                              | Yes                   | Full preview card mandatory in dashboard   |
-| `memory.search` / `.write`      | SAFE                                 | No                    | Core personal memory                       |
-| `device.fs.read`                | SAFE                                 | No                    | Enforces per-device path jail              |
-| `device.fs.write`               | CONFIRM                              | Yes                   | File diff displayed before execution       |
-| `device.fs.delete`              | CRITICAL                             | Yes                   | Soft delete / trash where supported        |
-| `device.shell.exec`             | CONFIRM                              | Yes                   | Command classification policy enforced     |
-| `device.process.list` / `.kill` | SAFE / CONFIRM                       | Contextual            | Kill requires explicit confirmation        |
-| `github.*`                      | SAFE read, CONFIRM write             | Yes on write          | Pull requests, commits, merges             |
-| `browser.act`                   | CONFIRM                              | Yes on mutating act   | See [05](05-browser-use.md)                |
-| `payment.*`                     | CRITICAL                             | Strict dual factor    | Out of scope for initial release           |
+| Tool                            | Risk Level                      | Confirmation Required | Notes                                    |
+| ------------------------------- | ------------------------------- | --------------------- | ---------------------------------------- |
+| `search.web`                    | SAFE                            | No                    | External search provider                 |
+| `http.request`                  | CONFIRM                         | GET no / Others yes   | Domain allowlist validation              |
+| `weather.get`                   | SAFE                            | No                    | Read-only utility                        |
+| `calendar.list`                 | SAFE                            | No                    | Google Calendar OAuth                    |
+| `calendar.create` / `.update`   | CONFIRM                         | Yes                   | Scoped event manipulation                |
+| `calendar.delete`               | CONFIRM → CRITICAL if recurring | Yes                   | Irreversible for recurring events        |
+| `mail.list` / `mail.read`       | SAFE                            | No                    | Read-only email access                   |
+| `mail.send`                     | CONFIRM                         | Yes                   | Full preview card mandatory in dashboard |
+| `memory.search` / `.write`      | SAFE                            | No                    | Core personal memory                     |
+| `device.fs.read`                | SAFE                            | No                    | Enforces per-device path jail            |
+| `device.fs.write`               | CONFIRM                         | Yes                   | File diff displayed before execution     |
+| `device.fs.delete`              | CRITICAL                        | Yes                   | Soft delete / trash where supported      |
+| `device.shell.exec`             | CONFIRM                         | Yes                   | Command classification policy enforced   |
+| `device.process.list` / `.kill` | SAFE / CONFIRM                  | Contextual            | Kill requires explicit confirmation      |
+| `github.*`                      | SAFE read, CONFIRM write        | Yes on write          | Pull requests, commits, merges           |
+| `browser.act`                   | CONFIRM                         | Yes on mutating act   | See [05](05-browser-use.md)              |
+| `payment.*`                     | CRITICAL                        | Strict dual factor    | Out of scope for initial release         |
 
 ## 5. Model Context Protocol (MCP)
 

@@ -4,13 +4,13 @@
 
 The term "memory" encompasses five distinct mechanisms that must not be conflated:
 
-| Layer                    | Content                                                     | Lifespan             | Storage                  | Injected into Prompt       |
-| ------------------------ | ----------------------------------------------------------- | -------------------- | ------------------------ | -------------------------- |
-| **Working context**      | Immediate token window passed to the model                  | Current turn         | RAM                      | In full (defines context)  |
-| **Short-term memory**    | Active run execution: plan, tool observations, drafts       | Duration of run      | `AgentStep` + Redis      | Yes, intelligently trimmed |
-| **Conversation history** | Chat messages in a conversation                             | Indefinite           | `Message`                | Last K turns + summary     |
-| **Long-term memory**     | Extracted facts, implicit preferences, procedural knowledge | Indefinite           | `Memory` + local vector  | Hybrid top-K retrieval     |
-| **User preferences**     | Explicit structured settings                                | Until changed        | `UserPreference`         | Always, compact format     |
+| Layer                    | Content                                                     | Lifespan        | Storage                 | Injected into Prompt       |
+| ------------------------ | ----------------------------------------------------------- | --------------- | ----------------------- | -------------------------- |
+| **Working context**      | Immediate token window passed to the model                  | Current turn    | RAM                     | In full (defines context)  |
+| **Short-term memory**    | Active run execution: plan, tool observations, drafts       | Duration of run | `AgentStep` + Redis     | Yes, intelligently trimmed |
+| **Conversation history** | Chat messages in a conversation                             | Indefinite      | `Message`               | Last K turns + summary     |
+| **Long-term memory**     | Extracted facts, implicit preferences, procedural knowledge | Indefinite      | `Memory` + local vector | Hybrid top-K retrieval     |
+| **User preferences**     | Explicit structured settings                                | Until changed   | `UserPreference`        | Always, compact format     |
 
 Two auxiliary audit stores exist which are **not** prompt memory, but are queryable via tools:
 `Task` (task execution history) and `ToolExecution` (audit trail of tool calls). The agent queries

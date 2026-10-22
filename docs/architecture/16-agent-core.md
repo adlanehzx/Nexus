@@ -12,19 +12,19 @@ The specifications defined eleven modular components, mapped cleanly across arch
 ([00 §4](00-overview.md)) — capability modules know nothing of LLMs, reasoning layers know nothing
 of low-level tool executions:
 
-| Component             | Location                            | Architecture Plane  |
-| --------------------- | ----------------------------------- | ------------------- |
-| `AgentOrchestrator`   | `agent-core/src/orchestrator.ts`    | Reasoning           |
-| `AgentLoop`           | `agent-core/src/loop.ts`            | Reasoning           |
-| `AgentContext`        | `agent-core/src/context.ts`         | Reasoning           |
-| `AgentState`          | `agent-core/src/state.ts`           | Reasoning           |
-| `Planner`             | `agent-core/src/planner.ts`         | Reasoning           |
-| `ExecutionPolicy`     | `agent-core/src/policy.ts`          | Governance          |
-| `ToolRegistry`        | `tools/src/registry.ts`             | Capability          |
-| `ToolExecutor`        | `tools/src/executor.ts`             | Capability          |
-| `PermissionService`   | `tools/src/permission-service.ts`   | Governance          |
-| `ConfirmationService` | `tools/src/confirmation-service.ts` | Governance          |
-| `ToolDefinition`      | `tools/src/definition.ts`           | Capability          |
+| Component             | Location                            | Architecture Plane |
+| --------------------- | ----------------------------------- | ------------------ |
+| `AgentOrchestrator`   | `agent-core/src/orchestrator.ts`    | Reasoning          |
+| `AgentLoop`           | `agent-core/src/loop.ts`            | Reasoning          |
+| `AgentContext`        | `agent-core/src/context.ts`         | Reasoning          |
+| `AgentState`          | `agent-core/src/state.ts`           | Reasoning          |
+| `Planner`             | `agent-core/src/planner.ts`         | Reasoning          |
+| `ExecutionPolicy`     | `agent-core/src/policy.ts`          | Governance         |
+| `ToolRegistry`        | `tools/src/registry.ts`             | Capability         |
+| `ToolExecutor`        | `tools/src/executor.ts`             | Capability         |
+| `PermissionService`   | `tools/src/permission-service.ts`   | Governance         |
+| `ConfirmationService` | `tools/src/confirmation-service.ts` | Governance         |
+| `ToolDefinition`      | `tools/src/definition.ts`           | Capability         |
 
 `agent-core` depends neither on `@nexus/database`, nor on MCP packages, nor on vendor SDKs.
 It interacts exclusively through decoupled ports: `LLMProvider`, `MemoryProvider`, `AgentRunStore`.
@@ -127,14 +127,14 @@ Tests verify that passwords passed as tool arguments appear neither in `AgentRun
 
 ## 8. Intentional Refinements from Initial Design (Doc 03)
 
-| Dimension              | Document 03             | Implemented Code                              | Justification                                                                                      |
-| ---------------------- | ----------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Risk Tiers             | 3 levels                | 5 levels                                      | Introduces auto-approval risk thresholds (§2)                                                      |
-| Persistence            | Direct Prisma in loop   | Port interface + memory implementation        | `agent-core` remains decoupled from `@nexus/database` (ADR-003)                                     |
-| Planner                | `PLANNED` with `Task`   | Reactive mode primary                         | Planned mode integrates alongside task engine (Phase 6); reactive loop satisfies Phase 2 use cases |
-| Streaming              | Tokens into WebSocket   | `stream()` available, loop uses `generate()`  | WebSocket streaming handled at gateway layer                                                       |
-| Compaction             | Embedded in loop        | Modular architecture                         | Extracted to dedicated `ContextAssembler`                                                          |
-| Tool `execute()`       | Returns `ToolResult`    | Returns output or **throws**                  | Developers write standard throwing code; executor wraps results consistently                       |
+| Dimension        | Document 03           | Implemented Code                             | Justification                                                                                      |
+| ---------------- | --------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Risk Tiers       | 3 levels              | 5 levels                                     | Introduces auto-approval risk thresholds (§2)                                                      |
+| Persistence      | Direct Prisma in loop | Port interface + memory implementation       | `agent-core` remains decoupled from `@nexus/database` (ADR-003)                                    |
+| Planner          | `PLANNED` with `Task` | Reactive mode primary                        | Planned mode integrates alongside task engine (Phase 6); reactive loop satisfies Phase 2 use cases |
+| Streaming        | Tokens into WebSocket | `stream()` available, loop uses `generate()` | WebSocket streaming handled at gateway layer                                                       |
+| Compaction       | Embedded in loop      | Modular architecture                         | Extracted to dedicated `ContextAssembler`                                                          |
+| Tool `execute()` | Returns `ToolResult`  | Returns output or **throws**                 | Developers write standard throwing code; executor wraps results consistently                       |
 
 ## 9. Automated Test Coverage
 

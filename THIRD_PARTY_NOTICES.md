@@ -24,4 +24,3 @@ terms of service. NEXUS does not convert an existing personal subscription into 
 
 Prior to any release, the license inventory must be audited, and any unknown or non-commercial license
 must block publication.
-

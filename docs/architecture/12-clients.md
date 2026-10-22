@@ -19,15 +19,15 @@ deltas are kept out of Query cache to avoid rendering bottlenecks.
 
 **Screens**
 
-| Screen         | Key Contents                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| Conversation   | Message timeline, streaming tokens, tool cards, confirmation cards, text + mic composer   |
-| History        | Conversation list, search, pinning, archiving                                              |
-| Tasks          | Active and scheduled missions, progress tracking, result summaries                         |
-| Devices        | Paired machines, online status, QR enrollment, audit logs, revocation                      |
-| Permissions    | Tool grants, path scopes, instant revocation, audit log viewer                             |
-| Memory         | Long-term memory facts, inline editing, manual deletion                                     |
-| Settings       | Provider configurations, voice models, cost budgets, privacy toggles                       |
+| Screen       | Key Contents                                                                            |
+| ------------ | --------------------------------------------------------------------------------------- |
+| Conversation | Message timeline, streaming tokens, tool cards, confirmation cards, text + mic composer |
+| History      | Conversation list, search, pinning, archiving                                           |
+| Tasks        | Active and scheduled missions, progress tracking, result summaries                      |
+| Devices      | Paired machines, online status, QR enrollment, audit logs, revocation                   |
+| Permissions  | Tool grants, path scopes, instant revocation, audit log viewer                          |
+| Memory       | Long-term memory facts, inline editing, manual deletion                                 |
+| Settings     | Provider configurations, voice models, cost budgets, privacy toggles                    |
 
 **The Conversation Timeline** is the core product interface. It renders an **event timeline**, not
 merely static chat bubbles:
@@ -141,12 +141,12 @@ desktop, app stores on mobile), which holds the public key validating package si
 
 Safety Rules:
 
-| Rejection Case          | Rationale                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| Unsigned bundle         | An unsigned package is untrusted: whoever serves it could inject arbitrary malicious code |
-| Version downgrade       | Downgrade attacks could reintroduce previously patched security vulnerabilities            |
-| Channel switching       | Stable production installs must not jump to beta channels without explicit user intent    |
-| Major version upgrades  | Breaking changes require database or config migrations; never auto-applied silently        |
+| Rejection Case         | Rationale                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| Unsigned bundle        | An unsigned package is untrusted: whoever serves it could inject arbitrary malicious code |
+| Version downgrade      | Downgrade attacks could reintroduce previously patched security vulnerabilities           |
+| Channel switching      | Stable production installs must not jump to beta channels without explicit user intent    |
+| Major version upgrades | Breaking changes require database or config migrations; never auto-applied silently       |
 
 Malformed feed entries are ignored rather than failing the evaluation, ensuring feed issues do not
 block critical security patch installations.

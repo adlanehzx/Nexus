@@ -27,13 +27,13 @@ Packages: [`services/browser-worker`](../../services/browser-worker) (Python),
 `browser-use 0.13.8`, Python ≥ 3.11. The integration was verified **against the installed package
 bytecode**, rather than documentation:
 
-| Element               | Component Invocation                                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| Agent                 | `Agent(task, llm, browser, tools, sensitive_data, task_id, register_should_stop_callback, step_timeout)` |
-| Execution             | `agent.run(max_steps=…, on_step_end=…)`                                                                  |
-| Action Sandboxing     | `Tools(exclude_actions=[…])`                                                                             |
-| Browser Driver        | `Browser(browser_profile=BrowserProfile(…))`                                                             |
-| Language Model        | `ChatAnthropic`                                                                                          |
+| Element           | Component Invocation                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| Agent             | `Agent(task, llm, browser, tools, sensitive_data, task_id, register_should_stop_callback, step_timeout)` |
+| Execution         | `agent.run(max_steps=…, on_step_end=…)`                                                                  |
+| Action Sandboxing | `Tools(exclude_actions=[…])`                                                                             |
+| Browser Driver    | `Browser(browser_profile=BrowserProfile(…))`                                                             |
+| Language Model    | `ChatAnthropic`                                                                                          |
 
 Two pitfalls were discovered during package inspection:
 
@@ -100,12 +100,12 @@ This avoids displaying a generic spinner while a browser is navigating. Worker e
 
 ## 7. Refinements from Initial Design (Doc 05)
 
-| Dimension              | Document 05                     | Implemented Code                              | Justification                                                                                             |
-| ---------------------- | ------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Exposed Tools          | `browser.act` + low-level tools | Distinct tool per operational intent          | Risk must be granular; "extract pricing" and "execute purchase" cannot share an identical approval grant |
-| Progress Updates       | Redis Streams                   | HTTP long-polling with `seq` sequence markers | Numbered events make resumption reliable without persistent connections for internal services            |
-| Screenshot Archiving   | Per-step object storage         | `screenshotRef` reserved in schema metadata   | Object storage integration attaches in infrastructure deployment phase                                    |
-| Persistent Profiles    | Encrypted cookies at rest       | Ephemeral browser contexts only               | Host credential manager protects service tokens; persistent cross-site cookies remain out of scope        |
+| Dimension            | Document 05                     | Implemented Code                              | Justification                                                                                            |
+| -------------------- | ------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Exposed Tools        | `browser.act` + low-level tools | Distinct tool per operational intent          | Risk must be granular; "extract pricing" and "execute purchase" cannot share an identical approval grant |
+| Progress Updates     | Redis Streams                   | HTTP long-polling with `seq` sequence markers | Numbered events make resumption reliable without persistent connections for internal services            |
+| Screenshot Archiving | Per-step object storage         | `screenshotRef` reserved in schema metadata   | Object storage integration attaches in infrastructure deployment phase                                   |
+| Persistent Profiles  | Encrypted cookies at rest       | Ephemeral browser contexts only               | Host credential manager protects service tokens; persistent cross-site cookies remain out of scope       |
 
 ## 8. Local Administration Dashboard
 

@@ -43,14 +43,14 @@ Agent → Plan → Required Capabilities → Authorization Gate
 
 Advantages provided by the WorkerGateway architecture:
 
-| Capability         | Guarantee                                                                     |
-| ------------------ | ----------------------------------------------------------------------------- |
-| Authentication     | Cryptographic challenge-response signing, not static tokens                   |
-| Identity           | Dedicated device entry of type `BROWSER_WORKER`, instantly revocable          |
-| Selection          | Dynamic `DeviceSelector` matching advertised browser capabilities             |
-| Permissions        | Standard `browser.*` permission hierarchy                                     |
-| Confirmations      | Tiered risk levels, escalating to `CRITICAL` for mutating transactions        |
-| Health Monitoring  | Heartbeats; worker automatically delists if Chromium becomes unresponsive     |
+| Capability        | Guarantee                                                                 |
+| ----------------- | ------------------------------------------------------------------------- |
+| Authentication    | Cryptographic challenge-response signing, not static tokens               |
+| Identity          | Dedicated device entry of type `BROWSER_WORKER`, instantly revocable      |
+| Selection         | Dynamic `DeviceSelector` matching advertised browser capabilities         |
+| Permissions       | Standard `browser.*` permission hierarchy                                 |
+| Confirmations     | Tiered risk levels, escalating to `CRITICAL` for mutating transactions    |
+| Health Monitoring | Heartbeats; worker automatically delists if Chromium becomes unresponsive |
 
 Advertised capabilities comprise `browser.navigate`, `browser.interact`, `browser.login`, and
 `browser.purchase`. Concrete operational limits remain enforced in `app/policies.py` on the Python
@@ -63,14 +63,14 @@ side: central core decides _what should be done_, the local worker enforces _wha
 Versioned OpenAPI specification derived from `@nexus/contracts` schemas (JSON Schema export validated
 against Pydantic models via cross-language contract tests).
 
-| Method   | Route                     | Purpose                                                      |
-| -------- | ------------------------- | ------------------------------------------------------------ |
-| `POST`   | `/v1/sessions`            | Opens a browser session (profile, headless, proxy, TTL)      |
-| `GET`    | `/v1/sessions/:id`        | Status, active URL, token cost, current screenshot           |
-| `POST`   | `/v1/sessions/:id/act`    | Executes a natural language task or structured action        |
-| `POST`   | `/v1/sessions/:id/cancel` | Cooperative task cancellation                                |
-| `DELETE` | `/v1/sessions/:id`        | Terminates session, releases browser context                 |
-| `GET`    | `/v1/health`              | Liveness and readiness checks (warm browser pool status)     |
+| Method   | Route                     | Purpose                                                  |
+| -------- | ------------------------- | -------------------------------------------------------- |
+| `POST`   | `/v1/sessions`            | Opens a browser session (profile, headless, proxy, TTL)  |
+| `GET`    | `/v1/sessions/:id`        | Status, active URL, token cost, current screenshot       |
+| `POST`   | `/v1/sessions/:id/act`    | Executes a natural language task or structured action    |
+| `POST`   | `/v1/sessions/:id/cancel` | Cooperative task cancellation                            |
+| `DELETE` | `/v1/sessions/:id`        | Terminates session, releases browser context             |
+| `GET`    | `/v1/health`              | Liveness and readiness checks (warm browser pool status) |
 
 Service-to-service authentication: mTLS **or** short-lived signed bearer tokens across private Docker
 networks (the browser worker is never publicly exposed).
@@ -110,14 +110,14 @@ serves as the primary debugging interface for web tasks.
 
 ## 5. Security & Threat Mitigations
 
-| Threat                                  | Mitigation                                                                                                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Indirect prompt injection from web DOM  | Page text marked as untrusted input; prohibited from privilege escalation or invoking `CRITICAL` tools (→ [09](09-security-permissions.md) §7)            |
-| Credential exfiltration                 | Zero central secrets inside container; web session credentials injected via `secretRef` handles never revealed to LLM prompts                            |
-| Internal network reconnaissance (SSRF)  | Isolated Docker network, strict egress filters, blocking RFC1918 subnets and cloud metadata endpoints (169.254.169.254)                                   |
-| Chromium container escape               | Non-root container execution, strict `seccomp` profile, sandboxing enabled, automatic process recycling, hard session timeouts                             |
-| Access to unauthorized domains          | User allowlist / denylist enforced at both backend executor and worker boundary                                                                           |
-| Uncontrolled session costs              | Hard session limits (max steps, max wall-clock time, max LLM tokens) enforced autonomously by worker daemon                                              |
+| Threat                                 | Mitigation                                                                                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Indirect prompt injection from web DOM | Page text marked as untrusted input; prohibited from privilege escalation or invoking `CRITICAL` tools (→ [09](09-security-permissions.md) §7) |
+| Credential exfiltration                | Zero central secrets inside container; web session credentials injected via `secretRef` handles never revealed to LLM prompts                  |
+| Internal network reconnaissance (SSRF) | Isolated Docker network, strict egress filters, blocking RFC1918 subnets and cloud metadata endpoints (169.254.169.254)                        |
+| Chromium container escape              | Non-root container execution, strict `seccomp` profile, sandboxing enabled, automatic process recycling, hard session timeouts                 |
+| Access to unauthorized domains         | User allowlist / denylist enforced at both backend executor and worker boundary                                                                |
+| Uncontrolled session costs             | Hard session limits (max steps, max wall-clock time, max LLM tokens) enforced autonomously by worker daemon                                    |
 
 ## 6. Lifecycle & Operational Resilience
 

@@ -163,15 +163,15 @@ OutboxEvent          (status, availableAt) WHERE status = 'PENDING'
 
 ## 10. Data Retention Policies
 
-| Data Entity               | Retention Window                     | Operational Reason                                |
-| ------------------------- | ------------------------------------ | ------------------------------------------------- |
-| `Message`, `Conversation` | Indefinite (user archives)           | Primary product value                             |
-| `AgentStep`               | 90 days detailed, then aggregated    | Trace storage volume; step debugging is near-term |
-| `ToolExecution`           | 1 year minimum                       | Verifiable audit trail of real-world actions      |
-| `AuditLog`                | 1 year minimum, append-only          | Security compliance                               |
-| `Artifact`                | 30 days default, pinnable by user    | Object storage optimization                       |
-| `Memory`                  | Indefinite, editable by user         | Core personalized memory                          |
-| Raw Audio Recordings      | Ephemeral, immediate zero-retention  | Privacy-first architecture, transcripts retained  |
+| Data Entity               | Retention Window                    | Operational Reason                                |
+| ------------------------- | ----------------------------------- | ------------------------------------------------- |
+| `Message`, `Conversation` | Indefinite (user archives)          | Primary product value                             |
+| `AgentStep`               | 90 days detailed, then aggregated   | Trace storage volume; step debugging is near-term |
+| `ToolExecution`           | 1 year minimum                      | Verifiable audit trail of real-world actions      |
+| `AuditLog`                | 1 year minimum, append-only         | Security compliance                               |
+| `Artifact`                | 30 days default, pinnable by user   | Object storage optimization                       |
+| `Memory`                  | Indefinite, editable by user        | Core personalized memory                          |
+| Raw Audio Recordings      | Ephemeral, immediate zero-retention | Privacy-first architecture, transcripts retained  |
 
 Account deletion: Cascading removal across tables + object storage purge within 30 days, retaining
 an anonymized deletion certificate for regulatory compliance.

@@ -12,7 +12,7 @@ apps/dashboard  ──▶  /api/v1/dashboard/*  ──▶  requireAdmin  ──�
 
 | Section       | What is displayed                                                                          |
 | ------------- | ------------------------------------------------------------------------------------------ |
-| Overview      | online devices, active workers, running and failed tasks, recent activity, system health    |
+| Overview      | online devices, active workers, running and failed tasks, recent activity, system health   |
 | Devices       | role, platform, status, capabilities, last heartbeat, health, trust, effective permissions |
 | Workers       | declared **and** actual channel state, load, capabilities                                  |
 | Tasks         | plan, steps, assigned workers, progress, execution log, results, errors                    |
@@ -100,4 +100,3 @@ allowing initial configuration on a fresh installation. Subsequent registrations
 > **Important Deployment Note:** Any publicly exposed deployment must disable open registration
 > immediately after creating the initial administrative account. Otherwise, arbitrary visitors could
 > register and gain administrative privileges.
-

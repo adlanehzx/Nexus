@@ -36,11 +36,11 @@ Zero firewall port forwarding, zero exposed host endpoints, and zero client devi
 
 ## 3. Identical Code Across Workstations and Laptops
 
-| Configuration   | Laptop Node   | Workstation Node |
-| --------------- | ------------- | ---------------- |
-| Role            | `BOTH`        | `WORKER`         |
-| Device Type     | `WINDOWS_PC`  | `WINDOWS_PC`     |
-| Executable Code | Identical     | Identical        |
+| Configuration   | Laptop Node  | Workstation Node |
+| --------------- | ------------ | ---------------- |
+| Role            | `BOTH`       | `WORKER`         |
+| Device Type     | `WINDOWS_PC` | `WINDOWS_PC`     |
+| Executable Code | Identical    | Identical        |
 
 Nothing inside the worker inspects its configured device role or friendly name: those attributes derive
 from the central database registry. Tests verify this by connecting the identical worker class under two

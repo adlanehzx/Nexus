@@ -29,4 +29,3 @@ To verify text content, do not assume `page_info()` contains the full DOM. Query
 elements explicitly, for example:
 `js("document.querySelector('h1')?.textContent?.trim() || ''")`, then compare the returned value
 against success criteria before concluding.
-
