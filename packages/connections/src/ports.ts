@@ -63,3 +63,25 @@ export interface ClockPort {
   /** Resolves after `ms`. Replaced in tests so no suite waits on real time. */
   sleep(ms: number): Promise<void>;
 }
+
+/**
+ * Looks for an installed npm package without loading it.
+ *
+ * Separate from `ProcessPort` because this answers a different question about a
+ * different component: whether the **ACP adapter** is present on disk, as
+ * opposed to whether the provider's CLI runs. The two are installed separately
+ * and either can exist without the other.
+ *
+ * Resolution is a directory lookup, not `require.resolve`. A package's
+ * `exports` map can legitimately refuse `/package.json`, which would make a
+ * present adapter look absent, and loading anything at all to answer a
+ * presence question is more than the question needs.
+ */
+export interface PackageResolverPort {
+  /**
+   * The directory of `packageName`, or `undefined` when no copy was found.
+   *
+   * Never throws for an absent package: absence is an answer, not a failure.
+   */
+  resolve(packageName: string): Promise<string | undefined>;
+}

@@ -7,9 +7,15 @@ import type {
   ConnectionState,
 } from "./model.js";
 import { connectionSchema } from "./model.js";
-import type { ClockPort } from "./ports.js";
+import type { ClockPort, PackageResolverPort } from "./ports.js";
 import type { ProbeOutcome, SafeCommandRunner } from "./probes.js";
-import type { ProbeInterpretation, ProviderDefinition, ProviderRegistry } from "./registry.js";
+import type {
+  AdapterCommandProbe,
+  AdapterPackageProbe,
+  ProbeInterpretation,
+  ProviderDefinition,
+  ProviderRegistry,
+} from "./registry.js";
 import { stateRequiresHumanAction, transition } from "./state-machine.js";
 
 /**
@@ -61,6 +67,13 @@ export interface DetectorOptions {
   runner: SafeCommandRunner;
   clock: ClockPort;
   platform: ConnectionPlatform;
+  /**
+   * Finds installed adapter packages.
+   *
+   * Optional, and its absence is reported honestly: without it, adapter
+   * availability stays `unknown` rather than being guessed from the CLI.
+   */
+  packages?: PackageResolverPort;
   /** The ambient environment, filtered by the runner before any child sees it. */
   env?: Readonly<Record<string, string | undefined>>;
   onAudit?: (event: DetectionAuditEvent) => void;
@@ -102,6 +115,7 @@ export class ConnectionDetector {
   readonly #runner: SafeCommandRunner;
   readonly #clock: ClockPort;
   readonly #platform: ConnectionPlatform;
+  readonly #packages: PackageResolverPort | undefined;
   readonly #env: Readonly<Record<string, string | undefined>>;
   readonly #onAudit: ((event: DetectionAuditEvent) => void) | undefined;
 
@@ -110,6 +124,7 @@ export class ConnectionDetector {
     this.#runner = options.runner;
     this.#clock = options.clock;
     this.#platform = options.platform;
+    this.#packages = options.packages;
     this.#env = options.env ?? {};
     this.#onAudit = options.onAudit;
   }
@@ -313,7 +328,32 @@ export class ConnectionDetector {
   async #adapterAvailability(definition: ProviderDefinition): Promise<AdapterAvailability> {
     const probe = definition.adapter.probe;
     if (!probe) return "unknown";
+    return probe.kind === "package" ? this.#adapterPackage(probe) : this.#adapterCommand(probe);
+  }
 
+  /**
+   * Looks for the adapter's package on disk.
+   *
+   * Presence is reported as `available`, which is a claim about presence and
+   * not about the adapter working — a directory shows one and not the other.
+   * Absence is reported as whatever the provider says absence proves, which for
+   * an `npx`-launched adapter is nothing at all.
+   */
+  async #adapterPackage(probe: AdapterPackageProbe): Promise<AdapterAvailability> {
+    if (this.#packages === undefined) {
+      // No resolver was supplied, so nothing looked. Saying `missing` here
+      // would turn a missing capability of the caller into a claim about the
+      // user's machine.
+      return "unknown";
+    }
+    const found = await this.#packages.resolve(probe.packageName);
+    if (found !== undefined) {
+      return probe.verification === "verified" ? "available" : "unknown";
+    }
+    return probe.absenceProves === "missing" ? "missing" : "unknown";
+  }
+
+  async #adapterCommand(probe: AdapterCommandProbe): Promise<AdapterAvailability> {
     const outcome = await this.#runner.run(probe.command, this.#env);
     if (!outcome.ok) {
       return outcome.errorCategory === "not_found" ? "missing" : "unknown";

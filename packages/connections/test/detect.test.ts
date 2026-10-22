@@ -362,6 +362,7 @@ posixOnly("adapter availability is a separate question from the CLI", () => {
       adapter: {
         ...base.adapter,
         probe: {
+          kind: "command",
           command: { file: "fixture-adapter", args: ["--version"] },
           verification,
           interpret,

@@ -77,7 +77,14 @@ export interface ProbeInterpretation {
  * nothing about whether the ACP adapter that bridges to it is. Conflating them
  * produces a surface offering an action that cannot run.
  */
-export interface AdapterProbe {
+/**
+ * Running a command to find out whether the adapter is there.
+ *
+ * Kept for adapters that ship their own executable. It is the more expensive
+ * of the two forms, since it starts a process.
+ */
+export interface AdapterCommandProbe {
+  kind: "command";
   command: DeclaredCommand;
   verification: ProbeVerification;
   /**
@@ -88,6 +95,36 @@ export interface AdapterProbe {
    */
   interpret?: (stdout: string) => { available: boolean } | undefined;
 }
+
+/**
+ * Looking for the adapter's npm package on disk.
+ *
+ * Cheaper and more honest than a command for the ACP adapters NEXUS uses: they
+ * are npm packages, so presence is a directory lookup. Nothing is started, no
+ * network is touched, no quota can be consumed, and the answer does not depend
+ * on parsing somebody else's output.
+ */
+export interface AdapterPackageProbe {
+  kind: "package";
+  /** A plain npm package name. `@scope/name` is fine; a path is not. */
+  packageName: string;
+  verification: ProbeVerification;
+  /**
+   * What an absent package proves.
+   *
+   * This distinction is the whole reason the field exists. An adapter launched
+   * with `npx -y <package>` is fetched on demand, so "no local copy" says
+   * nothing about whether it will run — reporting `missing` there would send
+   * somebody to install something that was never required. Such a provider
+   * declares `"nothing"`, and absence yields `unknown`.
+   *
+   * An adapter that must be installed ahead of time declares `"missing"`,
+   * because for it absence really is evidence.
+   */
+  absenceProves: "missing" | "nothing";
+}
+
+export type AdapterProbe = AdapterCommandProbe | AdapterPackageProbe;
 
 export interface ProviderDefinition {
   id: string;

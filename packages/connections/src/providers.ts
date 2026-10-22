@@ -77,6 +77,16 @@ export const CODEX_PROVIDER: ProviderDefinition = {
     provenance: "unknown",
     provenanceEvidence:
       "Unknown maintainer. The adapter is referenced in services/agent/config/profiles.example.json under the @agentclientprotocol npm scope, but a scope is a name and does not establish who publishes under it. To classify as official, record an authoritative vendor statement: the adapter listed as supported in the vendor's own documentation, or the npm package linked from a vendor-controlled domain.",
+    probe: {
+      kind: "package",
+      packageName: "@agentclientprotocol/codex-acp",
+      verification: "verified",
+      // The profile in services/agent/config/profiles.example.json launches
+      // this adapter with `npx -y`, which fetches it on demand. A local copy
+      // is therefore sufficient evidence of presence and its absence is
+      // evidence of nothing at all.
+      absenceProves: "nothing",
+    },
   },
   detect: {
     command: { file: "codex", args: ["--version"], timeoutMs: 10_000 },
@@ -97,6 +107,12 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
     provenance: "unknown",
     provenanceEvidence:
       "Unknown maintainer. The adapter is referenced in services/agent/config/profiles.example.json under the @agentclientprotocol npm scope, but a scope is a name and does not establish who publishes under it. To classify as official, record an authoritative vendor statement: the adapter listed as supported in the vendor's own documentation, or the npm package linked from a vendor-controlled domain.",
+    probe: {
+      kind: "package",
+      packageName: "@agentclientprotocol/claude-agent-acp",
+      verification: "verified",
+      absenceProves: "nothing",
+    },
   },
   detect: {
     command: { file: "claude", args: ["--version"], timeoutMs: 10_000 },
@@ -121,6 +137,12 @@ export const ANTIGRAVITY_PROVIDER: ProviderDefinition = {
     provenance: "community",
     provenanceEvidence:
       "Third-party npm package google-antigravity-acp wrapping the `agy` binary; no vendor publication evidence present in this repository.",
+    probe: {
+      kind: "package",
+      packageName: "google-antigravity-acp",
+      verification: "verified",
+      absenceProves: "nothing",
+    },
   },
   detect: {
     command: { file: "agy", args: ["--version"], timeoutMs: 10_000 },

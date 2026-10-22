@@ -6,3 +6,4 @@ export * from "./registry.js";
 export * from "./providers.js";
 export * from "./detect.js";
 export * from "./node-process.js";
+export * from "./node-packages.js";

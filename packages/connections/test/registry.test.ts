@@ -126,9 +126,45 @@ describe("built-in providers", () => {
     }
   });
 
-  it("declares no adapter probe yet, so availability is never claimed", () => {
+  it("looks for its ACP adapter as a package, never by running anything", () => {
     for (const provider of BUILT_IN_PROVIDERS) {
-      expect(provider.adapter.probe).toBeUndefined();
+      const probe = provider.adapter.probe;
+      expect(probe?.kind).toBe("package");
+      // A command probe would start a process to answer a question a directory
+      // listing answers, and starting someone else's adapter to ask whether it
+      // exists is the kind of probe that eventually costs money.
+      expect(probe).not.toHaveProperty("command");
+    }
+  });
+
+  it("names the adapter packages the agent profiles actually launch", () => {
+    // The evidence is in-repo and checkable:
+    // services/agent/config/profiles.example.json.
+    const byId = new Map(
+      BUILT_IN_PROVIDERS.map((provider) => [
+        provider.id,
+        provider.adapter.probe?.kind === "package" ? provider.adapter.probe.packageName : null,
+      ]),
+    );
+
+    expect(byId.get("codex")).toBe("@agentclientprotocol/codex-acp");
+    expect(byId.get("claude")).toBe("@agentclientprotocol/claude-agent-acp");
+    expect(byId.get("antigravity")).toBe("google-antigravity-acp");
+  });
+
+  it("treats an absent adapter package as proving nothing", () => {
+    // Every one of these is launched with `npx -y`, which fetches on demand.
+    // Reporting `missing` because no local copy exists would send somebody to
+    // install something that was never required.
+    for (const provider of BUILT_IN_PROVIDERS) {
+      const probe = provider.adapter.probe;
+      if (probe?.kind !== "package") throw new Error("expected a package probe");
+      expect(probe.absenceProves).toBe("nothing");
+      // Verified, and legitimately so: unlike parsing somebody's stdout, "a
+      // directory with a package.json exists" has no interpretation step to
+      // get wrong. Downgrading it would silently cap availability at unknown
+      // and make the probe pointless.
+      expect(probe.verification).toBe("verified");
     }
   });
 

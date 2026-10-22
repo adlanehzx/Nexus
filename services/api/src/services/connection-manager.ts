@@ -1,5 +1,6 @@
 import {
   ConnectionDetector,
+  NodePackageResolver,
   NodeProcessPort,
   SafeCommandRunner,
   SystemClock,
@@ -72,6 +73,10 @@ export class LocalConnectionManager implements ConnectionCatalogService {
       }),
       clock,
       platform: this.#platform,
+      // Finds ACP adapter packages on disk. Without it adapter availability
+      // would stay `unknown` for every provider, which is honest but useless.
+      // The resolver reads directory entries; it never loads an adapter.
+      packages: new NodePackageResolver(),
       // SafeCommandRunner applies a strict allowlist and strips secret-shaped
       // names before any child process receives this ambient environment.
       env: process.env,
