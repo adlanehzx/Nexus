@@ -54,6 +54,55 @@ describe("sign in", () => {
     expect(JSON.stringify([...storage.values.values()])).not.toContain("MySecretPassword2026");
   });
 
+  it("registers account and stores tokens in secure storage", async () => {
+    const { http, storage, session } = makeSession();
+    http.on("POST", "/api/v1/auth/register", {
+      status: 201,
+      body: {
+        data: {
+          user: { id: "user-1", email: "admin@example.test", role: "ADMIN" },
+          tokens: {
+            accessToken: TOKENS.access,
+            refreshToken: TOKENS.refresh,
+          },
+        },
+      },
+    });
+
+    await session.register({
+      email: "admin@example.test",
+      displayName: "Administrator",
+      password: "a-secure-long-password",
+    });
+
+    expect(session.isAuthenticated).toBe(true);
+    expect(storage.values.get("nexus.access")).toBe(TOKENS.access);
+    expect(storage.values.get("nexus.refresh")).toBe(TOKENS.refresh);
+    expect(session.userId).toBe("user-1");
+  });
+
+  it("rejects failed registration with meaningful error", async () => {
+    const { http, session } = makeSession();
+    http.on("POST", "/api/v1/auth/register", {
+      status: 409,
+      body: {
+        error: { code: "CONFLICT", message: "An account already exists with this email address." },
+      },
+    });
+
+    await expect(
+      session.register({
+        email: "admin@example.test",
+        displayName: "Administrator",
+        password: "a-secure-long-password",
+      }),
+    ).rejects.toMatchObject({
+      code: "CLIENT_LOGIN_FAILED",
+      message: expect.stringContaining("An account already exists"),
+    });
+    expect(session.isAuthenticated).toBe(false);
+  });
+
   it("restores session from secure storage on startup", async () => {
     const { storage, session } = makeSession();
     await storage.set("nexus.access", TOKENS.access);

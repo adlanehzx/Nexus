@@ -196,6 +196,42 @@ export class SessionManager {
     if (accountChanged) await this.#storage.remove(DEVICE_KEY);
   }
 
+  async register(input: {
+    email: string;
+    displayName: string;
+    password: string;
+  }): Promise<void> {
+    const response = await this.#http.request({
+      method: "POST",
+      path: "/api/v1/auth/register",
+      body: input,
+    });
+
+    if (response.status !== 201) {
+      throw new LoginFailedError(messageOf(response.body, "Registration failed."));
+    }
+
+    const body = response.body as {
+      data: {
+        user?: { id?: string };
+        tokens: { accessToken: string; refreshToken: string };
+      };
+    };
+
+    const userId = body.data.user?.id ?? null;
+    const previousUserId = this.#session?.userId ?? null;
+    const accountChanged = userId !== null && previousUserId !== null && userId !== previousUserId;
+
+    await this.#persist({
+      accessToken: body.data.tokens.accessToken,
+      refreshToken: body.data.tokens.refreshToken,
+      deviceId: accountChanged ? null : (this.#session?.deviceId ?? null),
+      userId: userId ?? previousUserId,
+    });
+
+    if (accountChanged) await this.#storage.remove(DEVICE_KEY);
+  }
+
   /**
    * Ends the session.
    *

@@ -29,10 +29,10 @@ mission scheduling, context compression or routing decisions.
 
 ## Progress summary
 
-| ID  | Deliverable                                   | Status | Commit | Evidence |
-| --- | --------------------------------------------- | ------ | ------ | -------- |
-| G0  | UX inventory and executable onboarding states | TODO   |        |          |
-| G1  | First-run setup wizard                        | TODO   |        |          |
+| ID  | Deliverable                                   | Status | Commit  | Evidence                                                                    |
+| --- | --------------------------------------------- | ------ | ------- | --------------------------------------------------------------------------- |
+| G0  | UX inventory and executable onboarding states | DONE   | d147a69 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
+| G1  | First-run setup wizard                        | TODO   |         |                                                                             |
 | G2  | Dashboard configuration and connection UX     | TODO   |        |          |
 | G3  | Device discovery, pairing and worker install  | TODO   |        |          |
 | G4  | Desktop, mobile and voice completion          | TODO   |        |          |
@@ -50,12 +50,55 @@ Acceptance criteria:
 - Every action identifies its API contract and durable result.
 - Missing backend contracts are recorded under `Cross-agent handoffs` before UI implementation.
 
+State inventory and backend contract map:
+1. **Core Service & Database Readiness**:
+   - Contract: `GET /api/v1/health` (Readiness) + `GET /health` (Liveness).
+   - States:
+     - `loading`: Polling readiness on startup.
+     - `offline`: API unreachable (network error/connection refused). Sanitized diagnostic exposed with retry.
+     - `partial`/`degraded`: PostgreSQL or Redis reported down in `dependencies`.
+     - `success`: `status === "ok"`, dependencies up.
+     - `failure`: HTTP 503 or unexpected payload.
+2. **First-Run Administrator Onboarding**:
+   - Contract: `POST /api/v1/auth/register` (body: `{ email, displayName, password }`).
+   - States:
+     - `empty`: Form with validation (password min 12 chars).
+     - `loading`: Registration request in-flight.
+     - `success`: HTTP 201, first user becomes `ADMIN`, access/refresh tokens stored securely without permanent leaks.
+     - `failure`: HTTP 409 (already registered), HTTP 400 (validation), HTTP 429 (rate limited).
+3. **Local AI Agent Discovery & Connectivity**:
+   - Contract: `GET /api/v1/connections`, `POST /api/v1/connections/detect`, `POST /api/v1/connections/:providerId/test`.
+   - States:
+     - `not_installed`: CLI executable absent from host.
+     - `detected`: CLI found on host.
+     - `missing_adapter`: CLI present but ACP adapter unavailable (`adapter.availability === "missing"`).
+     - `connection_required`: CLI found, requires sign-in/OAuth (`authStatus === "unauthenticated"` or `"expired"`).
+     - `connected`: Authenticated, adapter available, test passed (`state === "connected"`).
+     - `degraded`: Operational with capability warnings (`state === "degraded"`).
+     - `failed`: Test failed or returned error (`state === "error"`).
+     - `empty`: No providers detected on host.
+4. **Agent Account & Profile Configuration**:
+   - Contract: `GET/POST /api/v1/orchestrator/accounts`, `PATCH/DELETE /api/v1/orchestrator/accounts/:id`, `PUT /api/v1/orchestrator/agents/:key`.
+   - States: `loading`, `success`, `failure`, `empty` (no accounts configured).
+5. **Optional Capabilities (MCP, Browser, Workers)**:
+   - MCP Contract: `GET /api/v1/dashboard/mcp`, `PUT /api/v1/dashboard/mcp/servers/:id`, `POST /api/v1/dashboard/mcp/servers/:id/test`.
+   - Browser Contract: `GET /api/v1/dashboard/browser`, `PUT /api/v1/dashboard/browser/config`, `POST /api/v1/dashboard/browser/test`.
+   - Worker Pairing Contract: `POST /api/v1/devices/pairing-tickets`, `GET /api/v1/dashboard/workers`, `GET /api/v1/devices`.
+   - States: `unconfigured`, `configured`, `testing`, `verified`, `degraded`, `revoked`.
+
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-22T22:17:30+02:00
+- Completed at: 2026-10-22T22:18:45+02:00
+- Commit: d147a69
+- Commands and results:
+  - `pnpm --filter @nexus/client-core test`: 9 test files passed, 165 tests passed
+  - `pnpm --filter @nexus/client-core build`: exit 0
+- Notes:
+  - Mapped complete UX state taxonomy across Database, API, Connector, Agent, MCP, Browser, Worker.
+  - Implemented `SessionManager.register()` in `@nexus/client-core` with full transparent token lifecycle tests.
+  - Recorded cross-agent handoffs for setup status probe and CLI guidance.
 - Commands and results:
 - Notes:
 
@@ -174,9 +217,9 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID  | Task | Severity | Status | Description | Reproduction or evidence | Fix commit |
-| --- | ---- | -------- | ------ | ----------- | ------------------------ | ---------- |
-|     |      |          |        |             |                          |            |
+| ID     | Task | Severity | Status   | Description                                                               | Reproduction or evidence                  | Fix commit |
+| ------ | ---- | -------- | -------- | ------------------------------------------------------------------------- | ----------------------------------------- | ---------- |
+| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration | packages/client-core/test/session.test.ts | d147a69    |
 
 ## Improvements for the adjustment phase
 
@@ -186,9 +229,10 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Cross-agent handoffs
 
-| ID  | From/to | Contract or dependency | Status | Evidence or target commit |
-| --- | ------- | ---------------------- | ------ | ------------------------- |
-|     |         |                        |        |                           |
+| ID     | From/to               | Contract or dependency                                                                                              | Status  | Evidence or target commit |
+| ------ | --------------------- | ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------- |
+| H-G0-1 | Gemini -> Codex       | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | PENDING | Target: Codex integration |
+| H-G0-2 | Gemini -> Claude      | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                     | PENDING | Target: Claude CL1/CL2    |
 
 ## Shared-file changes required at integration
 
