@@ -30,6 +30,10 @@ function build(env: Record<string, string> = {}, overrides: Record<string, unkno
     reconnectInitialDelayMs: 10,
     reconnectMaxDelayMs: 50,
     maxReconnectAttempts: 2,
+    // These tests exercise MCP transport behavior. Bubblewrap isolation has a
+    // dedicated suite so transport failures cannot be confused with host
+    // namespace restrictions.
+    sandbox: { enabled: false },
     ...overrides,
   });
 
