@@ -1,0 +1,391 @@
+import type {
+  Connection,
+  ConnectionErrorCategory,
+  ConnectionPlatform,
+  ConnectionState,
+} from "./model.js";
+import { connectionSchema } from "./model.js";
+import type { ClockPort } from "./ports.js";
+import type { ProbeOutcome, SafeCommandRunner } from "./probes.js";
+import type { ProbeInterpretation, ProviderDefinition, ProviderRegistry } from "./registry.js";
+import { stateRequiresHumanAction, transition } from "./state-machine.js";
+
+/**
+ * Turning probe results into connection states.
+ *
+ * ## The rule this file exists to enforce
+ *
+ * A connection is `connected` only when something ran and succeeded. Not when a
+ * binary exists, not when `~/.codex` exists, not when a config file mentions a
+ * profile. Those are the three shortcuts every integration takes eventually,
+ * and each one produces the same bug: a dashboard showing a green dot next to a
+ * tool that will fail the moment it is used.
+ *
+ * The strongest claim a presence probe can support is `detected`. Reaching
+ * `connected` additionally requires a session probe that the provider declares
+ * as `verified` and that positively reports an active session. A probe marked
+ * `unverified` can still run and can still fail usefully — it just cannot be
+ * the basis of a success claim.
+ */
+
+export interface DetectorOptions {
+  registry: ProviderRegistry;
+  runner: SafeCommandRunner;
+  clock: ClockPort;
+  platform: ConnectionPlatform;
+  /** The ambient environment, filtered by the runner before any child sees it. */
+  env?: Readonly<Record<string, string | undefined>>;
+  onAudit?: (event: DetectionAuditEvent) => void;
+}
+
+/**
+ * What gets recorded about a detection.
+ *
+ * Note what is absent: no stdout, no stderr, no environment, no path contents.
+ * An audit trail that carries a provider's raw output eventually carries a
+ * provider's credential, and audit logs are the one place nobody redacts
+ * because nobody expects them to contain anything.
+ */
+export interface DetectionAuditEvent {
+  providerId: string;
+  at: string;
+  fromState: ConnectionState;
+  toState: ConnectionState;
+  durationMs: number;
+  errorCategory: ConnectionErrorCategory | null;
+  probeVerification: "verified" | "unverified";
+}
+
+/** Human sentences per failure category. Fixed text: nothing from a provider is interpolated. */
+const USER_MESSAGES: Record<ConnectionErrorCategory, string> = {
+  not_found: "This tool is not installed on this machine.",
+  permission_denied: "NEXUS is not allowed to run this tool on this machine.",
+  authentication_required: "Sign in to this tool with its own command line, then check again.",
+  timeout: "This tool did not answer in time.",
+  unsupported_platform: "This tool does not run on this kind of machine.",
+  invalid_output: "This tool answered in a form NEXUS does not recognise.",
+  quota_exhausted: "This tool reports that its usage limit is reached.",
+  network_unreachable: "This tool could not reach the network.",
+  internal: "NEXUS could not check this tool.",
+};
+
+export class ConnectionDetector {
+  readonly #registry: ProviderRegistry;
+  readonly #runner: SafeCommandRunner;
+  readonly #clock: ClockPort;
+  readonly #platform: ConnectionPlatform;
+  readonly #env: Readonly<Record<string, string | undefined>>;
+  readonly #onAudit: ((event: DetectionAuditEvent) => void) | undefined;
+
+  constructor(options: DetectorOptions) {
+    this.#registry = options.registry;
+    this.#runner = options.runner;
+    this.#clock = options.clock;
+    this.#platform = options.platform;
+    this.#env = options.env ?? {};
+    this.#onAudit = options.onAudit;
+  }
+
+  /** Detects every provider that can run on this platform. */
+  async detectAll(
+    previous: ReadonlyMap<string, ConnectionState> = new Map(),
+  ): Promise<Connection[]> {
+    const definitions = this.#registry.listForPlatform(this.#platform);
+    // Sequential, not parallel. These probes spawn processes on a machine
+    // somebody is using; detecting ten providers at once to save two seconds is
+    // a bad trade against a visible stall on a laptop.
+    const connections: Connection[] = [];
+    for (const definition of definitions) {
+      connections.push(
+        await this.#detect(definition, previous.get(definition.id) ?? "not_installed"),
+      );
+    }
+    return connections;
+  }
+
+  /** Detects a single provider by id. Throws `UnknownProviderError` for an unregistered id. */
+  async detect(
+    providerId: string,
+    previousState: ConnectionState = "not_installed",
+  ): Promise<Connection> {
+    return this.#detect(this.#registry.get(providerId), previousState);
+  }
+
+  async #detect(
+    definition: ProviderDefinition,
+    previousState: ConnectionState,
+  ): Promise<Connection> {
+    const startedAt = this.#clock.now();
+
+    if (!definition.platforms.includes(this.#platform)) {
+      // Not an error and not a probe: there is nothing to run, so nothing runs.
+      return this.#build(definition, {
+        state: this.#move(definition, previousState, "not_installed", 0, "unsupported_platform"),
+        errorCategory: "unsupported_platform",
+        version: null,
+        executablePath: null,
+        capabilities: [],
+        succeeded: false,
+      });
+    }
+
+    const executablePath = await this.#runner.locate(definition.detect.command.file);
+    if (executablePath === undefined) {
+      return this.#build(definition, {
+        state: this.#move(
+          definition,
+          previousState,
+          "not_installed",
+          this.#clock.now() - startedAt,
+          "not_found",
+        ),
+        errorCategory: "not_found",
+        version: null,
+        executablePath: null,
+        capabilities: [],
+        succeeded: false,
+      });
+    }
+
+    // Everything past this point is a claim backed by execution, so it goes
+    // through `testing` first. The state machine enforces that; this is the
+    // call that makes the enforcement real rather than documentary.
+    const probing = this.#move(definition, previousState, "testing", 0, null);
+    const outcome = await this.#runner.run(definition.detect.command, this.#env);
+    // Two different "nothing" results, deliberately not collapsed with `??`:
+    //
+    //  - no interpreter DECLARED  → `{}`, meaning "recognised, nothing learned"
+    //  - interpreter RETURNED undefined → `undefined`, meaning "I do not
+    //    recognise this output", which must surface as `invalid_output`
+    //
+    // Treating the second as the first is how a tool that answered gibberish
+    // ends up reported as working.
+    const interpretation: ProbeInterpretation | undefined = !outcome.ok
+      ? undefined
+      : definition.detect.interpret === undefined
+        ? {}
+        : definition.detect.interpret(outcome.stdout);
+
+    if (!outcome.ok) {
+      const category = outcome.errorCategory ?? "internal";
+      const failed = category === "authentication_required" ? "authentication_required" : "error";
+      return this.#build(definition, {
+        state: this.#move(definition, probing, failed, outcome.durationMs, category),
+        errorCategory: category,
+        version: null,
+        executablePath,
+        capabilities: [],
+        succeeded: false,
+      });
+    }
+
+    if (interpretation === undefined) {
+      // Ran fine, said something unrecognisable. Reporting this as a distinct
+      // category matters: "I could not parse the answer" is a NEXUS problem,
+      // and telling a user their tool is broken instead would send them to fix
+      // the wrong thing.
+      return this.#build(definition, {
+        state: this.#move(definition, probing, "error", outcome.durationMs, "invalid_output"),
+        errorCategory: "invalid_output",
+        version: null,
+        executablePath,
+        capabilities: [],
+        succeeded: false,
+      });
+    }
+
+    const sessionProbe = definition.authenticate;
+    if (!sessionProbe) {
+      // Installed, runnable, session unknown. This is the ceiling for a provider
+      // that declares no session probe, and it is deliberately below `connected`.
+      return this.#build(definition, {
+        state: this.#move(definition, probing, "detected", outcome.durationMs, null),
+        errorCategory: null,
+        version: interpretation.version ?? null,
+        executablePath,
+        capabilities: interpretation.capabilities ?? [],
+        succeeded: true,
+      });
+    }
+
+    const session = await this.#runner.run(sessionProbe.command, this.#env);
+    const state = this.#sessionState(session, sessionProbe.verification, sessionProbe.interpret);
+    return this.#build(definition, {
+      state: this.#move(definition, probing, state.state, session.durationMs, state.errorCategory),
+      errorCategory: state.errorCategory,
+      version: interpretation.version ?? state.version ?? null,
+      executablePath,
+      capabilities: state.capabilities,
+      succeeded: state.state === "connected" || state.state === "degraded",
+      probeVerification: sessionProbe.verification,
+    });
+  }
+
+  #sessionState(
+    outcome: ProbeOutcome,
+    verification: "verified" | "unverified",
+    interpret:
+      | ((
+          stdout: string,
+        ) =>
+          | { authenticated?: boolean; version?: string; capabilities?: readonly string[] }
+          | undefined)
+      | undefined,
+  ): {
+    state: ConnectionState;
+    errorCategory: ConnectionErrorCategory | null;
+    version: string | undefined;
+    capabilities: readonly string[];
+  } {
+    if (!outcome.ok) {
+      const category = outcome.errorCategory ?? "internal";
+      const state: ConnectionState =
+        category === "authentication_required"
+          ? "authentication_required"
+          : category === "quota_exhausted"
+            ? "degraded"
+            : category === "network_unreachable"
+              ? "disconnected"
+              : "error";
+      return { state, errorCategory: category, version: undefined, capabilities: [] };
+    }
+
+    const parsed = interpret?.(outcome.stdout);
+    if (parsed === undefined) {
+      return {
+        state: "error",
+        errorCategory: "invalid_output",
+        version: undefined,
+        capabilities: [],
+      };
+    }
+    if (parsed.authenticated !== true) {
+      // Not authenticated is not an error: it is the normal state of a tool
+      // nobody has signed into yet, and it needs a person, not a retry.
+      return {
+        state: "authentication_required",
+        errorCategory: "authentication_required",
+        version: parsed.version,
+        capabilities: parsed.capabilities ?? [],
+      };
+    }
+    if (verification !== "verified") {
+      // An unverified parser said "authenticated". That is not enough to tell a
+      // user their tool works, so the claim is capped at `detected` and the
+      // reason is recorded rather than hidden.
+      return {
+        state: "detected",
+        errorCategory: null,
+        version: parsed.version,
+        capabilities: parsed.capabilities ?? [],
+      };
+    }
+    return {
+      state: "connected",
+      errorCategory: null,
+      version: parsed.version,
+      capabilities: parsed.capabilities ?? [],
+    };
+  }
+
+  #move(
+    definition: ProviderDefinition,
+    from: ConnectionState,
+    to: ConnectionState,
+    durationMs: number,
+    errorCategory: ConnectionErrorCategory | null,
+    probeVerification: "verified" | "unverified" = definition.detect.verification,
+  ): ConnectionState {
+    const next = transition(from, to);
+    this.#onAudit?.({
+      providerId: definition.id,
+      at: new Date(this.#clock.now()).toISOString(),
+      fromState: from,
+      toState: next,
+      durationMs,
+      errorCategory,
+      probeVerification,
+    });
+    return next;
+  }
+
+  #build(
+    definition: ProviderDefinition,
+    result: {
+      state: ConnectionState;
+      errorCategory: ConnectionErrorCategory | null;
+      version: string | null;
+      executablePath: string | null;
+      capabilities: readonly string[];
+      succeeded: boolean;
+      probeVerification?: "verified" | "unverified";
+    },
+  ): Connection {
+    const now = new Date(this.#clock.now()).toISOString();
+    // Parsed, not cast. The schema is `strict`, so this call is what guarantees
+    // no extra field — a leaked secret included — ever reaches a caller.
+    //
+    // A failure here is not a crash. Some of these values come from a
+    // provider's own output: a tool that prints a 500-character "version" would
+    // otherwise throw a validation error out of a detection loop and take the
+    // whole sweep down with it. Refusing that one connection, and saying why,
+    // is the proportionate answer.
+    const candidate = {
+      id: `${definition.kind}:${definition.id}`,
+      providerId: definition.id,
+      kind: definition.kind,
+      displayName: definition.displayName,
+      state: result.state,
+      version: result.version,
+      executablePath: result.executablePath,
+      capabilities: [...result.capabilities],
+      availableActions: [...definition.actions],
+      platform: this.#platform,
+      lastCheckedAt: now,
+      lastSuccessAt: result.succeeded ? now : null,
+      errorCategory: result.errorCategory,
+      userMessage: result.errorCategory === null ? null : USER_MESSAGES[result.errorCategory],
+      requiresHumanAction: stateRequiresHumanAction(result.state),
+      adapter: {
+        available: result.executablePath !== null,
+        provenance: definition.adapter.provenance,
+        provenanceEvidence: definition.adapter.provenanceEvidence,
+      },
+    };
+
+    const parsed = connectionSchema.safeParse(candidate);
+    if (parsed.success) return parsed.data;
+    return this.#unrepresentable(definition, now);
+  }
+
+  /**
+   * The connection we report when a provider's own output will not fit the model.
+   *
+   * Built from constants and from the registry, never from probe output, so this
+   * one cannot fail validation in turn.
+   */
+  #unrepresentable(definition: ProviderDefinition, now: string): Connection {
+    return connectionSchema.parse({
+      id: `${definition.kind}:${definition.id}`,
+      providerId: definition.id,
+      kind: definition.kind,
+      displayName: definition.displayName,
+      state: "error",
+      version: null,
+      executablePath: null,
+      capabilities: [],
+      availableActions: [...definition.actions],
+      platform: this.#platform,
+      lastCheckedAt: now,
+      lastSuccessAt: null,
+      errorCategory: "invalid_output",
+      userMessage: USER_MESSAGES.invalid_output,
+      requiresHumanAction: stateRequiresHumanAction("error"),
+      adapter: {
+        available: false,
+        provenance: definition.adapter.provenance,
+        provenanceEvidence: definition.adapter.provenanceEvidence,
+      },
+    });
+  }
+}
