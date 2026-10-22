@@ -21,7 +21,7 @@ New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 $keyPath = Join-Path $ConfigDir 'nexus-device.key'
 $envPath = Join-Path $ConfigDir 'worker.env'
 if ((Test-Path $keyPath) -or (Test-Path $envPath)) {
-    throw "Un appairage existe deja dans $ConfigDir. Revoquez-le dans NEXUS avant de le remplacer."
+    throw "A pairing already exists in $ConfigDir. Revoke it in NEXUS before replacing it."
 }
 
 $PairingToken | & $node $pairEntry `
@@ -31,11 +31,11 @@ $PairingToken | & $node $pairEntry `
     --key-path $keyPath `
     --env-path $envPath `
     --allowed-paths ($AllowedPaths -join ',')
-if ($LASTEXITCODE -ne 0) { throw "L'appairage a echoue ($LASTEXITCODE)." }
+if ($LASTEXITCODE -ne 0) { throw "Pairing failed ($LASTEXITCODE)." }
 
-# La cle et la configuration ne sont d'abord lisibles que par l'utilisateur
-# courant et les administrateurs. Le script de service remplace ensuite cette
-# ACL par le seul compte virtuel du service et les administrateurs.
+# The key and configuration are initially readable only by the current user
+# and administrators. The service script then replaces this ACL with only
+# the virtual service account and administrators.
 icacls $keyPath /inheritance:r /grant:r "$env:USERNAME:(R)" 'Administrators:(F)' | Out-Null
 icacls $envPath /inheritance:r /grant:r "$env:USERNAME:(R)" 'Administrators:(F)' | Out-Null
 
@@ -49,4 +49,4 @@ foreach ($path in $AllowedPaths) {
 if (-not $NoStart) { sc.exe start nexus-worker | Out-Null }
 
 Write-Host ''
-Write-Host 'Installation terminee. Approuvez maintenant cet appareil dans NEXUS > Appareils.'
+Write-Host 'Installation complete. Now approve this device in NEXUS > Devices.'
