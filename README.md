@@ -58,16 +58,20 @@ npm install -g pnpm@11.25.0
 
 ```bash
 git clone https://github.com/adlanehzx/Nexus.git nexus && cd nexus
-cp .env.example .env         # the defaults are enough locally
 pnpm install
-pnpm docker:platform         # postgres + redis + migrations + api + dashboard
+pnpm nexus setup --mode docker   # validates prerequisites & generates secure persistent keys
+pnpm docker:platform             # postgres + redis + migrations + api + dashboard
 ```
 
 The dashboard is then available at `http://localhost:8080`. An ephemeral container applies the
 database migration before the API starts, so no separate Prisma command is required.
+The first user to register on the dashboard is automatically granted the `ADMIN` role.
+
+For step-by-step guidance, see the [Beginner's Installation Guide](docs/operations/installation-guide.md),
+the [Updating Guide](docs/operations/updating.md), and the [Uninstallation Guide](docs/operations/uninstallation.md).
 
 Add additional machines from **Supervision → Devices** using the Windows installer, the Android
-pairing link, or an isolated Docker worker for Linux, NAS devices and Raspberry Pi. Each pairing
+pairing link or QR code, or an isolated Docker worker for Linux, NAS devices and Raspberry Pi. Each pairing
 ticket expires after five minutes, and the device still has to be approved in the dashboard before
 it can receive work.
 
