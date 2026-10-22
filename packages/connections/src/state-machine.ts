@@ -22,7 +22,12 @@ import type { ConnectionState } from "./model.js";
  * the only state that means "evidence is being gathered right now".
  *
  * Weakening is always allowed: anything can fail, expire, or vanish, and no
- * amount of past success prevents it.
+ * amount of past success prevents it. `not_installed` is therefore reachable
+ * from every state without exception. A package manager removing a CLI does not
+ * ask NEXUS first, and a model that refused to represent that would leave a
+ * connection reading `connected` for something that is no longer on disk — the
+ * one failure this whole file exists to prevent, arrived at from the other
+ * direction.
  */
 const TRANSITIONS: Readonly<Record<ConnectionState, readonly ConnectionState[]>> = {
   // Something appeared on disk, or we are about to look.
@@ -42,8 +47,16 @@ const TRANSITIONS: Readonly<Record<ConnectionState, readonly ConnectionState[]>>
   ],
 
   // The provider's own sign-in flow is running. It can succeed, fail, or be
-  // abandoned — never silently become `connected` without a probe.
-  authenticating: ["testing", "authentication_required", "error", "authenticating"],
+  // abandoned — never silently become `connected` without a probe. It can also
+  // find the tool gone: a sign-in flow is exactly when somebody might be
+  // uninstalling and reinstalling it.
+  authenticating: [
+    "testing",
+    "authentication_required",
+    "not_installed",
+    "error",
+    "authenticating",
+  ],
 
   // The only state from which a success claim may be made.
   testing: [
@@ -62,13 +75,24 @@ const TRANSITIONS: Readonly<Record<ConnectionState, readonly ConnectionState[]>>
     "testing",
   ],
 
-  // Working. Everything that can go wrong, can go wrong from here.
-  connected: ["degraded", "expired", "disconnected", "testing", "error", "connected"],
+  // Working. Everything that can go wrong, can go wrong from here — including
+  // the executable ceasing to exist. A package manager removing a CLI does not
+  // consult NEXUS first, so refusing this edge would mean a connection stuck at
+  // `connected` for a tool that is gone.
+  connected: [
+    "degraded",
+    "expired",
+    "disconnected",
+    "testing",
+    "not_installed",
+    "error",
+    "connected",
+  ],
 
   // Working, but impaired. Recovery requires a probe, so there is deliberately
   // no direct edge to `connected`: an impairment that clears on its own is
   // still only a belief until something has run.
-  degraded: ["testing", "expired", "disconnected", "error", "degraded"],
+  degraded: ["testing", "expired", "disconnected", "not_installed", "error", "degraded"],
 
   // A session lapsed. A new session needs a human, or at least a fresh probe.
   expired: [

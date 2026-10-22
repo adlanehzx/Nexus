@@ -36,6 +36,24 @@ describe("connection state machine", () => {
     }
   });
 
+  it("allows a tool to disappear from any state", () => {
+    // A CLI can be uninstalled at any moment, including while a sign-in flow is
+    // running or while the connection reads `connected`. Asserted over the whole
+    // state set rather than by example, so a new state cannot forget it.
+    const cannotDisappear = ALL_STATES.filter((from) => !canTransition(from, "not_installed"));
+
+    expect(cannotDisappear).toEqual([]);
+  });
+
+  it("still refuses to strengthen a claim without a probe", () => {
+    // The counterweight to the rule above: weakening is free, strengthening is
+    // not, and widening the table for removal must not widen it for success.
+    for (const from of ALL_STATES) {
+      if (from === "testing" || from === "connected") continue;
+      expect(canTransition(from, "connected")).toBe(false);
+    }
+  });
+
   it("declares every state as a possible successor of itself", () => {
     // Re-detecting without a change must not be an error.
     for (const state of ALL_STATES) expect(canTransition(state, state)).toBe(true);

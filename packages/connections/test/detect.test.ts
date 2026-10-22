@@ -61,6 +61,22 @@ posixOnly("connection detection", () => {
     expect(connection.lastSuccessAt).toBeNull();
   });
 
+  it.each(["connected", "degraded", "authenticating", "detected", "expired", "error"] as const)(
+    "reports a tool that vanished while the connection read %s",
+    async (previousState) => {
+      // The regression this guards: a CLI removed by a package manager, from a
+      // state the old table refused to leave. The detector threw an
+      // InvalidConnectionTransitionError instead of reporting the removal.
+      const bin = await createFakeBinDir();
+      const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+      const connection = await detector.detect("fixture", previousState);
+
+      expect(connection.state).toBe("not_installed");
+      expect(connection.errorCategory).toBe("not_found");
+    },
+  );
+
   it("reaches detected, and no further, on a successful presence probe", async () => {
     const bin = await createFakeBinDir();
     await bin.write("fixture", 'echo "fixture 2.3.4"');
