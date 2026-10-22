@@ -16,20 +16,13 @@ class Worker:
     repository: MissionRepository
     gateway: AcpGateway
     lease_seconds: int = 30
-    #: Exécutant Agent Core. Absent, une tâche ``agent-core`` échoue sur la
-    #: catégorie ``config`` : elle ne bascule jamais sur un agent ACP, qui
-    #: n'aurait ni ses outils, ni ses permissions, ni ses confirmations.
+    #: Agent Core executor. When absent, an agent-core task fails with category "config".
     agent_core: AgentCoreGateway | None = None
-    #: Délai entre deux sondages d'une confirmation en attente. Une décision
-    #: humaine se compte en minutes, pas en secondes : sonder plus souvent ne
-    #: la ferait pas venir plus vite et rendrait l'attente coûteuse.
+    #: Delay between two polls of a pending confirmation in seconds.
     confirmation_poll_seconds: int = 30
 
     def run_once(self) -> bool:
-        # Les confirmations dues d'abord. Une tâche qui attend depuis
-        # longtemps ne doit pas passer derrière une file de travail neuf : son
-        # run est déjà ouvert côté Agent Core, et le laisser traîner retient
-        # aussi tout le DAG qui en dépend.
+        # Prioritize due confirmations so suspended tasks resume quickly.
         lease = self.repository.claim_confirmation_poll(self.worker_id, self.lease_seconds)
         if lease is None:
             lease = self.repository.acquire(self.worker_id, self.lease_seconds)
@@ -44,9 +37,8 @@ class Worker:
             if lease.agent_kind == AGENT_CORE_KIND:
                 outcome = self._advance_agent_core(lease, heartbeat)
                 if outcome is None:
-                    # Suspendue : ni succès ni échec, et surtout pas de
-                    # tentative consommée. On rend la main, la tâche sera
-                    # reprise quand le prochain sondage sera dû.
+                    # Suspended awaiting confirmation: neither success nor failure.
+                    # Yield execution; task resumes on next poll.
                     return True
                 response = outcome
             else:
@@ -62,10 +54,6 @@ class Worker:
             return True
         except Exception as exc:
             # Persist only a stable category, never a provider or HTTP response body.
-            # A failure can itself mean that the lease expired between two I/O
-            # calls. In that case another worker is now authoritative and this
-            # worker must simply return to the queue instead of dying while it
-            # tries to record the already-fenced attempt.
             try:
                 category = exc.category if isinstance(exc, AcpError) else type(exc).__name__
                 self.repository.fail(lease, f"worker_error_{category}")
@@ -74,18 +62,7 @@ class Worker:
             return True
 
     def _retire_grants_if_mission_finished(self, lease: Lease) -> None:
-        """Retire les assertions dès que la mission est terminée.
-
-        Le retrait passe par le worker et non par la transaction qui conclut la
-        mission : celle-ci est en base, et y faire un appel réseau la rendrait
-        dépendante de la disponibilité de l'API. Ici, un échec réseau laisse
-        simplement l'assertion en place jusqu'à son expiration naturelle — ce
-        qui est le comportement d'avant, donc une dégradation et non une
-        régression.
-
-        L'assertion locale n'est effacée qu'après un retrait confirmé : la
-        garder tant qu'on n'est pas sûr permet de réessayer.
-        """
+        """Retires owner assertions once mission reaches a terminal state."""
         if self.agent_core is None or lease.owner_assertion is None:
             return
         assertion = self.repository.terminal_mission_with_assertion(lease.mission_id)
@@ -97,20 +74,16 @@ class Worker:
                 assertion=assertion,
             )
         except AcpError:
-            # Rien à signaler au-delà du journal : la mission est terminée, son
-            # résultat est écrit, et les assertions expireront d'elles-mêmes.
+            # If retirement call fails, assertions will expire naturally.
             return
         self.repository.clear_owner_assertion(lease.mission_id)
 
     def _advance_agent_core(
         self, lease: Lease, heartbeat: Callable[[], None]
     ) -> str | None:
-        """Fait avancer une tâche Agent Core d'un cran.
+        """Advances an Agent Core task one step.
 
-        Rend la réponse finale, ou ``None`` si la tâche vient d'être suspendue
-        en attente d'une décision humaine. Le ``None`` est explicite plutôt
-        qu'une exception : une attente n'est pas une erreur, et la traiter comme
-        telle ferait échouer la tâche au bout de quelques essais.
+        Returns final response string, or None if suspended waiting for confirmation.
         """
         if self.agent_core is None:
             raise AcpError("Agent Core executor is not configured", category="config")
@@ -133,10 +106,7 @@ class Worker:
                 assertion=lease.owner_assertion,
             )
 
-        # La rotation d'abord : si l'API vient d'émettre une assertion de
-        # remplacement, l'écrire avant tout le reste réduit la fenêtre où un
-        # redémarrage laisserait la mission avec l'ancienne — laquelle est encore
-        # valide, donc même perdue l'incident reste bénin.
+        # Rotate renewed assertion immediately if provided.
         if outcome.renewed_assertion is not None:
             self.repository.rotate_owner_assertion(
                 lease.mission_id,
@@ -144,8 +114,7 @@ class Worker:
                 outcome.renewed_expires_at,
             )
 
-        # Mémorisée dès qu'elle est connue : c'est ce qui permet au prochain
-        # essai de prolonger la conversation plutôt que d'en ouvrir une seconde.
+        # Record conversation ID as soon as received for continuity.
         if (
             outcome.conversation_id is not None
             and outcome.conversation_id != lease.agent_core_conversation_id

@@ -372,7 +372,7 @@ def test_scheduled_agent_core_exchanges_delegation_just_in_time(tmp_path) -> Non
                     "key": "synthesis",
                     "profile": "agent-core",
                     "agent_kind": "agent-core",
-                    "instruction": "Synthétise",
+                    "instruction": "Synthesize",
                 }
             ],
         },

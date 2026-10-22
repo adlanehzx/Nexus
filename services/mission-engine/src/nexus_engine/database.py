@@ -13,11 +13,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     profile_key TEXT PRIMARY KEY,
     agent_profile_id TEXT NOT NULL UNIQUE,
     enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
-    -- Quel exécutant sert ce profil. 'acp' lance un agent par processus, et
-    -- 'agent-core' délègue à Agent Core via l'API. La colonne vit ici, et non
-    -- sur la tâche, parce que le routage et les replis raisonnent déjà par
-    -- profil : un repli entre deux exécutants de nature différente n'aurait pas
-    -- de sens, et le dire au niveau du profil l'interdit par construction.
+    -- Executor for this profile: 'acp' launches per-process agent,
+    -- 'agent-core' delegates to Agent Core via API.
     agent_kind TEXT NOT NULL DEFAULT 'acp' CHECK (agent_kind IN ('acp', 'agent-core'))
 );
 
@@ -50,19 +47,11 @@ CREATE TABLE IF NOT EXISTS missions (
     workspace TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('pending','running','succeeded','failed','cancelled')),
     definition_json TEXT NOT NULL CHECK (json_valid(definition_json)),
-    -- Propriétaire de la mission, tel que l'API l'a signé. Jusqu'ici la
-    -- propriété n'était portée que par un préfixe d'`external_key` : lisible,
-    -- mais invérifiable — le moteur ne pouvait pas distinguer un préfixe
-    -- légitime d'un préfixe recopié.
+    -- Signed mission owner from API.
     owner_user_id TEXT,
-    -- L'assertion signée elle-même. Le moteur ne sait pas la relire et n'a pas
-    -- à le savoir : il la conserve et la rejoue. Elle ne sort jamais par l'API
-    -- du moteur, n'entre dans aucun journal et n'est jamais donnée à un modèle.
+    -- Signed assertion for API delegation.
     owner_assertion TEXT,
-    -- Expiration de l'assertion, telle que l'API l'a annoncee. Le moteur ne
-    -- sait pas relire le jeton -- il n'a pas la cle -- mais il doit savoir
-    -- quand son assertion devient inutilisable, ne serait-ce que pour le dire
-    -- dans un journal plutot que d'echouer sur une erreur de signature.
+    -- Assertion expiration time.
     owner_assertion_expires_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -89,14 +78,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     retry_delay_seconds INTEGER NOT NULL,
     fallback_profiles_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(fallback_profiles_json)),
     context_budget_chars INTEGER NOT NULL DEFAULT 60000,
-    -- Conversation ouverte par Agent Core au premier essai, réutilisée aux
-    -- suivants. C'est ce qui fait qu'un retry prolonge un historique au lieu
-    -- d'en ouvrir un second. Nulle pour toute tâche ACP.
+    -- Conversation opened by Agent Core on first attempt, reused on subsequent retries.
     agent_core_conversation_id TEXT,
-    -- Run Agent Core suspendu sur une confirmation humaine, et la confirmation
-    -- attendue. Renseignes uniquement entre la suspension et la decision : le
-    -- moteur s'en sert pour redemander ou en est le run, et c'est ce qui rend
-    -- l'attente durable — elle survit a un redemarrage comme tout le reste.
+    -- Agent Core run awaiting confirmation.
     agent_core_run_id TEXT,
     agent_core_confirmation_id TEXT,
     next_attempt_at TEXT,
@@ -316,13 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_research_runs_state ON research_runs(state, updat
 
 
 def table_ddl(name: str) -> str:
-    """Extrait du schéma de référence le ``CREATE TABLE`` d'une table.
-
-    Une seule source de vérité. Recopier la définition ailleurs pour les besoins
-    d'une reconstruction la ferait diverger du schéma d'une base neuve au
-    premier changement suivant — et cette divergence ne se verrait que le jour
-    où une contrainte manquerait sur l'une des deux.
-    """
+    """Extracts ``CREATE TABLE`` statement for a table from reference SCHEMA."""
     marker = f"CREATE TABLE IF NOT EXISTS {name} ("
     start = SCHEMA.index(marker)
     end = SCHEMA.index("\n);", start) + len("\n);")
@@ -344,24 +322,7 @@ class Database:
         return connection
 
     def _widen_state_checks(self, connection: sqlite3.Connection) -> None:
-        """Ajoute ``awaiting_confirmation`` aux CHECK de ``tasks`` et ``attempts``.
-
-        SQLite ne sait pas modifier une contrainte CHECK : il faut reconstruire
-        la table. C'est la seule migration non additive de ce service, et elle
-        est écrite pour être sûre plutôt que courte —
-
-        - elle ne fait rien si la base porte déjà le nouvel état, donc elle est
-          idempotente et ne coûte rien aux démarrages suivants ;
-        - la table neuve vient de `SCHEMA`, pas d'une copie manuelle, donc une
-          base migrée a exactement la structure d'une base neuve — au seul
-          détail près que SQLite met le nom de la table entre guillemets après
-          un `RENAME`, ce qui ne change ni les colonnes ni les contraintes ;
-        - les colonnes copiées sont l'intersection des deux schémas, de sorte
-          qu'une colonne ajoutée plus tard au schéma ne fasse pas échouer la
-          copie d'une base qui ne l'a pas encore ;
-        - `foreign_key_check` tourne avant de valider : si la copie avait cassé
-          une référence, on sort sans rien avoir écrit.
-        """
+        """Adds ``awaiting_confirmation`` to CHECK constraints of ``tasks`` and ``attempts``."""
         for table in ("tasks", "attempts"):
             existing = connection.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
@@ -374,8 +335,7 @@ class Database:
                 f"CREATE TABLE {table}__migrating (",
                 1,
             )
-            # Hors transaction, seul endroit où ce PRAGMA a un effet. Sans lui,
-            # le DROP serait refusé par les tables qui référencent celle-ci.
+            # Foreign keys disabled outside transaction so DROP TABLE succeeds.
             connection.execute("PRAGMA foreign_keys = OFF")
             try:
                 connection.execute("BEGIN IMMEDIATE")
@@ -458,11 +418,7 @@ class Database:
                 row["name"] for row in connection.execute("PRAGMA table_info(profiles)")
             }
             if "agent_kind" not in profile_columns:
-                # SQLite refuse une contrainte CHECK dans un ALTER TABLE ADD
-                # COLUMN : sur une base existante la colonne arrive donc sans
-                # elle. Les écritures passent toutes par `register_profile` et
-                # par cette migration, qui n'écrivent que les deux valeurs
-                # admises — et une base neuve, elle, porte bien le CHECK.
+                # Add agent_kind column for profiles if missing.
                 connection.execute(
                     "ALTER TABLE profiles ADD COLUMN agent_kind TEXT NOT NULL DEFAULT 'acp'"
                 )
@@ -477,20 +433,10 @@ class Database:
                 connection.execute(
                     "ALTER TABLE missions ADD COLUMN owner_assertion_expires_at TEXT"
                 )
-            # Après les ALTER, pour que la table reconstruite emporte aussi les
-            # colonnes qui viennent d'être ajoutées.
+            # Apply state check migration and restore schema.
             self._widen_state_checks(connection)
-            # `DROP TABLE` a emporté les index de la table reconstruite. Rejouer
-            # le schéma les recrée — les `CREATE TABLE IF NOT EXISTS` qui
-            # précèdent sont alors sans effet.
             connection.executescript(SCHEMA)
-            # Profil réservé de l'exécutant Agent Core.
-            #
-            # C'est une ligne de `profiles` comme les autres, et c'est tout
-            # l'intérêt : le routage, la santé, les bails et les tentatives
-            # continuent de fonctionner sans connaître Agent Core. Elle n'est pas
-            # pilotée par la configuration des agents ACP — `sync_profiles` la
-            # laisse donc tranquille.
+            # Reserved profile for Agent Core executor.
             connection.execute(
                 """
                 INSERT INTO profiles(profile_key, agent_profile_id, enabled, agent_kind)

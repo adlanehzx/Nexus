@@ -54,7 +54,7 @@ def test_worker_survives_failure_after_lease_is_lost() -> None:
         def claim_confirmation_poll(
             self, _worker_id: str, _lease_seconds: int
         ) -> Lease | None:
-            # Aucune confirmation en attente : le worker enchaîne sur le travail
+            # No confirmation pending: worker proceeds with work
             # ordinaire, qui est ce que ce test exerce.
             return None
 

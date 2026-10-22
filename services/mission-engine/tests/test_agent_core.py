@@ -18,12 +18,12 @@ from nexus_engine.errors import ConflictError, ValidationError
 from nexus_engine.repository import MissionRepository
 from nexus_engine.worker import Worker
 
-"""Pont Mission Engine → Agent Core.
+"""Bridge Mission Engine → Agent Core.
 
-Ce que ces tests protègent, dans l'ordre d'importance : qu'une tâche Agent Core
-ne puisse pas partir sans propriétaire signé, qu'elle ne bascule jamais sur un
-agent ACP par repli, et que l'assertion ne se retrouve ni dans la définition de
-la mission ni dans un message d'erreur.
+These tests ensure:
+- an Agent Core task cannot run without a signed owner;
+- it never falls back to an ACP agent;
+- the assertion is not leaked into mission definitions or error messages.
 """
 
 
@@ -103,7 +103,7 @@ def _agent_core_mission(repository: MissionRepository, *, owner: bool = True) ->
             {
                 "key": "delegated",
                 "agent_kind": "agent-core",
-                "instruction": "Range mes mails",
+                "instruction": "Organize my emails",
                 "depends_on": [],
             }
         ],
@@ -151,7 +151,7 @@ def test_bridge_sends_the_assertion_and_the_mission_scope() -> None:
     outcome = gateway.execute(
         mission_external_key="bridge-demo",
         task_key="delegated",
-        instruction="Range mes mails",
+        instruction="Organize my emails",
         assertion="signed-assertion",
         conversation_id=None,
         attempt_id="attempt-1",
@@ -165,11 +165,9 @@ def test_bridge_sends_the_assertion_and_the_mission_scope() -> None:
     assert request.full_url.endswith("/api/v1/agent-core/mission-runs")
     assert request.get_header("Authorization") == "Bearer signed-assertion"
     body = json.loads(request.data.decode())
-    # La portée voyage avec l'appel : l'API refuse de travailler sur une autre
-    # mission que celle inscrite dans l'assertion.
+    # Scope travels with request: API rejects execution for other missions.
     assert body["missionExternalKey"] == "bridge-demo"
-    # La tentative porte l'unicité : sans elle, l'API ne peut pas réserver et un
-    # bail expiré pendant un appel long produirait deux runs.
+    # Attempt ID ensures idempotency.
     assert body["attemptId"] == "attempt-1"
     assert "conversationId" not in body
 
@@ -181,7 +179,7 @@ def test_bridge_reuses_a_known_conversation() -> None:
     gateway.execute(
         mission_external_key="bridge-demo",
         task_key="delegated",
-        instruction="Suite",
+        instruction="Next",
         assertion="signed-assertion",
         conversation_id="conv-1",
         attempt_id="attempt-1",
@@ -197,7 +195,7 @@ def test_bridge_refuses_to_run_without_an_assertion() -> None:
         _gateway(_run_payload()).execute(
             mission_external_key="bridge-demo",
             task_key="delegated",
-            instruction="Range mes mails",
+            instruction="Organize my emails",
             assertion=None,
             conversation_id=None,
             attempt_id="attempt-1",
@@ -213,7 +211,7 @@ def test_bridge_reports_a_missing_configuration_instead_of_calling() -> None:
         AgentCoreGateway(None).execute(
             mission_external_key="bridge-demo",
             task_key="delegated",
-            instruction="Range mes mails",
+            instruction="Organize my emails",
             assertion="signed-assertion",
             conversation_id=None,
             attempt_id="attempt-1",
@@ -228,7 +226,7 @@ def test_bridge_reports_a_pending_confirmation_without_failing() -> None:
     outcome = _gateway(_awaiting_payload()).execute(
         mission_external_key="bridge-demo",
         task_key="delegated",
-        instruction="Envoie un message",
+        instruction="Send a message",
         assertion="signed-assertion",
         conversation_id=None,
         attempt_id="attempt-1",
@@ -236,9 +234,7 @@ def test_bridge_reports_a_pending_confirmation_without_failing() -> None:
         heartbeat=lambda: None,
     )
 
-    # Une attente de décision humaine n'est pas un échec. La passerelle la rend
-    # telle quelle : c'est au worker de suspendre la tâche, et une exception
-    # ferait consommer une tentative pour une attente.
+    # Waiting for human confirmation is not an error; task is suspended.
     assert outcome.awaits_confirmation is True
     assert (outcome.run_id, outcome.confirmation_id) == ("run-1", "confirm-1")
     assert outcome.response is None
@@ -251,8 +247,7 @@ def test_bridge_reports_a_pending_confirmation_without_failing() -> None:
         (403, "auth_required"),
         (404, "config"),
         (429, "rate_limited"),
-        # Notre propre API indisponible n'est pas un quota épuisé : la tâche doit
-        # réessayer, pas attendre une réinitialisation qui n'arrivera jamais.
+        # Unavailable API is a transport issue requiring retry, not quota exhaustion.
         (503, "transport"),
         (500, "transport"),
     ],
@@ -268,7 +263,7 @@ def test_bridge_maps_http_refusals_onto_known_categories(status: int, category: 
         gateway.execute(
             mission_external_key="bridge-demo",
             task_key="delegated",
-            instruction="Range mes mails",
+            instruction="Organize my emails",
             assertion="signed-assertion",
             conversation_id=None,
             attempt_id="attempt-1",
@@ -311,7 +306,7 @@ def test_agent_core_task_cannot_fall_back_to_an_acp_agent(tmp_path) -> None:
                         "key": "delegated",
                         "agent_kind": "agent-core",
                         "fallback_profiles": ["codex"],
-                        "instruction": "Range mes mails",
+                        "instruction": "Organize my emails",
                         "depends_on": [],
                     }
                 ],
@@ -343,21 +338,21 @@ def test_worker_routes_an_agent_core_task_through_the_bridge(tmp_path) -> None:
 
     class RefusingAcpGateway:
         def execute(self, **_values) -> str:
-            raise AssertionError("une tâche agent-core ne doit jamais partir en ACP")
+            raise AssertionError("an agent-core task must never go to ACP")
 
     worker = Worker(
         "worker-1",
         repository,
         RefusingAcpGateway(),  # type: ignore[arg-type]
-        agent_core=_gateway(_run_payload(response="rangé")),
+        agent_core=_gateway(_run_payload(response="organized")),
     )
 
     assert worker.run_once() is True
     mission = repository.mission(mission_id)
     assert mission["state"] == "succeeded"
-    assert json.loads(mission["tasks"][0]["result_json"])["response"] == "rangé"
+    assert json.loads(mission["tasks"][0]["result_json"])["response"] == "organized"
 
-    # La conversation est mémorisée pour que le prochain essai la prolonge.
+    # Conversation ID is stored for continuity in next attempt.
     with repository.db.connect() as connection:
         stored = connection.execute(
             "SELECT agent_core_conversation_id FROM tasks WHERE mission_id=?",
@@ -384,9 +379,7 @@ def test_reserved_profile_is_absent_from_the_acp_registry(tmp_path) -> None:
     repository = MissionRepository(Database(tmp_path / "bridge.db"))
     repository.register_profile("codex", "profile-codex")
 
-    # Agent Core n'est pas un agent ACP : il ne doit apparaître ni dans les
-    # profils proposés au planificateur, ni dans la santé des quotas, ni dans le
-    # registre du tableau de bord — mais un plan doit pouvoir le nommer.
+    # Agent Core is not an ACP agent: omitted from dashboard/quotas but plannable.
     assert repository.enabled_profiles() == {"codex"}
     assert repository.routable_profiles() == {"codex"}
     assert [item["key"] for item in repository.profile_activity()] == ["codex"]
@@ -398,17 +391,12 @@ def test_profile_sync_keeps_the_reserved_profile_enabled(tmp_path) -> None:
     repository.register_profile("codex", "profile-codex")
     repository.sync_profiles({"claude": "profile-claude"})
 
-    # Une resynchronisation des agents ACP ne doit pas désactiver l'exécutant
-    # Agent Core, sans quoi toute tâche déléguée deviendrait irroutable.
+    # ACP profile resync must not disable agent-core.
     assert "agent-core" in repository.plannable_profiles()
 
 
 class _ScriptedGateway:
-    """Passerelle qui rejoue une suite d'issues, et retient ses appels.
-
-    Suffisant pour ce que ces tests vérifient : la mécanique de suspension et
-    de reprise, pas le transport — déjà couvert plus haut.
-    """
+    """Scripted gateway playing a sequence of outcomes and recording calls."""
 
     def __init__(self, outcomes: list) -> None:
         self.outcomes = list(outcomes)
@@ -433,7 +421,7 @@ def _awaiting(run_id: str = "run-1", confirmation_id: str = "confirm-1") -> Agen
     )
 
 
-def _completed(response: str = "fait") -> AgentCoreOutcome:
+def _completed(response: str = "done") -> AgentCoreOutcome:
     return AgentCoreOutcome(
         status="completed",
         run_id="run-1",
@@ -474,22 +462,18 @@ def test_a_pending_confirmation_suspends_the_task_durably(tmp_path) -> None:
     assert task["state"] == "awaiting_confirmation"
     assert task["agent_core_run_id"] == "run-1"
     assert task["agent_core_confirmation_id"] == "confirm-1"
-    # Ni succès ni échec : la tâche attend, et la mission reste en cours.
     assert task["result_json"] is None
     assert repository.mission(mission_id)["state"] == "running"
 
-    # L'attente est en base : un moteur qui redémarre la retrouve. On le
-    # vérifie en relisant par un dépôt neuf sur le même fichier.
+    # State persists in database across restarts.
     reopened = MissionRepository(Database(tmp_path / "suspend.db"))
     assert _task_row(reopened, mission_id)["state"] == "awaiting_confirmation"
 
 
 def test_an_awaited_task_does_not_consume_an_attempt(tmp_path) -> None:
-    # max_attempts vaut 2 par défaut : sans cette garantie, deux sondages
-    # suffiraient à faire échouer la tâche pour « trop d'essais » alors
-    # qu'elle n'a fait qu'attendre.
+    # Awaited tasks do not consume retry attempts.
     repository, worker, gateway, mission_id = _suspended_task(
-        tmp_path, [_awaiting(), _awaiting(), _awaiting(), _completed("enfin")]
+        tmp_path, [_awaiting(), _awaiting(), _awaiting(), _completed("finally")]
     )
 
     for _ in range(4):
@@ -508,19 +492,19 @@ def test_an_awaited_task_does_not_consume_an_attempt(tmp_path) -> None:
 
 def test_an_approved_confirmation_resumes_and_completes_the_task(tmp_path) -> None:
     repository, worker, gateway, mission_id = _suspended_task(
-        tmp_path, [_awaiting(), _completed("message envoyé")]
+        tmp_path, [_awaiting(), _completed("message sent")]
     )
 
     assert worker.run_once() is True
     assert _task_row(repository, mission_id)["state"] == "awaiting_confirmation"
 
-    # Deuxième tour : le sondage est dû, le run a été approuvé entre-temps.
+    # Second cycle: poll returns approved run.
     assert worker.run_once() is True
 
     task = _task_row(repository, mission_id)
     assert task["state"] == "succeeded"
-    assert json.loads(task["result_json"])["response"] == "message envoyé"
-    # La reprise interroge le run suspendu, elle ne rejoue pas l'instruction.
+    assert json.loads(task["result_json"])["response"] == "message sent"
+    # Resumption polls the suspended run without re-executing instruction.
     assert gateway.calls == ["execute", "poll:run-1"]
     assert repository.mission(mission_id)["state"] == "succeeded"
 
@@ -535,8 +519,6 @@ def test_a_refused_confirmation_fails_without_retrying(tmp_path) -> None:
     assert worker.run_once() is True
 
     task = _task_row(repository, mission_id)
-    # Pas de `retry_wait` : réessayer rouvrirait la même confirmation et
-    # redemanderait la même décision à la même personne.
     assert task["state"] == "failed"
     assert "confirmation_declined" in str(task["error_json"])
     assert repository.mission(mission_id)["state"] == "failed"
@@ -551,8 +533,6 @@ def test_a_human_refusal_leaves_the_profile_healthy(tmp_path) -> None:
     worker.run_once()
 
     health = {item["key"]: item for item in repository.profile_activity()}
-    # Un refus humain n'est pas une défaillance d'agent : mettre le profil en
-    # cooldown pénaliserait les missions suivantes pour une décision humaine.
     assert "agent-core" not in health
     assert health["codex"]["consecutive_failures"] == 0
 
@@ -563,9 +543,6 @@ def test_the_migration_adds_the_awaiting_state_to_existing_databases(tmp_path) -
     from nexus_engine.database import SCHEMA
 
     path = tmp_path / "legacy.db"
-    # Un schéma d'avant la suspension, obtenu en retirant le nouvel état du
-    # schéma courant. Le dériver ainsi plutôt que de le recopier à la main
-    # garantit qu'il reste réaliste quand le schéma évoluera.
     legacy_schema = SCHEMA.replace("'retry_wait','awaiting_confirmation'", "'retry_wait'")
     legacy_schema = legacy_schema.replace("'running','awaiting_confirmation'", "'running'")
     legacy = sqlite3.connect(path)
@@ -599,13 +576,10 @@ def test_the_migration_adds_the_awaiting_state_to_existing_databases(tmp_path) -
             "SELECT sql FROM sqlite_master WHERE name=?", (table,)
         ).fetchone()[0]
         assert "awaiting_confirmation" in sql
-    # Les lignes préexistantes survivent à la reconstruction, et les références
-    # entre tables restent intactes.
     assert migrated.execute("SELECT state FROM tasks WHERE id='t1'").fetchone()[0] == "ready"
     assert migrated.execute("SELECT task_id FROM attempts WHERE id='a1'").fetchone()[0] == "t1"
     assert migrated.execute("PRAGMA foreign_key_check").fetchall() == []
     assert migrated.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-    # Les index de la table reconstruite sont recréés.
     indexes = {
         row[0]
         for row in migrated.execute(
@@ -629,7 +603,7 @@ def _owner_spec(assertion: str, expires_at: str | None = None) -> dict:
             {
                 "key": "delegated",
                 "agent_kind": "agent-core",
-                "instruction": "Range mes mails",
+                "instruction": "Organize my emails",
                 "depends_on": [],
             }
         ],
@@ -649,14 +623,6 @@ def _stored_owner(repository: MissionRepository, mission_id: str) -> tuple:
 
 
 def test_resubmission_refreshes_a_stale_assertion(tmp_path) -> None:
-    """Le defaut signale en revue.
-
-    Une resoumission idempotente rendait la mission existante *sans* remplacer
-    l'assertion stockee. Une mission Agent Core plus longue que la duree de vie
-    d'une assertion devenait donc irreprenable : le moteur rejouait un jeton
-    perime et la tache echouait en ``auth_required``, sans qu'aucune relance
-    n'y change quoi que ce soit.
-    """
     repository = MissionRepository(Database(tmp_path / "rotation.db"))
     repository.register_profile("codex", "profile-codex")
 
@@ -672,7 +638,7 @@ def test_resubmission_refreshes_a_stale_assertion(tmp_path) -> None:
     second, replayed = repository.submit(
         _owner_spec("assertion-v2", "2026-10-23T08:00:00+00:00"), "rotation-key"
     )
-    # Meme mission — l'idempotence est preservee — mais assertion a jour.
+    # Same mission: idempotency preserved with updated assertion.
     assert (second, replayed) == (first, True)
     assert _stored_owner(repository, first) == (
         "assertion-v2",
@@ -687,8 +653,6 @@ def test_resubmission_refuses_to_change_the_owner(tmp_path) -> None:
 
     spec = _owner_spec("assertion-v2")
     spec["owner"]["user_id"] = "user-2"
-    # Sinon il suffirait de resoumettre la meme cle externe sous un autre compte
-    # pour s'approprier une mission.
     with pytest.raises(ConflictError, match="owner cannot change"):
         repository.submit(spec, "rotation-key-2")
 
@@ -717,7 +681,7 @@ def test_worker_applies_a_renewed_assertion(tmp_path) -> None:
         status="completed",
         run_id="run-1",
         conversation_id="conv-1",
-        response="fait",
+        response="done",
         confirmation_id=None,
         renewed_assertion="assertion-v2",
         renewed_expires_at="2026-10-23T08:00:00+00:00",
@@ -736,10 +700,8 @@ def test_worker_applies_a_renewed_assertion(tmp_path) -> None:
     worker = Worker("worker-1", repository, None, agent_core=gateway)  # type: ignore[arg-type]
     assert worker.run_once() is True
 
-    # La mission est terminee : les assertions sont retirees, et c'est la
-    # version renouvelee qui a servi au retrait puisqu'elle a remplace l'ancienne.
+    # Mission completed: assertions retired using renewed version.
     assert gateway.retired == ["assertion-v2"]
-    # Puis oubliee : garder un jeton devenu inutile ne sert rien.
     assert _stored_owner(repository, mission_id) == (None, None)
 
 
@@ -756,12 +718,9 @@ def test_a_failed_retirement_keeps_the_assertion_for_a_later_attempt(tmp_path) -
         "worker-1",
         repository,
         None,  # type: ignore[arg-type]
-        agent_core=UnreachableGateway([_completed("fait")]),
+        agent_core=UnreachableGateway([_completed("done")]),
     )
     assert worker.run_once() is True
 
-    # Le resultat de la mission est ecrit malgre l'echec du retrait, et
-    # l'assertion reste en place : on pourra reessayer, et a defaut elle
-    # expirera d'elle-meme.
     assert repository.mission(mission_id)["state"] == "succeeded"
     assert _stored_owner(repository, mission_id)[0] == "assertion-v1"

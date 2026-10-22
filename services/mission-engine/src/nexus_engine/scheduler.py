@@ -109,7 +109,7 @@ class CronExpression:
         elif self.week_day_wildcard:
             day_matches = month_day_matches
         else:
-            # Sémantique cron historique : DOM et DOW sont reliés par OU.
+            # Standard cron semantics: DOM and DOW are combined with OR.
             day_matches = month_day_matches or week_day_matches
         return (
             local.minute in self.minutes
@@ -216,9 +216,8 @@ class SchedulerRepository:
             raise ValidationError("owner delegation is only valid for agent-core schedules")
         candidate = dict(mission)
         if uses_agent_core:
-            # Identité factice uniquement pour la validation structurelle. Elle
-            # est retirée du JSON canonique par validate_plan et n'est jamais
-            # persistée ni utilisée pour agir.
+            # Synthetic identity for structural validation only; removed from
+            # canonical JSON by validate_plan and never persisted or used for actions.
             candidate["owner"] = {"user_id": "scheduled", "assertion": "delegated"}
         validated = validate_plan(candidate, self.missions.plannable_profiles())
         template = json.loads(validated.canonical_json)
@@ -228,8 +227,8 @@ class SchedulerRepository:
             cron = None
         else:
             cron = CronExpression.parse(str(cron_expression))
-            # Une création à 10:00:30 pour "* * * * *" commence à 10:01,
-            # jamais rétroactivement à 10:00.
+            # Creating at 10:00:30 for "* * * * *" starts at 10:01,
+            # never retroactively at 10:00.
             first = cron.next_after(current, zone)
             schedule_kind = "cron"
         schedule_id = schedule_id or str(uuid.uuid4())
@@ -539,11 +538,9 @@ class SchedulerRepository:
         try:
             mission_id, _ = self.missions.submit(plan, idempotency_key)
         except (ValidationError, ConflictError) as exc:
-            # Ces deux erreurs décrivent le contenu durable du calendrier : un
-            # profil retiré entre-temps, ou une collision incohérente. Les
-            # rejouer ne les réparera pas. Les erreurs d'infrastructure, elles,
-            # laissent volontairement le bail expirer afin qu'une autre
-            # instance reprenne l'occurrence.
+            # These two errors describe permanent schedule problems (missing profile, conflict).
+            # Retrying will not fix them. Infrastructure errors deliberately leave lease
+            # to expire so another instance can claim the occurrence.
             self.fail_claim(lease, f"submission_{type(exc).__name__}")
             raise
         with self.db.transaction(immediate=True) as connection:
@@ -563,9 +560,8 @@ class SchedulerRepository:
                 ),
             ).rowcount
         if not changed:
-            # La soumission est idempotente ; perdre le bail n'autorise pas ce
-            # worker à publier son résultat. Le prochain claim retrouvera la
-            # même mission avec la même clé puis conclura la ligne.
+            # Submission is idempotent; losing lease does not authorize this worker
+            # to publish result. Next claim will find same mission and finalize row.
             raise LeaseLostError(lease.run_id)
         return mission_id
 

@@ -19,21 +19,15 @@ class Settings:
     worker_concurrency: int
     profiles_file: Path | None
     runtime_settings_file: Path | None = None
-    #: Base de l'API NEXUS, pour les tâches ``agent-core``. Absente, l'exécutant
-    #: Agent Core n'est pas configuré et toute tâche de ce type échoue avec la
-    #: catégorie ``config`` — jamais silencieusement sur un repli ACP.
+    #: Base URL of NEXUS API for agent-core tasks. When absent, agent-core tasks
+    #: fail with category "config", never falling back to ACP.
     api_base_url: str | None = None
-    #: Délai d'un appel au pont, bail compris. Un run Agent Core peut être long ;
-    #: ce qui le borne reste le ``timeout_seconds`` de la tâche.
+    #: Bridge call timeout including lease.
     api_timeout_seconds: int = 900
-    #: Cle publique Ed25519 de l'API, au format PEM SPKI. Sa presence **active**
-    #: l'authentification des appels entrants : toutes les routes de mutation
-    #: exigent alors un jeton de service signe. Absente, le port reste protege
-    #: par la seule boucle locale, et le demarrage le dit dans le journal.
+    #: Ed25519 public key of API in PEM SPKI format. When present, enables
+    #: authentication for incoming mutating requests.
     api_public_key_pem: str | None = None
-    #: Le scheduler est un petit dispatcher durable indépendant des workers
-    #: ACP. Il peut donc matérialiser des missions même si leur exécution est
-    #: assurée par une autre instance du moteur.
+    #: Durable scheduler dispatcher independent of ACP workers.
     scheduler_enabled: bool = True
     scheduler_poll_seconds: float = 1.0
 
@@ -146,16 +140,9 @@ class Settings:
 
 
 def _read_api_public_key() -> str | None:
-    """Lit la cle publique de l'API, depuis un fichier ou depuis l'environnement.
+    """Reads API public key from file or environment variable.
 
-    Les deux formes existent parce qu'elles servent deux usages : un fichier
-    pour un deploiement -- c'est ce que `systemd` sait faire proprement, et la
-    cle n'apparait alors dans aucune liste de processus -- et une variable pour
-    un conteneur ou un test.
-
-    Le fichier a la priorite : si les deux sont fournis, l'intention la plus
-    explicite gagne, et on ne laisse pas une variable oubliee dans un
-    environnement prendre le pas sur une cle deployee.
+    File takes precedence over environment variable if both are provided.
     """
     path = os.getenv("NEXUS_ENGINE_API_PUBLIC_KEY_FILE")
     if path:
@@ -163,7 +150,5 @@ def _read_api_public_key() -> str | None:
     inline = os.getenv("NEXUS_ENGINE_API_PUBLIC_KEY")
     if not inline:
         return None
-    # Une cle collee dans une variable d'environnement arrive souvent avec des
-    # sauts de ligne echappes : les restaurer evite un echec de lecture PEM
-    # dont la cause est invisible.
+    # Restore escaped newlines if passed inline.
     return inline.replace("\\n", "\n")

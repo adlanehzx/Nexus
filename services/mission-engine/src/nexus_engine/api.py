@@ -32,12 +32,10 @@ from nexus_engine.worker import Worker
 
 
 class MissionOwnerRequest(BaseModel):
-    """Identité propriétaire signée, émise par l'API NEXUS.
+    """Signed owner identity, issued by the NEXUS API.
 
-    Le moteur ne vérifie pas la signature : il n'a pas la clé, et c'est voulu —
-    ce qui vérifie ne doit pas pouvoir émettre. Il conserve l'assertion et la
-    rejoue au moment d'agir ; c'est l'API qui la refuse si elle est forgée,
-    périmée ou hors de sa portée.
+    The engine does not verify the signature: it holds the assertion and sends it
+    when acting; the API verifies and authorizes it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -90,7 +88,7 @@ class ResearchMissionRequest(BaseModel):
 
 class PaperAccountRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = "Portefeuille de recherche"
+    name: str = "Research portfolio"
     bankroll_eur: Decimal = Decimal("50.00")
 
 
@@ -154,7 +152,7 @@ class AgentTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace: str = Field(min_length=1, max_length=4096)
-    prompt: str = Field(default="Réponds uniquement NEXUS_ACP_OK", min_length=1, max_length=8000)
+    prompt: str = Field(default="Reply only NEXUS_ACP_OK", min_length=1, max_length=8000)
     timeout_seconds: int = Field(default=120, ge=10, le=600)
 
 
@@ -205,29 +203,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if configured.acp_runner is not None and configured.acp_registry is not None
         else None
     )
-    # Construite même sans URL : la passerelle sait dire qu'elle n'est pas
-    # configurée, et le dire sur une tâche vaut mieux que de laisser le worker
-    # découvrir un `None` au moment de l'exécuter.
-    # Verificateur des appels entrants. Instancie une fois : charger une cle PEM
-    # a chaque requete serait du gaspillage, et elle ne change pas en cours
-    # d'execution.
+    # Built even without URL: the gateway reports if not configured.
+    # Inbound call verifier. Instantiated once since the PEM key does not change at runtime.
     service_verifier = (
         ServiceTokenVerifier(configured.api_public_key_pem)
         if configured.api_public_key_pem
         else None
     )
     if service_verifier is None:
-        # Dit au demarrage plutot que decouvert apres coup. Sans cle, la seule
-        # barriere est la boucle locale : acceptable pour une installation
-        # personnelle sur une machine, insuffisant des qu'il y a Docker,
-        # plusieurs machines ou des workers distants.
         logging.getLogger("nexus_engine.service_auth").warning(
-            "aucune cle publique d'API configuree : les routes de mutation ne sont "
-            "protegees que par la boucle locale (voir NEXUS_ENGINE_API_PUBLIC_KEY_FILE)"
+            "no API public key configured: mutation routes are only protected by loopback "
+            "(see NEXUS_ENGINE_API_PUBLIC_KEY_FILE)"
         )
     else:
         logging.getLogger("nexus_engine.service_auth").info(
-            "authentification des appels entrants active"
+            "inbound service authentication enabled"
         )
 
     agent_core_gateway = AgentCoreGateway(
@@ -315,17 +305,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def require_service_identity(request: Request, call_next):  # noqa: ANN001
-        """Exige un jeton de service sur toute route qui modifie l'etat.
+        """Requires a service token on any state-mutating route.
 
-        Un middleware, et non une dependance par route : il y a quatorze routes
-        de mutation aujourd'hui, et celle qu'on ajoutera demain doit etre
-        protegee sans qu'on ait a y penser. Oublier un `Depends` ne produit
-        aucune erreur -- juste une route ouverte, decouverte trop tard.
-
-        La lecture reste libre. Ce qui compte ici est l'ecriture : soumettre une
-        mission, enregistrer un agent, modifier la configuration, placer un
-        ordre fictif. Un `GET` ne fait fuiter que vers la boucle locale, qui
-        reste la premiere barriere.
+        Implemented as middleware rather than route dependencies to ensure
+        all mutation routes are consistently protected.
         """
         if service_verifier is None or request.method in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
@@ -335,10 +318,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 bearer_token(request.headers.get("authorization"))
             )
         except ServiceAuthError as exc:
-            # Le motif va dans le journal du moteur, pas dans la reponse :
-            # savoir *pourquoi* un jeton est refuse n'aide que qui en forge un.
+            # Reason is logged locally, not exposed in HTTP response.
             logging.getLogger("nexus_engine.service_auth").warning(
-                "appel refuse sur %s %s : %s", request.method, request.url.path, exc
+                "request refused on %s %s: %s", request.method, request.url.path, exc
             )
             return JSONResponse(
                 status_code=401, content={"detail": "service authentication required"}

@@ -258,8 +258,8 @@ def test_quality_review_durably_replans_then_allows_final(
     assert review is not None and review.task_key == "nexus_quality_review_1"
     repository.succeed(
         review,
-        '{"verdict":"revise","summary":"preuve manquante",'
-        '"corrective_instruction":"ajouter une preuve vérifiable"}',
+        '{"verdict":"revise","summary":"missing evidence",'
+        '"corrective_instruction":"add verifiable evidence"}',
     )
     snapshot = repository.mission(mission_id)
     states = {task["task_key"]: task["state"] for task in snapshot["tasks"]}
@@ -270,14 +270,14 @@ def test_quality_review_durably_replans_then_allows_final(
     correction = repository.acquire("worker")
     assert correction is not None and correction.task_key == "nexus_correction_1"
     assert correction.profile_key == "codex"
-    assert "preuve manquante" in correction.instruction
+    assert "missing evidence" in correction.instruction
     repository.succeed(correction, "corrected draft with evidence")
 
     review_two = repository.acquire("worker")
     assert review_two is not None and review_two.task_key == "nexus_quality_review_2"
     repository.succeed(
         review_two,
-        '{"verdict":"pass","summary":"validation réussie",'
+        '{"verdict":"pass","summary":"validation succeeded",'
         '"corrective_instruction":""}',
     )
     final = repository.acquire("worker")

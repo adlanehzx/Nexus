@@ -23,16 +23,14 @@ from nexus_engine.service_auth import (
     bearer_token,
 )
 
-"""Authentification des appels entrants de l'API vers le moteur.
+"""Authentication of inbound API requests to the engine.
 
-Le port du moteur n'etait protege que par la boucle locale : tout processus
-local pouvait soumettre une mission, enregistrer un agent ou modifier la
-configuration. Ces tests fixent ce que la nouvelle barriere refuse, parce que
-c'est la seule chose qui compte pour une barriere.
+The engine port was previously protected only by loopback: any local process
+could submit a mission, register an agent, or modify configuration. These tests
+verify what the barrier rejects.
 
-Le moteur ne detient que la cle publique. Les jetons sont donc forges ici avec
-une cle privee de test -- comme le ferait l'API -- et le moteur, lui, est
-incapable d'en produire.
+The engine only holds the public key. Tokens are forged here with a test private key
+(as the API would do), and the engine cannot produce them.
 """
 
 
@@ -99,8 +97,7 @@ def test_refuses_a_token_signed_by_another_key() -> None:
 
 def test_refuses_a_token_meant_for_another_audience() -> None:
     private, public_pem = _keys()
-    # Signe par la bonne cle, mais emis pour une autre surface : une assertion
-    # de mission ou un jeton d'acces utilisateur ne doit pas ouvrir ici.
+    # Signed with the correct key, but issued for another surface.
     with pytest.raises(ServiceAuthError, match="audience"):
         ServiceTokenVerifier(public_pem).verify(
             _token(private, audience="nexus-mission-grant")
@@ -119,8 +116,7 @@ def test_refuses_an_expired_token() -> None:
 def test_tolerates_a_small_clock_drift() -> None:
     private, public_pem = _keys()
     now = int(time.time())
-    # Expire il y a dix secondes : deux processus de la meme machine derivent,
-    # et refuser pour dix secondes d'ecart serait absurde.
+    # Expired ten seconds ago: two processes on the same host can drift, so small skew is tolerated.
     identity = ServiceTokenVerifier(public_pem).verify(
         _token(private, expires_at=now - 10), now=now
     )
@@ -138,8 +134,7 @@ def test_refuses_a_token_dated_from_the_future() -> None:
 
 def test_refuses_an_unsigned_token() -> None:
     private, public_pem = _keys()
-    # Confusion d'algorithme : l'en-tete annonce `none`, et le refus intervient
-    # avant toute verification de signature.
+    # Algorithm confusion: header announces none.
     with pytest.raises(ServiceAuthError, match="header|signature"):
         ServiceTokenVerifier(public_pem).verify(
             _token(private, header={"alg": "none", "typ": "JWT"})
@@ -157,10 +152,7 @@ def test_refuses_a_malformed_token() -> None:
 def test_refuses_a_valid_key_of_the_wrong_type() -> None:
     from cryptography.hazmat.primitives.asymmetric import ec
 
-    # Une cle parfaitement valide, mais pas Ed25519. C'est le cas interessant :
-    # un PEM corrompu echoue de lui-meme au parsing, alors qu'une cle EC
-    # passerait si on ne verifiait pas le type -- et le moteur verifierait alors
-    # des signatures avec un algorithme que l'API n'utilise pas.
+    # Valid key, but not Ed25519.
     wrong = (
         ec.generate_private_key(ec.SECP256R1())
         .public_key()
@@ -200,8 +192,7 @@ def test_mutations_require_a_service_token_when_a_key_is_configured(tmp_path) ->
     private, public_pem = _keys()
     client = TestClient(create_app(_settings(tmp_path, public_pem)))
 
-    # La lecture reste libre : la boucle locale suffit a la proteger, et c'est
-    # l'ecriture qui compte.
+    # Read-only endpoints remain open: mutations require authentication.
     assert client.get("/v1/health/ready").status_code == 200
 
     body = {"task_timeout_seconds": 1800, "max_attempts": 2, "retry_delay_seconds": 10,
@@ -219,11 +210,9 @@ def test_mutations_require_a_service_token_when_a_key_is_configured(tmp_path) ->
 
 
 def test_every_mutating_route_is_covered(tmp_path) -> None:
-    """Le middleware protege par methode, pas par liste de routes.
+    """The middleware protects by method, not by route allowlist.
 
-    C'est l'invariant qui compte : la route de mutation ajoutee demain est
-    couverte sans qu'on y pense, la ou un `Depends` oublie ne produit aucune
-    erreur -- juste une route ouverte.
+    Any newly added mutation route is automatically covered.
     """
     _, public_pem = _keys()
     app = create_app(_settings(tmp_path, public_pem))
@@ -238,12 +227,11 @@ def test_every_mutating_route_is_covered(tmp_path) -> None:
     assert len(mutating) >= 14
 
     for method, path in mutating:
-        # Chemin concret : les parametres importent peu, le refus intervient
-        # avant tout routage de corps.
+        # Concrete path: refusal occurs before body routing.
         concrete = path.replace("{profile_key}", "x").replace("{profile_id}", "x")
         concrete = concrete.replace("{market_id}", "x").replace("{mission_id}", "x")
         response = client.request(method, concrete, json={})
-        assert response.status_code == 401, f"{method} {path} n'exige pas de jeton"
+        assert response.status_code == 401, f"{method} {path} does not require a token"
 
 
 def test_without_a_key_the_engine_keeps_its_previous_posture(tmp_path) -> None:
@@ -252,6 +240,5 @@ def test_without_a_key_the_engine_keeps_its_previous_posture(tmp_path) -> None:
             "context_budget_chars": 60000, "quality_review": True,
             "research_priority": ["codex"], "review_priority": ["codex"],
             "synthesis_priority": ["codex"]}
-    # Documente plutot que corrige : sans cle configuree, la barriere est la
-    # boucle locale seule. Le demarrage l'annonce dans le journal.
+    # When no key is configured, loopback-only posture is maintained.
     assert client.put("/v1/settings", json=body).status_code == 200

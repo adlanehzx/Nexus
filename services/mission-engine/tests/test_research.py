@@ -28,7 +28,7 @@ def test_research_plan_uses_all_three_agents_and_never_trades() -> None:
         "antigravity", "claude", "codex", "claude", "codex"
     ]
     assert plan["tasks"][-1]["depends_on"] == ["forecast", "red_team"]
-    assert all("aucun ordre réel" in task["instruction"] for task in plan["tasks"])
+    assert all("Do not place any live orders" in task["instruction"] for task in plan["tasks"])
 
 
 @pytest.mark.parametrize(
