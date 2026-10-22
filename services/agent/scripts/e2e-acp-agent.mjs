@@ -126,12 +126,12 @@ acp
     const path = MODE === "refuse-outside" ? FOREIGN_PATH : `${process.cwd()}/note.txt`;
     const permission = await requestPermission(ctx.client, sessionId, path);
 
-    await say(ctx.client, sessionId, `MARQUEUR=${MARKER} `);
+    await say(ctx.client, sessionId, `MARKER=${MARKER} `);
     await say(
       ctx.client,
       sessionId,
-      `PERMISSION=${permission} AMONT=${keys.join("+") || "none"} ` +
-        `MARQUEURS_AMONT=${markers.join("+") || "none"}`,
+      `PERMISSION=${permission} UPSTREAM=${keys.join("+") || "none"} ` +
+        `UPSTREAM_MARKERS=${markers.join("+") || "none"}`,
     );
     return { stopReason: "end_turn" };
   })

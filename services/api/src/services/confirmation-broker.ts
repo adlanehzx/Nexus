@@ -3,22 +3,21 @@ import type { ConfirmationService } from "@nexus/tools";
 import type { NotificationService } from "./notification-service.js";
 
 /**
- * Le pont entre le coordinateur de tâches et une décision humaine.
+ * Bridge between the task coordinator and human decision-making.
  *
- * `TaskCoordinator` attend un `ConfirmationGate` : il pose une question et
- * attend un verdict. `ConfirmationService` sait créer et trancher une demande,
- * mais **ne bloque jamais** — c'est justement sa qualité, un run agent peut
- * attendre dix minutes sans immobiliser de processus.
+ * `TaskCoordinator` expects a `ConfirmationGate`: it asks a question and
+ * awaits a verdict. `ConfirmationService` handles creating and resolving requests,
+ * but **never blocks** — which is its core strength, as an agent run can
+ * wait ten minutes without tying up server processes.
  *
- * Ce courtier réconcilie les deux : il crée la demande, garde la promesse
- * ouverte, et la résout quand l'utilisateur répond depuis **n'importe lequel de
- * ses appareils**. C'est ce dernier point qui compte : une confirmation demandée
- * pendant qu'on est sur l'iPhone peut être approuvée depuis le portable, parce
- * que la demande vit au centre et non dans le client qui l'a affichée.
+ * This broker reconciles the two: it creates the request, keeps the promise
+ * pending, and resolves it when the user responds from **any of their
+ * devices**. This last point is essential: a confirmation requested
+ * while active on iPhone can be approved from a laptop, because
+ * the request lives centrally rather than within the displaying client.
  *
- * Une demande sans réponse expire. L'expiration vaut **refus** : le silence ne
- * doit jamais valoir accord pour une action qui touche les fichiers ou l'argent
- * de quelqu'un.
+ * An unanswered request expires. Expiration counts as a **rejection**: silence
+ * must never imply consent for an action touching files or finances.
  */
 
 type Decision = "approved" | "rejected" | "expired";
@@ -34,7 +33,7 @@ export interface ConfirmationBrokerOptions {
   notifications?: NotificationService | undefined;
   dashboardBaseUrl?: string | undefined;
   now?: () => Date;
-  /** Injectables pour éprouver l'expiration sans attendre réellement. */
+  /** Injectable helpers to test expiration without real delays. */
   setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
 }
@@ -62,7 +61,7 @@ export class ConfirmationBroker implements ConfirmationGate {
       });
   }
 
-  /** Demandes en attente pour un utilisateur — diagnostic et tests. */
+  /** Pending requests for a user — diagnostics and testing. */
   pendingIds(userId: string): string[] {
     return [...this.#pending.entries()]
       .filter(([, pending]) => pending.userId === userId)
@@ -70,11 +69,11 @@ export class ConfirmationBroker implements ConfirmationGate {
   }
 
   /**
-   * Demande une confirmation et attend la réponse.
+   * Requests confirmation and awaits the response.
    *
-   * L'identifiant est celui que le coordinateur a déjà émis dans son événement
-   * `confirmation.required` : les clients l'ont reçu, et c'est celui qu'ils
-   * renverront. Créer un second identifiant ici les désynchroniserait.
+   * The identifier matches the one emitted by the coordinator in its
+   * `confirmation.required` event: clients have received it, and will send it
+   * back. Creating a second identifier here would introduce desynchronization.
    */
   request(input: Parameters<ConfirmationGate["request"]>[0]): Promise<Decision> {
     const ttlMs = Math.max(0, input.expiresAt.getTime() - this.#now().getTime());
@@ -92,7 +91,7 @@ export class ConfirmationBroker implements ConfirmationGate {
         resolve(decision);
       };
 
-      // Le silence vaut refus, jamais accord.
+      // Silence means rejection, never approval.
       const timer = this.#setTimer(() => {
         settle("expired");
       }, ttlMs);
@@ -104,46 +103,45 @@ export class ConfirmationBroker implements ConfirmationGate {
       });
 
       if (this.#notifications) {
-        const desc = input.description ?? "action sensible";
+        const desc = input.description ?? "sensitive action";
         const confirmUrl = `${this.#dashboardBaseUrl.replace(/\/$/, "")}/dashboard?tab=confirmations&id=${encodeURIComponent(input.confirmationId)}`;
         void this.#notifications
           .create({
             userId: input.userId,
-            title: `Confirmation requise : ${desc.slice(0, 45)}`,
-            body: `L'agent demande une confirmation : ${desc}`,
+            title: `Confirmation required: ${desc.slice(0, 45)}`,
+            body: `Agent requests confirmation: ${desc}`,
             severity: "warning",
             url: confirmUrl,
-            actionTitle: "Valider l'action",
+            actionTitle: "Confirm action",
             tags: ["confirmation", "security"],
             groupKey: `confirmation-${input.confirmationId}`,
           })
           .catch(() => {
-            // Ignoré : l'échec de notification ne bloque pas le flux de confirmation
+            // Ignored: notification failure does not block confirmation flow
           });
       }
     });
   }
 
   /**
-   * Enregistre la réponse de l'utilisateur.
+   * Records user response.
    *
-   * Retourne `false` si aucune demande n'attend cet identifiant : cas normal
-   * quand deux clients répondent presque en même temps, ou quand la demande a
-   * expiré entre l'affichage et le geste. Ce n'est pas une erreur, et la traiter
-   * comme telle ferait afficher un message d'échec au second client alors que
-   * tout s'est bien passé.
+   * Returns `false` if no pending request matches this identifier: standard
+   * behavior when two clients respond almost simultaneously, or when the request
+   * expired between display and interaction. This is not an error, and treating it
+   * as such would show a failure message to the second client when the action
+   * succeeded.
    */
   respond(confirmationId: string, decision: "approved" | "rejected", userId: string): boolean {
     const pending = this.#pending.get(confirmationId);
 
-    // **La demande appartient à quelqu'un.** Le courtier connaissait déjà son
-    // propriétaire ; ne pas le vérifier laissait n'importe quel compte
-    // authentifié approuver l'action de quelqu'un d'autre, à condition d'en
-    // connaître l'identifiant — et cet identifiant voyage jusqu'à tous les
-    // clients de la victime.
+    // **The request belongs to someone.** The broker already knew its
+    // owner; failing to check it would allow any authenticated account
+    // to approve someone else's action, provided they know the
+    // identifier — which travels to all clients of the victim.
     //
-    // Le refus est indiscernable d'une demande absente : distinguer les deux
-    // permettrait de sonder l'existence des confirmations d'autrui.
+    // Rejection is indistinguishable from an absent request: distinguishing
+    // them would allow probing for others' pending confirmations.
     if (pending?.userId !== userId) return false;
 
     pending.resolve(decision);
@@ -151,11 +149,11 @@ export class ConfirmationBroker implements ConfirmationGate {
   }
 
   /**
-   * Enregistre la décision **et** la consigne dans le service de confirmation.
+   * Records the decision **and** logs it in the confirmation service.
    *
-   * Les deux enregistrements sont distincts : le service tient l'historique
-   * durable — qui a approuvé quoi, et quand — pendant que ce courtier ne
-   * s'occupe que des promesses en vol.
+   * The two records serve distinct purposes: the service maintains durable
+   * history — who approved what, and when — while this broker only
+   * manages in-flight promises.
    */
   async respondAndRecord(
     confirmationId: string,
@@ -164,14 +162,13 @@ export class ConfirmationBroker implements ConfirmationGate {
   ): Promise<boolean> {
     const known = await this.#confirmations.get(confirmationId);
 
-    // Propriété vérifiée **avant** d'écrire la trace : consigner la décision
-    // d'un intrus dans l'historique de la victime salirait l'audit même si
-    // l'action n'a pas lieu.
+    // Ownership verified **before** writing audit log: recording an intruder's
+    // decision in a victim's history would pollute the audit trail even if
+    // the action does not execute.
     if (known !== undefined && known.userId !== userId) return false;
 
-    // Une demande émise par le coordinateur ne vit d'abord que dans le
-    // courtier ; c'est lui qui tranche la propriété dans ce cas, et il la
-    // connaît.
+    // A request emitted by the coordinator initially lives only in the
+    // broker; it arbitrates ownership in this case, and is aware of it.
     if (known === undefined && this.#pending.get(confirmationId)?.userId !== userId) return false;
 
     if (known !== undefined) await this.#confirmations.resolve(confirmationId, decision);
@@ -179,7 +176,7 @@ export class ConfirmationBroker implements ConfirmationGate {
     return this.respond(confirmationId, decision, userId);
   }
 
-  /** Refuse tout ce qui attend — arrêt du serveur, ou révocation. */
+  /** Rejects all pending requests — server shutdown, or revocation. */
   rejectAll(): number {
     const count = this.#pending.size;
     for (const [id] of [...this.#pending]) {

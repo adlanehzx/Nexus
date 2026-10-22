@@ -5,14 +5,14 @@ import { createAccount, makeApi, type ApiHarness } from "./harness.js";
 
 const SOURCE_RUN_ID = "7a301a7c-77b1-47d0-9318-3b55dd7b4bed";
 
-describe("rejeu d'analyse d'un run", () => {
+describe("run analysis replay", () => {
   let harness: ApiHarness | undefined;
 
   afterEach(async () => {
     await harness?.close();
   });
 
-  it("rejoue le prompt dans une nouvelle conversation sans exécuter les outils proposés", async () => {
+  it("replays prompt in a new conversation without executing proposed tools", async () => {
     let executions = 0;
     const llm = new ScriptedLLMProvider([
       {
@@ -24,7 +24,7 @@ describe("rejeu d'analyse d'un run", () => {
     const admin = await createAccount(harness, "replay-admin@exemple.fr");
     harness.services.toolRegistry.register({
       name: "danger.write",
-      description: "Outil à effet externe utilisé pour prouver l'isolation du rejeu.",
+      description: "External effect tool used to prove replay isolation.",
       inputSchema: z.object({ value: z.string() }),
       outputSchema: z.object({ written: z.boolean() }),
       riskLevel: "HIGH",
@@ -50,12 +50,12 @@ describe("rejeu d'analyse d'un run", () => {
         errors: [],
         usage: { inputTokens: 10, outputTokens: 5 },
         model: "scripted-model",
-        response: "Réponse source.",
+        response: "Source response.",
         missionExternalKey: null,
         replayOfRunId: null,
         fallbackCount: 0,
       },
-      messages: [{ role: "user", content: [{ type: "text", text: "Analyse ce problème." }] }],
+      messages: [{ role: "user", content: [{ type: "text", text: "Analyze this issue." }] }],
       pendingConfirmation: null,
       consecutiveToolFailures: 0,
       toolCallCount: 0,

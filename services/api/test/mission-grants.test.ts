@@ -6,19 +6,9 @@ import {
 } from "../src/services/mission-grants.js";
 
 /**
- * Cycle de vie d'une assertion de mission.
+ * Mission grant assertion lifecycle.
  *
- * Trois défauts motivent ce fichier, et chacun a son test :
- *
- *  1. une assertion expirait au bout de vingt-quatre heures sans que rien ne la
- *     renouvelle, donc une mission plus longue devenait irreprenable ;
- *  2. le `jti` identifiait l'assertion sans qu'aucun registre ne soit consulté,
- *     donc une assertion volée restait exploitable jusqu'à son terme ;
- *  3. rien ne retirait les assertions d'une mission terminée.
- *
- * Tout est piloté par une **horloge injectée**. Faire autrement obligerait à
- * attendre des heures pour éprouver une expiration, et un test qu'on ne peut
- * pas lancer ne protège rien.
+ * Driven by an injected clock to test expiration and renewal deterministically.
  */
 
 const keys = generateSigningKeyPair();
@@ -40,8 +30,6 @@ function build(options: { renewWithinMs?: number } = {}) {
     service,
     registry,
     verifier,
-    // Fonction fléchée et non méthode : elle est déstructurée par chaque test,
-    // donc détachée de son objet.
     advance: (ms: number) => {
       instant = new Date(instant.getTime() + ms);
     },
@@ -54,8 +42,8 @@ const SCOPE = {
   missionExternalKey: "nexus-mission-grants",
 };
 
-describe("émission et registre", () => {
-  it("inscrit toute assertion émise", async () => {
+describe("issuance and registry", () => {
+  it("records every issued assertion", async () => {
     const { service, registry } = build();
     const granted = await service.issue(SCOPE);
 
@@ -65,19 +53,16 @@ describe("émission et registre", () => {
     expect(recorded?.expiresAt).toEqual(granted.expiresAt);
   });
 
-  it("refuse une assertion signée mais absente du registre", async () => {
+  it("rejects signed assertion missing from registry", async () => {
     const { service, verifier } = build();
-    // Signature parfaitement valide : seule la trace manque. C'est le cas d'une
-    // clé compromise, ou d'un enregistrement perdu — aucun des deux ne doit
-    // ouvrir, d'où le refus par défaut.
     const orphan = verifier.issueMissionGrant(SCOPE);
 
     await expect(service.assertUsable(verifier.verifyMissionGrant(orphan.token))).rejects.toThrow(
-      /registre/i,
+      /registry/i,
     );
   });
 
-  it("accepte une assertion active", async () => {
+  it("accepts an active assertion", async () => {
     const { service, verifier } = build();
     const granted = await service.issue(SCOPE);
 
@@ -89,23 +74,18 @@ describe("émission et registre", () => {
   });
 });
 
-describe("retrait", () => {
-  it("refuse une assertion retirée alors que sa signature reste valide", async () => {
+describe("retirement", () => {
+  it("rejects retired assertion while signature remains valid", async () => {
     const { service, verifier } = build();
     const granted = await service.issue(SCOPE);
     const claims = verifier.verifyMissionGrant(granted.token);
 
     expect(await service.retire(SCOPE.missionExternalKey)).toBe(1);
 
-    // La signature n'a pas changé et l'assertion n'est pas expirée : c'est bien
-    // le registre, et lui seul, qui ferme la porte.
-    await expect(service.assertUsable(claims)).rejects.toThrow(/retirée/i);
+    await expect(service.assertUsable(claims)).rejects.toThrow(/revoked/i);
   });
 
-  it("retire toutes les assertions d'une mission, pas seulement la dernière", async () => {
-    // La rotation en laisse plusieurs valides en même temps. Ne retirer que
-    // celle qu'on a sous la main laisserait les autres ouvertes — c'est pour ça
-    // que le retrait porte sur la mission.
+  it("retires all assertions of a mission, not only the last one", async () => {
     const { service, verifier, advance } = build({ renewWithinMs: 20 * HOUR });
     const first = await service.issue(SCOPE);
     advance(5 * HOUR);
@@ -115,12 +95,12 @@ describe("retrait", () => {
     expect(await service.retire(SCOPE.missionExternalKey)).toBe(2);
     for (const token of [first.token, rotated!.token]) {
       await expect(service.assertUsable(verifier.verifyMissionGrant(token))).rejects.toThrow(
-        /retirée/i,
+        /revoked/i,
       );
     }
   });
 
-  it("distingue une fin de mission d'une révocation d'incident", async () => {
+  it("distinguishes mission end from incident revocation", async () => {
     const { service } = build();
     await service.issue(SCOPE);
     await service.retire(SCOPE.missionExternalKey, "REVOKED");
@@ -130,41 +110,37 @@ describe("retrait", () => {
     expect(grants[0]?.retiredAt).not.toBeNull();
   });
 
-  it("est idempotent et ne déplace pas la date de retrait", async () => {
+  it("is idempotent and does not shift retirement date", async () => {
     const { service, advance } = build();
     await service.issue(SCOPE);
     expect(await service.retire(SCOPE.missionExternalKey)).toBe(1);
     const first = (await service.listByMission(SCOPE.missionExternalKey))[0]?.retiredAt;
 
     advance(HOUR);
-    // Le moteur peut redemander le retrait si son premier appel a échoué sur le
-    // réseau : le second ne doit rien réécrire.
     expect(await service.retire(SCOPE.missionExternalKey)).toBe(0);
     expect((await service.listByMission(SCOPE.missionExternalKey))[0]?.retiredAt).toEqual(first);
   });
 });
 
-describe("expiration et rotation", () => {
-  it("refuse une assertion expirée selon le registre", async () => {
+describe("expiration and rotation", () => {
+  it("rejects assertion expired according to registry", async () => {
     const { service, verifier, advance } = build();
     const granted = await service.issue(SCOPE);
     const claims = verifier.verifyMissionGrant(granted.token);
 
     advance(25 * HOUR);
-    await expect(service.assertUsable(claims)).rejects.toThrow(/expirée/i);
+    await expect(service.assertUsable(claims)).rejects.toThrow(/expired/i);
   });
 
-  it("ne renouvelle pas une assertion encore loin de son terme", async () => {
+  it("does not renew an assertion far from expiry", async () => {
     const { service, advance } = build({ renewWithinMs: 8 * HOUR });
     const granted = await service.issue(SCOPE);
 
     advance(2 * HOUR);
-    // Vingt-deux heures restantes : renouveler ici multiplierait les assertions
-    // valides sans raison.
     expect(await service.renewById(granted.grantId)).toBeUndefined();
   });
 
-  it("renouvelle dans la fenêtre, et la nouvelle assertion est exploitable", async () => {
+  it("renews within window and new assertion is usable", async () => {
     const { service, verifier, advance } = build({ renewWithinMs: 8 * HOUR });
     const granted = await service.issue(SCOPE);
 
@@ -179,7 +155,7 @@ describe("expiration et rotation", () => {
     ).resolves.toMatchObject({ status: "ACTIVE" });
   });
 
-  it("laisse l'ancienne assertion vivre jusqu'à son terme", async () => {
+  it("lets legacy assertion live until its expiry", async () => {
     const { service, verifier, advance } = build({ renewWithinMs: 8 * HOUR });
     const granted = await service.issue(SCOPE);
     const claims = verifier.verifyMissionGrant(granted.token);
@@ -187,38 +163,30 @@ describe("expiration et rotation", () => {
     advance(17 * HOUR);
     await service.renewById(granted.grantId);
 
-    // Retirer l'ancienne au moment de la rotation casserait toute requête déjà
-    // en vol avec elle, pour un gain nul.
     await expect(service.assertUsable(claims)).resolves.toMatchObject({
       status: "ACTIVE",
     });
   });
 
-  it("couvre une mission plus longue que la durée de vie d'une assertion", async () => {
-    // Le scénario qui motive toute la rotation : une mission qui attend une
-    // décision humaine pendant trois jours. Sans renouvellement, elle devenait
-    // irreprenable au bout de vingt-quatre heures.
+  it("covers mission longer than assertion lifetime", async () => {
     const { service, verifier, advance } = build({ renewWithinMs: 8 * HOUR });
     let current = await service.issue(SCOPE);
 
     for (let elapsed = 0; elapsed < 72; elapsed += 6) {
       advance(6 * HOUR);
       const claims = verifier.verifyMissionGrant(current.token);
-      // À chaque passage, l'assertion détenue doit encore ouvrir.
       await expect(service.assertUsable(claims)).resolves.toBeDefined();
       const renewed = await service.renewById(current.grantId);
       if (renewed !== undefined) current = renewed;
     }
   });
 
-  it("ne renouvelle pas une assertion déjà retirée", async () => {
+  it("does not renew an assertion already retired", async () => {
     const { service, advance } = build({ renewWithinMs: 8 * HOUR });
     const granted = await service.issue(SCOPE);
     await service.retire(SCOPE.missionExternalKey);
 
     advance(17 * HOUR);
-    // Sans ce refus, le retrait serait contournable : il suffirait de demander
-    // une rotation pour obtenir une assertion neuve et active.
     expect(await service.renewById(granted.grantId)).toBeUndefined();
   });
 });

@@ -92,8 +92,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       : new AcpOrchestrator({
           missionControl,
           context: app.services.context,
-          // Le service d'assertions signe **et** enregistre : l'orchestrateur ne
-          // reçoit que la capacité de délivrer une portée de mission.
+          // The grant service signs **and** registers: the orchestrator only
+          // receives the ability to issue mission scopes.
           grants: app.services.missionGrants,
           agentRouter,
           sharedArtifacts: app.services.sharedArtifacts,
@@ -111,7 +111,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(await missionControl.settings(), request.id);
     },
   );
@@ -127,7 +127,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(await missionControl.updateSettings(request.body), request.id);
     },
   );
@@ -147,12 +147,11 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      // La pause passe **avant** la vérification du moteur : refuser pour la
-      // bonne raison compte, et une mission à moitié partie serait pire qu'une
-      // mission refusée. Elle ne doit pas non plus compter sur le refus de
-      // chaque outil en aval.
+      // Pause check precedes engine check: rejecting for the right reason matters,
+      // and a half-dispatched mission would be worse than a rejected one. It must not
+      // rely on downstream tool rejection either.
       app.services.pause.assertRunning();
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const { userId } = currentUser(request);
       const mission = await orchestrator.submit(
         userId,
@@ -187,7 +186,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(
         await missionControl.updateAgentProfile(request.params.profileId, request.body),
         request.id,
@@ -206,7 +205,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(await missionControl.disableAgent(request.params.key), request.id);
     },
   );
@@ -230,7 +229,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(
         await missionControl.testAgentProfile(request.params.profileId, request.body),
         request.id,
@@ -249,7 +248,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const { userId } = currentUser(request);
       const mission = await orchestrator.status(userId, request.params.missionId);
       if (mission === undefined) throw new NotFoundError("Mission", request.params.missionId);
@@ -267,7 +266,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       return ok(await missionControl.agents(), request.id);
     },
   );
@@ -286,7 +285,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       const registry = await missionControl.registerAgent(request.body);
       return reply.code(201).send(ok(registry, request.id));
     },
@@ -308,7 +307,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       const registry = await missionControl.createAgent(request.body);
       return reply.code(201).send(ok(registry, request.id));
     },
@@ -341,7 +340,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
       const registry = await missionControl.updateAgentHealth(request.params.key, request.body);
       return ok(registry, request.id);
     },
@@ -358,7 +357,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       return ok({ accounts: await providerAccounts.listAccounts() }, request.id);
     },
@@ -376,7 +375,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request, reply) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const created = await providerAccounts.createAccount(request.body);
       return reply.code(201).send(ok(created, request.id));
@@ -395,7 +394,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const account = await providerAccounts.getAccount(request.params.id);
       if (account === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
@@ -416,7 +415,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const updated = await providerAccounts.updateAccount(request.params.id, request.body);
       if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
@@ -436,7 +435,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const deleted = await providerAccounts.deleteAccount(request.params.id);
       if (!deleted) throw new NotFoundError("ProviderAccount", request.params.id);
@@ -456,7 +455,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const tested = await providerAccounts.probeAuth(request.params.id);
       if (tested === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
@@ -481,7 +480,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       if (providerAccounts === undefined) {
-        throw new Error("Le gestionnaire multi-comptes n'est pas configuré.");
+        throw new Error("Provider accounts manager is not configured.");
       }
       const updated = request.body.active
         ? await providerAccounts.setCooldown(
@@ -636,7 +635,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const artifacts = await orchestrator.getArtifacts(request.params.missionId);
       return ok({ artifacts }, request.id);
     },
@@ -653,7 +652,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const { record, content } = await orchestrator.readArtifact(
         request.params.missionId,
         request.query.uri,
@@ -684,7 +683,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const artifact = await orchestrator.saveArtifact(request.params.missionId, {
         taskKey: request.body.taskKey,
         name: request.body.name,
@@ -773,7 +772,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("Le moteur ACP n'est pas configuré.");
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const view = await orchestrator.getCollaborationView(request.params.missionId);
       return ok(view, request.id);
     },

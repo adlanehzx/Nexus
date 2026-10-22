@@ -17,39 +17,34 @@ import {
 } from "./harness.js";
 
 /**
- * La flotte complète, montée pour de vrai.
+ * The complete fleet, mounted for real.
  *
- * C'est l'architecture finale, telle qu'elle tourne :
+ * This is the final architecture as it runs:
  *
- *     iPhone 17        CLIENT           pilote
- *     Portable Windows CLIENT + WORKER  pilote **et** exécute
- *     Poste fixe       WORKER           exécute
- *     Redmi Note 10S   WORKER           exécute
- *     NEXUS Core       autorité centrale
+ *     iPhone 17        CLIENT           controls
+ *     Windows Laptop   CLIENT + WORKER  controls **and** executes
+ *     Desktop          WORKER           executes
+ *     Redmi Note 10S   WORKER           executes
+ *     NEXUS Core       central authority
  *
- * Rien de tout cela n'est écrit dans le code du cœur : ce sont quatre lignes de
- * registre. Chercher « Redmi » ou « poste fixe » ailleurs que dans les fixtures
- * de test ne donne rien, et c'est la propriété qu'on vérifie en montant la
- * flotte depuis l'extérieur.
+ * None of this is hardcoded in the core: these are four registry entries.
+ * Searching for "Redmi" or "Desktop" outside test fixtures yields nothing,
+ * which is the property verified by mounting the fleet from outside.
  *
- * ## Ce qui est réel, et ce qui ne l'est pas
+ * ## What is real, and what is not
  *
- * **Réel** : les deux clients sont `SessionManager` + `RealtimeClient` +
- * réducteur de `@nexus/client-core` — le code que l'iPhone et la fenêtre Windows
- * exécutent. Les trois exécutants sont `WorkerRuntime` de `@nexus/worker-core` —
- * celui du démon. Le cœur est l'API Fastify complète, avec ses vraies
- * signatures Ed25519, sa vraie sélection d'exécutant, son vrai coordinateur, ses
- * vraies confirmations.
+ * **Real**: both clients are `SessionManager` + `RealtimeClient` + reducer from
+ * `@nexus/client-core` — the exact code the iPhone and Windows window run.
+ * The three workers are `WorkerRuntime` from `@nexus/worker-core` — the daemon runtime.
+ * The core is the complete Fastify API, with its real Ed25519 signatures,
+ * its real worker selection, its real coordinator, and its real confirmations.
  *
- * **Doublé** : le transport réseau (branchement direct sur les canaux, mêmes
- * enveloppes, mêmes schémas) et les appels système des exécutants — on ne lance
- * pas Chrome sur la machine qui exécute la suite de tests.
+ * **Doubled**: network transport (direct channel wiring, identical envelopes
+ * and schemas) and worker system calls — Chrome is not launched on the test runner host.
  *
- * **Absent** : il n'y a **pas de modèle de langage**. La traduction d'une phrase
- * française en plan de tâche appartient au service agent, qui n'est pas encore
- * câblé. Les scénarios partent donc du plan que la phrase dénote, et éprouvent
- * tout ce qui suit. C'est une limite réelle, et elle est dite plutôt que
- * masquée par un planificateur de circonstance.
+ * **Omitted**: there is **no language model**. Translating a prompt into a task plan
+ * belongs to the agent service. Test scenarios therefore start from the denoted
+ * plan and exercise everything downstream.
  */
 
 export interface Fleet {
@@ -63,11 +58,11 @@ export interface Fleet {
     redmi: RegisteredDevice;
   };
 
-  /** Les deux clients. Le portable est les deux à la fois. */
+  /** The two clients. Laptop is both simultaneously. */
   iphone: ClientRig;
   laptop: ClientRig;
 
-  /** Les trois exécutants. */
+  /** The three workers. */
   laptopWorker: WorkerRig;
   desktop: WorkerRig;
   redmi: WorkerRig;
@@ -76,11 +71,10 @@ export interface Fleet {
 }
 
 /**
- * Capacités de chaque machine.
+ * Capabilities of each machine.
  *
- * Elles décrivent ce que la machine **sait faire**. Ce qu'elle a le **droit** de
- * faire est une autre question, tranchée par les permissions de l'utilisateur —
- * et les deux ne sont jamais confondues.
+ * They describe what each machine **can do**. What it is **permitted** to
+ * do is a separate concern governed by user permissions — and the two are never conflated.
  */
 export const LAPTOP_CAPABILITIES = [
   "terminal.execute",
@@ -101,19 +95,19 @@ export const DESKTOP_CAPABILITIES = [
 
 export const REDMI_CAPABILITIES = ["android.app.open", "android.app.list", "android.notification"];
 
-/** Tout ce que l'utilisateur a autorisé, toutes machines confondues. */
+/** Everything authorized by the user across all devices. */
 export const GRANTED = [
   ...new Set([...LAPTOP_CAPABILITIES, ...DESKTOP_CAPABILITIES, ...REDMI_CAPABILITIES]),
 ];
 
 export interface FleetOptions {
-  /** Comportement des capacités, par appareil. */
+  /** Capability behaviours per device. */
   behaviours?: {
     laptop?: Readonly<Record<string, CapabilityBehaviour>>;
     desktop?: Readonly<Record<string, CapabilityBehaviour>>;
     redmi?: Readonly<Record<string, CapabilityBehaviour>>;
   };
-  /** Risque à partir duquel une confirmation humaine est exigée. */
+  /** Risk threshold above which human confirmation is required. */
   confirmationThreshold?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 }
 
@@ -133,17 +127,16 @@ export async function bootFleet(options: FleetOptions = {}): Promise<Fleet> {
     permissions: GRANTED,
   });
 
-  // Le portable : **un seul appareil**, rôle `BOTH`. Deux lignes de registre
-  // pour la même machine donneraient deux entrées dans la flotte et deux états
-  // de santé contradictoires.
+  // Laptop: **single device**, `BOTH` role. Two registry rows for the same
+  // machine would create two fleet entries and contradictory health statuses.
   const laptopDevice = await registerDevice(harness, account, {
-    name: "Portable Windows",
+    name: "Windows Laptop",
     role: "BOTH",
     permissions: GRANTED,
   });
 
   const desktopDevice = await registerDevice(harness, account, {
-    name: "Poste fixe Windows",
+    name: "Windows Desktop",
     role: "WORKER",
     permissions: GRANTED,
   });
@@ -180,9 +173,8 @@ export async function bootFleet(options: FleetOptions = {}): Promise<Fleet> {
 
   await Promise.all([laptopWorker.runtime.start(), desktop.runtime.start(), redmi.runtime.start()]);
 
-  // On attend que les capacités soient **enregistrées**, pas seulement que la
-  // session soit ouverte : le sélecteur choisit sur les capacités, et partir
-  // trop tôt rendrait les scénarios intermittents.
+  // Await capabilities being **registered**, not just session open:
+  // selector routes based on capabilities, and premature starts cause flaky tests.
   await until(async () => {
     const devices = await harness.services.deviceRegistry.listDevices(account.userId);
     return devices
@@ -209,13 +201,11 @@ export async function bootFleet(options: FleetOptions = {}): Promise<Fleet> {
 }
 
 /**
- * Le plan qu'une demande dénote.
+ * The plan denoted by a request.
  *
- * Le service agent le produira à partir d'une phrase ; en son absence, les
- * scénarios l'écrivent à la main. Le nom de la machine, quand l'utilisateur en
- * cite une, devient un `preferredDeviceId` — une **préférence**, pondérée par le
- * sélecteur, jamais un contournement : un appareil préféré qui n'a pas la
- * capacité reste écarté.
+ * In the absence of an LLM planner, test scenarios construct this manually.
+ * A named machine becomes a `preferredDeviceId` — a preference weighed by
+ * the selector, never a bypass: a preferred device lacking capabilities is rejected.
  */
 export function planFor(input: {
   userId: string;
@@ -234,24 +224,17 @@ export function planFor(input: {
 }
 
 /**
- * Attend qu'une condition devienne vraie, **en laissant tourner l'horloge**.
+ * Waits for a condition to become true while advancing real clock timers.
  *
- * `until` du harnais ne fait tourner que la file de micro-tâches : c'est ce
- * qu'il faut pour éprouver une machine à états sans attendre réellement. Un
- * scénario de bout en bout, lui, traverse des minuteries — délais de dispatch,
- * expiration de confirmation, reprise après coupure — et une boucle de
- * micro-tâches ne les atteint jamais.
- *
- * D'où deux fonctions distinctes plutôt qu'une qui ferait mal les deux.
+ * Test harness `until` only drains microtasks: suitable for state machines
+ * without real waits. End-to-end scenarios traverse dispatch timeouts,
+ * confirmation expiries, and recovery delays.
  */
 export async function waitFor(
   predicate: () => boolean | Promise<boolean>,
   options: { timeoutMs?: number; label?: string } = {},
 ): Promise<void> {
-  // Généreux par défaut. Cette échéance est un **filet**, pas une mesure de
-  // performance : sous la suite complète, quatorze paquets se disputent la
-  // machine, et un délai serré ferait échouer un scénario qui a simplement pris
-  // son temps. Une attente réellement infinie, elle, masquerait un blocage.
+  // Generous by default: serves as a safety net rather than performance metric.
   const deadline = Date.now() + (options.timeoutMs ?? 15_000);
 
   while (Date.now() < deadline) {
@@ -259,10 +242,10 @@ export async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 
-  throw new Error(`condition jamais atteinte : ${options.label ?? "(sans nom)"}`);
+  throw new Error(`condition never met: ${options.label ?? "(unnamed)"}`);
 }
 
-/** Lance un plan par le superviseur, comme le fait la route `POST /tasks`. */
+/** Runs a plan through supervisor, matching the `POST /tasks` route behaviour. */
 export function runPlan(fleet: Fleet, plan: TaskPlan): void {
   fleet.harness.services.supervisor.start(plan, GRANTED);
 }

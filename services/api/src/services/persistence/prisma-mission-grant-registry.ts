@@ -31,12 +31,12 @@ export class PrismaMissionGrantRegistry implements MissionGrantRegistry {
   }
 
   /**
-   * Retire en une seule écriture les assertions encore actives d'une mission.
+   * Revokes in a single write the still-active assertions of a mission.
    *
-   * Le filtre sur `ACTIVE` est ce qui rend l'opération idempotente : un second
-   * appel ne réécrit rien et ne déplace pas la date de retrait. Le moteur peut
-   * donc redemander le retrait sans précaution si sa première tentative a
-   * échoué sur le réseau.
+   * The filter on `ACTIVE` makes the operation idempotent: a second
+   * call does not rewrite anything and does not shift the revocation timestamp. The engine can
+   * therefore retry revocation safely if its first attempt
+   * failed on the network.
    */
   async retireMission(
     missionExternalKey: string,

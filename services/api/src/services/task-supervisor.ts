@@ -2,22 +2,22 @@ import type { TaskCoordinator, TaskPlan } from "@nexus/devices";
 import type { NotificationService } from "./notification-service.js";
 
 /**
- * Suit les plans en cours d'exécution.
+ * Tracks actively executing plans.
  *
- * `TaskCoordinator.execute()` s'annule par `AbortSignal` — c'est le bon
- * mécanisme, il propage jusqu'au processus enfant sur la machine cible. Mais un
- * client qui annule ne détient pas ce signal : il envoie `task.cancel` avec un
- * identifiant, des minutes plus tard, depuis un autre appareil que celui qui a
- * lancé la tâche.
+ * `TaskCoordinator.execute()` is cancelled via `AbortSignal` — this is the right
+ * mechanism, propagating all the way to child processes on target machines. But
+ * a client issuing a cancellation does not hold this signal: it sends `task.cancel` with
+ * an identifier, minutes later, from a different device than the one that
+ * initiated the task.
  *
- * Ce superviseur fait le lien : il garde le contrôleur de chaque exécution en
- * vol et le déclenche sur demande. Il vit dans l'API plutôt que dans le
- * coordinateur, et c'est délibéré — le coordinateur n'a pas à savoir qu'il
- * existe des clients, des identifiants de requête ou des sessions.
+ * This supervisor bridges that gap: it maintains the controller for each in-flight
+ * execution and triggers it on demand. It lives in the API rather than the
+ * coordinator by design — the coordinator does not need to know about
+ * clients, request identifiers, or sessions.
  *
- * Il est aussi le seul endroit qui décide qu'une tâche terminée mérite une
- * notification : centraliser cette décision est ce qui garantit que l'iPhone et
- * le portable en reçoivent exactement une, identique.
+ * It is also the sole location deciding that a completed task warrants a
+ * notification: centralizing this decision ensures that an iPhone and
+ * a laptop receive exactly one identical notification.
  */
 
 interface Running {
@@ -57,11 +57,11 @@ export class TaskSupervisor {
   }
 
   /**
-   * Lance un plan **sans attendre sa fin**.
+   * Starts a plan **without awaiting its completion**.
    *
-   * Un plan peut durer des minutes ; une requête HTTP qui l'attendrait
-   * expirerait. Le client suit la suite par le canal temps réel — c'est
-   * exactement à cela qu'il sert.
+   * A plan can take minutes; an HTTP request waiting for it
+   * would time out. The client tracks subsequent progress via the real-time channel — which
+   * is precisely its purpose.
    */
   start(plan: TaskPlan, permissions: readonly string[]): void {
     const controller = new AbortController();
@@ -92,22 +92,21 @@ export class TaskSupervisor {
   }
 
   /**
-   * Annule un plan en cours.
+   * Cancels an in-flight plan.
    *
-   * Retourne `false` quand rien n'est en vol : la tâche est déjà terminée, ou
-   * le serveur a redémarré depuis. Ce n'est pas une erreur — le client voulait
-   * qu'elle s'arrête, et elle est arrêtée.
-   */
-  /**
-   * Interrompt une exécution.
+   * Returns `false` when nothing is in flight: the task already finished, or
+   * the server has restarted since. This is not an error — the client requested
+   * that it stop, and it has stopped.
    *
-   * `userId` est **exigé**, et vérifié contre le propriétaire du plan. Le
-   * superviseur connaissait déjà ce propriétaire ; ne pas s'en servir laissait
-   * n'importe quel compte authentifié arrêter l'exécution de quelqu'un d'autre
-   * en devinant un identifiant de tâche.
+   * Interrupts an execution.
    *
-   * Un refus est indiscernable d'une tâche inconnue : les distinguer permettrait
-   * de sonder l'existence des tâches d'autrui.
+   * `userId` is **mandatory**, and verified against the plan owner. The
+   * supervisor already knew this owner; ignoring it would have allowed
+   * any authenticated account to terminate someone else's execution
+   * by guessing a task identifier.
+   *
+   * A rejection is indistinguishable from an unknown task: distinguishing them would
+   * permit probing for the existence of other users' tasks.
    */
   cancel(taskId: string, userId: string): boolean {
     const running = this.#running.get(taskId);
@@ -117,7 +116,7 @@ export class TaskSupervisor {
     return true;
   }
 
-  /** Interrompt tout — arrêt du serveur. */
+  /** Interrupts all executions — server shutdown. */
   cancelAll(): number {
     const count = this.#running.size;
     for (const running of this.#running.values()) running.controller.abort();

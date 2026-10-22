@@ -6,7 +6,7 @@ import type { DeliveryReport, NotificationDispatcher } from "@nexus/notification
 import { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
-describe("Notifications externes (Chantier 11)", () => {
+describe("External notifications", () => {
   let harness: ApiHarness;
   let admin: Account;
   let membre: Account;
@@ -25,7 +25,7 @@ describe("Notifications externes (Chantier 11)", () => {
     await rm(configDir, { recursive: true, force: true });
   });
 
-  it("récupère la configuration des notifications par défaut pour l'admin", async () => {
+  it("retrieves default notification configuration for admin", async () => {
     const res = await harness.app.inject({
       method: "GET",
       url: "/api/v1/dashboard/notifications/config",
@@ -41,7 +41,7 @@ describe("Notifications externes (Chantier 11)", () => {
     expect(body.data.ntfy.enabled).toBe(false);
   });
 
-  it("refuse l'accès à la configuration aux membres non administrateurs", async () => {
+  it("denies access to notification config for non-admin members", async () => {
     const res = await harness.app.inject({
       method: "GET",
       url: "/api/v1/dashboard/notifications/config",
@@ -51,7 +51,7 @@ describe("Notifications externes (Chantier 11)", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("met à jour et persiste la configuration des notifications", async () => {
+  it("updates and persists notification configuration", async () => {
     const updatePayload = {
       enabled: true,
       desktop: { enabled: false, urgency: "critical" },
@@ -89,7 +89,7 @@ describe("Notifications externes (Chantier 11)", () => {
     expect(body.data.ntfy.topic).toBe("nexus-custom-topic");
   });
 
-  it("émet une notification de test via POST /dashboard/notifications/test", async () => {
+  it("emits test notification via POST /dashboard/notifications/test", async () => {
     const mockReport: DeliveryReport = {
       messageId: "test-123",
       timestamp: new Date().toISOString(),
@@ -103,7 +103,7 @@ describe("Notifications externes (Chantier 11)", () => {
       dispatch: vi.fn().mockResolvedValue(mockReport),
     } as unknown as NotificationDispatcher;
 
-    // Injection du dispatcher dans les services
+    // Inject dispatcher into services
     Object.defineProperty(harness.services, "notificationDispatcher", {
       value: mockDispatcher,
       writable: true,
@@ -121,7 +121,7 @@ describe("Notifications externes (Chantier 11)", () => {
     expect(sendTestMock).toHaveBeenCalled();
   });
 
-  it("déclenche une notification externe avec lien direct lors d'une demande de confirmation", async () => {
+  it("triggers external notification with direct link on confirmation request", async () => {
     const dispatchMock = vi.fn().mockResolvedValue({
       messageId: "m1",
       timestamp: new Date().toISOString(),
@@ -134,7 +134,7 @@ describe("Notifications externes (Chantier 11)", () => {
       updateConfig: vi.fn(),
     } as unknown as NotificationDispatcher;
 
-    // Raccordement au notification service
+    // Connect to notification service
     const notifService = harness.services.notifications;
     Object.defineProperty(notifService, "dispatcher", {
       value: mockDispatcher,
@@ -142,7 +142,7 @@ describe("Notifications externes (Chantier 11)", () => {
     });
     const broker = harness.services.confirmationBroker;
 
-    // Déclenche une demande de confirmation
+    // Trigger a confirmation request
     void broker.request({
       confirmationId: "conf-xyz-456",
       taskId: "task-001",
@@ -156,26 +156,26 @@ describe("Notifications externes (Chantier 11)", () => {
       expiresAt: new Date(Date.now() + 60_000),
     });
 
-    // Vérifie que le store de notifications a reçu l'enregistrement
+    // Verify notification store received record
     const userNotifs = await harness.services.notificationStore.listByUser(admin.userId, {
       limit: 10,
     });
     expect(userNotifs.items.length).toBeGreaterThan(0);
-    expect(userNotifs.items[0]?.title).toContain("Confirmation requise");
+    expect(userNotifs.items[0]?.title).toContain("Confirmation required");
   });
 
-  it("génère une URL vers la tâche lors de l'appel notifyTaskOutcome", async () => {
+  it("generates task URL upon notifyTaskOutcome call", async () => {
     const notif = await harness.services.notifications.notifyTaskOutcome({
       userId: admin.userId,
       taskId: "task-build-789",
-      title: "Build terminé",
+      title: "Build completed",
       status: "succeeded",
       originClientDeviceId: null,
-      detail: "Tous les artefacts sont disponibles.",
+      detail: "All artifacts are available.",
     });
 
     expect(notif).toBeDefined();
-    expect(notif?.title).toBe("Build terminé");
-    expect(notif?.body).toBe("Tous les artefacts sont disponibles.");
+    expect(notif?.title).toBe("Build completed");
+    expect(notif?.body).toBe("All artifacts are available.");
   });
 });

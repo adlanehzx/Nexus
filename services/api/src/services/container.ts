@@ -88,27 +88,27 @@ import { AgentCollaborationService } from "./agent-collaboration.js";
 import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 
 /**
- * Assemblage des services de l'API.
+ * Assembly of API services.
  *
- * Un seul endroit relie tout, et c'est ce qui rend vérifiable la propriété
- * centrale de l'architecture : **le cœur est l'autorité**. Aucun client
- * n'atteint un exécutant ; il n'existe qu'un chemin, et il passe par ici.
+ * A single location connects everything, making the central property of the
+ * architecture verifiable: **the core is the authority**. No client directly
+ * reaches an executor; only one path exists, passing through here:
  *
- *     client ─▶ route ou WebSocket ─▶ PermissionService ─▶ ConfirmationBroker
+ *     client ─▶ route or WebSocket ─▶ PermissionService ─▶ ConfirmationBroker
  *            ─▶ TaskCoordinator ─▶ DeviceSelector ─▶ WorkerGateway ─▶ worker
  *
- * Rien n'est réimplémenté : appareils, sessions d'appareil, tâches,
- * confirmations, permissions et mémoire viennent des paquets existants. L'API
- * les câble et expose leur surface.
+ * Nothing is reimplemented: devices, device sessions, tasks, confirmations,
+ * permissions, and memory come from existing packages. The API wires them
+ * and exposes their surface.
  */
 
 export interface ServiceContainerOptions {
-  /** Clé de signature des jetons. Générée au déploiement, jamais commitée. */
+  /** Token signing private key. Generated on deployment, never committed. */
   tokenPrivateKeyPem: string;
   now?: () => Date;
   prisma?: PrismaClient;
 
-  /** Remplaçables : la persistance Prisma se branche ici sans toucher aux routes. */
+  /** Replaceable: Prisma persistence plugs in here without altering routes. */
   users?: UserStore;
   sessions?: SessionStore;
   conversations?: ConversationStore;
@@ -118,101 +118,97 @@ export interface ServiceContainerOptions {
   taskStore?: TaskStore;
   deviceStore?: DeviceStore;
   /**
-   * Magasin des tickets d'appairage.
+   * Pairing ticket store.
    *
-   * Absent, un magasin en mémoire est monté : les tickets vivent cinq minutes,
-   * donc une installation qui redémarre n'en perd aucun qui compte. En
-   * production, le magasin PostgreSQL est fourni — sans quoi un QR affiché sur
-   * le tableau de bord ne serait plus reconnu par le processus qui reçoit le
-   * scan, dès qu'il y en a plus d'un.
+   * If omitted, an in-memory store is mounted: tickets live five minutes,
+   * so a restarted instance loses none that matter. In production, the
+   * PostgreSQL store is supplied — otherwise a QR code displayed on the
+   * dashboard would not be recognized by the process handling the scan
+   * once more than one instance runs.
    */
   pairingTickets?: PairingTicketStore;
   /**
-   * Adresse publique de l'API, inscrite dans le QR d'appairage.
+   * Public API address included in the pairing QR code.
    *
-   * Facultative, et son absence a une conséquence nommée : l'appairage par QR
-   * est refusé avec un message qui désigne `PUBLIC_API_URL`. Produire un QR
-   * avec une adresse devinée serait pire que de refuser — il mènerait
-   * silencieusement au mauvais endroit, et le symptôme apparaîtrait sur le
-   * téléphone, loin de la cause.
+   * Optional; its absence has a clear consequence: QR pairing is rejected
+   * with a message pointing to `PUBLIC_API_URL`. Producing a QR code with a
+   * guessed address would be worse than rejecting — it would silently lead to
+   * the wrong endpoint, and the failure would appear on the phone, far from the cause.
    */
   publicApiUrl?: string;
-  /** Version d'exécutant attendue. Consultative : voir `@nexus/devices/updates`. */
+  /** Expected worker version. Advisory: see `@nexus/devices/updates`. */
   expectedWorkerVersion?: string;
   runStore?: QueryableAgentRunStore;
   telemetry?: NexusTelemetry;
   embeddings?: EmbeddingProvider;
 
   /**
-   * Registre des réservations de run Agent Core.
+   * Agent Core run claim registry.
    *
-   * En mémoire par défaut, ce qui convient aux tests et à un mono-processus.
-   * En production il doit être celui de PostgreSQL : c'est la contrainte
-   * d'unicité de la base qui tient la promesse, pas une structure de données
-   * locale à un processus.
+   * In-memory by default, suitable for tests and single-process deployments.
+   * In production this must be backed by PostgreSQL: the database uniqueness
+   * constraint enforces the guarantee, not a local in-process data structure.
    */
   agentRunClaims?: AgentRunClaimStore;
 
   /**
-   * Registre des assertions de mission. En mémoire par défaut ; en production
-   * c'est celui de PostgreSQL, sans quoi un redémarrage de l'API rendrait toute
-   * assertion inconnue — donc refusée — et casserait les missions en cours.
+   * Mission assertion registry. In-memory by default; in production it is backed
+   * by PostgreSQL, otherwise an API restart would render every assertion
+   * unknown — thus rejected — breaking ongoing missions.
    */
   missionGrantRegistry?: MissionGrantRegistry;
-  /** Délégations durables des calendriers, hachées en persistance. */
+  /** Durable schedule delegations, hashed in storage. */
   scheduleGrantRegistry?: ScheduleGrantRegistry;
 
-  /** Marge de renouvellement d'une assertion. Exposée pour les tests d'horloge. */
+  /** Assertion renewal threshold margin. Exposed for clock skew tests. */
   missionGrantRenewWithinMs?: number;
 
   /**
-   * Vérificateur de signature d'appareil.
+   * Device signature verifier.
    *
-   * Par défaut, le type de secret enregistré décide : Ed25519 pour les postes
-   * de travail, ECDSA P-256 pour Android, dont le magasin de clés ne gère pas
-   * Ed25519.
+   * By default, the registered secret type decides: Ed25519 for workstations,
+   * ECDSA P-256 for Android, whose keystore does not support Ed25519.
    */
   deviceVerifier?: SignatureVerifier;
 
-  /** Risque à partir duquel une confirmation humaine est exigée. */
+  /** Risk threshold above which human confirmation is required. */
   confirmationThreshold?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
-  /** Journalisation d'une exécution de plan interrompue. */
+  /** Logging for interrupted plan executions. */
   onTaskError?: (error: unknown, taskId: string) => void;
 
-  /** Coût du hachage de mot de passe. Réduit dans les tests uniquement. */
+  /** Password hashing parameters. Reduced in test suites only. */
   passwordParams?: ScryptParams;
 
   /**
-   * Audit de la mémoire.
+   * Memory audit callback.
    *
-   * Reçoit **ce qui s'est passé, jamais le contenu**. Savoir qu'un souvenir
-   * sensible a été refusé est utile ; le recopier dans le journal annulerait le
-   * refus.
+   * Receives **what occurred, never the content**. Knowing a sensitive
+   * memory was rejected is useful; copying it to logs would negate the rejection.
    */
   onMemoryAudit?: ConstructorParameters<typeof MemoryService>[0]["onAudit"];
 
-  /** Catalogue d'outils. Fourni par le service agent quand il existe. */
+  /** Tool catalog. Provided by agent service when present. */
   toolRegistry?: ToolRegistry;
-  /** Gestionnaire MCP. Absent = aucun serveur configure, et le dire. */
+  /** MCP manager. Omitted = no server configured, and reported as such. */
   mcp?: McpManager;
-  /** Client du worker navigateur. Absent = non configure. */
+  /** Browser worker client. Omitted = unconfigured. */
   browser?: BrowserWorkerClient;
-  /** Gestionnaire des sessions de navigation natives (browser-harness). */
+  /** Native browser session manager (browser-harness). */
   browserSessionManager?: BrowserSessionManager;
-  /** Dispatcher des notifications externes (desktop, mobile push ntfy, webhooks). */
+  /** External notification dispatcher (desktop, mobile push ntfy, webhooks). */
   notificationDispatcher?: NotificationDispatcher;
-  /** Configuration administrable, stockée localement sans secret en clair. */
+  /** Runtime configuration store, stored locally without plaintext secrets. */
   runtimeConfiguration?: RuntimeConfigurationStore;
-  /** Coffre adossé au trousseau de session Linux. */
+  /** Keyring vault backed by Linux session keyring. */
   vault?: KeyringVault;
-  /** Client du moteur NEXUS ACP/paper-trading. */
+  /** NEXUS ACP/paper-trading engine client. */
   missionControl?: MissionControlPort;
-  /** Version affichee par le tableau de bord. */
+  /** Version displayed in dashboard. */
   apiVersion?: string;
-  /** Répertoire local privé pour les journaux rédigés et bornés. */
+  /** Private local directory for redacted, bounded logs. */
   observabilityDirectory?: string;
-  /** Provider LLM pour le TaskPlanner. */
+  /** LLM provider for TaskPlanner. */
   llmProvider?: LLMProvider;
 }
 
@@ -225,7 +221,7 @@ export class ServiceContainer {
   readonly conversations: ConversationStore;
   readonly notificationStore: NotificationStore;
   readonly memory: MemoryProvider;
-  /** La politique autour du magasin. Les routes n'appellent que celle-ci. */
+  /** Memory store policy wrapper. Routes call only this. */
   readonly memoryService: MemoryService;
   readonly shortTerm: ShortTermContext;
   readonly context: ContextAssembler;
@@ -249,31 +245,31 @@ export class ServiceContainer {
   readonly notifications: NotificationService;
   readonly supervisor: TaskSupervisor;
 
-  // ── Observabilite ─────────────────────────────────────────────────────
+  // ── Observability ─────────────────────────────────────────────────────
   //
-  // Le catalogue d'outils et le magasin de runs vivent ici meme si la boucle
-  // agent n'est pas encore cablee dans l'API : ce sont eux que `services/agent`
-  // remplira, et le tableau de bord lit deja les bons objets. Un magasin vide
-  // est honnete ; un magasin invente ne l'aurait pas ete.
+  // The tool catalog and run store live here even when the agent loop
+  // is not yet wired into the API: `services/agent` populates them, and
+  // the dashboard reads the correct objects. An empty store is honest;
+  // an invented store would not have been.
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
   readonly telemetry: NexusTelemetry;
   readonly agentRunClaims: AgentRunClaimStore;
   readonly missionGrants: MissionGrantService;
   readonly scheduleGrants: ScheduleGrantService;
-  /** Boucle agent généraliste, branchée sur les mêmes outils et garde-fous. */
+  /** General-purpose agent loop wired to the same tools and safeguards. */
   readonly agentCore: AgentOrchestrator | undefined;
   readonly securityLog: SecurityLog;
   readonly logs: LogBuffer;
   readonly dashboard: DashboardService;
 
-  /** Gestionnaire MCP, quand il y en a un. `undefined` = non configure. */
+  /** MCP manager, when present. `undefined` = unconfigured. */
   readonly mcp: McpManager | undefined;
-  /** Client du worker navigateur, quand il y en a un. */
+  /** Browser worker client, when present. */
   browser: BrowserWorkerClient | undefined;
-  /** Gestionnaire des sessions de navigation natives locales. */
+  /** Local native browser session manager. */
   browserSessionManager: BrowserSessionManager | undefined;
-  /** Dispatcher des notifications externes. */
+  /** External notification dispatcher. */
   readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
   readonly providerAccounts: ProviderAccountService | undefined;
@@ -281,9 +277,9 @@ export class ServiceContainer {
   readonly sharedArtifacts: SharedArtifactStore;
   readonly agentCollaboration: AgentCollaborationService;
   readonly vault: KeyringVault | undefined;
-  /** Moteur NEXUS ACP/paper-trading, quand il est configuré. */
+  /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
-  /** Provider LLM pour planifier des tâches (optionnel). */
+  /** LLM provider for task planning (optional). */
   readonly llmProvider: LLMProvider | undefined;
 
   readonly #now: () => Date;
@@ -319,7 +315,7 @@ export class ServiceContainer {
       now,
     });
 
-    // ── Appareils ─────────────────────────────────────────────────────────
+    // ── Devices ──────────────────────────────────────────────────────────
     this.deviceRegistry = new DeviceRegistry({
       now,
       ...(options.deviceStore ? { store: options.deviceStore } : {}),
@@ -346,9 +342,9 @@ export class ServiceContainer {
     });
     this.selector = new DeviceSelector({ registry: this.deviceRegistry });
 
-    // ── Pause globale ─────────────────────────────────────────────────────
+    // ── Global pause ──────────────────────────────────────────────────────
     //
-    // Montée avant les permissions : c'est elle qu'elles consultent.
+    // Mounted before permissions: permissions query the pause switch.
     this.pause = new PauseSwitch({
       ...(options.runtimeConfiguration === undefined
         ? {}
@@ -356,15 +352,15 @@ export class ServiceContainer {
       now,
     });
 
-    // ── Permissions et confirmations ──────────────────────────────────────
+    // ── Permissions and confirmations ─────────────────────────────────────
     this.permissions = new PermissionService({
-      // Fermeture et non valeur : la pause doit prendre effet sur l'appel
-      // suivant, sans reconstruire le service ni ce qui en dépend.
+      // Closure rather than value: pause takes effect on the next call,
+      // without rebuilding the service or its dependents.
       readOnly: () => this.pause.paused,
       grants: {
-        // Les permissions accordées à l'utilisateur sont l'union de celles de
-        // ses appareils. Un poste autorisé à `terminal.execute` rend la
-        // permission disponible ; le sélecteur décidera *où* elle s'exerce.
+        // Permissions granted to user are the union of those of their devices.
+        // A machine granted `terminal.execute` makes the permission available;
+        // selector decides *where* it is exercised.
         listGranted: async (userId) => {
           const devices = await this.deviceRegistry.listDevices(userId);
           return [...new Set(devices.flatMap((device) => device.grantedPermissions))];
@@ -390,7 +386,7 @@ export class ServiceContainer {
       now,
     });
 
-    // ── Tâches ────────────────────────────────────────────────────────────
+    // ── Tasks ─────────────────────────────────────────────────────────────
     this.taskStore = options.taskStore ?? new InMemoryTaskStore();
     this.coordinator = new TaskCoordinator({
       registry: this.deviceRegistry,
@@ -411,14 +407,12 @@ export class ServiceContainer {
       ...(options.onTaskError === undefined ? {} : { onError: options.onTaskError }),
     });
 
-    // ── Mémoire ───────────────────────────────────────────────────────────
+    // ── Memory ────────────────────────────────────────────────────────────
     //
-    // Le service enveloppe le magasin ; c'est lui, et lui seul, que les routes
-    // et le cœur agent appellent. Le magasin nu écrirait tout ce qu'on lui
-    // donne — c'est son rôle, et c'est pourquoi il ne doit pas être atteignable
-    // directement depuis une route.
-    // Le journal de securite doit exister avant le service de memoire, qui lui
-    // remonte ses refus.
+    // The service wraps the store; it is this wrapper, and only this wrapper,
+    // that routes and agent core call. The raw store would write whatever is passed
+    // — that is its role, and why it must not be reachable directly from a route.
+    // The security log must exist before the memory service, which logs refusals to it.
     this.securityLog = new SecurityLog({
       now,
       ...(options.observabilityDirectory === undefined
@@ -434,18 +428,17 @@ export class ServiceContainer {
     this.memoryService = new MemoryService({
       provider: this.memory,
       onAudit: (event) => {
-        // Un refus de memorisation est un evenement de securite : c'est la
-        // trace qu'un secret a failli entrer dans la base. Seules les
-        // **categories** remontent, jamais le contenu — le journal ne doit pas
-        // conserver ce qu'on vient de refuser de conserver.
+        // A memory refusal is a security event: record that a secret almost entered
+        // the database. Only categories are reported, never content — the log
+        // must not retain what was just rejected.
         if (event.action === "refuse" || event.action === "consent-required") {
           this.securityLog.record({
             kind: event.action === "refuse" ? "memory.refused" : "memory.consent_required",
             userId: event.userId,
             summary:
               event.action === "refuse"
-                ? `Memorisation refusee (${(event.categories ?? []).join(", ")})`
-                : `Accord requis pour memoriser (${(event.categories ?? []).join(", ")})`,
+                ? `Memory storage refused (${(event.categories ?? []).join(", ")})`
+                : `Consent required to store memory (${(event.categories ?? []).join(", ")})`,
             context: { categories: event.categories ?? [] },
           });
         }
@@ -454,10 +447,9 @@ export class ServiceContainer {
       },
     });
 
-    // L'assembleur relie les six couches sans les mélanger. Les quatre sources
-    // qu'il ne possède pas sont branchées ici, sur leurs vrais propriétaires :
-    // le magasin de conversations, le registre d'appareils, le magasin de
-    // plans. Les recopier créerait une seconde vérité, qui divergerait.
+    // The assembler links all six layers without conflating them. The four sources
+    // it does not own are wired here to their true owners: conversation store,
+    // device registry, task store. Duplicating them would create divergent state.
     this.context = new ContextAssembler({
       memory: this.memory,
       shortTerm: this.shortTerm,
@@ -495,8 +487,8 @@ export class ServiceContainer {
           const names = new Map(devices.map((device) => [device.id, device.name]));
 
           return plans.map((plan: TaskPlan) => {
-            // La machine qui a exécuté la dernière étape retenue. Un
-            // identifiant n'apprend rien au modèle ; un nom, si.
+            // Machine that executed the last retained step. An identifier teaches
+            // nothing to the model; a name does.
             const executed = plan.steps.findLast((step) => step.selectedDeviceId !== null);
             const deviceId = executed?.selectedDeviceId ?? null;
 
@@ -512,7 +504,7 @@ export class ServiceContainer {
       },
     });
 
-    // ── Observabilite ─────────────────────────────────────────────────────
+    // ── Observability ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.telemetry = options.telemetry ?? new NexusTelemetry();
     this.runStore = new ObservableAgentRunStore(
@@ -608,11 +600,10 @@ export class ServiceContainer {
   }
 
   /**
-   * Permissions effectives d'un utilisateur.
+   * Effective permissions of a user.
    *
-   * Consultées avant toute exécution de tâche. C'est le point où « le cœur est
-   * l'autorité » cesse d'être une intention : une étape dont la capacité n'est
-   * pas accordée ne quitte jamais le serveur.
+   * Queried before any task execution. This is where "the core is the authority"
+   * stops being an intention: a step whose capability is not granted never leaves the server.
    */
   async permissionsFor(userId: string): Promise<string[]> {
     return [...(await this.permissions.listGranted(userId))];
@@ -624,15 +615,14 @@ export interface QueryableAgentRunStore extends AgentRunStore {
 }
 
 /**
- * Vérificateur multi-algorithme.
+ * Multi-algorithm verifier.
  *
- * Une clé publique PEM ne dit pas d'elle-même quel algorithme l'a produite du
- * point de vue de l'appelant, mais `crypto.verify` le sait. On essaie Ed25519
- * puis ECDSA P-256 : les deux coexistent parce qu'Android ne sait pas stocker de
- * clé Ed25519 dans son magasin matériel.
+ * A PEM public key does not state on its own which algorithm produced it from
+ * the caller's perspective, but `crypto.verify` knows. We attempt Ed25519 then
+ * ECDSA P-256: both coexist because Android cannot store Ed25519 keys in its hardware keystore.
  *
- * Ce n'est pas un affaiblissement : chaque tentative vérifie une vraie
- * signature contre une vraie clé. Une signature invalide échoue aux deux.
+ * This is not a weakening: each attempt checks a genuine signature against a genuine key.
+ * An invalid signature fails both.
  */
 const multiAlgorithmVerifier: SignatureVerifier = (material, nonce, signature) =>
   ed25519Verifier(material, nonce, signature) || ecdsaP256Verifier(material, nonce, signature);

@@ -5,50 +5,46 @@ import type { Principal } from "@nexus/auth";
 import type { ServiceContainer } from "../services/container.js";
 
 /**
- * Authentification des requêtes HTTP.
+ * HTTP request authentication.
  *
- * **Deux surfaces, strictement séparées.** Un jeton d'appareil ne donne jamais
- * les droits d'un utilisateur, et réciproquement. La séparation est portée par
- * les jetons eux-mêmes — leurs claims diffèrent, et `verifyAccessToken` refuse
- * un jeton d'appareil — mais elle est aussi rendue explicite ici : les routes
- * déclarent laquelle elles attendent, et il n'existe pas de garde générique qui
- * accepterait les deux sans le dire.
+ * **Two strictly separated surfaces.** A device token never grants user rights,
+ * and vice versa. The separation is carried by the tokens themselves — their claims differ,
+ * and `verifyAccessToken` rejects a device token — but it is also made explicit here:
+ * routes declare which one they expect, and there is no generic guard that accepts both implicitly.
  *
- * La vérification se fait en deux temps :
+ * Verification occurs in two steps:
  *
- *  1. la **signature** prouve que le jeton vient de nous ;
- *  2. la **session** prouve qu'il est toujours valide.
+ *  1. The **signature** proves the token originated from us;
+ *  2. The **session** proves it is still valid.
  *
- * Le second temps n'est pas redondant. Un jeton d'accès reste
- * cryptographiquement valide jusqu'à son expiration ; sans consulter la session,
- * une déconnexion ne prendrait effet qu'un quart d'heure plus tard.
+ * The second step is not redundant. An access token remains cryptographically valid
+ * until expiration; without consulting the session, a sign-out would only take effect
+ * fifteen minutes later.
  */
 
 declare module "fastify" {
   interface FastifyInstance {
     services: ServiceContainer;
-    /** Exige un utilisateur authentifié. */
+    /** Requires an authenticated user. */
     requireUser: (request: FastifyRequest) => Promise<void>;
-    /** Exige un appareil authentifié. Surface distincte de la précédente. */
+    /** Requires an authenticated device. Distinct surface from the former. */
     requireDevice: (request: FastifyRequest) => Promise<void>;
     /**
-     * Exige un utilisateur **administrateur**.
+     * Requires an **administrator** user.
      *
-     * Garde du tableau de bord de supervision, qui donne une vue de tout le
-     * système. Un jeton de client ordinaire ne doit pas l'ouvrir : un téléphone
-     * perdu exposerait alors l'infrastructure entière en plus de la
-     * conversation.
+     * Guard for the supervision dashboard, which provides a whole-system view.
+     * An ordinary client token must not unlock it: a lost phone would then expose
+     * the entire infrastructure in addition to the conversation.
      */
     requireAdmin: (request: FastifyRequest) => Promise<void>;
     /**
-     * Exige une **assertion de mission** signée.
+     * Requires a signed **mission grant**.
      *
-     * Troisième surface, pour les services internes — Mission Engine
-     * aujourd'hui. Elle n'authentifie pas un porteur mais une délégation : le
-     * principal obtenu porte un utilisateur *et* la mission dans laquelle il
-     * est permis d'agir. Une route gardée par celle-ci ne doit jamais accepter
-     * une ressource hors de cette portée, et `assertMissionScope` est là pour
-     * l'exiger explicitement.
+     * Third surface, for internal services — Mission Engine today.
+     * It does not authenticate a bearer but a delegation: the resulting principal
+     * carries a user *and* the mission in which acting is permitted. A route
+     * guarded by this must never accept a resource outside that scope, and
+     * `assertMissionScope` explicitly enforces this.
      */
     requireMissionGrant: (request: FastifyRequest) => Promise<void>;
   }
@@ -59,11 +55,11 @@ declare module "fastify" {
 }
 
 /**
- * Services autorisés à présenter une assertion de mission.
+ * Services authorized to present a mission grant.
  *
- * Liste blanche, et non simple vérification de signature : la clé qui signe les
- * assertions signe aussi les jetons d'accès. Nommer le service attendu ferme la
- * porte à une assertion émise pour un autre usage interne, présente ou futur.
+ * Whitelist, not a simple signature check: the key that signs mission grants
+ * also signs access tokens. Naming the expected service closes the door to a
+ * grant issued for another internal use, present or future.
  */
 const ALLOWED_GRANT_SERVICES = new Set(["mission-engine"]);
 
@@ -71,19 +67,19 @@ export interface AuthenticationPluginOptions {
   services: ServiceContainer;
 }
 
-/** Extrait le jeton porteur, sans révéler pourquoi il est refusé. */
+/** Extracts the bearer token, without disclosing why it was rejected. */
 function bearerToken(request: FastifyRequest): string {
   const header = request.headers.authorization;
   if (typeof header !== "string" || !header.startsWith("Bearer ")) {
     throw new AuthenticationError({
-      message: "En-tête Authorization absent ou mal formé",
+      message: "Authorization header missing or malformed",
       userMessage: "Authentication required.",
     });
   }
 
   const token = header.slice("Bearer ".length).trim();
   if (token.length === 0) {
-    throw new AuthenticationError({ message: "Jeton porteur vide" });
+    throw new AuthenticationError({ message: "Empty bearer token" });
   }
   return token;
 }
@@ -96,20 +92,19 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
     app.decorate("requireUser", async (request: FastifyRequest) => {
       const claims = options.services.tokens.verifyAccessToken(bearerToken(request));
 
-      // La session peut avoir été fermée depuis l'émission du jeton. Sans cette
-      // vérification, se déconnecter ne ferait rien pendant quinze minutes.
+      // The session may have been closed since token issuance. Without this
+      // check, logging out would do nothing for fifteen minutes.
       await options.services.auth.assertSessionActive(claims.sid);
 
       request.principal = { kind: "user", userId: claims.sub, sessionId: claims.sid };
     });
 
     /**
-     * Le rôle est lu **dans le magasin**, pas dans le jeton.
+     * The role is read **from the store**, not from the token.
      *
-     * Un rôle inscrit dans le jeton d'accès resterait valide un quart d'heure
-     * après une rétrogradation. La session est déjà consultée à chaque requête ;
-     * une lecture de plus est négligeable, et c'est ce qui fait qu'un retrait de
-     * droits prend effet immédiatement.
+     * A role baked into the access token would remain valid for fifteen minutes
+     * after a demotion. The session is already consulted on every request; one
+     * extra read is negligible, and ensures permission revocations take effect immediately.
      */
     app.decorate("requireAdmin", async (request: FastifyRequest) => {
       await app.requireUser(request);
@@ -118,9 +113,9 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
       const user = await options.services.users.findById(userId);
       if (user?.role !== "ADMIN") {
         throw new AuthorizationError({
-          message: `Tableau de bord demandé par un compte non administrateur : ${userId}`,
-          // Le message ne dit pas « il faut être administrateur » : la surface
-          // d'administration n'a pas à s'annoncer à qui n'y a pas droit.
+          message: `Dashboard requested by non-administrator account: ${userId}`,
+          // The message does not say "must be admin": the administration surface
+          // does not need to advertise itself to unauthorized callers.
           userMessage: "The requested resource does not exist.",
           context: { userId },
         });
@@ -130,10 +125,10 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
     app.decorate("requireDevice", async (request: FastifyRequest) => {
       const session = await options.services.deviceSessions.resolve(bearerToken(request));
       if (session === undefined) {
-        // `resolve` retourne `undefined` aussi bien pour un jeton inconnu que
-        // pour un appareil révoqué : la distinction n'aiderait qu'un attaquant.
+        // `resolve` returns `undefined` both for an unknown token and for a
+        // revoked device: the distinction would only aid an attacker.
         throw new AuthenticationError({
-          message: "Session d'appareil invalide ou révoquée",
+          message: "Invalid or revoked device session",
           userMessage: "This device is not authenticated.",
         });
       }
@@ -147,40 +142,39 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
     });
 
     /**
-     * Aucune session n'est consultée ici, et c'est délibéré.
+     * No session is consulted here, and this is deliberate.
      *
-     * Une assertion de mission ne représente pas une connexion : elle
-     * représente un travail en cours. La subordonner à une session active
-     * casserait la promesse de durabilité du moteur — une mission lancée le
-     * soir doit pouvoir se terminer après la déconnexion de son propriétaire.
-     * Ce qui la borne n'est donc pas la session mais sa portée et son
-     * expiration, toutes deux inscrites dans la signature.
+     * A mission grant does not represent a connection: it represents work in progress.
+     * Subordinating it to an active session would break the engine's durability
+     * promise — a mission started in the evening must be able to complete after
+     * its owner disconnects. What bounds it is not the session but its scope and
+     * expiration, both embedded in the signature.
      */
     app.decorate("requireMissionGrant", async (request: FastifyRequest) => {
       const claims = options.services.tokens.verifyMissionGrant(bearerToken(request));
 
       if (!ALLOWED_GRANT_SERVICES.has(claims.svc)) {
         throw new AuthorizationError({
-          message: `Assertion de mission présentée par un service inconnu : ${claims.svc}`,
+          message: `Mission grant presented by unknown service: ${claims.svc}`,
           userMessage: "Access denied.",
           context: { service: claims.svc },
         });
       }
 
-      // Le propriétaire a pu être supprimé ou suspendu depuis l'émission. Une
-      // mission ne doit pas continuer d'agir pour un compte qui n'existe plus.
+      // The owner may have been deleted or suspended since issuance. A mission
+      // must not continue acting on behalf of an account that no longer exists.
       const owner = await options.services.users.findById(claims.sub);
       if (owner?.status !== "ACTIVE") {
         throw new AuthorizationError({
-          message: `Assertion de mission pour un compte inactif : ${claims.sub}`,
+          message: `Mission grant for inactive account: ${claims.sub}`,
           userMessage: "Access denied.",
           context: { userId: claims.sub },
         });
       }
 
-      // Signature valide ne suffit pas : le registre dit si l'assertion est
-      // toujours exploitable. C'est ce qui rend une assertion volée retirable
-      // avant son expiration, au lieu d'ouvrir vingt-quatre heures durant.
+      // Valid signature is not enough: the registry verifies whether the grant
+      // is still usable. This allows revoking a compromised grant before its
+      // expiration instead of leaving it open for twenty-four hours.
       await options.services.missionGrants.assertUsable(claims);
 
       request.principal = {
@@ -198,24 +192,24 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
 );
 
 /**
- * Utilisateur de la requête.
+ * Request user.
  *
- * @throws {AuthorizationError} si la requête n'a pas traversé `requireUser`.
- *   Lever plutôt que retourner `undefined` est délibéré : une route qui oublie
- *   sa garde doit échouer bruyamment, pas servir des données sans propriétaire.
+ * @throws {AuthorizationError} if the request did not pass through `requireUser`.
+ *   Throwing rather than returning `undefined` is deliberate: a route that forgets
+ *   its guard must fail loudly, not serve unowned data.
  */
 export function currentUser(request: FastifyRequest): { userId: string; sessionId: string } {
   const principal = request.principal;
   if (principal?.kind !== "user") {
     throw new AuthorizationError({
-      message: "Route utilisateur atteinte sans principal utilisateur",
+      message: "User route reached without user principal",
       userMessage: "Access denied.",
     });
   }
   return { userId: principal.userId, sessionId: principal.sessionId };
 }
 
-/** Appareil de la requête. Même règle que ci-dessus. */
+/** Request device. Same rule as above. */
 export function currentDevice(request: FastifyRequest): {
   deviceId: string;
   userId: string;
@@ -224,7 +218,7 @@ export function currentDevice(request: FastifyRequest): {
   const principal = request.principal;
   if (principal?.kind !== "device") {
     throw new AuthorizationError({
-      message: "Route appareil atteinte sans principal appareil",
+      message: "Device route reached without device principal",
       userMessage: "Access denied.",
     });
   }
@@ -236,8 +230,8 @@ export function currentDevice(request: FastifyRequest): {
 }
 
 /**
- * Mission de la requête. Même règle que ci-dessus : une route gardée par
- * `requireMissionGrant` qui oublierait d'appeler ceci doit échouer, pas servir.
+ * Request mission. Same rule as above: a route guarded by `requireMissionGrant`
+ * that forgets to call this must fail, not serve.
  */
 export function currentMission(request: FastifyRequest): {
   userId: string;
@@ -248,7 +242,7 @@ export function currentMission(request: FastifyRequest): {
   const principal = request.principal;
   if (principal?.kind !== "mission") {
     throw new AuthorizationError({
-      message: "Route de mission atteinte sans principal de mission",
+      message: "Mission route reached without mission principal",
       userMessage: "Access denied.",
     });
   }
@@ -261,38 +255,37 @@ export function currentMission(request: FastifyRequest): {
 }
 
 /**
- * Vérifie qu'une requête reste dans la mission que l'assertion lui ouvre.
+ * Verifies that a request stays within the mission permitted by the grant.
  *
- * C'est le pendant de `assertOwnedBy` pour la surface de délégation, et il est
- * tout aussi facile à oublier. Sans lui, une assertion valide pour une mission
- * pourrait piloter le travail d'une autre mission du même utilisateur — la
- * signature prouverait le propriétaire, mais plus la portée, et toute la raison
- * d'être de l'assertion disparaîtrait.
+ * This is the delegation counterpart of `assertOwnedBy`, and just as easy to forget.
+ * Without it, a valid grant for one mission could control the work of another mission
+ * belonging to the same user — the signature would prove ownership, but not scope,
+ * and the entire purpose of the grant would disappear.
  */
 export function assertMissionScope(grantedExternalKey: string, requestedExternalKey: string): void {
   if (grantedExternalKey === requestedExternalKey) return;
 
   throw new AuthorizationError({
-    message: "Assertion de mission utilisée hors de sa portée",
+    message: "Mission grant used outside its scope",
     userMessage: "The requested resource does not exist.",
     context: { granted: grantedExternalKey, requested: requestedExternalKey },
   });
 }
 
 /**
- * Vérifie qu'une ressource appartient bien à l'utilisateur.
+ * Verifies that a resource belongs to the user.
  *
- * Le contrôle d'accès le plus courant de cette API, et celui qu'on oublie : une
- * route qui charge une conversation par identifiant sans vérifier son
- * propriétaire laisse lire celles des autres à qui devine un identifiant.
+ * The most common access control in this API, and the easiest to overlook: a route
+ * that loads a conversation by ID without checking ownership allows anyone guessing an ID
+ * to read other users' conversations.
  */
 export function assertOwnedBy(resourceUserId: string, userId: string, what: string): void {
   if (resourceUserId === userId) return;
 
   throw new AuthorizationError({
-    message: `${what} appartenant à un autre utilisateur`,
-    // Le message ne distingue pas « n'existe pas » de « ne vous appartient
-    // pas » : la différence permettrait de sonder l'existence des ressources.
+    message: `${what} belonging to another user`,
+    // The message does not distinguish between "does not exist" and "does not
+    // belong to you": the difference would allow probing for resource existence.
     userMessage: "The requested resource does not exist.",
     context: { what },
   });

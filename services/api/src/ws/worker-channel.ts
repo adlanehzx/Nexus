@@ -3,19 +3,19 @@ import type { WorkerConnection } from "@nexus/devices";
 import type { ServiceContainer } from "../services/container.js";
 
 /**
- * Canal temps réel des exécutants.
+ * Real-time worker channel.
  *
- * Volontairement mince : **toute la logique est déjà dans `WorkerGateway`**, qui
- * l'expose derrière un point d'entrée unique, `handleMessage`. Ce module ne fait
- * que relier une socket à ce point d'entrée et gérer la fermeture.
+ * Intentionally thin: **all logic already lives in `WorkerGateway`**, which
+ * exposes it behind a single entrypoint, `handleMessage`. This module merely
+ * connects a socket to that entrypoint and manages teardown.
  *
- * Deux propriétés que ce découpage garantit :
+ * Two properties guaranteed by this split:
  *
- *  - un worker n'atteint **jamais** le canal client, et réciproquement. Les deux
- *    canaux ont des points d'entrée, des schémas et des types disjoints ; un
- *    `worker.task_result` forgé depuis un téléphone n'a nulle part où arriver ;
- *  - la logique de la passerelle est testée sans réseau, et le reste. Ce fichier
- *    ne contient aucune décision qu'il faudrait éprouver à nouveau ici.
+ *  - A worker **never** reaches the client channel, and vice versa. The two
+ *    channels have disjoint entrypoints, schemas, and types; a `worker.task_result`
+ *    forged from a phone has nowhere to land;
+ *  - Gateway logic is tested without network, and remains so. This file
+ *    contains no decisions that would need to be re-verified here.
  */
 
 export interface WorkerSocket {
@@ -30,12 +30,11 @@ export interface WorkerChannelOptions {
 }
 
 /**
- * Une connexion worker en cours d'établissement.
+ * A worker connection being established.
  *
- * `deviceId` est renseigné dès le `worker.hello` — **il n'authentifie rien**. Il
- * sert uniquement à router les réponses de la poignée de main vers la bonne
- * socket. L'authentification, elle, se joue sur la signature du challenge, et
- * c'est `DeviceSessionService` qui la vérifie.
+ * `deviceId` is populated as of `worker.hello` — **it authenticates nothing**.
+ * It serves solely to route handshake responses to the right socket.
+ * Authentication itself hinges on the challenge signature, verified by `DeviceSessionService`.
  */
 interface AttachedWorker {
   socket: WorkerSocket;
@@ -58,45 +57,43 @@ export class WorkerChannel {
   }
 
   /**
-   * Cette socket a-t-elle prouvé son identité ?
+   * Has this socket proven its identity?
    *
-   * La réponse ne vient pas d'un drapeau local : elle vient de la passerelle,
-   * seule à savoir si le challenge a été signé. Un booléen tenu ici pourrait
-   * dériver de la vérité, et un transport qui croit une machine authentifiée
-   * alors qu'elle ne l'est pas est exactement le bogue qu'on ne veut pas.
+   * The answer does not come from a local flag: it comes from the gateway,
+   * which alone knows if the challenge was signed. A local boolean could drift
+   * from reality, and a transport that believes a machine is authenticated
+   * when it is not is exactly the bug we want to avoid.
    */
   isAuthenticated(connectionId: string): boolean {
-    // La réponse vient de la passerelle, seule à savoir si le challenge a été
-    // signé — et elle répond **pour cette socket**, pas pour l'appareil. Deux
-    // sockets peuvent prétendre au même appareil ; une seule a signé.
+    // The response comes from the gateway, which alone knows if the challenge
+    // was signed — and it answers **for this socket**, not for the device.
+    // Two sockets may claim the same device; only one has signed.
     return this.#services.gateway.authenticatedDeviceId(connectionId) !== undefined;
   }
 
   /**
-   * Ouvre un canal pour une socket qui vient d'arriver.
+   * Opens a channel for a newly arrived socket.
    *
-   * `connectionId` identifie la socket, pas l'appareil : deux sockets peuvent
-   * prétendre au même `deviceId` avant authentification, et les confondre
-   * permettrait à l'une de recevoir les trames de l'autre.
+   * `connectionId` identifies the socket, not the device: two sockets could claim
+   * the same `deviceId` before authentication, and conflating them would allow one
+   * to receive frames intended for the other.
    */
   open(connectionId: string, socket: WorkerSocket): void {
     this.#attached.set(connectionId, { socket, deviceId: "" });
   }
 
   /**
-   * Traite une trame montante d'un exécutant.
+   * Handles an upstream frame from an executor.
    *
-   * Tout passe par `WorkerGateway.handleMessage` : hello, authentification,
-   * enregistrement de capacités, battements, progression et résultats. Ce module
-   * n'interprète rien.
+   * Everything flows through `WorkerGateway.handleMessage`: hello, authentication,
+   * capability registration, heartbeats, progress, and results. This module interprets nothing.
    */
   async handle(connectionId: string, raw: unknown): Promise<void> {
     const attached = this.#attached.get(connectionId);
     if (attached === undefined) return;
 
-    // Le `deviceId` annoncé sert à adresser les réponses. La passerelle ne lui
-    // accorde aucune confiance : elle exige une signature avant d'ouvrir quoi
-    // que ce soit.
+    // The announced `deviceId` is used to address responses. The gateway places
+    // no trust in it: it requires a signature before opening anything.
     const announced = declaredDeviceId(raw);
     if (announced !== undefined && attached.deviceId === "") {
       attached.deviceId = announced;
@@ -104,8 +101,8 @@ export class WorkerChannel {
 
     const connection: WorkerConnection = {
       connectionId,
-      // Annoncé par le pair. La passerelle ne s'en sert que pour adresser la
-      // réponse au challenge ; elle ne lui accorde aucune autorité.
+      // Announced by the peer. The gateway only uses this to address the
+      // challenge response; it accords it no authority.
       deviceId: attached.deviceId,
       send: (envelope: Envelope) => {
         attached.socket.send(JSON.stringify(envelope));
@@ -121,22 +118,22 @@ export class WorkerChannel {
     try {
       await this.#services.gateway.handleMessage(connection, raw);
     } catch (cause) {
-      // Une trame refusée — signature invalide, appareil révoqué, rejeu — ferme
-      // la connexion. Un exécutant qui présente un mauvais secret n'a rien à
-      // faire sur ce canal, et le laisser réessayer en boucle sur la même socket
-      // transformerait le refus en simple ralentissement.
+      // A rejected frame — invalid signature, revoked device, replay — closes
+      // the connection. An executor presenting bad credentials has no business
+      // on this channel, and allowing it to retry in a loop on the same socket
+      // would turn the rejection into a mere slowdown.
       this.#onError?.(cause, attached.deviceId);
-      attached.socket.close(4401, "authentification refusée");
-      await this.close(connectionId, "authentification refusée");
+      attached.socket.close(4401, "authentication rejected");
+      await this.close(connectionId, "authentication rejected");
     }
   }
 
   /**
-   * Ferme un canal.
+   * Closes a channel.
    *
-   * Le détachement côté passerelle est ce qui libère les étapes en vol : sans
-   * lui, le coordinateur attendrait leur délai complet avant de comprendre que
-   * la machine a disparu, alors qu'il peut les reprendre ailleurs tout de suite.
+   * Gateway detachment is what releases in-flight steps: without it, the
+   * coordinator would wait for their full timeout before understanding that the
+   * machine has disappeared, whereas it can reassign them immediately elsewhere.
    */
   async close(connectionId: string, reason: string): Promise<void> {
     const attached = this.#attached.get(connectionId);
@@ -144,18 +141,18 @@ export class WorkerChannel {
 
     this.#attached.delete(connectionId);
 
-    // Détachement **par connexion**, jamais par identifiant annoncé : une socket
-    // qui s'est contentée de dire un identifiant public ne doit pas pouvoir
-    // mettre l'appareil correspondant hors ligne en raccrochant.
+    // Detachment **by connection**, never by announced identifier: a socket
+    // that merely stated a public identifier must not be able to take the
+    // corresponding device offline by disconnecting.
     await this.#services.gateway.detachConnection(connectionId, reason);
   }
 }
 
 /**
- * Extrait le `deviceId` d'une trame de poignée de main.
+ * Extracts `deviceId` from a handshake frame.
  *
- * Sans validation : c'est volontaire, la passerelle valide. Ici on cherche
- * seulement à savoir où renvoyer le challenge.
+ * Without validation: this is deliberate, the gateway validates. Here we only
+ * want to know where to send the challenge back.
  */
 function declaredDeviceId(raw: unknown): string | undefined {
   if (raw === null || typeof raw !== "object") return undefined;

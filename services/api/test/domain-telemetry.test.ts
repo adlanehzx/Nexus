@@ -16,7 +16,7 @@ function run(overrides: Partial<AgentRunView> = {}): AgentRunView {
     endedAt: "2026-10-21T10:00:02.000Z",
     durationMs: 2_000,
     iterations: 1,
-    response: "Terminé.",
+    response: "Completed.",
     tools: [],
     errors: [],
     metrics: {
@@ -34,7 +34,7 @@ function run(overrides: Partial<AgentRunView> = {}): AgentRunView {
 }
 
 describe("NexusTelemetry", () => {
-  it("agrège coûts configurés, latence p95, erreurs et fallbacks explicites", () => {
+  it("aggregates configured costs, p95 latency, errors, and explicit fallbacks", () => {
     const telemetry = new NexusTelemetry({
       pricing: {
         "model-a": {
@@ -73,14 +73,14 @@ describe("NexusTelemetry", () => {
     expect(summary.missions[0]).toMatchObject({ mission: "mission-1", runs: 2 });
   });
 
-  it("n'invente aucun coût lorsqu'aucun tarif n'est configuré", () => {
+  it("does not invent costs when no pricing is configured", () => {
     const summary = new NexusTelemetry().summarize([run()]);
 
     expect(summary.totals.estimatedApiEquivalentCostUsd).toBeNull();
     expect(summary.agents[0]?.estimatedApiEquivalentCostUsd).toBeNull();
   });
 
-  it("ne confond pas plusieurs tours de modèle avec un fallback", () => {
+  it("does not confuse multiple model iterations with a fallback", () => {
     const summary = new NexusTelemetry().summarize([run({ iterations: 4 })]);
 
     expect(summary.rates.fallback).toBe(0);

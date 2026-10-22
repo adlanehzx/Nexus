@@ -5,15 +5,14 @@ import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 
 /**
- * Pause globale : lire continue, agir s'arrête.
+ * Global pause: reading continues, actions halt.
  *
- * Deux routes seulement, et l'absence d'une troisième est volontaire : il n'y a
- * pas de « pause par appareil » ici. Mettre en pause un sous-ensemble ferait
- * croire à un arrêt alors qu'une autre surface continuerait, et c'est
- * exactement ce qu'un bouton d'arrêt ne doit pas faire.
+ * Only two routes, and the absence of a third is deliberate: there is no
+ * "per-device pause" here. Pausing a subset would give the illusion of a halt
+ * while another surface continues running, which is exactly what a kill switch must avoid.
  *
- * Ces routes **ne consultent pas** la pause. Si elles le faisaient, une pause
- * interdirait sa propre levée.
+ * These routes **do not consult** pause state. If they did, a pause would prohibit
+ * its own resumption.
  */
 
 const pauseViewSchema = z.object({
@@ -31,7 +30,7 @@ export const pauseRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["system"],
-        summary: "NEXUS est-il en pause, depuis quand et pourquoi",
+        summary: "Whether NEXUS is paused, since when and why",
         response: { 200: okSchema(pauseViewSchema) },
       },
     },
@@ -44,12 +43,11 @@ export const pauseRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["system"],
-        summary: "Met NEXUS en pause, ou le reprend",
+        summary: "Pauses NEXUS, or resumes it",
         body: z.object({
           paused: z.boolean(),
-          /** Libre, et jamais imposé : « rien ne se passe » est le symptôme le
-           * plus coûteux à diagnostiquer, et un motif le transforme en
-           * information. */
+          /** Free-form and never enforced: 'nothing happens' is the costliest symptom
+           * to diagnose, and a reason turns it into information. */
           reason: z.string().min(1).max(200).optional(),
         }),
         response: { 200: okSchema(pauseViewSchema) },
@@ -63,8 +61,8 @@ export const pauseRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         kind: state.paused ? "system.paused" : "system.resumed",
         userId,
         summary: state.paused
-          ? `NEXUS mis en pause${state.reason === null ? "" : ` : ${state.reason}`}`
-          : "NEXUS repris",
+          ? `NEXUS paused${state.reason === null ? "" : ` : ${state.reason}`}`
+          : "NEXUS resumed",
         context: { since: state.since },
       });
 

@@ -2,12 +2,12 @@ import type { PrismaClient } from "@nexus/database";
 import type { PairingTicket, PairingTicketStore } from "@nexus/devices";
 
 /**
- * Tickets d'appairage sur PostgreSQL.
+ * Pairing tickets on PostgreSQL.
  *
- * Rien de plus qu'une traduction : la logique — usage unique, expiration,
- * empreinte au lieu du code — vit dans `PairingService`, qui se teste sans
- * base. Ce magasin ne décide de rien, et c'est ce qui permet de le relire en
- * une minute pour se convaincre qu'il n'écrit aucun secret.
+ * Nothing more than a conversion: logic — single use, expiration,
+ * hash instead of plaintext code — lives in `PairingService`, which is tested without
+ * a database. This store makes no policy decisions, which makes it easy to review in
+ * one minute to ensure it writes no secrets.
  */
 export class PrismaPairingTicketStore implements PairingTicketStore {
   readonly #prisma: PrismaClient;
@@ -26,10 +26,10 @@ export class PrismaPairingTicketStore implements PairingTicketStore {
       deviceId: ticket.deviceId,
       label: ticket.label,
     };
-    // `upsert` parce que `save` sert à l'émission **et** à la consommation : le
-    // service rend un ticket modifié et le confie au magasin sans savoir s'il
-    // existe déjà. Deux méthodes distinctes déplaceraient ce choix chez
-    // l'appelant, qui n'a aucune raison de s'en occuper.
+    // `upsert` because `save` is used for issuance **and** redemption: the
+    // service returns a modified ticket and entrusts it to the store without knowing whether
+    // it already exists. Two separate methods would shift this logic to
+    // the caller, which has no reason to handle it.
     await this.#prisma.devicePairingTicket.upsert({
       where: { id: ticket.id },
       create: { id: ticket.id, ...row },
@@ -52,12 +52,12 @@ export class PrismaPairingTicketStore implements PairingTicketStore {
   }
 
   /**
-   * Efface ce qui ne peut plus servir.
+   * Deletes tickets that are no longer useful.
    *
-   * Un ticket consommé ou périmé n'a plus d'usage, et le garder allonge
-   * indéfiniment une table dont chaque ligne porte l'empreinte d'un secret.
-   * `deleteMany` rend le compte, ce qui permet à l'appelant de le journaliser
-   * sans relire la table.
+   * A consumed or expired ticket has no further purpose, and keeping it unnecessarily
+   * expands a table where every row carries the hash of a secret.
+   * `deleteMany` returns the count, allowing the caller to log it
+   * without re-reading the table.
    */
   async prune(before: Date): Promise<number> {
     const { count } = await this.#prisma.devicePairingTicket.deleteMany({

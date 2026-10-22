@@ -14,7 +14,7 @@ const loopbackHttpUrl = z
   .refine((value) => {
     const url = new URL(value);
     return url.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-  }, "L'adresse doit être une URL HTTP de boucle locale");
+  }, "Address must be a loopback HTTP URL");
 
 const browserConfigSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -33,15 +33,15 @@ const browserConfigSchema = z.discriminatedUnion("mode", [
         return (
           url.protocol === "https:" || ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
         );
-      }, "HTTP est réservé à la boucle locale"),
+      }, "HTTP is restricted to loopback"),
     tokenRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
   }),
 ]);
 
 const persistedBrowserConfigSchema = z.union([
   browserConfigSchema,
-  // Migration transparente de la configuration NEXUS 1.x. Le prochain
-  // enregistrement depuis le dashboard écrira explicitement le mode.
+  // Seamless migration from NEXUS 1.x configuration. The next
+  // save from the dashboard will explicitly write the mode.
   z
     .object({
       enabled: z.boolean(),
@@ -195,7 +195,7 @@ function secretName(value: string): string {
 
 function referenceName(ref: string): string {
   const match = /^vault:\/\/nexus\/([a-z][a-z0-9_-]{0,63})$/.exec(ref);
-  if (match?.[1] === undefined) throw new Error("Référence de secret invalide.");
+  if (match?.[1] === undefined) throw new Error("Invalid secret reference.");
   return match[1];
 }
 
@@ -215,7 +215,7 @@ function runSecretTool(args: string[], stdin = ""): Promise<string> {
     child.once("error", reject);
     child.once("close", (code) => {
       if (code === 0) resolve(stdout);
-      else reject(new Error(`Le trousseau local est indisponible (${String(code)}).`));
+      else reject(new Error(`Local keyring is unavailable (${String(code)}).`));
     });
     child.stdin.end(stdin);
   });

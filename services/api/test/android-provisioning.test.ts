@@ -13,7 +13,7 @@ describe("Provisioning Android Worker", () => {
     await harness.close();
   });
 
-  it("déroule un provisioning de bout en bout réussi", async () => {
+  it("runs successful end-to-end provisioning", async () => {
     const registerResponse = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/register",
@@ -73,7 +73,7 @@ describe("Provisioning Android Worker", () => {
     expect(authWorkerResponse.statusCode).toBe(201);
   });
 
-  it("refuse un UUID nul ou inconnu", async () => {
+  it("rejects nil or unknown UUID", async () => {
     const challengeResponse = await harness.app.inject({
       method: "POST",
       url: `/api/v1/devices/00000000-0000-0000-0000-000000000000/challenge`,

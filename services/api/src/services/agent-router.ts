@@ -86,7 +86,7 @@ export interface AgentRouterOptions {
   now?: () => Date;
 }
 
-// Profils de base empiriques pour chaque grand modèle CLI
+// Empirical baseline profiles for each major CLI model
 const BASE_AFFINITIES: Record<string, Record<TaskCategory, number>> = {
   codex: {
     browser: 98,
@@ -127,48 +127,48 @@ export class AgentRouter {
   }
 
   /**
-   * Analyse syntaxique et sémantique d'une instruction de tâche.
+   * Syntactic and semantic analysis of a task instruction.
    */
   classifyTask(instruction: string, contextChars = 0): TaskClassification {
     const text = instruction.toLowerCase();
 
-    // Détection navigateur
+    // Browser detection
     const browserMatches = (
       text.match(
-        /\b(navigateur|navigation|chromium|chrome|browser|browser-harness|clique|cliquer|click|url|http|https|dom|formulaire|champ|saisie|screenshot|capture d'écran)\b/g,
+        /\b(browser|navigation|chromium|chrome|browser-harness|click|url|http|https|dom|form|field|input|screenshot)\b/g,
       ) ?? []
     ).length;
     const requiresBrowser = browserMatches >= 1 || /browser-harness|bu_cdp_url|19222/.test(text);
 
-    // Détection code
+    // Code detection
     const codeMatches = (
       text.match(
-        /\b(code|fonction|function|classe|class|méthode|script|typescript|javascript|python|rust|vitest|test|tests|bug|fix|refactor|git|commit|patch|diff|npm|pnpm|build|compil)\b/g,
+        /\b(code|function|class|method|script|typescript|javascript|python|rust|vitest|test|tests|bug|fix|refactor|git|commit|patch|diff|npm|pnpm|build|compile)\b/g,
       ) ?? []
     ).length;
 
-    // Détection critique / revue
+    // Review / critique detection
     const reviewMatches = (
       text.match(
-        /\b(critique|revue|review|contrôle|verdict|qualité|audit|vérification|faille|sécurité|contradiction|cohérence|évalue|inspection)\b/g,
+        /\b(critique|review|verdict|quality|audit|verification|flaw|vulnerability|security|contradiction|contradictions|consistency|evaluate|inspection)\b/g,
       ) ?? []
     ).length;
 
-    // Détection recherche / exploration
+    // Research / exploration detection
     const researchMatches = (
       text.match(
-        /\b(recherche|search|investigation|explore|analyse|documentation|veille|source|faits|trouve|état de l'art|bibliothèque)\b/g,
+        /\b(research|search|investigation|explore|analyze|analysis|documentation|source|facts|find|library)\b/g,
       ) ?? []
     ).length;
 
-    // Détection synthèse
+    // Synthesis detection
     const synthesisMatches = (
       text.match(
-        /\b(synthèse|synthétiseur|résumé|résumer|rapport final|conclus|conclusion|réponse finale|bilan)\b/g,
+        /\b(synthesis|synthesizer|summary|summarize|final report|conclude|conclusion|final answer|assessment)\b/g,
       ) ?? []
     ).length;
 
-    // Calcul des poids relatifs
+    // Relative weights computation
     const weights: Record<TaskCategory, number> = {
       browser: requiresBrowser ? 40 + browserMatches * 10 : browserMatches * 5,
       code: codeMatches * 10,
@@ -178,7 +178,7 @@ export class AgentRouter {
       general: 10,
     };
 
-    // Détermine la catégorie principale
+    // Determine primary category
     let primaryCategory: TaskCategory = "general";
     let maxWeight = 0;
 
@@ -226,7 +226,7 @@ export class AgentRouter {
   }
 
   /**
-   * Évalue et classe l'ensemble des profils disponibles pour une instruction donnée.
+   * Evaluates and ranks all available profiles for a given instruction.
    */
   async rankProfiles(
     profiles: string[],
@@ -245,29 +245,29 @@ export class AgentRouter {
       let isAvailable = true;
       let unavailabilityReason: string | undefined;
 
-      // Déterminer le fournisseur (ex: "claude-review" -> "claude", "antigravity" -> "antigravity")
+      // Determine provider (e.g. "claude-review" -> "claude", "antigravity" -> "antigravity")
       const provider = this.#resolveProvider(key);
       const baseAffinity = BASE_AFFINITIES[provider] ?? BASE_AFFINITIES.claude;
       const agentStats = stats[key] ?? stats[provider];
       const account = accounts.find((a) => a.id === key || a.provider === provider);
 
-      // 1. Compatibilité intrinsèque + apprentissage historique
+      // 1. Intrinsic compatibility + historical learning
       let S_compat = baseAffinity?.[classification.primaryCategory] ?? 80;
 
-      // Si la tâche exige un vrai navigateur, codex et claude sont les seuls profils viables
+      // If the task requires a real browser, codex and claude are the only viable profiles
       if (classification.requiresBrowser && provider !== "codex" && provider !== "claude") {
         S_compat = 0;
         isAvailable = false;
-        unavailabilityReason = "Non équipé pour le navigateur local";
+        unavailabilityReason = "Not equipped for local browser";
       }
 
-      // Modulation par les performances apprises
+      // Modulation by learned performance
       const catStats = agentStats?.categories[classification.primaryCategory];
       if (catStats && catStats.runs >= 2) {
         const catSuccessRate = catStats.successes / catStats.runs;
-        // Ajustement de ±15 points selon le taux de succès dans cette catégorie
+        // Adjustment of +/- 15 points based on success rate in this category
         S_compat += (catSuccessRate - 0.75) * 20;
-        // Ajustement qualité (pass verdicts)
+        // Quality adjustment (pass verdicts)
         if (catStats.runs > 0) {
           const avgQuality = catStats.qualitySum / catStats.runs;
           S_compat += (avgQuality - 0.5) * 10;
@@ -275,7 +275,7 @@ export class AgentRouter {
       }
       S_compat = Math.max(0, Math.min(100, S_compat));
 
-      // 2. Authentification
+      // 2. Authentication
       let S_auth = 85;
 
       if (account) {
@@ -284,28 +284,28 @@ export class AgentRouter {
         else if (account.authStatus === "expired" || account.authStatus === "unauthenticated") {
           S_auth = 0;
           isAvailable = false;
-          unavailabilityReason = "Authentification requise ou expirée";
+          unavailabilityReason = "Authentication required or expired";
         }
       }
 
-      // 3. Quota disponible
+      // 3. Available quota
       let S_quota = 85;
       if (account) {
         if (account.quotas.exhausted) {
           S_quota = 0;
           isAvailable = false;
-          unavailabilityReason = "Quota 5h ou hebdomadaire épuisé";
+          unavailabilityReason = "5h or weekly quota exhausted";
         } else if (account.quotas.remaining5hPercent !== null) {
           S_quota = account.quotas.remaining5hPercent;
         }
       }
 
-      // 4. Santé & Cooldowns
+      // 4. Health & Cooldowns
       let S_health = 100;
       if (account?.cooldown.active) {
         S_health = 0;
         isAvailable = false;
-        unavailabilityReason = account.cooldown.reason ?? "En cooldown temporaire";
+        unavailabilityReason = account.cooldown.reason ?? "Temporarily on cooldown";
       } else if (account) {
         const fails = account.reliability.consecutiveFailures;
         if (fails === 1) S_health = 60;
@@ -313,11 +313,11 @@ export class AgentRouter {
         else if (fails >= 3) {
           S_health = 0;
           isAvailable = false;
-          unavailabilityReason = "Trop d'échecs consécutifs récents";
+          unavailabilityReason = "Too many recent consecutive failures";
         }
       }
 
-      // 5. Qualité historique
+      // 5. Historical quality
       let S_quality = 85;
       if (account) {
         S_quality = Math.round(account.reliability.score * 100);
@@ -325,10 +325,10 @@ export class AgentRouter {
         S_quality = Math.round(agentStats.overallSuccessRate * 100);
       }
 
-      // 6. Performance & Vitesse
+      // 6. Performance & Speed
       let S_perf = 80;
       if (catStats && catStats.avgDurationMs > 0) {
-        // Benchmark moyen : 15s (15000ms). Si plus rapide, bonus, si >60s, pénalité
+        // Average benchmark: 15s (15000ms). Faster gets bonus, >60s gets penalty
         const speedScore = Math.max(
           20,
           Math.min(100, 100 - (catStats.avgDurationMs - 10_000) / 1000),
@@ -336,17 +336,17 @@ export class AgentRouter {
         S_perf = Math.round(speedScore);
       }
 
-      // 7. Longueur de contexte
+      // 7. Context window length
       let S_context = 90;
       if (classification.contextChars > 60_000) {
         if (provider === "antigravity")
-          S_context = 100; // Fenêtre géante
+          S_context = 100; // Giant context window
         else if (provider === "claude") S_context = 95;
         else if (provider === "codex") S_context = 75;
       }
 
-      // Calcul du score global pondéré
-      // Poids : compatibilité (35%), santé (20%), quota (15%), auth (15%), qualité (10%), perf (5%)
+      // Compute weighted overall score
+      // Weights: compatibility (35%), health (20%), quota (15%), auth (15%), quality (10%), perf (5%)
       const weightedScore =
         S_compat * 0.35 +
         S_health * 0.2 +
@@ -375,7 +375,7 @@ export class AgentRouter {
       });
     }
 
-    // Tri : disponibles d'abord, puis par score total décroissant
+    // Sort: available first, then by descending total score
     scored.sort((a, b) => {
       if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
       return b.totalScore - a.totalScore;
@@ -385,7 +385,7 @@ export class AgentRouter {
   }
 
   /**
-   * Retourne le meilleur profil sélectionné pour l'instruction donnée.
+   * Returns the best selected profile for the given instruction.
    */
   async bestProfileFor(
     profiles: string[],
@@ -399,7 +399,7 @@ export class AgentRouter {
   }
 
   /**
-   * Génère la chaîne ordonnée de fallbacks optimaux pour une tâche.
+   * Generates the ordered chain of optimal fallbacks for a task.
    */
   async fallbackOrderFor(
     primary: string,
@@ -411,7 +411,7 @@ export class AgentRouter {
   }
 
   /**
-   * Enregistre le résultat d'exécution pour enrichir l'apprentissage de routage.
+   * Records execution outcome to enrich routing learning.
    */
   async recordOutcome(
     agentKey: string,
@@ -482,7 +482,7 @@ export class AgentRouter {
     current.updatedAt = nowIso;
 
     stats[agentKey] = current;
-    // Si la clé est distincte du provider, mettre à jour également le provider parent
+    // If the key differs from provider, also update parent provider
     if (provider !== agentKey && !stats[provider]) {
       stats[provider] = { ...current };
     }
@@ -491,7 +491,7 @@ export class AgentRouter {
   }
 
   /**
-   * Retourne la matrice complète de compétences et scores par catégorie.
+   * Returns the complete matrix of competencies and scores per category.
    */
   async getRoutingMatrix(profiles: string[]): Promise<RoutingMatrixItem[]> {
     const stats = await this.loadStats();
@@ -514,7 +514,7 @@ export class AgentRouter {
         general: baseAffinity?.general ?? 70,
       };
 
-      // Enrichissement avec l'apprentissage
+      // Enrichment with learning
       let totalDuration = 0;
       let durationCount = 0;
 

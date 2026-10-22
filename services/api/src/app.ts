@@ -52,7 +52,7 @@ declare module "fastify" {
     config: AppConfig;
     prisma: PrismaClient;
     redis: Redis;
-    /** Canaux temps réel. Le transport WebSocket s'y branche. */
+    /** Real-time channels. WebSocket transport connects here. */
     clientChannel: ClientChannel;
     workerChannel: WorkerChannel;
   }
@@ -61,49 +61,49 @@ declare module "fastify" {
 export interface BuildAppOptions {
   config: AppConfig;
   logger: Logger;
-  /** Injectables pour les tests : évite d'ouvrir de vraies connexions. */
+  /** Injectable for tests: avoids opening real connections. */
   prisma?: PrismaClient;
   redis?: Redis;
   /**
-   * Où compter les requêtes pour la limitation de débit. "redis" en production
-   * (compteur partagé entre réplicas), "memory" dans les tests, qui n'ont pas à
-   * dépendre d'un service externe.
+   * Where to count requests for rate limiting. "redis" in production
+   * (counter shared across replicas), "memory" in tests, which do not need
+   * to depend on an external service.
    */
   rateLimitStore?: "redis" | "memory";
   /**
-   * Services applicatifs.
+   * Application services.
    *
-   * Injectables pour que les tests câblent leurs propres magasins. En
-   * production, l'application en construit un à partir de la configuration.
+   * Injectable so tests can wire their own stores. In production,
+   * the application builds one from configuration.
    */
   services?: ServiceContainer;
   /**
-   * Monter le transport WebSocket.
+   * Mount WebSocket transport.
    *
-   * Coupé dans les tests qui n'utilisent que `app.inject()` : `@fastify/websocket`
-   * attache un serveur d'upgrade au serveur HTTP, ce qui n'a aucun sens quand
-   * aucun port n'est ouvert.
+   * Disabled in tests using only `app.inject()`: `@fastify/websocket`
+   * attaches an upgrade server to the HTTP server, which makes no sense when
+   * no port is open.
    */
   websocket?: boolean;
-  /** Délai de poignée de main WebSocket. Raccourci dans les tests. */
+  /** WebSocket handshake timeout. Shortened in tests. */
   websocketHandshakeTimeoutMs?: number;
 }
 
 /**
- * Construit l'application sans l'écouter.
+ * Builds the application without listening.
  *
- * La séparation build / listen est ce qui rend l'API testable : les tests
- * utilisent `app.inject()` et ne consomment aucun port. `server.ts` ne fait que
- * démarrer ce que cette fonction a assemblé.
+ * The build / listen separation is what makes the API testable: tests
+ * use `app.inject()` and consume no ports. `server.ts` only starts
+ * what this function assembled.
  */
 export async function buildApp(options: BuildAppOptions) {
   const { config, logger } = options;
 
   const app = Fastify({
     loggerInstance: logger,
-    // Identifiant de corrélation : accepté depuis l'amont s'il existe (le
-    // reverse proxy ou un autre service l'a peut-être déjà émis), généré sinon.
-    // Il traverse ensuite toute la chaîne et figure dans chaque log.
+    // Correlation identifier: accepted from upstream if present (the reverse
+    // proxy or another service may have already emitted it), generated otherwise.
+    // It then traverses the whole chain and appears in every log.
     requestIdHeader: "x-request-id",
     genReqId: () => newCorrelationId(),
     logController: new LogController({ requestIdLogLabel: "correlationId" }),
@@ -113,8 +113,8 @@ export async function buildApp(options: BuildAppOptions) {
   }).withTypeProvider<ZodTypeProvider>();
   const requestSpans = new WeakMap<object, ReturnType<typeof startHttpSpan>>();
 
-  // Zod devient le moteur de validation ET de sérialisation : un schéma unique
-  // valide l'entrée, type le handler et produit la documentation OpenAPI.
+  // Zod becomes both the validation AND serialization engine: a single schema
+  // validates input, types the handler, and generates OpenAPI documentation.
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
@@ -131,9 +131,9 @@ export async function buildApp(options: BuildAppOptions) {
   app.decorate("prisma", prisma);
   app.decorate("redis", redis);
 
-  // L'identifiant de corrélation repart avec la réponse : en cas d'erreur,
-  // l'utilisateur peut le citer et une seule recherche donne toute l'histoire
-  // de sa requête — HTTP, job, run agent, exécution d'outil.
+  // The correlation identifier is returned with the response: in case of error,
+  // the user can cite it and a single search reveals the whole history
+  // of their request — HTTP, job, agent run, tool execution.
   app.addHook("onRequest", (request, reply, done) => {
     void reply.header("x-request-id", request.id);
     requestSpans.set(
@@ -166,7 +166,7 @@ export async function buildApp(options: BuildAppOptions) {
       tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
       prisma,
       onTaskError: (error, taskId) => {
-        logger.error({ err: error, taskId }, "exécution de plan interrompue");
+        logger.error({ err: error, taskId }, "plan execution aborted");
       },
       users: new PrismaUserStore(prisma),
       sessions: new PrismaSessionStore(prisma),
@@ -183,7 +183,7 @@ export async function buildApp(options: BuildAppOptions) {
     new ClientChannel({
       services,
       onError: (error, context) => {
-        logger.warn({ err: error, ...context }, "demande client refusée");
+        logger.warn({ err: error, ...context }, "client request rejected");
       },
     }),
   );
@@ -192,7 +192,7 @@ export async function buildApp(options: BuildAppOptions) {
     new WorkerChannel({
       services,
       onError: (error, deviceId) => {
-        logger.warn({ err: error, deviceId }, "trame worker refusée");
+        logger.warn({ err: error, deviceId }, "worker frame rejected");
       },
     }),
   );
@@ -201,8 +201,8 @@ export async function buildApp(options: BuildAppOptions) {
   await app.register(authenticationPlugin, { services });
 
   await app.register(helmet, {
-    // L'API ne sert pas de HTML : la CSP par défaut n'a rien à protéger ici et
-    // gênerait la page de documentation OpenAPI.
+    // The API does not serve HTML: default CSP has nothing to protect here
+    // and would interfere with the OpenAPI documentation page.
     contentSecurityPolicy: false,
   });
 
@@ -216,8 +216,8 @@ export async function buildApp(options: BuildAppOptions) {
     max: config.RATE_LIMIT_MAX,
     timeWindow: config.RATE_LIMIT_WINDOW,
     nameSpace: "ratelimit:",
-    // Redis est déjà là : partager le compteur entre instances évite qu'un
-    // quota de 100 devienne un quota de 100 × nombre de réplicas.
+    // Redis is already here: sharing the counter between instances prevents
+    // a quota of 100 from becoming 100 * number of replicas.
     ...((options.rateLimitStore ?? "redis") === "redis" ? { redis } : {}),
   });
 
@@ -225,7 +225,7 @@ export async function buildApp(options: BuildAppOptions) {
     openapi: {
       info: {
         title: "NEXUS API",
-        description: "API de l'assistant personnel NEXUS",
+        description: "NEXUS personal assistant API",
         version: config.API_VERSION,
       },
       servers: [{ url: `http://${config.API_HOST}:${String(config.API_PORT)}` }],
@@ -233,13 +233,12 @@ export async function buildApp(options: BuildAppOptions) {
     transform: jsonSchemaTransform,
   });
 
-  // Sonde de liveness, hors versionnement : elle appartient à l'infrastructure,
-  // pas au contrat public de l'API.
+  // Liveness probe, unversioned: belongs to infrastructure, not the API's public contract.
   await app.register(healthRoutes);
 
-  // Transport temps réel. Hors du préfixe versionné : la version voyage dans
-  // l'enveloppe de chaque trame (`v`), pas dans l'URL — une socket vit des
-  // heures et ne peut pas changer d'URL en cours de route.
+  // Real-time transport. Outside versioned prefix: version travels in
+  // frame envelope (`v`), not the URL — a socket lives for hours and cannot
+  // change URLs in flight.
   if (options.websocket !== false) {
     await app.register(websocketRoutes, {
       allowedOrigins: config.CORS_ORIGINS,
@@ -249,8 +248,8 @@ export async function buildApp(options: BuildAppOptions) {
     });
   }
 
-  // Toutes les routes métier sous le même préfixe versionné : le contrat public
-  // change de version en bloc, jamais route par route.
+  // All domain routes under the same versioned prefix: public contract
+  // changes version as a whole, never route by route.
   await app.register(
     async (v1) => {
       await v1.register(v1HealthRoutes);
@@ -274,16 +273,15 @@ export async function buildApp(options: BuildAppOptions) {
   );
 
   app.addHook("onReady", () => {
-    app.log.info({ event: "api.ready", version: config.API_VERSION }, "API prête");
+    app.log.info({ event: "api.ready", version: config.API_VERSION }, "API ready");
   });
 
   return app;
 }
 
 /**
- * Type exact de l'application assemblée : instance Fastify spécialisée par le
- * logger Pino et le type provider Zod. On l'infère plutôt que de la réécrire à
- * la main — une annotation approximative masquerait justement les erreurs de
- * typage que `withTypeProvider` est censé faire remonter.
+ * Exact type of the assembled application: Fastify instance specialized by the
+ * Pino logger and Zod type provider. Inferred rather than rewritten manually —
+ * an approximate annotation would hide typing errors that `withTypeProvider` is meant to surface.
  */
 export type NexusApp = Awaited<ReturnType<typeof buildApp>>;

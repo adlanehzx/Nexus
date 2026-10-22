@@ -31,12 +31,12 @@ const runSchema = z.object({
     })
     .nullable(),
   /**
-   * Assertion renouvelée, quand celle présentée approche de son terme.
+   * Renewed grant, when the presented one nears expiration.
    *
-   * La rotation voyage dans la réponse d'un appel déjà authentifié : pas de
-   * second point d'entrée, pas de second identifiant à protéger, et elle se
-   * produit tant que l'ancienne assertion est encore valide. Absente le reste
-   * du temps — le moteur ne doit alors rien réécrire.
+   * Rotation travels in the response of an already-authenticated call: no
+   * second entry point, no second identifier to protect, and it occurs
+   * while the old grant is still valid. Absent the rest of the time —
+   * the engine need not rewrite anything then.
    */
   renewedAssertion: z
     .object({ assertion: z.string(), expiresAt: z.string() })
@@ -48,9 +48,9 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   /**
-   * Échange une délégation durable de calendrier contre une assertion
-   * courte, strictement bornée à l'occurrence. Le secret opaque n'est jamais
-   * renvoyé et la clé de signature ne quitte jamais l'API.
+   * Exchanges a durable schedule delegation for a short grant,
+   * strictly bounded to the occurrence. The opaque secret is never returned
+   * and the signing key never leaves the API.
    */
   app.post(
     "/agent-core/schedule-grants/exchange",
@@ -113,7 +113,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
       assertOwnedBy(conversation.userId, userId, "Conversation");
       if (app.services.agentCore === undefined) {
         throw new DependencyError({
-          message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
+          message: "Agent Core has no active LLM provider.",
           userMessage: "The general-purpose agent engine is not available.",
         });
       }
@@ -124,9 +124,8 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         message: request.body.message,
         correlationId: request.id,
       });
-      // Le message courant est ajoute par AgentOrchestrator apres assemblage de
-      // l'historique. Le persister avant `run()` le ferait apparaitre deux fois
-      // dans le prompt (historique + message courant).
+      // Current message is added by AgentOrchestrator after assembling history.
+      // Persisting it before `run()` would make it appear twice in the prompt.
       await app.services.conversations.appendMessage({
         conversationId: conversation.id,
         role: "user",
@@ -139,24 +138,21 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
   );
 
   /**
-   * Pont Mission Engine → Agent Core.
+   * Mission Engine → Agent Core bridge.
    *
-   * Surface réservée aux services internes, séparée de `/agent-core/runs` parce
-   * qu'elle ne s'authentifie pas de la même façon et n'autorise pas la même
-   * chose. Le moteur n'y choisit ni l'utilisateur — il vient de la signature —
-   * ni la mission : il ne peut que travailler dans celle qui lui a été confiée.
+   * Surface reserved for internal services, separate from `/agent-core/runs` because
+   * it authenticates differently and authorizes different scopes. The engine chooses
+   * neither the user — derived from signature — nor the mission: it can only work within
+   * what was entrusted to it.
    *
-   * **Unicité par tentative.** Un run Agent Core dure facilement plus longtemps
-   * qu'un bail de trente secondes. Si le bail expire pendant l'appel, un second
-   * worker reprend la tâche et redemanderait un run : deux exécutions pour un
-   * même travail, et une action faite deux fois dès qu'un outil a un effet
-   * externe. La route réserve donc `(mission, tâche, tentative)` dans une table
-   * à contrainte unique, et une seconde demande sur la même tentative rend le
-   * run déjà réservé au lieu d'en lancer un nouveau.
+   * **Uniqueness per attempt.** An Agent Core run easily lasts longer than a thirty-second lease.
+   * If the lease expires during the call, a second worker reassigns the task and would request another run:
+   * two executions for the same work, and an action executed twice whenever a tool has an external effect.
+   * The route therefore reserves `(mission, task, attempt)` in a unique-constrained table,
+   * and a second request on the same attempt returns the already reserved run instead of launching a new one.
    *
-   * La granularité est la tentative, et c'est ce qui compte : deux workers qui
-   * se disputent la même tentative convergent, alors qu'un vrai réessai après
-   * échec — nouvelle tentative, nouvel identifiant — obtient bien un run neuf.
+   * Granularity is the attempt, and that is what counts: two workers contesting the same attempt converge,
+   * whereas a genuine retry after failure — new attempt, new ID — gets a fresh run.
    */
   app.post(
     "/agent-core/mission-runs",
@@ -169,17 +165,16 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
           taskKey: z.string().min(1).max(128),
           instruction: z.string().min(1).max(100_000),
           /**
-           * Conversation à réutiliser. Absente au premier appel, puis renvoyée
-           * par le moteur à chaque nouvelle tentative : c'est ce qui fait qu'un
-           * retry prolonge l'historique au lieu d'en ouvrir un second.
+           * Conversation to reuse. Absent on first call, then returned
+           * by the engine on every new attempt: ensures an agent retains memory
+           * across steps of the same mission.
            */
           conversationId: z.string().uuid().optional(),
           /**
-           * Tentative du moteur.
+           * Engine attempt.
            *
-           * Facultative pour ne pas casser un appelant plus ancien, mais son
-           * absence désactive la garantie d'unicité — c'est dit dans le journal
-           * plutôt que silencieux.
+           * Optional to avoid breaking older callers, but its absence disables
+           * uniqueness guarantees — logged explicitly rather than failing silently.
            */
           attemptId: z.string().min(1).max(128).optional(),
         }),
@@ -192,24 +187,23 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
       if (app.services.agentCore === undefined) {
         throw new DependencyError({
-          message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
+          message: "Agent Core has no active LLM provider.",
           userMessage: "The general-purpose agent engine is not available.",
         });
       }
 
       const { attemptId } = request.body;
 
-      // L'identifiant est choisi **avant** la réservation, parce que c'est lui
-      // qu'elle inscrit : c'est ce qui rend l'opération atomique. Le générer
-      // après, ou laisser l'orchestrateur le produire, obligerait à réserver
-      // puis à compléter en deux temps — et un incident entre les deux
-      // laisserait une réservation sans run.
+      // The identifier is chosen **before** reservation, because it is recorded
+      // by it: this makes the operation atomic. Generating it afterward,
+      // or letting the orchestrator produce it, would require two-step reservation
+      // — and an incident in between would leave a reservation without a run.
       const reservedRunId = randomUUID();
 
-      // Réservation avant toute exécution. Si une autre requête détient déjà
-      // cette tentative, c'est son run qu'on rend — sans rappeler le modèle, ce
-      // qui est tout l'intérêt : un second run coûterait des jetons et
-      // rejouerait les effets de bord de ses outils.
+      // Reservation before any execution. If another request already holds
+      // this attempt, its run is returned — without calling the model again,
+      // which is the entire point: a second run would cost tokens and
+      // replay side-effects of its tools.
       if (attemptId !== undefined) {
         const reserved = await app.services.agentRunClaims.claim({
           missionExternalKey: mission.missionExternalKey,
@@ -222,7 +216,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         if (!reserved.claimed) {
           const existing = await app.services.agentCore.getRun(reserved.existing.runId);
           if (existing !== undefined) {
-            assertOwnedBy(existing.userId, mission.userId, "Run agent");
+            assertOwnedBy(existing.userId, mission.userId, "Agent run");
             request.log.info(
               {
                 grantId: mission.grantId,
@@ -231,17 +225,16 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
                 attemptId,
                 runId: existing.runId,
               },
-              "tentative déjà réservée : run existant rendu sans relancer Agent Core",
+              "attempt already reserved: existing run returned without restarting Agent Core",
             );
             return ok(present({ record: existing }), request.id);
           }
-          // Réservation prise mais run introuvable : l'appelant précédent est
-          // entre les deux, ou il a échoué avant la première sauvegarde. Un
-          // conflit dit au moteur de réessayer plus tard ; inventer un second
-          // run annulerait la garantie qu'on vient d'établir.
+          // Reservation claimed but run not found: the previous caller is
+          // between the two, or failed before first save. A conflict tells
+          // the engine to retry later; inventing a second run would void the guarantee.
           throw new ConflictError(
-            `Tentative ${attemptId} en cours de démarrage`,
-            "Cette tâche est déjà en train de démarrer.",
+            `Attempt ${attemptId} currently starting`,
+            "This task is already starting.",
           );
         }
       }
@@ -263,8 +256,8 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
           conversationId: conversation.id,
         },
         attemptId === undefined
-          ? "run Agent Core demandé sans tentative : unicité non garantie"
-          : "run Agent Core demandé par un service pour le compte du propriétaire de la mission",
+          ? "Agent Core run requested without attempt: uniqueness not guaranteed"
+          : "Agent Core run requested by service on behalf of mission owner",
       );
 
       const result = await app.services.agentCore.run({
@@ -272,11 +265,11 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         conversationId: conversation.id,
         message: request.body.instruction,
         correlationId: request.id,
-        // Inscrit sur le run : c'est ce qui permet plus tard de le relire sous
-        // cette assertion, et uniquement sous celle-ci.
+        // Recorded on the run: allows reading it later under this grant,
+        // and only under this grant.
         missionExternalKey: mission.missionExternalKey,
-        // Celui de la réservation, sans quoi elle désignerait un run qui
-        // n'existe pas et la garantie d'unicité ne vaudrait rien.
+        // That of the reservation, otherwise it would designate a run that
+        // does not exist and void uniqueness guarantees.
         ...(attemptId === undefined ? {} : { runId: reservedRunId }),
       });
       await app.services.conversations.appendMessage({
@@ -286,13 +279,13 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         originClientDeviceId: null,
       });
       await persistResponse(app.services.conversations, conversation.id, result.record.response);
-      // La rotation est calculée après le travail, pas avant : si le run échoue,
-      // rien ne justifie d'avoir émis une assertion de plus.
+      // Rotation is calculated after work, not before: if the run fails,
+      // there is no justification for issuing another grant.
       const renewed = await app.services.missionGrants.renewById(mission.grantId);
       if (renewed !== undefined) {
         request.log.info(
           { grantId: mission.grantId, replacedBy: renewed.grantId },
-          "assertion de mission renouvelée avant son terme",
+          "mission grant renewed before expiration",
         );
       }
       return ok(present(result, renewed), request.id);
@@ -300,15 +293,15 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
   );
 
   /**
-   * Lecture d'un run par le moteur, pour savoir où en est une confirmation.
+   * Reading a run by the engine, to inspect confirmation progress.
    *
-   * C'est la moitié « le moteur interroge » de la suspension durable : rien
-   * n'est notifié au moteur, donc rien de nouveau n'est joignable sur son port.
-   * Il redemande, et l'état qu'il lit vient de la base.
+   * This is the "engine polls" half of durable suspension: nothing
+   * is pushed to the engine, so nothing new is exposed on its port.
+   * It queries, and the state it reads comes from the database.
    *
-   * La portée est vérifiée **deux fois** : le propriétaire, comme partout, et
-   * la mission. La seconde n'est pas redondante — sans elle, une assertion
-   * ouvrirait aussi les runs issus des conversations privées du compte.
+   * Scope is verified **twice**: the owner, like everywhere, and
+   * the mission. The second is not redundant — without it, a grant
+   * would also open runs from private account conversations.
    */
   app.get(
     "/agent-core/mission-runs/:runId",
@@ -323,31 +316,28 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const mission = currentMission(request);
       const record = await app.services.agentCore?.getRun(request.params.runId);
-      if (record === undefined) throw new NotFoundError("Run agent", request.params.runId);
-      assertOwnedBy(record.userId, mission.userId, "Run agent");
-      // `null` pour un run lancé par une personne : une assertion ne doit pas
-      // pouvoir le lire, et `assertMissionScope` le refuse sur une clé vide.
+      if (record === undefined) throw new NotFoundError("Agent run", request.params.runId);
+      assertOwnedBy(record.userId, mission.userId, "Agent run");
+      // `null` for a user-initiated run: a grant must not be able to read it,
+      // and `assertMissionScope` rejects an empty key.
       assertMissionScope(mission.missionExternalKey, record.missionExternalKey ?? "");
-      // Le chemin le plus important pour la rotation : une mission suspendue sur
-      // une confirmation ne passe plus que par ici, et c'est elle qui risque de
-      // dépasser la durée de vie de son assertion.
+      // The most critical path for rotation: a mission suspended on
+      // confirmation passes only through here, and risks exceeding
+      // its grant lifespan.
       const renewed = await app.services.missionGrants.renewById(mission.grantId);
       return ok(present({ record }, renewed), request.id);
     },
   );
 
   /**
-   * Retrait des assertions d'une mission terminée.
+   * Revocation of grants for a completed mission.
    *
-   * C'est le moteur qui l'appelle, avec l'assertion qu'il veut justement
-   * retirer : une auto-révocation. Rien n'est plus sûr que ça ici — présenter
-   * une assertion valide pour la retirer ne donne aucun pouvoir
-   * supplémentaire, alors qu'un point d'entrée capable de révoquer *autrui*
-   * en donnerait un.
+   * The engine calls this with the grant it wants to revoke: a self-revocation.
+   * Nothing is safer here — presenting a valid grant to revoke it grants no extra power,
+   * whereas an entry point capable of revoking *others* would give one.
    *
-   * Idempotent : le filtre sur les assertions actives fait qu'un second appel
-   * ne réécrit rien. Le moteur peut donc redemander le retrait si sa première
-   * tentative a échoué sur le réseau.
+   * Idempotent: filtering on active grants ensures a second call rewrites nothing.
+   * The engine can therefore retry revocation if its first attempt failed on the network.
    */
   app.post(
     "/agent-core/mission-grants/retire",
@@ -358,9 +348,9 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         body: z.object({
           missionExternalKey: z.string().min(1).max(128),
           /**
-           * Motif du retrait. `completed` est le chemin normal — la mission est
-           * finie ; `revoked` est le chemin d'incident. Les distinguer permet de
-           * répondre plus tard à « qu'a-t-on dû retirer en urgence ».
+           * Retirement reason. `completed` is the normal path — the mission
+           * finished; `revoked` is the incident path. Distinguishing them enables
+           * answering later 'what had to be revoked in emergency'.
            */
           reason: z.enum(["completed", "revoked"]).default("completed"),
         }),
@@ -383,7 +373,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
           reason: request.body.reason,
           retired,
         },
-        "assertions de mission retirées",
+        "mission grants revoked",
       );
       return ok({ retired }, request.id);
     },
@@ -402,8 +392,8 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const { userId } = currentUser(request);
       const record = await app.services.agentCore?.getRun(request.params.runId);
-      if (record === undefined) throw new NotFoundError("Run agent", request.params.runId);
-      assertOwnedBy(record.userId, userId, "Run agent");
+      if (record === undefined) throw new NotFoundError("Agent run", request.params.runId);
+      assertOwnedBy(record.userId, userId, "Agent run");
       return ok(present({ record }), request.id);
     },
   );
@@ -425,8 +415,8 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const { userId } = currentUser(request);
       const existing = await app.services.agentCore?.getRun(request.params.runId);
-      if (existing === undefined) throw new NotFoundError("Run agent", request.params.runId);
-      assertOwnedBy(existing.userId, userId, "Run agent");
+      if (existing === undefined) throw new NotFoundError("Agent run", request.params.runId);
+      assertOwnedBy(existing.userId, userId, "Agent run");
       const result = await app.services.agentCore!.resume(
         request.params.runId,
         request.body.decision,
@@ -456,8 +446,8 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const { userId } = currentUser(request);
       const existing = await app.services.agentCore?.getRun(request.params.runId);
-      if (existing === undefined) throw new NotFoundError("Run agent", request.params.runId);
-      assertOwnedBy(existing.userId, userId, "Run agent");
+      if (existing === undefined) throw new NotFoundError("Agent run", request.params.runId);
+      assertOwnedBy(existing.userId, userId, "Agent run");
       return ok(
         { cancelled: await app.services.agentCore!.cancel(request.params.runId) },
         request.id,
@@ -470,11 +460,11 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
 function opaqueBearer(header: string | undefined): string {
   if (typeof header !== "string" || !header.startsWith("Bearer ")) {
-    throw new AuthenticationError({ message: "Délégation de calendrier absente" });
+    throw new AuthenticationError({ message: "Schedule delegation missing" });
   }
   const token = header.slice("Bearer ".length).trim();
   if (!token.startsWith("nsg_") || token.length > 512) {
-    throw new AuthenticationError({ message: "Délégation de calendrier mal formée" });
+    throw new AuthenticationError({ message: "Malformed schedule delegation" });
   }
   return token;
 }
@@ -505,14 +495,12 @@ function present(result: AgentRunResult, renewed?: IssuedMissionGrant) {
 }
 
 /**
- * Conversation d'une tâche de mission.
+ * Conversation of a mission task.
  *
- * Le moteur ne peut pas créer de conversation : elles appartiennent à un
- * utilisateur, dans PostgreSQL, et lui n'a qu'une portée. Il reçoit donc
- * l'identifiant au premier appel et le rend ensuite. La vérification de
- * propriété reste nécessaire malgré la signature : l'identifiant, lui, vient du
- * corps de la requête, et rien n'empêcherait d'y nommer la conversation d'un
- * autre compte.
+ * The engine cannot create conversations: they belong to a user in PostgreSQL,
+ * and the engine only has a scope. It therefore receives the identifier on the first call
+ * and returns it subsequently. Ownership verification remains necessary despite the signature:
+ * the identifier comes from the request body, and nothing would prevent naming another user's conversation.
  */
 async function resolveMissionConversation(
   conversations: ConversationStore,

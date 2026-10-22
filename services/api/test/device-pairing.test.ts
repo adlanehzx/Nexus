@@ -3,15 +3,13 @@ import { decodePairingPayload } from "@nexus/devices";
 import { makeApi, type ApiHarness } from "./harness.js";
 
 /**
- * Appairage d'un appareil par QR, vu de l'API.
+ * QR device pairing as seen from the API.
  *
- * Ce qui est éprouvé est l'**asymétrie** des deux routes : émettre un ticket
- * exige un utilisateur authentifié, l'utiliser n'exige que le ticket. C'est
- * cette asymétrie qui fait tenir l'ensemble — et c'est donc elle qu'il faut
- * attaquer.
+ * Verifies the asymmetry of both routes: issuing a ticket requires an authenticated user,
+ * consuming it only requires the ticket.
  */
 
-const PASSWORD = "MotDePasseTresSolide!42";
+const PASSWORD = "VeryStrongPassword!42";
 const API_URL = "http://192.168.1.20:3000";
 
 async function register(harness: ApiHarness, email: string): Promise<string> {
@@ -29,7 +27,7 @@ async function issueTicket(harness: ApiHarness, token: string) {
     method: "POST",
     url: "/api/v1/devices/pairing-tickets",
     headers: { authorization: `Bearer ${token}` },
-    payload: { label: "Téléphone" },
+    payload: { label: "Phone" },
   });
   expect(response.statusCode).toBe(201);
   return response.json<{
@@ -45,7 +43,7 @@ const PHONE = {
   publicKeyPem: "-----BEGIN PUBLIC KEY-----\nMCo=\n-----END PUBLIC KEY-----\n",
 };
 
-describe("appairage par QR", () => {
+describe("QR device pairing", () => {
   let harness: ApiHarness;
   let accessToken: string;
 
@@ -58,7 +56,7 @@ describe("appairage par QR", () => {
     await harness.close();
   });
 
-  it("émet un ticket dont la charge utile est un QR d'appairage utilisable", async () => {
+  it("issues a ticket whose payload is a usable pairing QR", async () => {
     const ticket = await issueTicket(harness, accessToken);
 
     const payload = decodePairingPayload(ticket.payload);
@@ -67,7 +65,7 @@ describe("appairage par QR", () => {
     expect(new Date(ticket.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("exige un utilisateur pour émettre, mais rien pour appairer", async () => {
+  it("requires a user to issue, but nothing to pair", async () => {
     const anonymous = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices/pairing-tickets",
@@ -84,7 +82,7 @@ describe("appairage par QR", () => {
     expect(paired.statusCode).toBe(201);
   });
 
-  it("rattache l'appareil au propriétaire du ticket, et arrive non approuvé", async () => {
+  it("attaches device to ticket owner and arrives unapproved", async () => {
     const ticket = await issueTicket(harness, accessToken);
     const paired = await harness.app.inject({
       method: "POST",
@@ -96,7 +94,7 @@ describe("appairage par QR", () => {
     expect(device.trust).toBe("PENDING");
     expect(device.status).toBe("OFFLINE");
 
-    // L'appareil apparaît bien chez son propriétaire — et nulle part ailleurs.
+    // The device appears for its owner and nowhere else
     const mine = await harness.app.inject({
       method: "GET",
       url: "/api/v1/devices",
@@ -107,16 +105,13 @@ describe("appairage par QR", () => {
     );
   });
 
-  it("ne laisse pas le porteur du code choisir le propriétaire", async () => {
+  it("does not let bearer choose owner", async () => {
     const ticket = await issueTicket(harness, accessToken);
-    const otherToken = await register(harness, "tiers@exemple.fr");
+    const otherToken = await register(harness, "thirdparty@example.com");
 
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices/pair",
-      // Un `userId` dans le corps serait de toute façon refusé par le schéma ;
-      // ce qui compte est que même authentifié comme un tiers, l'appareil
-      // atterrit chez le propriétaire du ticket.
       headers: { authorization: `Bearer ${otherToken}` },
       payload: { token: ticket.token, ...PHONE },
     });
@@ -129,7 +124,7 @@ describe("appairage par QR", () => {
     expect(theirs.json<{ data: unknown[] }>().data).toHaveLength(0);
   });
 
-  it("refuse un second usage du même code", async () => {
+  it("rejects a second use of the same code", async () => {
     const ticket = await issueTicket(harness, accessToken);
     const first = await harness.app.inject({
       method: "POST",
@@ -145,7 +140,7 @@ describe("appairage par QR", () => {
     });
     expect(second.statusCode).toBe(401);
 
-    // Et surtout : aucun second appareil n'a été créé.
+    // And crucially: no second device was created
     const mine = await harness.app.inject({
       method: "GET",
       url: "/api/v1/devices",
@@ -154,7 +149,7 @@ describe("appairage par QR", () => {
     expect(mine.json<{ data: unknown[] }>().data).toHaveLength(1);
   });
 
-  it("refuse un code inventé", async () => {
+  it("rejects an invented code", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices/pair",
@@ -163,7 +158,7 @@ describe("appairage par QR", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("refuse un exécutant sans clé publique, ticket valable ou non", async () => {
+  it("rejects worker without public key, valid ticket or not", async () => {
     const ticket = await issueTicket(harness, accessToken);
     const response = await harness.app.inject({
       method: "POST",
@@ -176,10 +171,9 @@ describe("appairage par QR", () => {
         role: "WORKER",
       },
     });
-    // Le ticket change le transport de la clé, pas la règle qui l'exige.
     expect(response.statusCode).toBe(400);
 
-    // Le ticket n'a pas été consommé par cette tentative invalide.
+    // The ticket was not consumed by this invalid attempt
     const retry = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices/pair",
@@ -188,7 +182,7 @@ describe("appairage par QR", () => {
     expect(retry.statusCode).toBe(201);
   });
 
-  it("accepte un client pur sans clé publique", async () => {
+  it("accepts pure client without public key", async () => {
     const ticket = await issueTicket(harness, accessToken);
     const response = await harness.app.inject({
       method: "POST",
@@ -204,7 +198,7 @@ describe("appairage par QR", () => {
     expect(response.statusCode).toBe(201);
   });
 
-  it("liste les tickets sans jamais rendre leur code", async () => {
+  it("lists tickets without revealing their code", async () => {
     const ticket = await issueTicket(harness, accessToken);
     await harness.app.inject({
       method: "POST",
@@ -224,7 +218,7 @@ describe("appairage par QR", () => {
     expect(rows[0]?.status).toBe("consumed");
   });
 
-  it("journalise l'appairage sans le code ni son empreinte", async () => {
+  it("logs pairing without code or digest", async () => {
     const ticket = await issueTicket(harness, accessToken);
     await harness.app.inject({
       method: "POST",
@@ -239,7 +233,7 @@ describe("appairage par QR", () => {
   });
 });
 
-describe("révocation et réappairage", () => {
+describe("revocation and repair", () => {
   let harness: ApiHarness;
   let accessToken: string;
 
@@ -263,7 +257,7 @@ describe("révocation et réappairage", () => {
     return paired.json<{ data: { id: string } }>().data.id;
   }
 
-  it("retire la clé publique en révoquant", async () => {
+  it("removes public key upon revocation", async () => {
     const deviceId = await pair();
     expect(await harness.services.deviceCredentials.publicKeyFor(deviceId)).toBe(
       PHONE.publicKeyPem,
@@ -276,12 +270,10 @@ describe("révocation et réappairage", () => {
     });
     expect(revoked.statusCode).toBe(200);
 
-    // Sans clé, la poignée de main est invérifiable — donc impossible, quelle
-    // que soit la règle qu'un futur chemin aurait oublié de vérifier.
     expect(await harness.services.deviceCredentials.publicKeyFor(deviceId)).toBeUndefined();
   });
 
-  it("laisse réappairer, sans ressusciter l'appareil révoqué", async () => {
+  it("allows repairing without resurrecting revoked device", async () => {
     const first = await pair();
     await harness.app.inject({
       method: "POST",
@@ -289,9 +281,6 @@ describe("révocation et réappairage", () => {
       headers: { authorization: `Bearer ${accessToken}` },
     });
 
-    // Le réappairage est un appairage : un nouveau ticket, un nouvel appareil.
-    // La même clé matérielle est réutilisée, et c'est normal — elle n'a pas
-    // changé, c'est l'appareil enregistré qui a été retiré.
     const second = await pair();
     expect(second).not.toBe(first);
     expect(await harness.services.deviceCredentials.publicKeyFor(second)).toBe(PHONE.publicKeyPem);
@@ -302,13 +291,11 @@ describe("révocation et réappairage", () => {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     const rows = devices.json<{ data: { id: string; trust: string }[] }>().data;
-    // L'ancien reste en base et reste révoqué : l'historique des tâches y
-    // renvoie, et le ressusciter effacerait la décision prise.
     expect(rows.find((item) => item.id === first)?.trust).toBe("REVOKED");
     expect(rows.find((item) => item.id === second)?.trust).toBe("PENDING");
   });
 
-  it("refuse un challenge sur un appareil révoqué", async () => {
+  it("rejects challenge on revoked device", async () => {
     const deviceId = await pair();
     await harness.app.inject({
       method: "POST",
@@ -325,8 +312,8 @@ describe("révocation et réappairage", () => {
   });
 });
 
-describe("sans PUBLIC_API_URL", () => {
-  it("refuse d'émettre un QR plutôt que d'en produire un qui mène ailleurs", async () => {
+describe("without PUBLIC_API_URL", () => {
+  it("refuses to issue a QR rather than producing one that points elsewhere", async () => {
     const harness = await makeApi();
     const token = await register(harness, "alex@example.test");
     const response = await harness.app.inject({

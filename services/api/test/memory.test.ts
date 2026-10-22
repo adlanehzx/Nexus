@@ -2,25 +2,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
 /**
- * La mémoire, à travers l'API.
+ * Memory through the API.
  *
- * Ce fichier éprouve ce que les tests du paquet `@nexus/memory` ne peuvent pas
- * voir : que le service est bien **le seul chemin**. Une route qui appellerait
- * le magasin directement contournerait la règle du silence sans qu'aucun test
- * unitaire ne s'en aperçoive.
- *
- * Et la frontière entre utilisateurs, éprouvée ici avec deux vrais comptes et
- * deux vrais jetons.
+ * Verifies that the service is the sole route to memory storage,
+ * and proves tenant isolation between accounts.
  */
 
 let harness: ApiHarness;
 let example: Account;
-let autre: Account;
+let other: Account;
 
 beforeEach(async () => {
   harness = await makeApi();
   example = await createAccount(harness, "alex@example.test");
-  autre = await createAccount(harness, "autre@exemple.fr");
+  other = await createAccount(harness, "other@example.com");
 });
 
 afterEach(async () => {
@@ -44,18 +39,18 @@ async function storeOk(account: Account, content: string, extra: Record<string, 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("store", () => {
-  it("enregistre un souvenir", async () => {
-    const response = await store(example, { content: "Alex préfère le train" });
+  it("stores a memory", async () => {
+    const response = await store(example, { content: "Alex prefers the train" });
 
     expect(response.statusCode).toBe(201);
     expect(response.json<{ data: { content: string } }>().data.content).toBe(
-      "Alex préfère le train",
+      "Alex prefers the train",
     );
   });
 
-  it("distingue une préférence d'un souvenir", async () => {
-    await storeOk(example, "Réponds toujours en français", { layer: "PREFERENCE" });
-    await storeOk(example, "Habite à Lyon");
+  it("distinguishes a preference from a memory", async () => {
+    await storeOk(example, "Always reply in concise English", { layer: "PREFERENCE" });
+    await storeOk(example, "Lives in London");
 
     const response = await harness.app.inject({
       method: "GET",
@@ -64,13 +59,11 @@ describe("store", () => {
     });
 
     const data = response.json<{ data: { content: string }[] }>().data;
-    expect(data.map((record) => record.content)).toEqual(["Réponds toujours en français"]);
+    expect(data.map((record) => record.content)).toEqual(["Always reply in concise English"]);
   });
 
-  it("refuse un secret, et le dit", async () => {
-    // La route ne doit pas pouvoir court-circuiter le service : si elle
-    // appelait le magasin directement, ce test passerait en 201.
-    const response = await store(example, { content: "Mon mot de passe est Tr0ub4dor3xy" });
+  it("rejects a secret and explains why", async () => {
+    const response = await store(example, { content: "My password is Tr0ub4dor3xy" });
 
     expect(response.statusCode).toBe(422);
     const body = response.json<{ error: { code: string; message: string } }>();
@@ -78,22 +71,22 @@ describe("store", () => {
     expect(body.error.message).toContain("password manager");
   });
 
-  it("le refus ne renvoie pas le secret", async () => {
-    const response = await store(example, { content: "Ma clé API est sk-abcdefghijklmnopqrstuv" });
+  it("rejection does not echo the secret", async () => {
+    const response = await store(example, { content: "My API key is sk-abcdefghijklmnopqrstuv" });
 
     expect(response.body).not.toContain("sk-abcdefghijklmnopqrstuv");
   });
 
-  it("exige un accord pour une information personnelle", async () => {
-    const response = await store(example, { content: "J'ai été diagnostiqué diabétique" });
+  it("requires consent for personal data", async () => {
+    const response = await store(example, { content: "I was diagnosed with diabetes" });
 
     expect(response.statusCode).toBe(409);
     expect(response.json<{ error: { code: string } }>().error.code).toBe("MEMORY_CONSENT_REQUIRED");
   });
 
-  it("accepte une fois l'accord donné, et le conserve", async () => {
+  it("accepts once consent is given and preserves it", async () => {
     const response = await store(example, {
-      content: "J'ai été diagnostiqué diabétique",
+      content: "I was diagnosed with diabetes",
       acknowledgedSensitive: true,
     });
 
@@ -104,19 +97,17 @@ describe("store", () => {
     expect(data.sensitiveCategories).toContain("sante");
   });
 
-  it("l'accord n'est jamais implicite", async () => {
-    // Le schéma déclare `acknowledgedSensitive` avec un défaut à `false`. Ne
-    // rien envoyer doit donc valoir « non », pas « oui ».
-    const response = await store(example, { content: "Mon IBAN figure sur le relevé" });
+  it("consent is never implicit", async () => {
+    const response = await store(example, { content: "My IBAN appears on the statement" });
 
     expect(response.statusCode).toBe(409);
   });
 });
 
 describe("search", () => {
-  it("trouve un souvenir par mot-clé", async () => {
-    await storeOk(example, "Alex préfère le train");
-    await storeOk(example, "Alex aime le café serré");
+  it("finds a memory by keyword", async () => {
+    await storeOk(example, "Alex prefers the train");
+    await storeOk(example, "Alex likes strong coffee");
 
     const response = await harness.app.inject({
       method: "GET",
@@ -125,11 +116,11 @@ describe("search", () => {
     });
 
     const hits = response.json<{ data: { hits: { content: string }[] } }>().data.hits;
-    expect(hits.map((hit) => hit.content)).toEqual(["Alex préfère le train"]);
+    expect(hits.map((hit) => hit.content)).toEqual(["Alex prefers the train"]);
   });
 
-  it("ne trouve rien chez quelqu'un d'autre", async () => {
-    await storeOk(autre, "Le secret de l'autre utilisateur");
+  it("finds nothing belonging to another user", async () => {
+    await storeOk(other, "Secret of the other user");
 
     const response = await harness.app.inject({
       method: "GET",
@@ -142,14 +133,14 @@ describe("search", () => {
 });
 
 describe("update", () => {
-  it("corriger supersède au lieu d'écraser", async () => {
-    const record = await storeOk(example, "Habite à Lyon");
+  it("updating supersedes instead of overwriting", async () => {
+    const record = await storeOk(example, "Lives in London");
 
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
       headers: example.authorization,
-      payload: { content: "Habite à Paris" },
+      payload: { content: "Lives in Paris" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -158,40 +149,36 @@ describe("update", () => {
     expect(data.id).not.toBe(record.id);
   });
 
-  it("reclasse le contenu révisé", async () => {
-    // Ne contrôler qu'à la création laisserait la modification comme porte
-    // ouverte.
-    const record = await storeOk(example, "Une note anodine");
+  it("reclassifies revised content", async () => {
+    const record = await storeOk(example, "An innocent note");
 
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
       headers: example.authorization,
-      payload: { content: "Mon mot de passe est Tr0ub4dor3xy" },
+      payload: { content: "My password is Tr0ub4dor3xy" },
     });
 
     expect(response.statusCode).toBe(422);
   });
 
-  it("ne corrige pas le souvenir de quelqu'un d'autre", async () => {
-    const record = await storeOk(autre, "Souvenir de l'autre");
+  it("does not modify someone else's memory", async () => {
+    const record = await storeOk(other, "Memory of the other");
 
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/api/v1/memory/${record.id}`,
       headers: example.authorization,
-      payload: { content: "détourné" },
+      payload: { content: "hijacked" },
     });
 
-    // 404, pas 403 : distinguer « inconnu » de « pas à vous » indiquerait à un
-    // curieux quels identifiants existent.
     expect(response.statusCode).toBe(404);
   });
 });
 
 describe("delete", () => {
-  it("oublie un souvenir et rend ce qui a disparu", async () => {
-    const record = await storeOk(example, "Habite à Lyon");
+  it("forgets a memory and returns what disappeared", async () => {
+    const record = await storeOk(example, "Lives in London");
 
     const response = await harness.app.inject({
       method: "DELETE",
@@ -202,11 +189,11 @@ describe("delete", () => {
     expect(response.statusCode).toBe(200);
     expect(
       response.json<{ data: { forgotten: { content: string }[] } }>().data.forgotten[0]?.content,
-    ).toBe("Habite à Lyon");
+    ).toBe("Lives in London");
   });
 
-  it("n'oublie pas le souvenir de quelqu'un d'autre", async () => {
-    const record = await storeOk(autre, "Souvenir de l'autre");
+  it("does not delete another user's memory", async () => {
+    const record = await storeOk(other, "Memory of the other");
 
     const response = await harness.app.inject({
       method: "DELETE",
@@ -216,40 +203,39 @@ describe("delete", () => {
 
     expect(response.statusCode).toBe(404);
 
-    // Et il est toujours là pour son propriétaire.
-    const reste = await harness.app.inject({
+    const remaining = await harness.app.inject({
       method: "GET",
       url: "/api/v1/memory",
-      headers: autre.authorization,
+      headers: other.authorization,
     });
-    expect(reste.json<{ data: unknown[] }>().data).toHaveLength(1);
+    expect(remaining.json<{ data: unknown[] }>().data).toHaveLength(1);
   });
 });
 
 describe("forget", () => {
-  it("oublie par correspondance de texte", async () => {
-    await storeOk(example, "Habite à Lyon");
-    await storeOk(example, "Préfère le café serré");
+  it("forgets by text match", async () => {
+    await storeOk(example, "Lives in London");
+    await storeOk(example, "Prefers strong coffee");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
       headers: example.authorization,
-      payload: { match: "habite lyon" },
+      payload: { match: "lives london" },
     });
 
     expect(response.json<{ data: { forgotten: unknown[] } }>().data.forgotten).toHaveLength(1);
   });
 
-  it("rend les candidats plutôt que de deviner", async () => {
-    await storeOk(example, "Réunion équipe le lundi");
-    await storeOk(example, "Réunion équipe le mardi");
+  it("returns candidates rather than guessing", async () => {
+    await storeOk(example, "Team meeting on Monday");
+    await storeOk(example, "Team meeting on Tuesday");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
       headers: example.authorization,
-      payload: { match: "réunion équipe" },
+      payload: { match: "team meeting" },
     });
 
     const data = response.json<{ data: { forgotten: unknown[]; ambiguous: unknown[] } }>().data;
@@ -257,29 +243,29 @@ describe("forget", () => {
     expect(data.ambiguous).toHaveLength(2);
   });
 
-  it("exige une confirmation pour tout effacer", async () => {
-    await storeOk(example, "Un souvenir");
+  it("requires confirmation to delete everything", async () => {
+    await storeOk(example, "A memory");
 
-    const sans = await harness.app.inject({
+    const withoutConf = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
       headers: example.authorization,
       payload: { all: true },
     });
-    expect(sans.json<{ data: { needsConfirmation: boolean } }>().data.needsConfirmation).toBe(true);
+    expect(withoutConf.json<{ data: { needsConfirmation: boolean } }>().data.needsConfirmation).toBe(true);
 
-    const avec = await harness.app.inject({
+    const withConf = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/forget",
       headers: example.authorization,
       payload: { all: true, confirmed: true },
     });
-    expect(avec.json<{ data: { forgotten: unknown[] } }>().data.forgotten).toHaveLength(1);
+    expect(withConf.json<{ data: { forgotten: unknown[] } }>().data.forgotten).toHaveLength(1);
   });
 
-  it("« tout » veut dire « tout le mien »", async () => {
-    await storeOk(example, "Souvenir d'Alex");
-    await storeOk(autre, "Souvenir de l'autre");
+  it("'all' means 'all of mine'", async () => {
+    await storeOk(example, "Alex's memory");
+    await storeOk(other, "Memory of the other");
 
     await harness.app.inject({
       method: "POST",
@@ -288,22 +274,22 @@ describe("forget", () => {
       payload: { all: true, confirmed: true },
     });
 
-    const reste = await harness.app.inject({
+    const remaining = await harness.app.inject({
       method: "GET",
       url: "/api/v1/memory",
-      headers: autre.authorization,
+      headers: other.authorization,
     });
-    expect(reste.json<{ data: unknown[] }>().data).toHaveLength(1);
+    expect(remaining.json<{ data: unknown[] }>().data).toHaveLength(1);
   });
 });
 
-describe("commandes explicites", () => {
-  it("exécute « retiens que… »", async () => {
+describe("explicit commands", () => {
+  it("executes 'remember that...'", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
       headers: example.authorization,
-      payload: { text: "Retiens que je préfère le train" },
+      payload: { text: "Remember that I prefer the train" },
     });
 
     const data = response.json<{
@@ -312,57 +298,52 @@ describe("commandes explicites", () => {
 
     expect(data.recognized).toBe(true);
     expect(data.kind).toBe("remember");
-    expect(data.stored?.content).toBe("je préfère le train");
+    expect(data.stored?.content).toBe("I prefer the train");
   });
 
-  it("exécute « oublie… »", async () => {
-    await storeOk(example, "j'habite à Lyon");
+  it("executes 'forget...'", async () => {
+    await storeOk(example, "I live in London");
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
       headers: example.authorization,
-      payload: { text: "Oublie que j'habite à Lyon" },
+      payload: { text: "Forget that I live in London" },
     });
 
     expect(response.json<{ data: { forgotten: unknown[] } }>().data.forgotten).toHaveLength(1);
   });
 
-  it("une commande dictée subit la même classification", async () => {
-    // Le chemin ne change pas la règle : l'utilisateur qui dicte son mot de
-    // passe se le voit refuser comme s'il l'avait saisi dans l'écran de gestion.
+  it("dictated command undergoes same classification", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
       headers: example.authorization,
-      payload: { text: "Retiens que mon mot de passe est Tr0ub4dor3xy" },
+      payload: { text: "Remember that my password is Tr0ub4dor3xy" },
     });
 
     expect(response.statusCode).toBe(422);
   });
 
-  it("ne reconnaît rien dans un message ordinaire", async () => {
+  it("recognizes nothing in ordinary conversation", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory/command",
       headers: example.authorization,
-      payload: { text: "Quelle est la météo à Lyon ?" },
+      payload: { text: "What is the weather in London?" },
     });
 
     expect(response.json<{ data: { recognized: boolean } }>().data.recognized).toBe(false);
   });
 });
 
-describe("frontière d'authentification", () => {
-  it("refuse un appel sans jeton", async () => {
-    // Les charges utiles sont **valides** : on veut mesurer l'authentification,
-    // pas la validation. Fastify valide avant le `preHandler`, si bien qu'un
-    // corps incomplet rendrait 400 et masquerait ce qu'on cherche a verifier.
+describe("authentication boundary", () => {
+  it("rejects call without token", async () => {
     for (const [method, url, payload] of [
       ["GET", "/api/v1/memory", undefined],
-      ["POST", "/api/v1/memory", { content: "quelque chose" }],
-      ["POST", "/api/v1/memory/forget", { match: "quelque chose" }],
-      ["POST", "/api/v1/memory/command", { text: "Retiens que X" }],
+      ["POST", "/api/v1/memory", { content: "something" }],
+      ["POST", "/api/v1/memory/forget", { match: "something" }],
+      ["POST", "/api/v1/memory/command", { text: "Remember that X" }],
       ["GET", "/api/v1/memory/search?q=x", undefined],
     ] as const) {
       const response = await harness.app.inject({
@@ -377,76 +358,70 @@ describe("frontière d'authentification", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("assemblage du contexte", () => {
-  it("relie les six couches sans les mélanger", async () => {
-    // Le test de bout en bout de la séparation : chaque couche vient de son
-    // propriétaire réel — le magasin de mémoire, le contexte de session, le
-    // magasin de conversations, le registre d'appareils, le magasin de plans.
-    await storeOk(example, "Réponds toujours en français", { layer: "PREFERENCE" });
-    await storeOk(example, "Habite à Lyon");
+describe("context assembly", () => {
+  it("connects the six layers without blending them", async () => {
+    await storeOk(example, "Always reply in concise English", { layer: "PREFERENCE" });
+    await storeOk(example, "Alex lives in London");
 
     const conversation = await harness.services.conversations.create({
       userId: example.userId,
-      title: "Essai",
+      title: "Test",
     });
     await harness.services.conversations.appendMessage({
       conversationId: conversation.id,
       role: "user",
-      content: "Bonjour NEXUS",
+      content: "Hello NEXUS",
       originClientDeviceId: null,
     });
 
-    harness.services.shortTerm.set(conversation.id, "fichier-courant", "src/memory.ts");
+    harness.services.shortTerm.set(conversation.id, "current-file", "src/memory.ts");
 
     const assembled = await harness.services.context.assemble({
       userId: example.userId,
       conversationId: conversation.id,
-      query: "où habite Alex",
+      query: "where does Alex live in London",
     });
 
-    expect(assembled.text).toContain("Réponds toujours en français");
-    expect(assembled.text).toContain("Habite à Lyon");
+    expect(assembled.text).toContain("Always reply in concise English");
+    expect(assembled.text).toContain("Alex lives in London");
     expect(assembled.text).toContain("src/memory.ts");
-    expect(assembled.text).toContain("Bonjour NEXUS");
+    expect(assembled.text).toContain("Hello NEXUS");
 
-    // Et chaque chose est dans sa section.
     const preferences = assembled.sections.find((s) => s.name === "preferences");
-    expect(preferences?.lines.join()).toContain("français");
-    expect(preferences?.lines.join()).not.toContain("Lyon");
+    expect(preferences?.lines.join()).toContain("concise English");
+    expect(preferences?.lines.join()).not.toContain("London");
   });
 
-  it("n'assemble jamais le contexte de quelqu'un d'autre", async () => {
-    await storeOk(autre, "Le secret de l'autre utilisateur");
+  it("never assembles another user's context", async () => {
+    await storeOk(other, "Secret of the other user");
 
     const assembled = await harness.services.context.assemble({
       userId: example.userId,
-      conversationId: "conv-inconnue",
+      conversationId: "unknown-conv",
       query: "secret",
     });
 
-    expect(assembled.text).not.toContain("secret de l'autre");
+    expect(assembled.text).not.toContain("Secret of the other user");
   });
 
-  it("ne lit pas la conversation d'un autre utilisateur", async () => {
-    // L'identifiant de conversation vient du client. Sans la vérification de
-    // propriété dans l'adaptateur, il suffirait d'en deviner un.
+  it("does not read another user's conversation", async () => {
     const conversation = await harness.services.conversations.create({
-      userId: autre.userId,
-      title: "Privé",
+      userId: other.userId,
+      title: "Private",
     });
     await harness.services.conversations.appendMessage({
       conversationId: conversation.id,
       role: "user",
-      content: "Message confidentiel",
+      content: "Confidential message",
       originClientDeviceId: null,
     });
 
     const assembled = await harness.services.context.assemble({
       userId: example.userId,
       conversationId: conversation.id,
-      query: "quoi de neuf",
+      query: "what is new",
     });
 
-    expect(assembled.text).not.toContain("Message confidentiel");
+    expect(assembled.text).not.toContain("Confidential message");
   });
 });

@@ -7,12 +7,12 @@ import { memoryKindSchema, storableLayerSchema, type MemoryRecord } from "@nexus
 import { NotFoundError } from "../../services/stores.js";
 
 /**
- * Conversations, messages, runs agent, mémoire, outils, notifications.
+ * Conversations, messages, agent runs, memory, tools, notifications.
  *
- * Le regroupement suit une frontière réelle : ce sont toutes des ressources
- * **propres à l'utilisateur**, lues et écrites par ses clients, sans jamais
- * toucher un exécutant. Les tâches, elles, vivent ailleurs — parce qu'elles
- * franchissent cette frontière.
+ * The grouping follows a real boundary: these are all resources
+ * **specific to the user**, read and written by their clients, without ever
+ * touching an executor. Tasks, on the other hand, live elsewhere — because
+ * they cross that boundary.
  */
 
 const conversationSchema = z.object({
@@ -29,11 +29,10 @@ const messageSchema = z.object({
   role: z.string(),
   content: z.string(),
   /**
-   * Appareil d'où part le message.
+   * Device from which the message originated.
    *
-   * Conservé sur le message : c'est ce qui permet à l'iPhone d'afficher « posé
-   * depuis le portable » et de ne pas resonner pour une réponse qu'on regarde
-   * déjà ailleurs.
+   * Preserved on the message: allows the iPhone to display "sent from laptop"
+   * and avoid chiming again for a response already viewed elsewhere.
    */
   originClientDeviceId: z.string().nullable(),
   createdAt: z.date(),
@@ -42,7 +41,7 @@ const messageSchema = z.object({
 export const conversationRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
-  /** Charge une conversation en vérifiant qu'elle appartient à l'appelant. */
+  /** Loads a conversation, verifying that it belongs to the caller. */
   async function load(conversationId: string, userId: string) {
     const conversation = await app.services.conversations.get(conversationId);
     if (conversation === undefined) throw new NotFoundError("Conversation", conversationId);
@@ -164,7 +163,7 @@ export const conversationRoutes: FastifyPluginCallback = (fastify, _options, don
       config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
         tags: ["messages"],
-        summary: "Ajoute un message — le streaming de la réponse passe par le WebSocket",
+        summary: "Appends a message — response streaming occurs via WebSocket",
         params: z.object({ conversationId: z.string().min(1) }),
         body: z.object({
           content: z.string().min(1).max(32_000),
@@ -177,13 +176,13 @@ export const conversationRoutes: FastifyPluginCallback = (fastify, _options, don
       const { userId } = currentUser(request);
       await load(request.params.conversationId, userId);
 
-      // L'appareil d'origine est vérifié comme appartenant à l'utilisateur : un
-      // client ne se déclare pas au nom d'un autre appareil.
+      // The origin device is verified to belong to the user:
+      // a client cannot claim to act on behalf of another device.
       const originClientDeviceId = request.body.originClientDeviceId ?? null;
       if (originClientDeviceId !== null) {
         const device = await app.services.deviceRegistry.getDevice(originClientDeviceId);
-        if (device === undefined) throw new NotFoundError("Appareil", originClientDeviceId);
-        assertOwnedBy(device.userId, userId, "Appareil");
+        if (device === undefined) throw new NotFoundError("Device", originClientDeviceId);
+        assertOwnedBy(device.userId, userId, "Device");
       }
 
       const message = await app.services.conversations.appendMessage({
@@ -243,7 +242,7 @@ export const notificationRoutes: FastifyPluginCallback = (fastify, _options, don
       preHandler: app.requireUser,
       schema: {
         tags: ["notifications"],
-        summary: "Marque comme lue — l'état est partagé entre tous les clients",
+        summary: "Marks as read — state is shared across all clients",
         params: z.object({ notificationId: z.string().min(1) }),
         response: { 200: okSchema(notificationSchema) },
       },
@@ -257,8 +256,8 @@ export const notificationRoutes: FastifyPluginCallback = (fastify, _options, don
       }
       assertOwnedBy(notification.userId, userId, "Notification");
 
-      // Lue sur l'iPhone, lue sur le portable : l'état vit au centre, ce qui est
-      // toute la raison d'être de la synchronisation.
+      // Read on iPhone, read on laptop: state lives centrally, which is
+      // the entire purpose of synchronization.
       return ok(
         await app.services.notificationStore.markRead(
           request.params.notificationId,
@@ -272,16 +271,16 @@ export const notificationRoutes: FastifyPluginCallback = (fastify, _options, don
 };
 
 /**
- * Mémoire.
+ * Memory.
  *
- * Toutes ces routes passent par `MemoryService`, jamais par le magasin nu. Le
- * magasin range ce qu'on lui donne ; le service est ce qui décide si on doit le
- * lui donner. Court-circuiter le service ici, « juste pour la route de
- * création », suffirait à contourner la règle du silence.
+ * All these routes pass through `MemoryService`, never through the raw store.
+ * The store saves what it is given; the service decides whether it should be given.
+ * Short-circuiting the service here, "just for the creation route", would suffice
+ * to bypass the silence rule.
  *
- * La frontière entre utilisateurs n'est pas revérifiée route par route : chaque
- * appel porte `userId`, et le service l'applique. Une vérification recopiée dans
- * six routes finit toujours par manquer à la septième.
+ * The user boundary is not re-checked route by route: each call carries `userId`,
+ * and the service enforces it. A check duplicated across six routes inevitably
+ * ends up missing on the seventh.
  */
 const memoryRecordSchema = z.object({
   id: z.string(),
@@ -324,7 +323,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Tout ce que NEXUS retient de l'utilisateur",
+        summary: "Everything NEXUS remembers about the user",
         querystring: z.object({
           limit: z.coerce.number().int().min(1).max(200).default(100),
           layer: storableLayerSchema.optional(),
@@ -353,7 +352,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Recherche dans la mémoire de l'utilisateur",
+        summary: "Search user memory",
         querystring: z.object({
           q: z.string().min(1).max(1_000),
           limit: z.coerce.number().int().min(1).max(50).default(10),
@@ -416,7 +415,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Enregistre un souvenir",
+        summary: "Saves a memory",
         body: z.object({
           content: z.string().min(1).max(8_000),
           kind: memoryKindSchema.default("SEMANTIC"),
@@ -424,12 +423,11 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
           tags: z.array(z.string().max(40)).max(16).default([]),
           importance: z.number().min(0).max(1).optional(),
           /**
-           * L'utilisateur a vu la nature du contenu et l'a confirmé.
+           * The user acknowledged the sensitive nature of the content and confirmed it.
            *
-           * Sans valeur par défaut à `true` : c'est ce qui donne son sens à la
-           * règle. Un client qui l'envoie systématiquement la contourne, et
-           * c'est un choix qu'il assume — le serveur ne peut pas savoir si la
-           * question a été posée, seulement exiger qu'on la déclare.
+           * No default value of `true`: that is what gives meaning to the rule.
+           * A client sending it systematically bypasses it, and that is a deliberate choice
+           * on its part — the server cannot know if the prompt was shown, only require its declaration.
            */
           acknowledgedSensitive: z.boolean().default(false),
         }),
@@ -459,7 +457,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Corrige un souvenir",
+        summary: "Updates a memory",
         params: z.object({ memoryId: z.string().min(1) }),
         body: z.object({
           content: z.string().min(1).max(8_000).optional(),
@@ -483,9 +481,9 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         ...(request.body.layer === undefined ? {} : { layer: request.body.layer }),
       });
 
-      // Inconnu et « pas à vous » sont volontairement indiscernables : les
-      // distinguer indiquerait à un curieux quels identifiants existent.
-      if (updated === undefined) throw new NotFoundError("Souvenir", request.params.memoryId);
+      // Unknown and "not yours" are intentionally indistinguishable:
+      // distinguishing them would reveal to an attacker which IDs exist.
+      if (updated === undefined) throw new NotFoundError("Memory", request.params.memoryId);
       return ok(presentMemory(updated), request.id);
     },
   );
@@ -496,7 +494,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Oublie un souvenir",
+        summary: "Forgets a memory",
         params: z.object({ memoryId: z.string().min(1) }),
         response: { 200: okSchema(z.object({ forgotten: z.array(memoryRecordSchema) })) },
       },
@@ -509,11 +507,11 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       });
 
       if (result.forgotten.length === 0) {
-        throw new NotFoundError("Souvenir", request.params.memoryId);
+        throw new NotFoundError("Memory", request.params.memoryId);
       }
 
-      // On rend ce qui a disparu : l'interface peut l'afficher et proposer de
-      // le redire, plutôt que de laisser l'utilisateur devant un vide.
+      // Return what was deleted: the UI can display it and offer to
+      // restate it, rather than leaving the user with an empty screen.
       return ok({ forgotten: result.forgotten.map(presentMemory) }, request.id);
     },
   );
@@ -524,11 +522,11 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Oublie par correspondance de texte, ou tout",
+        summary: "Forgets by text match, or all",
         body: z.object({
           match: z.string().min(1).max(1_000).optional(),
           all: z.boolean().default(false),
-          /** Exigé pour un effacement total. Un souvenir se redit, pas une mémoire. */
+          /** Required for total erasure. A single memory can be restated; an entire memory bank cannot. */
           confirmed: z.boolean().default(false),
         }),
         response: {
@@ -568,7 +566,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["memory"],
-        summary: "Exécute « Retiens que… » ou « Oublie… » s'il y en a une",
+        summary: "Executes 'Remember that...' or 'Forget...' if present",
         body: z.object({
           text: z.string().min(1).max(8_000),
           acknowledgedSensitive: z.boolean().default(false),
@@ -577,7 +575,7 @@ export const memoryRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         response: {
           200: okSchema(
             z.object({
-              /** `false` quand le message n'est pas une commande — le cas normal. */
+              /** `false` when the message is not a command — the normal case. */
               recognized: z.boolean(),
               kind: z.enum(["remember", "forget"]).nullable(),
               message: z.string(),
@@ -639,7 +637,7 @@ export const toolRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["tools"],
-        summary: "Outils exposés à l'agent, avec leur risque et leur disponibilité",
+        summary: "Tools exposed to the agent, with risk level and availability",
         response: {
           200: okSchema(
             z.object({
@@ -651,7 +649,7 @@ export const toolRoutes: FastifyPluginCallback = (fastify, _options, done) => {
                   requiredPermissions: z.array(z.string()),
                   requiresConfirmation: z.boolean(),
                   granted: z.boolean(),
-                  /** Appareils capables de l'exécuter maintenant. */
+                  /** Devices capable of executing it now. */
                   availableOn: z.array(z.string()),
                 }),
               ),
@@ -665,9 +663,9 @@ export const toolRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const granted = new Set(await app.services.permissionsFor(userId));
       const devices = await app.services.deviceRegistry.listDevices(userId);
 
-      // La liste des outils est dérivée des capacités réellement présentes dans
-      // la flotte, et non d'un catalogue statique : un outil qu'aucun appareil
-      // ne sait exécuter n'a rien à faire dans une interface.
+      // The tool list is derived from capabilities actually present in
+      // the fleet, not a static catalog: a tool that no device can execute
+      // has no place in a UI.
       const byCapability = new Map<string, string[]>();
       for (const device of devices) {
         for (const capability of device.capabilities) {
@@ -687,7 +685,7 @@ export const toolRoutes: FastifyPluginCallback = (fastify, _options, done) => {
 
           return {
             name: `device.${capability}`,
-            description: `Capacité ${capability}, exercée sur un appareil de l'utilisateur.`,
+            description: `Capability ${capability}, executed on a user device.`,
             riskLevel: risk,
             requiredPermissions: [capability],
             requiresConfirmation: risk !== "SAFE" && risk !== "LOW",

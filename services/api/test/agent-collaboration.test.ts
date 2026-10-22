@@ -14,30 +14,30 @@ const settings: RuntimeSettings = {
   synthesis_priority: ["claude", "antigravity", "codex"],
 };
 
-describe("AgentCollaborationService (Chantier 14)", () => {
+describe("AgentCollaborationService", () => {
   const service = new AgentCollaborationService();
   const router = new AgentRouter();
 
-  it("extrait fidèlement une sortie structurée en JSON", () => {
+  it("faithfully extracts structured JSON output", () => {
     const raw = JSON.stringify({
-      summary: "Refactorisation réussie du module d'authentification.",
+      summary: "Successful refactoring of the authentication module.",
       payloadType: "code_patch",
       confidenceScore: 0.95,
-      assumptions: ["Node 26 LTS utilisé", "Clés JWT 256 bits"],
-      openQuestions: ["Faut-il migrer les anciens tokens ?"],
+      assumptions: ["Node 26 LTS used", "256-bit JWT keys"],
+      openQuestions: ["Should legacy tokens be migrated?"],
       proposedSubtasks: [
         {
           key: "verify_jwt_migration",
-          title: "Vérifier la migration JWT",
-          instruction: "Tester la rétrocompatibilité des anciens tokens.",
-          reason: "Éviter de déconnecter les sessions existantes.",
+          title: "Verify JWT migration",
+          instruction: "Test backward compatibility with legacy tokens.",
+          reason: "Avoid disconnecting existing sessions.",
           priority: "recommended",
         },
       ],
       artifacts: [
         {
           name: "auth.patch",
-          description: "Correctif de signature",
+          description: "Signature fix",
         },
       ],
     });
@@ -45,41 +45,41 @@ describe("AgentCollaborationService (Chantier 14)", () => {
     const parsed = service.parseTaskOutput(raw);
     expect(parsed.payloadType).toBe("code_patch");
     expect(parsed.confidenceScore).toBe(0.95);
-    expect(parsed.assumptions).toEqual(["Node 26 LTS utilisé", "Clés JWT 256 bits"]);
+    expect(parsed.assumptions).toEqual(["Node 26 LTS used", "256-bit JWT keys"]);
     expect(parsed.proposedSubtasks).toHaveLength(1);
     expect(parsed.proposedSubtasks[0]?.key).toBe("verify_jwt_migration");
   });
 
-  it("extrait sémantiquement les hypothèses et questions depuis du markdown libre", () => {
+  it("semantically extracts assumptions and questions from free markdown", () => {
     const text = `
-    J'ai analysé l'architecture du système.
+    I analyzed the system architecture.
     
-    ## Hypothèses
-    - PostgreSQL est opérationnel sur localhost:5432
-    - Redis n'est pas utilisé pour la persistance durable
+    ## Assumptions
+    - PostgreSQL is operational on localhost:5432
+    - Redis is not used for durable persistence
     
-    ## Questions ouvertes
-    - Quelle est la volumétrie cible de requêtes ?
+    ## Open questions
+    - What is the target request throughput?
     
-    Confiance : 90%
+    Confidence: 90%
     `;
 
     const parsed = service.parseTaskOutput(text);
     expect(parsed.confidenceScore).toBe(0.9);
-    expect(parsed.assumptions).toContain("PostgreSQL est opérationnel sur localhost:5432");
-    expect(parsed.openQuestions).toContain("Quelle est la volumétrie cible de requêtes ?");
+    expect(parsed.assumptions).toContain("PostgreSQL is operational on localhost:5432");
+    expect(parsed.openQuestions).toContain("What is the target request throughput?");
   });
 
-  it("formate un contexte amont structuré avec artefacts et indicateurs", () => {
+  it("formats structured upstream context with artifacts and indicators", () => {
     const context = service.formatStructuredUpstreamContext([
       {
         taskKey: "investigate",
         profileKey: "codex",
         output: {
-          summary: "Base de code explorée, aucun composant obsolète.",
+          summary: "Codebase explored, no obsolete components.",
           payloadType: "audit_report",
           confidenceScore: 0.92,
-          assumptions: ["Version TypeScript 5.8"],
+          assumptions: ["TypeScript version 5.8"],
           openQuestions: [],
           proposedSubtasks: [],
           artifacts: [],
@@ -95,7 +95,7 @@ describe("AgentCollaborationService (Chantier 14)", () => {
             mimeType: "application/json",
             sizeBytes: 2048,
             sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-            description: "Détail de l'analyse",
+            description: "Analysis details",
             metadata: {},
             createdAt: new Date().toISOString(),
           },
@@ -105,20 +105,20 @@ describe("AgentCollaborationService (Chantier 14)", () => {
 
     expect(context).toContain("<STRUCTURED_UPSTREAM_CONTEXT>");
     expect(context).toContain(
-      "[TASK: investigate | AGENT: codex | TYPE: audit_report | CONFIANCE: 92%]",
+      "[TASK: investigate | AGENT: codex | TYPE: audit_report | CONFIDENCE: 92%]",
     );
     expect(context).toContain("artifact://investigate/report.json");
-    expect(context).toContain("Version TypeScript 5.8");
+    expect(context).toContain("TypeScript version 5.8");
     expect(context).toContain("</STRUCTURED_UPSTREAM_CONTEXT>");
   });
 
-  it("détecte une contradiction formelle et génère une tâche d'arbitrage neutre", async () => {
+  it("detects formal contradiction and generates a neutral arbitration task", async () => {
     const upstream = [
       {
         taskKey: "propose_solution",
         profileKey: "antigravity",
         output: {
-          summary: "La solution sans verrouillage est sûre et suffisante.",
+          summary: "The lockless solution is safe and sufficient.",
           payloadType: "hypothesis" as const,
           confidenceScore: 0.85,
           assumptions: [],
@@ -132,7 +132,7 @@ describe("AgentCollaborationService (Chantier 14)", () => {
         profileKey: "claude",
         output: {
           summary:
-            "Contradiction majeure : l'absence de verrouillage introduit une race condition critique.",
+            "Major contradiction: the lack of locking introduces a critical race condition.",
           payloadType: "contradiction_claim" as const,
           confidenceScore: 0.95,
           assumptions: [],
@@ -157,13 +157,13 @@ describe("AgentCollaborationService (Chantier 14)", () => {
 
       expect(arbitration.key).toBe("nexus_cross_critique_arbitration");
       expect(arbitration.depends_on).toEqual(["propose_solution", "security_review"]);
-      expect(arbitration.instruction).toContain("arbitre neutre");
-      // Préfère codex comme tiers neutre
+      expect(arbitration.instruction).toContain("neutral arbitrator");
+      // Prefers codex as neutral third party
       expect(arbitration.profile).toBe("codex");
     }
   });
 
-  it("intègre dynamiquement les propositions de sous-tâches prioritaires dans le DAG", async () => {
+  it("dynamically integrates priority subtask proposals into the DAG", async () => {
     const existingTasks = [
       {
         key: "initial_dev",
@@ -174,7 +174,7 @@ describe("AgentCollaborationService (Chantier 14)", () => {
         max_attempts: 1,
         retry_delay_seconds: 5,
         context_budget_chars: 40000,
-        instruction: "Développe la fonctionnalité",
+        instruction: "Develop feature",
       },
       {
         key: "nexus_final_synthesis",
@@ -185,23 +185,23 @@ describe("AgentCollaborationService (Chantier 14)", () => {
         max_attempts: 1,
         retry_delay_seconds: 5,
         context_budget_chars: 40000,
-        instruction: "Synthétise",
+        instruction: "Synthesize",
       },
     ];
 
     const proposals = [
       {
         key: "benchmark_stress_test",
-        title: "Test de charge",
-        instruction: "Mesure la latence à 1000 req/s",
-        reason: "Vérifier le scaling",
+        title: "Load test",
+        instruction: "Measure latency at 1000 req/s",
+        reason: "Verify scaling",
         priority: "critical" as const,
       },
       {
         key: "optional_styling",
-        title: "Peaufinage CSS",
-        instruction: "Change la couleur",
-        reason: "Esthétique",
+        title: "CSS polish",
+        instruction: "Change color",
+        reason: "Aesthetics",
         priority: "optional" as const,
       },
     ];
@@ -215,13 +215,13 @@ describe("AgentCollaborationService (Chantier 14)", () => {
       settings,
     });
 
-    // Seule la sous-tâche critique doit être intégrée, l'optionnelle est ignorée
+    // Only the critical subtask should be incorporated; optional is ignored
     expect(updated).toHaveLength(3);
     const benchmarkTask = updated.find((t) => t.key === "benchmark_stress_test");
     expect(benchmarkTask).toBeDefined();
     expect(benchmarkTask?.depends_on).toEqual(["initial_dev"]);
 
-    // La synthèse finale doit désormais attendre la nouvelle sous-tâche
+    // The final synthesis must now depend on the new subtask
     const synthesis = updated.find((t) => t.key === "nexus_final_synthesis");
     expect(synthesis?.depends_on).toContain("benchmark_stress_test");
   });

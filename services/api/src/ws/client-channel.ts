@@ -13,27 +13,26 @@ import {
 import type { ServiceContainer } from "../services/container.js";
 
 /**
- * Canal temps réel des clients.
+ * Real-time client channel.
  *
- * Trois responsabilités, et pas une de plus :
+ * Three responsibilities, and no more:
  *
- *  1. **authentifier** la connexion — un jeton d'accès, puis un appareil qui
- *     appartient à l'utilisateur de ce jeton ;
- *  2. **traiter les demandes montantes**, chacune passant par les mêmes
- *     autorisations que la route REST équivalente ;
- *  3. **traduire les événements internes** en messages descendants.
+ *  1. **Authenticate** the connection — an access token, then a device
+ *     belonging to the user of that token;
+ *  2. **Handle upstream requests**, each passing through the same
+ *     authorizations as the equivalent REST route;
+ *  3. **Translate internal events** into downstream messages.
  *
- * Ce qu'il ne fait pas : parler à un exécutant. Aucun message de ce canal ne
- * désigne un worker, et le seul chemin vers une machine passe par
- * `TaskCoordinator`, qui applique ses propres contrôles.
+ * What it does not do: talk directly to an executor. No message on this channel
+ * addresses a worker, and the only path to a machine passes through
+ * `TaskCoordinator`, which applies its own controls.
  *
- * La synchronisation entre l'iPhone et le portable ne demande aucun code
- * spécifique : `EventRouter` diffuse déjà à tous les clients de l'utilisateur,
- * l'appareil d'origine servi en premier. Ce canal ne fait que brancher une
- * connexion dessus.
+ * Synchronization between iPhone and laptop requires no specific code:
+ * `EventRouter` already broadcasts to all of the user's clients,
+ * serving the origin device first. This channel merely connects a socket to it.
  */
 
-/** Une socket, réduite à ce dont ce module a besoin. */
+/** A socket, reduced to what this module requires. */
 export interface ClientSocket {
   send(data: string): void;
   close(code: number, reason: string): void;
@@ -72,12 +71,11 @@ export class ClientChannel {
   }
 
   /**
-   * Authentifie une connexion entrante.
+   * Authenticates an incoming connection.
    *
-   * Deux preuves sont exigées, et la seconde n'est pas redondante : le jeton dit
-   * *qui* se connecte, l'appareil dit *d'où*. Sans le second contrôle, un jeton
-   * volé permettrait de se déclarer n'importe quel appareil et de détourner les
-   * événements destinés à celui-ci.
+   * Two proofs are required, and the second is not redundant: the token states
+   * *who* is connecting, the device states *from where*. Without the second check,
+   * a stolen token would allow impersonating any device and hijacking events intended for it.
    */
   async authenticate(input: {
     accessToken: string;
@@ -88,22 +86,21 @@ export class ClientChannel {
 
     const device = await this.#services.deviceRegistry.requireDevice(input.deviceId);
     if (device.userId !== claims.sub) {
-      throw new Error("Appareil n'appartenant pas à l'utilisateur du jeton");
+      throw new Error("Device does not belong to token user");
     }
     if (device.trust !== "TRUSTED" || device.revokedAt !== null) {
-      throw new Error("Appareil non approuvé ou révoqué");
+      throw new Error("Device not approved or revoked");
     }
 
     return { userId: claims.sub, sessionId: claims.sid, deviceId: device.id };
   }
 
   /**
-   * Attache une connexion authentifiée.
+   * Attaches an authenticated connection.
    *
-   * Le rattachement au routeur livre immédiatement ce qui a été manqué : un
-   * iPhone rallumé après deux heures reçoit la file en attente avant tout
-   * message neuf. C'est ce qui fait que les deux clients convergent au lieu de
-   * diverger.
+   * Attaching to the router immediately delivers what was missed: an iPhone
+   * powered on after two hours receives the queued backlog before any new message.
+   * This is what ensures the two clients converge rather than diverge.
    */
   async attach(context: ClientConnectionContext, socket: ClientSocket): Promise<number> {
     this.#sockets.set(context.deviceId, socket);
@@ -125,11 +122,10 @@ export class ClientChannel {
   }
 
   /**
-   * Traite une trame montante.
+   * Handles an upstream frame.
    *
-   * Ne lève jamais : toute issue devient un accusé. Une exception qui remonterait
-   * ferait tomber la connexion, et le client perdrait aussi les événements sans
-   * rapport avec sa demande.
+   * Never throws: any outcome becomes an acknowledgment. An uncaught exception
+   * would tear down the connection, and the client would also lose events unrelated to its request.
    */
   async handle(context: ClientConnectionContext, raw: unknown): Promise<void> {
     let request: ReturnType<typeof parseClientRequest>;
@@ -137,8 +133,7 @@ export class ClientChannel {
     try {
       request = parseClientRequest(raw);
     } catch (cause) {
-      // Type connu, charge utile invalide : c'est une erreur de programmation ou
-      // une falsification, et le client doit le savoir.
+      // Known type, invalid payload: programming error or forgery, and the client must know.
       this.#ack(context.deviceId, undefined, {
         ok: false,
         data: null,
@@ -147,8 +142,8 @@ export class ClientChannel {
       return;
     }
 
-    // Cadrage illisible ou type inconnu : ignoré en silence. Un client plus
-    // récent que le serveur ne doit pas voir sa connexion fermée.
+    // Unreadable framing or unknown type: silently ignored. A client newer
+    // than the server must not have its connection severed.
     if (request === undefined) return;
 
     try {
@@ -171,10 +166,9 @@ export class ClientChannel {
   ): Promise<unknown> {
     switch (type) {
       case CLIENT_TO_SERVER.conversationSubscribe: {
-        // L'abonnement est implicite : le routeur diffuse déjà tout ce qui
-        // concerne l'utilisateur. On confirme la portée demandée pour que le
-        // client sache à quoi s'attendre, sans créer un second mécanisme de
-        // filtrage qui divergerait du premier.
+        // Subscription is implicit: the router already broadcasts everything
+        // concerning the user. We confirm the requested scope so the client knows
+        // what to expect, without creating a second filtering mechanism that could diverge.
         const input = payload as ClientRequestPayload<"conversation.subscribe">;
         return { subscribed: true, conversationId: input.conversationId };
       }
@@ -199,8 +193,8 @@ export class ClientChannel {
       case CLIENT_TO_SERVER.messageSend: {
         const input = payload as ClientRequestPayload<"message.send">;
 
-        // L'appareil d'origine est **imposé**, pas accepté : un client ne
-        // choisit pas son identité. C'est la connexion authentifiée qui le dit.
+        // The origin device is **enforced**, not accepted: a client does not choose its identity.
+        // The authenticated connection dictates it.
         const conversationId =
           input.conversationId ??
           (
@@ -212,7 +206,7 @@ export class ClientChannel {
 
         const conversation = await this.#services.conversations.get(conversationId);
         if (conversation?.userId !== context.userId) {
-          throw new Error("Conversation inconnue");
+          throw new Error("Unknown conversation");
         }
 
         const message = await this.#services.conversations.appendMessage({
@@ -228,8 +222,8 @@ export class ClientChannel {
       case CLIENT_TO_SERVER.confirmationRespond: {
         const input = payload as ClientRequestPayload<"confirmation.respond">;
 
-        // N'importe quel appareil de l'utilisateur peut trancher : la demande
-        // vit au centre, pas dans le client qui l'a affichée.
+        // Any device belonging to the user may decide: the request lives centrally,
+        // not in the client that displayed it.
         const accepted = await this.#services.confirmationBroker.respondAndRecord(
           input.confirmationId,
           input.decision,
@@ -243,7 +237,7 @@ export class ClientChannel {
         const plan = await this.#services.taskStore.get(input.taskId);
 
         if (plan?.userId !== context.userId) {
-          throw new Error("Tâche inconnue");
+          throw new Error("Unknown task");
         }
 
         return { cancelled: this.#services.supervisor.cancel(input.taskId, context.userId) };
@@ -251,26 +245,23 @@ export class ClientChannel {
 
       case CLIENT_TO_SERVER.agentCancel: {
         const input = payload as ClientRequestPayload<"agent.cancel">;
-        // Un run agent s'annule par le même chemin qu'une tâche : le
-        // superviseur tient les exécutions en vol, quel que soit ce qui les a
-        // déclenchées — et vérifie le propriétaire, comme pour une tâche. Ce
-        // chemin-ci ne consultait aucun magasin et ne vérifiait donc rien.
+        // An agent run is cancelled via the same path as a task: the supervisor
+        // tracks in-flight executions regardless of trigger — and checks ownership.
         return { cancelled: this.#services.supervisor.cancel(input.runId, context.userId) };
       }
 
       default:
-        throw new Error(`Type de demande non traité : ${type}`);
+        throw new Error(`Unhandled request type: ${type}`);
     }
   }
 
   /**
-   * Traduit un événement interne en message descendant.
+   * Translates an internal event into a downstream message.
    *
-   * La table de correspondance est **partielle**, et c'est le point : tout ce
-   * qui n'y figure pas ne descend pas. Les événements `worker.*` décrivent ce
-   * que fait une machine ; les clients voient `task.*`, qui décrit ce qu'ils
-   * doivent afficher. Diffuser les premiers révélerait la topologie de la flotte
-   * à chaque client sans raison.
+   * The mapping table is **partial**, and that is the point: whatever is not in it
+   * is not sent down. `worker.*` events describe machine actions; clients see
+   * `task.*`, which describes what they must render. Broadcasting the former
+   * would unnecessarily expose fleet topology to every client.
    */
   #deliver(deviceId: string, event: NexusEvent): void {
     const type = EVENT_TO_CLIENT_MESSAGE[event.type];
@@ -310,7 +301,7 @@ export class ClientChannel {
     );
   }
 
-  /** Envoie un message hors événement — flux de réponse de l'agent. */
+  /** Sends a non-event message — agent response stream. */
   push<T extends ServerToClientType>(
     deviceId: string,
     type: T,
@@ -327,12 +318,12 @@ export class ClientChannel {
 }
 
 function describe(cause: unknown): string {
-  // Le message d'une `AppError` est sûr à afficher ; celui d'une exception
-  // inconnue peut contenir un chemin ou un fragment de requête.
+  // An `AppError` message is safe to display; that of an unknown exception
+  // might contain a path or a request fragment.
   if (cause !== null && typeof cause === "object" && "userMessage" in cause) {
     return String(cause.userMessage);
   }
-  return cause instanceof Error ? cause.message : "Erreur inattendue";
+  return cause instanceof Error ? cause.message : "Unexpected error";
 }
 
 function codeOf(cause: unknown): string {

@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { parseMcpServerConfig } from "@nexus/mcp";
 import { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 
-describe("configuration administrable NEXUS", () => {
-  it("persiste MCP, Browser Use et uniquement les noms de secrets", async () => {
+describe("NEXUS manageable configuration", () => {
+  it("persists MCP, Browser Use, and only secret names", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-"));
     const store = new RuntimeConfigurationStore(directory);
 
@@ -44,11 +44,11 @@ describe("configuration administrable NEXUS", () => {
     expect((await store.loadBrowser())?.mode).toBe("local-harness");
     expect(await store.listSecretNames()).toEqual(["browser-worker-token", "mcp-token"]);
     expect(await readFile(join(directory, "secret-refs.json"), "utf8")).not.toContain(
-      "valeur-secrète",
+      "secret-value",
     );
   });
 
-  it("migre en lecture la configuration historique du worker navigateur", async () => {
+  it("migrates legacy browser worker configuration on read", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-legacy-"));
     const store = new RuntimeConfigurationStore(directory);
     await store.saveBrowser({

@@ -46,7 +46,7 @@ const engine = {
           ordinal: 2,
           profile_key: "codex",
           state: "succeeded",
-          result_json: '{"response":"Réponse finale vérifiée"}',
+          result_json: '{"response":"Verified final response"}',
           error_json: null,
           created_at: "2026-10-19T10:00:00+00:00",
           updated_at: "2026-10-19T10:01:00+00:00",
@@ -115,13 +115,13 @@ beforeEach(async () => {
 
 afterEach(async () => harness.close());
 
-describe("façade orchestrateur NEXUS", () => {
-  it("transforme un seul message en DAG ACP puis expose uniquement la synthèse", async () => {
+describe("NEXUS orchestrator facade", () => {
+  it("transforms a single message into an ACP DAG then exposes only the synthesis", async () => {
     const created = await harness.app.inject({
       method: "POST",
       url: "/api/v1/orchestrator/messages",
       headers: account.authorization,
-      payload: { message: "Analyse ce dépôt et propose trois améliorations." },
+      payload: { message: "Analyze this repository and suggest three improvements." },
     });
     expect(created.statusCode).toBe(202);
     expect(submitted?.tasks.at(-1)).toMatchObject({
@@ -148,11 +148,11 @@ describe("façade orchestrateur NEXUS", () => {
     expect(status.statusCode).toBe(200);
     expect(status.json().data).toMatchObject({
       state: "succeeded",
-      response: "Réponse finale vérifiée",
+      response: "Verified final response",
     });
   });
 
-  it("exige une session utilisateur", async () => {
+  it("requires a user session", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/orchestrator/messages",
@@ -161,10 +161,10 @@ describe("façade orchestrateur NEXUS", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("injecte la mémoire persistante dans les tâches ACP sans la traiter comme une instruction", async () => {
+  it("injects persistent memory into ACP tasks without treating it as an instruction", async () => {
     await harness.services.memoryService.remember({
       userId: account.userId,
-      content: "Toujours livrer un résumé final en français.",
+      content: "Always deliver a final summary in English.",
       layer: "PREFERENCE",
     });
 
@@ -172,24 +172,24 @@ describe("façade orchestrateur NEXUS", () => {
       method: "POST",
       url: "/api/v1/orchestrator/messages",
       headers: account.authorization,
-      payload: { message: "Analyse le projet." },
+      payload: { message: "Analyze the project." },
     });
 
     expect(response.statusCode).toBe(202);
     expect(submitted?.tasks[0]?.instruction).toContain("<USER_CONTEXT>");
     expect(submitted?.tasks[0]?.instruction).toContain(
-      "Toujours livrer un résumé final en français.",
+      "Always deliver a final summary in English.",
     );
-    expect(submitted?.tasks[0]?.instruction).toContain("donnée non fiable");
+    expect(submitted?.tasks[0]?.instruction).toContain("untrusted data");
   });
 
-  it("route une mission navigateur vers un agent équipé du harness local", async () => {
+  it("routes a browser mission to an agent equipped with local harness", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/orchestrator/messages",
       headers: account.authorization,
       payload: {
-        message: "Ouvre le navigateur, visite example.com et vérifie le titre de la page.",
+        message: "Open the browser, visit example.com, and verify the page title.",
       },
     });
 
@@ -201,7 +201,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(submitted?.tasks[0]?.instruction).toContain("browser-harness");
   });
 
-  it("crée depuis le chat un calendrier durable quand la demande temporelle est explicite", async () => {
+  it("creates a durable schedule from chat when timing request is explicit", async () => {
     await harness.close();
     const scheduleId = "88888888-8888-4888-8888-888888888888";
     const scheduledLlm: LLMProvider = {
@@ -216,12 +216,12 @@ describe("façade orchestrateur NEXUS", () => {
       countTokens: () => Promise.resolve(10),
       structuredOutput: <T>() =>
         Promise.resolve({
-          title: "Veille quotidienne",
+          title: "Daily watch",
           tasks: [
             {
               key: "daily_watch",
               profile: "antigravity",
-              instruction: "Analyse les nouvelles informations et signale les changements.",
+              instruction: "Analyze new information and report changes.",
               depends_on: [],
             },
           ],
@@ -245,7 +245,7 @@ describe("façade orchestrateur NEXUS", () => {
     };
     engine.createSchedule.mockResolvedValueOnce({
       id: scheduleId,
-      name: "Veille quotidienne",
+      name: "Daily watch",
       state: "active",
       schedule_kind: "cron",
       run_at: null,
@@ -257,7 +257,7 @@ describe("façade orchestrateur NEXUS", () => {
       misfire_grace_seconds: 300,
       mission: {
         external_key: "nexus-owner-schedule",
-        title: "Veille quotidienne",
+        title: "Daily watch",
         workspace: "/tmp/nexus",
         tasks: [],
       },
@@ -274,7 +274,7 @@ describe("façade orchestrateur NEXUS", () => {
       url: "/api/v1/orchestrator/messages",
       headers: account.authorization,
       payload: {
-        message: "Tous les jours à 8 h, surveille les nouvelles informations.",
+        message: "Every day at 8 AM, monitor new information.",
         timezone: "Europe/Paris",
       },
     });
@@ -284,7 +284,7 @@ describe("façade orchestrateur NEXUS", () => {
       missionId: scheduleId,
       state: "scheduled",
     });
-    expect(response.json().data.response).toContain("Calendrier");
+    expect(response.json().data.response).toContain("Schedule");
     expect(engine.createSchedule).toHaveBeenCalledWith(
       expect.objectContaining({
         timezone: "Europe/Paris",
@@ -294,7 +294,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(engine.submitMission).not.toHaveBeenCalled();
   });
 
-  it("permet à l'administrateur de consulter et enregistrer les profils ACP NEXUS", async () => {
+  it("allows administrator to inspect and register NEXUS ACP profiles", async () => {
     const listed = await harness.app.inject({
       method: "GET",
       url: "/api/v1/orchestrator/agents",
@@ -307,16 +307,16 @@ describe("façade orchestrateur NEXUS", () => {
       method: "POST",
       url: "/api/v1/orchestrator/agents",
       headers: account.authorization,
-      payload: { key: "nouvel-agent", agent_profile_id: "profile-123" },
+      payload: { key: "new-agent", agent_profile_id: "profile-123" },
     });
     expect(registered.statusCode).toBe(201);
     expect(engine.registerAgent).toHaveBeenCalledWith({
-      key: "nouvel-agent",
+      key: "new-agent",
       agent_profile_id: "profile-123",
     });
   });
 
-  it("réserve le registre d'agents au compte administrateur", async () => {
+  it("reserves agent registry to administrator account", async () => {
     const member = await createAccount(harness, "member-agents@example.org");
     const response = await harness.app.inject({
       method: "GET",
@@ -326,7 +326,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it("crée un profil ACP depuis NEXUS sans recevoir de secret", async () => {
+  it("creates an ACP profile from NEXUS without receiving secrets", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/orchestrator/agents/create",
@@ -348,7 +348,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(JSON.stringify(engine.createAgent.mock.calls)).not.toMatch(/token|secret|password/i);
   });
 
-  it("configure, teste et désactive un profil ACP depuis le dashboard", async () => {
+  it("configures, tests, and disables an ACP profile from dashboard", async () => {
     const profile = {
       name: "Claude Review",
       command: "/usr/bin/npx",
@@ -382,7 +382,7 @@ describe("façade orchestrateur NEXUS", () => {
     expect(engine.disableAgent).toHaveBeenCalledWith("claude");
   });
 
-  it("lit et enregistre les paramètres d'orchestration", async () => {
+  it("reads and saves orchestration settings", async () => {
     const settings = await engine.settings();
     engine.updateSettings.mockResolvedValueOnce(settings);
     const response = await harness.app.inject({

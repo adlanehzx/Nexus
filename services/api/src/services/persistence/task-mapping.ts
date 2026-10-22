@@ -10,24 +10,24 @@ import type {
 } from "@nexus/devices";
 
 /**
- * Correspondance entre le domaine des tâches et les colonnes PostgreSQL.
+ * Mapping between the task domain model and PostgreSQL columns.
  *
- * Ce module existe parce que les deux côtés ne parlent pas la même langue, et
- * que l'ignorer coûtait cher : le domaine écrit ses statuts en minuscules
- * (`"succeeded"`), la base les stocke dans un **enum PostgreSQL natif** en
- * majuscules (`SUCCEEDED`). Les dates sont des chaînes ISO côté domaine et des
- * `timestamptz` côté base. Un champ ne porte pas le même nom des deux côtés
+ * This module exists because both sides do not speak the same language, and
+ * ignoring this was costly: the domain writes its statuses in lowercase
+ * (`"succeeded"`), while the database stores them in a **native PostgreSQL enum** in
+ * uppercase (`SUCCEEDED`). Dates are ISO strings on the domain side and
+ * `timestamptz` in the database. One field has a different name on each side
  * (`retry` / `retryPolicy`).
  *
- * Tant que ces écarts étaient masqués par des `as any` à l'écriture et des
- * `as unknown as TaskPlan` à la lecture, rien ne compilait faux et rien ne
- * fonctionnait : PostgreSQL refuse `'succeeded'` sur un enum qui n'admet que
- * `SUCCEEDED`. Les tables correspondantes sont d'ailleurs restées vides.
+ * As long as these discrepancies were hidden behind `as any` when writing and
+ * `as unknown as TaskPlan` when reading, compilation appeared clean while nothing
+ * functioned: PostgreSQL rejects `'succeeded'` on an enum that only accepts
+ * `SUCCEEDED`. The corresponding tables had remained empty as a result.
  *
- * Les tables ci-dessous sont des `Record` **exhaustifs** sur les unions du
- * domaine. C'est volontaire : ajouter un statut au domaine sans l'ajouter ici
- * ne compilera pas, au lieu de produire une erreur PostgreSQL le jour où ce
- * statut sera atteint pour la première fois.
+ * The mapping tables below are **exhaustive** `Record` types over domain unions.
+ * This is intentional: adding a status to the domain without adding it here
+ * will fail to compile, rather than triggering a PostgreSQL runtime error when
+ * that status is first encountered.
  */
 
 const PLAN_STATUS_TO_DB = {
@@ -68,12 +68,12 @@ export const planStatusToDb = (status: TaskStatus): DbPlanStatus => PLAN_STATUS_
 export const stepStatusToDb = (status: StepStatus): DbStepStatus => STEP_STATUS_TO_DB[status];
 
 /**
- * Statut relu depuis la base.
+ * Status read from the database.
  *
- * Le défaut n'est pas de la complaisance : la colonne est un enum PostgreSQL,
- * donc une valeur inconnue signifie que la base a été modifiée hors de ce code.
- * Mieux vaut alors une tâche qui se présente comme `failed` qu'un objet dont le
- * statut mentirait au reste du système.
+ * The default fallback is not complacency: the column is a PostgreSQL enum,
+ * so an unknown value indicates the database was altered outside this codebase.
+ * It is therefore safer for a task to present as `failed` than to return an object whose
+ * status would mislead the rest of the system.
  */
 export const planStatusFromDb = (value: string): TaskStatus =>
   PLAN_STATUS_FROM_DB[value as DbPlanStatus] ?? "failed";
@@ -81,26 +81,26 @@ export const planStatusFromDb = (value: string): TaskStatus =>
 export const stepStatusFromDb = (value: string): StepStatus =>
   STEP_STATUS_FROM_DB[value as DbStepStatus] ?? "failed";
 
-/** Date de base → chaîne ISO du domaine. */
+/** Database date → domain ISO string. */
 const isoOrNull = (value: Date | null): string | null => value?.toISOString() ?? null;
 
 /**
- * Valeur du domaine → colonne `Json` nullable.
+ * Domain value → nullable `Json` column.
  *
- * Le point à retenir n'est pas le type mais la sentinelle : Prisma distingue
- * `DbNull`, un `NULL` SQL, de `JsonNull`, la valeur JSON `null` stockée dans la
- * colonne. Un `null` JavaScript n'exprime ni l'un ni l'autre et ses types
- * d'entrée le refusent. Les colonnes concernées ici sont facultatives au sens
- * du domaine : c'est donc `DbNull` qu'on veut.
+ * The key point is not the type but the sentinel: Prisma distinguishes
+ * `DbNull`, a SQL `NULL`, from `JsonNull`, the JSON `null` literal stored in the
+ * column. A JavaScript `null` does not represent either and Prisma input types
+ * reject it. The columns concerned here are optional in domain terms:
+ * `DbNull` is therefore what we need.
  */
 type JsonWrite = InputJsonValue | typeof DbNull;
 
 const jsonOrNull = (value: unknown): JsonWrite => value ?? DbNull;
 
-/** Même conversion pour une colonne `Json` non nullable, dont le défaut est `{}`. */
+/** Same conversion for a non-nullable `Json` column whose default is `{}`. */
 const jsonValue = (value: unknown): InputJsonValue => value ?? {};
 
-/** Erreur d'étape, telle que le domaine la décrit. */
+/** Step error as described by the domain. */
 type StepError = TaskStep["error"];
 
 function stepErrorFromDb(value: unknown): StepError {
@@ -220,8 +220,8 @@ export function stepFromRow(row: TaskStepRow): TaskStep {
     error: stepErrorFromDb(row.error),
     startedAt: isoOrNull(row.startedAt),
     completedAt: isoOrNull(row.completedAt),
-    // `exactOptionalPropertyTypes` est actif : une contrainte absente s'omet,
-    // elle ne se met pas à `undefined`.
+    // `exactOptionalPropertyTypes` is enabled: an absent constraint is omitted,
+    // not set to `undefined`.
     ...(constraints === undefined ? {} : { constraints }),
   };
 }
@@ -261,12 +261,12 @@ export function executionFromRow(row: TaskExecutionRow): TaskExecution {
   };
 }
 
-/** Champs d'écriture d'une étape, hors clés de relation. */
+/** Step write fields, excluding relation keys. */
 export function stepToRow(step: TaskStep) {
   return {
     id: step.id,
-    // Le domaine n'a pas de clé lisible distincte de l'identifiant ; la colonne
-    // `key` est contrainte unique par plan, et l'identifiant la satisfait.
+    // The domain has no readable key distinct from the identifier; the
+    // `key` column has a unique constraint per plan, which the identifier satisfies.
     key: step.id,
     description: step.description,
     requiredCapabilities: step.requiredCapabilities,
@@ -288,7 +288,7 @@ export function stepToRow(step: TaskStep) {
   };
 }
 
-/** Chaîne ISO du domaine → date de base. */
+/** Domain ISO string → database date. */
 export const dateOrNull = (value: string | null): Date | null =>
   value === null ? null : new Date(value);
 

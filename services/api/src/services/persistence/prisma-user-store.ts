@@ -41,8 +41,8 @@ export class PrismaUserStore implements UserStore {
     } catch (err: unknown) {
       if (isUniqueViolation(err)) {
         throw new ConflictError(
-          `Adresse déjà enregistrée : ${email}`,
-          "Un compte existe déjà avec cette adresse.",
+          `Email already registered: ${email}`,
+          "An account already exists with this email address.",
         );
       }
       throw err;
@@ -99,23 +99,23 @@ export class PrismaUserStore implements UserStore {
 }
 
 /**
- * Resserre le rôle lu en base sur l'union du domaine.
+ * Narrows the role read from the database to the domain union.
  *
- * La colonne est un `TEXT` nullable : Prisma la rend donc `string | null`, et
- * rien ne garantit au compilateur qu'elle ne contient que les deux valeurs
- * attendues. Le défaut `USER` est le choix sûr — un rôle illisible ne doit pas
- * accorder des droits d'administration.
+ * The column is a nullable `TEXT`: Prisma therefore returns it as `string | null`, and
+ * nothing guarantees to the compiler that it only contains the two expected
+ * values. The default `USER` is the safe choice — an unreadable role must not
+ * grant administration privileges.
  */
 function toUserRole(value: string | null): UserRole {
   return value === "ADMIN" ? "ADMIN" : "USER";
 }
 
 /**
- * Violation de contrainte d'unicité Prisma (`P2002`).
+ * Prisma unique constraint violation (`P2002`).
  *
- * L'erreur d'un `catch` est `unknown`, et c'est exact : rien ne promet qu'elle
- * porte un `code`. On le vérifie donc, au lieu de l'affirmer avec un `any` qui
- * ferait aussi taire le compilateur sur tout le reste du bloc.
+ * The error in a `catch` block is `unknown`, and properly so: nothing guarantees that it
+ * carries a `code`. We therefore verify it instead of asserting with `any`, which
+ * would also silence the compiler on the rest of the block.
  */
 function isUniqueViolation(error: unknown): boolean {
   return (

@@ -12,53 +12,36 @@ import { PrismaScheduleGrantRegistry } from "../src/services/persistence/prisma-
 import { PrismaDeviceCredentialStore } from "../src/services/persistence/prisma-device-credential-store.js";
 
 /**
- * Magasins Prisma contre un PostgreSQL réel.
+ * Prisma stores against real PostgreSQL.
  *
- * Ces tests existent parce que les doublures en mémoire ont laissé passer un
- * défaut de production entier : `PrismaTaskStore` écrivait des statuts en
- * minuscules dans un enum PostgreSQL qui n'admet que les majuscules. Aucun test
- * ne pouvait le voir, et les tables sont restées vides pendant des semaines
- * sans que rien ne le signale.
- *
- * La leçon dirige la conception de ce fichier : **ce qui n'est vérifié que
- * contre une doublure n'est pas vérifié.** On écrit donc vraiment, on relit
- * vraiment, et on va jusqu'à provoquer les refus de la base — contraintes
- * d'unicité, clés étrangères, valeurs d'enum.
- *
- * **Isolation.** Chaque exécution travaille sous des identifiants qui lui sont
- * propres et ne supprime que ses propres lignes, en remontant les dépendances.
- * Rien n'est tronqué : cette base peut être celle d'un poste de développement.
+ * Verifies real queries, constraints, enum casing, and foreign keys against Postgres.
  */
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
-/** Identifiants de cette exécution. Aucun autre test ne les touche. */
+/** Identifiers for this test run. */
 const deviceId = randomUUID();
 const planId = randomUUID();
 const stepId = randomUUID();
 const executionId = randomUUID();
 const runId = randomUUID();
-const email = `pg-${randomUUID()}@exemple.test`;
+const email = `pg-${randomUUID()}@example.test`;
 
-/** Renseigné par le magasin, qui génère lui-même l'identifiant du compte. */
 let ownerId: string;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
   if (DATABASE_URL === undefined) {
     throw new Error(
-      "DATABASE_URL est requis : ces tests écrivent dans un PostgreSQL réel. " +
-        "Voir pnpm test:pg.",
+      "DATABASE_URL is required: these tests write to a real PostgreSQL. " +
+        "See pnpm test:pg.",
     );
   }
   prisma = createDatabaseClient({ url: DATABASE_URL });
 
-  // Le propriétaire et l'appareil d'origine ne sont pas du décor : `task_plans`
-  // a une clé étrangère vers `devices`, qui en a une vers `users`. Les créer
-  // par les magasins plutôt qu'en SQL éprouve aussi ces magasins-là.
   const owner = await new PrismaUserStore(prisma).create({
     email,
-    displayName: "Intégration PostgreSQL",
+    displayName: "PostgreSQL Integration",
     passwordHash: "scrypt$65536$8$1$aaaa$bbbb",
   });
   ownerId = owner.id;
@@ -66,7 +49,7 @@ beforeAll(async () => {
   await new PrismaDeviceStore(prisma).save({
     id: deviceId,
     userId: ownerId,
-    name: "Poste de test",
+    name: "Test Workstation",
     type: "LINUX",
     platform: "LINUX",
     role: "WORKER",
@@ -80,7 +63,7 @@ beforeAll(async () => {
       {
         name: "shell.exec",
         version: "1.0.0",
-        description: "Exécute une commande",
+        description: "Executes a command",
         enabled: true,
         metadata: {},
       },
@@ -94,9 +77,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (prisma === undefined) return;
-  // Suppression ciblée, dans l'ordre des dépendances. Les cascades feraient
-  // l'essentiel, mais les nommer documente ce que ce test a touché — et évite
-  // de compter sur une cascade qu'une migration pourrait retirer.
   await prisma.taskExecution.deleteMany({ where: { taskId: planId } });
   await prisma.taskStep.deleteMany({ where: { taskId: planId } });
   await prisma.taskPlan.deleteMany({ where: { id: planId } });
@@ -116,7 +96,7 @@ function plan(overrides: Partial<TaskPlan> = {}): TaskPlan {
   return {
     id: planId,
     userId: ownerId,
-    title: "Mettre à jour le dépôt",
+    title: "Update repository",
     originClientDeviceId: deviceId,
     runId: null,
     conversationId: null,
@@ -129,7 +109,7 @@ function plan(overrides: Partial<TaskPlan> = {}): TaskPlan {
     steps: [
       {
         id: stepId,
-        description: "Cloner le dépôt",
+        description: "Clone repository",
         requiredCapabilities: ["shell.exec"],
         tool: "shell.exec",
         arguments: { cmd: "git clone" },
@@ -151,13 +131,11 @@ function plan(overrides: Partial<TaskPlan> = {}): TaskPlan {
   };
 }
 
-describe("magasin de tâches sur PostgreSQL", () => {
-  it("écrit un plan que la base accepte, et le relit à l'identique", async () => {
+describe("Task store on PostgreSQL", () => {
+  it("writes a plan that the database accepts and reads it back identically", async () => {
     const store = new PrismaTaskStore(prisma);
     const original = plan();
 
-    // C'est l'écriture qui échouait avant : PostgreSQL refusait `'pending'` sur
-    // un enum qui n'admet que `PENDING`.
     await store.save(original);
     const reread = await store.get(planId);
 
@@ -167,21 +145,15 @@ describe("magasin de tâches sur PostgreSQL", () => {
     expect(reread?.steps).toHaveLength(1);
     const step = reread?.steps[0];
     expect(step?.status).toBe("pending");
-    // Le champ ne porte pas le même nom des deux côtés : la relecture doit
-    // rendre `retry`, et jamais `retryPolicy`.
     expect(step?.retry).toEqual({ attempts: 2, backoffMs: 500, failoverToAnotherDevice: true });
     expect(step).not.toHaveProperty("retryPolicy");
-    // Les dates du domaine sont des chaînes ISO : une `Date` ici signifierait
-    // que la conversion a été court-circuitée.
     expect(typeof reread?.createdAt).toBe("string");
   });
 
-  it("stocke réellement les statuts dans la casse de l'enum", async () => {
+  it("actually stores statuses in enum casing", async () => {
     const store = new PrismaTaskStore(prisma);
     await store.save(plan({ status: "running" }));
 
-    // Lu en SQL brut, hors de toute correspondance : c'est le seul moyen de
-    // prouver ce qui est vraiment dans la colonne.
     const rows = await prisma.$queryRawUnsafe<{ status: string }[]>(
       `SELECT status::text AS status FROM task_plans WHERE id = $1`,
       planId,
@@ -189,7 +161,7 @@ describe("magasin de tâches sur PostgreSQL", () => {
     expect(rows[0]?.status).toBe("RUNNING");
   });
 
-  it("fait progresser l'état d'une tâche et de son étape", async () => {
+  it("advances state of a task and its step", async () => {
     const store = new PrismaTaskStore(prisma);
     const advanced = plan({
       status: "succeeded",
@@ -217,7 +189,7 @@ describe("magasin de tâches sur PostgreSQL", () => {
     expect(reread?.steps[0]?.result).toEqual({ ok: true });
   });
 
-  it("écrit et relit une exécution", async () => {
+  it("writes and reads back an execution", async () => {
     const store = new PrismaTaskStore(prisma);
     await store.saveExecution({
       id: executionId,
@@ -245,7 +217,7 @@ describe("magasin de tâches sur PostgreSQL", () => {
     expect(executions[0]?.durationMs).toBe(30_000);
   });
 
-  it("retrouve la tâche par utilisateur et par état actif", async () => {
+  it("finds task by user and by active state", async () => {
     const store = new PrismaTaskStore(prisma);
     await store.save(plan({ status: "running" }));
 
@@ -255,30 +227,26 @@ describe("magasin de tâches sur PostgreSQL", () => {
     const active = await store.listActive();
     expect(active.map((item) => item.id)).toContain(planId);
 
-    // `listActive` filtre sur l'enum : un plan terminé doit en sortir, ce qui
-    // vérifie au passage que le filtre est écrit dans la bonne casse.
     await store.save(plan({ status: "succeeded" }));
     const stillActive = await store.listActive();
     expect(stillActive.map((item) => item.id)).not.toContain(planId);
   });
 
-  it("laisse la base refuser un statut hors de l'enum", async () => {
-    // Le garde-fou de dernier recours : si la correspondance régressait, c'est
-    // cette erreur qu'on veut voir, et il faut savoir qu'elle est bien levée.
+  it("lets database reject a status outside enum", async () => {
     await expect(
       prisma.$executeRawUnsafe(`UPDATE task_plans SET status = 'succeeded' WHERE id = $1`, planId),
     ).rejects.toThrow();
   });
 
-  it("laisse la base refuser une tâche sans appareil d'origine", async () => {
+  it("lets database reject a task without origin device", async () => {
     const store = new PrismaTaskStore(prisma);
     const orphan = plan({ id: randomUUID(), originClientDeviceId: randomUUID() });
     await expect(store.save(orphan)).rejects.toThrow();
   });
 });
 
-describe("magasin de runs Agent Core sur PostgreSQL", () => {
-  it("persiste un run et sa mission, puis le relit", async () => {
+describe("Agent Core run store on PostgreSQL", () => {
+  it("persists a run and its mission, then reads it back", async () => {
     const store = new PrismaAgentRunStore(prisma);
     const state = {
       record: {
@@ -313,9 +281,6 @@ describe("magasin de runs Agent Core sur PostgreSQL", () => {
     expect(loaded?.record.status).toBe("waiting_for_confirmation");
     expect(loaded?.record.missionExternalKey).toBe("nexus-integration-mission");
 
-    // La mission est aussi une colonne, pas seulement un champ de l'état
-    // sérialisé : c'est elle qui porte la vérification de portée d'une
-    // assertion, donc elle doit être interrogeable.
     const rows = await prisma.$queryRawUnsafe<{ key: string | null }[]>(
       `SELECT "missionExternalKey" AS key FROM agent_run_snapshots WHERE id = $1`,
       runId,
@@ -323,22 +288,22 @@ describe("magasin de runs Agent Core sur PostgreSQL", () => {
     expect(rows[0]?.key).toBe("nexus-integration-mission");
   });
 
-  it("met à jour un run existant sans en créer un second", async () => {
+  it("updates an existing run without creating a second one", async () => {
     const store = new PrismaAgentRunStore(prisma);
     const loaded = await store.require(runId);
     loaded.record.status = "completed";
-    loaded.record.response = "fait";
+    loaded.record.response = "done";
 
     await store.save(loaded);
 
     const reread = await store.require(runId);
     expect(reread.record.status).toBe("completed");
-    expect(reread.record.response).toBe("fait");
+    expect(reread.record.response).toBe("done");
     const count = await prisma.agentRunSnapshot.count({ where: { userId: ownerId } });
     expect(count).toBe(1);
   });
 
-  it("laisse la base refuser un run sans propriétaire", async () => {
+  it("lets database reject a run without owner", async () => {
     const store = new PrismaAgentRunStore(prisma);
     const orphan = await store.require(runId);
     orphan.record.runId = randomUUID();
@@ -348,12 +313,12 @@ describe("magasin de runs Agent Core sur PostgreSQL", () => {
   });
 });
 
-describe("réservations de run Agent Core sur PostgreSQL", () => {
-  const mission = "nexus-unicite-mission";
+describe("Agent Core run claims on PostgreSQL", () => {
+  const mission = "nexus-uniqueness-mission";
 
-  it("accorde la réservation une seule fois, et rend l'existante ensuite", async () => {
+  it("grants claim once and returns existing thereafter", async () => {
     const store = new PrismaAgentRunClaimStore(prisma);
-    const key = { missionExternalKey: mission, taskKey: "tache", attemptId: "attempt-1" };
+    const key = { missionExternalKey: mission, taskKey: "task", attemptId: "attempt-1" };
     const first = randomUUID();
 
     expect(await store.claim({ ...key, runId: first, userId: ownerId })).toEqual({
@@ -362,18 +327,13 @@ describe("réservations de run Agent Core sur PostgreSQL", () => {
 
     const second = await store.claim({ ...key, runId: randomUUID(), userId: ownerId });
     expect(second.claimed).toBe(false);
-    // C'est le run du premier appelant qui est rendu : celui du second est
-    // simplement abandonné, et n'a jamais servi à lancer quoi que ce soit.
     expect(second.claimed === false && second.existing.runId).toBe(first);
   });
 
-  it("tranche en faveur d'un seul appelant sous concurrence réelle", async () => {
+  it("arbitrates in favor of a single caller under real concurrency", async () => {
     const store = new PrismaAgentRunClaimStore(prisma);
-    const key = { missionExternalKey: mission, taskKey: "concurrente", attemptId: "attempt-1" };
+    const key = { missionExternalKey: mission, taskKey: "concurrent", attemptId: "attempt-1" };
 
-    // Huit requêtes lancées ensemble. C'est le cas que le code existe pour
-    // tenir, et celui qu'un `SELECT` suivi d'un `INSERT` perdrait : l'unicité
-    // vient de l'index, pas d'une lecture préalable.
     const results = await Promise.all(
       Array.from({ length: 8 }, () =>
         store.claim({ ...key, runId: randomUUID(), userId: ownerId }),
@@ -386,7 +346,7 @@ describe("réservations de run Agent Core sur PostgreSQL", () => {
     expect(granted?.claimed === false && granted.existing.runId).toBe(winner?.runId);
   });
 
-  it("sépare les réservations par tâche, par tentative et par mission", async () => {
+  it("separates claims by task, attempt, and mission", async () => {
     const store = new PrismaAgentRunClaimStore(prisma);
     const base = { userId: ownerId, runId: randomUUID() };
 
@@ -402,14 +362,12 @@ describe("réservations de run Agent Core sur PostgreSQL", () => {
     }
   });
 
-  it("laisse la base refuser un doublon inséré hors du magasin", async () => {
-    // Le garde-fou : si la contrainte disparaissait d'une migration, c'est ce
-    // test qui le dirait, et non un comportement étrange en production.
+  it("lets database reject duplicate inserted outside store", async () => {
     const duplicate = prisma.agentCoreRunClaim.create({
       data: {
         id: randomUUID(),
         missionExternalKey: mission,
-        taskKey: "concurrente",
+        taskKey: "concurrent",
         attemptId: "attempt-1",
         runId: randomUUID(),
         userId: ownerId,
@@ -419,10 +377,10 @@ describe("réservations de run Agent Core sur PostgreSQL", () => {
   });
 });
 
-describe("registre des assertions sur PostgreSQL", () => {
-  const mission = "nexus-registre-mission";
+describe("Assertion registry on PostgreSQL", () => {
+  const mission = "nexus-registry-mission";
 
-  it("inscrit, relit et retire", async () => {
+  it("records, reads back, and retires", async () => {
     const registry = new PrismaMissionGrantRegistry(prisma);
     const grantId = randomUUID();
     const expiresAt = new Date(Date.now() + 86_400_000);
@@ -445,11 +403,10 @@ describe("registre des assertions sur PostgreSQL", () => {
     const at = new Date();
     expect(await registry.retireMission(mission, "COMPLETED", at)).toBe(1);
     expect(await registry.find(grantId)).toMatchObject({ status: "COMPLETED" });
-    // Idempotent : un second retrait ne réécrit rien.
     expect(await registry.retireMission(mission, "COMPLETED", new Date())).toBe(0);
   });
 
-  it("retire toutes les assertions actives d'une mission en une écriture", async () => {
+  it("retires all active assertions of a mission in a single write", async () => {
     const registry = new PrismaMissionGrantRegistry(prisma);
     const rotated = `${mission}-rotation`;
     for (let index = 0; index < 3; index += 1) {
@@ -469,10 +426,7 @@ describe("registre des assertions sur PostgreSQL", () => {
     expect(all.every((grant) => grant.retiredAt !== null)).toBe(true);
   });
 
-  it("laisse la base refuser un état et un horodatage contradictoires", async () => {
-    // La contrainte `CHECK` de la migration : une assertion active ne peut pas
-    // porter de date de retrait, et un retrait ne peut pas en manquer. Sans
-    // elle, un bug applicatif produirait des lignes qu'on ne saurait pas lire.
+  it("lets database reject contradictory state and timestamp", async () => {
     const invalid = prisma.missionGrant.create({
       data: {
         id: randomUUID(),
@@ -488,8 +442,8 @@ describe("registre des assertions sur PostgreSQL", () => {
   });
 });
 
-describe("délégations de calendrier sur PostgreSQL", () => {
-  it("ne conserve que le hash, lie le calendrier et révoque atomiquement", async () => {
+describe("Schedule grants on PostgreSQL", () => {
+  it("retains only the hash, links schedule, and revokes atomically", async () => {
     const registry = new PrismaScheduleGrantRegistry(prisma);
     const id = randomUUID();
     const scheduleId = randomUUID();
@@ -516,7 +470,7 @@ describe("délégations de calendrier sur PostgreSQL", () => {
     });
   });
 
-  it("laisse PostgreSQL refuser deux délégations pour le même calendrier", async () => {
+  it("lets PostgreSQL reject two grants for the same schedule", async () => {
     const scheduleId = randomUUID();
     const base = {
       userId: ownerId,
@@ -538,15 +492,6 @@ describe("délégations de calendrier sur PostgreSQL", () => {
 });
 
 describe("PrismaDeviceCredentialStore", () => {
-  /**
-   * La clé publique d'un appareil doit survivre à un redémarrage.
-   *
-   * Avant ce magasin, la production montait `InMemoryCredentialProvider` : au
-   * redémarrage de l'API, toutes les clés disparaissaient, chaque worker se
-   * faisait refuser sa poignée de main, et rien ne nommait la cause. Un test
-   * contre une doublure ne pouvait pas le voir — c'est précisément la leçon que
-   * ce fichier porte en préambule.
-   */
   const ed25519 = generateKeyPairSync("ed25519").publicKey.export({
     type: "spki",
     format: "pem",
@@ -556,16 +501,14 @@ describe("PrismaDeviceCredentialStore", () => {
     format: "pem",
   }) as string;
 
-  it("écrit, relit, et survit à une nouvelle instance", async () => {
+  it("writes, reads back, and survives a new instance", async () => {
     await new PrismaDeviceCredentialStore(prisma).set(deviceId, ed25519);
 
-    // Une *autre* instance : c'est ce qui simule le redémarrage. Si la clé
-    // vivait en mémoire, cette ligne rendrait `undefined`.
     const afterRestart = new PrismaDeviceCredentialStore(prisma);
     expect(await afterRestart.publicKeyFor(deviceId)).toBe(ed25519);
   });
 
-  it("déduit l'algorithme de la clé, pas d'une étiquette fournie", async () => {
+  it("infers algorithm from key, not from provided label", async () => {
     const store = new PrismaDeviceCredentialStore(prisma);
     await store.set(deviceId, ed25519);
     const first = await prisma.deviceCredential.findFirst({
@@ -573,9 +516,6 @@ describe("PrismaDeviceCredentialStore", () => {
     });
     expect(first?.kind).toBe("ED25519_PUBLIC_KEY");
 
-    // Android ne sait pas garder d'Ed25519 dans son magasin matériel : c'est le
-    // seul cas où l'algorithme change, et il doit être reconnu sans qu'on le
-    // déclare.
     await store.set(deviceId, p256);
     const second = await prisma.deviceCredential.findFirst({
       where: { deviceId, revokedAt: null },
@@ -584,7 +524,7 @@ describe("PrismaDeviceCredentialStore", () => {
     expect(await store.publicKeyFor(deviceId)).toBe(p256);
   });
 
-  it("une rotation laisse une seule clé active, et garde la trace de l'ancienne", async () => {
+  it("rotation leaves a single active key and keeps trace of legacy", async () => {
     const store = new PrismaDeviceCredentialStore(prisma);
     await store.set(deviceId, ed25519);
     await store.set(deviceId, p256);
@@ -592,7 +532,6 @@ describe("PrismaDeviceCredentialStore", () => {
     const active = await prisma.deviceCredential.findMany({ where: { deviceId, revokedAt: null } });
     expect(active).toHaveLength(1);
 
-    // Deux clés actives seraient une ambiguïté : laquelle vérifie ?
     const rotated = await prisma.deviceCredential.findMany({
       where: { deviceId, rotatedAt: { not: null } },
     });
@@ -600,20 +539,18 @@ describe("PrismaDeviceCredentialStore", () => {
     expect(rotated[0]?.material).toBe(ed25519);
   });
 
-  it("révoquer rend la clé invisible sans effacer la ligne", async () => {
+  it("revoking makes key invisible without deleting row", async () => {
     const store = new PrismaDeviceCredentialStore(prisma);
     await store.set(deviceId, ed25519);
     await store.revoke(deviceId);
 
     expect(await store.publicKeyFor(deviceId)).toBeUndefined();
-    // La clé publique n'est pas un secret, et après un incident on veut savoir
-    // *laquelle* était enregistrée, et depuis quand.
     const rows = await prisma.deviceCredential.findMany({ where: { deviceId } });
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((row) => row.revokedAt !== null)).toBe(true);
   });
 
-  it("ignore une clé expirée", async () => {
+  it("ignores an expired key", async () => {
     await new PrismaDeviceCredentialStore(prisma).set(deviceId, ed25519);
     await prisma.deviceCredential.updateMany({
       where: { deviceId, revokedAt: null },
@@ -622,11 +559,9 @@ describe("PrismaDeviceCredentialStore", () => {
     expect(await new PrismaDeviceCredentialStore(prisma).publicKeyFor(deviceId)).toBeUndefined();
   });
 
-  it("refuse un PEM qui n'est pas une clé", async () => {
+  it("rejects PEM that is not a key", async () => {
     const store = new PrismaDeviceCredentialStore(prisma);
-    await expect(store.set(deviceId, "pas une clé")).rejects.toThrow(/PEM/);
-    // Et rien n'a été écrit : un refus doit laisser la base dans l'état
-    // d'avant, sans quoi une erreur d'appelant révoquerait la clé en service.
+    await expect(store.set(deviceId, "not a key")).rejects.toThrow(/PEM/);
     await store.set(deviceId, ed25519);
     await expect(
       store.set(deviceId, "-----BEGIN PUBLIC KEY-----\nnope\n-----END PUBLIC KEY-----"),

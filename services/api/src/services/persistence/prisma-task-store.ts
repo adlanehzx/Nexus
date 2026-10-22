@@ -12,13 +12,13 @@ import {
 } from "./task-mapping.js";
 
 /**
- * Magasin de plans de tâches sur PostgreSQL.
+ * Task plan store on PostgreSQL.
  *
- * Toutes les traductions entre le domaine et les colonnes passent par
- * `task-mapping.ts`. Elles ne sont pas cosmétiques : les statuts changent de
- * casse, les dates de type, et un champ de nom. Les faire au vol dans chaque
- * requête est ce qui avait laissé ce magasin inutilisable sans que rien ne le
- * signale.
+ * All conversions between the domain and database columns go through
+ * `task-mapping.ts`. They are not cosmetic: statuses change casing,
+ * dates change types, and one field changes name. Doing them ad hoc in each
+ * query is what previously left this store broken without anything
+ * flagging it.
  */
 export class PrismaTaskStore implements TaskStore {
   readonly #prisma: PrismaClient;
@@ -123,8 +123,8 @@ export class PrismaTaskStore implements TaskStore {
 
   async listActive(): Promise<TaskPlan[]> {
     const plans = await this.#prisma.taskPlan.findMany({
-      // Les valeurs de l'enum viennent de la table de correspondance : écrire
-      // ces trois littéraux à la main les laisserait dériver du domaine.
+      // Enum values come from the mapping table: hardcoding these three
+      // literals would let them drift from domain definitions.
       where: {
         status: {
           in: [

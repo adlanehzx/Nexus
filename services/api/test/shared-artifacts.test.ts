@@ -8,15 +8,15 @@ import {
   SharedArtifactStore,
 } from "../src/services/shared-artifacts.js";
 
-describe("SharedArtifactStore (Chantier 14)", () => {
+describe("SharedArtifactStore", () => {
   let workspaceDir: string;
   let store: SharedArtifactStore;
 
   beforeEach(async () => {
     workspaceDir = await mkdtemp(join(tmpdir(), "nexus-test-artifacts-"));
     store = new SharedArtifactStore({
-      maxFileSizeBytes: 1024 * 1024, // 1 Mo max pour les tests
-      maxTotalSizeBytes: 5 * 1024 * 1024, // 5 Mo max
+      maxFileSizeBytes: 1024 * 1024, // 1 MB max for tests
+      maxTotalSizeBytes: 5 * 1024 * 1024, // 5 MB max
     });
   });
 
@@ -24,14 +24,14 @@ describe("SharedArtifactStore (Chantier 14)", () => {
     await rm(workspaceDir, { recursive: true, force: true });
   });
 
-  it("enregistre un artefact et génère son URI et son hachage SHA-256", async () => {
+  it("saves an artifact and generates its URI and SHA-256 hash", async () => {
     const record = await store.saveArtifact({
       missionWorkspace: workspaceDir,
       missionKey: "mission-test-1",
       taskKey: "investigate",
       name: "analysis.md",
-      content: "# Analyse du projet\nTous les voyants sont au vert.",
-      description: "Rapport d'analyse",
+      content: "# Project analysis\nAll indicators are green.",
+      description: "Analysis report",
     });
 
     expect(record.uri).toBe("artifact://investigate/analysis.md");
@@ -39,18 +39,18 @@ describe("SharedArtifactStore (Chantier 14)", () => {
     expect(record.sizeBytes).toBeGreaterThan(0);
     expect(record.sha256).toMatch(/^[a-f0-9]{64}$/);
 
-    // Lecture
+    // Read
     const loaded = await store.readArtifact(workspaceDir, record.uri);
     expect(loaded.record.name).toBe("analysis.md");
-    expect(loaded.content.toString("utf-8")).toContain("Tous les voyants sont au vert.");
+    expect(loaded.content.toString("utf-8")).toContain("All indicators are green.");
 
-    // Manifeste
+    // Manifest
     const list = await store.listArtifacts(workspaceDir);
     expect(list).toHaveLength(1);
     expect(list[0]?.id).toBe(record.id);
   });
 
-  it("bloque strictement les tentatives de traversée de répertoires (directory traversal)", async () => {
+  it("strictly blocks directory traversal attempts", async () => {
     await expect(
       store.saveArtifact({
         missionWorkspace: workspaceDir,
@@ -59,9 +59,9 @@ describe("SharedArtifactStore (Chantier 14)", () => {
         name: "passwd",
         content: "malicious",
       }),
-    ).resolves.toBeDefined(); // sanitizePathSegment assainit la clé en "______etc" à l'intérieur du dossier
+    ).resolves.toBeDefined(); // sanitizePathSegment sanitizes the key inside directory
 
-    // Mais si le chemin résolu sortait du dossier, une erreur de sécurité est levée
+    // But if resolved path escapes directory, a security error is thrown
     const targetDir = store.getArtifactsDir(workspaceDir);
     expect(targetDir.startsWith(workspaceDir)).toBe(true);
 
@@ -70,8 +70,8 @@ describe("SharedArtifactStore (Chantier 14)", () => {
     ).rejects.toThrow(ArtifactNotFoundError);
   });
 
-  it("applique le quota de taille par fichier", async () => {
-    const hugeContent = Buffer.alloc(2 * 1024 * 1024); // 2 Mo > 1 Mo
+  it("enforces per-file size quota", async () => {
+    const hugeContent = Buffer.alloc(2 * 1024 * 1024); // 2 MB > 1 MB
     await expect(
       store.saveArtifact({
         missionWorkspace: workspaceDir,
@@ -83,7 +83,7 @@ describe("SharedArtifactStore (Chantier 14)", () => {
     ).rejects.toThrow(ArtifactSecurityError);
   });
 
-  it("gère plusieurs artefacts par tâche et met à jour le manifeste", async () => {
+  it("handles multiple artifacts per task and updates manifest", async () => {
     await store.saveArtifact({
       missionWorkspace: workspaceDir,
       missionKey: "mission-test-1",

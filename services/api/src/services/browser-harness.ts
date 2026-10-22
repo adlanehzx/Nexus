@@ -27,7 +27,7 @@ export class BrowserHarnessClient {
   constructor(options: { cdpUrl: string; command?: string }) {
     const url = new URL(options.cdpUrl);
     if (url.protocol !== "http:" || !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-      throw new Error("Le CDP Browser Use doit rester sur la boucle locale.");
+      throw new Error("Browser Use CDP must stay on loopback.");
     }
     this.#cdpUrl = url.toString().replace(/\/$/, "");
     this.#command = options.command ?? "browser-harness";
@@ -42,14 +42,14 @@ export class BrowserHarnessClient {
       typeof parsed.healthy !== "boolean" ||
       typeof parsed.daemon?.browser_ready !== "boolean"
     ) {
-      throw new Error("Diagnostic Browser Use invalide.");
+      throw new Error("Invalid Browser Use diagnostic.");
     }
 
-    // `doctor` compte les connexions CDP actives a l'instant T. Or le client
-    // CLI ferme normalement la sienne a la fin de chaque commande : un
-    // navigateur parfaitement joignable et inactif etait donc presente comme
-    // indisponible. Une sonde reelle, dont la sortie n'est jamais journalisee,
-    // mesure ici la capacite qui nous interesse vraiment.
+    // `doctor` counts active CDP connections at instant T. However, the CLI
+    // client normally closes its connection at the end of each command: a
+    // perfectly reachable, idle browser was therefore presented as
+    // unavailable. An actual probe, whose output is never logged,
+    // verifies the real capability we care about.
     if (!parsed.daemon.browser_ready) {
       try {
         await this.#run([], "print(page_info())\n", 8_000);
@@ -60,7 +60,7 @@ export class BrowserHarnessClient {
           daemon: { ...parsed.daemon, browser_ready: true },
         };
       } catch {
-        // Le rapport initial reste le diagnostic le plus utile en cas d'echec.
+        // The initial report remains the most useful diagnostic on failure.
       }
     }
     return parsed;
@@ -84,7 +84,7 @@ export class BrowserHarnessClient {
       let stderr = "";
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
-        reject(new Error("Délai de connexion Browser Use dépassé."));
+        reject(new Error("Browser Use connection timed out."));
       }, timeoutMs);
       timer.unref();
       child.stdout.setEncoding("utf8");
@@ -106,7 +106,7 @@ export class BrowserHarnessClient {
         // JSON report. All other failures remain errors and stderr is reduced
         // to a generic message so browser details never reach API logs.
         if (exitCode !== 0 && args[0] !== "doctor") {
-          reject(new Error("Browser Use n'a pas pu se connecter au navigateur local."));
+          reject(new Error("Browser Use could not connect to local browser."));
           return;
         }
         resolve({ stdout, stderr, code: exitCode });

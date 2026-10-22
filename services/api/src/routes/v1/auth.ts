@@ -6,19 +6,18 @@ import { ok, okSchema } from "../../lib/response.js";
 import { NotFoundError } from "../../services/stores.js";
 
 /**
- * Authentification.
+ * Authentication.
  *
- * Ces routes sont les seules du service à recevoir un mot de passe, et les
- * seules à mériter une limitation de débit plus serrée que le réglage global :
- * une adresse et un mot de passe se devinent, alors qu'un jeton signé ne se
- * devine pas.
+ * These routes are the only ones in the service that receive a password, and the
+ * only ones that warrant a tighter rate limit than the global setting:
+ * an email and a password can be guessed, whereas a signed token cannot.
  */
 
 const userSchema = z.object({
   id: z.string(),
   email: z.string(),
   displayName: z.string(),
-  /** `ADMIN` ouvre le tableau de bord de supervision. */
+  /** `ADMIN` unlocks the supervision dashboard. */
   role: z.string(),
   status: z.string(),
   createdAt: z.date(),
@@ -32,11 +31,11 @@ const tokensSchema = z.object({
 });
 
 /**
- * Limitation de débit de la connexion.
+ * Login rate limit.
  *
- * Cinq tentatives par minute et par adresse IP. Le compte est fait sur l'IP et
- * non sur l'adresse électronique : compter par adresse permettrait de bloquer le
- * compte de quelqu'un d'autre en échouant volontairement à sa place.
+ * Five attempts per minute per IP address. The count is tracked per IP
+ * rather than per email address: counting per email would allow locking someone
+ * else's account by deliberately failing on their behalf.
  */
 const LOGIN_RATE_LIMIT = { max: 5, timeWindow: "1 minute" } as const;
 
@@ -49,7 +48,7 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       config: { rateLimit: LOGIN_RATE_LIMIT },
       schema: {
         tags: ["auth"],
-        summary: "Crée un compte et ouvre une session",
+        summary: "Creates an account and opens a session",
         body: z.object({
           email: z.email(),
           displayName: z.string().min(1).max(120),
@@ -70,7 +69,7 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       config: { rateLimit: LOGIN_RATE_LIMIT },
       schema: {
         tags: ["auth"],
-        summary: "Ouvre une session",
+        summary: "Opens a session",
         body: z.object({ email: z.email(), password: z.string().min(1).max(1_024) }),
         response: { 200: okSchema(z.object({ user: userSchema, tokens: tokensSchema })) },
       },
@@ -81,17 +80,16 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         app.services.securityLog.record({
           kind: "auth.login",
           userId: result.user.id,
-          summary: `Connexion de ${result.user.email}`,
+          summary: `Login of ${result.user.email}`,
         });
         return ok(result, request.id);
       } catch (cause) {
-        // Un échec de connexion est l'événement de sécurité le plus utile qui
-        // soit : c'est lui qui trahit une tentative. **L'adresse essayée n'est
-        // pas journalisée** — elle appartient peut-être à quelqu'un d'autre, et
-        // le mot de passe, lui, n'apparaît nulle part.
+        // A failed login is the most informative security event:
+        // it reveals an intrusion attempt. **The attempted address is not logged**
+        // — it may belong to someone else, and passwords never appear anywhere.
         app.services.securityLog.record({
           kind: "auth.login_failed",
-          summary: "Tentative de connexion refusée",
+          summary: "Login attempt rejected",
           context: { ip: request.ip },
         });
         throw cause;
@@ -105,7 +103,7 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         tags: ["auth"],
-        summary: "Fait tourner le jeton de session",
+        summary: "Rotates session token",
         body: z.object({ refreshToken: z.string().min(1) }),
         response: { 200: okSchema(tokensSchema) },
       },
@@ -122,14 +120,14 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["auth"],
-        summary: "Ferme la session courante",
+        summary: "Closes current session",
         response: { 200: okSchema(z.object({ closed: z.boolean() })) },
       },
     },
     async (request) => {
       const { sessionId, userId } = currentUser(request);
       await app.services.auth.logout(sessionId);
-      app.services.securityLog.record({ kind: "auth.logout", userId, summary: "Déconnexion" });
+      app.services.securityLog.record({ kind: "auth.logout", userId, summary: "Logout" });
       return ok({ closed: true }, request.id);
     },
   );
@@ -140,7 +138,7 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["auth"],
-        summary: "Ferme toutes les sessions de l'utilisateur",
+        summary: "Closes all user sessions",
         response: { 200: okSchema(z.object({ closed: z.number().int().nonnegative() })) },
       },
     },
@@ -162,7 +160,7 @@ export const userRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["users"],
-        summary: "Profil de l'utilisateur authentifié",
+        summary: "Authenticated user profile",
         response: { 200: okSchema(userSchema) },
       },
     },
@@ -170,9 +168,9 @@ export const userRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const { userId } = currentUser(request);
       const user = await app.services.users.findById(userId);
 
-      // Le jeton était valide mais l'utilisateur n'existe plus : compte supprimé
-      // pendant que la session courait.
-      if (user === undefined) throw new NotFoundError("Utilisateur", userId);
+      // The token was valid but the user no longer exists: account deleted
+      // while the session was active.
+      if (user === undefined) throw new NotFoundError("User", userId);
       return ok(user, request.id);
     },
   );
@@ -183,7 +181,7 @@ export const userRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["users"],
-        summary: "Permissions effectives, toutes sources confondues",
+        summary: "Effective permissions across all sources",
         response: { 200: okSchema(z.object({ permissions: z.array(z.string()) })) },
       },
     },

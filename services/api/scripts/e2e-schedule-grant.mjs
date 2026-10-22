@@ -1,9 +1,7 @@
 /**
- * Contrat réel TypeScript ↔ Python des calendriers Agent Core.
+ * TypeScript ↔ Python integration contract for Agent Core schedules.
  *
- * Fastify écoute sur une boucle locale choisie par l'OS. Le vrai client Python
- * du Mission Engine échange ensuite une délégation via HTTP. Aucun secret de
- * test n'est imprimé ni écrit sur disque : la charge utile passe sur stdin.
+ * Fastify listens on loopback; Python Mission Engine client exchanges delegation via HTTP.
  */
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -48,7 +46,7 @@ const app = await buildApp({
 try {
   await app.listen({ host: "127.0.0.1", port: 0 });
   const address = app.server.address();
-  if (address === null || typeof address === "string") throw new Error("adresse Fastify absente");
+  if (address === null || typeof address === "string") throw new Error("Fastify address missing");
   const owner = await services.users.create({
     email: "e2e-schedule-grant@example.test",
     displayName: "E2E Schedule",
@@ -90,7 +88,7 @@ try {
   const status = await new Promise((resolveStatus, reject) => {
     const timeout = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error("Le client Python n'a pas répondu sous 30 secondes"));
+      reject(new Error("Python client timed out after 30 seconds"));
     }, 30_000);
     child.once("error", (error) => {
       clearTimeout(timeout);
@@ -101,8 +99,8 @@ try {
       resolveStatus(code);
     });
   });
-  if (status !== 0) throw new Error(`Le client Python a refusé l'échange (${String(status)})`);
-  process.stdout.write("E2E calendrier Agent Core : OK\n");
+  if (status !== 0) throw new Error(`Python client rejected exchange (${String(status)})`);
+  process.stdout.write("E2E Agent Core schedule: OK\n");
 } finally {
   await app.close();
 }

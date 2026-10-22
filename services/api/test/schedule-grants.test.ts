@@ -31,8 +31,8 @@ function build(active = true) {
   return { tokens, missions, schedules };
 }
 
-describe("délégations de calendrier", () => {
-  it("émet une assertion courte pour l'occurrence exacte", async () => {
+describe("schedule grants", () => {
+  it("issues a short-lived assertion for the exact occurrence", async () => {
     const { tokens, schedules } = build();
     const delegated = await schedules.issue({
       userId: USER,
@@ -56,7 +56,7 @@ describe("délégations de calendrier", () => {
     });
   });
 
-  it("expose l'échange HTTP sans accepter une session utilisateur à sa place", async () => {
+  it("exposes HTTP exchange without accepting a user session in its place", async () => {
     const harness = await makeApi();
     try {
       const account = await createAccount(harness, "schedule-grant@example.org");
@@ -91,7 +91,7 @@ describe("délégations de calendrier", () => {
     }
   });
 
-  it("refuse un autre calendrier ou une occurrence forgée", async () => {
+  it("rejects another schedule or forged occurrence", async () => {
     const { schedules } = build();
     const delegated = await schedules.issue({
       userId: USER,
@@ -105,7 +105,7 @@ describe("délégations de calendrier", () => {
         scheduledFor: DUE,
         missionExternalKey: "nexus-forged",
       }),
-    ).rejects.toThrow(/autre calendrier/i);
+    ).rejects.toThrow(/different schedule/i);
     await expect(
       schedules.exchange({
         token: delegated.token,
@@ -113,10 +113,10 @@ describe("délégations de calendrier", () => {
         scheduledFor: DUE,
         missionExternalKey: "nexus-forged",
       }),
-    ).rejects.toThrow(/ne couvre pas/i);
+    ).rejects.toThrow(/does not cover/i);
   });
 
-  it("refuse immédiatement une délégation retirée ou un compte inactif", async () => {
+  it("immediately rejects a revoked delegation or inactive account", async () => {
     const active = build();
     const delegated = await active.schedules.issue({
       userId: USER,
@@ -131,7 +131,7 @@ describe("délégations de calendrier", () => {
         scheduledFor: DUE,
         missionExternalKey: scheduledExternalKey(BASE, SCHEDULE, DUE),
       }),
-    ).rejects.toThrow(/retirée/i);
+    ).rejects.toThrow(/revoked/i);
 
     const inactive = build(false);
     const blocked = await inactive.schedules.issue({
@@ -146,6 +146,6 @@ describe("délégations de calendrier", () => {
         scheduledFor: DUE,
         missionExternalKey: scheduledExternalKey(BASE, SCHEDULE, DUE),
       }),
-    ).rejects.toThrow(/inactif/i);
+    ).rejects.toThrow(/inactive/i);
   });
 });

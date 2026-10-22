@@ -91,10 +91,10 @@ export class ScheduleGrantService {
   }): Promise<{ owner: { userId: string } } & IssuedMissionGrant> {
     const record = await this.#registry.findByTokenHash(hash(input.token));
     if (record?.status !== "ACTIVE") {
-      throw invalidDelegation("délégation inconnue ou retirée");
+      throw invalidDelegation("unknown or revoked delegation");
     }
     if (record.scheduleId !== input.scheduleId) {
-      throw invalidDelegation("délégation utilisée pour un autre calendrier");
+      throw invalidDelegation("delegation used for a different schedule");
     }
     const expected = scheduledExternalKey(
       record.missionExternalKey,
@@ -103,13 +103,13 @@ export class ScheduleGrantService {
     );
     if (expected !== input.missionExternalKey) {
       throw new AuthorizationError({
-        message: "La délégation de calendrier ne couvre pas cette occurrence",
+        message: "Schedule delegation does not cover this occurrence",
         userMessage: "Access denied.",
       });
     }
     if (!(await this.#isUserActive(record.userId))) {
       throw new AuthorizationError({
-        message: `Délégation de calendrier pour un compte inactif : ${record.userId}`,
+        message: `Schedule delegation for an inactive account: ${record.userId}`,
         userMessage: "Access denied.",
       });
     }
@@ -143,7 +143,7 @@ function hash(token: string): string {
 
 function invalidDelegation(reason: string): AuthenticationError {
   return new AuthenticationError({
-    message: `Délégation de calendrier refusée : ${reason}`,
+    message: `Schedule delegation rejected: ${reason}`,
     userMessage: "Authentication required.",
   });
 }

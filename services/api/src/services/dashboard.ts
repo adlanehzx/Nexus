@@ -5,27 +5,26 @@ import type { MissionSnapshot, MissionTask } from "@nexus/mission-control-client
 import { missionOwnerPrefix } from "./acp-orchestrator.js";
 
 /**
- * Le tableau de bord de supervision.
+ * Supervision dashboard.
  *
- * Il **lit**, il n'agit pas. Aucune méthode de ce fichier ne modifie quoi que ce
- * soit : superviser et administrer sont deux surfaces, et les confondre ferait
- * d'un écran de consultation un moyen d'action à un clic de distance.
+ * It **reads**, it does not act. No method in this file modifies anything:
+ * supervising and administering are two different surfaces, and confusing them
+ * would make an inspection screen an action mechanism one click away.
  *
- * Deux portées, et la distinction est délibérée :
+ * Two scopes, and the distinction is deliberate:
  *
- *  - **ce qui appartient à quelqu'un** — appareils, tâches, souvenirs,
- *    notifications, runs — est lu pour le compte de l'administrateur, jamais
- *    pour tous les comptes. Le rôle `ADMIN` ouvre la supervision de
- *    l'infrastructure ; il n'a jamais eu vocation à donner accès aux
- *    conversations d'autrui, et faire l'inverse serait une décision beaucoup
- *    plus lourde que ce qui a été demandé ;
- *  - **ce qui n'appartient à personne** — serveurs MCP, worker navigateur,
- *    catalogue d'outils, journaux — est global.
+ *  - **what belongs to someone** — devices, tasks, memories,
+ *    notifications, runs — is read on behalf of the administrator, never
+ *    for all accounts. The `ADMIN` role opens infrastructure supervision;
+ *    it was never intended to grant access to others' conversations, and doing
+ *    the opposite would be a much heavier decision than what was asked;
+ *  - **what belongs to no one** — MCP servers, browser worker,
+ *    tool catalog, logs — is global.
  *
- * Troisième principe, qui gouverne les sections non câblées : **on ne peint pas
- * en vert ce qui n'existe pas.** Quand un sous-système n'est pas configuré, la
- * section le dit. Un voyant vert sur un composant absent est pire qu'un écran
- * vide : il fait chercher la panne ailleurs.
+ * Third principle, governing unwired sections: **we do not paint green
+ * what does not exist.** When a subsystem is not configured, the section says so.
+ * A green light on an absent component is worse than an empty screen:
+ * it makes people look for failures elsewhere.
  */
 
 export type HealthLevel = "ok" | "degraded" | "down" | "unconfigured";
@@ -47,7 +46,7 @@ export interface OverviewSnapshot {
   notifications: { unread: number };
   security: { eventsRetained: number; byKind: Record<string, number> };
   health: SubsystemHealth[];
-  /** Les derniers événements de tout le système, fusionnés et datés. */
+  /** Latest system-wide events, merged and timestamped. */
   recentActivity: ActivityEntry[];
 }
 
@@ -87,7 +86,7 @@ export interface DeviceView {
 }
 
 export interface WorkerView extends DeviceView {
-  /** Le canal exécutant est-il réellement ouvert ? Vient de la passerelle. */
+  /** Is the worker channel actually open? Comes from the gateway. */
   connected: boolean;
   acceptingTasks: boolean;
 }
@@ -119,7 +118,7 @@ export interface TaskView {
 }
 
 export interface TaskDetailView extends TaskView {
-  /** Journal d'exécution : une entrée par tentative sur une machine. */
+  /** Execution log: one entry per attempt on a machine. */
   executions: {
     id: string;
     stepId: string;
@@ -140,7 +139,7 @@ export interface ToolView {
   version: string;
   riskLevel: string;
   requiredPermissions: string[];
-  /** Vrai si les permissions de l'administrateur couvrent cet outil. */
+  /** True if administrator permissions cover this tool. */
   allowed: boolean;
   source: "native" | "browser" | "search" | "acp";
 }
@@ -158,7 +157,7 @@ export interface MemoryStats {
 export interface DashboardServiceOptions {
   services: ServiceContainer;
   now?: () => Date;
-  /** Version affichée dans l'en-tête. Vient de la configuration. */
+  /** Version displayed in header. Comes from configuration. */
   apiVersion?: string;
 }
 
@@ -177,7 +176,7 @@ export class DashboardService {
     return this.#apiVersion;
   }
 
-  // ── Vue d'ensemble ──────────────────────────────────────────────────────
+  // ── Overview ────────────────────────────────────────────────────────────
 
   async overview(userId: string): Promise<OverviewSnapshot> {
     const [devices, plans, runs] = await Promise.all([
@@ -236,11 +235,11 @@ export class DashboardService {
   }
 
   /**
-   * Santé des sous-systèmes.
+   * Subsystem health.
    *
-   * `unconfigured` est un niveau à part entière, distinct de `down`. Un serveur
-   * MCP qu'on n'a jamais branché n'est pas en panne, et l'afficher en rouge
-   * enverrait chercher un incident qui n'existe pas.
+   * `unconfigured` is a distinct level in its own right, separate from `down`.
+   * An MCP server that has never been plugged in is not broken, and displaying
+   * it in red would prompt investigations into an incident that does not exist.
    */
   health(devices: readonly Device[]): SubsystemHealth[] {
     const workers = devices.filter((device) => canAcceptTasks(device.role));
@@ -253,7 +252,7 @@ export class DashboardService {
         detail: `version ${this.#apiVersion}`,
       },
       {
-        name: "Exécutants",
+        name: "Workers",
         level:
           workers.length === 0
             ? "unconfigured"
@@ -264,20 +263,20 @@ export class DashboardService {
                 : "ok",
         detail:
           workers.length === 0
-            ? "aucun exécutant appairé"
-            : `${String(connected.length)}/${String(workers.length)} connecté(s)`,
+            ? "no paired workers"
+            : `${String(connected.length)}/${String(workers.length)} connected`,
       },
       {
-        name: "Clients temps réel",
+        name: "Real-time clients",
         level: this.#services.router.connectedDeviceIds.length === 0 ? "degraded" : "ok",
-        detail: `${String(this.#services.router.connectedDeviceIds.length)} client(s) attaché(s)`,
+        detail: `${String(this.#services.router.connectedDeviceIds.length)} client(s) attached`,
       },
       this.#mcpHealth(),
       this.#browserHealth(),
       {
-        name: "Mémoire",
+        name: "Memory",
         level: "ok",
-        detail: "magasin en mémoire",
+        detail: "in-memory store",
       },
     ];
 
@@ -287,7 +286,7 @@ export class DashboardService {
   #mcpHealth(): SubsystemHealth {
     const manager = this.#services.mcp;
     if (manager === undefined) {
-      return { name: "MCP", level: "unconfigured", detail: "aucun serveur MCP configuré" };
+      return { name: "MCP", level: "unconfigured", detail: "no MCP servers configured" };
     }
 
     const servers = manager.health();
@@ -297,29 +296,29 @@ export class DashboardService {
       name: "MCP",
       level:
         servers.length === 0 ? "unconfigured" : connected === servers.length ? "ok" : "degraded",
-      detail: `${String(connected)}/${String(servers.length)} serveur(s) connecté(s)`,
+      detail: `${String(connected)}/${String(servers.length)} server(s) connected`,
     };
   }
 
   #browserHealth(): SubsystemHealth {
     if (this.#services.browserSessionManager !== undefined) {
       return {
-        name: "Navigateur",
+        name: "Browser",
         level: "ok",
-        detail: "harness local Chromium connecté (mode natif)",
+        detail: "connected local Chromium harness (native mode)",
       };
     }
     if (this.#services.browser === undefined) {
       return {
         name: "Browser Use",
         level: "unconfigured",
-        detail: "worker navigateur non configuré",
+        detail: "browser worker not configured",
       };
     }
-    // La sonde est asynchrone et le worker peut être lent : l'état réel est
-    // rendu par la section dédiée, qui l'interroge. Ici on dit seulement qu'il
-    // est câblé — mentir sur sa santé serait pire que ne rien dire.
-    return { name: "Browser Use", level: "ok", detail: "configuré ; voir la section dédiée" };
+    // The probe is asynchronous and the worker can be slow: the actual state is
+    // returned by the dedicated section, which queries it. Here we only indicate that
+    // it is wired — misrepresenting its health would be worse than saying nothing.
+    return { name: "Browser Use", level: "ok", detail: "configured; see dedicated section" };
   }
 
   #recentActivity(
@@ -337,7 +336,7 @@ export class DashboardService {
       entries.push({
         at: plan.completedAt ?? plan.createdAt,
         kind: "task",
-        summary: `Tâche « ${plan.title} » — ${plan.status}`,
+        summary: `Task "${plan.title}" — ${plan.status}`,
         level: plan.status === "failed" ? "error" : "info",
       });
     }
@@ -346,7 +345,7 @@ export class DashboardService {
       entries.push({
         at: run.endedAt ?? run.startedAt,
         kind: "run",
-        summary: `Run agent ${run.runId.slice(0, 8)} — ${run.status}`,
+        summary: `Agent run ${run.runId.slice(0, 8)} — ${run.status}`,
         level: run.status === "failed" ? "error" : "info",
       });
     }
@@ -363,7 +362,7 @@ export class DashboardService {
     return entries.sort((left, right) => (left.at < right.at ? 1 : -1)).slice(0, 30);
   }
 
-  // ── Appareils ───────────────────────────────────────────────────────────
+  // ── Devices ─────────────────────────────────────────────────────────────
 
   async listDevices(userId: string): Promise<DeviceView[]> {
     const devices = await this.#services.deviceRegistry.listDevices(userId);
@@ -372,13 +371,13 @@ export class DashboardService {
 
   async getDevice(userId: string, deviceId: string): Promise<DeviceView | undefined> {
     const device = await this.#services.deviceRegistry.getDevice(deviceId);
-    // Vérification de propriété, comme partout : un identifiant deviné ne doit
-    // rien ouvrir, fût-ce depuis un compte administrateur.
+    // Ownership check, as elsewhere: a guessed identifier must not open anything,
+    // even from an administrator account.
     if (device?.userId !== userId) return undefined;
     return presentDevice(device);
   }
 
-  // ── Exécutants ──────────────────────────────────────────────────────────
+  // ── Workers ─────────────────────────────────────────────────────────────
 
   async listWorkers(userId: string): Promise<WorkerView[]> {
     const devices = await this.#services.deviceRegistry.listDevices(userId);
@@ -398,7 +397,7 @@ export class DashboardService {
       });
   }
 
-  // ── Tâches ──────────────────────────────────────────────────────────────
+  // ── Tasks ───────────────────────────────────────────────────────────────
 
   async listTasks(userId: string, limit = 50): Promise<TaskView[]> {
     const [plans, missions] = await Promise.all([
@@ -440,8 +439,8 @@ export class DashboardService {
           execution.completedAt === null
             ? null
             : new Date(execution.completedAt).getTime() - new Date(execution.startedAt).getTime(),
-        // Le résultat est celui que le coordinateur a bien voulu conserver : un
-        // résultat marqué sensible y a déjà été remplacé par un marqueur.
+        // The result is what the coordinator chose to retain: a result marked
+        // sensitive has already been replaced by a marker.
         result: execution.result,
         error:
           execution.error === null
@@ -456,13 +455,13 @@ export class DashboardService {
     return new Map(devices.map((device) => [device.id, device.name]));
   }
 
-  // ── Runs d'agent ────────────────────────────────────────────────────────
+  // ── Agent runs ──────────────────────────────────────────────────────────
 
   /**
-   * Les runs de l'administrateur, **projetés**.
+   * Administrator runs, **projected**.
    *
-   * `projectAgentRun` ne lit que `record` : le transcript et les blocs de
-   * raisonnement du fournisseur ne traversent jamais cette frontière.
+   * `projectAgentRun` only reads `record`: transcript and provider reasoning blocks
+   * never cross this boundary.
    */
   async listAgentRuns(userId: string, limit = 50): Promise<AgentRunView[]> {
     const [runs, missions] = await Promise.all([
@@ -487,7 +486,7 @@ export class DashboardService {
     return projectAgentRun(run);
   }
 
-  // ── Outils ──────────────────────────────────────────────────────────────
+  // ── Tools ───────────────────────────────────────────────────────────────
 
   async listTools(userId: string): Promise<ToolView[]> {
     const granted = new Set(await this.#services.permissionsFor(userId));
@@ -511,7 +510,7 @@ export class DashboardService {
         ...native,
         ...registry.configured.map((agent) => ({
           name: `acp.${agent.key}`,
-          description: `Délègue une tâche durable au profil ACP ${agent.key}.`,
+          description: `Delegates a durable task to ACP profile ${agent.key}.`,
           version: "1",
           riskLevel: "MEDIUM",
           requiredPermissions: [],
@@ -525,7 +524,7 @@ export class DashboardService {
     }
   }
 
-  // ── Mémoire ─────────────────────────────────────────────────────────────
+  // ── Memory ──────────────────────────────────────────────────────────────
 
   async memoryStats(userId: string): Promise<MemoryStats> {
     const hits = await this.#services.memoryService.list({ userId, limit: 500 });
@@ -793,10 +792,10 @@ function parseAcpError(raw: string | null): { code: string; message: string } | 
     const message = value.message ?? value.error;
     return {
       code: typeof value.code === "string" ? value.code : "ACP_ERROR",
-      message: typeof message === "string" ? message : "Échec de l'agent ACP",
+      message: typeof message === "string" ? message : "ACP agent failure",
     };
   }
-  return { code: "ACP_ERROR", message: "Échec de l'agent ACP" };
+  return { code: "ACP_ERROR", message: "ACP agent failure" };
 }
 
 function responseFromAcp(raw: string | null): string | null {

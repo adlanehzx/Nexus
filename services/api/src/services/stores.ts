@@ -2,16 +2,16 @@ import { uuidv7 } from "@nexus/shared";
 import { AppError, type ErrorSeverity } from "@nexus/shared";
 
 /**
- * Magasins des domaines que l'API expose et qui n'avaient pas encore de service.
+ * Stores for domains exposed by the API that did not previously have a dedicated service.
  *
- * Utilisateurs, conversations, messages, notifications. Ce sont des **ports**
- * avec une implémentation en mémoire, exactement comme `DeviceStore` ou
- * `TaskStore` ailleurs dans le dépôt : l'implémentation Prisma se branchera
- * dessus sans toucher aux routes, et les tests n'ouvrent aucune connexion.
+ * Users, conversations, messages, notifications. These are **ports**
+ * with in-memory implementations, matching `DeviceStore` and
+ * `TaskStore` elsewhere in the repository: Prisma implementations plug
+ * into them without changing routes, and tests need no network connection.
  *
- * Les domaines qui avaient déjà un service — appareils, sessions d'appareil,
- * tâches, runs agent, confirmations, mémoire — ne sont pas réimplémentés ici.
- * L'API les câble, elle ne les redéfinit pas.
+ * Domains that already had a service — devices, device sessions,
+ * tasks, agent runs, confirmations, memory — are not re-implemented here.
+ * The API wires them, it does not redefine them.
  */
 
 export class NotFoundError extends AppError {
@@ -21,7 +21,7 @@ export class NotFoundError extends AppError {
 
   constructor(what: string, id: string) {
     super({
-      message: `${what} introuvable : ${id}`,
+      message: `${what} not found: ${id}`,
       userMessage: "The requested resource does not exist.",
       context: { what, id },
     });
@@ -39,16 +39,16 @@ export class ConflictError extends AppError {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utilisateurs
+// Users
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Role d'un compte.
+ * Role of an account.
  *
- * `ADMIN` ouvre le tableau de bord de supervision, qui donne une vue **de tout
- * le systeme** : appareils, executants, runs, journaux. Un jeton de client
- * ordinaire ne doit pas y donner acces — sans quoi un telephone perdu
- * exposerait l'infrastructure entiere en plus de la conversation.
+ * `ADMIN` opens the supervision dashboard, which provides an overview **of the entire
+ * system**: devices, workers, runs, logs. A standard client token
+ * must not grant access — otherwise a lost phone
+ * would expose the entire infrastructure in addition to chat history.
  */
 export type UserRole = "USER" | "ADMIN";
 
@@ -62,7 +62,7 @@ export interface User {
 }
 
 export interface UserRecord extends User {
-  /** Empreinte scrypt. Ne sort jamais de ce magasin. */
+  /** Scrypt hash. Never leaves this store. */
   passwordHash: string;
 }
 
@@ -71,15 +71,15 @@ export interface UserStore {
   findById(id: string): Promise<User | undefined>;
   findByEmail(email: string): Promise<UserRecord | undefined>;
   updatePasswordHash(id: string, passwordHash: string): Promise<void>;
-  /** Nombre de comptes. Sert a savoir si l'on cree le premier. */
+  /** Number of accounts. Used to determine if creating the initial account. */
   count(): Promise<number>;
   /**
-   * Change le role d'un compte.
+   * Updates an account's role.
    *
-   * Sur le port, et pas seulement sur l'implementation en memoire : le role est
-   * lu a chaque requete d'administration, et pouvoir le retirer fait partie du
-   * contrat. Un droit qu'on ne sait pas reprendre n'est pas un droit, c'est un
-   * acquis.
+   * Defined on the port, not just the in-memory implementation: the role is
+   * checked on every administrative request, and ability to revoke it is part of
+   * the contract. A privilege that cannot be revoked is not a privilege, it is an
+   * entitlement.
    */
   setRole(id: string, role: UserRole): Promise<void>;
 }
@@ -97,8 +97,8 @@ export class InMemoryUserStore implements UserStore {
     for (const existing of this.#byId.values()) {
       if (existing.email === email) {
         throw new ConflictError(
-          `Adresse déjà enregistrée : ${email}`,
-          "Un compte existe déjà avec cette adresse.",
+          `Email already registered: ${email}`,
+          "An account already exists with this email address.",
         );
       }
     }
@@ -107,11 +107,11 @@ export class InMemoryUserStore implements UserStore {
       id: uuidv7(),
       email,
       displayName: input.displayName,
-      // Le **premier compte** est celui de la personne qui installe NEXUS : il
-      // faut bien que quelqu'un puisse ouvrir le tableau de bord. Les suivants
-      // sont des comptes ordinaires. Corollaire a ne pas oublier : une
-      // installation exposee doit fermer l'inscription des le premier compte
-      // cree, sinon le premier venu devient administrateur.
+      // The **initial account** belongs to whoever installs NEXUS: someone
+      // must be able to access the dashboard. Subsequent accounts
+      // are standard users. Important operational corollary: an
+      // exposed installation must close registration once the first account
+      // is created, otherwise the next registrant becomes administrator.
       role: this.#byId.size === 0 ? "ADMIN" : "USER",
       status: "ACTIVE",
       createdAt: this.#now(),
@@ -152,7 +152,7 @@ export class InMemoryUserStore implements UserStore {
   }
 }
 
-/** L'empreinte ne franchit jamais la frontière du magasin. */
+/** Password hashes never leave the store boundary. */
 function publicUser(record: UserRecord): User {
   const { passwordHash: _passwordHash, ...rest } = record;
   return rest;
@@ -163,7 +163,7 @@ function normalizeEmail(email: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sessions utilisateur
+// User sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UserSession {
@@ -172,7 +172,7 @@ export interface UserSession {
   createdAt: Date;
   expiresAt: Date;
   revokedAt: Date | null;
-  /** Empreinte du jeton de rafraîchissement. La valeur n'est rendue qu'une fois. */
+  /** Hash of the refresh token. The raw token is returned only once. */
   refreshTokenHash: string;
 }
 
@@ -222,7 +222,7 @@ export class InMemorySessionStore implements SessionStore {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Conversations et messages
+// Conversations and messages
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Conversation {
@@ -240,11 +240,11 @@ export interface Message {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   /**
-   * Appareil d'où part le message.
+   * Device that sent the message.
    *
-   * Conservé sur le message lui-même : c'est ce qui permet à l'iPhone de savoir
-   * qu'une réponse répond à une question posée depuis le portable, et de
-   * l'afficher comme telle.
+   * Retained on the message itself: allows an iPhone client to know
+   * that a response answers a question asked from a laptop, and
+   * display it accordingly.
    */
   originClientDeviceId: string | null;
   createdAt: Date;
@@ -290,7 +290,7 @@ export class InMemoryConversationStore implements ConversationStore {
   }
 
   listByUser(userId: string, page: PageRequest): Promise<Page<Conversation>> {
-    // Les plus récentes d'abord : c'est ce qu'un client affiche en haut.
+    // Most recent first: matches what clients display at the top.
     const all = [...this.#conversations.values()]
       .filter((conversation) => conversation.userId === userId)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -335,10 +335,10 @@ export interface Notification {
   body: string;
   severity: "info" | "warning" | "error";
   /**
-   * Appareil à l'origine de ce qui a produit la notification.
+   * Device that produced the notification.
    *
-   * `null` pour une notification issue du système. Conservé pour que le client
-   * d'origine puisse la présenter différemment — il sait déjà ce qui s'est passé.
+   * `null` for a system notification. Retained so the originating
+   * client can present it differently — it already knows what happened.
    */
   originClientDeviceId: string | null;
   readAt: Date | null;
@@ -409,21 +409,21 @@ export class InMemoryNotificationStore implements NotificationStore {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pagination par curseur, et non par décalage.
+ * Cursor-based pagination rather than offset-based.
  *
- * Un `?page=3` sur une liste qui bouge saute ou répète des éléments : une
- * conversation ajoutée entre deux appels décale tout. Un curseur désigne un
- * point précis dans la liste, ce qui reste juste quoi qu'il arrive entre-temps.
+ * A `?page=3` on an active list skips or duplicates items: a
+ * conversation added between calls shifts everything. A cursor references a
+ * specific point in the list, remaining accurate regardless of concurrent changes.
  */
 export interface PageRequest {
-  /** Identifiant après lequel reprendre. Absent = depuis le début. */
+  /** Identifier after which to resume. Omitted = from the beginning. */
   cursor?: string | undefined;
   limit: number;
 }
 
 export interface Page<T> {
   items: T[];
-  /** À passer en `cursor` pour la page suivante. `null` = fin de liste. */
+  /** Pass as `cursor` for the next page. `null` = end of list. */
   nextCursor: string | null;
   total: number;
 }
@@ -436,8 +436,8 @@ export function paginate<T>(
   const start =
     page.cursor === undefined ? 0 : all.findIndex((item) => idOf(item) === page.cursor) + 1;
 
-  // Un curseur inconnu — élément supprimé entre deux appels — repart du début
-  // plutôt que de renvoyer une liste vide sans explication.
+  // An unknown cursor — item deleted between calls — restarts from the beginning
+  // rather than returning an empty list without explanation.
   const from = start <= 0 && page.cursor !== undefined ? 0 : start;
   const items = all.slice(from, from + page.limit);
   const last = items.at(-1);

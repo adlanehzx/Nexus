@@ -20,16 +20,9 @@ import {
 } from "./harness.js";
 
 /**
- * Le transport WebSocket, sur un vrai port.
+ * WebSocket transport on a real listening port.
  *
- * Tout le reste de la suite passe par `app.inject()` ou par un branchement
- * direct sur les canaux — délibérément, parce que c'est là que vit la logique.
- * Ce fichier est l'exception : il ouvre un port, s'y connecte avec `ws`, et
- * vérifie ce qu'aucun double ne peut vérifier — la mise à niveau HTTP, les codes
- * de fermeture, le cadrage des trames.
- *
- * Sans ce fichier, l'affirmation « le portable se connecte au cœur » resterait
- * une inférence.
+ * Verifies HTTP upgrades, close codes, and wire framing.
  */
 
 let api: ListeningApi;
@@ -59,7 +52,7 @@ function workerFrame(kind: keyof typeof WORKER_MESSAGE, payload: unknown) {
   );
 }
 
-/** Ouvre une socket et attend son ouverture. */
+/** Opens a socket and waits for open event. */
 function open(url: string, headers?: Record<string, string>): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url, headers === undefined ? undefined : { headers });
@@ -70,12 +63,12 @@ function open(url: string, headers?: Record<string, string>): Promise<WebSocket>
   });
 }
 
-/** Attend la première trame d'un type donné. */
+/** Waits for first frame of given type. */
 function waitFor(socket: WebSocket, type: string, timeoutMs = 3_000): Promise<Envelope> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       socket.off("message", onMessage);
-      reject(new Error(`aucune trame « ${type} » en ${String(timeoutMs)} ms`));
+      reject(new Error(`no frame "${type}" within ${String(timeoutMs)} ms`));
     }, timeoutMs);
 
     function onMessage(data: unknown) {
@@ -97,11 +90,11 @@ interface Envelope {
   payload: Record<string, unknown>;
 }
 
-/** Attend la fermeture et rend son code. */
+/** Waits for close event and returns code. */
 function waitClose(socket: WebSocket, timeoutMs = 3_000): Promise<number> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error("la socket n'a pas été fermée"));
+      reject(new Error("socket was not closed"));
     }, timeoutMs);
 
     socket.once("close", (code) => {
@@ -115,7 +108,7 @@ beforeEach(async () => {
   api = await listeningApi();
   account = await createAccount(api.harness);
   portable = await registerDevice(api.harness, account, {
-    name: "Portable Windows",
+    name: "Windows Laptop",
     role: "BOTH",
     permissions: ["filesystem.read"],
   });
@@ -125,8 +118,8 @@ afterEach(async () => {
   await api.close();
 });
 
-describe("canal client sur le fil", () => {
-  it("ouvre une session sur une poignée de main valide", async () => {
+describe("client channel on the wire", () => {
+  it("opens session on valid handshake", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
 
     socket.send(
@@ -136,7 +129,7 @@ describe("canal client sur le fil", () => {
       }),
     );
 
-    // La preuve que la session est ouverte : une demande obtient son accusé.
+    // Proof session is open: request receives its ack
     socket.send(envelope(CLIENT_TO_SERVER.deviceList, { workersOnly: false }, "r1"));
     const ack = await waitFor(socket, SERVER_TO_CLIENT.ack);
 
@@ -145,34 +138,29 @@ describe("canal client sur le fil", () => {
     socket.close();
   });
 
-  it("ferme en 4401 quand le jeton est refusé", async () => {
-    // Le code compte : le cœur client le distingue d'une coupure réseau et fait
-    // tourner son jeton avant de réessayer, au lieu de marteler indéfiniment.
+  it("closes with 4401 when token is rejected", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
     socket.send(
-      envelope(CLIENT_HELLO, { accessToken: "jeton-inventé", deviceId: portable.device.id }),
+      envelope(CLIENT_HELLO, { accessToken: "invented-token", deviceId: portable.device.id }),
     );
 
     expect(await waitClose(socket)).toBe(WsCloseCode.UNAUTHENTICATED);
   });
 
-  it("ferme quand la première trame n'est pas une poignée de main", async () => {
+  it("closes when first frame is not a handshake", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
     socket.send(envelope(CLIENT_TO_SERVER.deviceList, { workersOnly: false }, "r1"));
 
     expect(await waitClose(socket)).toBe(WsCloseCode.UNAUTHENTICATED);
   });
 
-  it("ferme une socket muette", async () => {
-    // Une connexion ouverte qui ne se présente jamais consomme un descripteur
-    // et une entrée de table. Le délai est raccourci ici ; en production il est
-    // de dix secondes.
+  it("closes silent socket", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
 
     expect(await waitClose(socket)).toBe(WsCloseCode.AUTH_TIMEOUT);
   });
 
-  it("ignore une trame illisible sans fermer", async () => {
+  it("ignores unreadable frame without closing", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
     socket.send(
       envelope(CLIENT_HELLO, {
@@ -181,7 +169,7 @@ describe("canal client sur le fil", () => {
       }),
     );
 
-    socket.send("ceci n'est pas du json");
+    socket.send("this is not json");
     socket.send(envelope(CLIENT_TO_SERVER.deviceList, { workersOnly: true }, "r2"));
 
     const ack = await waitFor(socket, SERVER_TO_CLIENT.ack);
@@ -189,25 +177,19 @@ describe("canal client sur le fil", () => {
     socket.close();
   });
 
-  it("refuse une origine inconnue avant la poignée de main", async () => {
-    // Le jeton reste la vraie garde — un site tiers n'en a pas. Mais refuser
-    // l'origine ferme le détournement inter-site avant même que la socket ne
-    // s'ouvre, ce qui coûte trois lignes.
+  it("rejects unknown origin before handshake", async () => {
     await expect(
-      open(`${api.wsUrl}/ws/client`, { origin: "https://site-malveillant.example" }),
+      open(`${api.wsUrl}/ws/client`, { origin: "https://malicious-site.example" }),
     ).rejects.toThrow();
   });
 
-  it("accepte une origine déclarée", async () => {
+  it("accepts declared origin", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`, { origin: "http://localhost:3000" });
     expect(socket.readyState).toBe(WebSocket.OPEN);
     socket.close();
   });
 
-  it("accepte la coquille de bureau Tauri", async () => {
-    // Le défaut constaté sur la machine : le client Windows empaqueté recevait
-    // un 403 à la poignée de main parce que son origine n'était déclarée nulle
-    // part. Ces deux origines désignent l'application installée, pas un serveur.
+  it("accepts Tauri desktop shell", async () => {
     for (const origin of ["http://tauri.localhost", "tauri://localhost"]) {
       const socket = await open(`${api.wsUrl}/ws/client`, { origin });
       expect(socket.readyState).toBe(WebSocket.OPEN);
@@ -215,21 +197,19 @@ describe("canal client sur le fil", () => {
     }
   });
 
-  it("l'ouverture à Tauri n'élargit rien d'autre", async () => {
-    // Une origine qui ressemble à celle de Tauri sans en être une doit rester
-    // refusée : la comparaison est exacte, pas un préfixe.
+  it("opening to Tauri widens nothing else", async () => {
     for (const origin of [
-      "https://tauri.localhost.attaquant.test",
+      "https://tauri.localhost.attacker.test",
       "http://tauri.localhost.evil.test",
-      "tauri://autre-hote",
+      "tauri://other-host",
     ]) {
       await expect(open(`${api.wsUrl}/ws/client`, { origin })).rejects.toThrow();
     }
   });
 });
 
-describe("canal worker sur le fil", () => {
-  it("mène la poignée de main signée de bout en bout", async () => {
+describe("worker channel on the wire", () => {
+  it("conducts signed handshake end-to-end", async () => {
     const socket = await open(`${api.wsUrl}/ws/worker`);
 
     socket.send(
@@ -261,7 +241,7 @@ describe("canal worker sur le fil", () => {
     socket.close();
   });
 
-  it("ferme sur une signature invalide", async () => {
+  it("closes on invalid signature", async () => {
     const socket = await open(`${api.wsUrl}/ws/worker`);
     socket.send(
       workerFrame("hello", {
@@ -277,7 +257,7 @@ describe("canal worker sur le fil", () => {
       workerFrame("authenticate", {
         deviceId: portable.device.id,
         nonce: String(challenge.payload.nonce),
-        signature: Buffer.from("pas une signature").toString("base64"),
+        signature: Buffer.from("not a signature").toString("base64"),
         capabilities: [],
         requestId: "auth-2",
         timestamp: new Date().toISOString(),
@@ -287,13 +267,13 @@ describe("canal worker sur le fil", () => {
     expect(await waitClose(socket)).toBe(4401);
   });
 
-  it("ferme une machine qui ne s'authentifie pas", async () => {
+  it("closes machine that does not authenticate", async () => {
     const socket = await open(`${api.wsUrl}/ws/worker`);
 
     expect(await waitClose(socket)).toBe(WsCloseCode.AUTH_TIMEOUT);
   });
 
-  it("libère l'exécutant quand la socket tombe", async () => {
+  it("releases worker when socket drops", async () => {
     const socket = await open(`${api.wsUrl}/ws/worker`);
     socket.send(
       workerFrame("hello", {
@@ -319,16 +299,14 @@ describe("canal worker sur le fil", () => {
     await waitFor(socket, WORKER_MESSAGE.session);
 
     socket.close();
-    // Sans détachement, le coordinateur attendrait le délai complet de chaque
-    // étape en vol avant de comprendre que la machine a disparu.
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(api.harness.services.gateway.isConnected(portable.device.id)).toBe(false);
   });
 });
 
-describe("cloisonnement sur le fil", () => {
-  it("un client ne peut pas émettre une trame du canal worker", async () => {
+describe("channel partitioning on the wire", () => {
+  it("a client cannot emit a frame from worker channel", async () => {
     const socket = await open(`${api.wsUrl}/ws/client`);
     socket.send(
       envelope(CLIENT_HELLO, {
@@ -337,9 +315,6 @@ describe("cloisonnement sur le fil", () => {
       }),
     );
 
-    // Un `worker.task_result` forgé ferait croire au cœur qu'une étape a
-    // réussi. Le canal client ne connaît pas ce type : il l'ignore, et la
-    // demande légitime qui suit obtient bien son accusé.
     socket.send(
       JSON.stringify(
         workerEnvelope(

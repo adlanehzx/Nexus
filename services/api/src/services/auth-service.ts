@@ -10,20 +10,20 @@ import {
 import type { SessionStore, User, UserStore } from "./stores.js";
 
 /**
- * Connexion, rafraîchissement, déconnexion.
+ * Sign in, token refresh, sign out.
  *
- * Deux jetons, deux rôles distincts :
+ * Two tokens, two distinct roles:
  *
- *  - un **jeton d'accès** court (quinze minutes), signé, porté à chaque requête.
- *    Il n'est stocké nulle part : le serveur le vérifie par la signature ;
- *  - un **jeton de rafraîchissement** long, dont seule l'empreinte est
- *    conservée, et qui **tourne à chaque usage**.
+ *  - a short-lived (fifteen minutes) **access token**, signed, sent on each request.
+ *    It is stored nowhere: the server verifies it by signature;
+ *  - a long-lived **refresh token**, where only the hash is
+ *    retained, and which **rotates on every use**.
  *
- * La rotation est ce qui rend le vol détectable : si un jeton de
- * rafraîchissement déjà consommé réapparaît, c'est qu'il a été copié. On révoque
- * alors **toute la famille de sessions de l'utilisateur**, pas seulement celle-là
- * — l'attaquant et la victime en détiennent chacun un, et on ne sait pas lequel
- * est lequel.
+ * Rotation makes token theft detectable: if a previously consumed
+ * refresh token is presented again, it indicates it was copied. We then revoke
+ * **the user's entire session family**, not just that one
+ * — both the attacker and victim hold a token, and we cannot tell which
+ * is which.
  */
 
 export class InvalidCredentialsError extends AppError {
@@ -33,7 +33,7 @@ export class InvalidCredentialsError extends AppError {
 
   constructor() {
     super({
-      message: "Identifiants refusés",
+      message: "Invalid credentials",
       // A single message for "unknown address" and "wrong password":
       // distinguishing them would reveal which addresses have an account.
       userMessage: "Incorrect email or password.",
@@ -47,7 +47,7 @@ export class SessionRevokedError extends AppError {
 
   constructor(reason: string) {
     super({
-      message: `Session révoquée : ${reason}`,
+      message: `Session revoked: ${reason}`,
       userMessage: "Your session was closed. Please sign in again.",
       context: { reason },
     });
@@ -65,11 +65,11 @@ export interface AuthServiceOptions {
   users: UserStore;
   sessions: SessionStore;
   tokens: TokenService;
-  /** Durée de vie d'un jeton de rafraîchissement. */
+  /** Lifespan of a refresh token. */
   refreshTtlMs?: number;
   /**
-   * Coût du hachage. **Réduit dans les tests uniquement** : une suite qui paie
-   * 350 ms par compte créé finit par ne plus être lancée.
+   * Hashing cost. **Reduced in tests only**: a suite that spends
+   * 350 ms per account created ends up not being run.
    */
   passwordParams?: ScryptParams;
   now?: () => Date;
@@ -112,11 +112,11 @@ export class AuthService {
   }
 
   /**
-   * Connexion.
+   * Sign in.
    *
-   * Le mot de passe est vérifié **même quand l'adresse est inconnue**, contre
-   * une empreinte factice. Sans cela, une réponse immédiate signale « ce compte
-   * n'existe pas » et permet d'énumérer les adresses enregistrées.
+   * The password is verified **even when the email address is unknown**, against
+   * a decoy hash. Otherwise, an immediate response signals "this account
+   * does not exist" and enables username enumeration.
    */
   async login(input: { email: string; password: string }): Promise<{
     user: User;
@@ -133,11 +133,11 @@ export class AuthService {
     if (!valid) throw new InvalidCredentialsError();
 
     if (record.status !== "ACTIVE") {
-      throw new SessionRevokedError("compte suspendu");
+      throw new SessionRevokedError("account suspended");
     }
 
-    // Le durcissement des paramètres se rattrape à la connexion suivante, sans
-    // que l'utilisateur ait à changer de mot de passe.
+    // Parameter hardening is updated on next login without
+    // requiring the user to change their password.
     if (needsRehash(record.passwordHash)) {
       await this.#users.updatePasswordHash(record.id, await this.#hash(input.password));
     }
@@ -147,25 +147,24 @@ export class AuthService {
   }
 
   /**
-   * Rafraîchit une session, en faisant tourner le jeton.
+   * Refreshes a session by rotating the refresh token.
    *
-   * @throws {SessionRevokedError} si le jeton présenté a déjà été consommé —
-   *   signe qu'il a été copié. Toutes les sessions de l'utilisateur sont alors
-   *   fermées : on ne peut pas savoir qui, de l'attaquant ou de la victime,
-   *   présente le jeton.
+   * @throws {SessionRevokedError} if the presented token was already consumed —
+   *   indicating it was copied. All sessions for the user are then
+   *   closed: there is no way to distinguish the attacker from the victim.
    */
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const session = await this.#sessions.findByRefreshHash(hashRefreshToken(refreshToken));
-    if (session === undefined) throw new SessionRevokedError("jeton inconnu");
+    if (session === undefined) throw new SessionRevokedError("unknown token");
 
     const now = this.#now();
 
     if (session.revokedAt !== null) {
       await this.#sessions.revokeAllForUser(session.userId, now);
-      throw new SessionRevokedError("jeton de rafraîchissement rejoué");
+      throw new SessionRevokedError("replayed refresh token");
     }
     if (session.expiresAt.getTime() <= now.getTime()) {
-      throw new SessionRevokedError("session expirée");
+      throw new SessionRevokedError("session expired");
     }
 
     await this.#sessions.revoke(session.id, now);
@@ -181,18 +180,18 @@ export class AuthService {
   }
 
   /**
-   * Vérifie qu'une session est toujours ouverte.
+   * Verifies that a session is still active.
    *
-   * Le jeton d'accès porte sa propre signature, mais cela ne suffit pas : une
-   * déconnexion doit prendre effet immédiatement, y compris sur un jeton encore
-   * valide cryptographiquement.
+   * The access token carries its own signature, but that is insufficient: a
+   * logout must take effect immediately, including on a token that is still
+   * cryptographically valid.
    */
   async assertSessionActive(sessionId: string): Promise<void> {
     const session = await this.#sessions.get(sessionId);
-    if (session === undefined) throw new SessionRevokedError("session inconnue");
-    if (session.revokedAt !== null) throw new SessionRevokedError("session fermée");
+    if (session === undefined) throw new SessionRevokedError("unknown session");
+    if (session.revokedAt !== null) throw new SessionRevokedError("session closed");
     if (session.expiresAt.getTime() <= this.#now().getTime()) {
-      throw new SessionRevokedError("session expirée");
+      throw new SessionRevokedError("session expired");
     }
   }
 
@@ -229,17 +228,17 @@ export class AuthService {
 }
 
 /**
- * Empreinte factice, aux paramètres courants.
+ * Decoy hash with current parameters.
  *
- * Vérifiée quand l'adresse est inconnue, uniquement pour que la réponse mette
- * le même temps. Le mot de passe qui l'a produite n'a aucune importance ; ce qui
- * compte est que le calcul soit identique.
+ * Verified when the email address is unknown, solely so the response takes
+ * the same duration. The password that produced it is irrelevant; what
+ * matters is that the computation is identical.
  */
 const DECOY_HASH =
   "scrypt$65536$8$1$AAAAAAAAAAAAAAAAAAAAAA$" +
   "d2VfZG9fbm90X2NhcmVfYWJvdXRfdGhpc192YWx1ZV9hdF9hbGxfaXRfaXNfYV9kZWNveV8xMjM0";
 
-/** Comparaison en temps constant, pour les jetons opaques. */
+/** Constant-time comparison for opaque tokens. */
 export function tokensMatch(a: string, b: string): boolean {
   const left = Buffer.from(a);
   const right = Buffer.from(b);

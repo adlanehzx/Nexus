@@ -4,21 +4,21 @@ import type { NotificationDispatcher, NotificationPriority } from "@nexus/notifi
 import type { Notification, NotificationStore } from "./stores.js";
 
 /**
- * Notifications, produites **au centre**.
+ * Notifications, produced **centrally**.
  *
- * C'est une décision d'architecture, pas une commodité d'implémentation. Si
- * chaque client décidait quoi notifier, l'iPhone et le portable afficheraient
- * des choses différentes du même événement, et une tâche terminée pendant que
- * l'iPhone était éteint ne produirait rien du tout.
+ * This is an architectural decision, not an implementation convenience. If
+ * each client decided what to notify, an iPhone and a laptop would display
+ * different information for the same event, and a task completed while
+ * the iPhone was powered off would produce nothing at all.
  *
- * Ici, une notification est **créée une fois**, persistée, puis diffusée à tous
- * les clients de l'utilisateur par le routeur existant. Un client absent la
- * retrouve dans sa file au retour ; un client présent la voit tout de suite. Les
- * deux voient la même.
+ * Here, a notification is **created once**, persisted, then broadcast to all
+ * user clients through the existing router. An offline client
+ * retrieves it from its queue upon returning; an active client sees it immediately.
+ * Both see the exact same notification.
  *
- * En complément, le NotificationDispatcher relaie les alertes vers les canaux
- * externes (desktop notify-send, mobile push ntfy, webhooks Discord/Telegram)
- * en appliquant les plages silencieuses et le regroupement.
+ * Additionally, NotificationDispatcher relays alerts to external channels
+ * (desktop notify-send, mobile push ntfy, Discord/Telegram webhooks)
+ * applying quiet hours and grouping.
  */
 
 export interface NotificationServiceOptions {
@@ -35,10 +35,10 @@ export interface CreateNotificationInput {
   body: string;
   severity?: "info" | "warning" | "error" | "critical" | undefined;
   /**
-   * Appareil à l'origine de ce qui a produit la notification.
+   * Device that originated the action producing the notification.
    *
-   * Transmis tel quel dans l'événement : le client d'origine sait déjà ce qui
-   * s'est passé et peut la présenter autrement, voire ne pas la sonner.
+   * Transmitted as-is in the event: the originating client already knows what
+   * occurred and can present it differently, or silence it.
    */
   originClientDeviceId?: string | null | undefined;
   url?: string | undefined;
@@ -66,11 +66,11 @@ export class NotificationService {
   }
 
   /**
-   * Crée une notification et la diffuse (WebSocket interne + canaux externes).
+   * Creates a notification and broadcasts it (internal WebSocket + external channels).
    *
-   * La persistance précède la diffusion, et l'ordre compte : si la diffusion
-   * échoue, la notification existe quand même et sera lue au prochain appel de
-   * l'API. Dans l'autre sens, un client hors ligne perdrait l'information.
+   * Persistence precedes broadcast, and order matters: if broadcast
+   * fails, the notification still exists and will be read on the next API
+   * call. In reverse, an offline client would lose the information.
    */
   async create(input: CreateNotificationInput): Promise<Notification> {
     const storeSeverity = input.severity === "critical" ? "error" : (input.severity ?? "info");
@@ -95,7 +95,7 @@ export class NotificationService {
       },
     });
 
-    // Envoi externe vers le bureau, ntfy ou les webhooks
+    // External dispatch to desktop, ntfy, or webhooks
     if (this.#dispatcher) {
       const priority = this.#mapSeverityToPriority(input.severity ?? "info");
       void this.#dispatcher
@@ -112,7 +112,7 @@ export class NotificationService {
           metadata: input.metadata,
         })
         .catch(() => {
-          // Les erreurs des canaux externes sont interceptées et ne bloquent pas
+          // Errors from external channels are intercepted and non-blocking
         });
     }
 
@@ -134,7 +134,7 @@ export class NotificationService {
   }
 
   /**
-   * Notifie l'issue d'une tâche.
+   * Notifies the outcome of a task.
    */
   async notifyTaskOutcome(input: {
     userId: string;
@@ -149,12 +149,12 @@ export class NotificationService {
 
     const body =
       input.status === "succeeded"
-        ? (input.detail ?? "La tâche est terminée.")
+        ? (input.detail ?? "The task has completed.")
         : input.status === "partial"
-          ? "Certaines étapes n'ont pas abouti."
+          ? "Some steps did not complete."
           : input.status === "cancelled"
-            ? "La tâche a été annulée."
-            : (input.detail ?? "La tâche a échoué.");
+            ? "The task was cancelled."
+            : (input.detail ?? "The task failed.");
 
     const taskUrl = `${this.#dashboardBaseUrl.replace(/\/$/, "")}/dashboard?tab=tasks&taskId=${encodeURIComponent(input.taskId)}`;
 
@@ -165,7 +165,7 @@ export class NotificationService {
       severity,
       originClientDeviceId: input.originClientDeviceId,
       url: taskUrl,
-      actionTitle: "Voir la tâche",
+      actionTitle: "View task",
       groupKey: `task-${input.taskId}`,
       tags: ["task", input.status],
     });

@@ -12,17 +12,15 @@ import type { ClientSocket } from "../src/ws/client-channel.js";
 import type { WorkerSocket } from "../src/ws/worker-channel.js";
 
 /**
- * Harnais des tests de l'API.
+ * API test harness.
  *
- * `app.inject()` : aucun port ouvert, aucun service externe. Les magasins sont
- * ceux du conteneur — en mémoire, comme partout ailleurs dans le dépôt — et
- * Prisma comme Redis sont remplacés par des doubles, puisque aucune route
- * testée ici ne les touche.
+ * `app.inject()`: no open ports, no external services. Stores are those of the
+ * container — in-memory, as everywhere else in the repository — and both Prisma
+ * and Redis are replaced with test doubles, as no tested route interacts with them.
  *
- * Ce qui reste **réel** : la construction Fastify complète, la validation Zod,
- * la limitation de débit, le gestionnaire d'erreurs, les vraies signatures
- * Ed25519, le vrai `TaskCoordinator`, la vraie `WorkerGateway`. On ne double que
- * les frontières externes.
+ * What remains **real**: full Fastify construction, Zod validation, rate limiting,
+ * error handling, genuine Ed25519 signatures, real `TaskCoordinator`, real `WorkerGateway`.
+ * Only external boundaries are doubled.
  */
 
 export const signingKeys = generateSigningKeyPair();
@@ -88,10 +86,9 @@ export async function makeApi(
     ...(options.expectedWorkerVersion === undefined
       ? {}
       : { expectedWorkerVersion: options.expectedWorkerVersion }),
-    // Le coût de scrypt est voulu en production ; le faire payer à chaque test
-    // rendrait la suite inutilisable, et une suite lente finit par ne plus être
-    // lancée. Les paramètres sont inscrits dans l'empreinte : rien d'autre ne
-    // change.
+    // Scrypt cost is deliberate in production; paying it on each test
+    // would make the suite unusable, and a slow suite ends up skipped.
+    // Parameters are encoded in the hash: nothing else changes.
     passwordParams: SCRYPT_FAST,
   });
 
@@ -100,7 +97,7 @@ export async function makeApi(
     logger,
     prisma: fakePrisma(),
     redis: fakeRedis(),
-    // Compteur local : les tests n'ont pas à dépendre d'un Redis joignable.
+    // Local in-memory counter: tests do not depend on a reachable Redis.
     rateLimitStore: "memory",
     services,
   });
@@ -115,21 +112,20 @@ export async function makeApi(
 }
 
 /**
- * La même application, mais **sur un vrai port**.
+ * The same application, but **on a real port**.
  *
- * Réservé aux tests du transport WebSocket : `app.inject()` ne fait pas de mise
- * à niveau HTTP, et une socket ne se simule pas depuis l'intérieur. Le port est
- * choisi par le système (`port: 0`) pour que deux exécutions parallèles ne se
- * disputent rien.
+ * Reserved for WebSocket transport tests: `app.inject()` does not perform
+ * HTTP upgrades, and a socket cannot be simulated from within. Port is chosen
+ * by the system (`port: 0`) so parallel runs do not clash.
  *
- * L'écoute est limitée à `127.0.0.1` : une suite de tests n'a aucune raison
- * d'ouvrir un port sur le réseau local de qui la lance.
+ * Listening is bound to `127.0.0.1`: a test suite has no reason to expose ports
+ * on the local network.
  */
 export interface ListeningApi {
   harness: ApiHarness;
-  /** Adresse HTTP, par exemple `http://127.0.0.1:53124`. */
+  /** HTTP address, e.g. `http://127.0.0.1:53124`. */
   baseUrl: string;
-  /** La même en `ws://`. */
+  /** Same address with `ws://`. */
   wsUrl: string;
   close(): Promise<void>;
 }
@@ -149,9 +145,8 @@ export async function listeningApi(): Promise<ListeningApi> {
     redis: fakeRedis(),
     rateLimitStore: "memory",
     services,
-    // Dix secondes de délai de poignée de main rendraient la suite
-    // inutilisable ; la valeur de production est éprouvée par le fait qu'elle
-    // traverse le même chemin.
+    // 10s handshake timeout would make suite unusable; production value
+    // is verified because it traverses the same code path.
     websocketHandshakeTimeoutMs: 150,
   });
 
@@ -159,7 +154,7 @@ export async function listeningApi(): Promise<ListeningApi> {
 
   const address = app.server.address();
   if (address === null || typeof address === "string") {
-    throw new Error("le serveur de test n'a pas d'adresse TCP");
+    throw new Error("test server has no TCP address");
   }
 
   const baseUrl = `http://127.0.0.1:${String(address.port)}`;
@@ -173,10 +168,10 @@ export async function listeningApi(): Promise<ListeningApi> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comptes et appareils
+// Accounts and devices
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const PASSWORD = "un mot de passe suffisant";
+export const PASSWORD = "a sufficient password";
 
 export interface Account {
   userId: string;
@@ -213,10 +208,10 @@ export interface RegisteredDevice {
 }
 
 /**
- * Enregistre un appareil et l'approuve.
+ * Registers and approves a device.
  *
- * La clé est une vraie paire Ed25519 : la poignée de main du worker est jouée
- * pour de vrai dans les tests, signature comprise.
+ * Key is a genuine Ed25519 pair: worker handshake is executed for real
+ * in tests, including signature verification.
  */
 export async function registerDevice(
   harness: ApiHarness,
@@ -271,10 +266,10 @@ export function signNonce(privateKeyPem: string, nonce: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sockets de test
+// Test sockets
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Socket client. Retient ce qui est envoyé, décodé. */
+/** Client socket. Holds what was sent, decoded. */
 export class FakeClientSocket implements ClientSocket {
   readonly sent: { type: string; requestId?: string; payload: unknown }[] = [];
   closed: { code: number; reason: string } | undefined;
@@ -304,7 +299,7 @@ export class FakeClientSocket implements ClientSocket {
   }
 }
 
-/** Socket worker. Même principe. */
+/** Worker socket. Same principle. */
 export class FakeWorkerSocket implements WorkerSocket {
   readonly sent: { type: string; payload: unknown }[] = [];
   closed: { code: number; reason: string } | undefined;
@@ -327,21 +322,20 @@ export class FakeWorkerSocket implements WorkerSocket {
   }
 }
 
-/** Laisse la file de micro-tâches se vider. */
+/** Lets microtask queue settle. */
 export async function settle(rounds = 20): Promise<void> {
   for (let index = 0; index < rounds; index += 1) await Promise.resolve();
 }
 
-/** Attend qu'une condition devienne vraie, sans horloge réelle. */
+/** Awaits condition becoming true, without real clock. */
 export async function until(
   predicate: () => boolean | Promise<boolean>,
   rounds = 400,
 ): Promise<boolean> {
   for (let index = 0; index < rounds; index += 1) {
-    // Le prédicat peut être asynchrone : certains états ne se lisent que par un
-    // appel au registre. Sans `await`, une promesse serait toujours vraie et la
-    // boucle rendrait la main au premier tour, sur une condition jamais
-    // vérifiée — un test vert qui ne teste rien.
+    // Predicate may be async: some states are read through registry calls.
+    // Without await, a promise is truthy and loop returns on first round
+    // on an unverified condition — creating a passing test that tests nothing.
     if (await predicate()) return true;
     await Promise.resolve();
   }

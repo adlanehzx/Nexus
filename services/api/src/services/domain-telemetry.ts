@@ -41,18 +41,18 @@ export interface ObservabilitySummary {
 }
 
 const meter = metrics.getMeter("nexus.domain");
-const runsCounter = meter.createCounter("nexus_agent_runs", { description: "Runs agent terminés" });
+const runsCounter = meter.createCounter("nexus_agent_runs", { description: "Completed agent runs" });
 const tokensCounter = meter.createCounter("nexus_agent_tokens", {
-  description: "Jetons par agent",
+  description: "Tokens per agent",
 });
 const costCounter = meter.createCounter("nexus_agent_api_equivalent_cost_usd", {
-  description: "Coût API équivalent configuré ; ce n'est pas une facture fournisseur",
+  description: "Configured API equivalent cost; not a provider invoice",
   unit: "USD",
 });
 const runLatency = meter.createHistogram("nexus_agent_run_duration_seconds", { unit: "s" });
-const toolsCounter = meter.createCounter("nexus_tool_calls", { description: "Appels d'outils" });
+const toolsCounter = meter.createCounter("nexus_tool_calls", { description: "Tool calls" });
 const fallbackCounter = meter.createCounter("nexus_agent_fallbacks", {
-  description: "Runs ayant nécessité plus d'une tentative",
+  description: "Runs requiring more than one attempt",
 });
 
 export class NexusTelemetry {

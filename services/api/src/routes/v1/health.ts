@@ -4,14 +4,14 @@ import { checkDatabase } from "@nexus/database";
 import { checkRedis } from "../../lib/redis.js";
 
 /**
- * Sonde de READINESS — `GET /api/v1/health`.
+ * READINESS probe — `GET /api/v1/health`.
  *
- * Interroge les dépendances. C'est la sonde qui décide de retirer l'instance de
- * la rotation du load balancer, pas de la tuer.
+ * Queries dependencies. This is the probe that decides whether to remove the instance
+ * from load balancer rotation, not kill it.
  *
- * Le statut HTTP suit l'état : 200 si tout répond, 503 si une dépendance est
- * tombée. Un healthcheck qui renvoie 200 avec `status: "degraded"` dans le corps
- * est inutile — aucun load balancer ne lit le corps.
+ * HTTP status follows health: 200 if everything responds, 503 if a dependency is
+ * down. A healthcheck returning 200 with `status: "degraded"` in the body
+ * is useless — no load balancer inspects response bodies.
  */
 export const v1HealthRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
   app.get(
@@ -19,14 +19,14 @@ export const v1HealthRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
     {
       schema: {
         tags: ["health"],
-        summary: "Readiness — le service peut-il traiter du trafic ?",
+        summary: "Readiness — can the service handle traffic?",
         response: { 200: readinessResponseSchema, 503: readinessResponseSchema },
       },
       config: { rateLimit: false },
     },
     async (_request, reply) => {
-      // Les deux sondes sont indépendantes : les lancer en parallèle évite
-      // d'additionner leurs latences (et leurs timeouts).
+      // The two probes are independent: running them in parallel avoids
+      // compounding their latencies (and timeouts).
       const [database, redis] = await Promise.all([
         checkDatabase(app.prisma),
         checkRedis(app.redis),

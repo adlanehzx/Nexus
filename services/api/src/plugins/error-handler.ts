@@ -14,14 +14,14 @@ import {
 import type { ErrorResponse } from "@nexus/protocol";
 
 /**
- * Gestionnaire d'erreurs unique.
+ * Single error handler.
  *
- * Trois garanties :
- *   1. Le client reçoit toujours la même forme — `{ error: { code, message,
- *      retryable, correlationId } }` — quel que soit l'endroit où ça a cassé.
- *   2. Aucune trace d'exécution, aucun détail interne ne franchit la frontière.
- *      Ils partent dans les logs, corrélés par `correlationId`.
- *   3. `code` est un contrat public et stable : un client peut se brancher dessus.
+ * Three guarantees:
+ *   1. The client always receives the same shape — `{ error: { code, message,
+ *      retryable, correlationId } }` — regardless of where the failure occurred.
+ *   2. No stack trace, no internal details cross the boundary.
+ *      They go into logs, correlated by `correlationId`.
+ *   3. `code` is a public, stable contract: clients can bind against it.
  */
 
 function buildResponse(error: AppError, correlationId: string): ErrorResponse {
@@ -32,7 +32,7 @@ export const errorHandlerPlugin = fp(
   function errorHandler(app: FastifyInstance, _options: unknown, done: () => void) {
     app.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
       const error = new NotFoundError({
-        message: `Route inconnue : ${request.method} ${request.url}`,
+        message: `Unknown route: ${request.method} ${request.url}`,
       });
       request.log.info({ event: "http.not_found", method: request.method, path: request.url });
       void reply.status(error.httpStatus).send(buildResponse(error, request.id));
@@ -41,8 +41,8 @@ export const errorHandlerPlugin = fp(
     app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
       const appError = translate(error);
 
-      // Une erreur client (4xx) est un événement attendu, pas un incident :
-      // la journaliser en `error` rendrait les alertes inutilisables.
+      // A client error (4xx) is an expected event, not an incident:
+      // logging it as 'error' would render alerts unusable.
       const level = appError.httpStatus >= 500 ? "error" : "warn";
       request.log[level](
         {
@@ -65,26 +65,25 @@ export const errorHandlerPlugin = fp(
   { name: "error-handler" },
 );
 
-/** Ramène toute erreur — Fastify, Zod, ou inattendue — à notre taxonomie. */
+/** Maps any error — Fastify, Zod, or unexpected — to our taxonomy. */
 function translate(error: FastifyError): AppError {
   if (error instanceof AppError) return error;
 
   if (hasZodFastifySchemaValidationErrors(error)) {
     return new ValidationError({
-      message: "Échec de validation de la requête",
+      message: "Request validation failed",
       context: { issues: error.validation },
     });
   }
 
   if (isResponseSerializationError(error)) {
-    // Une réponse qui ne respecte pas son propre schéma est un bug serveur,
-    // jamais une erreur du client. Le détail du schéma violé accompagne le
-    // message : sans lui, le diagnostic se réduisait à « quelque part dans
-    // cette route », et c'est exactement ce qui a coûté une soirée sur
-    // `lastSeenAt`.
+    // A response that does not respect its own schema is a server bug,
+    // never a client error. The schema violation details accompany the
+    // message: without them, diagnosis was reduced to "somewhere in this route",
+    // which is exactly what cost an evening on lastSeenAt.
     return toAppError(
       new Error(
-        `Réponse non conforme au schéma sur ${error.method} ${error.url} : ${error.message}`,
+        `Response does not match schema on ${error.method} ${error.url}: ${error.message}`,
       ),
     );
   }

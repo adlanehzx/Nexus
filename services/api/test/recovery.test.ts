@@ -11,9 +11,8 @@ import { uuidv7 } from "@nexus/shared";
 
 describe("Phase 5 - Recovery", () => {
   const mockNow = new Date("2024-01-01T12:00:00Z");
-  // Les doublures ne portent que ce que `recover()` touche. Les typer ainsi
-  // plutôt qu'en `any` garde la vérification sur ces méthodes : renommer
-  // `select` casserait le test, au lieu de le laisser passer en silence.
+  // Test doubles only supply what recover() touches. Typing them this way
+  // rather than any retains check integrity on these methods.
   const createBaseOptions = () => ({
     registry: { get: vi.fn() } as unknown as TaskCoordinatorOptions["registry"],
     selector: { select: vi.fn() } as unknown as TaskCoordinatorOptions["selector"],
@@ -51,9 +50,7 @@ describe("Phase 5 - Recovery", () => {
         riskLevel: "LOW",
         timeoutMs: 10_000,
         dependsOn: [],
-        // Complété plutôt qu'asserté : une étape partielle forcée en `TaskStep`
-        // laissait le test compiler tout en décrivant un objet que le domaine
-        // n'accepte pas.
+        // Completed rather than asserted to conform with domain types.
         selectedDeviceId: null,
         preferredDeviceId: null,
         retry: { attempts: 1, backoffMs: 1_000, failoverToAnotherDevice: false },
@@ -65,7 +62,7 @@ describe("Phase 5 - Recovery", () => {
     ],
   });
 
-  it("Test 1 — Task COMPLETED: Ne relance pas une tâche terminée", async () => {
+  it("Test 1 — Task COMPLETED: Does not re-run completed task", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("succeeded", "succeeded");
     await store.save(plan);
@@ -77,7 +74,7 @@ describe("Phase 5 - Recovery", () => {
     expect(recovered?.status).toBe("succeeded");
   });
 
-  it("Test 2 — Task QUEUED: Restaure la tâche", async () => {
+  it("Test 2 — Task QUEUED: Restores task", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("pending", "pending");
     await store.save(plan);
@@ -91,7 +88,7 @@ describe("Phase 5 - Recovery", () => {
     expect(executeSpy).toHaveBeenCalled();
   });
 
-  it("Test 3 — Task RUNNING: Détecte l'interruption", async () => {
+  it("Test 3 — Task RUNNING: Detects interruption", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("running", "running");
     await store.save(plan);
@@ -105,7 +102,7 @@ describe("Phase 5 - Recovery", () => {
     expect(recovered!.steps[0]!.error).toBeDefined();
   });
 
-  it("Test 4 — Task FAILED: Reste failed", async () => {
+  it("Test 4 — Task FAILED: Remains failed", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("failed", "failed");
     await store.save(plan);
@@ -117,7 +114,7 @@ describe("Phase 5 - Recovery", () => {
     expect(recovered?.status).toBe("failed");
   });
 
-  it("Test 5 — Task CANCELLED: Ne pas relancer", async () => {
+  it("Test 5 — Task CANCELLED: Does not re-run", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("cancelled", "cancelled");
     await store.save(plan);
@@ -129,7 +126,7 @@ describe("Phase 5 - Recovery", () => {
     expect(recovered?.status).toBe("cancelled");
   });
 
-  it("Test 9 — Duplicate recovery: Est idempotent", async () => {
+  it("Test 9 — Duplicate recovery: Is idempotent", async () => {
     const store = new InMemoryTaskStore();
     const plan = createPlan("running", "running");
     await store.save(plan);

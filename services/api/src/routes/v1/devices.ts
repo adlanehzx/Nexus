@@ -13,14 +13,14 @@ import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/respo
 import { NotFoundError, paginate } from "../../services/stores.js";
 
 /**
- * Appareils, sessions d'appareil, capacités.
+ * Devices, device sessions, capabilities.
  *
- * Toutes ces routes exigent un **utilisateur**, jamais un appareil. Un appareil
- * ne s'enregistre pas lui-même, ne s'approuve pas lui-même, et ne se donne pas
- * de permissions : il demande un challenge et exécute ce qu'on lui confie.
+ * All these routes require a **user**, never a device. A device
+ * does not register itself, does not approve itself, and does not grant itself
+ * permissions: it requests a challenge and executes what is assigned to it.
  *
- * Le seul point d'entrée où un appareil parle est le canal WebSocket worker, et
- * il n'y fait que ce que le protocole permet.
+ * The only entry point where a device communicates is the worker WebSocket channel,
+ * and it only does what the protocol permits.
  */
 
 const deviceSchema = z.object({
@@ -43,17 +43,17 @@ const deviceSchema = z.object({
     .passthrough(),
   lastSeenAt: z.string().datetime().nullable(),
   authenticated: z.boolean(),
-  /** Version annoncée par l'exécutant, et ce qu'il faut en penser. */
+  /** Version reported by the worker, and its evaluation status. */
   agentVersion: z.string().nullable(),
   update: z.object({
     status: z.enum(["a-jour", "en-retard", "en-avance", "inconnu"]),
     expected: z.string().nullable(),
-    /** Le geste à faire, ou `null`. Il est toujours **local**. */
+    /** Action to take, or `null`. It is always **local**. */
     action: z.string().nullable(),
   }),
 });
 
-/** Ce qu'un appareil expose au client. Le secret d'appairage n'y figure pas. */
+/** What a device exposes to the client. The pairing secret is not included. */
 function present(
   device: {
     id: string;
@@ -85,9 +85,9 @@ function present(
     health: device.health as never,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
     agentVersion: device.agentVersion,
-    // L'avis est calculé par le cœur, qui est le seul à connaître la version
-    // attendue. Le worker, lui, ne reçoit aucune instruction : il n'y a pas de
-    // canal pour lui en donner.
+    // The evaluation is calculated by core, which is the only component aware of
+    // the expected version. The worker itself receives no instructions: there is
+    // no channel to send them.
     update: (() => {
       const advice = updateAdvice(device.agentVersion, expectedWorkerVersion);
       return { status: advice.status, expected: advice.expected, action: advice.action };
@@ -105,7 +105,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Appareils de l'utilisateur",
+        summary: "User devices",
         querystring: paginationQuerySchema.extend({
           role: z.enum(["CLIENT", "WORKER", "BOTH"]).optional(),
         }),
@@ -138,7 +138,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Enregistre un appareil — il arrive hors ligne et non approuvé",
+        summary: "Register a device — it arrives offline and unapproved",
         body: z
           .object({
             name: z.string().min(1).max(120),
@@ -146,35 +146,35 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
             platform: z.enum(["WINDOWS", "MACOS", "LINUX", "IOS", "ANDROID", "WEB"]),
             role: z.enum(["CLIENT", "WORKER", "BOTH"]),
             /**
-             * Clé publique de l'appareil. Ed25519 en PEM, ou ECDSA P-256 sur Android.
+             * Device public key. Ed25519 in PEM, or ECDSA P-256 on Android.
              *
-             * Facultative **dans la forme seulement** : le raffinement ci-dessous
-             * la rend obligatoire dès que l'appareil demande à exécuter. Un rôle
-             * `WORKER` ou `BOTH` sans clé serait un exécutant dont on ne peut
-             * vérifier aucune signature — l'ouvrir reviendrait à supprimer la
-             * poignée de main worker.
+             * Optional **in syntax only**: the refinement below
+             * makes it mandatory as soon as the device requests execution capability. A
+             * `WORKER` or `BOTH` role without a key would be an executor whose
+             * signature cannot be verified — allowing this would defeat the
+             * worker handshake.
              */
             publicKeyPem: z.string().min(1).max(4_096).optional(),
             grantedPermissions: z.array(z.string()).max(64).default([]),
           })
           /**
-           * Un exécutant signe ; un client ne signe pas.
+           * An executor signs; a client does not sign.
            *
-           * L'iPhone est un `CLIENT` pur : il s'authentifie par JWT, et le cœur
-           * vérifie déjà que l'appareil appartient au porteur du jeton. Lui
-           * réclamer une clé matérielle n'ajouterait aucune garantie et
-           * l'empêchait simplement de s'enregistrer.
+           * iPhone is a pure `CLIENT`: it authenticates via JWT, and core
+           * already verifies that the device belongs to the token bearer.
+           * Requiring a hardware key would add no guarantees and
+           * would simply prevent registration.
            *
-           * `WORKER` et `BOTH`, eux, reçoivent des commandes et ouvrent le canal
-           * `/ws/worker` en signant un challenge. Sans clé publique enregistrée,
-           * ce challenge est invérifiable : l'exigence reste entière, et elle est
-           * posée ici plutôt que dans le code métier pour qu'aucun appelant ne
-           * puisse l'oublier.
+           * `WORKER` and `BOTH` receive commands and open the
+           * `/ws/worker` channel by signing a challenge. Without a registered
+           * public key, this challenge cannot be verified: the requirement remains intact,
+           * and it is placed here rather than in domain code so no caller can
+           * omit it.
            */
           .refine((body) => body.role === "CLIENT" || body.publicKeyPem !== undefined, {
             path: ["publicKeyPem"],
             message:
-              "Une clé publique est obligatoire pour un appareil exécutant (WORKER ou BOTH).",
+              "A public key is required for an executor device (WORKER or BOTH).",
           }),
         response: { 201: okSchema(deviceSchema) },
       },
@@ -191,9 +191,9 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         grantedPermissions: request.body.grantedPermissions,
       });
 
-      // La clé publique est enregistrée séparément : elle a un cycle de vie
-      // propre — rotation, révocation — distinct de celui de l'appareil.
-      // Les CLIENT purs (iPhone) n'en envoient pas : ils s'authentifient par JWT.
+      // The public key is stored separately: it has its own lifecycle
+      // — rotation, revocation — distinct from the device itself.
+      // Pure CLIENTs (iPhone) do not send one: they authenticate via JWT.
       if (request.body.publicKeyPem !== undefined) {
         await app.services.deviceCredentials.set(device.id, request.body.publicKeyPem);
       }
@@ -201,7 +201,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       app.services.securityLog.record({
         kind: "device.registered",
         userId,
-        summary: `Appareil « ${device.name} » enregistré (${device.role}, non approuvé)`,
+        summary: `Device "${device.name}" registered (${device.role}, not approved)`,
         context: { deviceId: device.id, type: device.type, platform: device.platform },
       });
 
@@ -211,38 +211,36 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     },
   );
 
-  // ── Appairage par QR ─────────────────────────────────────────────────────
+  // ── QR Pairing ──────────────────────────────────────────────────────────
   //
-  // Deux routes, et leur asymétrie *est* le dispositif. La première exige un
-  // utilisateur authentifié : c'est elle qui fabrique la preuve. La seconde
-  // n'exige rien d'autre que le ticket, parce que l'appareil qui scanne ne
-  // possède encore aucune identité — c'est précisément ce qu'il vient
-  // chercher.
+  // Two routes, and their asymmetry *is* the security mechanism. The first requires
+  // an authenticated user: it generates the proof. The second requires
+  // nothing other than the ticket, because the scanning device does not yet
+  // have any identity — which is precisely what it comes to obtain.
   app.post(
     "/devices/pairing-tickets",
     {
       preHandler: app.requireUser,
-      // Un ticket par émission, et pas d'inondation : chaque ticket est une
-      // fenêtre de cinq minutes, et en ouvrir cent en ouvrirait cent.
+      // One ticket per issuance, no flooding: each ticket is a 5-minute
+      // window, and issuing a hundred would open a hundred.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
       schema: {
         tags: ["devices"],
-        summary: "Émet un ticket d'appairage à usage unique, à afficher en QR",
+        summary: "Issue a single-use pairing ticket to display as a QR code",
         body: z.object({ label: z.string().min(1).max(120).optional() }),
         response: {
           201: okSchema(
             z.object({
               id: z.string(),
               /**
-               * Le code en clair, rendu **une seule fois**.
+               * Plaintext code, returned **only once**.
                *
-               * Nommé `token` jusque dans la réponse : la rédaction de
-               * `@nexus/shared` masque par nom de clé, et `token` en fait
-               * partie. Un champ nommé `code` traverserait les journaux en
-               * clair le jour où quelqu'un journalise un corps de réponse.
+               * Named `token` in the response: the `@nexus/shared` redaction
+               * masks by key name, and `token` is included. A field named `code`
+               * would leak in plaintext if response bodies were ever logged.
                */
               token: z.string(),
-              /** Charge utile prête à encoder en QR. */
+              /** Payload ready to encode into QR. */
               payload: z.string(),
               expiresAt: z.string().datetime(),
             }),
@@ -254,10 +252,10 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       const { userId } = currentUser(request);
       const apiUrl = app.services.publicApiUrl;
       if (apiUrl === undefined) {
-        // Refuser plutôt que deviner : un QR qui porte la mauvaise adresse
-        // échoue sur le téléphone, loin de sa cause.
+        // Reject rather than guess: a QR with the wrong address
+        // fails on the phone, far from the root cause.
         throw new Error(
-          "L'appairage par QR exige PUBLIC_API_URL : l'adresse que vos appareils peuvent joindre.",
+          "QR pairing requires PUBLIC_API_URL: the address your devices can reach.",
         );
       }
       const { ticket, code } = await app.services.pairing.issue({
@@ -268,9 +266,9 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       app.services.securityLog.record({
         kind: "device.pairing_ticket_issued",
         userId,
-        summary: "Ticket d'appairage émis (valable 5 minutes, usage unique)",
-        // Jamais le code, ni son empreinte : l'identifiant suffit à relier
-        // cette ligne à l'appairage qui suivra.
+        summary: "Pairing ticket issued (valid for 5 minutes, single use)",
+        // Never the code, nor its fingerprint: the identifier is enough to link
+        // this entry to the subsequent pairing.
         context: { ticketId: ticket.id },
       });
 
@@ -294,7 +292,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Tickets d'appairage récents — sans leur code, qui n'est plus lisible",
+        summary: "Recent pairing tickets — without their code, which is no longer readable",
         response: {
           200: listSchema(
             z.object({
@@ -331,14 +329,14 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
   app.post(
     "/devices/pair",
     {
-      // Pas de `preHandler` : l'appareil n'a pas encore d'identité. Le ticket
-      // est son unique titre, et il est à usage unique — mais un code reste un
-      // code, donc la limite de débit est ici une mesure de sécurité et non de
-      // confort : elle est ce qui rend le tâtonnement inutile.
+      // No `preHandler`: the device has no identity yet. The ticket
+      // is its sole claim, and it is single-use — but a code is still a code,
+      // so rate limiting here is a security measure rather than a convenience:
+      // it makes brute-forcing infeasible.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
       schema: {
         tags: ["devices"],
-        summary: "Appaire un appareil avec un ticket — il arrive non approuvé",
+        summary: "Pair a device using a ticket — it arrives unapproved",
         body: z
           .object({
             token: z.string().min(16).max(256),
@@ -348,13 +346,13 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
             role: z.enum(["CLIENT", "WORKER", "BOTH"]),
             publicKeyPem: z.string().min(1).max(4_096).optional(),
           })
-          // Le même raffinement que l'enregistrement manuel, et pour la même
-          // raison : un exécutant sans clé publique serait un exécutant dont
-          // aucune signature n'est vérifiable. Le ticket change le transport,
-          // pas les règles.
+          // The same refinement as manual registration, and for the same
+          // reason: an executor without a public key would be an executor whose
+          // signature cannot be verified. The ticket changes the transport,
+          // not the rules.
           .refine(
             (body) => body.role === "CLIENT" || body.publicKeyPem !== undefined,
-            "Un appareil WORKER ou BOTH doit fournir sa clé publique.",
+            "A WORKER or BOTH device must provide its public key.",
           ),
         response: { 201: okSchema(deviceSchema) },
       },
@@ -362,9 +360,9 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request, reply) => {
       const ticket = await app.services.pairing.redeem(request.body.token);
 
-      // Le propriétaire vient du ticket, jamais du corps de la requête : c'est
-      // ce qui interdit au porteur d'un code de rattacher l'appareil à
-      // quelqu'un d'autre.
+      // The owner comes from the ticket, never from the request body:
+      // this prevents a bearer of a code from attaching the device
+      // to someone else.
       const device = await app.services.deviceRegistry.registerDevice({
         userId: ticket.userId,
         name: request.body.name,
@@ -382,7 +380,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       app.services.securityLog.record({
         kind: "device.paired",
         userId: ticket.userId,
-        summary: `Appareil « ${device.name} » appairé par QR (${device.role}, non approuvé)`,
+        summary: `Device "${device.name}" paired via QR (${device.role}, not approved)`,
         context: { deviceId: device.id, ticketId: ticket.id, type: device.type },
       });
 
@@ -406,8 +404,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.getDevice(request.params.deviceId);
 
-      if (device === undefined) throw new NotFoundError("Appareil", request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      if (device === undefined) throw new NotFoundError("Device", request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Device");
 
       return ok(present(device, app.services.expectedWorkerVersion), request.id);
     },
@@ -419,7 +417,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Approuve un appareil — il devient sélectionnable",
+        summary: "Approve a device — it becomes selectable",
         params: z.object({ deviceId: z.string().min(1) }),
         response: { 200: okSchema(deviceSchema) },
       },
@@ -427,13 +425,13 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request) => {
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      assertOwnedBy(device.userId, userId, "Device");
 
       const trusted = await app.services.deviceRegistry.trustDevice(device.id);
       app.services.securityLog.record({
         kind: "device.trusted",
         userId,
-        summary: `Appareil « ${trusted.name} » approuvé`,
+        summary: `Device "${trusted.name}" approved`,
         context: { deviceId: trusted.id },
       });
 
@@ -447,7 +445,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Révoque un appareil — définitif, et ses sessions sont fermées",
+        summary: "Revoke a device — permanent, and its sessions are closed",
         params: z.object({ deviceId: z.string().min(1) }),
         response: { 200: okSchema(deviceSchema) },
       },
@@ -455,23 +453,23 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request) => {
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      assertOwnedBy(device.userId, userId, "Device");
 
       const revoked = await app.services.deviceRegistry.revokeDevice(device.id);
       app.services.securityLog.record({
         kind: "device.revoked",
         userId,
-        summary: `Appareil « ${revoked.name} » révoqué`,
+        summary: `Device "${revoked.name}" revoked`,
         context: { deviceId: revoked.id },
       });
-      // Une révocation qui laisserait les sessions ouvertes ne révoquerait rien
-      // avant leur expiration.
+      // A revocation that left sessions open would revoke nothing
+      // before their expiration.
       await app.services.deviceSessions.revokeAllForDevice(device.id);
-      await app.services.gateway.detach(device.id, "appareil révoqué");
-      // Et la clé part avec. Ce n'est pas la barrière principale — la confiance
-      // révoquée suffit — mais c'est celle qui reste si un futur chemin oublie
-      // de la vérifier : sans clé, la poignée de main est invérifiable, donc
-      // impossible, quelle que soit la règle qu'on aurait oubliée.
+      await app.services.gateway.detach(device.id, "device revoked");
+      // And the key goes with it. This is not the primary barrier — revoked
+      // trust suffices — but it is the defense-in-depth if a future path forgets
+      // to check trust: without a key, the handshake cannot be verified and is
+      // therefore impossible, regardless of any overlooked rule.
       await app.services.deviceCredentials.revoke(device.id);
 
       return ok(present(revoked, app.services.expectedWorkerVersion), request.id);
@@ -484,7 +482,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Modifie les permissions accordées à cet appareil",
+        summary: "Modify permissions granted to this device",
         params: z.object({ deviceId: z.string().min(1) }),
         body: z.object({ grantedPermissions: z.array(z.string()).max(64) }),
         response: { 200: okSchema(deviceSchema) },
@@ -493,7 +491,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request) => {
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      assertOwnedBy(device.userId, userId, "Device");
 
       const updated = await app.services.deviceRegistry.updateDevice(device.id, {
         grantedPermissions: request.body.grantedPermissions,
@@ -502,18 +500,18 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     },
   );
 
-  // ── Sessions d'appareil ───────────────────────────────────────────────────
+  // ── Device sessions ───────────────────────────────────────────────────
 
   app.post(
     "/devices/:deviceId/challenge",
     {
-      // Pas de garde : c'est le point d'entrée d'un appareil qui n'a pas encore
-      // de session. Il n'accorde rien — un challenge est un nonce public, et le
-      // service refuse d'en émettre pour un appareil révoqué.
+      // No guard: this is the entry point for a device that does not yet
+      // have a session. It grants nothing — a challenge is a public nonce, and
+      // the service refuses to issue one for a revoked device.
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
         tags: ["device-sessions"],
-        summary: "Émet un challenge à signer",
+        summary: "Issue a challenge to sign",
         params: z.object({ deviceId: z.string().min(1) }),
         response: {
           200: okSchema(z.object({ nonce: z.string(), expiresAt: z.date() })),
@@ -532,7 +530,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
         tags: ["device-sessions"],
-        summary: "Ouvre une session d'appareil sur un challenge signé",
+        summary: "Open a device session on a signed challenge",
         params: z.object({ deviceId: z.string().min(1) }),
         body: z.object({
           nonce: z.string().min(1),
@@ -554,7 +552,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request, reply) => {
       const publicKey = await app.services.deviceCredentials.publicKeyFor(request.params.deviceId);
       if (publicKey === undefined) {
-        throw new NotFoundError("Clé d'appareil", request.params.deviceId);
+        throw new NotFoundError("Device key", request.params.deviceId);
       }
 
       const { session, token } = await app.services.deviceSessions.authenticate(
@@ -571,8 +569,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         ok(
           {
             sessionId: session.id,
-            // Le jeton n'est rendu qu'ici, une fois. Seule son empreinte est
-            // conservée côté serveur.
+            // The token is returned only here, once. Only its hash is
+            // retained on the server.
             token,
             expiresAt: session.expiresAt,
             capabilities: session.capabilities,
@@ -589,7 +587,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["device-sessions"],
-        summary: "Ferme toutes les sessions d'un appareil",
+        summary: "Close all sessions for a device",
         params: z.object({ deviceId: z.string().min(1) }),
         response: { 200: okSchema(z.object({ closed: z.number().int().nonnegative() })) },
       },
@@ -597,10 +595,10 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     async (request) => {
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      assertOwnedBy(device.userId, userId, "Device");
 
       const closed = await app.services.deviceSessions.revokeAllForDevice(device.id);
-      await app.services.gateway.detach(device.id, "sessions fermées");
+      await app.services.gateway.detach(device.id, "sessions closed");
 
       return ok({ closed }, request.id);
     },
@@ -617,7 +615,7 @@ export const capabilityRoutes: FastifyPluginCallback = (fastify, _options, done)
       preHandler: app.requireUser,
       schema: {
         tags: ["capabilities"],
-        summary: "Capacités connues du catalogue, et qui les fournit",
+        summary: "Known catalogue capabilities, and who provides them",
         response: {
           200: okSchema(
             z.object({
@@ -638,8 +636,8 @@ export const capabilityRoutes: FastifyPluginCallback = (fastify, _options, done)
       const { userId } = currentUser(request);
       const devices = await app.services.deviceRegistry.listDevices(userId);
 
-      // Ce que la flotte sait réellement faire, à cet instant. Distinct du
-      // catalogue, qui documente ce qui existe.
+      // What the fleet can actually perform right now. Distinct from
+      // the catalogue, which documents what exists.
       const byCapability = new Map<string, { id: string; name: string }[]>();
       for (const device of devices) {
         for (const capability of device.capabilities) {
@@ -669,7 +667,7 @@ export const capabilityRoutes: FastifyPluginCallback = (fastify, _options, done)
       preHandler: app.requireUser,
       schema: {
         tags: ["capabilities"],
-        summary: "Remplace les capacités déclarées d'un appareil",
+        summary: "Replace declared capabilities for a device",
         params: z.object({ deviceId: z.string().min(1) }),
         body: z.object({ capabilities: z.array(deviceCapabilitySchema).max(128) }),
         response: { 200: okSchema(z.object({ capabilities: z.array(z.string()) })) },
@@ -678,7 +676,7 @@ export const capabilityRoutes: FastifyPluginCallback = (fastify, _options, done)
     async (request) => {
       const { userId } = currentUser(request);
       const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
-      assertOwnedBy(device.userId, userId, "Appareil");
+      assertOwnedBy(device.userId, userId, "Device");
 
       const updated = await app.services.deviceRegistry.updateCapabilities(
         device.id,

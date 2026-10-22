@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 /**
- * Forme des réponses de l'API.
+ * API response format.
  *
- * Une seule enveloppe pour tout : succès comme échec, liste comme objet. Le
- * client écrit un seul décodeur, et un ajout de champ ne casse rien.
+ * A single envelope for everything: success as well as failure, lists as well as objects.
+ * The client writes a single decoder, and adding a field breaks nothing.
  *
  * ```jsonc
  * { "data": { … }, "meta": { "requestId": "…" } }
@@ -12,9 +12,9 @@ import { z } from "zod";
  *   "meta": { "requestId": "…" } }
  * ```
  *
- * `requestId` figure dans **chaque** réponse, pas seulement dans les erreurs.
- * C'est ce qui permet à un utilisateur de citer un identifiant pour une requête
- * qui a « bizarrement » réussi, et de retrouver toute son histoire côté serveur.
+ * `requestId` appears in **every** response, not only in errors.
+ * This is what allows a user to cite an ID for a request that "mysteriously" succeeded,
+ * and trace its entire history server-side.
  */
 
 export const responseMetaSchema = z.object({
@@ -25,7 +25,7 @@ export function ok<T>(data: T, requestId: string): { data: T; meta: { requestId:
   return { data, meta: { requestId } };
 }
 
-/** Enveloppe de liste, avec le curseur de la page suivante. */
+/** List envelope, with cursor for the next page. */
 export function okList<T>(
   page: { items: T[]; nextCursor: string | null; total: number },
   requestId: string,
@@ -39,12 +39,12 @@ export function okList<T>(
   };
 }
 
-/** Schéma d'une réponse simple, pour la sérialisation et la documentation. */
+/** Simple response schema, for serialization and documentation. */
 export function okSchema<T extends z.ZodType>(data: T) {
   return z.object({ data, meta: responseMetaSchema });
 }
 
-/** Schéma d'une réponse paginée. */
+/** Paginated response schema. */
 export function listSchema<T extends z.ZodType>(item: T) {
   return z.object({
     data: z.array(item),
@@ -56,10 +56,10 @@ export function listSchema<T extends z.ZodType>(item: T) {
 }
 
 /**
- * Paramètres de pagination communs.
+ * Common pagination query parameters.
  *
- * `limit` est plafonné à 100 : sans plafond, `?limit=1000000` transforme une
- * liste en déni de service, et ce n'est pas au client de se retenir.
+ * `limit` is capped at 100: without a cap, `?limit=1000000` turns a
+ * list into a denial of service, and it is not up to the client to hold back.
  */
 export const paginationQuerySchema = z.object({
   cursor: z.string().min(1).optional(),

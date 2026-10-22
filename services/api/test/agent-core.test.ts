@@ -8,9 +8,9 @@ describe("Agent Core HTTP", () => {
 
   afterEach(async () => harness?.close());
 
-  it("execute une reponse, persiste le run et le transcript", async () => {
+  it("executes a response, persists the run and transcript", async () => {
     const llm = new ScriptedLLMProvider([
-      { kind: "final", text: "Réponse effective d'Agent Core." },
+      { kind: "final", text: "Effective Agent Core response." },
     ]);
     harness = await makeApi({
       llmProvider: llm,
@@ -28,18 +28,18 @@ describe("Agent Core HTTP", () => {
       method: "POST",
       url: "/api/v1/agent-core/runs",
       headers: account.authorization,
-      payload: { conversationId, message: "Réponds maintenant" },
+      payload: { conversationId, message: "Reply now" },
     });
 
     expect(executed.statusCode).toBe(200);
     const body = executed.json<{ data: { runId: string; status: string; response: string } }>();
     expect(body.data.status).toBe("completed");
-    expect(body.data.response).toBe("Réponse effective d'Agent Core.");
+    expect(body.data.response).toBe("Effective Agent Core response.");
     const occurrences = llm.requests[0]?.messages.filter(
       (message) =>
         message.role === "user" &&
         message.content.some(
-          (block) => block.type === "text" && block.text === "Réponds maintenant",
+          (block) => block.type === "text" && block.text === "Reply now",
         ),
     );
     expect(occurrences).toHaveLength(1);
@@ -55,28 +55,26 @@ describe("Agent Core HTTP", () => {
       limit: 10,
     });
     expect(transcript.items.map((message) => [message.role, message.content])).toEqual([
-      ["user", "Réponds maintenant"],
-      ["assistant", "Réponse effective d'Agent Core."],
+      ["user", "Reply now"],
+      ["assistant", "Effective Agent Core response."],
     ]);
   });
 });
 
 /**
- * Pont Mission Engine → Agent Core.
+ * Mission Engine -> Agent Core bridge.
  *
- * La surface est ouverte à un service, pas à une personne. Ce qui est testé en
- * priorité, c'est donc ce qu'elle refuse : un jeton d'utilisateur ordinaire, une
- * assertion hors de sa portée, et une conversation qui n'appartient pas au
- * propriétaire de la mission.
+ * Verifies that the service surface rejects standard user tokens,
+ * out-of-scope assertions, and foreign conversations.
  */
-describe("pont Mission Engine vers Agent Core", () => {
+describe("Mission Engine to Agent Core bridge", () => {
   let harness: ApiHarness | undefined;
 
   afterEach(async () => harness?.close());
 
-  const MISSION = "nexus-mission-sous-test";
+  const MISSION = "nexus-mission-under-test";
 
-  async function setup(responses = ["Travail délégué effectué."]) {
+  async function setup(responses = ["Delegated work completed."]) {
     const llm = new ScriptedLLMProvider(
       responses.map((text) => ({ kind: "final" as const, text })),
     );
@@ -87,10 +85,10 @@ describe("pont Mission Engine vers Agent Core", () => {
       service: "mission-engine",
       missionExternalKey: MISSION,
     });
-    return { account, grant, harness: harness };
+    return { account, grant, harness };
   }
 
-  it("exécute un run pour le compte du propriétaire et ouvre une conversation", async () => {
+  it("executes a run on behalf of the owner and opens a conversation", async () => {
     const { account, grant, harness: api } = await setup();
 
     const executed = await api.app.inject({
@@ -99,29 +97,27 @@ describe("pont Mission Engine vers Agent Core", () => {
       headers: { authorization: `Bearer ${grant.token}` },
       payload: {
         missionExternalKey: MISSION,
-        taskKey: "deleguee",
-        instruction: "Range mes mails",
+        taskKey: "delegated",
+        instruction: "Tidy my emails",
       },
     });
 
     expect(executed.statusCode).toBe(200);
     const body = executed.json<{ data: { conversationId: string; response: string } }>();
-    expect(body.data.response).toBe("Travail délégué effectué.");
+    expect(body.data.response).toBe("Delegated work completed.");
 
-    // La conversation appartient à l'utilisateur, pas au service : c'est ce qui
-    // rend le travail de la mission visible dans son tableau de bord.
     const conversation = await api.services.conversations.get(body.data.conversationId);
     expect(conversation?.userId).toBe(account.userId);
   });
 
-  it("prolonge la conversation rendue au lieu d'en ouvrir une seconde", async () => {
-    const { grant, harness: api } = await setup(["Premier essai.", "Second essai."]);
+  it("extends returned conversation instead of opening a second one", async () => {
+    const { grant, harness: api } = await setup(["First attempt.", "Second attempt."]);
 
     const first = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/mission-runs",
       headers: { authorization: `Bearer ${grant.token}` },
-      payload: { missionExternalKey: MISSION, taskKey: "deleguee", instruction: "Essaie" },
+      payload: { missionExternalKey: MISSION, taskKey: "delegated", instruction: "Try" },
     });
     const conversationId = first.json<{ data: { conversationId: string } }>().data.conversationId;
 
@@ -131,8 +127,8 @@ describe("pont Mission Engine vers Agent Core", () => {
       headers: { authorization: `Bearer ${grant.token}` },
       payload: {
         missionExternalKey: MISSION,
-        taskKey: "deleguee",
-        instruction: "Réessaie",
+        taskKey: "delegated",
+        instruction: "Retry",
         conversationId,
       },
     });
@@ -145,7 +141,7 @@ describe("pont Mission Engine vers Agent Core", () => {
     expect(transcript.items).toHaveLength(4);
   });
 
-  it("refuse une assertion utilisée pour une autre mission", async () => {
+  it("rejects assertion used for another mission", async () => {
     const { grant, harness: api } = await setup();
 
     const executed = await api.app.inject({
@@ -153,18 +149,16 @@ describe("pont Mission Engine vers Agent Core", () => {
       url: "/api/v1/agent-core/mission-runs",
       headers: { authorization: `Bearer ${grant.token}` },
       payload: {
-        missionExternalKey: "nexus-une-autre-mission",
-        taskKey: "deleguee",
-        instruction: "Range mes mails",
+        missionExternalKey: "nexus-another-mission",
+        taskKey: "delegated",
+        instruction: "Tidy my emails",
       },
     });
 
-    // Signature valide, propriétaire valide — mais hors portée. Sans ce refus,
-    // une assertion suffirait à piloter toutes les missions du compte.
     expect(executed.statusCode).toBe(403);
   });
 
-  it("refuse un jeton d'accès utilisateur sur la surface de service", async () => {
+  it("rejects user access token on service surface", async () => {
     const { account, harness: api } = await setup();
 
     const executed = await api.app.inject({
@@ -173,33 +167,33 @@ describe("pont Mission Engine vers Agent Core", () => {
       headers: account.authorization,
       payload: {
         missionExternalKey: MISSION,
-        taskKey: "deleguee",
-        instruction: "Range mes mails",
+        taskKey: "delegated",
+        instruction: "Tidy my emails",
       },
     });
 
     expect(executed.statusCode).toBe(401);
   });
 
-  it("refuse une assertion sur la surface utilisateur", async () => {
+  it("rejects assertion on user surface", async () => {
     const { grant, harness: api } = await setup();
 
     const executed = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/runs",
       headers: { authorization: `Bearer ${grant.token}` },
-      payload: { conversationId: randomUUID(), message: "Range mes mails" },
+      payload: { conversationId: randomUUID(), message: "Tidy my emails" },
     });
 
     expect(executed.statusCode).toBe(401);
   });
 
-  it("refuse de travailler dans la conversation d'un autre compte", async () => {
+  it("refuses to work in another account's conversation", async () => {
     const { grant, harness: api } = await setup();
-    const other = await createAccount(api, "autre@exemple.fr");
+    const other = await createAccount(api, "other@example.com");
     const foreign = await api.services.conversations.create({
       userId: other.userId,
-      title: "Conversation d'un autre",
+      title: "Someone else's conversation",
     });
 
     const executed = await api.app.inject({
@@ -208,35 +202,30 @@ describe("pont Mission Engine vers Agent Core", () => {
       headers: { authorization: `Bearer ${grant.token}` },
       payload: {
         missionExternalKey: MISSION,
-        taskKey: "deleguee",
-        instruction: "Range mes mails",
+        taskKey: "delegated",
+        instruction: "Tidy my emails",
         conversationId: foreign.id,
       },
     });
 
-    // L'identifiant vient du corps de la requête : la signature prouve le
-    // propriétaire, elle ne dit rien de cette conversation-là.
     expect(executed.statusCode).toBe(403);
   });
 });
 
 /**
- * Lecture d'un run par le moteur.
+ * Reading a mission run.
  *
- * C'est la moitié « le moteur interroge » de la suspension durable. Le risque
- * propre à cette route n'est pas la lecture mais sa portée : une assertion ne
- * doit ouvrir que les runs de sa mission, et surtout pas ceux que le
- * propriétaire a lancés depuis ses conversations privées.
+ * Verifies that a mission grant only permits reading runs within its own mission.
  */
-describe("lecture d'un run de mission", () => {
+describe("reading a mission run", () => {
   let harness: ApiHarness | undefined;
 
   afterEach(async () => harness?.close());
 
-  const MISSION = "nexus-mission-lecture";
+  const MISSION = "nexus-mission-reading";
 
   async function setup() {
-    const llm = new ScriptedLLMProvider([{ kind: "final", text: "Fait." }]);
+    const llm = new ScriptedLLMProvider([{ kind: "final", text: "Done." }]);
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
     const grant = await harness.services.missionGrants.issue({
@@ -247,13 +236,13 @@ describe("lecture d'un run de mission", () => {
     return { account, grant, api: harness };
   }
 
-  it("relit le run qu'elle a lancé, dans sa mission", async () => {
+  it("reads back run launched within its mission", async () => {
     const { grant, api } = await setup();
     const started = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/mission-runs",
       headers: { authorization: `Bearer ${grant.token}` },
-      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Agis" },
+      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Act" },
     });
     const runId = started.json<{ data: { runId: string } }>().data.runId;
 
@@ -267,20 +256,20 @@ describe("lecture d'un run de mission", () => {
     expect(reread.json<{ data: { runId: string } }>().data.runId).toBe(runId);
   });
 
-  it("refuse de relire un run lancé par une personne", async () => {
+  it("refuses to read back run launched by an individual", async () => {
     const { account, grant, api } = await setup();
     const created = await api.app.inject({
       method: "POST",
       url: "/api/v1/conversations",
       headers: account.authorization,
-      payload: { title: "Conversation privée" },
+      payload: { title: "Private conversation" },
     });
     const conversationId = created.json<{ data: { id: string } }>().data.id;
     const personal = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/runs",
       headers: account.authorization,
-      payload: { conversationId, message: "Travaille" },
+      payload: { conversationId, message: "Work" },
     });
     const runId = personal.json<{ data: { runId: string } }>().data.runId;
 
@@ -290,26 +279,23 @@ describe("lecture d'un run de mission", () => {
       headers: { authorization: `Bearer ${grant.token}` },
     });
 
-    // Même propriétaire, même signature valide — mais ce run n'appartient à
-    // aucune mission. Sans ce refus, une assertion lirait les conversations
-    // privées du compte.
     expect(attempted.statusCode).toBe(403);
   });
 
-  it("refuse une assertion émise pour une autre mission", async () => {
+  it("rejects assertion issued for another mission", async () => {
     const { account, grant, api } = await setup();
     const started = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/mission-runs",
       headers: { authorization: `Bearer ${grant.token}` },
-      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Agis" },
+      payload: { missionExternalKey: MISSION, taskKey: "t", instruction: "Act" },
     });
     const runId = started.json<{ data: { runId: string } }>().data.runId;
 
     const other = await api.services.missionGrants.issue({
       userId: account.userId,
       service: "mission-engine",
-      missionExternalKey: "nexus-mission-voisine",
+      missionExternalKey: "nexus-neighbor-mission",
     });
     const attempted = await api.app.inject({
       method: "GET",
@@ -322,23 +308,16 @@ describe("lecture d'un run de mission", () => {
 });
 
 /**
- * Unicité d'un run par tentative.
+ * Mission run uniqueness per attempt.
  *
- * Le risque est concret : un run Agent Core dure facilement plus longtemps
- * qu'un bail de trente secondes. Quand le bail expire pendant l'appel, un
- * second worker reprend la tâche et redemande un run. Sans réservation, le
- * modèle est rappelé et les outils rejouent leurs effets — un message envoyé
- * deux fois, un fichier écrit deux fois.
- *
- * La granularité est la tentative, et c'est ce que ces tests fixent : deux
- * workers sur la même tentative convergent, un vrai réessai obtient un run neuf.
+ * Prevents redundant tool executions when lease expires and another worker claims the task.
  */
-describe("unicité d'un run de mission", () => {
+describe("mission run uniqueness", () => {
   let harness: ApiHarness | undefined;
 
   afterEach(async () => harness?.close());
 
-  const MISSION = "nexus-mission-unicite";
+  const MISSION = "nexus-mission-uniqueness";
 
   async function setup(responses: string[]) {
     const llm = new ScriptedLLMProvider(
@@ -359,18 +338,18 @@ describe("unicité d'un run de mission", () => {
       method: "POST",
       url: "/api/v1/agent-core/mission-runs",
       headers: { authorization: `Bearer ${token}` },
-      payload: { missionExternalKey: MISSION, taskKey: "deleguee", ...payload },
+      payload: { missionExternalKey: MISSION, taskKey: "delegated", ...payload },
     });
 
-  it("rend le même run pour une tentative redemandée, sans rappeler le modèle", async () => {
-    const { grant, api, llm } = await setup(["Travail unique."]);
+  it("returns the same run for a repeated attempt without calling model again", async () => {
+    const { grant, api, llm } = await setup(["Unique work."]);
 
     const first = await request(api, grant.token, {
-      instruction: "Range mes mails",
+      instruction: "Tidy my emails",
       attemptId: "attempt-1",
     });
     const second = await request(api, grant.token, {
-      instruction: "Range mes mails",
+      instruction: "Tidy my emails",
       attemptId: "attempt-1",
     });
 
@@ -380,80 +359,70 @@ describe("unicité d'un run de mission", () => {
     const secondRun = second.json<{ data: { runId: string } }>().data.runId;
     expect(secondRun).toBe(firstRun);
 
-    // Le point qui compte vraiment : un seul appel au modèle. Un second aurait
-    // rejoué les outils du run, et coûté des jetons pour un travail déjà fait.
     expect(llm.requests).toHaveLength(1);
   });
 
-  it("lance un run neuf pour une tentative différente", async () => {
-    const { grant, api, llm } = await setup(["Premier essai.", "Second essai."]);
+  it("launches a fresh run for a different attempt", async () => {
+    const { grant, api, llm } = await setup(["First attempt.", "Second attempt."]);
 
     const first = await request(api, grant.token, {
-      instruction: "Range mes mails",
+      instruction: "Tidy my emails",
       attemptId: "attempt-1",
     });
     const second = await request(api, grant.token, {
-      instruction: "Range mes mails",
+      instruction: "Tidy my emails",
       attemptId: "attempt-2",
     });
 
     const firstRun = first.json<{ data: { runId: string } }>().data.runId;
     const secondRun = second.json<{ data: { runId: string } }>().data.runId;
-    // Un réessai après échec est un travail neuf : le confondre avec un doublon
-    // bloquerait la tâche sur son premier résultat.
     expect(secondRun).not.toBe(firstRun);
     expect(llm.requests).toHaveLength(2);
   });
 
-  it("réserve le run sous l'identifiant qu'il portera vraiment", async () => {
-    const { grant, api } = await setup(["Travail unique."]);
+  it("claims run under the identifier it will actually hold", async () => {
+    const { grant, api } = await setup(["Unique work."]);
 
     const response = await request(api, grant.token, {
-      instruction: "Range mes mails",
+      instruction: "Tidy my emails",
       attemptId: "attempt-1",
     });
     const runId = response.json<{ data: { runId: string } }>().data.runId;
 
     const claim = await api.services.agentRunClaims.find({
       missionExternalKey: MISSION,
-      taskKey: "deleguee",
+      taskKey: "delegated",
       attemptId: "attempt-1",
     });
-    // Si la réservation désignait un autre identifiant, elle ne protégerait
-    // rien : la seconde requête rendrait un run introuvable.
     expect(claim?.runId).toBe(runId);
   });
 
-  it("isole les réservations par tâche et par mission", async () => {
+  it("isolates claims by task and mission", async () => {
     const { account, grant, api, llm } = await setup(["A.", "B."]);
 
     await request(api, grant.token, {
-      instruction: "Tâche A",
-      taskKey: "tache-a",
+      instruction: "Task A",
+      taskKey: "task-a",
       attemptId: "attempt-1",
     });
     await request(api, grant.token, {
-      instruction: "Tâche B",
-      taskKey: "tache-b",
+      instruction: "Task B",
+      taskKey: "task-b",
       attemptId: "attempt-1",
     });
 
-    // Même identifiant de tentative, mais deux tâches : la clé est composite,
-    // donc ce sont deux réservations distinctes.
     expect(llm.requests).toHaveLength(2);
     expect(account.userId).toBeDefined();
   });
 
-  it("n'exige pas de tentative, mais ne garantit alors plus rien", async () => {
-    const { grant, api, llm } = await setup(["Sans tentative.", "Encore."]);
+  it("does not require an attempt but then guarantees nothing", async () => {
+    const { grant, api, llm } = await setup(["Without attempt.", "Again."]);
 
-    const first = await request(api, grant.token, { instruction: "Range mes mails" });
-    const second = await request(api, grant.token, { instruction: "Range mes mails" });
+    const first = await request(api, grant.token, { instruction: "Tidy my emails" });
+    const second = await request(api, grant.token, { instruction: "Tidy my emails" });
 
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
-    // Documenté plutôt que corrigé : un appelant qui n'envoie pas de tentative
-    // ne peut pas être protégé, et le prétendre serait pire.
     expect(second.json<{ data: { runId: string } }>().data.runId).not.toBe(
       first.json<{ data: { runId: string } }>().data.runId,
     );
@@ -462,23 +431,19 @@ describe("unicité d'un run de mission", () => {
 });
 
 /**
- * Le registre vu depuis la surface HTTP.
- *
- * Les tests de `mission-grants.test.ts` éprouvent le service ; ceux-ci
- * vérifient que la garde le consulte réellement. La distinction compte : un
- * registre parfait qu'aucune route n'interroge ne protège rien.
+ * Assertion registry on the HTTP bridge surface.
  */
-describe("registre des assertions sur la surface du pont", () => {
+describe("assertion registry on bridge surface", () => {
   let harness: ApiHarness | undefined;
 
   afterEach(async () => harness?.close());
 
-  const MISSION = "nexus-mission-registre";
+  const MISSION = "nexus-mission-registry";
 
   async function setup() {
     const llm = new ScriptedLLMProvider([
-      { kind: "final", text: "Fait." },
-      { kind: "final", text: "Encore." },
+      { kind: "final", text: "Done." },
+      { kind: "final", text: "Again." },
     ]);
     harness = await makeApi({ llmProvider: llm });
     const account = await createAccount(harness);
@@ -497,20 +462,19 @@ describe("registre des assertions sur la surface du pont", () => {
       headers: { authorization: `Bearer ${token}` },
       payload: {
         missionExternalKey: MISSION,
-        taskKey: "deleguee",
-        instruction: "Agis",
+        taskKey: "delegated",
+        instruction: "Act",
         attemptId,
       },
     });
 
-  it("accepte une assertion inscrite au registre", async () => {
+  it("accepts assertion registered in the registry", async () => {
     const { granted, api } = await setup();
     expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(200);
   });
 
-  it("refuse une assertion signée mais jamais enregistrée", async () => {
+  it("rejects signed assertion never registered", async () => {
     const { account, api } = await setup();
-    // Émise par le service de jetons seul : signature valide, aucune trace.
     const orphan = api.services.tokens.issueMissionGrant({
       userId: account.userId,
       service: "mission-engine",
@@ -520,18 +484,16 @@ describe("registre des assertions sur la surface du pont", () => {
     expect((await run(api, orphan.token, "attempt-1")).statusCode).toBe(403);
   });
 
-  it("refuse une assertion retirée, sans attendre son expiration", async () => {
+  it("rejects retired assertion without awaiting expiration", async () => {
     const { granted, api } = await setup();
     expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(200);
 
     await api.services.missionGrants.retire(MISSION);
 
-    // C'est la capacité qui manquait : jusqu'ici une assertion volée restait
-    // exploitable vingt-quatre heures.
     expect((await run(api, granted.token, "attempt-2")).statusCode).toBe(403);
   });
 
-  it("retire les assertions par sa propre route, sur présentation de l'une d'elles", async () => {
+  it("retires assertions via its own route upon presenting one", async () => {
     const { granted, api } = await setup();
 
     const retired = await api.app.inject({
@@ -543,23 +505,19 @@ describe("registre des assertions sur la surface du pont", () => {
 
     expect(retired.statusCode).toBe(200);
     expect(retired.json<{ data: { retired: number } }>().data.retired).toBe(1);
-    // L'assertion qui vient de servir au retrait ne vaut plus rien : c'est le
-    // propre d'une auto-révocation.
     expect((await run(api, granted.token, "attempt-1")).statusCode).toBe(403);
   });
 
-  it("refuse de retirer les assertions d'une autre mission", async () => {
+  it("refuses to retire assertions of another mission", async () => {
     const { granted, api } = await setup();
 
     const attempted = await api.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/mission-grants/retire",
       headers: { authorization: `Bearer ${granted.token}` },
-      payload: { missionExternalKey: "nexus-mission-voisine", reason: "revoked" },
+      payload: { missionExternalKey: "nexus-neighbor-mission", reason: "revoked" },
     });
 
-    // Sans cette vérification de portée, une assertion quelconque permettrait
-    // de couper les accès de n'importe quelle mission du compte.
     expect(attempted.statusCode).toBe(403);
   });
 });

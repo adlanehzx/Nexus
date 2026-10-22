@@ -3,42 +3,42 @@ import { AppError } from "@nexus/shared";
 import type { RuntimeConfigurationStore } from "./runtime-configuration.js";
 
 /**
- * Pause globale.
+ * Global pause switch.
  *
- * ## Ce que « pause » veut dire, précisément
+ * ## What "pause" means, precisely
  *
- * **Lire continue, agir s'arrête.** C'est la seule définition utile pour un
- * assistant personnel : on met NEXUS en pause parce qu'on ne veut plus qu'il
- * *fasse* des choses — pas parce qu'on veut qu'il devienne aveugle. Un agent en
- * pause peut encore consulter, résumer, répondre ; il ne peut plus envoyer,
- * écrire, exécuter, acheter.
+ * **Reading continues, acting stops.** This is the only practical definition for a
+ * personal assistant: we pause NEXUS because we do not want it to *do*
+ * things — not because we want it to go blind. A paused agent
+ * can still retrieve, summarize, and reply; it can no longer send,
+ * write, execute, or purchase.
  *
- * Techniquement, cela tombe exactement sur le coupe-circuit qui existait déjà
- * dans `PermissionService` : `readOnly` refuse tout outil de risque `LOW` ou
- * plus, et laisse passer `SAFE`. L'échelle de risque portait donc déjà la
- * bonne frontière ; il manquait seulement de quoi l'actionner.
+ * Technically, this aligns exactly with the circuit-breaker that already
+ * existed in `PermissionService`: `readOnly` rejects any tool with `LOW` or
+ * higher risk, while permitting `SAFE`. The risk tier already provided the
+ * right boundary; it only needed an actuation mechanism.
  *
- * ## Trois propriétés, et pourquoi chacune
+ * ## Three key properties, and why each matters
  *
- * **Elle survit à un redémarrage.** Une pause qui s'oublie est pire que pas de
- * pause : on croit NEXUS arrêté, il ne l'est plus, et personne n'est prévenu.
- * L'état est donc écrit sur disque, par la même écriture atomique que le reste
- * de la configuration.
+ * **It survives restarts.** A pause that forgets state is worse than no
+ * pause: users believe NEXUS is stopped, it resumes, and no one is notified.
+ * State is therefore persisted to disk using the same atomic write used by
+ * the rest of the configuration.
  *
- * **Elle porte un motif et une date.** « Rien ne se passe » est le symptôme le
- * plus coûteux à diagnostiquer. Une interface qui peut dire « en pause depuis
- * 14h02 : réunion » transforme une énigme en information.
+ * **It records a reason and a timestamp.** "Nothing is happening" is the most
+ * expensive symptom to diagnose. An interface that displays "paused since
+ * 14:02: meeting" turns a mystery into actionable information.
  *
- * **Elle ne peut pas s'enfermer.** Reprendre est une action, et si la pause
- * refusait les actions sans exception, elle interdirait sa propre levée. La
- * route de reprise ne consulte donc pas la pause — elle la modifie.
+ * **It cannot lock itself out.** Resuming is an action, and if pause
+ * unconditionally rejected actions, it would prevent its own removal. The
+ * resume route therefore does not check whether pause is active — it updates it.
  */
 
 export const pauseStateSchema = z.object({
   paused: z.boolean(),
-  /** Pourquoi, tel que la personne l'a écrit. Jamais imposé. */
+  /** Reason, as entered by the user. Never enforced. */
   reason: z.string().max(200).nullable(),
-  /** Depuis quand, en ISO 8601. Nul quand rien n'est en pause. */
+  /** Timestamp when paused, in ISO 8601. Null when not paused. */
   since: z.string().datetime().nullable(),
 });
 
@@ -52,11 +52,11 @@ export class SystemPausedError extends AppError {
 
   constructor(state: PauseState) {
     super({
-      message: "NEXUS est en pause",
+      message: "NEXUS is paused",
       userMessage:
         state.reason === null
-          ? "NEXUS est en pause. Reprenez-le pour relancer des actions."
-          : `NEXUS est en pause : ${state.reason}. Reprenez-le pour relancer des actions.`,
+          ? "NEXUS is paused. Resume it to run actions."
+          : `NEXUS is paused: ${state.reason}. Resume it to run actions.`,
       context: { since: state.since },
     });
   }
@@ -64,10 +64,10 @@ export class SystemPausedError extends AppError {
 
 export interface PauseSwitchOptions {
   /**
-   * Persistance. Absente, la pause ne vit qu'en mémoire.
+   * Persistence. When omitted, pause state lives only in memory.
    *
-   * C'est le cas des tests, et ce n'en est pas un en production : sans
-   * persistance, un redémarrage lèverait la pause en silence.
+   * This is appropriate for unit tests, but not in production: without
+   * persistence, a restart would silently lift the pause.
    */
   store?: RuntimeConfigurationStore;
   now?: () => Date;
@@ -84,12 +84,12 @@ export class PauseSwitch {
   }
 
   /**
-   * Relit l'état depuis le disque.
+   * Reads state from disk.
    *
-   * Appelée au démarrage. Synchrone dans son usage — `paused` doit répondre
-   * sans attendre, parce qu'il est consulté sur le chemin de chaque
-   * autorisation — d'où cette lecture explicite une fois pour toutes plutôt
-   * qu'un accès au disque par appel.
+   * Called on startup. Synchronous in subsequent usage — `paused` must respond
+   * without awaiting, because it is checked on every authorization path
+   * — hence this single explicit read at startup rather than disk access
+   * per call.
    */
   async restore(): Promise<PauseState> {
     if (this.#store === undefined) return this.#state;
@@ -107,8 +107,8 @@ export class PauseSwitch {
   }
 
   async set(paused: boolean, reason?: string): Promise<PauseState> {
-    // Mettre en pause ce qui l'est déjà ne déplace pas la date : on veut savoir
-    // depuis quand, pas depuis le dernier clic.
+    // Pausing what is already paused does not move the timestamp: we want to know
+    // since when, not since the last click.
     if (paused && this.#state.paused) {
       if (reason !== undefined) {
         this.#state = { ...this.#state, reason };
@@ -124,7 +124,7 @@ export class PauseSwitch {
     return this.state;
   }
 
-  /** Lève `SystemPausedError` si NEXUS est en pause. */
+  /** Throws `SystemPausedError` if NEXUS is paused. */
   assertRunning(): void {
     if (this.#state.paused) throw new SystemPausedError(this.#state);
   }

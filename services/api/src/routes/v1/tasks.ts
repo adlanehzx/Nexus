@@ -10,20 +10,20 @@ import { NotFoundError, paginate } from "../../services/stores.js";
 import { TaskPlanner } from "../../services/task-planner.js";
 
 /**
- * Plans de tâches, exécutions, confirmations.
+ * Task plans, executions, confirmations.
  *
- * Le point le plus sensible de l'API : c'est ici qu'une demande devient une
- * action sur une machine réelle. Trois barrières s'y succèdent, dans cet ordre,
- * et **aucune n'est facultative** :
+ * This is the operational core of the API: this is where words turn into
+ * action on a real machine. Three gates succeed each other, in this order,
+ * and **none is optional**:
  *
- *  1. l'utilisateur possède l'appareil d'origine qu'il déclare ;
- *  2. les permissions effectives couvrent toutes les capacités demandées ;
- *  3. le coordinateur revérifie à chaque étape, sélectionne, et confirme si le
- *     risque l'exige.
+ *  1. The user owns the declared origin device;
+ *  2. Effective permissions cover all requested capabilities;
+ *  3. The coordinator re-checks at each step, selects, and confirms if
+ *     the risk demands it.
  *
- * Un client ne désigne jamais l'exécutant. Il déclare des **capacités
- * requises** ; le sélecteur choisit. C'est ce qui empêche « envoie ça au poste
- * fixe » de devenir un chemin d'exécution dirigé depuis un téléphone.
+ * A client never specifies the executor. It declares **required capabilities**;
+ * the selector chooses. This is what prevents "send this to desktop"
+ * from becoming a directed execution path from a phone.
  */
 
 const stepSchema = z.object({
@@ -86,7 +86,7 @@ function presentPlan(plan: {
       status: step.status,
       selectedDeviceId: step.selectedDeviceId,
       riskLevel: step.riskLevel,
-      // `retryable` intéresse le serveur, pas l'affichage.
+      // `retryable` is relevant to the server, not UI display.
       error: step.error === null ? null : { code: step.error.code, message: step.error.message },
     })),
   };
@@ -96,26 +96,24 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   /**
-   * Vérifie qu'une demande de tâche est légitime avant de l'exécuter.
+   * Verifies that a task request is legitimate before execution.
    *
-   * Extrait plutôt qu'inséré deux fois : la création et la relance passent par
-   * les mêmes contrôles, et un contrôle qu'on n'écrit qu'une fois ne peut pas
-   * être oublié dans l'une des deux branches.
+   * Extracted rather than duplicated: creation and replay pass through
+   * the same checks, and a check written once cannot be forgotten in one branch.
    */
   async function authorize(userId: string, originClientDeviceId: string, capabilities: string[]) {
     const origin = await app.services.deviceRegistry.getDevice(originClientDeviceId);
-    if (origin === undefined) throw new NotFoundError("Appareil", originClientDeviceId);
-    assertOwnedBy(origin.userId, userId, "Appareil");
+    if (origin === undefined) throw new NotFoundError("Device", originClientDeviceId);
+    assertOwnedBy(origin.userId, userId, "Device");
 
     const granted = new Set(await app.services.permissionsFor(userId));
     const missing = capabilities.filter((capability) => !granted.has(capability));
 
     if (missing.length > 0) {
-      // Refus avant tout dispatch. Le worker revérifiera de son côté, mais un
-      // système qui compterait sur cette seconde vérification ferait reposer sa
-      // sécurité sur le bon comportement de l'exécutant.
+      // Rejection before any dispatch. The worker will re-verify on its end,
+      // but relying solely on that second check would base security on executor behavior.
       throw new AuthorizationError({
-        message: `Capacités non accordées : ${missing.join(", ")}`,
+        message: `Capabilities not granted: ${missing.join(", ")}`,
         userMessage: `You have not granted: ${missing.join(", ")}.`,
         context: { missing },
       });
@@ -129,10 +127,10 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         tags: ["tasks"],
-        summary: "Crée et exécute un plan de tâche",
+        summary: "Creates and executes a task plan",
         body: z.object({
           title: z.string().min(1).max(200),
-          /** L'appareil d'où part la demande. Le fil de routage de tout le reste. */
+          /** Origin device for the request. The routing thread for everything that follows. */
           originClientDeviceId: z.string().min(1),
           conversationId: z.string().min(1).optional(),
           steps: z
@@ -155,9 +153,9 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       },
     },
     async (request, reply) => {
-      // Une tâche d'appareil n'emprunte pas la couche de permissions de l'agent :
-      // elle est soumise directement. Le coupe-circuit doit donc être vérifié
-      // ici aussi, sans quoi la pause ne couvrirait qu'une moitié du système.
+      // A device task does not traverse the agent permission layer:
+      // it is submitted directly. The circuit breaker must therefore be checked
+      // here as well, otherwise pause would only cover half the system.
       app.services.pause.assertRunning();
       const { userId } = currentUser(request);
       const capabilities = request.body.steps.flatMap((step) => step.requiredCapabilities);
@@ -175,9 +173,8 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         steps: request.body.steps as TaskStepInput[],
       });
 
-      // L'exécution n'est pas attendue : un plan peut durer des minutes, et une
-      // requête HTTP qui l'attendrait expirerait. Le client suit la suite par le
-      // canal temps réel — c'est précisément à cela qu'il sert.
+      // Execution is not awaited: a plan may take minutes, and an HTTP request
+      // waiting for it would time out. The client tracks progress via the real-time channel.
       app.services.supervisor.start(plan, await app.services.permissionsFor(userId));
 
       return reply.code(202).send(ok(presentPlan(plan), request.id));
@@ -191,7 +188,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         tags: ["tasks"],
-        summary: "Planifie et exécute une tâche à partir d'une instruction en langage naturel",
+        summary: "Plans and executes a task from a natural language instruction",
         body: z.object({
           instruction: z.string().min(1).max(2000),
           originClientDeviceId: z.string().min(1),
@@ -205,7 +202,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const originClientDeviceId = request.body.originClientDeviceId;
 
       if (!app.services.llmProvider) {
-        throw new Error("Le service LLMProvider n'est pas configuré");
+        throw new Error("LLMProvider service is not configured");
       }
 
       app.services.pause.assertRunning();
@@ -251,8 +248,8 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const { userId } = currentUser(request);
       const plan = await app.services.taskStore.get(request.params.taskId);
 
-      if (plan === undefined) throw new NotFoundError("Tâche", request.params.taskId);
-      assertOwnedBy(plan.userId, userId, "Tâche");
+      if (plan === undefined) throw new NotFoundError("Task", request.params.taskId);
+      assertOwnedBy(plan.userId, userId, "Task");
 
       return ok(presentPlan(plan), request.id);
     },
@@ -264,9 +261,9 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["tasks"],
-        summary: "Annule une tâche en cours",
+        summary: "Cancels an in-flight task",
         params: z.object({ taskId: z.string().min(1) }),
-        body: z.object({ reason: z.string().max(256).default("annulé par l'utilisateur") }),
+        body: z.object({ reason: z.string().max(256).default("cancelled by user") }),
         response: { 200: okSchema(z.object({ cancelled: z.boolean() })) },
       },
     },
@@ -274,15 +271,15 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const { userId } = currentUser(request);
       const plan = await app.services.taskStore.get(request.params.taskId);
 
-      if (plan === undefined) throw new NotFoundError("Tâche", request.params.taskId);
-      assertOwnedBy(plan.userId, userId, "Tâche");
+      if (plan === undefined) throw new NotFoundError("Task", request.params.taskId);
+      assertOwnedBy(plan.userId, userId, "Task");
 
-      // `false` n'est pas une erreur : la tâche est peut-être déjà terminée.
-      // Le client voulait qu'elle s'arrête, et elle est arrêtée.
+      // `false` is not an error: the task may have already finished.
+      // The client wanted it stopped, and it is stopped.
       const cancelled = app.services.supervisor.cancel(request.params.taskId, userId);
       request.log.info(
         { taskId: request.params.taskId, reason: request.body.reason, cancelled },
-        "annulation de tâche demandée",
+        "task cancellation requested",
       );
 
       return ok({ cancelled }, request.id);
@@ -295,7 +292,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       preHandler: app.requireUser,
       schema: {
         tags: ["tasks"],
-        summary: "Journal d'exécution d'une tâche",
+        summary: "Execution log of a task",
         params: z.object({ taskId: z.string().min(1) }),
         querystring: paginationQuerySchema,
         response: {
@@ -309,7 +306,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
               startedAt: z.string(),
               completedAt: z.string().nullable(),
               durationMs: z.number().nullable(),
-              /** Arguments **rédigés**. Le journal d'exécution est un audit. */
+              /** Redacted arguments. The execution log is an audit trail. */
               input: z.unknown(),
               error: z.object({ code: z.string(), message: z.string() }).nullable(),
             }),
@@ -321,8 +318,8 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const { userId } = currentUser(request);
       const plan = await app.services.taskStore.get(request.params.taskId);
 
-      if (plan === undefined) throw new NotFoundError("Tâche", request.params.taskId);
-      assertOwnedBy(plan.userId, userId, "Tâche");
+      if (plan === undefined) throw new NotFoundError("Task", request.params.taskId);
+      assertOwnedBy(plan.userId, userId, "Task");
 
       const executions = await app.services.taskStore.listExecutions(request.params.taskId);
       const page = paginate(
@@ -407,7 +404,7 @@ export const confirmationRoutes: FastifyPluginCallback = (fastify, _options, don
       preHandler: app.requireUser,
       schema: {
         tags: ["confirmations"],
-        summary: "Approuve ou refuse — depuis n'importe quel appareil de l'utilisateur",
+        summary: "Approves or rejects — from any device belonging to the user",
         params: z.object({ confirmationId: z.string().min(1) }),
         body: z.object({ decision: z.enum(["approved", "rejected"]) }),
         response: { 200: okSchema(z.object({ accepted: z.boolean() })) },
@@ -415,18 +412,17 @@ export const confirmationRoutes: FastifyPluginCallback = (fastify, _options, don
     },
     async (request) => {
       const { userId } = currentUser(request);
-      // La propriété est vérifiée **par le courtier**, qui est le seul à la
-      // connaître dans tous les cas : une demande émise par le coordinateur ne
-      // vit d'abord que chez lui, et une vérification faite ici seulement
-      // laissait passer exactement celles-là — c'est-à-dire les dangereuses.
+      // Ownership is verified **by the broker**, which alone knows it in all cases:
+      // a request issued by the coordinator only lives there initially, and a check
+      // done only here would let precisely those through — i.e. dangerous ones.
       const accepted = await app.services.confirmationBroker.respondAndRecord(
         request.params.confirmationId,
         request.body.decision,
         userId,
       );
 
-      // `false` n'est pas une erreur : deux clients ont pu répondre presque en
-      // même temps, ou la demande a expiré entre l'affichage et le geste.
+      // `false` is not an error: two clients may have responded almost simultaneously,
+      // or the request expired between display and user action.
       return ok({ accepted }, request.id);
     },
   );

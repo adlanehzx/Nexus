@@ -75,7 +75,7 @@ describe("Native Browser Tools & Dashboard Integration", () => {
       artifactsDirectory: "/tmp/test-browser-artifacts",
     });
 
-    // Enregistrement des outils natifs dans le conteneur de services
+    // Register native tools in service container
     harness.services.setNativeBrowser(sessionManager);
   });
 
@@ -83,7 +83,7 @@ describe("Native Browser Tools & Dashboard Integration", () => {
     await harness.close();
   });
 
-  it("enregistre les 5 outils browser.* dans ToolRegistry", () => {
+  it("registers the 5 browser.* tools in ToolRegistry", () => {
     const registry = harness.services.toolRegistry;
     const tools = registry.list();
     const browserToolNames = tools.map((t) => t.name).filter((n) => n.startsWith("browser."));
@@ -97,8 +97,8 @@ describe("Native Browser Tools & Dashboard Integration", () => {
     ]);
   });
 
-  it("expose la santé du navigateur natif dans GET /api/v1/dashboard/browser", async () => {
-    // Alloue une session active pour vérifier le décompte
+  it("exposes native browser health in GET /api/v1/dashboard/browser", async () => {
+    // Allocate active session to verify count
     await sessionManager.getOrCreateSession("session-audit");
 
     const res = await harness.app.inject({
@@ -111,12 +111,12 @@ describe("Native Browser Tools & Dashboard Integration", () => {
     const body = res.json();
     expect(body.data.configured).toBe(true);
     expect(body.data.reachable).toBe(true);
-    expect(body.data.detail).toContain("harness local connecté (1 session(s) active(s))");
+    expect(body.data.detail).toContain("local harness connected (1 active session(s))");
     expect(body.data.health.chrome_running).toBe(true);
     expect(doctorMock).toHaveBeenCalled();
   });
 
-  it("déréférence proprement les outils si le navigateur est désactivé", () => {
+  it("cleanly dereferences tools if browser is disabled", () => {
     const registry = harness.services.toolRegistry;
     harness.services.setNativeBrowser(undefined);
 

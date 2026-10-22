@@ -20,7 +20,7 @@ export const proposedSubtaskSchema = z.object({
   key: z
     .string()
     .regex(/^[a-z][a-z0-9_]{0,47}$/)
-    .describe("Clé de la sous-tâche"),
+    .describe("Subtask key"),
   title: z.string().min(1).max(200),
   instruction: z.string().min(1).max(20_000),
   reason: z.string().max(1000),
@@ -70,20 +70,20 @@ export interface UpstreamTaskContext {
 }
 
 /**
- * Service de collaboration inter-agents :
- * - Parsing et structuration des sorties
- * - Formatage de contexte enrichi (artefacts, confiance, hypothèses)
- * - Détection des contradictions et arbitrage contradictoire
- * - Intégration dynamique des sous-tâches proposées
+ * Inter-agent collaboration service:
+ * - Output parsing and structuring
+ * - Enriched context formatting (artifacts, confidence, assumptions)
+ * - Contradiction detection and adversarial arbitration
+ * - Dynamic integration of proposed subtasks
  */
 export class AgentCollaborationService {
   /**
-   * Analyse et extrait une sortie structurée depuis un résultat brut (JSON ou texte).
+   * Parses and extracts structured output from raw result (JSON or text).
    */
   parseTaskOutput(raw: unknown): StructuredTaskOutput {
     if (raw === null || raw === undefined) {
       return {
-        summary: "Aucun résultat fourni.",
+        summary: "No result provided.",
         payloadType: "text",
         confidenceScore: 0.5,
         assumptions: [],
@@ -93,12 +93,12 @@ export class AgentCollaborationService {
       };
     }
 
-    // 1. Si déjà un objet conforme
+    // 1. If already a conforming object
     if (typeof raw === "object") {
       const parsed = structuredTaskOutputSchema.safeParse(raw);
       if (parsed.success) return parsed.data;
 
-      // Si objet avec propriété 'response'
+      // If object with 'response' property
       if ("response" in raw && typeof raw.response === "string") {
         return this.parseTaskOutput(raw.response);
       }
@@ -118,7 +118,7 @@ export class AgentCollaborationService {
 
     const text = raw.trim();
 
-    // 2. Tenter d'extraire un bloc JSON complet ou un bloc ```json ... ```
+    // 2. Attempt to extract a full JSON block or a ```json ... ``` block
     const jsonMatch = /```json\s*([\s\S]*?)\s*```/.exec(text) ?? /^(\{[\s\S]*\})$/.exec(text);
     if (jsonMatch?.[1]) {
       try {
@@ -130,39 +130,39 @@ export class AgentCollaborationService {
           return this.parseTaskOutput(obj.response);
         }
       } catch {
-        // Poursuivre vers extraction sémantique
+        // Fall through to semantic extraction
       }
     }
 
-    // 3. Extraction sémantique basée sur les en-têtes markdown courants
-    const assumptions = extractMarkdownList(text, ["hypothèses", "hypotheses", "assumptions"]);
+    // 3. Semantic extraction based on common markdown headers
+    const assumptions = extractMarkdownList(text, ["assumptions", "hypotheses"]);
     const openQuestions = extractMarkdownList(text, [
-      "questions ouvertes",
-      "incertitudes",
       "open questions",
+      "uncertainties",
+      "questions",
     ]);
 
-    // Détection du type de payload
+    // Payload type detection
     let payloadType: PayloadType = "text";
     if (/diff\s+--git|@@\s+-[0-9]+,[0-9]+\s+\+[0-9]+,[0-9]+\s+@@/i.test(text)) {
       payloadType = "code_patch";
     } else if (
-      /\b(vulnérabilité|faille|audit\s+sécurité|audit\s+de\s+conformité|cve|injection)\b/i.test(
+      /\b(vulnerability|flaw|security\s+audit|compliance\s+audit|cve|injection)\b/i.test(
         text,
       )
     ) {
       payloadType = "audit_report";
-    } else if (/\b(contradiction|désaccord|invalide|erreur\s+majeure|réfutation)\b/i.test(text)) {
+    } else if (/\b(contradiction|disagreement|invalid|major\s+error|refutation)\b/i.test(text)) {
       payloadType = "contradiction_claim";
-    } else if (/\b(critique|contre-analyse|revue|review|vérification)\b/i.test(text)) {
+    } else if (/\b(critique|counter-analysis|review|verification)\b/i.test(text)) {
       payloadType = "critique";
-    } else if (/\b(browser|navigateur|chromium|page\s+web|url|titre\s+page)\b/i.test(text)) {
+    } else if (/\b(browser|chromium|web\s+page|url|page\s+title)\b/i.test(text)) {
       payloadType = "browser_findings";
     }
 
-    // Détection de confiance
+    // Confidence detection
     let confidenceScore = 0.85;
-    const confidenceMatch = /\bconfiance\s*:\s*([0-9]{1,3})\s*%/i.exec(text);
+    const confidenceMatch = /\bconfidence\s*:\s*([0-9]{1,3})\s*%/i.exec(text);
     if (confidenceMatch?.[1]) {
       confidenceScore = Math.min(1, Math.max(0, Number(confidenceMatch[1]) / 100));
     }
@@ -179,7 +179,7 @@ export class AgentCollaborationService {
   }
 
   /**
-   * Construit le bloc de contexte structuré injecté dans les instructions des tâches aval.
+   * Builds the structured context block injected into instructions of downstream tasks.
    */
   formatStructuredUpstreamContext(upstream: UpstreamTaskContext[]): string {
     if (upstream.length === 0) return "";
@@ -188,27 +188,27 @@ export class AgentCollaborationService {
     for (const item of upstream) {
       const confPct = Math.round(item.output.confidenceScore * 100);
       lines.push(
-        `[TASK: ${item.taskKey} | AGENT: ${item.profileKey} | TYPE: ${item.output.payloadType} | CONFIANCE: ${confPct}%]`,
+        `[TASK: ${item.taskKey} | AGENT: ${item.profileKey} | TYPE: ${item.output.payloadType} | CONFIDENCE: ${confPct}%]`,
       );
-      lines.push(`RÉSUMÉ :`);
+      lines.push("SUMMARY:");
       lines.push(item.output.summary);
 
       if (item.output.assumptions.length > 0) {
-        lines.push(`HYPOTHÈSES :`);
+        lines.push("ASSUMPTIONS:");
         for (const ass of item.output.assumptions) lines.push(`- ${ass}`);
       }
 
       if (item.output.openQuestions.length > 0) {
-        lines.push(`QUESTIONS OUVERTES :`);
+        lines.push("OPEN QUESTIONS:");
         for (const q of item.output.openQuestions) lines.push(`- ${q}`);
       }
 
       if (item.artifacts && item.artifacts.length > 0) {
-        lines.push(`ARTEFACTS DISPONIBLES :`);
+        lines.push("AVAILABLE ARTIFACTS:");
         for (const art of item.artifacts) {
           const kb = (art.sizeBytes / 1024).toFixed(1);
           lines.push(
-            `- ${art.uri} (${art.mimeType}, ${kb} KB, sha256: ${art.sha256.slice(0, 8)}…) : ${art.description}`,
+            `- ${art.uri} (${art.mimeType}, ${kb} KB, sha256: ${art.sha256.slice(0, 8)}…): ${art.description}`,
           );
         }
       }
@@ -219,22 +219,22 @@ export class AgentCollaborationService {
   }
 
   /**
-   * Détecte les contradictions ou désaccords substantiels entre tâches amont.
+   * Detects contradictions or substantive disagreements between upstream tasks.
    */
   detectContradiction(tasks: UpstreamTaskContext[]): CrossCritiqueDebate | null {
     if (tasks.length < 2) return null;
 
-    // 1. Recherche d'une tâche qui formule explicitement une contradiction ou réfutation
+    // 1. Find a task that explicitly states a contradiction or refutation
     const contradictionTask = tasks.find(
       (t) =>
         t.output.payloadType === "contradiction_claim" ||
-        /\b(invalide|dangereux|incorrect|contradiction\s+majeure|conclusion\s+fausse|réfute)\b/i.test(
+        /\b(invalid|dangerous|incorrect|major\s+contradiction|false\s+conclusion|refutes)\b/i.test(
           t.output.summary,
         ),
     );
 
     if (contradictionTask) {
-      // Trouver la tâche précédente contredite
+      // Find the previous contradicted task
       const otherTask = tasks.find((t) => t.taskKey !== contradictionTask.taskKey);
       if (otherTask) {
         return {
@@ -251,10 +251,10 @@ export class AgentCollaborationService {
             summary: contradictionTask.output.summary.slice(0, 300),
             confidence: contradictionTask.output.confidenceScore,
           },
-          issue: `Divergence contradictoire détectée entre ${otherTask.taskKey} et ${contradictionTask.taskKey}.`,
+          issue: `Contradictory divergence detected between ${otherTask.taskKey} and ${contradictionTask.taskKey}.`,
           severity: "high",
           recommendation:
-            "Arbitrage requis pour trancher entre les conclusions contradictoires avant synthèse finale.",
+            "Arbitration required to resolve contradictory conclusions before final synthesis.",
         };
       }
     }
@@ -263,7 +263,7 @@ export class AgentCollaborationService {
   }
 
   /**
-   * Génère une tâche d'arbitrage contradictoire (cross-critique debate) lorsqu'une divergence est détectée.
+   * Generates a cross-critique debate arbitration task when divergence is detected.
    */
   async generateArbitrationTask(
     debate: CrossCritiqueDebate,
@@ -271,7 +271,7 @@ export class AgentCollaborationService {
     settings: RuntimeSettings,
     router: AgentRouter,
   ): Promise<MissionTaskInput> {
-    // Préférer un arbitre neutre (profil différent de taskA et taskB si possible)
+    // Prefer a neutral arbiter (different profile from taskA and taskB if possible)
     const neutralProfiles = availableProfiles.filter(
       (p) => p !== debate.taskA.profile && p !== debate.taskB.profile,
     );
@@ -279,29 +279,29 @@ export class AgentCollaborationService {
 
     const arbiterProfile = await router.bestProfileFor(
       candidateProfiles,
-      "Arbitrage contradictoire neutre et résolution de litige",
+      "Neutral contradictory arbitration and dispute resolution",
       candidateProfiles[0] ?? "claude",
     );
 
     const fallbacks = await router.fallbackOrderFor(
       arbiterProfile,
       availableProfiles,
-      "Arbitrage contradictoire neutre",
+      "Neutral contradictory arbitration",
     );
 
     const instruction = [
-      "Tu es l'arbitre neutre de NEXUS.",
-      `Deux agents ont émis des conclusions divergentes sur la mission :`,
-      `- Agent A (${debate.taskA.profile}, tâche "${debate.taskA.key}", confiance ${Math.round(debate.taskA.confidence * 100)}%) :`,
+      "You are the neutral arbitrator for NEXUS.",
+      "Two agents issued divergent conclusions on this mission:",
+      `- Agent A (${debate.taskA.profile}, task "${debate.taskA.key}", confidence ${Math.round(debate.taskA.confidence * 100)}%):`,
       `  "${debate.taskA.summary}"`,
-      `- Agent B (${debate.taskB.profile}, tâche "${debate.taskB.key}", confiance ${Math.round(debate.taskB.confidence * 100)}%) :`,
+      `- Agent B (${debate.taskB.profile}, task "${debate.taskB.key}", confidence ${Math.round(debate.taskB.confidence * 100)}%):`,
       `  "${debate.taskB.summary}"`,
       "",
-      "CONSIGNE D'ARBITRAGE :",
-      "1. Analyse rigoureusement les preuves, faits et artefacts fournis par les deux parties.",
-      "2. Démêle les contradictions factuelles ou méthodologiques.",
-      "3. Identifie les risques non démontrés vs les garanties réelles.",
-      "4. Formule un verdict d'arbitrage unifié, clair et exploitable que le synthétiseur final pourra reprendre en toute confiance.",
+      "ARBITRATION INSTRUCTIONS:",
+      "1. Rigorously analyze evidence, facts, and artifacts provided by both parties.",
+      "2. Untangle factual or methodological contradictions.",
+      "3. Identify unsubstantiated risks vs proven guarantees.",
+      "4. Formulate a unified, clear, actionable arbitration verdict that the final synthesizer can rely on with full confidence.",
     ].join("\n");
 
     return {
@@ -318,7 +318,7 @@ export class AgentCollaborationService {
   }
 
   /**
-   * Valide et intègre les propositions de sous-tâches émises par un agent dans le DAG d'exécution.
+   * Validates and incorporates subtask proposals from an agent into the execution DAG.
    */
   async incorporateSubtaskProposals(options: {
     proposals: ProposedSubtask[];
@@ -332,7 +332,7 @@ export class AgentCollaborationService {
     const maxAdditional = options.maxAdditional ?? 3;
     const existingKeys = new Set(options.existingTasks.map((t) => t.key));
 
-    // Filtrer les propositions valides et prioritaires (critical ou recommended)
+    // Filter valid, high-priority proposals (critical or recommended)
     const candidates = options.proposals
       .filter((p) => p.priority === "critical" || p.priority === "recommended")
       .filter((p) => !existingKeys.has(p.key))
@@ -343,7 +343,7 @@ export class AgentCollaborationService {
     const newTasks: MissionTaskInput[] = [];
 
     for (const proposal of candidates) {
-      // Déterminer le profil (soit spécifié, soit routé automatiquement)
+      // Determine profile (either specified or automatically routed)
       let profile = proposal.profile;
       if (!profile || !options.availableProfiles.includes(profile)) {
         profile = await options.router.bestProfileFor(
@@ -379,7 +379,7 @@ export class AgentCollaborationService {
       existingKeys.add(proposal.key);
     }
 
-    // Réajuster les dépendances de nexus_final_synthesis et nexus_quality_review pour attendre les nouvelles sous-tâches
+    // Re-adjust dependencies of nexus_final_synthesis and nexus_quality_review to await new subtasks
     const newTaskKeys = newTasks.map((t) => t.key);
     const updatedExisting = options.existingTasks.map((task) => {
       if (task.key === "nexus_final_synthesis" || task.key.startsWith("nexus_quality_review")) {
@@ -415,10 +415,10 @@ function extractMarkdownList(text: string, headerKeywords: string[]): string[] {
       } else if (/^[0-9]+\.\s+/.test(trimmed)) {
         result.push(trimmed.replace(/^[0-9]+\.\s+/, "").trim());
       } else if (trimmed.length === 0) {
-        // Ligne vide
+        // Empty line
         continue;
       } else if (!trimmed.startsWith(" ") && !trimmed.startsWith("\t")) {
-        // Fin de la section de liste
+        // End of list section
         inSection = false;
       }
     }

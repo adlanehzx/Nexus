@@ -11,12 +11,11 @@ import {
 import { buildApp, type NexusApp } from "../src/app.js";
 
 /**
- * Smoke test de l'API.
+ * API smoke test.
  *
- * Utilise `app.inject()` : aucun port ouvert, aucun service externe. Les
- * dépendances sont injectées, ce qui permet de tester le chemin dégradé —
- * base ou Redis en panne — qui est précisément celui qu'on ne peut pas
- * provoquer facilement en intégration.
+ * Uses `app.inject()`: no open port, no external services. Dependencies are injected,
+ * allowing test of degraded paths — database or Redis failure — which are precisely
+ * those difficult to trigger reliably in live integration environments.
  */
 
 const config = parseConfig({
@@ -66,7 +65,7 @@ describe("GET /health — liveness", () => {
     await app.close();
   });
 
-  it("répond 200 et respecte son contrat", async () => {
+  it("responds 200 and complies with contract", async () => {
     const response = await app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
@@ -75,9 +74,9 @@ describe("GET /health — liveness", () => {
     expect(body.uptimeSeconds).toBeGreaterThanOrEqual(0);
   });
 
-  it("reste vert même quand les dépendances sont tombées", async () => {
-    // C'est tout l'intérêt de séparer liveness et readiness : une base lente ne
-    // doit pas provoquer le redémarrage d'un processus sain.
+  it("remains green even when dependencies are down", async () => {
+    // Key reason to separate liveness and readiness: a slow database
+    // must not trigger restarts of a healthy application process.
     const degraded = await build(false);
     const response = await degraded.inject({ method: "GET", url: "/health" });
 
@@ -85,24 +84,24 @@ describe("GET /health — liveness", () => {
     await degraded.close();
   });
 
-  it("renvoie un identifiant de corrélation", async () => {
+  it("returns correlation identifier", async () => {
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.headers["x-request-id"]).toBeDefined();
   });
 
-  it("réutilise l'identifiant de corrélation fourni en amont", async () => {
+  it("reuses upstream correlation identifier", async () => {
     const response = await app.inject({
       method: "GET",
       url: "/health",
-      headers: { "x-request-id": "correlation-amont" },
+      headers: { "x-request-id": "upstream-correlation" },
     });
 
-    expect(response.headers["x-request-id"]).toBe("correlation-amont");
+    expect(response.headers["x-request-id"]).toBe("upstream-correlation");
   });
 });
 
 describe("GET /api/v1/health — readiness", () => {
-  it("répond 200 quand PostgreSQL et Redis répondent", async () => {
+  it("responds 200 when PostgreSQL and Redis are responsive", async () => {
     const app = await build(true);
     const response = await app.inject({ method: "GET", url: "/api/v1/health" });
 
@@ -116,9 +115,9 @@ describe("GET /api/v1/health — readiness", () => {
     await app.close();
   });
 
-  it("répond 503 quand une dépendance est tombée", async () => {
-    // Le statut HTTP doit porter l'information : aucun load balancer ne lit le
-    // corps de la réponse.
+  it("responds 503 when a dependency is down", async () => {
+    // HTTP status must carry information: load balancers check status codes,
+    // not response bodies.
     const app = await build(false);
     const response = await app.inject({ method: "GET", url: "/api/v1/health" });
 
@@ -130,7 +129,7 @@ describe("GET /api/v1/health — readiness", () => {
     await app.close();
   });
 
-  it("ne divulgue pas de détail interne au-delà du message d'erreur de la sonde", async () => {
+  it("does not leak internal details beyond probe error message", async () => {
     const app = await build(false);
     const body = readinessResponseSchema.parse(
       (await app.inject({ method: "GET", url: "/api/v1/health" })).json(),
@@ -141,7 +140,7 @@ describe("GET /api/v1/health — readiness", () => {
   });
 });
 
-describe("gestion des erreurs", () => {
+describe("error handling", () => {
   let app: NexusApp;
 
   beforeEach(async () => {
@@ -151,8 +150,8 @@ describe("gestion des erreurs", () => {
     await app.close();
   });
 
-  it("renvoie une 404 dans la forme d'erreur standard", async () => {
-    const response = await app.inject({ method: "GET", url: "/route-qui-nexiste-pas" });
+  it("returns 404 in standard error format", async () => {
+    const response = await app.inject({ method: "GET", url: "/non-existent-route" });
 
     expect(response.statusCode).toBe(404);
     const body = errorResponseSchema.parse(response.json());
@@ -161,10 +160,10 @@ describe("gestion des erreurs", () => {
     expect(body.error.correlationId).toBeTruthy();
   });
 
-  it("sépare la sonde d'infrastructure de la sonde versionnée", async () => {
-    // /health appartient à l'infrastructure et n'est pas versionnée ;
-    // /api/v1/health fait partie du contrat public. Les deux coexistent, et
-    // aucune n'est accessible sous le préfixe de l'autre.
+  it("separates infrastructure probe from versioned probe", async () => {
+    // /health belongs to infrastructure and is unversioned;
+    // /api/v1/health is part of public API contract. Both coexist
+    // and neither is accessible under the other's prefix.
     expect((await app.inject({ method: "GET", url: "/health" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/api/v1/health" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/api/v1/../health" })).statusCode).toBe(404);
@@ -172,8 +171,8 @@ describe("gestion des erreurs", () => {
   });
 });
 
-describe("documentation OpenAPI", () => {
-  it("décrit les routes à partir de leurs schémas Zod", async () => {
+describe("OpenAPI documentation", () => {
+  it("describes routes from their Zod schemas", async () => {
     const app = await build();
     await app.ready();
 

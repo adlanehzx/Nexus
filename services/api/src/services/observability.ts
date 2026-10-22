@@ -3,28 +3,28 @@ import { dirname } from "node:path";
 import { redact, truncate } from "@nexus/shared";
 
 /**
- * Ce que le tableau de bord a le droit de voir.
+ * What the supervision dashboard is allowed to see.
  *
- * Deux magasins bornés — les journaux applicatifs et les événements de sécurité
- * — et les **projections** qui décident ce qui sort du système.
+ * Two bounded stores — application logs and security events —
+ * and the **projections** that decide what leaves the system.
  *
- * La projection est le cœur de ce fichier, et sa raison d'être tient en une
- * ligne : **le raisonnement du modèle ne sort jamais.** Un run d'agent contient
- * son transcript complet, blocs de raisonnement du fournisseur compris
- * (`LlmMessage.providerBlocks`). Ces blocs existent pour être rejoués au tour
- * suivant, pas pour être lus — ni par le cœur agent, ni par une interface, ni
- * par la personne qui supervise.
+ * Projection is the core of this file, and its rationale fits in one
+ * line: **the model's reasoning never leaves.** An agent run contains
+ * its complete transcript, including provider reasoning blocks
+ * (`LlmMessage.providerBlocks`). These blocks exist to be replayed in the
+ * next turn, not to be read — not by the agent core, not by an interface,
+ * not by the person supervising.
  *
- * La garantie est obtenue **par construction, pas par filtrage** : la projection
- * ne lit que `AgentRunRecord`, jamais `AgentState.messages`. On ne peut pas
- * oublier de masquer un champ auquel on n'accède pas.
+ * This guarantee is achieved **by construction, not by filtering**: the projection
+ * only reads `AgentRunRecord`, never `AgentState.messages`. One cannot forget
+ * to mask a field one cannot access.
  *
- * Ce qui sort, et rien d'autre : statut, action, outil, progression, résultat,
- * erreur, métriques.
+ * What leaves, and nothing else: status, action, tool, progress, result,
+ * error, metrics.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Journaux applicatifs
+// Application logs
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal";
@@ -33,20 +33,20 @@ export interface LogEntry {
   at: string;
   level: LogLevel;
   message: string;
-  /** Identifiant de corrélation, quand la ligne vient d'une requête. */
+  /** Correlation identifier, when the line originates from a request. */
   correlationId: string | null;
-  /** Champs structurés retenus. Rédigés, et bornés. */
+  /** Retained structured fields. Redacted, and bounded. */
   context: Record<string, unknown>;
 }
 
 /**
- * Niveaux pino.
+ * Pino levels.
  *
- * Deux formes coexistent, et il faut les accepter toutes les deux : pino ecrit
- * un **entier** par defaut, mais ce depot configure `formatters.level` pour
- * ecrire un **libelle**. Ne reconnaitre que la premiere ferait tomber toutes les
- * lignes reelles en `info`, silencieusement — et un tableau de bord ou tout est
- * `info` ne sert a rien.
+ * Two forms coexist, and both must be accepted: pino writes an
+ * **integer** by default, but this repository configures `formatters.level`
+ * to write a **label**. Recognizing only the former would silently drop
+ * all real lines to `info` — and a dashboard where everything is `info`
+ * is useless.
  */
 const PINO_LEVELS: Record<number, LogLevel> = {
   20: "debug",
@@ -64,7 +64,7 @@ function toLevel(value: unknown): LogLevel {
   return "info";
 }
 
-/** Meme histoire pour l'horodatage : entier epoch par defaut, ISO ici. */
+/** Same story for timestamp: epoch integer by default, ISO here. */
 function toIso(value: unknown): string {
   if (typeof value === "number") return new Date(value).toISOString();
   if (typeof value === "string") {
@@ -75,15 +75,15 @@ function toIso(value: unknown): string {
 }
 
 /**
- * Anneau borné des dernières lignes de journal.
+ * Bounded ring buffer of recent log lines.
  *
- * **Bornée**, parce qu'un tampon de journaux qui grandit sans limite finit par
- * faire tomber le processus qu'il servait à diagnostiquer.
+ * **Bounded**, because an unbounded log buffer eventually crashes
+ * the process it was supposed to diagnose.
  *
- * Implémente l'interface d'une destination pino (`write(ligne)`), ce qui permet
- * de la brancher en parallèle de la sortie standard sans intercaler de couche.
- * Les tests l'alimentent avec les mêmes lignes NDJSON que pino produit — c'est
- * le vrai format qui est éprouvé, pas une imitation.
+ * Implements a pino destination interface (`write(line)`), allowing it
+ * to be plugged in parallel with standard output without an extra layer.
+ * Tests feed it with the same NDJSON lines pino produces — the real
+ * format is tested, not a mock.
  */
 export class LogBuffer {
   readonly #entries: LogEntry[] = [];
@@ -96,7 +96,7 @@ export class LogBuffer {
     this.#entries.push(...readJsonLines<LogEntry>(options.filePath, this.#max));
   }
 
-  /** Destination pino. Une ligne NDJSON par appel. */
+  /** Pino destination. One NDJSON line per call. */
   write(line: string): void {
     const entry = parseLogLine(line);
     if (entry !== undefined) this.push(entry);
@@ -108,7 +108,7 @@ export class LogBuffer {
     persistJsonLines(this.#filePath, this.#entries);
   }
 
-  /** Les plus récentes d'abord. */
+  /** Most recent first. */
   list(filter: { level?: LogLevel; limit?: number; search?: string } = {}): LogEntry[] {
     const minimum = filter.level === undefined ? 0 : SEVERITY[filter.level];
     const needle = filter.search?.toLowerCase();
@@ -130,11 +130,11 @@ export class LogBuffer {
 const SEVERITY: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, fatal: 4 };
 
 /**
- * Décode une ligne pino.
+ * Decodes a pino line.
  *
- * Rend `undefined` sur ce qui n'est pas du JSON : une destination de journal ne
- * doit jamais lever. Elle serait appelée depuis le gestionnaire d'erreur, et
- * une exception y transformerait un incident en panne.
+ * Returns `undefined` for non-JSON input: a log destination must never throw.
+ * It would be called from the error handler, where an exception turns
+ * an incident into a crash.
  */
 export function parseLogLine(line: string): LogEntry | undefined {
   let parsed: unknown;
@@ -161,15 +161,14 @@ export function parseLogLine(line: string): LogEntry | undefined {
     level: toLevel(level),
     message: typeof msg === "string" ? msg : "",
     correlationId: typeof correlationId === "string" ? correlationId : null,
-    // Rédaction **à l'entrée** du tampon. Une ligne peut transporter un jeton au
-    // milieu d'un champ innocemment nommé, et le tableau de bord l'afficherait
-    // tel quel.
+    // Redaction at buffer ingestion. A line could carry a token inside
+    // an innocently named field, and the dashboard would display it verbatim.
     context: redact(rest) as Record<string, unknown>,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Événements de sécurité
+// Security events
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SecurityEventKind =
@@ -177,14 +176,14 @@ export type SecurityEventKind =
   | "auth.login_failed"
   | "auth.logout"
   | "device.registered"
-  /** Ticket d'appairage émis. Jamais le code, ni son empreinte. */
+  /** Pairing ticket issued. Never the code, nor its fingerprint. */
   | "device.pairing_ticket_issued"
-  /** Appareil créé par un scan de QR, et donc par une présence physique. */
+  /** Device created via QR scan, thus by physical presence. */
   | "device.paired"
   | "device.trusted"
   | "device.revoked"
   | "device.auth_failed"
-  /** Pause globale actionnée. Le motif accompagne la ligne. */
+  /** Global pause actuated. Reason accompanies the line. */
   | "system.paused"
   | "system.resumed"
   | "permission.denied"
@@ -196,24 +195,24 @@ export type SecurityEventKind =
 export interface SecurityEvent {
   at: string;
   kind: SecurityEventKind;
-  /** `null` quand l'événement précède l'identification — un échec de connexion. */
+  /** `null` when event precedes identification — e.g. login failure. */
   userId: string | null;
-  /** Résumé affichable. Ne contient jamais de secret ni de contenu. */
+  /** Displayable summary. Never contains secrets or raw content. */
   summary: string;
   context: Record<string, unknown>;
 }
 
 /**
- * Journal des événements de sécurité.
+ * Security event log.
  *
- * Distinct des journaux applicatifs, et pas par commodité : ce sont des
- * **événements de domaine**, typés, qu'on veut pouvoir compter et filtrer. Les
- * retrouver en fouillant du texte serait fragile, et une ligne de journal
- * reformulée casserait la supervision sans que rien n'échoue.
+ * Distinct from application logs, not for convenience: these are typed
+ * **domain events** that we want to count and filter. Finding them by
+ * text search would be fragile, and a reworded log line would break
+ * supervision silently.
  *
- * Ce qui n'y entre jamais : un mot de passe, un jeton, un contenu de souvenir.
- * `record` rédige ce qu'on lui donne, mais la vraie règle est en amont — les
- * appelants passent des identifiants et des catégories, pas des valeurs.
+ * What never enters: a password, a token, memory content.
+ * `record` redacts what it receives, but the real rule is upstream —
+ * callers pass identifiers and categories, not secret values.
  */
 export class SecurityLog {
   readonly #events: SecurityEvent[] = [];
@@ -249,7 +248,7 @@ export class SecurityLog {
     return event;
   }
 
-  /** Les plus récents d'abord. */
+  /** Most recent first. */
   list(filter: { kind?: SecurityEventKind; limit?: number } = {}): SecurityEvent[] {
     const matching =
       filter.kind === undefined
@@ -259,7 +258,7 @@ export class SecurityLog {
     return matching.slice(-(filter.limit ?? 100)).reverse();
   }
 
-  /** Compte par type, sur toute la fenêtre retenue. */
+  /** Count by kind over the retained window. */
   countByKind(): Record<string, number> {
     const counts: Record<string, number> = {};
     for (const event of this.#events) counts[event.kind] = (counts[event.kind] ?? 0) + 1;
@@ -304,15 +303,15 @@ function persistJsonLines<T>(filePath: string | undefined, entries: readonly T[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Projection d'un run d'agent
+// Agent run projection
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ce qu'un run laisse voir.
+ * What a run exposes.
  *
- * Comparer avec `AgentRunRecord` est instructif : il n'y a **pas** de champ
- * `messages`, pas de `providerBlocks`, pas de transcript. Ce type est la
- * frontière, et le fait qu'il soit plus pauvre que la source est le but.
+ * Comparing with `AgentRunRecord` is instructive: there is **no**
+ * `messages` field, no `providerBlocks`, no transcript. This type is
+ * the boundary, and being strictly smaller than the source is the goal.
  */
 export interface AgentRunView {
   runId: string;
@@ -327,7 +326,7 @@ export interface AgentRunView {
   endedAt: string | null;
   durationMs: number | null;
   iterations: number;
-  /** Réponse finale rendue à l'utilisateur. Un résultat, pas un raisonnement. */
+  /** Final response returned to user. A result, not reasoning. */
   response: string | null;
   tools: {
     callId: string;
@@ -336,7 +335,7 @@ export interface AgentRunView {
     status: string;
     durationMs: number;
     attempts: number;
-    /** Résumé rédigé et borné des arguments. Jamais l'objet complet. */
+    /** Redacted and bounded argument summary. Never the full object. */
     action: string;
     errorCode: string | null;
   }[];
@@ -354,12 +353,12 @@ export interface AgentRunView {
 }
 
 /**
- * Forme minimale d'un run, telle que la projection la lit.
+ * Minimal run shape as read by projection.
  *
- * Structurelle, et volontairement réduite à `record` : `@nexus/agent-core` n'est
- * pas importé ici, et surtout **`messages` n'apparaît nulle part**. La garantie
- * de non-divulgation du raisonnement n'est pas une politique appliquée au
- * passage, c'est la forme de cette signature.
+ * Structural, and deliberately restricted to `record`: `@nexus/agent-core`
+ * is not imported here, and crucially **`messages` does not appear anywhere**.
+ * The guarantee of non-disclosure of reasoning is not a policy applied in passing,
+ * it is the type shape of this signature.
  */
 export interface ProjectableRun {
   record: {
@@ -443,12 +442,12 @@ export function projectAgentRun(run: ProjectableRun): AgentRunView {
 }
 
 /**
- * Résumé d'un appel d'outil.
+ * Tool call argument summary.
  *
- * Un nom d'outil seul ne suffit pas à superviser : « terminal.execute » ne dit
- * pas quelle commande a tourné. On rend donc une ligne, mais **rédigée puis
- * bornée** — la trace du run rédige déjà ses arguments, et rédiger une seconde
- * fois ici ne coûte rien pour un chemin de sortie qui, lui, est public.
+ * A tool name alone is insufficient for supervision: "terminal.execute"
+ * does not indicate what command was executed. We return a single line,
+ * but **redacted then bounded** — the run trace already redacts arguments,
+ * and redacting a second time costs nothing for an egress path that is public.
  */
 export function summarizeArguments(input: unknown): string {
   if (input === null || input === undefined) return "";

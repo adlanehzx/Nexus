@@ -22,45 +22,41 @@ import { initialState, reduce, type ClientAction, type ClientState } from "@nexu
 import { signNonce, type Account, type ApiHarness, type RegisteredDevice } from "./harness.js";
 
 /**
- * Le portable Windows, monté pour de vrai.
+ * The Windows laptop, mounted for real.
  *
- * Ce fichier assemble, dans un seul processus, exactement ce qui tourne sur la
- * machine — **le vrai code des deux côtés** :
+ * This file assembles, in a single process, exactly what runs on the
+ * machine — **the real code on both sides**:
  *
- *  - le client : `SessionManager`, `RealtimeClient` et le réducteur de
- *    `@nexus/client-core`, ceux-là mêmes que la fenêtre Windows et l'iPhone
- *    exécutent ;
- *  - l'exécutant : `WorkerRuntime` de `@nexus/worker-core`, celui du démon ;
- *  - le cœur : l'API Fastify complète, avec ses vraies autorisations, sa vraie
- *    passerelle et son vrai coordinateur.
+ *  - the client: `SessionManager`, `RealtimeClient`, and the reducer from
+ *    `@nexus/client-core`, the exact components running in the Windows window and iPhone;
+ *  - the worker: `WorkerRuntime` from `@nexus/worker-core`, the daemon runtime;
+ *  - the core: the complete Fastify API, with its real permissions, real
+ *    gateway, and real coordinator.
  *
- * Seuls deux éléments sont remplacés, et tous deux sont des **frontières
- * externes** : le transport réseau, remplacé par un branchement direct sur les
- * canaux (mêmes enveloppes, mêmes schémas), et les appels système du worker,
- * remplacés par des capacités en mémoire — on ne veut pas qu'une suite de tests
- * lance un processus sur la machine de qui la lance.
+ * Only two elements are replaced, and both are **external boundaries**:
+ * network transport, replaced by direct channel wiring (same envelopes, same schemas),
+ * and worker system calls, replaced by in-memory capabilities — we avoid having
+ * a test suite execute processes on the host machine.
  *
- * Ce qui n'est **pas** remplacé mérite d'être dit, parce que c'est ce que les
- * tests prétendent démontrer : les signatures Ed25519 sont vraies, les jetons
- * sont vrais, la vérification de propriété des appareils est vraie, la sélection
- * d'exécutant est vraie.
+ * What is **not** replaced deserves mention, as it is what the tests prove:
+ * Ed25519 signatures are real, tokens are real, device ownership verification
+ * is real, worker selection is real.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Côté client : brancher `SocketTransport` sur `ClientChannel`
+// Client side: wire `SocketTransport` to `ClientChannel`
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Transport client en mémoire.
+ * In-memory client transport.
  *
- * Le `RealtimeClient` croit parler à une WebSocket ; il parle en réalité au
- * canal client de l'API. Les trames qui transitent sont **les mêmes octets**
- * que sur le fil : sérialisées, validées par `envelopeSchema`, décodées par
+ * `RealtimeClient` believes it communicates with a WebSocket; it actually talks
+ * to the API client channel. Frames transmitted are **the exact same bytes**
+ * as on the wire: serialized, validated by `envelopeSchema`, decoded by
  * `parseClientRequest`.
  *
- * La poignée de main est traitée ici parce que c'est le transport qui en est
- * chargé en production aussi : `client.hello` n'est pas une demande routée, c'est
- * ce qui ouvre la session.
+ * The handshake is handled here because transport handles it in production too:
+ * `client.hello` is not a routed request, it opens the session.
  */
 export class ChannelSocket implements SocketTransport {
   #state: SocketState = "idle";
@@ -69,7 +65,7 @@ export class ChannelSocket implements SocketTransport {
   #context: { userId: string; sessionId: string; deviceId: string } | undefined;
 
   readonly #harness: ApiHarness;
-  /** Trames montantes observées, pour ce que les tests veulent inspecter. */
+  /** Observed upstream envelopes, for tests to inspect. */
   readonly sent: Envelope[] = [];
 
   constructor(harness: ApiHarness) {
@@ -123,10 +119,10 @@ export class ChannelSocket implements SocketTransport {
 
       this.#context = context;
     } catch {
-      // 4401 : le cœur a refusé la session. Le client le distingue d'une
-      // coupure réseau et fait tourner son jeton avant de réessayer.
+      // 4401: the core rejected the session. Client distinguishes this
+      // from network disconnect and rotates token before retrying.
       this.#state = "closed";
-      this.#onClose?.("authentification refusée", 4401);
+      this.#onClose?.("authentication rejected", 4401);
     }
   }
 
@@ -150,7 +146,7 @@ export class ChannelSocket implements SocketTransport {
   }
 }
 
-/** Client HTTP branché sur `app.inject()` — pas de port ouvert. */
+/** HTTP client wired to `app.inject()` — no open port. */
 export class InjectHttpClient implements HttpClient {
   readonly #harness: ApiHarness;
   readonly requests: { method: string; path: string }[] = [];
@@ -169,8 +165,7 @@ export class InjectHttpClient implements HttpClient {
       ...(input.body === undefined ? {} : { payload: input.body as never }),
     });
 
-    // 204, page d'erreur d'un proxy : rien de tout cela ne doit faire échouer
-    // l'appelant sur une exception d'analyse.
+    // 204, proxy error page: none of these should fail caller on parse error.
     let body: unknown;
     try {
       body = response.json();
@@ -207,11 +202,10 @@ export interface ClientRig {
 }
 
 /**
- * Monte un client complet pour un appareil donné.
+ * Mounts a complete client for a given device.
  *
- * Le jeton est celui du compte : c'est lui qui authentifie. L'appareil dit
- * seulement d'où l'on parle, et le cœur vérifie qu'il appartient bien au
- * porteur du jeton.
+ * Token belongs to the account and authenticates. Device indicates origin,
+ * and core verifies it belongs to the token owner.
  */
 export async function mountClient(
   harness: ApiHarness,
@@ -246,11 +240,10 @@ export async function mountClient(
 }
 
 /**
- * Minuteries inertes.
+ * Inert timers.
  *
- * Les tests ne veulent ni délai d'expiration de demande ni reconnexion
- * programmée : ils vérifient l'acheminement, et un minuteur réel les rendrait
- * lents puis instables.
+ * Tests require neither request timeouts nor scheduled reconnects:
+ * they test routing, and real timers make tests slow and flaky.
  */
 const NO_TIMERS: TimerPort = {
   set: () => 0,
@@ -258,7 +251,7 @@ const NO_TIMERS: TimerPort = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Côté exécutant : brancher `WorkerLink` sur `WorkerChannel`
+// Worker side: wire `WorkerLink` to `WorkerChannel`
 // ─────────────────────────────────────────────────────────────────────────────
 
 class StaticSigner implements CredentialSigner {
@@ -294,18 +287,18 @@ export interface WorkerRig {
   link: LoopbackLink;
   health: SimpleHealth;
   logger: MemoryWorkerLogger;
-  /** Ce que la capacité de test a réellement reçu. */
+  /** What the test capability actually received. */
   executed: { capability: string; input: unknown }[];
-  /** Coupe le canal — la machine s'éteint, le câble tombe. */
+  /** Cuts channel — machine turns off, cable disconnects. */
   disconnect(reason?: string): void;
 }
 
 /**
- * Comportement d'une capacité simulée.
+ * Simulated capability behaviour.
  *
- * Une capacité de test n'a pas à être muette : un scénario de bout en bout doit
- * pouvoir émettre de la progression, échouer, ou ne jamais rendre la main. Ce
- * sont les trois formes que prend un exécutant réel.
+ * A test capability does not have to be silent: an end-to-end scenario
+ * must be able to report progress, fail, or hang.
+ * These are the three forms a real worker takes.
  */
 export type CapabilityBehaviour = (
   input: Record<string, unknown>,
@@ -313,11 +306,11 @@ export type CapabilityBehaviour = (
 ) => Promise<unknown>;
 
 /**
- * Monte un exécutant complet pour un appareil donné.
+ * Mounts a complete worker for a given device.
  *
- * Ses capacités sont des doubles en mémoire — on n'exécute rien sur la machine
- * qui lance les tests. Tout le reste est le vrai runtime : poignée de main,
- * signature, enregistrement, dispatch, progression, résultat, reprise.
+ * Capabilities are in-memory doubles — nothing runs on the test runner host.
+ * Everything else is real runtime: handshake, signature, registration,
+ * dispatch, progress, result, recovery.
  */
 export function mountWorker(
   harness: ApiHarness,
@@ -326,7 +319,7 @@ export function mountWorker(
     capabilities?: readonly string[];
     connectionId?: string;
     platform?: string;
-    /** Comportement par capacité. À défaut, une réussite immédiate. */
+    /** Behaviour per capability. Defaults to immediate success. */
     behaviours?: Readonly<Record<string, CapabilityBehaviour>>;
   } = {},
 ): WorkerRig {
@@ -337,7 +330,7 @@ export function mountWorker(
   for (const name of names) {
     registry.register({
       name,
-      description: `Capacité de test : ${name}`,
+      description: `Test capability: ${name}`,
       inputSchema: z.record(z.string(), z.unknown()).default({}),
       riskLevel: "SAFE",
       execute: async (input: Record<string, unknown>, context) => {
@@ -356,9 +349,9 @@ export function mountWorker(
   const logger = new MemoryWorkerLogger();
   const connectionId = options.connectionId ?? `conn-${device.device.id}`;
 
-  // Le canal worker de l'API reçoit ce que le runtime envoie, et lui renvoie ce
-  // que la passerelle produit. Les deux extrémités échangent les enveloppes du
-  // protocole, validées par les mêmes schémas que sur le fil.
+  // API worker channel receives what runtime sends, and sends back what
+  // gateway produces. Both ends exchange protocol envelopes validated
+  // by the exact wire schemas.
   const connection: WorkerConnection = {
     connectionId,
     deviceId: device.device.id,
@@ -366,7 +359,7 @@ export function mountWorker(
       link.deliver(envelope);
     },
     close: () => {
-      link.drop("fermé par le cœur");
+      link.drop("closed by core");
     },
   };
 
@@ -399,14 +392,9 @@ export function mountWorker(
     health,
     logger,
     executed,
-    disconnect: (reason = "la machine s'est éteinte") => {
-      // Deux gestes, comme sur le fil : la socket tombe côté worker — ce qui
-      // déclenche sa reprise — et le transport prévient la passerelle, sans
-      // quoi le cœur croirait la machine toujours là et attendrait un résultat
-      // qui ne viendra jamais.
-      //
-      // `link.onClose` ne convient pas : le port n'a qu'un seul emplacement de
-      // gestionnaire, et le runtime y a déjà posé le sien.
+    disconnect: (reason = "machine powered off") => {
+      // Two actions, as on the wire: worker socket drops — triggering recovery —
+      // and transport notifies gateway so core does not wait indefinitely.
       link.drop(reason);
       void harness.services.gateway.detachConnection(connectionId, reason);
     },

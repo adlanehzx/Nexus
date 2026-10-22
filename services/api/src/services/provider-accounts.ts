@@ -105,7 +105,7 @@ export class ProviderAccountService {
     this.#now = options.now ?? (() => new Date());
   }
 
-  /** Initialise avec les comptes par défaut si le fichier n'existe pas encore. */
+  /** Initialize with default accounts if the file does not exist yet. */
   defaultAccounts(): ProviderAccount[] {
     const timestamp = this.#now().toISOString();
     const baseDir = join(homedir(), ".nexus", "agents", "sessions");
@@ -216,7 +216,7 @@ export class ProviderAccountService {
     const now = this.#now();
     let updated = false;
 
-    // Nettoyage automatique des cooldowns expirés
+    // Automatically clean up expired cooldowns
     const refreshed = accounts.map((account) => {
       if (account.cooldown.active && account.cooldown.until !== null) {
         if (new Date(account.cooldown.until).getTime() <= now.getTime()) {
@@ -248,7 +248,7 @@ export class ProviderAccountService {
     const accounts = await this.listAccounts();
 
     if (accounts.some((acc) => acc.id === validated.id)) {
-      throw new Error(`Le compte fournisseur "${validated.id}" existe déjà.`);
+      throw new Error(`Provider account "${validated.id}" already exists.`);
     }
 
     const nowIso = this.#now().toISOString();
@@ -418,27 +418,27 @@ export class ProviderAccountService {
     let authStatus = existing.authStatus;
     let quotas = existing.quotas;
 
-    // Déclenchement automatique de cooldown selon la catégorie d'erreur
+    // Automatically trigger cooldown according to error category
     if (!outcome.success) {
       if (outcome.errorCategory === "rate_limited") {
         cooldown = {
           active: true,
           until: new Date(now.getTime() + 60_000).toISOString(),
-          reason: "Rate limit détecté par le CLI",
+          reason: "Rate limit detected by CLI",
         };
       } else if (outcome.errorCategory === "quota_exhausted") {
         quotas = { ...quotas, exhausted: true };
         cooldown = {
           active: true,
           until: new Date(now.getTime() + 300_000).toISOString(),
-          reason: "Quota épuisé sur cette identité",
+          reason: "Quota exhausted on this identity",
         };
       } else if (outcome.errorCategory === "auth_required") {
         authStatus = "expired";
         cooldown = {
           active: true,
           until: new Date(now.getTime() + 600_000).toISOString(),
-          reason: "Session ou jeton d'authentification expiré",
+          reason: "Session or authentication token expired",
         };
       }
     } else {
@@ -472,7 +472,7 @@ export class ProviderAccountService {
     const existing = accounts[index];
     if (existing === undefined) return undefined;
 
-    // Sonde heuristique basée sur l'état de session et l'historique
+    // Heuristic probe based on session state and history
     const nowIso = this.#now().toISOString();
     let authStatus: AuthStatus = existing.authStatus;
 
@@ -500,9 +500,9 @@ export class ProviderAccountService {
   }
 
   /**
-   * Sélectionne la meilleure identité disponible pour un fournisseur donné.
-   * Filtre les identités en cooldown, quota épuisé ou auth expirée,
-   * puis trie par priorité (1 avant 2), score de fiabilité et échecs consécutifs.
+   * Selects the best available identity for a given provider.
+   * Filters out identities in cooldown, quota exhausted, or auth expired,
+   * then sorts by priority (1 before 2), reliability score, and consecutive failures.
    */
   async selectAccount(
     provider: string,
@@ -520,7 +520,7 @@ export class ProviderAccountService {
     );
 
     if (candidates.length === 0) {
-      // Si tous sont en cooldown ou épuisés, on prend le premier qui n'est pas expiré
+      // If all are in cooldown or exhausted, pick the first that is not expired
       return matching.find((acc) => acc.authStatus !== "expired");
     }
 
@@ -529,7 +529,7 @@ export class ProviderAccountService {
       if (preferred !== undefined) return preferred;
     }
 
-    // Tri : priorité ascendant (1 = haute priorité), fiabilité descendant, erreurs consécutives ascendant
+    // Sort: priority ascending (1 = high priority), reliability descending, consecutive errors ascending
     candidates.sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority;
       if (b.reliability.score !== a.reliability.score) {

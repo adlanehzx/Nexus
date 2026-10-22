@@ -7,7 +7,7 @@ import { createAccount, makeApi, type Account, type ApiHarness } from "./harness
 
 const missionId = "44444444-4444-4444-8444-444444444444";
 
-describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
+describe("Inter-Agent Collaboration Endpoints", () => {
   let harness: ApiHarness;
   let account: Account;
   let workspaceDir: string;
@@ -37,7 +37,7 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
       getMission: vi.fn().mockResolvedValue({
         id: missionId,
         external_key: "nexus-owner-collab-1",
-        title: "Mission avec collaboration",
+        title: "Mission with collaboration",
         workspace: workspaceDir,
         state: "succeeded",
         created_at: "2026-10-20T20:00:00+00:00",
@@ -52,17 +52,17 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
             state: "succeeded",
             result_json: JSON.stringify({
               response: JSON.stringify({
-                summary: "Architecture validée sans faille apparente.",
+                summary: "Architecture validated with no apparent flaws.",
                 payloadType: "hypothesis",
                 confidenceScore: 0.9,
-                assumptions: ["Cache mémoire local"],
+                assumptions: ["Local memory cache"],
                 openQuestions: [],
                 proposedSubtasks: [
                   {
                     key: "stress_test",
                     title: "Stress test",
-                    instruction: "Exécute 500 req/s",
-                    reason: "Valider le cache",
+                    instruction: "Run 500 req/s",
+                    reason: "Validate cache",
                     priority: "recommended",
                   },
                 ],
@@ -84,7 +84,7 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
             result_json: JSON.stringify({
               response: JSON.stringify({
                 summary:
-                  "Contradiction majeure : le cache mémoire local n'invalide pas les sessions révoquées !",
+                  "Major contradiction: local memory cache does not invalidate revoked sessions!",
                 payloadType: "contradiction_claim",
                 confidenceScore: 0.95,
                 assumptions: [],
@@ -136,7 +136,7 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
     await rm(workspaceDir, { recursive: true, force: true });
   });
 
-  it("enregistre un artefact et permet sa consultation et son téléchargement", async () => {
+  it("saves an artifact and allows its inspection and download", async () => {
     // 1. POST /api/v1/orchestrator/missions/:missionId/artifacts
     const createRes = await harness.app.inject({
       method: "POST",
@@ -146,7 +146,7 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
         taskKey: "investigate",
         name: "architecture_diagram.mmd",
         content: "flowchart TD\nA[Client] --> B[API]",
-        description: "Schéma d'architecture",
+        description: "Architecture diagram",
         mimeType: "text/vnd.mermaid",
       },
     });
@@ -178,8 +178,8 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
     expect(downloadRes.body).toBe("flowchart TD\nA[Client] --> B[API]");
   });
 
-  it("expose la vue collaborative avec messages structurés, débats contradictoires et sous-tâches", async () => {
-    // Créer un artefact au préalable
+  it("exposes collaborative view with structured messages, cross-critique debates, and subtasks", async () => {
+    // Create artifact in advance
     await harness.app.inject({
       method: "POST",
       url: `/api/v1/orchestrator/missions/${missionId}/artifacts`,
@@ -188,7 +188,7 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
         taskKey: "investigate",
         name: "scan.json",
         content: JSON.stringify({ ok: true }),
-        description: "Rapport d'audit",
+        description: "Audit report",
       },
     });
 
@@ -212,10 +212,10 @@ describe("Endpoints de Collaboration Inter-Agents (Chantier 14)", () => {
     expect(collab.missionId).toBe(missionId);
     expect(collab.tasks).toHaveLength(2);
     expect(collab.artifacts).toHaveLength(1);
-    // Un débat contradictoire doit avoir été détecté entre investigate et security_review
+    // A cross-critique debate must have been detected between investigate and security_review
     expect(collab.debates).toHaveLength(1);
-    expect(collab.debates[0]?.issue).toContain("Divergence contradictoire détectée");
-    // Une sous-tâche proposée par investigate doit être listée
+    expect(collab.debates[0]?.issue).toContain("Contradictory divergence detected");
+    // A subtask proposed by investigate must be listed
     expect(collab.proposedSubtasks).toHaveLength(1);
     expect(collab.proposedSubtasks[0]?.key).toBe("stress_test");
   });

@@ -106,22 +106,22 @@ export class PrismaDeviceStore implements DeviceStore {
 }
 
 /**
- * Champ JSON facultatif d'une entrée Prisma.
+ * Optional JSON field of a Prisma input.
  *
- * `exactOptionalPropertyTypes` est actif, et les types d'entrée de Prisma
- * n'acceptent pas `undefined` sur une colonne `Json` : passer la clé à
- * `undefined` est refusé, l'omettre est accepté. On omet donc, plutôt que de
- * masquer le désaccord sous un `as any` — un cast ici laisserait aussi passer
- * une valeur non sérialisable.
+ * `exactOptionalPropertyTypes` is enabled, and Prisma input types
+ * do not accept `undefined` on a `Json` column: passing the key as
+ * `undefined` is rejected, omitting it is accepted. We therefore omit it, rather than
+ * concealing the mismatch under `as any` — a cast here would also allow
+ * a non-serializable value.
  */
 function jsonField<K extends string>(
   key: K,
   value: Record<string, unknown> | undefined,
 ): Record<K, InputJsonObject> | Record<string, never> {
-  // L'assertion est ici, une fois, et elle est précise : `InputJsonObject`,
-  // pas `any`. Ce qu'elle affirme est vrai par construction — ces objets
-  // viennent de schémas JSON validés par Zod — et si elle devenait fausse, le
-  // compilateur continuerait de vérifier tout le reste de l'appel.
+  // The assertion is here, once, and it is precise: `InputJsonObject`,
+  // not `any`. What it asserts is true by construction — these objects
+  // come from JSON schemas validated by Zod — and if it became false, the
+  // compiler would continue verifying the rest of the call.
   return value === undefined
     ? {}
     : ({ [key]: value as InputJsonObject } as Record<K, InputJsonObject>);

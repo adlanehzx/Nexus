@@ -10,16 +10,16 @@ const DEFAULT_CAPS = [
 ];
 
 describe("TaskPlanner", () => {
-  test("Génère un plan valide pour une instruction simple (1 étape, safe risk)", async () => {
+  test("Generates valid plan for simple instruction (1 step, safe risk)", async () => {
     const llm = new ScriptedLLMProvider([
       {
         kind: "final",
         text: JSON.stringify({
-          title: "Lire le fichier",
+          title: "Read file",
           steps: [
             {
               id: "step-1",
-              description: "Lecture du fichier",
+              description: "File reading",
               requiredCapabilities: ["filesystem.read"],
               tool: "device.filesystem.read",
               arguments: { path: "/tmp/test.txt" },
@@ -27,7 +27,7 @@ describe("TaskPlanner", () => {
               riskLevel: "SAFE",
             },
           ],
-          reasoning: "Lecture locale, risque faible",
+          reasoning: "Local read, low risk",
         }),
       },
     ]);
@@ -35,29 +35,29 @@ describe("TaskPlanner", () => {
     const planner = new TaskPlanner({ llm, availableCapabilities: DEFAULT_CAPS });
 
     const { planInput } = await planner.plan({
-      instruction: "Lis le fichier /tmp/test.txt",
+      instruction: "Read file /tmp/test.txt",
       userId: "user-1",
       originClientDeviceId: "device-1",
       correlationId: "corr-1",
     });
 
-    expect(planInput.title).toBe("Lire le fichier");
+    expect(planInput.title).toBe("Read file");
     expect(planInput.steps).toHaveLength(1);
     expect(planInput.steps[0]!.tool).toBe("device.filesystem.read");
     expect(planInput.steps[0]!.requiredCapabilities).toEqual(["filesystem.read"]);
     expect(planInput.steps[0]!.riskLevel).toBe("SAFE");
   });
 
-  test("Génère un plan avec plusieurs étapes et des dépendances", async () => {
+  test("Generates plan with multiple steps and dependencies", async () => {
     const llm = new ScriptedLLMProvider([
       {
         kind: "final",
         text: JSON.stringify({
-          title: "Ouvrir youtube sur PC",
+          title: "Open YouTube on PC",
           steps: [
             {
               id: "step-1",
-              description: "Ouvrir Chrome",
+              description: "Open Chrome",
               requiredCapabilities: ["terminal.execute"],
               tool: "device.terminal.execute",
               arguments: { command: "start chrome" },
@@ -66,7 +66,7 @@ describe("TaskPlanner", () => {
             },
             {
               id: "step-2",
-              description: "Aller sur Youtube",
+              description: "Navigate to YouTube",
               requiredCapabilities: ["browser.navigate"],
               tool: "device.browser.navigate",
               arguments: { url: "https://youtube.com" },
@@ -74,7 +74,7 @@ describe("TaskPlanner", () => {
               riskLevel: "LOW",
             },
           ],
-          reasoning: "D'abord on ouvre chrome, ensuite on navigue",
+          reasoning: "First open chrome, then navigate",
         }),
       },
     ]);
@@ -82,7 +82,7 @@ describe("TaskPlanner", () => {
     const planner = new TaskPlanner({ llm, availableCapabilities: DEFAULT_CAPS });
 
     const { planInput } = await planner.plan({
-      instruction: "Ouvre Chrome sur mon PC et va sur YouTube.",
+      instruction: "Open Chrome on my PC and navigate to YouTube.",
       userId: "user-1",
       originClientDeviceId: "device-1",
       correlationId: "corr-1",
@@ -94,14 +94,14 @@ describe("TaskPlanner", () => {
     expect(planInput.steps[1]!.riskLevel).toBe("LOW");
   });
 
-  test("Échoue si la demande est ambiguë ou impossible (plan vide)", async () => {
+  test("Fails if instruction is ambiguous or impossible (empty plan)", async () => {
     const llm = new ScriptedLLMProvider([
       {
         kind: "final",
         text: JSON.stringify({
-          title: "Tâche impossible",
+          title: "Impossible task",
           steps: [],
-          reasoning: "Il n'y a pas de capacité pour préparer un café.",
+          reasoning: "No capability to brew coffee.",
         }),
       },
     ]);
@@ -110,7 +110,7 @@ describe("TaskPlanner", () => {
 
     await expect(
       planner.plan({
-        instruction: "Prépare moi un café",
+        instruction: "Brew me a coffee",
         userId: "user-1",
         originClientDeviceId: "device-1",
         correlationId: "corr-1",
@@ -118,12 +118,12 @@ describe("TaskPlanner", () => {
     ).rejects.toThrowError(TaskPlannerError);
   });
 
-  test("Échoue si le format LLM ne respecte pas le schéma de sortie structurée", async () => {
+  test("Fails if LLM output does not match structured output schema", async () => {
     const llm = new ScriptedLLMProvider([
       {
         kind: "final",
         text: JSON.stringify({
-          title: "Tâche mal formatée",
+          title: "Malformed task",
           steps: [
             {
               // missing 'id', 'tool' and others, so it will fail schema validation
@@ -139,7 +139,7 @@ describe("TaskPlanner", () => {
 
     await expect(
       planner.plan({
-        instruction: "Fais un truc",
+        instruction: "Do something",
         userId: "user-1",
         originClientDeviceId: "device-1",
         correlationId: "corr-1",

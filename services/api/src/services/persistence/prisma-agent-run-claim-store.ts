@@ -2,7 +2,7 @@ import type { PrismaClient } from "@nexus/database";
 import { uuidv7 } from "@nexus/shared";
 import type { AgentRunClaim, AgentRunClaimStore } from "../agent-run-claims.js";
 
-/** Code Prisma d'une violation de contrainte d'unicité. */
+/** Prisma code for a unique constraint violation. */
 const UNIQUE_VIOLATION = "P2002";
 
 export class PrismaAgentRunClaimStore implements AgentRunClaimStore {
@@ -13,12 +13,12 @@ export class PrismaAgentRunClaimStore implements AgentRunClaimStore {
   }
 
   /**
-   * Réserve en **insérant**, et traite le refus de la base comme la réponse.
+   * Claims by **inserting**, and treats database rejection as the answer.
    *
-   * Lire puis insérer serait plus lisible et faux : entre les deux, une seconde
-   * requête passe, et les deux workers croient détenir la réservation. Ici
-   * c'est l'index unique qui tranche, donc exactement un appelant gagne, quel
-   * que soit l'entrelacement.
+   * Reading then inserting would be cleaner to read but incorrect: between the two, a second
+   * request slips in, and both workers believe they hold the reservation. Here
+   * the unique index decides, so exactly one caller wins, regardless of
+   * concurrency interleaving.
    */
   async claim(
     input: Omit<AgentRunClaim, "createdAt">,
@@ -40,9 +40,9 @@ export class PrismaAgentRunClaimStore implements AgentRunClaimStore {
 
       const existing = await this.find(input);
       if (existing === undefined) {
-        // La réservation a disparu entre le refus et la relecture. Rien ne la
-        // supprime aujourd'hui, donc ce chemin signale un comportement qu'on
-        // ne comprend pas : mieux vaut échouer que réserver en double.
+        // The claim disappeared between the rejection and the re-read. Nothing
+        // deletes it today, so this path signals unexpected behavior:
+        // failing is safer than claiming twice.
         throw error;
       }
       return { claimed: false, existing };

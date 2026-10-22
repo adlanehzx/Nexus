@@ -2,13 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeApi, type ApiHarness } from "./harness.js";
 
 /**
- * Versions des exécutants, vues de l'API.
+ * Worker versions as seen from API.
  *
- * Le point à défendre est ce que l'API **ne** fait pas : aucune route ne met un
- * worker à jour, et l'avis rendu nomme un geste local. Une interface qui
- * afficherait « en retard » avec un bouton laisserait croire à un canal qui
- * n'existe pas — et qui n'existera pas, parce qu'il serait de l'exécution de
- * code à distance.
+ * The key invariant is what the API does **not** do: no route updates a
+ * worker, and the advisory notice points to a local administrative action.
+ * A UI presenting a "lagging" status with an "Update" button would suggest a channel
+ * that does not exist — and will not exist, as it constitutes remote code execution.
  */
 
 const PASSWORD = "MotDePasseTresSolide!42";
@@ -29,7 +28,7 @@ async function addWorker(harness: ApiHarness, token: string, agentVersion: strin
     url: "/api/v1/devices",
     headers: { authorization: `Bearer ${token}` },
     payload: {
-      name: "Poste fixe",
+      name: "Desktop workstation",
       type: "WINDOWS_PC",
       platform: "WINDOWS",
       role: "WORKER",
@@ -39,8 +38,8 @@ async function addWorker(harness: ApiHarness, token: string, agentVersion: strin
   expect(created.statusCode).toBe(201);
   const id = created.json<{ data: { id: string } }>().data.id;
   if (agentVersion !== null) {
-    // La version est annoncée par l'exécutant à son enregistrement ; ici on la
-    // pose directement dans le registre, qui est la même chose vue du cœur.
+    // The version is announced by worker upon registration; here we store it
+    // directly in the registry, which is identical from core perspective.
     await harness.services.deviceRegistry.updateDevice(id, { agentVersion });
   }
   return id;
@@ -61,7 +60,7 @@ async function deviceOf(harness: ApiHarness, token: string, id: string) {
   }>().data;
 }
 
-describe("avec une version attendue", () => {
+describe("with an expected version", () => {
   let harness: ApiHarness;
   let token: string;
 
@@ -74,7 +73,7 @@ describe("avec une version attendue", () => {
     await harness.close();
   });
 
-  it("signale un exécutant en retard et nomme un geste local", async () => {
+  it("flags a lagging worker and names a local action", async () => {
     const id = await addWorker(harness, token, "1.0.0");
     const device = await deviceOf(harness, token, id);
 
@@ -84,20 +83,20 @@ describe("avec une version attendue", () => {
     expect(device.update.action).toMatch(/on its host machine/);
   });
 
-  it("ne demande rien à un exécutant à jour", async () => {
+  it("requests nothing from an up-to-date worker", async () => {
     const id = await addWorker(harness, token, "1.2.0");
     const device = await deviceOf(harness, token, id);
     expect(device.update.status).toBe("a-jour");
     expect(device.update.action).toBeNull();
   });
 
-  it("n'affirme rien sur un exécutant qui n'a pas annoncé sa version", async () => {
+  it("asserts nothing for a worker that has not announced its version", async () => {
     const id = await addWorker(harness, token, null);
     const device = await deviceOf(harness, token, id);
     expect(device.update.status).toBe("inconnu");
   });
 
-  it("rend l'avis aussi dans la liste", async () => {
+  it("also returns notice in the list", async () => {
     await addWorker(harness, token, "1.0.0");
     const response = await harness.app.inject({
       method: "GET",
@@ -108,10 +107,10 @@ describe("avec une version attendue", () => {
     expect(rows[0]?.update.status).toBe("en-retard");
   });
 
-  it("n'expose aucune route qui mettrait un exécutant à jour", async () => {
+  it("exposes no route that would update a worker", async () => {
     const id = await addWorker(harness, token, "1.0.0");
-    // Le canal n'existe pas, et son absence est une décision : la vérifier
-    // empêche qu'on l'ajoute par commodité un jour sans y repenser.
+    // Channel does not exist, and its absence is by design: asserting this
+    // prevents inadvertent addition down the line.
     for (const url of [
       `/api/v1/devices/${id}/update`,
       `/api/v1/devices/${id}/upgrade`,
@@ -128,8 +127,8 @@ describe("avec une version attendue", () => {
   });
 });
 
-describe("sans version attendue", () => {
-  it("ne rend aucun avis plutôt que d'affirmer « à jour »", async () => {
+describe("without expected version", () => {
+  it("returns no notice rather than claiming up to date", async () => {
     const harness = await makeApi();
     const token = await register(harness);
     const id = await addWorker(harness, token, "1.0.0");

@@ -10,12 +10,9 @@ import {
 } from "./harness.js";
 
 /**
- * L'API REST.
+ * REST API tests.
  *
- * Les tests portent autant sur les **refus** que sur les succès : une API dont
- * on ne vérifie que le chemin heureux laisse passer exactement les défauts qui
- * comptent — une ressource lisible par le mauvais utilisateur, une garde
- * oubliée, un secret dans une réponse.
+ * Verifies both successful paths and security rejections across all endpoints.
  */
 
 let harness: ApiHarness;
@@ -30,8 +27,8 @@ afterEach(async () => {
   await harness.close();
 });
 
-describe("enveloppe de réponse", () => {
-  it("porte un identifiant de requête sur les succès", async () => {
+describe("response envelope", () => {
+  it("carries request id on success", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/users/me",
@@ -42,19 +39,17 @@ describe("enveloppe de réponse", () => {
     const body = response.json<{ data: unknown; meta: { requestId: string } }>();
 
     expect(body.meta.requestId).toBeTruthy();
-    // Le même identifiant repart dans l'en-tête : l'utilisateur peut le citer
-    // sans lire le corps de la réponse.
     expect(response.headers["x-request-id"]).toBe(body.meta.requestId);
   });
 
-  it("porte un identifiant de requête sur les erreurs", async () => {
+  it("carries request id on errors", async () => {
     const response = await harness.app.inject({ method: "GET", url: "/api/v1/users/me" });
 
     expect(response.statusCode).toBe(401);
     expect(response.json<{ error: { code: string } }>().error.code).toBe("UNAUTHENTICATED");
   });
 
-  it("pagine par curseur", async () => {
+  it("paginates via cursor", async () => {
     for (let index = 0; index < 5; index += 1) {
       await harness.app.inject({
         method: "POST",
@@ -86,38 +81,36 @@ describe("enveloppe de réponse", () => {
     });
 
     const next = second.json<{ data: { id: string }[] }>();
-    // Aucun recouvrement : c'est tout l'intérêt du curseur face à un décalage.
     expect(next.data.map((c) => c.id)).not.toContain(page.data[0]?.id);
   });
 
-  it("plafonne la taille de page demandée", async () => {
+  it("caps requested page size", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/conversations?limit=100000",
       headers: account.authorization,
     });
 
-    // Sans plafond, `?limit=1000000` transforme une liste en déni de service.
     expect(response.statusCode).toBe(400);
   });
 });
 
-describe("authentification", () => {
-  it("refuse une requête sans jeton", async () => {
+describe("authentication", () => {
+  it("rejects request without token", async () => {
     const response = await harness.app.inject({ method: "GET", url: "/api/v1/devices" });
     expect(response.statusCode).toBe(401);
   });
 
-  it("refuse un jeton falsifié", async () => {
+  it("rejects tampered token", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/devices",
-      headers: { authorization: "Bearer pas.un.jeton" },
+      headers: { authorization: "Bearer not.a.token" },
     });
     expect(response.statusCode).toBe(401);
   });
 
-  it("connecte avec le bon mot de passe", async () => {
+  it("logs in with correct password", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
@@ -130,27 +123,25 @@ describe("authentification", () => {
     ).toBeTruthy();
   });
 
-  it("refuse le mauvais mot de passe sans dire si le compte existe", async () => {
+  it("rejects wrong password without revealing whether account exists", async () => {
     const known = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: "alex@example.test", password: "mauvais mot de passe" },
+      payload: { email: "alex@example.test", password: "wrong password" },
     });
     const unknown = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: "inconnu@exemple.fr", password: "mauvais mot de passe" },
+      payload: { email: "unknown@example.com", password: "wrong password" },
     });
 
-    // Même code, même message : la différence permettrait d'énumérer les
-    // adresses enregistrées.
     expect(known.statusCode).toBe(unknown.statusCode);
     expect(known.json<{ error: { message: string } }>().error.message).toBe(
       unknown.json<{ error: { message: string } }>().error.message,
     );
   });
 
-  it("ne renvoie jamais l'empreinte du mot de passe", async () => {
+  it("never returns password hash", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/api/v1/users/me",
@@ -161,7 +152,7 @@ describe("authentification", () => {
     expect(response.body).not.toContain("passwordHash");
   });
 
-  it("fait tourner le jeton de rafraîchissement", async () => {
+  it("rotates refresh token", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/refresh",
@@ -174,9 +165,7 @@ describe("authentification", () => {
     );
   });
 
-  it("ferme toutes les sessions si un jeton de rafraîchissement est rejoué", async () => {
-    // Le rejeu signifie que le jeton a été copié. On ne sait pas qui, de
-    // l'attaquant ou de la victime, le présente : on ferme tout.
+  it("closes all sessions if refresh token is replayed", async () => {
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/refresh",
@@ -192,7 +181,6 @@ describe("authentification", () => {
     expect(replay.statusCode).toBe(401);
     expect(replay.json<{ error: { code: string } }>().error.code).toBe("SESSION_REVOKED");
 
-    // Et le jeton d'accès de la session d'origine ne vaut plus rien.
     const after = await harness.app.inject({
       method: "GET",
       url: "/api/v1/users/me",
@@ -201,9 +189,7 @@ describe("authentification", () => {
     expect(after.statusCode).toBe(401);
   });
 
-  it("la déconnexion prend effet immédiatement", async () => {
-    // Le jeton d'accès reste cryptographiquement valide un quart d'heure : sans
-    // vérification de session, se déconnecter ne ferait rien.
+  it("logout takes effect immediately", async () => {
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/logout",
@@ -218,13 +204,13 @@ describe("authentification", () => {
     expect(after.statusCode).toBe(401);
   });
 
-  it("limite les tentatives de connexion", async () => {
+  it("rate limits login attempts", async () => {
     const attempts = await Promise.all(
       Array.from({ length: 8 }, () =>
         harness.app.inject({
           method: "POST",
           url: "/api/v1/auth/login",
-          payload: { email: "alex@example.test", password: "mauvais" },
+          payload: { email: "alex@example.test", password: "wrong" },
         }),
       ),
     );
@@ -233,10 +219,10 @@ describe("authentification", () => {
   });
 });
 
-describe("cloisonnement entre utilisateurs", () => {
-  it("ne montre pas les appareils d'un autre utilisateur", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
-    await registerDevice(harness, autre, { name: "Poste privé", role: "WORKER" });
+describe("tenant isolation", () => {
+  it("does not show another user's devices", async () => {
+    const other = await createAccount(harness, "other@example.com");
+    await registerDevice(harness, other, { name: "Private Workstation", role: "WORKER" });
 
     const response = await harness.app.inject({
       method: "GET",
@@ -247,10 +233,10 @@ describe("cloisonnement entre utilisateurs", () => {
     expect(response.json<{ data: unknown[] }>().data).toHaveLength(0);
   });
 
-  it("refuse de lire l'appareil d'un autre, sans révéler qu'il existe", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
-    const { device } = await registerDevice(harness, autre, {
-      name: "Poste privé",
+  it("refuses to read another user's device without revealing existence", async () => {
+    const other = await createAccount(harness, "other@example.com");
+    const { device } = await registerDevice(harness, other, {
+      name: "Private Workstation",
       role: "WORKER",
     });
 
@@ -266,13 +252,13 @@ describe("cloisonnement entre utilisateurs", () => {
     );
   });
 
-  it("refuse de lire la conversation d'un autre", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
+  it("refuses to read another user's conversation", async () => {
+    const other = await createAccount(harness, "other@example.com");
     const created = await harness.app.inject({
       method: "POST",
       url: "/api/v1/conversations",
-      headers: autre.authorization,
-      payload: { title: "Privé" },
+      headers: other.authorization,
+      payload: { title: "Private" },
     });
     const id = created.json<{ data: { id: string } }>().data.id;
 
@@ -286,29 +272,25 @@ describe("cloisonnement entre utilisateurs", () => {
   });
 });
 
-describe("appareils", () => {
-  it("enregistre un appareil hors ligne et non approuvé", async () => {
+describe("devices", () => {
+  it("registers device offline and pending", async () => {
     const { device } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
       trust: false,
     });
 
-    // La confiance se donne, elle ne se suppose pas.
     expect(device.status).toBe("OFFLINE");
     expect(device.trust).toBe("PENDING");
   });
 
-  it("enregistre un CLIENT sans clé publique", async () => {
-    // L'iPhone s'authentifie par jeton, et la route vérifie déjà que l'appareil
-    // appartient au porteur du jeton. Exiger de lui une clé matérielle
-    // n'ajouterait aucune garantie et l'empêchait simplement de s'enregistrer.
+  it("registers CLIENT without public key", async () => {
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices",
       headers: account.authorization,
       payload: {
-        name: "iPhone d'Alex",
+        name: "Alex's iPhone",
         type: "IPHONE",
         platform: "IOS",
         role: "CLIENT",
@@ -318,22 +300,18 @@ describe("appareils", () => {
 
     expect(response.statusCode).toBe(201);
     const created = response.json<{ data: { role: string; trust: string } }>().data;
-    // Sans clé, mais sans privilège non plus : l'appareil arrive non approuvé.
     expect(created.role).toBe("CLIENT");
     expect(created.trust).toBe("PENDING");
   });
 
-  it("refuse un WORKER sans clé publique", async () => {
-    // C'est la clé qui rend vérifiable la signature du challenge : un exécutant
-    // sans clé enregistrée serait un exécutant dont plus rien n'atteste
-    // l'identité. L'ouverture faite pour l'iPhone ne doit pas déborder ici.
+  it("rejects WORKER without public key", async () => {
     for (const role of ["WORKER", "BOTH"]) {
       const response = await harness.app.inject({
         method: "POST",
         url: "/api/v1/devices",
         headers: account.authorization,
         payload: {
-          name: `Poste ${role}`,
+          name: `Workstation ${role}`,
           type: "WINDOWS_PC",
           platform: "WINDOWS",
           role,
@@ -345,15 +323,13 @@ describe("appareils", () => {
     }
   });
 
-  it("un CLIENT sans clé n'ouvre aucune session d'appareil", async () => {
-    // La contrepartie du chemin sans clé : elle ne donne accès à rien de plus.
-    // Le canal worker exige une signature, et il n'y a pas de clé à vérifier.
+  it("CLIENT without key opens no device session", async () => {
     const created = await harness.app.inject({
       method: "POST",
       url: "/api/v1/devices",
       headers: account.authorization,
       payload: {
-        name: "iPhone nu",
+        name: "Bare iPhone",
         type: "IPHONE",
         platform: "IOS",
         role: "CLIENT",
@@ -377,17 +353,17 @@ describe("appareils", () => {
     expect(session.statusCode).toBe(404);
   });
 
-  it("approuve un appareil", async () => {
+  it("approves a device", async () => {
     const { device } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
     });
     expect(device.trust).toBe("TRUSTED");
   });
 
-  it("ouvre une session d'appareil sur un challenge signé", async () => {
+  it("opens device session on signed challenge", async () => {
     const { device, privateKeyPem } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
       permissions: ["terminal.execute"],
     });
@@ -408,9 +384,9 @@ describe("appareils", () => {
     expect(session.json<{ data: { token: string } }>().data.token).toBeTruthy();
   });
 
-  it("refuse une signature invalide", async () => {
+  it("rejects invalid signature", async () => {
     const { device } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
     });
 
@@ -429,9 +405,9 @@ describe("appareils", () => {
     expect(session.statusCode).toBe(401);
   });
 
-  it("refuse un appareil révoqué", async () => {
+  it("rejects revoked device", async () => {
     const { device, privateKeyPem } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
     });
 
@@ -446,14 +422,13 @@ describe("appareils", () => {
       url: `/api/v1/devices/${device.id}/challenge`,
     });
 
-    // Le challenge lui-même est refusé : inutile d'attendre la signature.
     expect(challenge.statusCode).toBe(401);
     expect(privateKeyPem).toBeTruthy();
   });
 
-  it("expose les capacités présentes dans la flotte", async () => {
+  it("exposes capabilities present in fleet", async () => {
     const { device } = await registerDevice(harness, account, {
-      name: "Poste fixe",
+      name: "Desktop Workstation",
       role: "WORKER",
     });
 
@@ -479,8 +454,8 @@ describe("appareils", () => {
   });
 });
 
-describe("tâches", () => {
-  it("refuse une capacité non accordée", async () => {
+describe("tasks", () => {
+  it("rejects ungranted capability", async () => {
     const { device } = await registerDevice(harness, account, {
       name: "iPhone",
       role: "CLIENT",
@@ -493,11 +468,11 @@ describe("tâches", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Exécuter une commande",
+        title: "Execute a command",
         originClientDeviceId: device.id,
         steps: [
           {
-            description: "Lancer les tests",
+            description: "Run tests",
             requiredCapabilities: ["terminal.execute"],
             tool: "device.terminal.execute",
           },
@@ -505,23 +480,22 @@ describe("tâches", () => {
       },
     });
 
-    // Refusé au centre, avant tout dispatch : le worker n'est même pas consulté.
     expect(response.statusCode).toBe(403);
     expect(response.json<{ error: { message: string } }>().error.message).toContain(
       "terminal.execute",
     );
   });
 
-  it("refuse un appareil d'origine qui n'appartient pas à l'appelant", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
-    const { device } = await registerDevice(harness, autre, { name: "iPhone", role: "CLIENT" });
+  it("rejects origin device not owned by caller", async () => {
+    const other = await createAccount(harness, "other@example.com");
+    const { device } = await registerDevice(harness, other, { name: "iPhone", role: "CLIENT" });
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Détournement",
+        title: "Hijack",
         originClientDeviceId: device.id,
         steps: [{ description: "x", requiredCapabilities: ["filesystem.read"], tool: "device.x" }],
       },
@@ -530,14 +504,14 @@ describe("tâches", () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it("refuse un plan sans étape", async () => {
+  it("rejects plan without steps", async () => {
     const { device } = await registerDevice(harness, account, { name: "iPhone", role: "CLIENT" });
 
     const response = await harness.app.inject({
       method: "POST",
       url: "/api/v1/tasks",
       headers: account.authorization,
-      payload: { title: "Vide", originClientDeviceId: device.id, steps: [] },
+      payload: { title: "Empty", originClientDeviceId: device.id, steps: [] },
     });
 
     expect(response.statusCode).toBe(400);
@@ -545,11 +519,11 @@ describe("tâches", () => {
 });
 
 describe("notifications", () => {
-  it("marque une notification comme lue pour tous les clients", async () => {
+  it("marks notification as read for all clients", async () => {
     const notification = await harness.services.notifications.create({
       userId: account.userId,
-      title: "Tâche terminée",
-      body: "Les tests sont passés",
+      title: "Task completed",
+      body: "Tests passed",
     });
 
     const read = await harness.app.inject({
@@ -559,19 +533,18 @@ describe("notifications", () => {
     });
 
     expect(read.statusCode).toBe(200);
-    // L'état vit au centre : lu sur l'iPhone, lu sur le portable.
     expect(read.json<{ data: { readAt: string | null } }>().data.readAt).not.toBeNull();
   });
 
-  it("filtre les non lues", async () => {
+  it("filters unread notifications", async () => {
     const first = await harness.services.notifications.create({
       userId: account.userId,
-      title: "Une",
+      title: "One",
       body: "x",
     });
     await harness.services.notifications.create({
       userId: account.userId,
-      title: "Deux",
+      title: "Two",
       body: "y",
     });
 
@@ -591,18 +564,18 @@ describe("notifications", () => {
   });
 });
 
-describe("mémoire", () => {
-  it("enregistre puis retrouve un souvenir", async () => {
+describe("memory", () => {
+  it("saves and retrieves a memory", async () => {
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory",
       headers: account.authorization,
-      payload: { content: "Alex préfère les réponses courtes", kind: "SEMANTIC" },
+      payload: { content: "Alex prefers short answers", kind: "SEMANTIC" },
     });
 
     const response = await harness.app.inject({
       method: "GET",
-      url: "/api/v1/memory/search?q=réponses",
+      url: "/api/v1/memory/search?q=answers",
       headers: account.authorization,
     });
 
@@ -610,13 +583,13 @@ describe("mémoire", () => {
     expect(response.json<{ data: { hits: unknown[] } }>().data.hits.length).toBeGreaterThan(0);
   });
 
-  it("ne traverse pas la frontière entre utilisateurs", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
+  it("does not cross boundary between users", async () => {
+    const other = await createAccount(harness, "other@example.com");
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/memory",
-      headers: autre.authorization,
-      payload: { content: "Secret de quelqu'un d'autre", kind: "SEMANTIC" },
+      headers: other.authorization,
+      payload: { content: "Someone else's secret", kind: "SEMANTIC" },
     });
 
     const response = await harness.app.inject({
@@ -629,8 +602,8 @@ describe("mémoire", () => {
   });
 });
 
-describe("CORS et CSP", () => {
-  it("doit accepter un preflight valide", async () => {
+describe("CORS and CSP", () => {
+  it("must accept valid preflight", async () => {
     const response = await harness.app.inject({
       method: "OPTIONS",
       url: "/api/v1/auth/login",

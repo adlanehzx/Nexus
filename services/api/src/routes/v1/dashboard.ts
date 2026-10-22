@@ -27,27 +27,25 @@ const browserConfigurationSchema = z.discriminatedUnion("mode", [
 ]);
 
 /**
- * Le tableau de bord de supervision.
+ * Supervision dashboard.
  *
- * **Douze sections, une seule garde.** Chaque route porte `requireAdmin` : il
- * n'existe pas de sous-ensemble « moins sensible » qu'on ouvrirait à un client
- * ordinaire. Une vue partielle du système est encore une vue du système, et
- * découper la garde par section reviendrait à créer douze occasions de se
- * tromper au lieu d'une.
+ * **Twelve sections, a single guard.** Every route carries `requireAdmin`:
+ * there is no "less sensitive" subset that would be opened to an ordinary client.
+ * A partial view of the system is still a view of the system, and
+ * slicing the guard per section would create twelve opportunities to make a mistake.
  *
- * Les lectures restent séparées des mutations. Les réglages MCP, Browser Use et
- * coffre local vivent ici car ils n'ont pas d'autre surface métier ; les autres
- * actions (appareils, tâches, mémoire) continuent de passer par leurs routes
- * dédiées. Chaque mutation exige la garde administrateur.
+ * Reads remain separate from mutations. MCP settings, Browser Use, and local vault
+ * live here because they have no other business domain surface; other actions
+ * (devices, tasks, memory) continue through their dedicated routes. Each mutation requires admin guard.
  *
- * **Le raisonnement du modèle ne sort pas.** La section « runs d'agent » passe
- * par `projectAgentRun`, qui ne lit que l'enregistrement d'observabilité — pas
- * le transcript, pas les blocs opaques du fournisseur. La garantie tient à la
- * forme de la projection, pas à un filtre qu'on pourrait oublier.
+ * **Model reasoning never leaves.** The "agent runs" section goes through
+ * `projectAgentRun`, which only reads the observability record — not the transcript,
+ * not the provider's opaque blocks. The guarantee is built into the shape of the projection,
+ * not a filter that could be forgotten.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Schémas de réponse
+// Response schemas
 // ─────────────────────────────────────────────────────────────────────────────
 
 const healthSchema = z.object({
@@ -140,13 +138,13 @@ const taskDetailSchema = taskViewSchema.extend({
 });
 
 /**
- * Un run, tel qu'il sort.
+ * An agent run, as exposed.
  *
- * À lire comme un contrat de non-divulgation : il n'y a pas de champ
- * `messages`, pas de `providerBlocks`, pas de transcript. Ce qui figure ici est
- * exactement ce qui a été demandé — statut, action, outil, progression,
- * résultat, erreur, métriques — et le schéma de sérialisation Zod garantit que
- * rien d'autre ne franchit la frontière, même si la projection changeait.
+ * Read as a non-disclosure contract: there is no `messages` field,
+ * no `providerBlocks`, no transcript. What appears here is
+ * strictly what was requested — status, action, tool, progress,
+ * result, error, metrics — and the Zod serialization schema guarantees that
+ * nothing else crosses the boundary, even if the projection changed.
  */
 const agentRunSchema = z.object({
   runId: z.string(),
@@ -242,7 +240,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Vue d'ensemble du système",
+        summary: "System overview",
         response: {
           200: okSchema(
             z.object({
@@ -297,7 +295,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
-  // ── 2. Appareils ──────────────────────────────────────────────────────
+  // ── 2. Devices ────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/devices",
@@ -305,7 +303,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Appareils, avec santé, confiance et permissions",
+        summary: "Devices, with health, trust, and permissions",
         response: { 200: okSchema(z.object({ devices: z.array(deviceViewSchema) })) },
       },
     },
@@ -329,12 +327,12 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       const { userId } = currentUser(request);
       const device = await app.services.dashboard.getDevice(userId, request.params.deviceId);
 
-      if (device === undefined) throw new NotFoundError("Appareil", request.params.deviceId);
+      if (device === undefined) throw new NotFoundError("Device", request.params.deviceId);
       return ok(device, request.id);
     },
   );
 
-  // ── 3. Exécutants ─────────────────────────────────────────────────────
+  // ── 3. Workers ────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/workers",
@@ -342,7 +340,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Exécutants, et l'état réel de leur canal",
+        summary: "Workers, and real status of their channel",
         response: { 200: okSchema(z.object({ workers: z.array(workerViewSchema) })) },
       },
     },
@@ -352,7 +350,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
-  // ── 4. Tâches ─────────────────────────────────────────────────────────
+  // ── 4. Tasks ──────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/tasks",
@@ -377,7 +375,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Plan, étapes, exécutants retenus, journal d'exécution",
+        summary: "Plan, steps, selected workers, execution log",
         params: z.object({ taskId: z.string().min(1) }),
         response: { 200: okSchema(taskDetailSchema) },
       },
@@ -386,12 +384,12 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       const { userId } = currentUser(request);
       const task = await app.services.dashboard.getTask(userId, request.params.taskId);
 
-      if (task === undefined) throw new NotFoundError("Tâche", request.params.taskId);
+      if (task === undefined) throw new NotFoundError("Task", request.params.taskId);
       return ok(task, request.id);
     },
   );
 
-  // ── 5. Runs d'agent ───────────────────────────────────────────────────
+  // ── 5. Agent runs ─────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/runs",
@@ -399,7 +397,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Runs d'agent — statut, outils, métriques. Jamais le raisonnement.",
+        summary: "Agent runs — status, tools, metrics. Never reasoning.",
         querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
         response: { 200: okSchema(z.object({ runs: z.array(agentRunSchema) })) },
       },
@@ -436,7 +434,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Agrégats de latence, jetons, coûts équivalents et fallbacks",
+        summary: "Latency aggregates, tokens, equivalent costs, and fallbacks",
         response: { 200: okSchema(observabilitySummarySchema) },
       },
     },
@@ -448,10 +446,10 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
   );
 
   /**
-   * Rejeu d'analyse : même demande utilisateur, nouvelle conversation et
-   * budget d'outils à zéro. Il est donc impossible de répéter un effet externe
-   * en cliquant sur « rejouer ». Un vrai rejeu avec effets nécessiterait une
-   * nouvelle mission et ses confirmations ordinaires.
+   * Analysis replay: same user request, new conversation and
+   * zero tool budget. It is therefore impossible to repeat an external effect
+   * by clicking "replay". A true replay with side-effects would require
+   * a new mission and its ordinary confirmations.
    */
   app.post(
     "/dashboard/runs/:runId/replay",
@@ -472,21 +470,21 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       }
       if (source.record.endTime === null) {
         throw new ConflictError(
-          "Un run actif ne peut pas être rejoué.",
-          "Attendez la fin du run avant de le rejouer.",
+          "An active run cannot be replayed.",
+          "Wait for the run to complete before replaying it.",
         );
       }
       if (app.services.agentCore === undefined) {
         throw new DependencyError({
-          message: "Agent Core ne dispose d'aucun fournisseur LLM actif.",
+          message: "Agent Core has no active LLM provider.",
           userMessage: "The general-purpose agent engine is not available.",
         });
       }
       const message = lastUserText(source.messages);
       if (message === undefined) {
         throw new ConflictError(
-          "Le message source de ce run n'est plus disponible.",
-          "Ce run ne contient plus de demande rejouable.",
+          "The source message for this run is no longer available.",
+          "This run no longer contains a replayable request.",
         );
       }
 
@@ -521,7 +519,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
-  // ── 6. Outils ─────────────────────────────────────────────────────────
+  // ── 6. Tools ──────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/tools",
@@ -529,7 +527,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Catalogue d'outils, et lesquels sont autorisés",
+        summary: "Tool catalog, and which ones are granted",
         response: {
           200: okSchema(
             z.object({
@@ -563,7 +561,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Serveurs MCP et leur santé",
+        summary: "MCP servers and their health",
         response: {
           200: okSchema(
             z.object({
@@ -592,8 +590,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
         withoutInlineSecretValues,
       );
 
-      // Non configuré n'est pas en panne. Le dire évite d'envoyer chercher un
-      // incident qui n'existe pas.
+      // Not configured is not broken. Saying so avoids sending operators on a wild-goose chase.
       if (manager === undefined) {
         return ok({ configured: false, configurations, servers: [] }, request.id);
       }
@@ -635,8 +632,8 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const store = app.services.runtimeConfiguration;
       const manager = app.services.mcp;
-      if (store === undefined || manager === undefined) throw new Error("MCP non administrable.");
-      if (request.params.name !== request.body.name) throw new Error("Nom MCP incohérent.");
+      if (store === undefined || manager === undefined) throw new Error("MCP is not manageable.");
+      if (request.params.name !== request.body.name) throw new Error("Inconsistent MCP name.");
 
       const config = withoutInlineSecrets(request.body);
       const current = await store.loadMcp();
@@ -656,7 +653,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const store = app.services.runtimeConfiguration;
       const manager = app.services.mcp;
-      if (store === undefined || manager === undefined) throw new Error("MCP non administrable.");
+      if (store === undefined || manager === undefined) throw new Error("MCP is not manageable.");
       await manager.removeServer(request.params.name);
       await store.saveMcp(
         (await store.loadMcp()).filter((item) => item.name !== request.params.name),
@@ -686,7 +683,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Santé du worker navigateur",
+        summary: "Browser worker health",
         response: {
           200: okSchema(
             z.object({
@@ -719,8 +716,8 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
               configured: true,
               reachable: health.healthy,
               detail: health.healthy
-                ? `harness local connecté (${activeSessions.length} session(s) active(s))`
-                : "harness installé, navigateur non connecté",
+                ? `local harness connected (${activeSessions.length} active session(s))`
+                : "harness installed, browser not connected",
               health,
               configuration,
               tokenConfigured: false,
@@ -732,7 +729,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
             {
               configured: true,
               reachable: false,
-              detail: cause instanceof Error ? cause.message : "harness local indisponible",
+              detail: cause instanceof Error ? cause.message : "local harness unavailable",
               health: null,
               configuration,
               tokenConfigured: false,
@@ -751,8 +748,8 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
               configured: true,
               reachable: health.healthy,
               detail: health.healthy
-                ? "harness local connecté"
-                : "harness installé, navigateur non connecté",
+                ? "local harness connected"
+                : "harness installed, browser not connected",
               health,
               configuration,
               tokenConfigured: false,
@@ -764,7 +761,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
             {
               configured: true,
               reachable: false,
-              detail: cause instanceof Error ? cause.message : "harness local indisponible",
+              detail: cause instanceof Error ? cause.message : "local harness unavailable",
               health: null,
               configuration,
               tokenConfigured: false,
@@ -778,7 +775,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
           {
             configured: false,
             reachable: false,
-            detail: "worker navigateur non configuré",
+            detail: "browser worker not configured",
             health: null,
             configuration,
             tokenConfigured,
@@ -793,7 +790,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
           {
             configured: true,
             reachable: true,
-            detail: "joignable",
+            detail: "reachable",
             health,
             configuration,
             tokenConfigured,
@@ -801,13 +798,13 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
           request.id,
         );
       } catch (cause) {
-        // Un worker injoignable est une information, pas une erreur de la
-        // requête : le tableau de bord doit s'afficher quand même.
+        // An unreachable worker is informative, not a request error:
+        // the dashboard must still render.
         return ok(
           {
             configured: true,
             reachable: false,
-            detail: cause instanceof Error ? cause.message : "injoignable",
+            detail: cause instanceof Error ? cause.message : "unreachable",
             health: null,
             configuration,
             tokenConfigured,
@@ -828,12 +825,12 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       const store = app.services.runtimeConfiguration;
       const vault = app.services.vault;
       if (store === undefined || vault === undefined)
-        throw new Error("Configuration indisponible.");
+        throw new Error("Configuration unavailable.");
       const parsed = browserConfigurationSchema.parse(request.body);
       if (parsed.mode === "local-harness") {
         const url = new URL(parsed.cdpUrl);
         if (url.protocol !== "http:" || !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-          throw new Error("Le CDP Browser Use doit rester sur la boucle locale.");
+          throw new Error("Browser Use CDP must remain on loopback.");
         }
         await store.saveBrowser(parsed);
         app.services.setBrowser(undefined);
@@ -841,11 +838,11 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       }
       const url = new URL(parsed.baseUrl);
       if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-        throw new Error("HTTP est réservé à la boucle locale.");
+        throw new Error("HTTP is restricted to loopback.");
       }
       const token = parsed.enabled ? await vault.get(parsed.tokenRef) : undefined;
       if (parsed.enabled && token === undefined)
-        throw new Error("Le secret du worker est absent du coffre.");
+        throw new Error("Worker secret is missing from vault.");
       await store.saveBrowser(parsed);
       app.services.setBrowser(
         parsed.enabled && token !== undefined
@@ -866,7 +863,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
         return ok({ health: await harness.connect() }, request.id);
       }
       const browser = app.services.browser;
-      if (browser === undefined) throw new Error("Worker navigateur non configuré.");
+      if (browser === undefined) throw new Error("Browser worker not configured.");
       return ok({ health: await browser.health() }, request.id);
     },
   );
@@ -894,7 +891,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       },
     },
     async (request) => {
-      if (app.services.vault === undefined) throw new Error("Coffre local indisponible.");
+      if (app.services.vault === undefined) throw new Error("Local vault unavailable.");
       await app.services.vault.set(request.params.name, request.body.secret);
       return ok({ name: request.params.name, configured: true }, request.id);
     },
@@ -907,13 +904,13 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       schema: { tags: ["dashboard"], params: z.object({ name: secretNameSchema }) },
     },
     async (request) => {
-      if (app.services.vault === undefined) throw new Error("Coffre local indisponible.");
+      if (app.services.vault === undefined) throw new Error("Local vault unavailable.");
       await app.services.vault.delete(request.params.name);
       return ok({ removed: true }, request.id);
     },
   );
 
-  // ── 9. Mémoire ────────────────────────────────────────────────────────
+  // ── 9. Memory ─────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/memory",
@@ -921,7 +918,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Statistiques de mémoire par couche, origine et sensibilité",
+        summary: "Memory statistics by layer, origin, and sensitivity",
         response: {
           200: okSchema(
             z.object({
@@ -1071,14 +1068,14 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const dispatcher = app.services.notificationDispatcher;
       if (dispatcher === undefined) {
-        throw new Error("Moteur de notifications externes non configuré.");
+        throw new Error("External notifications engine not configured.");
       }
       const report = await dispatcher.sendTest();
       return ok({ report }, request.id);
     },
   );
 
-  // ── 11. Sécurité ──────────────────────────────────────────────────────
+  // ── 11. Security ──────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/security",
@@ -1086,7 +1083,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Événements de sécurité, confiance des appareils, sessions",
+        summary: "Security events, device trust, sessions",
         querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }),
         response: {
           200: okSchema(
@@ -1132,7 +1129,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
-  // ── 12. Journaux ──────────────────────────────────────────────────────
+  // ── 12. Logs ──────────────────────────────────────────────────────────
 
   app.get(
     "/dashboard/logs",
@@ -1140,7 +1137,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireAdmin,
       schema: {
         tags: ["dashboard"],
-        summary: "Dernières lignes de journal retenues",
+        summary: "Latest retained log lines",
         querystring: z.object({
           limit: z.coerce.number().int().min(1).max(500).default(100),
           level: z.enum(["debug", "info", "warn", "error", "fatal"]).optional(),
@@ -1194,22 +1191,22 @@ function lastUserText(messages: readonly unknown[]): string | undefined {
 }
 
 function requireRun<T>(run: T | undefined): T {
-  if (run === undefined) throw new Error("Le run rejoué n'a pas été persisté.");
+  if (run === undefined) throw new Error("Replayed run was not persisted.");
   return run;
 }
 
-/** Les secrets sont exclusivement des références de trousseau, jamais du JSON persistant. */
+/** Secrets are strictly keyring references, never persisted JSON. */
 function withoutInlineSecrets(config: McpServerConfig): McpServerConfig {
   if (config.transport === "stdio") {
     if (Object.keys(config.env).length > 0) {
-      throw new Error("Utilisez envRefs et le coffre NEXUS pour les variables sensibles.");
+      throw new Error("Use envRefs and NEXUS vault for sensitive variables.");
     }
     for (const reference of Object.values(config.envRefs)) vaultReferenceSchema.parse(reference);
     return { ...config, env: {} };
   }
 
   if (Object.keys(config.headers).length > 0) {
-    throw new Error("Utilisez headerRefs et le coffre NEXUS pour les en-têtes sensibles.");
+    throw new Error("Use headerRefs and NEXUS vault for sensitive headers.");
   }
   for (const reference of Object.values(config.headerRefs)) vaultReferenceSchema.parse(reference);
   return { ...config, headers: {} };

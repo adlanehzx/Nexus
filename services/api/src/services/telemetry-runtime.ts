@@ -15,9 +15,9 @@ export interface TelemetryRuntime {
 }
 
 /**
- * Initialise les fournisseurs globaux OpenTelemetry avant la construction de
- * l'application. Sans endpoint OTLP, les métriques Prometheus continuent de
- * fonctionner localement et aucune tentative réseau n'est faite.
+ * Initializes global OpenTelemetry providers prior to building
+ * the application. Without an OTLP endpoint, Prometheus metrics continue to
+ * operate locally and no network requests are attempted.
  */
 export function initializeTelemetry(config: AppConfig): TelemetryRuntime {
   const readers = config.METRICS_ENABLED
@@ -61,10 +61,10 @@ const meter = metrics.getMeter("nexus.api");
 const tracer = trace.getTracer("nexus.api");
 
 const httpRequests = meter.createCounter("nexus_http_requests", {
-  description: "Nombre de requêtes HTTP terminées",
+  description: "Count of completed HTTP requests",
 });
 const httpDuration = meter.createHistogram("nexus_http_request_duration_seconds", {
-  description: "Latence HTTP de bout en bout",
+  description: "End-to-end HTTP latency",
   unit: "s",
 });
 

@@ -17,28 +17,28 @@ import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
 
 /**
- * Point d'entrée du service API.
+ * API service entrypoint.
  *
- * Responsabilités, dans cet ordre : charger et VALIDER la configuration,
- * démarrer les dépendances, écouter, puis s'arrêter proprement. Rien d'autre —
- * l'assemblage de l'application vit dans `app.ts`, pour rester testable.
+ * Responsibilities, in this order: load and VALIDATE configuration,
+ * start dependencies, listen, then shut down cleanly. Nothing else —
+ * application assembly lives in `app.ts` to remain testable.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
 loadDotEnv(resolve(here, "../../../.env"));
 
-// Une configuration invalide doit empêcher le boot, pas produire une erreur
-// obscure à la première requête. On la résout donc avant toute autre chose.
+// An invalid configuration must prevent boot, not yield an obscure error
+// on the first request. It is therefore resolved before anything else.
 const config = getConfig();
 const telemetryRuntime = initializeTelemetry(config);
 
 /**
- * Les services d'abord, le logger ensuite.
+ * Services first, then the logger.
  *
- * L'ordre n'est pas arbitraire : le conteneur porte le tampon de journaux que
- * le tableau de bord affiche, et le logger doit ecrire dedans. Construire le
- * logger en premier laisserait le tampon vide, et la section « Journaux »
- * afficherait un ecran blanc sans que rien n'echoue.
+ * The order is not arbitrary: the container holds the log buffer displayed
+ * by the dashboard, and the logger must write into it. Building the logger first
+ * would leave the buffer empty, and the "Logs" section would display a blank screen
+ * without anything actually failing.
  */
 import {
   FallbackProvider,
@@ -136,13 +136,12 @@ const notificationDispatcher =
     : undefined;
 
 /**
- * Signeur dédié aux appels sortants.
+ * Dedicated signer for outbound calls.
  *
- * Une seconde instance sur la même clé, et non une référence au conteneur :
- * capturer `services` dans une fermeture qui se trouve dans son propre
- * initialiseur le fait inférer `any`, ce qui désarme toutes les règles
- * `no-unsafe-*` sur ce chemin. Le service de jetons est sans état, donc deux
- * instances issues du même PEM produisent des jetons interchangeables.
+ * A second instance using the same key, rather than a reference to the container:
+ * capturing `services` in a closure within its own initializer causes it to be inferred
+ * as `any`, disarming all `no-unsafe-*` rules along that path. The token service is stateless,
+ * so two instances derived from the same PEM produce interchangeable tokens.
  */
 const outboundSigner = new TokenService({ privateKeyPem: config.AUTH_SIGNING_KEY });
 const embeddings =
@@ -162,9 +161,9 @@ const services = new ServiceContainer({
   sessions: new PrismaSessionStore(prisma),
   conversations: new PrismaConversationStore(prisma),
   deviceStore: new PrismaDeviceStore(prisma),
-  // Sans ce magasin, les clés publiques des appareils vivaient en mémoire : un
-  // redémarrage de l'API les perdait toutes, et chaque worker se faisait
-  // ensuite refuser sa poignée de main sans que rien ne nomme la cause.
+  // Without this store, device public keys lived in memory: an API restart
+  // lost all of them, and every worker was subsequently rejected at handshake
+  // without any clue pointing to the cause.
   credentials: new PrismaDeviceCredentialStore(prisma),
   taskStore: new PrismaTaskStore(prisma),
   agentRunClaims: new PrismaAgentRunClaimStore(prisma),
@@ -200,10 +199,9 @@ const services = new ServiceContainer({
     : {
         missionControl: new MissionControlClient({
           baseUrl: config.MISSION_CONTROL_URL,
-          // Fermeture, et non valeur : elle n'est appelée qu'au moment d'un
-          // appel sortant, donc bien après que `services` soit construit — et
-          // elle émet alors un jeton frais, ce qu'une chaîne figée ici ne
-          // saurait pas faire.
+          // Closure, not a static value: only invoked when making an outbound call,
+          // well after `services` is constructed — emitting a fresh token,
+          // which a frozen string could not do.
           serviceToken: () =>
             outboundSigner.issueServiceToken({
               service: "nexus-api",
@@ -218,8 +216,8 @@ const logger = createLogger(config, [services.logs]);
 async function main(): Promise<void> {
   const app = await buildApp({ config, logger, services, prisma });
 
-  // Redis est en `lazyConnect` : on force la connexion maintenant pour qu'un
-  // Redis injoignable fasse échouer le démarrage bruyamment.
+  // Redis uses `lazyConnect`: we force connection now so that an unreachable
+  // Redis fails startup loudly.
   await app.redis.connect();
   await services.mcp?.start();
 
@@ -227,45 +225,44 @@ async function main(): Promise<void> {
   // before accepting new traffic.
   await services.coordinator.recover();
 
-  // La pause est relue **avant** d'accepter du trafic. Sans cette ligne, elle
-  // serait écrite sur disque et jamais rechargée : on croirait NEXUS arrêté
-  // alors qu'il reprendrait du service au premier redémarrage, sans que
-  // personne en soit averti. Le journal le dit, parce qu'un démarrage en pause
-  // doit s'expliquer tout seul.
+  // Pause state is read **before** accepting traffic. Without this line,
+  // it would be written to disk and never reloaded: NEXUS would seem paused
+  // but resume operations upon the first restart, without alerting anyone.
+  // The log announces it, because a paused boot must explain itself.
   const pause = await services.pause.restore();
   if (pause.paused) {
     logger.warn(
       { event: "api.paused", since: pause.since, reason: pause.reason },
-      "NEXUS démarre en pause : seules les actions sans effet de bord sont autorisées",
+      "NEXUS is starting in paused state: only side-effect-free actions are allowed",
     );
   }
 
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
   logger.info(
     { event: "api.listening", host: config.API_HOST, port: config.API_PORT },
-    "API en écoute",
+    "API listening",
   );
 
   let shuttingDown = false;
 
   /**
-   * Arrêt gracieux.
+   * Graceful shutdown.
    *
-   * Fastify cesse d'accepter, laisse les requêtes en cours se terminer, puis on
-   * ferme les dépendances. Le minuteur est la garantie de dernier recours : un
-   * processus qui refuse de mourir sera tué par l'orchestrateur de toute façon,
-   * autant le faire nous-mêmes proprement et en le journalisant.
+   * Fastify stops accepting new requests, lets in-flight requests finish,
+   * then dependencies are closed. The timer is the last-resort guarantee:
+   * a process refusing to die will be killed by the orchestrator anyway,
+   * so we might as well do it cleanly ourselves with proper logging.
    */
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    logger.info({ event: "api.shutdown.start", signal }, "Arrêt en cours");
+    logger.info({ event: "api.shutdown.start", signal }, "Shutdown in progress");
 
     const forceExit = setTimeout(() => {
       logger.error(
         { event: "api.shutdown.timeout", timeoutMs: config.SHUTDOWN_TIMEOUT_MS },
-        "Arrêt gracieux dépassé — sortie forcée",
+        "Graceful shutdown timeout exceeded — forcing exit",
       );
       process.exit(1);
     }, config.SHUTDOWN_TIMEOUT_MS);
@@ -279,10 +276,10 @@ async function main(): Promise<void> {
         app.redis.quit(),
         telemetryRuntime.shutdown(),
       ]);
-      logger.info({ event: "api.shutdown.done" }, "Arrêt terminé");
+      logger.info({ event: "api.shutdown.done" }, "Shutdown complete");
       process.exit(0);
     } catch (error) {
-      logger.error({ event: "api.shutdown.error", err: error }, "Échec de l'arrêt gracieux");
+      logger.error({ event: "api.shutdown.error", err: error }, "Graceful shutdown failed");
       process.exit(1);
     }
   };
@@ -291,19 +288,19 @@ async function main(): Promise<void> {
     process.once(signal, () => void shutdown(signal));
   }
 
-  // Une exception non capturée laisse le processus dans un état indéterminé :
-  // on journalise et on sort, plutôt que de continuer à servir du trafic.
+  // An uncaught exception leaves the process in an indeterminate state:
+  // we log and exit rather than continuing to serve traffic.
   process.on("uncaughtException", (error) => {
-    logger.fatal({ event: "api.uncaught_exception", err: error }, "Exception non capturée");
+    logger.fatal({ event: "api.uncaught_exception", err: error }, "Uncaught exception");
     void shutdown("uncaughtException");
   });
   process.on("unhandledRejection", (reason) => {
-    logger.fatal({ event: "api.unhandled_rejection", err: reason }, "Promesse rejetée non gérée");
+    logger.fatal({ event: "api.unhandled_rejection", err: reason }, "Unhandled rejection");
     void shutdown("unhandledRejection");
   });
 }
 
 main().catch((error: unknown) => {
-  logger.fatal({ event: "api.boot_failed", err: error }, "Démarrage impossible");
+  logger.fatal({ event: "api.boot_failed", err: error }, "Boot failed");
   process.exit(1);
 });

@@ -2,12 +2,12 @@ import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import { livenessResponseSchema } from "@nexus/protocol";
 
 /**
- * Sonde de LIVENESS — `GET /health`.
+ * LIVENESS probe — `GET /health`.
  *
- * Ne touche aucune dépendance, délibérément. C'est la sonde sur laquelle
- * l'orchestrateur décide de TUER le conteneur : si elle interrogeait PostgreSQL,
- * une base momentanément lente ferait redémarrer un processus parfaitement sain,
- * ce qui aggrave la panne au lieu de la corriger.
+ * Deliberately does not touch any dependencies. This is the probe that decides
+ * whether the orchestrator KILLS the container: if it queried PostgreSQL,
+ * a momentarily slow database would restart a perfectly healthy process,
+ * worsening an outage rather than recovering from it.
  */
 export const healthRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
   app.get(
@@ -15,11 +15,11 @@ export const healthRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     {
       schema: {
         tags: ["health"],
-        summary: "Liveness — le processus répond-il ?",
+        summary: "Liveness — is the process responding?",
         response: { 200: livenessResponseSchema },
       },
-      // La sonde est appelée en boucle par l'orchestrateur : la compter dans le
-      // quota de l'appelant n'aurait aucun sens.
+      // The probe is polled continuously by the orchestrator: counting it
+      // against caller quotas would make no sense.
       config: { rateLimit: false },
     },
     () => ({

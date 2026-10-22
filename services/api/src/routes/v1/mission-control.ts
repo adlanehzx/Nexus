@@ -48,12 +48,12 @@ const statusSchema = z.object({
 });
 
 /**
- * Pont administrateur vers NEXUS Mission Engine.
+ * Administrator bridge to NEXUS Mission Engine.
  *
- * Le navigateur ne joint jamais le port 18100. Nexus authentifie l'utilisateur,
- * valide les contrats puis parle au service local. Les calendriers reçoivent
- * côté serveur une clé propriétaire et un workspace isolé : le navigateur ne
- * choisit jamais un chemin sur la machine hôte.
+ * The browser never connects to port 18100 directly. Nexus authenticates
+ * the user, validates contracts, and speaks to the local service.
+ * Schedules receive a server-side owner key and an isolated workspace:
+ * the browser never chooses a path on the host machine.
  */
 export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -74,7 +74,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
           {
             configured: false,
             reachable: false,
-            detail: "Mission Control non configuré",
+            detail: "Mission Control not configured",
             health: null,
             audit: null,
             accounts: [],
@@ -102,7 +102,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
           {
             configured: true,
             reachable: true,
-            detail: "joignable",
+            detail: "reachable",
             health,
             audit,
             accounts,
@@ -118,7 +118,7 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
           {
             configured: true,
             reachable: false,
-            detail: "Mission Control injoignable ou contrat invalide",
+            detail: "Mission Control unreachable or invalid contract",
             health: null,
             audit: null,
             accounts: [],

@@ -10,30 +10,20 @@ import {
 } from "./harness.js";
 
 /**
- * Le tableau de bord de supervision.
+ * Supervision dashboard.
  *
- * Deux propriétés dominent ce fichier, et ce sont les deux qui, si elles
- * lâchaient, ne se verraient pas :
- *
- *  1. **la garde d'administration** — un jeton de client ordinaire n'ouvre
- *     aucune des douze sections. Un téléphone perdu ne doit pas exposer
- *     l'infrastructure en plus de la conversation ;
- *  2. **le raisonnement du modèle ne sort pas.** Un run porte son transcript et
- *     les blocs opaques du fournisseur ; la projection ne les lit pas. C'est
- *     vérifié ici avec un run dont chaque champ interdit contient une chaîne
- *     reconnaissable, qu'on cherche ensuite dans la réponse JSON entière.
+ * Verifies administrative authorization gating and ensures that model reasoning/thinking
+ * never leaks into projected representations.
  */
 
 let harness: ApiHarness;
-/** Premier compte créé : c'est lui qui reçoit le rôle d'administrateur. */
 let admin: Account;
-/** Second compte : un utilisateur ordinaire. */
-let membre: Account;
+let member: Account;
 
 beforeEach(async () => {
   harness = await makeApi();
   admin = await createAccount(harness, "alex@example.test");
-  membre = await createAccount(harness, "membre@exemple.fr");
+  member = await createAccount(harness, "member@example.com");
 });
 
 afterEach(async () => {
@@ -66,40 +56,38 @@ function get(url: string, account?: Account) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Authentification et autorisation
+// Authentication and authorization
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("garde d'administration", () => {
-  it("refuse toutes les sections sans jeton", async () => {
+describe("administrative guard", () => {
+  it("rejects all sections without token", async () => {
     for (const url of SECTIONS) {
       expect((await get(url)).statusCode, url).toBe(401);
     }
   });
 
-  it("refuse toutes les sections à un compte ordinaire", async () => {
-    // Il n'existe pas de sous-ensemble « moins sensible » ouvert au client :
-    // une vue partielle du système est encore une vue du système.
+  it("rejects all sections for ordinary account", async () => {
     for (const url of SECTIONS) {
-      expect((await get(url, membre)).statusCode, url).toBe(403);
+      expect((await get(url, member)).statusCode, url).toBe(403);
     }
   });
 
-  it("le refus ne révèle pas l'existence de la surface d'administration", async () => {
-    const response = await get("/api/v1/dashboard/overview", membre);
+  it("rejection does not reveal existence of administrative surface", async () => {
+    const response = await get("/api/v1/dashboard/overview", member);
 
     const body = response.json<{ error: { message: string } }>();
     expect(body.error.message).not.toMatch(/administrat/i);
     expect(body.error.message).toBe("The requested resource does not exist.");
   });
 
-  it("ouvre toutes les sections à l'administrateur", async () => {
+  it("opens all sections to administrator", async () => {
     for (const url of SECTIONS) {
       expect((await get(url, admin)).statusCode, url).toBe(200);
     }
   });
 
-  it("le premier compte créé est l'administrateur, les suivants non", async () => {
-    const premier = await harness.app.inject({
+  it("first created account is administrator, subsequent accounts are not", async () => {
+    const first = await harness.app.inject({
       method: "GET",
       url: "/api/v1/users/me",
       headers: admin.authorization,
@@ -107,16 +95,14 @@ describe("garde d'administration", () => {
     const second = await harness.app.inject({
       method: "GET",
       url: "/api/v1/users/me",
-      headers: membre.authorization,
+      headers: member.authorization,
     });
 
-    expect(premier.json<{ data: { role: string } }>().data.role).toBe("ADMIN");
+    expect(first.json<{ data: { role: string } }>().data.role).toBe("ADMIN");
     expect(second.json<{ data: { role: string } }>().data.role).toBe("USER");
   });
 
-  it("un retrait de droits prend effet immédiatement", async () => {
-    // Le rôle est lu dans le magasin, pas dans le jeton : inscrit dans le
-    // jeton, il resterait valide un quart d'heure après la rétrogradation.
+  it("privilege revocation takes effect immediately", async () => {
     expect((await get("/api/v1/dashboard/overview", admin)).statusCode).toBe(200);
 
     await harness.services.users.setRole(admin.userId, "USER");
@@ -124,9 +110,7 @@ describe("garde d'administration", () => {
     expect((await get("/api/v1/dashboard/overview", admin)).statusCode).toBe(403);
   });
 
-  it("aucune section n'écrit", async () => {
-    // Superviser et administrer sont deux surfaces. Les réunir mettrait une
-    // action destructrice à un clic d'un écran qu'on consulte machinalement.
+  it("no section allows writing", async () => {
     for (const method of ["POST", "DELETE", "PATCH"] as const) {
       const response = await harness.app.inject({
         method,
@@ -140,10 +124,9 @@ describe("garde d'administration", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Le raisonnement ne sort pas
+// Reasoning does not leak across boundaries
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Un run dont chaque champ interdit porte une chaîne qu'on saura retrouver. */
 function runWithSecrets(userId: string) {
   return {
     record: {
@@ -157,7 +140,7 @@ function runWithSecrets(userId: string) {
       stopReason: "final_answer",
       iterations: 3,
       model: "claude-opus-5",
-      response: "J'ai lancé les tests, tout passe.",
+      response: "I launched the tests, everything passed.",
       usage: { inputTokens: 1200, outputTokens: 340, cacheReadTokens: 90 },
       toolsUsed: [
         {
@@ -172,38 +155,37 @@ function runWithSecrets(userId: string) {
       ],
       errors: [],
     },
-    // Ce que la projection ne doit jamais voir.
     messages: [
       {
         role: "assistant",
-        content: [{ type: "text", text: "RAISONNEMENT_INTERNE_A_NE_PAS_DIVULGUER" }],
-        providerBlocks: { thinking: "BLOC_OPAQUE_DU_FOURNISSEUR", signature: "sig-xyz" },
+        content: [{ type: "text", text: "INTERNAL_REASONING_NOT_TO_BE_DISCLOSED" }],
+        providerBlocks: { thinking: "PROVIDER_OPAQUE_BLOCK", signature: "sig-xyz" },
       },
       {
         role: "user",
-        content: [{ type: "text", text: "MESSAGE_UTILISATEUR_BRUT" }],
+        content: [{ type: "text", text: "RAW_USER_MESSAGE" }],
       },
     ],
     pendingConfirmation: null,
     consecutiveToolFailures: 0,
     toolCallCount: 1,
-    callSignatures: ["device.terminal.execute:SIGNATURE_INTERNE"],
+    callSignatures: ["device.terminal.execute:INTERNAL_SIGNATURE"],
     deadlineAt: 0,
     suspendedAt: null,
   };
 }
 
-const INTERDITS = [
-  "RAISONNEMENT_INTERNE_A_NE_PAS_DIVULGUER",
-  "BLOC_OPAQUE_DU_FOURNISSEUR",
-  "MESSAGE_UTILISATEUR_BRUT",
-  "SIGNATURE_INTERNE",
+const FORBIDDEN = [
+  "INTERNAL_REASONING_NOT_TO_BE_DISCLOSED",
+  "PROVIDER_OPAQUE_BLOCK",
+  "RAW_USER_MESSAGE",
+  "INTERNAL_SIGNATURE",
   "providerBlocks",
   "callSignatures",
 ];
 
-describe("le raisonnement du modèle ne franchit pas la frontière", () => {
-  it("la projection n'expose que ce qui a été autorisé", () => {
+describe("model reasoning does not cross boundaries", () => {
+  it("projection exposes only what was authorized", () => {
     const view = projectAgentRun(runWithSecrets("u1"));
 
     expect(Object.keys(view).sort()).toEqual(
@@ -228,28 +210,26 @@ describe("le raisonnement du modèle ne franchit pas la frontière", () => {
     );
   });
 
-  it("aucun champ interdit ne survit à la projection", () => {
-    const serialise = JSON.stringify(projectAgentRun(runWithSecrets("u1")));
+  it("no forbidden field survives projection", () => {
+    const serialized = JSON.stringify(projectAgentRun(runWithSecrets("u1")));
 
-    for (const interdit of INTERDITS) {
-      expect(serialise).not.toContain(interdit);
+    for (const item of FORBIDDEN) {
+      expect(serialized).not.toContain(item);
     }
   });
 
-  it("la route rend la même chose, et rien de plus", async () => {
+  it("route returns the same and nothing more", async () => {
     await harness.services.runStore.save(runWithSecrets(admin.userId) as never);
 
     const response = await get("/api/v1/dashboard/runs", admin);
 
     expect(response.statusCode).toBe(200);
-    for (const interdit of INTERDITS) {
-      expect(response.body, interdit).not.toContain(interdit);
+    for (const item of FORBIDDEN) {
+      expect(response.body, item).not.toContain(item);
     }
   });
 
-  it("ce qui est autorisé, lui, est bien là", async () => {
-    // La règle n'est pas « ne rien montrer » : statut, action, outil,
-    // progression, résultat, erreur et métriques doivent sortir.
+  it("what is authorized is indeed present", async () => {
     await harness.services.runStore.save(runWithSecrets(admin.userId) as never);
 
     const response = await get("/api/v1/dashboard/runs/run-1", admin);
@@ -270,9 +250,7 @@ describe("le raisonnement du modèle ne franchit pas la frontière", () => {
     expect(run.metrics.toolCalls).toBe(1);
   });
 
-  it("le résumé d'action est rédigé", async () => {
-    // La trace du run rédige déjà ses arguments ; on rédige une seconde fois à
-    // la sortie, parce que ce chemin-là est public.
+  it("action summary is redacted", async () => {
     const run = runWithSecrets(admin.userId);
     run.record.toolsUsed[0]!.input = { command: "curl", token: "sk-abcdefghijklmnopqrstuv" };
     await harness.services.runStore.save(run as never);
@@ -282,14 +260,12 @@ describe("le raisonnement du modèle ne franchit pas la frontière", () => {
     expect(response.body).not.toContain("sk-abcdefghijklmnopqrstuv");
   });
 
-  it("un run d'un autre compte reste invisible", async () => {
-    await harness.services.runStore.save(runWithSecrets(membre.userId) as never);
+  it("a run from another account remains invisible", async () => {
+    await harness.services.runStore.save(runWithSecrets(member.userId) as never);
 
-    const liste = await get("/api/v1/dashboard/runs", admin);
-    expect(liste.json<{ data: { runs: unknown[] } }>().data.runs).toEqual([]);
+    const list = await get("/api/v1/dashboard/runs", admin);
+    expect(list.json<{ data: { runs: unknown[] } }>().data.runs).toEqual([]);
 
-    // Le rôle d'administrateur ouvre la supervision de l'infrastructure ; il n'a
-    // jamais eu vocation à donner accès aux conversations d'autrui.
     expect((await get("/api/v1/dashboard/runs/run-1", admin)).statusCode).toBe(404);
   });
 });
@@ -298,9 +274,9 @@ describe("le raisonnement du modèle ne franchit pas la frontière", () => {
 // Sections
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("vue d'ensemble", () => {
-  it("compte appareils, exécutants, tâches et runs", async () => {
-    await registerDevice(harness, admin, { name: "Portable", role: "BOTH" });
+describe("overview", () => {
+  it("counts devices, workers, tasks, and runs", async () => {
+    await registerDevice(harness, admin, { name: "Laptop", role: "BOTH" });
     await registerDevice(harness, admin, { name: "iPhone", role: "CLIENT", type: "IPHONE" });
 
     const response = await get("/api/v1/dashboard/overview", admin);
@@ -317,9 +293,7 @@ describe("vue d'ensemble", () => {
     expect(data.workers.connected).toBe(0);
   });
 
-  it("distingue « non configuré » de « en panne »", async () => {
-    // Un serveur MCP qu'on n'a jamais branché n'est pas en panne. L'afficher en
-    // rouge enverrait chercher un incident qui n'existe pas.
+  it("distinguishes unconfigured from broken", async () => {
     const response = await get("/api/v1/dashboard/overview", admin);
     const health = response.json<{ data: { health: { name: string; level: string }[] } }>().data
       .health;
@@ -329,11 +303,11 @@ describe("vue d'ensemble", () => {
     expect(health.find((entry) => entry.name === "API")?.level).toBe("ok");
   });
 
-  it("mêle les activités récentes de toutes les sources", async () => {
+  it("blends recent activities from all sources", async () => {
     harness.services.securityLog.record({
       kind: "device.trusted",
       userId: admin.userId,
-      summary: "Appareil « Portable » approuvé",
+      summary: 'Device "Laptop" approved',
     });
 
     const response = await get("/api/v1/dashboard/overview", admin);
@@ -344,10 +318,10 @@ describe("vue d'ensemble", () => {
   });
 });
 
-describe("appareils", () => {
-  it("rend tout ce que la page demande", async () => {
+describe("devices", () => {
+  it("returns everything the page requests", async () => {
     const registered = await registerDevice(harness, admin, {
-      name: "Portable Windows",
+      name: "Windows Laptop",
       role: "BOTH",
       permissions: ["terminal.execute"],
     });
@@ -355,7 +329,7 @@ describe("appareils", () => {
       {
         name: "terminal.execute",
         version: "1",
-        description: "Exécute une commande",
+        description: "Executes a command",
         enabled: true,
         metadata: {},
       },
@@ -391,18 +365,16 @@ describe("appareils", () => {
     expect(device.grantedPermissions).toEqual(["terminal.execute"]);
   });
 
-  it("ne rend pas l'appareil d'un autre compte", async () => {
-    const autre = await registerDevice(harness, membre, { name: "Poste du membre", role: "BOTH" });
+  it("does not return another account's device", async () => {
+    const other = await registerDevice(harness, member, { name: "Member Workstation", role: "BOTH" });
 
-    expect((await get(`/api/v1/dashboard/devices/${autre.device.id}`, admin)).statusCode).toBe(404);
+    expect((await get(`/api/v1/dashboard/devices/${other.device.id}`, admin)).statusCode).toBe(404);
   });
 });
 
-describe("exécutants", () => {
-  it("distingue le rôle déclaré du canal réellement ouvert", async () => {
-    // Un exécutant appairé mais déconnecté n'exécutera rien. Afficher son rôle
-    // sans son état de connexion ferait croire l'inverse.
-    await registerDevice(harness, admin, { name: "Poste fixe", role: "WORKER" });
+describe("workers", () => {
+  it("distinguishes declared role from actually open channel", async () => {
+    await registerDevice(harness, admin, { name: "Desktop Workstation", role: "WORKER" });
 
     const response = await get("/api/v1/dashboard/workers", admin);
     const workers = response.json<{
@@ -414,7 +386,7 @@ describe("exécutants", () => {
     expect(workers[0]?.acceptingTasks).toBe(false);
   });
 
-  it("exclut les clients purs", async () => {
+  it("excludes pure clients", async () => {
     await registerDevice(harness, admin, { name: "iPhone", role: "CLIENT", type: "IPHONE" });
 
     const response = await get("/api/v1/dashboard/workers", admin);
@@ -422,18 +394,18 @@ describe("exécutants", () => {
   });
 });
 
-describe("tâches", () => {
+describe("tasks", () => {
   async function seedPlan() {
-    const device = await registerDevice(harness, admin, { name: "Portable", role: "BOTH" });
+    const device = await registerDevice(harness, admin, { name: "Laptop", role: "BOTH" });
     const plan = createTaskPlan({
       userId: admin.userId,
-      title: "Lancer les tests",
+      title: "Run tests",
       originClientDeviceId: device.device.id,
       correlationId: "corr-1",
       steps: [
         {
           id: "s1",
-          description: "Exécuter pnpm test",
+          description: "Execute pnpm test",
           requiredCapabilities: ["terminal.execute"],
           tool: "device.terminal.execute",
           riskLevel: "SAFE",
@@ -444,7 +416,7 @@ describe("tâches", () => {
     return { plan, device };
   }
 
-  it("rend le plan, ses étapes et sa progression", async () => {
+  it("returns plan, its steps, and its progress", async () => {
     const { plan } = await seedPlan();
 
     const response = await get(`/api/v1/dashboard/tasks/${plan.id}`, admin);
@@ -457,14 +429,14 @@ describe("tâches", () => {
       };
     }>().data;
 
-    expect(task.title).toBe("Lancer les tests");
+    expect(task.title).toBe("Run tests");
     expect(task.progressPercent).toBe(0);
     expect(task.steps[0]?.tool).toBe("device.terminal.execute");
     expect(task.steps[0]?.requiredCapabilities).toEqual(["terminal.execute"]);
     expect(task.executions).toEqual([]);
   });
 
-  it("nomme l'exécutant retenu plutôt que de rendre un identifiant", async () => {
+  it("names the selected worker rather than returning an id", async () => {
     const { plan, device } = await seedPlan();
 
     await harness.services.taskStore.saveExecution({
@@ -487,15 +459,15 @@ describe("tâches", () => {
       data: { executions: { deviceName: string | null; durationMs: number | null }[] };
     }>().data.executions;
 
-    expect(executions[0]?.deviceName).toBe("Portable");
+    expect(executions[0]?.deviceName).toBe("Laptop");
     expect(executions[0]?.durationMs).toBe(5000);
   });
 
-  it("ne rend pas la tâche d'un autre compte", async () => {
-    const device = await registerDevice(harness, membre, { name: "Poste", role: "BOTH" });
+  it("does not return another account's task", async () => {
+    const device = await registerDevice(harness, member, { name: "Workstation", role: "BOTH" });
     const plan = createTaskPlan({
-      userId: membre.userId,
-      title: "Privée",
+      userId: member.userId,
+      title: "Private",
       originClientDeviceId: device.device.id,
       correlationId: "corr-2",
       steps: [
@@ -513,8 +485,8 @@ describe("tâches", () => {
   });
 });
 
-describe("sections d'infrastructure", () => {
-  it("annonce honnêtement un MCP non configuré", async () => {
+describe("infrastructure sections", () => {
+  it("honestly reports unconfigured MCP", async () => {
     const response = await get("/api/v1/dashboard/mcp", admin);
     const data = response.json<{ data: { configured: boolean; servers: unknown[] } }>().data;
 
@@ -522,7 +494,7 @@ describe("sections d'infrastructure", () => {
     expect(data.servers).toEqual([]);
   });
 
-  it("annonce honnêtement un worker navigateur non configuré", async () => {
+  it("honestly reports unconfigured browser worker", async () => {
     const response = await get("/api/v1/dashboard/browser", admin);
     const data = response.json<{ data: { configured: boolean; reachable: boolean } }>().data;
 
@@ -530,23 +502,23 @@ describe("sections d'infrastructure", () => {
     expect(data.reachable).toBe(false);
   });
 
-  it("liste le catalogue d'outils avec ce qui est autorisé", async () => {
+  it("lists tool catalog with what is authorized", async () => {
     const response = await get("/api/v1/dashboard/tools", admin);
     expect(response.statusCode).toBe(200);
     expect(response.json<{ data: { tools: unknown[] } }>().data.tools).toEqual([]);
   });
 });
 
-describe("mémoire", () => {
-  it("compte par couche, origine et sensibilité", async () => {
+describe("memory", () => {
+  it("counts by layer, origin, and sensitivity", async () => {
     await harness.services.memoryService.remember({
       userId: admin.userId,
-      content: "Réponds toujours en français",
+      content: "Always reply in concise English",
       layer: "PREFERENCE",
     });
     await harness.services.memoryService.remember({
       userId: admin.userId,
-      content: "Habite à Lyon",
+      content: "Lives in London",
       origin: "AGENT",
     });
 
@@ -565,11 +537,9 @@ describe("mémoire", () => {
   });
 });
 
-describe("sécurité", () => {
-  it("recense les événements produits par le reste de l'API", async () => {
-    // Les événements ne sont pas fabriqués par le tableau de bord : ils sont
-    // émis là où l'action a lieu, et il les lit.
-    const device = await registerDevice(harness, admin, { name: "Portable", role: "BOTH" });
+describe("security", () => {
+  it("lists events produced by the rest of the API", async () => {
+    const device = await registerDevice(harness, admin, { name: "Laptop", role: "BOTH" });
 
     const response = await get("/api/v1/dashboard/security", admin);
     const data = response.json<{
@@ -586,16 +556,16 @@ describe("sécurité", () => {
     expect(data.events.some((event) => event.summary.includes(device.device.name))).toBe(true);
   });
 
-  it("journalise un échec de connexion sans l'adresse essayée", async () => {
+  it("logs login failure without the attempted address", async () => {
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: "inconnu@exemple.fr", password: "mauvais mot de passe" },
+      payload: { email: "unknown@example.com", password: "wrong password" },
     });
 
     const response = await get("/api/v1/dashboard/security", admin);
-    expect(response.body).not.toContain("inconnu@exemple.fr");
-    expect(response.body).not.toContain("mauvais mot de passe");
+    expect(response.body).not.toContain("unknown@example.com");
+    expect(response.body).not.toContain("wrong password");
     expect(
       response.json<{ data: { byKind: Record<string, number> } }>().data.byKind[
         "auth.login_failed"
@@ -603,13 +573,13 @@ describe("sécurité", () => {
     ).toBe(1);
   });
 
-  it("remonte un refus de mémorisation sans le contenu refusé", async () => {
+  it("reports memory refusal without the refused content", async () => {
     await harness.app
       .inject({
         method: "POST",
         url: "/api/v1/memory",
         headers: admin.authorization,
-        payload: { content: "Mon mot de passe est Tr0ub4dor3xy" },
+        payload: { content: "My password is Tr0ub4dor3xy" },
       })
       .catch(() => undefined);
 
@@ -622,23 +592,23 @@ describe("sécurité", () => {
   });
 });
 
-describe("journaux", () => {
-  it("rend les lignes retenues, les plus récentes d'abord", async () => {
+describe("logs", () => {
+  it("returns stored lines, newest first", async () => {
     harness.services.logs.write(
-      JSON.stringify({ level: "info", time: "2026-09-03T10:00:00.000Z", msg: "première" }),
+      JSON.stringify({ level: "info", time: "2026-09-03T10:00:00.000Z", msg: "first" }),
     );
     harness.services.logs.write(
-      JSON.stringify({ level: "error", time: "2026-09-03T10:00:01.000Z", msg: "seconde" }),
+      JSON.stringify({ level: "error", time: "2026-09-03T10:00:01.000Z", msg: "second" }),
     );
 
     const response = await get("/api/v1/dashboard/logs", admin);
     const entries = response.json<{ data: { entries: { message: string }[] } }>().data.entries;
 
-    expect(entries.map((entry) => entry.message)).toEqual(["seconde", "première"]);
+    expect(entries.map((entry) => entry.message)).toEqual(["second", "first"]);
   });
 
-  it("filtre par niveau", async () => {
-    harness.services.logs.write(JSON.stringify({ level: "debug", msg: "bruit" }));
+  it("filters by level", async () => {
+    harness.services.logs.write(JSON.stringify({ level: "debug", msg: "noise" }));
     harness.services.logs.write(JSON.stringify({ level: "error", msg: "incident" }));
 
     const response = await get("/api/v1/dashboard/logs?level=error", admin);
@@ -649,20 +619,17 @@ describe("journaux", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Magasins d'observabilité
+// Observability stores
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("tampon de journaux", () => {
-  it("comprend le format réel de ce dépôt", () => {
-    // Le logger configure `formatters.level` et `timestamp: isoTime` : le niveau
-    // est un **libellé** et l'heure une chaîne ISO. Ne reconnaître que le format
-    // par défaut ferait tomber toutes les lignes en `info`, silencieusement.
+describe("log buffer", () => {
+  it("understands the actual format of this repository", () => {
     const buffer = new LogBuffer();
     buffer.write(
       JSON.stringify({
         level: "warn",
         time: "2026-09-03T10:00:00.000Z",
-        msg: "attention",
+        msg: "warning",
         correlationId: "corr-9",
       }),
     );
@@ -673,45 +640,42 @@ describe("tampon de journaux", () => {
     expect(entry?.correlationId).toBe("corr-9");
   });
 
-  it("comprend aussi le format par défaut de pino", () => {
+  it("also understands default pino format", () => {
     const buffer = new LogBuffer();
-    buffer.write(JSON.stringify({ level: 50, time: 1_756_890_000_000, msg: "erreur" }));
+    buffer.write(JSON.stringify({ level: 50, time: 1_756_890_000_000, msg: "error" }));
 
     expect(buffer.list()[0]?.level).toBe("error");
   });
 
-  it("rédige les secrets à l'entrée", () => {
-    // Une ligne peut transporter un jeton dans un champ innocemment nommé.
+  it("redacts secrets on entry", () => {
     const buffer = new LogBuffer();
-    buffer.write(JSON.stringify({ level: "info", msg: "appel", token: "sk-abcdefghijklmnopqrst" }));
+    buffer.write(JSON.stringify({ level: "info", msg: "call", token: "sk-abcdefghijklmnopqrst" }));
 
     expect(JSON.stringify(buffer.list())).not.toContain("sk-abcdefghijklmnopqrst");
   });
 
-  it("ne lève jamais sur une ligne illisible", () => {
-    // Cette destination est appelée depuis le gestionnaire d'erreurs : une
-    // exception y transformerait un incident en panne.
+  it("never throws on unreadable line", () => {
     const buffer = new LogBuffer();
 
     expect(() => {
-      buffer.write("pas du json");
+      buffer.write("not json");
     }).not.toThrow();
     expect(buffer.size).toBe(0);
   });
 
-  it("reste borné", () => {
+  it("remains bounded", () => {
     const buffer = new LogBuffer({ max: 3 });
     for (let index = 0; index < 10; index += 1) {
-      buffer.write(JSON.stringify({ level: "info", msg: `ligne ${String(index)}` }));
+      buffer.write(JSON.stringify({ level: "info", msg: `line ${String(index)}` }));
     }
 
     expect(buffer.size).toBe(3);
-    expect(buffer.list()[0]?.message).toBe("ligne 9");
+    expect(buffer.list()[0]?.message).toBe("line 9");
   });
 });
 
-describe("journal de sécurité", () => {
-  it("borne le résumé et rédige le contexte", () => {
+describe("security log", () => {
+  it("bounds summary and redacts context", () => {
     const log = new SecurityLog();
     log.record({
       kind: "auth.login",
@@ -725,10 +689,10 @@ describe("journal de sécurité", () => {
     expect(JSON.stringify(event?.context)).not.toContain("sk-abcdefghijklmnopqrst");
   });
 
-  it("reste borné", () => {
+  it("remains bounded", () => {
     const log = new SecurityLog({ max: 2 });
     for (let index = 0; index < 5; index += 1) {
-      log.record({ kind: "auth.login", summary: `connexion ${String(index)}` });
+      log.record({ kind: "auth.login", summary: `login ${String(index)}` });
     }
 
     expect(log.size).toBe(2);

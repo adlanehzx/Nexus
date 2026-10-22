@@ -4,29 +4,29 @@ import { uuidv7 } from "@nexus/shared";
 import type { DeviceCredentialStore } from "@nexus/devices";
 
 /**
- * Clés publiques d'appareils sur PostgreSQL.
+ * Device public keys on PostgreSQL.
  *
- * ## Pourquoi ce magasin existe
+ * ## Why this store exists
  *
- * La table `device_credentials` était dans le schéma depuis le début, et
- * personne ne l'écrivait : la production montait `InMemoryCredentialProvider`.
- * La conséquence n'était pas une absence de fonctionnalité mais une **panne
- * silencieuse** : au redémarrage de l'API, toutes les clés disparaissaient. Un
- * worker se reconnectait, signait son challenge, et se faisait refuser parce
- * qu'il n'y avait plus rien pour vérifier sa signature. Rien ne nommait la
- * cause, et le seul remède était de réenregistrer chaque appareil.
+ * The `device_credentials` table was in the schema from the beginning, but
+ * nothing wrote to it: production was mounting `InMemoryCredentialProvider`.
+ * The consequence was not a lack of features but a **silent failure**:
+ * whenever the API restarted, all keys disappeared. A
+ * worker would reconnect, sign its challenge, and be rejected because
+ * there was nothing left to verify its signature. Nothing reported the
+ * root cause, and the only remedy was to re-register every device.
  *
- * C'est exactement la classe de défaut que `persistence.pg.test.ts` décrit dans
- * son propre préambule : ce qui n'est vérifié que contre une doublure n'est pas
- * vérifié.
+ * This is exactly the failure class described in the preamble of
+ * `persistence.pg.test.ts`: what is only tested against a mock is not
+ * verified.
  *
- * ## Révoquer n'est pas supprimer
+ * ## Revoking is not deleting
  *
- * Un retrait écrit `revokedAt` au lieu d'effacer la ligne. La clé publique
- * n'est pas un secret — c'est la moitié publiable — et conserver la trace
- * répond à une question qu'on se pose après un incident : *quelle* clé était
- * enregistrée, et depuis quand. La lecture ignore les lignes révoquées, donc
- * l'effet est le même pour l'authentification.
+ * A revocation writes `revokedAt` instead of deleting the row. The public key
+ * is not a secret — it is the shareable half — and preserving the audit trail
+ * answers questions asked after an incident: *which* key was
+ * registered, and since when. Reads ignore revoked rows, so the
+ * effect is identical for authentication.
  */
 export class PrismaDeviceCredentialStore implements DeviceCredentialStore {
   readonly #prisma: PrismaClient;
@@ -41,25 +41,25 @@ export class PrismaDeviceCredentialStore implements DeviceCredentialStore {
         deviceId,
         revokedAt: null,
         kind: { in: ["ED25519_PUBLIC_KEY", "ECDSA_P256_PUBLIC_KEY"] },
-        // Une clé expirée ne vérifie plus rien. `null` veut dire « sans
-        // échéance », ce qui est le cas courant d'une clé matérielle.
+        // An expired key no longer verifies anything. `null` means "no
+        // expiration", which is the common case for a hardware key.
         OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      // La plus récente gagne : c'est ce qui rend une rotation effective sans
-      // exiger que l'ancienne ait été retirée d'abord.
+      // The most recent wins: this makes key rotation effective without
+      // requiring the old key to be removed first.
       orderBy: { createdAt: "desc" },
     });
     return row === null ? undefined : row.material;
   }
 
   /**
-   * Enregistre une clé, en remplaçant celle qui servait.
+   * Registers a key, replacing the one previously used.
    *
-   * Le remplacement est une **rotation** : l'ancienne ligne reçoit `rotatedAt`
-   * et `revokedAt` plutôt que de disparaître. Deux clés actives pour un même
-   * appareil seraient une ambiguïté — laquelle doit vérifier ? — et la lecture
-   * ci-dessus trancherait par la date, ce qui est un comportement trop
-   * implicite pour une décision d'authentification.
+   * Replacement is a **rotation**: the old row receives `rotatedAt`
+   * and `revokedAt` rather than being deleted. Two active keys for the same
+   * device would introduce ambiguity — which one should verify? — and the query
+   * above would decide by date, which is too implicit
+   * for an authentication decision.
    */
   async set(deviceId: string, publicKeyPem: string): Promise<void> {
     const kind = credentialKind(publicKeyPem);
@@ -85,21 +85,21 @@ export class PrismaDeviceCredentialStore implements DeviceCredentialStore {
 }
 
 /**
- * Détermine l'algorithme **à partir de la clé**, et non de ce qu'on nous dit.
+ * Determines the algorithm **from the key itself**, rather than from what is claimed.
  *
- * Android ne sait pas conserver de clé Ed25519 dans son magasin matériel et
- * fournit donc de l'ECDSA P-256 ; un poste fixe fournit de l'Ed25519. Laisser
- * l'appelant déclarer son algorithme ouvrirait un désaccord entre l'étiquette
- * et le contenu, et c'est l'étiquette qui choisirait le vérificateur.
+ * Android cannot store an Ed25519 key in its hardware keystore and
+ * therefore provides ECDSA P-256; a desktop workstation provides Ed25519. Letting
+ * the caller declare its algorithm would introduce a discrepancy between the label
+ * and the content, with the label dictating the verifier.
  */
 function credentialKind(publicKeyPem: string): "ED25519_PUBLIC_KEY" | "ECDSA_P256_PUBLIC_KEY" {
   let type: string;
   try {
     type = createPublicKey(publicKeyPem).asymmetricKeyType ?? "";
   } catch (error) {
-    throw new Error("clé publique illisible : ce n'est pas un PEM valide", { cause: error });
+    throw new Error("unreadable public key: not a valid PEM", { cause: error });
   }
   if (type === "ed25519") return "ED25519_PUBLIC_KEY";
   if (type === "ec") return "ECDSA_P256_PUBLIC_KEY";
-  throw new Error(`algorithme de clé non pris en charge : ${type}`);
+  throw new Error(`unsupported key algorithm: ${type}`);
 }

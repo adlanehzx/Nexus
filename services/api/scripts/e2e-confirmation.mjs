@@ -1,38 +1,16 @@
 #!/usr/bin/env node
 /**
- * Bout en bout : une tâche déléguée traverse une confirmation humaine **et** un
- * redémarrage du moteur.
- *
- * C'est le seul test qui exerce la chaîne entière avec deux vrais processus :
+ * End-to-end: delegated task across human confirmation and engine restart.
  *
  *     mission
- *     → tâche Agent Core
- *     → outil à risque
+ *     → Agent Core task
+ *     → sensitive tool
  *     → awaiting_confirmation
- *     → redémarrage du moteur (SIGTERM, puis relance)
- *     → approbation par la surface utilisateur
- *     → reprise
- *     → tâche succeeded
+ *     → engine restart (SIGTERM, then restart)
+ *     → approval via user surface
+ *     → resumption
+ *     → task succeeded
  *     → mission succeeded
- *
- * **Ce qui est réel** : l'API Fastify, PostgreSQL, le processus Python du
- * moteur, sa base SQLite, le HTTP entre les deux, l'authentification de service
- * et les assertions de mission signées. Le redémarrage est un vrai arrêt de
- * processus, pas une réinitialisation d'objet.
- *
- * **Ce qui est simulé** : le modèle. Il est scripté pour réclamer un outil à
- * risque, puis répondre une fois l'accord donné. C'est la seule façon de rendre
- * le scénario déterministe : on ne peut pas demander à un vrai agent de
- * réclamer un outil dangereux sur commande. L'outil, lui, est inoffensif — il
- * rend une chaîne — mais il exige une confirmation, ce qui est tout ce que la
- * chaîne a besoin de voir.
- *
- * Lancement :
- *     DATABASE_URL=postgresql://... pnpm --filter @nexus/api e2e:confirmation
- *
- * Le script vit dans `services/api` et non à la racine : il importe `zod`,
- * `@nexus/config` et les magasins compilés, qui se résolvent depuis les
- * dépendances de ce paquet.
  */
 
 import { spawn } from "node:child_process";
@@ -55,7 +33,7 @@ import { PrismaAgentRunStore } from "../dist/services/persistence/prisma-agent-r
 const API_PORT = Number(process.env.E2E_API_PORT ?? 3021);
 const ENGINE_PORT = Number(process.env.E2E_ENGINE_PORT ?? 18121);
 const MISSION_KEY = `e2e-confirmation-${Date.now()}`;
-const PASSWORD = "MotDePasseTresSolide!42";
+const PASSWORD = "VeryStrongPassword!42";
 
 const steps = [];
 let failures = 0;
@@ -69,10 +47,10 @@ function report(label, ok, detail = "") {
 
 function assert(label, condition, detail = "") {
   report(label, Boolean(condition), detail);
-  if (!condition) throw new Error(`étape échouée : ${label}`);
+  if (!condition) throw new Error(`step failed: ${label}`);
 }
 
-/** Attend qu'une condition devienne vraie, ou abandonne. */
+/** Waits for a condition to become true, or aborts. */
 async function until(label, probe, { timeoutMs = 60_000, intervalMs = 400 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let last;
@@ -81,34 +59,29 @@ async function until(label, probe, { timeoutMs = 60_000, intervalMs = 400 } = {}
     if (last) return last;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error(`délai dépassé en attendant : ${label} (dernier état ${JSON.stringify(last)})`);
+  throw new Error(`timeout exceeded waiting for: ${label} (last state ${JSON.stringify(last)})`);
 }
 
 /**
- * Outil à risque, et sans danger.
- *
- * Il exige une confirmation et ne fait rien d'autre que rendre une chaîne.
- * C'est exactement ce qu'il faut : la chaîne à éprouver est la suspension et la
- * reprise, pas l'effet de l'outil — et un outil qui aurait un effet réel
- * rendrait ce test dangereux à relancer.
+ * Sensitive demonstration tool requiring confirmation.
  */
 const demoTool = {
   name: "demo.sensitive_action",
-  description: "Action de démonstration qui exige un accord humain.",
+  description: "Demonstration action requiring human confirmation.",
   inputSchema: z.object({ note: z.string() }),
   outputSchema: z.object({ done: z.literal(true) }),
   riskLevel: "HIGH",
   requiredPermissions: [],
   requiresConfirmation: true,
-  summarize: (input) => `Action de démonstration : ${input.note}`,
+  summarize: (input) => `Demonstration action: ${input.note}`,
   execute: () => Promise.resolve({ done: true }),
 };
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("DATABASE_URL est requis");
+  if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
-  process.stdout.write("\nBout en bout : confirmation humaine et redémarrage du moteur\n\n");
+  process.stdout.write("\nEnd-to-end: human confirmation and engine restart\n\n");
 
   const signingKeys = generateSigningKeyPair();
   const config = parseConfig({
@@ -122,14 +95,13 @@ async function main() {
   const { createDatabaseClient } = await import("@nexus/database");
   const prisma = createDatabaseClient({ url: databaseUrl });
 
-  // Le modèle : un appel d'outil à risque, puis la réponse finale une fois
-  // l'accord donné. Deux tours, et c'est tout le déterminisme dont on a besoin.
+  // Scripted model calling sensitive tool, then returning final answer upon approval.
   const llm = new ScriptedLLMProvider([
     {
       kind: "tool_calls",
-      calls: [{ id: "call-1", name: demoTool.name, arguments: { note: "ranger les mails" } }],
+      calls: [{ id: "call-1", name: demoTool.name, arguments: { note: "organize emails" } }],
     },
-    { kind: "final", text: "Action confirmée puis exécutée." },
+    { kind: "final", text: "Action confirmed then executed." },
   ]);
 
   const services = new ServiceContainer({
@@ -154,16 +126,14 @@ async function main() {
     websocket: false,
   });
   await app.listen({ host: "127.0.0.1", port: API_PORT });
-  report("API démarrée", true, `127.0.0.1:${API_PORT}`);
+  report("API started", true, `127.0.0.1:${API_PORT}`);
 
   const engineDir = await mkdtemp(join(tmpdir(), "nexus-e2e-"));
   const publicKeyPath = join(engineDir, "api-public.pem");
   await writeFile(publicKeyPath, signingKeys.publicKeyPem);
-  // Fichiers factices : le moteur refuse de démarrer son worker sans runtime
-  // ACP déclaré, alors que notre mission n'a aucune tâche ACP.
   const acpRunner = join(engineDir, "runner.js");
   const acpRegistry = join(engineDir, "profiles.json");
-  await writeFile(acpRunner, "// jamais exécuté : aucune tâche ACP dans ce scénario\n");
+  await writeFile(acpRunner, "// never executed: no ACP tasks in this scenario\n");
   await writeFile(acpRegistry, "{}\n");
 
   const engineEnv = {
@@ -180,17 +150,15 @@ async function main() {
   };
 
   let engine = await startEngine(engineEnv);
-  report("moteur démarré", true, `pid ${engine.pid}`);
+  report("engine started", true, `pid ${engine.pid}`);
 
-  // Un compte réel : c'est lui qui possédera la mission, et c'est son jeton qui
-  // approuvera la confirmation depuis la surface utilisateur.
-  const account = await register(`e2e-${Date.now()}@exemple.test`);
+  const account = await register(`e2e-${Date.now()}@example.test`);
   const grant = await services.missionGrants.issue({
     userId: account.userId,
     service: "mission-engine",
     missionExternalKey: MISSION_KEY,
   });
-  report("compte et assertion de mission prêts", true);
+  report("account and mission assertion ready", true);
 
   const serviceToken = () =>
     new TokenService({ privateKeyPem: signingKeys.privateKeyPem }).issueServiceToken({
@@ -203,7 +171,7 @@ async function main() {
     headers: { "Idempotency-Key": MISSION_KEY },
     body: {
       external_key: MISSION_KEY,
-      title: "Confirmation de bout en bout",
+      title: "End to end confirmation",
       workspace: engineDir,
       owner: {
         user_id: account.userId,
@@ -212,61 +180,57 @@ async function main() {
       },
       tasks: [
         {
-          key: "deleguee",
+          key: "delegated",
           agent_kind: "agent-core",
-          instruction: "Effectue l'action de démonstration.",
+          instruction: "Perform demonstration action.",
           depends_on: [],
         },
       ],
     },
   });
-  assert("mission soumise au moteur", submitted.status === 201, `HTTP ${submitted.status}`);
+  assert("mission submitted to engine", submitted.status === 201, `HTTP ${submitted.status}`);
   const missionId = submitted.body.mission_id;
 
-  const suspended = await until("tâche en attente de confirmation", async () => {
+  const suspended = await until("task awaiting confirmation", async () => {
     const mission = await engineRequest("GET", `/v1/missions/${missionId}`);
     const task = mission.body?.tasks?.[0];
     return task?.state === "awaiting_confirmation" ? task : undefined;
   });
-  assert("tâche suspendue sur une confirmation", true, `état ${suspended.state}`);
+  assert("task suspended on confirmation", true, `state ${suspended.state}`);
 
-  // Le run qui attend l'accord, vu depuis l'API.
-  const runId = await until("run Agent Core en attente", async () => {
+  const runId = await until("Agent Core run awaiting", async () => {
     const row = await prisma.agentRunSnapshot.findFirst({
       where: { userId: account.userId, missionExternalKey: MISSION_KEY },
     });
     return row?.status === "waiting_for_confirmation" ? row.id : undefined;
   });
-  report("run Agent Core en attente d'accord", true, runId);
+  report("Agent Core run awaiting confirmation", true, runId);
 
-  // ── Le redémarrage. C'est le cœur du test : l'attente doit survivre à un
-  //    arrêt de processus, parce qu'elle est en base et non en mémoire.
+  // Restart engine to verify persistent state across restarts.
   await stopEngine(engine);
-  report("moteur arrêté", true, "SIGTERM");
+  report("engine stopped", true, "SIGTERM");
   engine = await startEngine(engineEnv);
-  report("moteur relancé", true, `pid ${engine.pid}`);
+  report("engine restarted", true, `pid ${engine.pid}`);
 
   const afterRestart = await engineRequest("GET", `/v1/missions/${missionId}`);
   assert(
-    "attente retrouvée après redémarrage",
+    "awaiting state preserved after restart",
     afterRestart.body?.tasks?.[0]?.state === "awaiting_confirmation",
-    `état ${afterRestart.body?.tasks?.[0]?.state}`,
+    `state ${afterRestart.body?.tasks?.[0]?.state}`,
   );
 
-  // ── L'approbation, par la surface utilisateur : c'est bien la personne qui
-  //    tranche, avec son propre jeton, comme depuis le tableau de bord.
   const approved = await apiRequest("POST", `/api/v1/agent-core/runs/${runId}/confirmation`, {
     token: account.accessToken,
     body: { decision: "approved" },
   });
   assert(
-    "confirmation approuvée par le propriétaire",
+    "confirmation approved by owner",
     approved.status === 200,
     `HTTP ${approved.status}`,
   );
 
   const finished = await until(
-    "tâche reprise et terminée",
+    "task resumed and finished",
     async () => {
       const mission = await engineRequest("GET", `/v1/missions/${missionId}`);
       const task = mission.body?.tasks?.[0];
@@ -274,20 +238,19 @@ async function main() {
     },
     { timeoutMs: 90_000 },
   );
-  assert("tâche succeeded après reprise", true);
-  assert("mission succeeded", finished.state === "succeeded", `état ${finished.state}`);
+  assert("task succeeded after resumption", true);
+  assert("mission succeeded", finished.state === "succeeded", `state ${finished.state}`);
 
   const result = JSON.parse(finished.tasks[0].result_json ?? "{}");
   assert(
-    "réponse finale rendue par la tâche",
-    typeof result.response === "string" && result.response.includes("Action confirmée"),
+    "final response returned by task",
+    typeof result.response === "string" && result.response.includes("Action confirmed"),
     JSON.stringify(result.response),
   );
 
-  // Les assertions de la mission sont retirées à sa clôture.
   const grants = await services.missionGrants.listByMission(MISSION_KEY);
   assert(
-    "assertions retirées à la clôture",
+    "assertions retired on closure",
     grants.length > 0 && grants.every((item) => item.status !== "ACTIVE"),
     grants.map((item) => item.status).join(","),
   );
@@ -297,10 +260,8 @@ async function main() {
   await cleanup(prisma, account.userId);
   await prisma.$disconnect();
 
-  process.stdout.write(`\n${steps.length} étapes, ${failures} échec(s)\n`);
+  process.stdout.write(`\n${steps.length} steps, ${failures} failure(s)\n`);
   process.exitCode = failures === 0 ? 0 : 1;
-
-  // ── helpers liés au contexte ──────────────────────────────────────────────
 
   async function register(email) {
     const response = await apiRequest("POST", "/api/v1/auth/register", {
@@ -308,7 +269,7 @@ async function main() {
     });
     if (response.status !== 201 && response.status !== 200) {
       throw new Error(
-        `inscription refusée : HTTP ${response.status} ${JSON.stringify(response.body)}`,
+        `registration refused: HTTP ${response.status} ${JSON.stringify(response.body)}`,
       );
     }
     return {
@@ -318,14 +279,6 @@ async function main() {
   }
 }
 
-/**
- * Journal muet.
- *
- * Fastify veut un logger complet ; ce scenario veut un rapport lisible, pas
- * trois cents lignes de traces HTTP. Les methodes rendent `undefined` plutot
- * que d'avoir un corps vide, ce que le lint refuse a juste titre : une fonction
- * vide par accident ressemble a une fonction vide par intention.
- */
 function silentLogger() {
   const noop = () => undefined;
   const logger = {
@@ -381,18 +334,14 @@ async function startEngine(env) {
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  // Le flux est consomme sans etre relaye : sans lecteur, le tube se remplit et
-  // finirait par bloquer le processus enfant.
   child.stdout.resume();
   child.stderr.on("data", (chunk) => {
     const text = String(chunk);
-    // On ne relaie que ce qui aide à diagnostiquer : le reste est du bruit
-    // uvicorn qui noierait les étapes.
-    if (/error|Traceback|refus/i.test(text)) process.stderr.write(`    [moteur] ${text}`);
+    if (/error|Traceback|refus/i.test(text)) process.stderr.write(`    [engine] ${text}`);
   });
 
   await until(
-    "moteur prêt",
+    "engine ready",
     async () => {
       const health = await engineRequest("GET", "/v1/health/ready").catch(() => undefined);
       return health?.status === 200;
@@ -410,7 +359,6 @@ async function stopEngine(child) {
   if (child.exitCode === null) child.kill("SIGKILL");
 }
 
-/** Ne supprime que ce que cette exécution a créé. */
 async function cleanup(prisma, userId) {
   await prisma.agentCoreRunClaim.deleteMany({ where: { userId } });
   await prisma.missionGrant.deleteMany({ where: { userId } });

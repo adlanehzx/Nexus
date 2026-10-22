@@ -4,17 +4,17 @@ import { settle } from "./harness.js";
 import { GRANTED, bootFleet, planFor, runPlan, waitFor, type Fleet } from "./fleet.js";
 
 /**
- * Validation de bout en bout.
+ * End-to-end validation.
  *
- * Sept scénarios, joués sur la flotte complète : iPhone, portable, poste fixe,
- * Redmi et le cœur. Le vrai code des cinq côtés — clients, exécutants,
- * coordinateur, sélecteur, confirmations. Voir `fleet.ts` pour ce qui est doublé
- * et ce qui ne l'est pas.
+ * Seven scenarios played across the full fleet: iPhone, laptop, desktop,
+ * Redmi, and core. Real code across all five sides — clients, workers,
+ * coordinator, selector, confirmations. See `fleet.ts` for what is stubbed
+ * and what is real.
  *
- * **Une limite, dite d'emblée** : il n'y a pas de modèle de langage câblé. Les
- * scénarios partent du plan que la phrase française dénote, pas de la phrase.
- * Tout ce qui suit — sélection, autorisation, dispatch, exécution, progression,
- * notification, synchronisation — est réel.
+ * **Stated limit upfront**: there is no wired language model. The
+ * scenarios start from the plan that the prompt denotes, not the prompt itself.
+ * Everything that follows — selection, authorization, dispatch, execution, progress,
+ * notification, synchronization — is real.
  */
 
 let fleet: Fleet;
@@ -27,7 +27,7 @@ afterEach(async () => {
   await fleet.close();
 });
 
-/** Les deux clients ont-ils convergé vers le même état d'une tâche ? */
+/** Do both clients converge to the same task state? */
 async function bothClientsSee(taskId: string, status: string): Promise<void> {
   await waitFor(
     () =>
@@ -37,24 +37,24 @@ async function bothClientsSee(taskId: string, status: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 1 — « Ouvre Chrome sur mon PC bureau et va sur Google. »
+// E2E 1 — "Open Chrome on my desktop PC and go to Google."
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 1 — depuis l'iPhone, ouvrir un navigateur sur le poste fixe", () => {
-  it("traverse la chaîne complète et revient sur l'iPhone", async () => {
+describe("E2E 1 — from iPhone, open a browser on desktop workstation", () => {
+  it("traverses the entire chain and returns to the iPhone", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Ouvrir Chrome sur le poste fixe",
+      title: "Open Chrome on desktop workstation",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir Google dans le navigateur",
-          // Le sélecteur ne connaît que ça. Jamais un nom de machine.
+          id: "open",
+          description: "Open Google in browser",
+          // The selector only knows capabilities. Never a machine name.
           requiredCapabilities: ["browser.open"],
           tool: "device.browser.open",
           arguments: { url: "https://www.google.com" },
-          // « sur mon PC bureau » devient une **préférence**, pondérée.
+          // "on my desktop PC" becomes a weighted preference.
           preferredDeviceId: fleet.devices.desktop.device.id,
           riskLevel: "LOW",
         },
@@ -63,45 +63,44 @@ describe("E2E 1 — depuis l'iPhone, ouvrir un navigateur sur le poste fixe", ()
 
     runPlan(fleet, plan);
 
-    // 1. L'étape atteint le poste fixe — et lui seul.
+    // 1. The step reaches the desktop workstation — and only it.
     await waitFor(() => fleet.desktop.executed.length > 0);
     expect(fleet.desktop.executed[0]?.capability).toBe("browser.open");
     expect(fleet.desktop.executed[0]?.input).toMatchObject({ url: "https://www.google.com" });
     expect(fleet.laptopWorker.executed).toEqual([]);
     expect(fleet.redmi.executed).toEqual([]);
 
-    // 2. L'iPhone voit la tâche aboutir.
+    // 2. The iPhone sees the task succeed.
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "succeeded");
 
     const task = fleet.iphone.state().tasks[0];
-    expect(task?.title).toBe("Ouvrir Chrome sur le poste fixe");
-    // 3. Le fil de routage tient de bout en bout.
+    expect(task?.title).toBe("Open Chrome on desktop workstation");
+    // 3. Routing trace holds end-to-end.
     expect(task?.originClientDeviceId).toBe(fleet.devices.iphone.device.id);
-    // 4. L'iPhone sait **où** ça a tourné.
+    // 4. The iPhone knows where it ran.
     expect(task?.workerDeviceId).toBe(fleet.devices.desktop.device.id);
 
-    // 5. Et il reçoit la notification, produite au centre.
+    // 5. And it receives the notification produced centrally.
     await waitFor(() => fleet.iphone.state().notifications.length > 0);
     expect(fleet.iphone.state().notifications[0]?.title).toBeTruthy();
   });
 
-  it("la préférence ne contourne pas la capacité", async () => {
-    // Le point de sécurité du scénario. « Sur mon PC bureau » est une
-    // préférence, pas un ordre : un appareil préféré qui ne sait pas faire reste
-    // écarté. Sans cela, nommer une machine deviendrait un moyen de la faire
-    // exécuter ce qu'elle n'a pas déclaré.
+  it("preference does not bypass capability", async () => {
+    // Security premise of scenario: "On my desktop PC" is a preference, not a command.
+    // A preferred device lacking the capability remains excluded. Otherwise, naming
+    // a machine would become a way to execute undeclared capabilities.
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Ouvrir une application Android",
+      title: "Open Android application",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir une application",
+          id: "open",
+          description: "Open an application",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           arguments: { package: "com.google.android.youtube" },
-          // L'utilisateur désigne le poste fixe, qui n'a pas cette capacité.
+          // The user designates desktop workstation, which lacks this capability.
           preferredDeviceId: fleet.devices.desktop.device.id,
           riskLevel: "SAFE",
         },
@@ -111,26 +110,26 @@ describe("E2E 1 — depuis l'iPhone, ouvrir un navigateur sur le poste fixe", ()
     runPlan(fleet, plan);
     await waitFor(() => fleet.redmi.executed.length > 0);
 
-    // Le Redmi a exécuté ; le poste fixe n'a rien vu.
+    // Redmi executed; desktop workstation saw nothing.
     expect(fleet.redmi.executed[0]?.capability).toBe("android.app.open");
     expect(fleet.desktop.executed).toEqual([]);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 2 — « Ouvre YouTube sur mon Redmi. »
+// E2E 2 — "Open YouTube on my Redmi."
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 2 — depuis le portable, agir sur le Redmi", () => {
-  it("atteint le téléphone et se synchronise sur l'iPhone", async () => {
+describe("E2E 2 — from laptop, act on Redmi", () => {
+  it("reaches phone and synchronizes to iPhone", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Ouvrir YouTube sur le Redmi",
+      title: "Open YouTube on Redmi",
       originClientDeviceId: fleet.devices.laptop.device.id,
       steps: [
         {
           id: "youtube",
-          description: "Ouvrir YouTube",
+          description: "Open YouTube",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           arguments: { package: "com.google.android.youtube" },
@@ -146,30 +145,30 @@ describe("E2E 2 — depuis le portable, agir sur le Redmi", () => {
       package: "com.google.android.youtube",
     });
 
-    // Le portable a lancé — et l'iPhone, qui n'a rien demandé, voit la même
-    // tâche avec la même origine. C'est la synchronisation par le centre.
+    // Laptop initiated — and iPhone, which requested nothing, sees same task with same origin.
+    // This is central synchronization.
     await bothClientsSee(plan.id, "succeeded");
 
-    const surIphone = fleet.iphone.state().tasks.find((task) => task.id === plan.id);
-    expect(surIphone?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
-    expect(surIphone?.workerDeviceId).toBe(fleet.devices.redmi.device.id);
+    const onIphone = fleet.iphone.state().tasks.find((task) => task.id === plan.id);
+    expect(onIphone?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
+    expect(onIphone?.workerDeviceId).toBe(fleet.devices.redmi.device.id);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 3 — « Lance mon projet et dis-moi quand le serveur est prêt. »
+// E2E 3 — "Start my project and notify me when the server is ready."
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 3 — démarrage d'un serveur, avec progression", () => {
-  it("enchaîne lecture puis démarrage, et rapporte l'avancement", async () => {
+describe("E2E 3 — server startup with progress reports", () => {
+  it("chains read then startup, and reports progress", async () => {
     await fleet.close();
     fleet = await bootFleet({
       behaviours: {
         desktop: {
-          // Un démarrage de serveur n'est pas instantané : il rapporte.
+          // Server startup is not instantaneous: it reports progress.
           "process.start": (input, context) => {
-            context.onProgress({ percent: 30, label: "installation des dépendances" });
-            context.onProgress({ percent: 80, label: "compilation" });
+            context.onProgress({ percent: 30, label: "installing dependencies" });
+            context.onProgress({ percent: 80, label: "compiling" });
             return Promise.resolve({ pid: 4242, port: 3000, ready: true, input });
           },
         },
@@ -178,25 +177,25 @@ describe("E2E 3 — démarrage d'un serveur, avec progression", () => {
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Lancer le projet sur le poste fixe",
+      title: "Start project on desktop workstation",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "lire",
-          description: "Lire la configuration du projet",
+          id: "read",
+          description: "Read project configuration",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
-          arguments: { path: "C:\\Projets\\leynai\\package.json" },
+          arguments: { path: "C:\\Projects\\leynai\\package.json" },
           preferredDeviceId: fleet.devices.desktop.device.id,
           riskLevel: "SAFE",
         },
         {
-          id: "demarrer",
-          description: "Démarrer le serveur de développement",
+          id: "start",
+          description: "Start development server",
           requiredCapabilities: ["process.start"],
           tool: "device.process.start",
           arguments: { executable: "pnpm", args: ["dev"] },
-          dependsOn: ["lire"],
+          dependsOn: ["read"],
           riskLevel: "SAFE",
         },
       ],
@@ -211,32 +210,31 @@ describe("E2E 3 — démarrage d'un serveur, avec progression", () => {
     expect(task?.percent).toBe(100);
     expect(task?.stepCount).toBe(2);
 
-    // Les deux étapes ont bien tourné sur le poste fixe, dans l'ordre.
+    // Both steps ran on desktop workstation, in order.
     expect(fleet.desktop.executed.map((entry) => entry.capability)).toEqual([
       "filesystem.read",
       "process.start",
     ]);
 
-    // L'iPhone a été notifié de la fin — c'est le « dis-moi quand ».
+    // iPhone was notified of completion.
     await waitFor(() => fleet.iphone.state().notifications.length > 0);
   });
 
-  it("l'iPhone reçoit la progression pendant l'exécution", async () => {
-    // Le point du scénario : l'utilisateur regarde son téléphone et veut savoir
-    // où ça en est, pas seulement quand c'est fini.
-    const progressions = fleet.iphone.actions.filter(
+  it("iPhone receives progress during execution", async () => {
+    // Scenario premise: user watches phone and wants to know progress, not just completion.
+    const progressActions = fleet.iphone.actions.filter(
       (action) => action.kind === "server" && action.type === SERVER_TO_CLIENT.taskProgress,
     );
-    expect(progressions).toHaveLength(0);
+    expect(progressActions).toHaveLength(0);
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Étapes successives",
+      title: "Sequential steps",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
           id: "a",
-          description: "Première",
+          description: "First",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           preferredDeviceId: fleet.devices.desktop.device.id,
@@ -244,7 +242,7 @@ describe("E2E 3 — démarrage d'un serveur, avec progression", () => {
         },
         {
           id: "b",
-          description: "Seconde",
+          description: "Second",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           dependsOn: ["a"],
@@ -256,37 +254,37 @@ describe("E2E 3 — démarrage d'un serveur, avec progression", () => {
     runPlan(fleet, plan);
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "succeeded");
 
-    const recues = fleet.iphone.actions.filter(
+    const received = fleet.iphone.actions.filter(
       (action) => action.kind === "server" && action.type === SERVER_TO_CLIENT.taskProgress,
     );
-    expect(recues.length).toBeGreaterThan(0);
+    expect(received.length).toBeGreaterThan(0);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 4 — « Lance les tests sur mon PC portable. »
+// E2E 4 — "Run tests on my laptop."
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 4 — l'iPhone fait exécuter le portable", () => {
-  it("le portable exécute et l'iPhone reçoit le résultat", async () => {
+describe("E2E 4 — iPhone runs execution on laptop", () => {
+  it("laptop executes and iPhone receives result", async () => {
     await fleet.close();
     fleet = await bootFleet({
       behaviours: {
         laptop: {
           "terminal.execute": (input) =>
-            Promise.resolve({ exitCode: 0, stdout: "1072 tests passés", input }),
+            Promise.resolve({ exitCode: 0, stdout: "1072 tests passed", input }),
         },
       },
     });
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Lancer les tests sur le portable",
+      title: "Run tests on laptop",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
           id: "tests",
-          description: "Exécuter la suite de tests",
+          description: "Execute test suite",
           requiredCapabilities: ["terminal.execute"],
           tool: "device.terminal.execute",
           arguments: { executable: "pnpm", args: ["test"] },
@@ -304,13 +302,13 @@ describe("E2E 4 — l'iPhone fait exécuter le portable", () => {
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "succeeded");
     expect(fleet.iphone.state().tasks[0]?.workerDeviceId).toBe(fleet.devices.laptop.device.id);
 
-    // Le résultat est bien celui qu'a produit la machine, consigné au centre.
+    // The result is indeed what machine produced, recorded centrally.
     const executions = await fleet.harness.services.taskStore.listExecutions(plan.id);
     expect(executions[0]?.result).toMatchObject({ exitCode: 0 });
   });
 
-  it("le portable est client et exécutant en même temps", () => {
-    // Deux canaux, deux secrets, une seule ligne d'appareil.
+  it("laptop is both client and worker simultaneously", () => {
+    // Two channels, two secrets, a single device record.
     expect(fleet.laptop.realtime.state).toBe("connected");
     expect(fleet.harness.services.gateway.isConnected(fleet.devices.laptop.device.id)).toBe(true);
     expect(fleet.harness.app.clientChannel.connectedDeviceIds).toContain(
@@ -320,25 +318,25 @@ describe("E2E 4 — l'iPhone fait exécuter le portable", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 5 — Deux machines, une dépendance
+// E2E 5 — Two machines, one dependency
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 5 — plan multi-machines avec dépendance", () => {
-  it("télécharge sur le poste fixe puis ouvre sur le Redmi, dans cet ordre", async () => {
-    const ordre: string[] = [];
+describe("E2E 5 — multi-machine plan with dependency", () => {
+  it("downloads on desktop workstation then opens on Redmi, in that order", async () => {
+    const order: string[] = [];
 
     await fleet.close();
     fleet = await bootFleet({
       behaviours: {
         desktop: {
           "git.clone": () => {
-            ordre.push("desktop");
+            order.push("desktop");
             return Promise.resolve({ cloned: true });
           },
         },
         redmi: {
           "android.app.open": () => {
-            ordre.push("redmi");
+            order.push("redmi");
             return Promise.resolve({ opened: true });
           },
         },
@@ -347,62 +345,62 @@ describe("E2E 5 — plan multi-machines avec dépendance", () => {
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Télécharger puis ouvrir",
+      title: "Download then open",
       originClientDeviceId: fleet.devices.laptop.device.id,
       steps: [
         {
-          id: "telecharger",
-          description: "Cloner le projet",
+          id: "download",
+          description: "Clone project",
           requiredCapabilities: ["git.clone"],
           tool: "device.git.clone",
-          arguments: { url: "https://exemple.fr/projet.git" },
+          arguments: { url: "https://example.com/project.git" },
           riskLevel: "SAFE",
         },
         {
-          id: "ouvrir",
-          description: "Ouvrir l'application sur le téléphone",
+          id: "open",
+          description: "Open application on phone",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
-          arguments: { package: "fr.exemple.app" },
-          dependsOn: ["telecharger"],
+          arguments: { package: "com.example.app" },
+          dependsOn: ["download"],
           riskLevel: "SAFE",
         },
       ],
     });
 
     runPlan(fleet, plan);
-    await waitFor(() => ordre.length === 2);
+    await waitFor(() => order.length === 2);
 
-    // La dépendance est respectée : la seconde étape n'a pas démarré avant que
-    // la première n'aboutisse, et elles sont sur deux machines différentes.
-    expect(ordre).toEqual(["desktop", "redmi"]);
+    // Dependency is respected: the second step did not start before the first completed,
+    // and they are on two different machines.
+    expect(order).toEqual(["desktop", "redmi"]);
 
-    // Le sélecteur a choisi chaque machine sur sa capacité, sans qu'on la nomme.
+    // Selector chose each machine based on capability, without naming them.
     const executed = await fleet.harness.services.taskStore.listExecutions(plan.id);
-    const parEtape = new Map(executed.map((entry) => [entry.stepId, entry.deviceId]));
-    expect(parEtape.get("telecharger")).toBe(fleet.devices.desktop.device.id);
-    expect(parEtape.get("ouvrir")).toBe(fleet.devices.redmi.device.id);
+    const byStep = new Map(executed.map((entry) => [entry.stepId, entry.deviceId]));
+    expect(byStep.get("download")).toBe(fleet.devices.desktop.device.id);
+    expect(byStep.get("open")).toBe(fleet.devices.redmi.device.id);
   });
 
-  it("les deux résultats se synchronisent sur l'iPhone et le portable", async () => {
+  it("both results synchronize on iPhone and laptop", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Deux machines",
+      title: "Two machines",
       originClientDeviceId: fleet.devices.laptop.device.id,
       steps: [
         {
-          id: "telecharger",
-          description: "Cloner",
+          id: "download",
+          description: "Clone",
           requiredCapabilities: ["git.clone"],
           tool: "device.git.clone",
           riskLevel: "SAFE",
         },
         {
-          id: "ouvrir",
-          description: "Ouvrir",
+          id: "open",
+          description: "Open",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
-          dependsOn: ["telecharger"],
+          dependsOn: ["download"],
           riskLevel: "SAFE",
         },
       ],
@@ -411,53 +409,53 @@ describe("E2E 5 — plan multi-machines avec dépendance", () => {
     runPlan(fleet, plan);
     await bothClientsSee(plan.id, "succeeded");
 
-    // Même identifiant, même origine, des deux côtés.
-    const surIphone = fleet.iphone.state().tasks.find((task) => task.id === plan.id);
-    const surPortable = fleet.laptop.state().tasks.find((task) => task.id === plan.id);
+    // Same identifier, same origin, on both sides.
+    const onIphone = fleet.iphone.state().tasks.find((task) => task.id === plan.id);
+    const onLaptop = fleet.laptop.state().tasks.find((task) => task.id === plan.id);
 
-    expect(surIphone?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
-    expect(surPortable?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
-    expect(surIphone?.stepCount).toBe(surPortable?.stepCount);
+    expect(onIphone?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
+    expect(onLaptop?.originClientDeviceId).toBe(fleet.devices.laptop.device.id);
+    expect(onIphone?.stepCount).toBe(onLaptop?.stepCount);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 6 — Déconnexion en cours d'exécution
+// E2E 6 — Disconnection during execution
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
-  it("bascule sur une autre machine plutôt que d'échouer en silence", async () => {
-    // Deux machines savent lire un fichier : le poste fixe et le portable. Le
-    // poste fixe est préféré, il tombe, et la tâche doit finir ailleurs.
-    let libere: (() => void) | undefined;
-    const bloque = new Promise<void>((resolve) => {
-      libere = resolve;
+describe("E2E 6 — desktop workstation drops during execution", () => {
+  it("fails over to another machine rather than failing silently", async () => {
+    // Two machines can read files: desktop and laptop. Desktop is preferred,
+    // it disconnects, and the task must complete elsewhere.
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
     });
 
     await fleet.close();
     fleet = await bootFleet({
       behaviours: {
         desktop: {
-          // Ne rend jamais la main : la machine est occupée quand le câble tombe.
+          // Never returns: machine is busy when cable is disconnected.
           "filesystem.read": async () => {
-            await bloque;
-            return { content: "jamais rendu" };
+            await blocked;
+            return { content: "never returned" };
           },
         },
         laptop: {
-          "filesystem.read": () => Promise.resolve({ content: "lu par le portable" }),
+          "filesystem.read": () => Promise.resolve({ content: "read by laptop" }),
         },
       },
     });
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Lecture avec bascule",
+      title: "Read with failover",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "lire",
-          description: "Lire un fichier",
+          id: "read",
+          description: "Read file",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           preferredDeviceId: fleet.devices.desktop.device.id,
@@ -469,35 +467,35 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
 
     runPlan(fleet, plan);
 
-    // L'étape part bien sur le poste fixe.
+    // Step starts on desktop workstation.
     await waitFor(() => fleet.desktop.executed.length > 0);
     expect(fleet.harness.services.gateway.isConnected(fleet.devices.desktop.device.id)).toBe(true);
 
-    // Le câble tombe.
-    fleet.desktop.disconnect("câble débranché");
+    // Cable is disconnected.
+    fleet.desktop.disconnect("cable disconnected");
     await settle(40);
 
-    // 1. NEXUS détecte la déconnexion.
+    // 1. NEXUS detects disconnection.
     await waitFor(
       () => !fleet.harness.services.gateway.isConnected(fleet.devices.desktop.device.id),
     );
 
-    // 2. L'étape en vol est résolue **réessayable**, et bascule sur le portable.
+    // 2. In-flight step is resolved retryable, and fails over to laptop.
     await waitFor(() => fleet.laptopWorker.executed.length > 0);
 
-    // 3. La tâche aboutit ; l'utilisateur n'est pas laissé sans réponse.
+    // 3. Task succeeds; user is not left hanging.
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "succeeded");
     expect(fleet.iphone.state().tasks[0]?.workerDeviceId).toBe(fleet.devices.laptop.device.id);
 
-    libere?.();
+    release?.();
   });
 
-  it("sans repli possible, l'échec est explicite et notifié", async () => {
-    // Aucune bascule silencieuse, mais aucun silence non plus : quand plus
-    // personne ne sait faire, l'utilisateur doit l'apprendre.
-    let libere: (() => void) | undefined;
-    const bloque = new Promise<void>((resolve) => {
-      libere = resolve;
+  it("without viable fallback, failure is explicit and notified", async () => {
+    // No silent failover, but no silence either: when no machine can handle it,
+    // the user must be informed.
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
     });
 
     await fleet.close();
@@ -505,7 +503,7 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
       behaviours: {
         redmi: {
           "android.app.open": async () => {
-            await bloque;
+            await blocked;
             return { opened: true };
           },
         },
@@ -514,13 +512,13 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Ouvrir sur le seul téléphone",
+      title: "Open on only phone",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir une application",
-          // Seul le Redmi sait faire : il n'existe pas de repli.
+          id: "open",
+          description: "Open application",
+          // Only Redmi can perform this: no fallback exists.
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           retry: { attempts: 1 },
@@ -532,7 +530,7 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
     runPlan(fleet, plan);
     await waitFor(() => fleet.redmi.executed.length > 0);
 
-    fleet.redmi.disconnect("téléphone éteint");
+    fleet.redmi.disconnect("phone shut down");
     await settle(40);
 
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "failed");
@@ -541,21 +539,20 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
     expect(task?.status).toBe("failed");
     expect(task?.error).not.toBeNull();
 
-    // Et une notification part — pas de défaillance muette.
+    // Notification is dispatched — no silent failure.
     await waitFor(() => fleet.iphone.state().notifications.length > 0);
     expect(fleet.iphone.state().notifications[0]?.severity).toBe("error");
 
-    libere?.();
+    release?.();
   });
 
-  it("un exécutant qui revient se réauthentifie entièrement", async () => {
-    fleet.desktop.disconnect("coupure réseau");
+  it("reconnecting worker completely re-authenticates", async () => {
+    fleet.desktop.disconnect("network outage");
     await settle(40);
     expect(fleet.harness.services.gateway.isConnected(fleet.devices.desktop.device.id)).toBe(false);
 
-    // Une session dont on ne sait pas si elle est encore valide n'est pas une
-    // session : la reprise refait la poignée de main complète, signature
-    // comprise.
+    // A session whose validity is uncertain is not a valid session:
+    // reconnection performs full handshake, including signature.
     await fleet.desktop.runtime.start();
     await waitFor(() =>
       fleet.harness.services.gateway.isConnected(fleet.devices.desktop.device.id),
@@ -566,27 +563,27 @@ describe("E2E 6 — le poste fixe tombe pendant l'exécution", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E2E 7 — Opération à risque élevé
+// E2E 7 — High-risk operation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("E2E 7 — une action HIGH attend un humain", () => {
+describe("E2E 7 — HIGH risk action awaits human confirmation", () => {
   beforeEach(async () => {
     await fleet.close();
     fleet = await bootFleet({ confirmationThreshold: "HIGH" });
   });
 
-  it("rien ne s'exécute avant l'approbation", async () => {
+  it("nothing executes before approval", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Écrire dans un fichier",
+      title: "Write to file",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ecrire",
-          description: "Écraser le fichier de configuration",
+          id: "write",
+          description: "Overwrite configuration file",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
-          arguments: { path: "C:\\Projets\\config.json", content: "{}" },
+          arguments: { path: "C:\\Projects\\config.json", content: "{}" },
           riskLevel: "HIGH",
         },
       ],
@@ -594,21 +591,21 @@ describe("E2E 7 — une action HIGH attend un humain", () => {
 
     runPlan(fleet, plan);
 
-    // La demande arrive sur l'appareil d'origine.
+    // Request arrives on origin device.
     await waitFor(() => fleet.iphone.state().confirmations.length > 0);
 
-    const demande = fleet.iphone.state().confirmations[0];
-    expect(demande?.riskLevel).toBe("HIGH");
-    expect(demande?.description).toContain("configuration");
+    const confirmation = fleet.iphone.state().confirmations[0];
+    expect(confirmation?.riskLevel).toBe("HIGH");
+    expect(confirmation?.description).toContain("configuration");
 
-    // Et **rien** n'a été exécuté.
+    // And nothing has executed.
     await settle(40);
     expect(fleet.desktop.executed).toEqual([]);
     expect(fleet.laptopWorker.executed).toEqual([]);
 
-    // L'approbation débloque.
+    // Approval unblocks execution.
     await fleet.harness.services.confirmationBroker.respondAndRecord(
-      demande?.id ?? "",
+      confirmation?.id ?? "",
       "approved",
       fleet.account.userId,
     );
@@ -616,17 +613,16 @@ describe("E2E 7 — une action HIGH attend un humain", () => {
     await waitFor(() => fleet.desktop.executed.length + fleet.laptopWorker.executed.length > 0);
   });
 
-  it("la demande apparaît aussi sur l'autre client, l'origine restant marquée", async () => {
-    // Une confirmation demandée pendant qu'on est sur l'iPhone peut être
-    // approuvée depuis le portable : la demande vit au centre.
+  it("request also appears on other client with origin preserved", async () => {
+    // Confirmation requested while on iPhone can be approved from laptop: request lives centrally.
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Action risquée",
+      title: "Risky action",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ecrire",
-          description: "Écrire",
+          id: "write",
+          description: "Write",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           riskLevel: "CRITICAL",
@@ -642,27 +638,26 @@ describe("E2E 7 — une action HIGH attend un humain", () => {
         fleet.laptop.state().confirmations.length > 0,
     );
 
-    const surIphone = fleet.iphone.state().confirmations[0];
-    const surPortable = fleet.laptop.state().confirmations[0];
-    expect(surIphone?.id).toBe(surPortable?.id);
+    const onIphone = fleet.iphone.state().confirmations[0];
+    const onLaptop = fleet.laptop.state().confirmations[0];
+    expect(onIphone?.id).toBe(onLaptop?.id);
 
-    // L'origine est préservée sur la tâche : l'interface sait où mettre la
-    // demande en avant.
+    // Origin is preserved on task: UI knows where to highlight request.
     await waitFor(() => fleet.iphone.state().tasks.length > 0);
     expect(fleet.iphone.state().tasks[0]?.originClientDeviceId).toBe(
       fleet.devices.iphone.device.id,
     );
   });
 
-  it("un refus n'exécute rien", async () => {
+  it("rejection executes nothing", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Action refusée",
+      title: "Rejected action",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ecrire",
-          description: "Écrire",
+          id: "write",
+          description: "Write",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           riskLevel: "HIGH",
@@ -679,30 +674,28 @@ describe("E2E 7 — une action HIGH attend un humain", () => {
       fleet.account.userId,
     );
 
-    // Un refus **annule** l'étape ; une confirmation expirée, elle, la fait
-    // échouer. La distinction compte : « j'ai dit non » et « personne n'a
-    // répondu » n'appellent pas la même relance.
-    // Le client **voit** l'annulation : sans le message `task.cancelled`, la
-    // carte resterait « en cours » indéfiniment sur tous les appareils.
+    // Rejection cancels step; expired confirmation fails it. The distinction matters:
+    // "I said no" and "no one answered" do not call for same retry.
+    // Client sees cancellation: without task.cancelled message, card would remain in progress.
     await waitFor(() => fleet.iphone.state().tasks[0]?.status === "cancelled", {
-      label: "tâche annulée après refus",
+      label: "task cancelled after rejection",
     });
 
     expect(fleet.desktop.executed).toEqual([]);
     expect(fleet.laptopWorker.executed).toEqual([]);
   });
 
-  it("une action ordinaire ne demande rien", async () => {
-    // Le seuil doit trancher, pas tout arrêter : demander une confirmation pour
-    // chaque lecture apprendrait à approuver sans lire.
+  it("ordinary action requires no confirmation", async () => {
+    // Threshold must be selective, not block everything: requesting confirmation
+    // for every read trains users to approve without reading.
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Lecture ordinaire",
+      title: "Ordinary read",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "lire",
-          description: "Lire",
+          id: "read",
+          description: "Read",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           riskLevel: "SAFE",
@@ -718,45 +711,45 @@ describe("E2E 7 — une action HIGH attend un humain", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Validation finale — les points de la liste
+// Final validation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validation finale", () => {
-  it("les quatre appareils sont dans la flotte, avec leurs rôles", async () => {
+describe("final validation", () => {
+  it("all four devices are in the fleet with their roles", async () => {
     const devices = await fleet.harness.services.deviceRegistry.listDevices(fleet.account.userId);
-    const parNom = new Map(devices.map((device) => [device.name, device]));
+    const byName = new Map(devices.map((device) => [device.name, device]));
 
-    expect(parNom.get("iPhone 17")?.role).toBe("CLIENT");
-    expect(parNom.get("Portable Windows")?.role).toBe("BOTH");
-    expect(parNom.get("Poste fixe Windows")?.role).toBe("WORKER");
-    expect(parNom.get("Redmi Note 10S")?.role).toBe("WORKER");
+    expect(byName.get("iPhone 17")?.role).toBe("CLIENT");
+    expect(byName.get("Windows Laptop")?.role).toBe("BOTH");
+    expect(byName.get("Windows Desktop")?.role).toBe("WORKER");
+    expect(byName.get("Redmi Note 10S")?.role).toBe("WORKER");
   });
 
-  it("les capacités sont résolues depuis les exécutants, pas déclarées au cœur", async () => {
+  it("capabilities are resolved from workers, not hardcoded in core", async () => {
     const devices = await fleet.harness.services.deviceRegistry.listDevices(fleet.account.userId);
     const redmi = devices.find((device) => device.name === "Redmi Note 10S");
 
-    // Elles viennent de la trame `worker.register` du téléphone.
+    // They come from the phone's worker.register envelope.
     expect(redmi?.capabilities.map((capability) => capability.name).sort()).toEqual(
       [...(["android.app.open", "android.app.list", "android.notification"] as const)].sort(),
     );
   });
 
-  it("le cœur ne connaît aucun appareil par son nom", async () => {
-    // La propriété d'architecture, vérifiée depuis l'extérieur : renommer une
-    // machine ne change rien à ce qu'elle exécute.
+  it("core does not know any device by name", async () => {
+    // Architectural property, verified from the outside: renaming a
+    // machine does not change what it executes.
     await fleet.harness.services.deviceRegistry.updateDevice(fleet.devices.redmi.device.id, {
-      name: "Téléphone renommé",
+      name: "Renamed phone",
     });
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Après renommage",
+      title: "After rename",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir",
+          id: "open",
+          description: "Open",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           riskLevel: "SAFE",
@@ -769,15 +762,15 @@ describe("validation finale", () => {
     expect(fleet.redmi.executed).toHaveLength(1);
   });
 
-  it("une capacité non accordée ne quitte jamais le cœur", async () => {
+  it("an ungranted capability never leaves core", async () => {
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Capacité interdite",
+      title: "Forbidden capability",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
-          id: "interdit",
-          description: "Faire quelque chose d'interdit",
+          id: "forbidden",
+          description: "Perform something forbidden",
           requiredCapabilities: ["docker.execute"],
           tool: "device.docker.execute",
           riskLevel: "SAFE",
@@ -785,8 +778,8 @@ describe("validation finale", () => {
       ],
     });
 
-    // Le superviseur reçoit des permissions qui **ne contiennent pas** la
-    // capacité : c'est ce que ferait la route après le contrôle d'autorisation.
+    // Supervisor receives permissions that do not contain the
+    // capability: this is what the route would do after authorization check.
     fleet.harness.services.supervisor.start(
       plan,
       GRANTED.filter((permission) => permission !== "docker.execute"),
@@ -798,10 +791,10 @@ describe("validation finale", () => {
     expect(fleet.laptopWorker.executed).toEqual([]);
   });
 
-  it("une tâche s'annule depuis n'importe quel client", async () => {
-    let libere: (() => void) | undefined;
-    const bloque = new Promise<void>((resolve) => {
-      libere = resolve;
+  it("a task can be cancelled from any client", async () => {
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
     });
 
     await fleet.close();
@@ -809,7 +802,7 @@ describe("validation finale", () => {
       behaviours: {
         desktop: {
           "process.start": async () => {
-            await bloque;
+            await blocked;
             return { started: true };
           },
         },
@@ -818,12 +811,12 @@ describe("validation finale", () => {
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Longue tâche",
+      title: "Long task",
       originClientDeviceId: fleet.devices.iphone.device.id,
       steps: [
         {
           id: "long",
-          description: "Démarrer un serveur",
+          description: "Start a server",
           requiredCapabilities: ["process.start"],
           tool: "device.process.start",
           riskLevel: "SAFE",
@@ -834,25 +827,25 @@ describe("validation finale", () => {
     runPlan(fleet, plan);
     await waitFor(() => fleet.desktop.executed.length > 0);
 
-    // Lancée depuis l'iPhone, annulée depuis le portable.
-    const resultat = await fleet.laptop.realtime.cancelTask(plan.id);
-    expect(resultat.cancelled).toBe(true);
+    // Started from iPhone, cancelled from laptop.
+    const result = await fleet.laptop.realtime.cancelTask(plan.id);
+    expect(result.cancelled).toBe(true);
 
-    libere?.();
+    release?.();
   });
 
-  it("un client déconnecté rattrape son retard", async () => {
-    fleet.iphone.realtime.stop("écran verrouillé");
+  it("a disconnected client catches up", async () => {
+    fleet.iphone.realtime.stop("screen locked");
     await settle();
 
     const plan = planFor({
       userId: fleet.account.userId,
-      title: "Pendant l'absence de l'iPhone",
+      title: "During iPhone absence",
       originClientDeviceId: fleet.devices.laptop.device.id,
       steps: [
         {
-          id: "lire",
-          description: "Lire",
+          id: "read",
+          description: "Read",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           riskLevel: "SAFE",
@@ -863,10 +856,10 @@ describe("validation finale", () => {
     runPlan(fleet, plan);
     await waitFor(() => fleet.laptop.state().tasks.length > 0);
 
-    // Le téléphone ressort de la poche : il doit voir ce qu'il a manqué.
+    // Phone comes out of pocket: it must see what it missed.
     await fleet.iphone.realtime.start();
     await waitFor(() => fleet.iphone.state().tasks.length > 0);
 
-    expect(fleet.iphone.state().tasks[0]?.title).toBe("Pendant l'absence de l'iPhone");
+    expect(fleet.iphone.state().tasks[0]?.title).toBe("During iPhone absence");
   });
 });

@@ -7,10 +7,10 @@ import { AgentRouter } from "../src/services/agent-router.js";
 import { ProviderAccountService } from "../src/services/provider-accounts.js";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
-describe("Routage intelligent des agents (Chantier 13)", () => {
+describe("Intelligent Agent Routing", () => {
   let harness: ApiHarness;
   let admin: Account;
-  let membre: Account;
+  let member: Account;
   let configDir: string;
   let router: AgentRouter;
   let accountsService: ProviderAccountService;
@@ -25,7 +25,7 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
     });
     harness = await makeApi({ runtimeConfiguration });
     admin = await createAccount(harness, "admin@nexus.local");
-    membre = await createAccount(harness, "membre@nexus.local");
+    member = await createAccount(harness, "member@nexus.local");
   });
 
   afterEach(async () => {
@@ -33,85 +33,85 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
     await rm(configDir, { recursive: true, force: true });
   });
 
-  it("classifie correctement les natures de tâches et exigences", () => {
-    // 1. Tâche de code
-    const codeTask = router.classifyTask("Écris une fonction TypeScript avec des tests unitaires");
+  it("correctly classifies task types and requirements", () => {
+    // 1. Code task
+    const codeTask = router.classifyTask("Write a TypeScript function with unit tests");
     expect(codeTask.primaryCategory).toBe("code");
     expect(codeTask.requiresBrowser).toBe(false);
 
-    // 2. Tâche de recherche
+    // 2. Research task
     const researchTask = router.classifyTask(
-      "Recherche et analyse la documentation officielle de Fastify",
+      "Research and analyze official Fastify documentation",
     );
     expect(researchTask.primaryCategory).toBe("research");
 
-    // 3. Tâche de revue critique
+    // 3. Review task
     const reviewTask = router.classifyTask(
-      "Fais une revue critique de sécurité pour détecter les contradictions",
+      "Perform a critical security review to detect contradictions",
     );
     expect(reviewTask.primaryCategory).toBe("review");
 
-    // 4. Tâche navigateur
+    // 4. Browser task
     const browserTask = router.classifyTask(
-      "Ouvre le navigateur Chromium et clique sur le bouton de connexion",
+      "Open Chromium browser and click the login button",
     );
     expect(browserTask.primaryCategory).toBe("browser");
     expect(browserTask.requiresBrowser).toBe(true);
 
-    // 5. Tâche de synthèse
+    // 5. Synthesis task
     const synthesisTask = router.classifyTask(
-      "Rédige la synthèse finale et le bilan des résultats",
+      "Write the final synthesis and summary of results",
     );
     expect(synthesisTask.primaryCategory).toBe("synthesis");
   });
 
-  it("classe les agents selon l'affinité de tâche et les contraintes", async () => {
+  it("ranks agents according to task affinity and constraints", async () => {
     const profiles = ["antigravity", "claude", "codex"];
 
-    // Pour du code : Codex doit avoir le score le plus élevé
+    // For code: Codex should have the highest score
     const codeRanked = await router.rankProfiles(
       profiles,
-      "Implémente un module TypeScript et écris les tests",
+      "Implement a TypeScript module and write tests",
     );
     expect(codeRanked[0]?.key).toBe("codex");
 
-    // Pour de la critique : Claude doit être en tête
+    // For review: Claude should be on top
     const reviewRanked = await router.rankProfiles(
       profiles,
-      "Fais une revue critique détaillée et valide le verdict",
+      "Perform a detailed critical review and validate verdict",
     );
     expect(reviewRanked[0]?.key).toBe("claude");
 
-    // Pour de la recherche : Antigravity doit être en tête
+    // For research: Antigravity should be on top
     const researchRanked = await router.rankProfiles(
       profiles,
-      "Explore et recherche les faits documentaires",
+      "Explore and research documentary facts",
     );
     expect(researchRanked[0]?.key).toBe("antigravity");
   });
 
-  it("rétrograde ou élimine un agent en cooldown ou quota épuisé", async () => {
+  it("downgrades or eliminates an agent on cooldown or exhausted quota", async () => {
     const profiles = ["antigravity", "claude", "codex"];
 
-    // Met Codex en cooldown
-    await accountsService.setCooldown("codex-principal", 300, "Trop de requêtes");
+    // Put Codex on cooldown
+    await accountsService.setCooldown("codex-principal", 300, "Too many requests");
 
-    // Même sur une tâche de code, Codex doit être marqué indisponible ou score 0
-    const codeRanked = await router.rankProfiles(profiles, "Implémente un script de build");
+    // Even on a code task, Codex should be marked unavailable or score 0
+    const codeRanked = await router.rankProfiles(profiles, "Implement a build script");
     const codexScore = codeRanked.find((r) => r.key === "codex");
     expect(codexScore?.isAvailable).toBe(false);
     expect(codexScore?.totalScore).toBe(0);
 
-    // Le premier choix disponible doit alors être Claude
-    const best = await router.bestProfileFor(profiles, "Implémente un script de build");
+    // The first available choice should then be Claude
+    const best = await router.bestProfileFor(profiles, "Implement a build script");
     expect(best).toBe("claude");
   });
 
-  it("gère l'apprentissage historique par catégorie de tâche", async () => {
+  it("handles historical learning by task category", async () => {
     const profiles = ["antigravity", "claude", "codex"];
-    const task = "Écris une fonction de tri en Python";
+    const task = "Write a sorting function in Python";
 
-    // Enregistre plusieurs succès éclatants pour Claude dans le code
+    // Record several successes for Claude in code
     await router.recordOutcome("claude", "code", {
       success: true,
       durationMs: 8000,
@@ -128,7 +128,7 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
       qualityVerdict: "pass",
     });
 
-    // Enregistre des échecs pour Codex dans le code
+    // Record failures for Codex in code
     await router.recordOutcome("codex", "code", {
       success: false,
       durationMs: 25000,
@@ -136,16 +136,16 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
     });
 
     const ranked = await router.rankProfiles(profiles, task);
-    // Grâce à l'apprentissage, Claude dépasse Codex pour cette tâche
+    // Thanks to learning, Claude overtakes Codex for this task
     expect(ranked[0]?.key).toBe("claude");
   });
 
-  it("expose la matrice de routage et l'évaluation via l'API", async () => {
-    // 0. Vérifier que seul un administrateur peut accéder à la matrice de routage
+  it("exposes routing matrix and evaluation via API", async () => {
+    // 0. Verify only an administrator can access routing matrix
     const forbiddenRes = await harness.app.inject({
       method: "GET",
       url: "/api/v1/orchestrator/routing/matrix",
-      headers: membre.authorization,
+      headers: member.authorization,
     });
     expect(forbiddenRes.statusCode).toBe(403);
 
@@ -166,7 +166,7 @@ describe("Routage intelligent des agents (Chantier 13)", () => {
       url: "/api/v1/orchestrator/routing/evaluate",
       headers: admin.authorization,
       payload: {
-        instruction: "Recherche les documents administratifs et vérifie leur intégrité",
+        instruction: "Research administrative documents and verify their integrity",
       },
     });
 

@@ -1,20 +1,19 @@
-// `multistream` vit sur l'espace de noms de pino, pas sur la fonction nommee
-// exportee a cote. L'import par defaut est le seul qui donne les deux.
+// `multistream` lives on pino's namespace, not on the named exported function next to it.
+// The default import is the only one that provides both.
 import pino, { type Logger, type LoggerOptions } from "pino";
 import type { AppConfig } from "@nexus/config";
 
 /**
- * Journalisation structurée.
+ * Structured logging.
  *
- * Un log est un ÉVÉNEMENT, pas une phrase : `event` est une énumération stable
- * qu'on peut agréger, contrairement à un message libre. Le contenu des messages
- * utilisateur n'apparaît jamais au niveau `info` — uniquement en `debug`, désactivé
- * en production.
+ * A log is an EVENT, not a sentence: `event` is a stable enumeration
+ * that can be aggregated, unlike free-form messages. The content of user messages
+ * never appears at the `info` level — only in `debug`, disabled in production.
  */
 
 /**
- * Champs systématiquement masqués. La liste est volontairement large : rater une
- * rédaction coûte infiniment plus cher qu'en faire une de trop.
+ * Systematically redacted fields. The list is deliberately broad: missing a
+ * redaction is infinitely more costly than having one too many.
  */
 const REDACTED_PATHS = [
   "req.headers.authorization",
@@ -34,12 +33,11 @@ const REDACTED_PATHS = [
 ];
 
 /**
- * Destination supplementaire.
+ * Additional destination.
  *
- * `LogBuffer` en est une : le tableau de bord affiche les dernieres lignes, et
- * il faut bien qu'elles lui parviennent. Une destination doit **ne jamais
- * lever** — elle est appelee depuis le gestionnaire d'erreurs, ou une exception
- * transformerait un incident en panne.
+ * `LogBuffer` is one: the dashboard displays the latest lines, and
+ * they must reach it. A destination must **never throw** — it is called from
+ * the error handler, where an exception would turn an incident into an outage.
  */
 export interface LogDestination {
   write(line: string): void;
@@ -51,7 +49,7 @@ export function createLogger(config: AppConfig, extra: LogDestination[] = []): L
   const options: LoggerOptions = {
     level: config.NODE_ENV === "test" ? "silent" : config.LOG_LEVEL,
     redact: { paths: REDACTED_PATHS, censor: "[REDACTED]" },
-    // Un niveau lisible par un humain vaut mieux qu'un entier dans un agrégateur.
+    // A human-readable level is better than an integer in an aggregator.
     formatters: {
       level: (label) => ({ level: label }),
     },
@@ -60,13 +58,12 @@ export function createLogger(config: AppConfig, extra: LogDestination[] = []): L
       service: "api",
       env: config.NODE_ENV,
     },
-    // Le transport `pino-pretty` et une destination multiple s'excluent : le
-    // premier deporte l'ecriture dans un thread worker, ou la seconde n'existe
-    // pas. Des qu'une destination est branchee — c'est-a-dire des que le
-    // tableau de bord est actif — on ecrit du NDJSON sur la sortie standard.
+    // The `pino-pretty` transport and multiple destinations are mutually exclusive:
+    // the former offloads writing to a worker thread where the latter does not exist.
+    // As soon as a destination is attached — i.e. as soon as the dashboard is active —
+    // NDJSON is written to standard output.
     //
-    // En developpement, `pnpm dev | npx pino-pretty` rend la lisibilite sans
-    // rien changer au pipeline.
+    // In development, `pnpm dev | npx pino-pretty` provides readability without changing the pipeline.
     ...(isDevelopment && extra.length === 0
       ? {
           transport: {

@@ -5,39 +5,39 @@ import { uuidv7 } from "@nexus/shared";
 import { WsCloseCode, parseClientHello } from "@nexus/protocol";
 
 /**
- * Transport WebSocket des deux canaux.
+ * WebSocket transport for both channels.
  *
- * Ce module est **uniquement du transport**. Toute la logique vit déjà dans
- * `ClientChannel` et `WorkerChannel`, et elle y est éprouvée sans réseau ; ce
- * fichier ouvre des sockets, décode des trames, et appelle. S'il contenait une
- * décision d'autorisation, cette décision ne serait vérifiable qu'en ouvrant un
- * port — c'est exactement ce qu'on ne veut pas.
+ * This module is **purely transport**. All logic already lives in
+ * `ClientChannel` and `WorkerChannel`, and is thoroughly tested without network; this
+ * file opens sockets, decodes frames, and delegates. If it contained an
+ * authorization decision, that decision would only be testable by opening a
+ * port — which is exactly what we want to avoid.
  *
- * Deux chemins, séparés jusqu'au bout :
+ * Two paths, separated end-to-end:
  *
- *     /ws/client   jeton d'accès + appareil        → ClientChannel
- *     /ws/worker   challenge signé par la machine  → WorkerChannel
+ *     /ws/client   access token + device           → ClientChannel
+ *     /ws/worker   machine-signed challenge        → WorkerChannel
  *
- * Le portable Windows emprunte **les deux**, avec deux secrets différents et
- * depuis deux processus différents : l'interface tient les jetons de
- * l'utilisateur, le démon tient la clé privée de la machine. Aucun des deux ne
- * peut prendre la place de l'autre, et c'est cette séparation qui fait qu'une
- * fenêtre compromise ne devient pas une exécution de commande.
+ * The Windows laptop uses **both**, with two distinct secrets and
+ * from two separate processes: the UI holds the user's tokens,
+ * while the daemon holds the machine's private key. Neither can substitute
+ * for the other, and this separation ensures that a compromised window
+ * does not become arbitrary command execution.
  */
 
-/** Un poste qui n'a rien prouvé au bout de ce délai est fermé. */
+/** An endpoint that proves nothing by this deadline is closed. */
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 
-/** Rythme des ping applicatifs. Une socket morte se détecte par le silence. */
+/** Cadence of application pings. A dead socket is detected through silence. */
 const KEEPALIVE_INTERVAL_MS = 30_000;
 
-/** 256 Ko : au-delà, ce n'est plus une commande, c'est un transfert. */
+/** 256 KB: beyond this, it is no longer a command, it is a file transfer. */
 const MAX_PAYLOAD_BYTES = 262_144;
 
 export interface WebSocketRoutesOptions {
-  /** Origines acceptées pour une connexion de navigateur. */
+  /** Accepted origins for browser connections. */
   allowedOrigins: readonly string[];
-  /** Délai de poignée de main. Raccourci dans les tests, qui n'attendent pas. */
+  /** Handshake timeout. Shortened in tests that do not wait. */
   handshakeTimeoutMs?: number;
 }
 
@@ -50,17 +50,16 @@ export async function websocketRoutes(
   await app.register(websocket, {
     options: {
       maxPayload: MAX_PAYLOAD_BYTES,
-      // `Origin` ne remplace pas l'authentification — le jeton et la signature
-      // s'en chargent — mais il coûte trois lignes et ferme le détournement
-      // WebSocket inter-site avant même la poignée de main. Une origine absente
-      // est acceptée : le démon worker n'est pas un navigateur et n'en envoie
-      // pas.
+      // `Origin` does not replace authentication — token and signature handle
+      // that — but it takes three lines and shuts down cross-site WebSocket
+      // hijacking even before the handshake. A missing origin is accepted:
+      // the worker daemon is not a browser and does not send one.
       verifyClient: ({ origin }, done) => {
         if (origin === undefined || options.allowedOrigins.includes(origin)) {
           done(true);
           return;
         }
-        done(false, 403, "origine refusée");
+        done(false, 403, "origin rejected");
       },
     },
   });
@@ -70,7 +69,7 @@ export async function websocketRoutes(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Canal client
+// Client channel
 // ─────────────────────────────────────────────────────────────────────────────
 
 function clientSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): void {
@@ -78,10 +77,10 @@ function clientSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
     const log = request.log;
     let context: Awaited<ReturnType<typeof app.clientChannel.authenticate>> | undefined;
 
-    // Une socket ouverte qui ne se présente pas consomme un descripteur et une
-    // entrée de table pour rien. Le minuteur ferme le silence.
+    // An open socket that does not present itself consumes a descriptor and a
+    // table entry for nothing. The timer terminates silence.
     const handshake = setTimeout(() => {
-      if (context === undefined) socket.close(WsCloseCode.AUTH_TIMEOUT, "poignée de main absente");
+      if (context === undefined) socket.close(WsCloseCode.AUTH_TIMEOUT, "missing handshake");
     }, handshakeTimeoutMs);
 
     const keepalive = setInterval(() => {
@@ -94,14 +93,14 @@ function clientSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
       if (context !== undefined) app.clientChannel.detach(context.deviceId);
     };
 
-    // Les trames sont traitées **dans l'ordre, une à la fois**.
+    // Frames are processed **in order, one at a time**.
     //
-    // Sans cette file, un client qui envoie sa poignée de main puis sa première
-    // demande dans la même boucle d'événements verrait la seconde arriver
-    // pendant que l'authentification est encore en vol : la session n'existe pas
-    // encore, la trame est prise pour une seconde poignée de main, et la
-    // connexion est fermée. C'est exactement ce que fait `RealtimeClient` au
-    // démarrage — le cas normal, pas un cas limite.
+    // Without this queue, a client sending its handshake followed by its first
+    // request in the same event loop would see the second frame arrive while
+    // authentication is still in flight: the session does not yet exist,
+    // the frame is mistaken for a second handshake, and the connection is closed.
+    // This is exactly what `RealtimeClient` does on startup — the normal case,
+    // not an edge case.
     const queue = serialize();
 
     socket.on("message", (data) => {
@@ -121,18 +120,18 @@ function clientSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
 
     socket.on("close", shutdown);
     socket.on("error", (cause) => {
-      log.warn({ err: cause }, "socket client en erreur");
+      log.warn({ err: cause }, "client socket error");
       shutdown();
     });
   });
 }
 
 /**
- * Ouvre une session client à partir de la première trame.
+ * Opens a client session from the first frame.
  *
- * Rend `undefined` et ferme si la trame n'est pas une poignée de main valide.
- * Le code 4401 est ce qui permet au client de comprendre qu'il doit faire
- * tourner son jeton plutôt que de reconnecter éternellement avec le même.
+ * Returns `undefined` and closes if the frame is not a valid handshake.
+ * Code 4401 is what informs the client to rotate its token rather than
+ * endlessly reconnecting with the same one.
  */
 async function openClientSession(
   app: FastifyInstance,
@@ -142,7 +141,7 @@ async function openClientSession(
 ): Promise<Awaited<ReturnType<typeof app.clientChannel.authenticate>> | undefined> {
   const hello = parseClientHello(frame);
   if (hello === undefined) {
-    socket.close(WsCloseCode.UNAUTHENTICATED, "poignée de main attendue");
+    socket.close(WsCloseCode.UNAUTHENTICATED, "handshake expected");
     return undefined;
   }
 
@@ -157,20 +156,22 @@ async function openClientSession(
       },
     });
 
-    // Le jeton n'apparaît nulle part : seul l'appareil est journalisé.
-    log.info({ deviceId: context.deviceId, userId: context.userId }, "client connecté");
+    // The token appears nowhere: only the device is logged.
+    log.info({ deviceId: context.deviceId, userId: context.userId }, "client connected");
     return context;
   } catch (cause) {
-    log.warn({ err: cause, deviceId: hello.deviceId }, "poignée de main client refusée");
-    const isDeviceError = cause instanceof Error && cause.message.includes("Appareil");
+    log.warn({ err: cause, deviceId: hello.deviceId }, "client handshake rejected");
+    const isDeviceError =
+      cause instanceof Error &&
+      (cause.message.includes("Device") || cause.message.includes("Appareil"));
     const code = isDeviceError ? WsCloseCode.FORBIDDEN_CHANNEL : WsCloseCode.UNAUTHENTICATED;
-    socket.close(code, "authentification refusée");
+    socket.close(code, "authentication rejected");
     return undefined;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Canal worker
+// Worker channel
 // ─────────────────────────────────────────────────────────────────────────────
 
 function workerSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): void {
@@ -188,11 +189,11 @@ function workerSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
       ...(request.ip === undefined ? {} : { remoteAddress: request.ip }),
     });
 
-    // Même règle que pour les clients : une machine qui ne signe pas le
-    // challenge dans les temps n'obtient pas de sursis.
+    // Same rule as for clients: a machine that does not sign the challenge
+    // in time gets no reprieve.
     const handshake = setTimeout(() => {
       if (!app.workerChannel.isAuthenticated(connectionId)) {
-        socket.close(WsCloseCode.AUTH_TIMEOUT, "authentification absente");
+        socket.close(WsCloseCode.AUTH_TIMEOUT, "missing authentication");
       }
     }, handshakeTimeoutMs);
 
@@ -206,9 +207,8 @@ function workerSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
       void app.workerChannel.close(connectionId, reason);
     };
 
-    // Même file que côté client : `worker.hello`, `worker.authenticate` et
-    // `worker.register` s'enchaînent, et chacun suppose que le précédent a
-    // abouti.
+    // Same queue as client-side: `worker.hello`, `worker.authenticate`, and
+    // `worker.register` chain sequentially, each assuming the previous succeeded.
     const queue = serialize();
 
     socket.on("message", (data) => {
@@ -218,11 +218,11 @@ function workerSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
     });
 
     socket.on("close", () => {
-      shutdown("socket fermée");
+      shutdown("socket closed");
     });
     socket.on("error", (cause) => {
-      log.warn({ err: cause }, "socket worker en erreur");
-      shutdown("socket en erreur");
+      log.warn({ err: cause }, "worker socket error");
+      shutdown("socket error");
     });
   });
 }
@@ -230,11 +230,11 @@ function workerSocketRoute(app: FastifyInstance, handshakeTimeoutMs: number): vo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * File d'exécution séquentielle.
+ * Sequential execution queue.
  *
- * Rend une fonction qui enchaîne les tâches les unes après les autres. Une tâche
- * qui échoue ne casse pas la chaîne : la suivante s'exécute quand même, sinon
- * une seule trame mal formée figerait la connexion pour de bon.
+ * Returns a function that chains tasks one after another. A failed task
+ * does not break the chain: the next one still runs, otherwise a single
+ * malformed frame would freeze the connection permanently.
  */
 function serialize(): (task: () => Promise<void>) => void {
   let chain: Promise<void> = Promise.resolve();
@@ -245,11 +245,11 @@ function serialize(): (task: () => Promise<void>) => void {
 }
 
 /**
- * Décode une trame.
+ * Decodes a frame.
  *
- * Rend `undefined` sur ce qui n'est pas du JSON. On ne ferme pas pour autant :
- * les canaux savent déjà ignorer ce qu'ils ne comprennent pas, et fermer sur
- * une trame illisible offrirait un déni de service à une seule socket bruyante.
+ * Returns `undefined` for non-JSON content. We do not close the socket:
+ * channels already know how to ignore unhandled content, and closing on
+ * an unreadable frame would grant a denial of service to a single noisy socket.
  */
 function decode(data: unknown): unknown {
   try {

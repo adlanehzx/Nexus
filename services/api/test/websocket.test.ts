@@ -23,18 +23,15 @@ import {
 } from "./harness.js";
 
 /**
- * Les deux canaux temps réel.
+ * Both real-time channels: client and worker.
  *
- * Ce fichier éprouve la propriété centrale du système : **aucun client ne parle
- * à un exécutant**. Un client demande au cœur, le cœur autorise, choisit,
- * dispatche, et les résultats reviennent par le cœur — à *tous* les clients de
- * l'utilisateur, l'appareil d'origine servi en premier.
+ * Verifies that clients never talk directly to workers, that the core routes
+ * and authorizes all actions, and that all user clients stay synchronized.
  */
 
 let harness: ApiHarness;
 let account: Account;
 
-/** L'iPhone et le portable : les deux clients qui doivent rester synchronisés. */
 let iphone: RegisteredDevice;
 let laptop: RegisteredDevice;
 let worker: RegisteredDevice;
@@ -69,12 +66,12 @@ beforeEach(async () => {
     platform: "IOS",
   });
   laptop = await registerDevice(harness, account, {
-    name: "Portable",
+    name: "Laptop",
     role: "BOTH",
     permissions: ["filesystem.read"],
   });
   worker = await registerDevice(harness, account, {
-    name: "Poste fixe",
+    name: "Desktop Workstation",
     role: "WORKER",
     permissions: ["filesystem.read", "terminal.execute"],
   });
@@ -84,7 +81,6 @@ afterEach(async () => {
   await harness.close();
 });
 
-/** Connecte un client au canal et rend sa socket. */
 async function connectClient(device: RegisteredDevice) {
   const socket = new FakeClientSocket();
   const context = await harness.app.clientChannel.authenticate({
@@ -96,7 +92,6 @@ async function connectClient(device: RegisteredDevice) {
   return { socket, context };
 }
 
-/** Déroule la poignée de main complète d'un exécutant sur le canal worker. */
 async function connectWorker(device: RegisteredDevice, connectionId = "w1") {
   const socket = new FakeWorkerSocket();
   harness.app.workerChannel.open(connectionId, socket);
@@ -135,7 +130,7 @@ async function connectWorker(device: RegisteredDevice, connectionId = "w1") {
         {
           name: "filesystem.read",
           version: "1",
-          description: "Lecture",
+          description: "Read",
           enabled: true,
           metadata: { risk: "SAFE" },
         },
@@ -147,8 +142,8 @@ async function connectWorker(device: RegisteredDevice, connectionId = "w1") {
   return { socket, authenticated: true };
 }
 
-describe("authentification du canal client", () => {
-  it("accepte un jeton valide et un appareil approuvé", async () => {
+describe("client channel authentication", () => {
+  it("accepts valid token and approved device", async () => {
     const context = await harness.app.clientChannel.authenticate({
       accessToken: account.accessToken,
       deviceId: iphone.device.id,
@@ -158,32 +153,30 @@ describe("authentification du canal client", () => {
     expect(context.deviceId).toBe(iphone.device.id);
   });
 
-  it("refuse un jeton invalide", async () => {
+  it("rejects invalid token", async () => {
     await expect(
       harness.app.clientChannel.authenticate({
-        accessToken: "pas.un.jeton",
+        accessToken: "not.a.token",
         deviceId: iphone.device.id,
       }),
     ).rejects.toThrow();
   });
 
-  it("refuse un appareil qui appartient à quelqu'un d'autre", async () => {
-    // Le jeton dit *qui*, l'appareil dit *d'où*. Sans le second contrôle, un
-    // jeton volé permettrait de détourner les événements d'un autre appareil.
-    const autre = await createAccount(harness, "autre@exemple.fr");
-    const sien = await registerDevice(harness, autre, { name: "Son iPhone", role: "CLIENT" });
+  it("rejects device belonging to someone else", async () => {
+    const other = await createAccount(harness, "other@example.com");
+    const theirs = await registerDevice(harness, other, { name: "His iPhone", role: "CLIENT" });
 
     await expect(
       harness.app.clientChannel.authenticate({
         accessToken: account.accessToken,
-        deviceId: sien.device.id,
+        deviceId: theirs.device.id,
       }),
-    ).rejects.toThrow(/n'appartenant pas/);
+    ).rejects.toThrow(/does not belong/i);
   });
 
-  it("refuse un appareil non approuvé", async () => {
-    const attente = await registerDevice(harness, account, {
-      name: "Nouveau",
+  it("rejects unapproved device", async () => {
+    const pending = await registerDevice(harness, account, {
+      name: "New",
       role: "CLIENT",
       trust: false,
     });
@@ -191,12 +184,12 @@ describe("authentification du canal client", () => {
     await expect(
       harness.app.clientChannel.authenticate({
         accessToken: account.accessToken,
-        deviceId: attente.device.id,
+        deviceId: pending.device.id,
       }),
-    ).rejects.toThrow(/non approuvé/);
+    ).rejects.toThrow(/not approved/i);
   });
 
-  it("refuse après déconnexion, même avec un jeton encore valide", async () => {
+  it("rejects after logout, even with token still valid", async () => {
     await harness.app.inject({
       method: "POST",
       url: "/api/v1/auth/logout",
@@ -212,54 +205,52 @@ describe("authentification du canal client", () => {
   });
 });
 
-describe("messages malformés", () => {
-  it("ignore une trame illisible sans fermer la connexion", async () => {
+describe("malformed messages", () => {
+  it("ignores unreadable frame without closing connection", async () => {
     const { socket, context } = await connectClient(iphone);
 
-    await harness.app.clientChannel.handle(context, { pas: "une enveloppe" });
-    await harness.app.clientChannel.handle(context, "du texte");
+    await harness.app.clientChannel.handle(context, { not: "an envelope" });
+    await harness.app.clientChannel.handle(context, "raw text");
     await harness.app.clientChannel.handle(context, null);
 
     expect(socket.closed).toBeUndefined();
     expect(socket.sent).toHaveLength(0);
   });
 
-  it("ignore un type inconnu — un client plus récent ne doit pas tomber", async () => {
+  it("ignores unknown type — newer client should not crash", async () => {
     const { socket, context } = await connectClient(iphone);
 
-    await harness.app.clientChannel.handle(context, clientMessage("client.telepathie", {}));
+    await harness.app.clientChannel.handle(context, clientMessage("client.telepathy", {}));
 
     expect(socket.closed).toBeUndefined();
     expect(socket.sent).toHaveLength(0);
   });
 
-  it("répond par un accusé négatif sur une charge utile invalide", async () => {
-    // Type connu, charge utile fausse : erreur de programmation ou
-    // falsification. Le client doit le savoir.
+  it("responds with negative ack on invalid payload", async () => {
     const { socket, context } = await connectClient(iphone);
 
     await harness.app.clientChannel.handle(
       context,
-      clientMessage(CLIENT_TO_SERVER.messageSend, { texte: "mauvais champ" }, "r1"),
+      clientMessage(CLIENT_TO_SERVER.messageSend, { invalidField: "bad" }, "r1"),
     );
 
     expect(socket.acks[0]).toMatchObject({ ok: false, error: { code: "INVALID_PAYLOAD" } });
   });
 
-  it("corrèle l'accusé à la demande", async () => {
+  it("correlates ack with request", async () => {
     const { socket, context } = await connectClient(iphone);
 
     await harness.app.clientChannel.handle(
       context,
-      clientMessage(CLIENT_TO_SERVER.deviceList, { workersOnly: false }, "demande-42"),
+      clientMessage(CLIENT_TO_SERVER.deviceList, { workersOnly: false }, "request-42"),
     );
 
-    expect(socket.ofType(SERVER_TO_CLIENT.ack)[0]?.requestId).toBe("demande-42");
+    expect(socket.ofType(SERVER_TO_CLIENT.ack)[0]?.requestId).toBe("request-42");
   });
 });
 
-describe("demandes client", () => {
-  it("liste les appareils de l'utilisateur", async () => {
+describe("client requests", () => {
+  it("lists user devices", async () => {
     const { socket, context } = await connectClient(iphone);
 
     await harness.app.clientChannel.handle(
@@ -269,20 +260,18 @@ describe("demandes client", () => {
 
     const ack = socket.acks[0] as { ok: boolean; data: { devices: { id: string }[] } };
     expect(ack.ok).toBe(true);
-    // L'iPhone est CLIENT : il n'est pas un exécutant.
     expect(ack.data.devices.map((d) => d.id)).not.toContain(iphone.device.id);
     expect(ack.data.devices.map((d) => d.id)).toContain(worker.device.id);
   });
 
-  it("crée une conversation et impose l'appareil d'origine", async () => {
+  it("creates a conversation and enforces origin device", async () => {
     const { socket, context } = await connectClient(laptop);
 
     await harness.app.clientChannel.handle(
       context,
       clientMessage(
         CLIENT_TO_SERVER.messageSend,
-        // Le client tente de se déclarer comme l'iPhone.
-        { conversationId: null, text: "Bonjour", originClientDeviceId: iphone.device.id },
+        { conversationId: null, text: "Hello", originClientDeviceId: iphone.device.id },
         "r1",
       ),
     );
@@ -294,15 +283,14 @@ describe("demandes client", () => {
       limit: 10,
     });
 
-    // C'est la connexion authentifiée qui décide, pas la charge utile.
     expect(messages.items[0]?.originClientDeviceId).toBe(laptop.device.id);
   });
 
-  it("refuse une conversation d'un autre utilisateur", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
+  it("rejects conversation belonging to another user", async () => {
+    const other = await createAccount(harness, "other@example.com");
     const conversation = await harness.services.conversations.create({
-      userId: autre.userId,
-      title: "Privé",
+      userId: other.userId,
+      title: "Private",
     });
 
     const { socket, context } = await connectClient(iphone);
@@ -318,14 +306,14 @@ describe("demandes client", () => {
     expect(socket.acks[0]?.ok).toBe(false);
   });
 
-  it("refuse d'annuler la tâche d'un autre utilisateur", async () => {
-    const autre = await createAccount(harness, "autre@exemple.fr");
-    const sien = await registerDevice(harness, autre, { name: "Son iPhone", role: "CLIENT" });
+  it("refuses to cancel another user's task", async () => {
+    const other = await createAccount(harness, "other@example.com");
+    const theirs = await registerDevice(harness, other, { name: "His iPhone", role: "CLIENT" });
 
     const plan = createTaskPlan({
-      userId: autre.userId,
-      title: "Sa tâche",
-      originClientDeviceId: sien.device.id,
+      userId: other.userId,
+      title: "His task",
+      originClientDeviceId: theirs.device.id,
       correlationId: "c",
       steps: [{ description: "x", requiredCapabilities: ["filesystem.read"], tool: "t" }],
     });
@@ -341,8 +329,8 @@ describe("demandes client", () => {
   });
 });
 
-describe("canal worker", () => {
-  it("authentifie un exécutant sur un challenge signé", async () => {
+describe("worker channel", () => {
+  it("authenticates a worker on signed challenge", async () => {
     const { socket, authenticated } = await connectWorker(worker);
 
     expect(authenticated).toBe(true);
@@ -353,12 +341,12 @@ describe("canal worker", () => {
     expect(device.status).toBe("ONLINE");
   });
 
-  it("refuse et ferme sur une signature invalide", async () => {
+  it("rejects and closes on invalid signature", async () => {
     const socket = new FakeWorkerSocket();
-    harness.app.workerChannel.open("w-mauvais", socket);
+    harness.app.workerChannel.open("w-bad", socket);
 
     await harness.app.workerChannel.handle(
-      "w-mauvais",
+      "w-bad",
       workerMessage("hello", {
         deviceId: worker.device.id,
         workerVersion: "0.1.0",
@@ -368,51 +356,49 @@ describe("canal worker", () => {
 
     const challenge = socket.last(WORKER_MESSAGE.challenge) as { nonce: string };
     await harness.app.workerChannel.handle(
-      "w-mauvais",
+      "w-bad",
       workerMessage("authenticate", {
         deviceId: worker.device.id,
         nonce: challenge.nonce,
         signature: "c2lnbmF0dXJlLWZhdXNzZQ",
         capabilities: [],
-        requestId: "auth-faux",
+        requestId: "auth-bad",
         timestamp: new Date().toISOString(),
       }),
     );
 
-    // Laisser réessayer en boucle sur la même socket transformerait le refus en
-    // simple ralentissement.
     expect(socket.closed?.code).toBe(4401);
     expect(socket.ofType(WORKER_MESSAGE.session)).toHaveLength(0);
   });
 
-  it("refuse un exécutant révoqué", async () => {
+  it("rejects revoked worker", async () => {
     await harness.app.inject({
       method: "POST",
       url: `/api/v1/devices/${worker.device.id}/revoke`,
       headers: account.authorization,
     });
 
-    const { authenticated } = await connectWorker(worker, "w-revoque");
+    const { authenticated } = await connectWorker(worker, "w-revoked");
     expect(authenticated).toBe(false);
   });
 
-  it("refuse un exécutant non approuvé", async () => {
-    const attente = await registerDevice(harness, account, {
-      name: "Nouveau poste",
+  it("rejects unapproved worker", async () => {
+    const pending = await registerDevice(harness, account, {
+      name: "New Workstation",
       role: "WORKER",
       trust: false,
     });
 
-    const { authenticated } = await connectWorker(attente, "w-attente");
+    const { authenticated } = await connectWorker(pending, "w-pending");
     expect(authenticated).toBe(false);
   });
 
-  it("refuse le rejeu d'une trame d'authentification", async () => {
+  it("rejects replay of authentication frame", async () => {
     const socket = new FakeWorkerSocket();
-    harness.app.workerChannel.open("w-rejeu", socket);
+    harness.app.workerChannel.open("w-replay", socket);
 
     await harness.app.workerChannel.handle(
-      "w-rejeu",
+      "w-replay",
       workerMessage("hello", {
         deviceId: worker.device.id,
         workerVersion: "0.1.0",
@@ -430,29 +416,28 @@ describe("canal worker", () => {
       timestamp: new Date().toISOString(),
     });
 
-    await harness.app.workerChannel.handle("w-rejeu", frame);
+    await harness.app.workerChannel.handle("w-replay", frame);
     expect(socket.ofType(WORKER_MESSAGE.session)).toHaveLength(1);
 
-    // Rejeu de la même trame, sur une nouvelle socket.
-    const rejeu = new FakeWorkerSocket();
-    harness.app.workerChannel.open("w-rejeu-2", rejeu);
-    await harness.app.workerChannel.handle("w-rejeu-2", frame);
+    const replay = new FakeWorkerSocket();
+    harness.app.workerChannel.open("w-replay-2", replay);
+    await harness.app.workerChannel.handle("w-replay-2", frame);
 
-    expect(rejeu.closed?.code).toBe(4401);
-    expect(rejeu.ofType(WORKER_MESSAGE.session)).toHaveLength(0);
+    expect(replay.closed?.code).toBe(4401);
+    expect(replay.ofType(WORKER_MESSAGE.session)).toHaveLength(0);
   });
 
-  it("libère l'exécutant à la fermeture du canal", async () => {
+  it("releases worker upon channel close", async () => {
     await connectWorker(worker);
-    await harness.app.workerChannel.close("w1", "socket fermée");
+    await harness.app.workerChannel.close("w1", "socket closed");
 
     const device = await harness.services.deviceRegistry.requireDevice(worker.device.id);
     expect(device.status).toBe("OFFLINE");
   });
 
-  it("permet une reconnexion après coupure", async () => {
+  it("allows reconnection after disconnect", async () => {
     await connectWorker(worker, "w-a");
-    await harness.app.workerChannel.close("w-a", "coupure");
+    await harness.app.workerChannel.close("w-a", "disconnect");
 
     const { authenticated } = await connectWorker(worker, "w-b");
     expect(authenticated).toBe(true);
@@ -461,21 +446,19 @@ describe("canal worker", () => {
     expect(device.status).toBe("ONLINE");
   });
 
-  it("ignore une trame worker illisible", async () => {
+  it("ignores unreadable worker frame", async () => {
     const socket = new FakeWorkerSocket();
-    harness.app.workerChannel.open("w-illisible", socket);
+    harness.app.workerChannel.open("w-unreadable", socket);
 
-    await harness.app.workerChannel.handle("w-illisible", { n: "importe quoi" });
+    await harness.app.workerChannel.handle("w-unreadable", { invalid: "content" });
 
     expect(socket.closed).toBeUndefined();
     expect(socket.sent).toHaveLength(0);
   });
 });
 
-describe("cloisonnement des canaux", () => {
-  it("un client ne peut pas émettre une trame du canal worker", async () => {
-    // Un `worker.task_result` forgé depuis un téléphone ferait croire au cœur
-    // qu'une étape a réussi. Les deux canaux ont des types disjoints.
+describe("channel partitioning", () => {
+  it("a client cannot emit a frame from worker channel", async () => {
     const { socket, context } = await connectClient(iphone);
 
     await harness.app.clientChannel.handle(
@@ -494,7 +477,7 @@ describe("cloisonnement des canaux", () => {
     expect(socket.closed).toBeUndefined();
   });
 
-  it("un exécutant ne peut pas émettre une demande client", async () => {
+  it("a worker cannot emit a client request", async () => {
     const { socket } = await connectWorker(worker);
     const before = socket.sent.length;
 
@@ -503,13 +486,12 @@ describe("cloisonnement des canaux", () => {
       clientMessage(CLIENT_TO_SERVER.taskCancel, { taskId: "t", reason: "x" }),
     );
 
-    // La passerelle ignore ce qui n'est pas du canal worker.
     expect(socket.sent).toHaveLength(before);
   });
 });
 
-describe("synchronisation entre l'iPhone et le portable", () => {
-  it("les deux clients reçoivent le même événement de tâche", async () => {
+describe("synchronization between iPhone and laptop", () => {
+  it("both clients receive the same task event", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     const laptopSocket = (await connectClient(laptop)).socket;
     await connectWorker(worker);
@@ -519,11 +501,11 @@ describe("synchronisation entre l'iPhone et le portable", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lire un fichier",
+        title: "Read a file",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire",
+            description: "Read",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
             riskLevel: "SAFE",
@@ -536,12 +518,11 @@ describe("synchronisation entre l'iPhone et le portable", () => {
     await until(() => iphoneSocket.ofType(SERVER_TO_CLIENT.taskCreated).length > 0);
     await settle(40);
 
-    // Une tâche lancée depuis l'iPhone est visible sur le portable.
     expect(iphoneSocket.ofType(SERVER_TO_CLIENT.taskCreated)).toHaveLength(1);
     expect(laptopSocket.ofType(SERVER_TO_CLIENT.taskCreated)).toHaveLength(1);
   });
 
-  it("préserve l'appareil d'origine dans tous les événements", async () => {
+  it("preserves origin device across all events", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     const laptopSocket = (await connectClient(laptop)).socket;
     await connectWorker(worker);
@@ -551,11 +532,11 @@ describe("synchronisation entre l'iPhone et le portable", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lire un fichier",
+        title: "Read a file",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire",
+            description: "Read",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
             riskLevel: "SAFE",
@@ -566,8 +547,6 @@ describe("synchronisation entre l'iPhone et le portable", () => {
 
     await until(() => laptopSocket.ofType(SERVER_TO_CLIENT.taskCreated).length > 0);
 
-    // Le portable sait que la demande vient de l'iPhone, et peut l'afficher
-    // comme telle plutôt que de la sonner.
     const onLaptop = laptopSocket.ofType(SERVER_TO_CLIENT.taskCreated)[0]?.payload as {
       originClientDeviceId: string;
     };
@@ -579,58 +558,52 @@ describe("synchronisation entre l'iPhone et le portable", () => {
     expect(onPhone.originClientDeviceId).toBe(iphone.device.id);
   });
 
-  it("livre au retour ce qu'un client déconnecté a manqué", async () => {
-    // L'iPhone est éteint pendant la tâche ; il doit converger au rallumage.
+  it("delivers on return what a disconnected client missed", async () => {
     const laptopSocket = (await connectClient(laptop)).socket;
     await connectWorker(worker);
 
     await harness.services.notifications.create({
       userId: account.userId,
-      title: "Pendant l'absence",
-      body: "quelque chose est arrivé",
+      title: "During absence",
+      body: "something happened",
       originClientDeviceId: laptop.device.id,
     });
 
     await until(() => laptopSocket.ofType(SERVER_TO_CLIENT.notificationCreated).length > 0);
 
-    // L'iPhone se connecte maintenant.
     const late = await connectClient(iphone);
     await settle(20);
 
     expect(late.socket.ofType(SERVER_TO_CLIENT.notificationCreated)).toHaveLength(1);
   });
 
-  it("ne diffuse rien à un exécutant pur", async () => {
+  it("broadcasts nothing to a pure worker", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     await connectWorker(worker);
 
     await harness.services.notifications.create({
       userId: account.userId,
-      title: "Pour les clients",
+      title: "For clients",
       body: "x",
     });
     await settle(20);
 
-    // Le poste fixe est WORKER : il exécute, il ne reçoit pas les notifications
-    // de l'utilisateur.
     expect(iphoneSocket.ofType(SERVER_TO_CLIENT.notificationCreated)).toHaveLength(1);
     expect(harness.app.clientChannel.connectedDeviceIds).not.toContain(worker.device.id);
   });
 
-  it("ne descend pas les événements internes d'exécutant vers les clients", async () => {
+  it("does not leak worker internal events down to clients", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     await connectWorker(worker);
     await settle(20);
 
-    // `worker.connected` décrit la topologie de la flotte : les clients voient
-    // `device.updated`, pas le détail du canal d'exécution.
     expect(iphoneSocket.sent.map((m) => m.type)).not.toContain("worker.connected");
     expect(iphoneSocket.sent.map((m) => m.type)).toContain(SERVER_TO_CLIENT.deviceUpdated);
   });
 });
 
-describe("routage vers l'exécutant et retour", () => {
-  it("achemine une étape jusqu'au worker et rend son résultat", async () => {
+describe("routing to worker and back", () => {
+  it("routes a step to worker and returns its result", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     const workerSocket = (await connectWorker(worker)).socket;
 
@@ -639,11 +612,11 @@ describe("routage vers l'exécutant et retour", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lire un fichier",
+        title: "Read a file",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire",
+            description: "Read",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
             riskLevel: "SAFE",
@@ -659,14 +632,13 @@ describe("routage vers l'exécutant et retour", () => {
     ) as WorkerPayload<"worker.task_dispatch">;
     expect(dispatch.capability).toBe("filesystem.read");
 
-    // Le worker répond, comme il le ferait sur le fil.
     await harness.app.workerChannel.handle(
       "w1",
       workerMessage("taskResult", {
         taskId: dispatch.taskId,
         stepId: dispatch.stepId,
         ok: true,
-        result: { content: "bonjour" },
+        result: { content: "hello" },
         sensitiveResult: false,
         error: null,
         durationMs: 12,
@@ -677,7 +649,7 @@ describe("routage vers l'exécutant et retour", () => {
     expect(iphoneSocket.ofType(SERVER_TO_CLIENT.taskCompleted)).toHaveLength(1);
   });
 
-  it("échoue proprement quand aucun exécutant ne déclare la capacité", async () => {
+  it("fails cleanly when no worker declares the capability", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     await connectWorker(worker);
 
@@ -686,11 +658,11 @@ describe("routage vers l'exécutant et retour", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Commande shell",
+        title: "Shell command",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lancer",
+            description: "Run",
             requiredCapabilities: ["terminal.execute"],
             tool: "device.terminal.execute",
             riskLevel: "SAFE",
@@ -703,7 +675,7 @@ describe("routage vers l'exécutant et retour", () => {
     expect(iphoneSocket.ofType(SERVER_TO_CLIENT.taskFailed)).toHaveLength(1);
   });
 
-  it("annule une tâche depuis le canal client", async () => {
+  it("cancels a task from the client channel", async () => {
     const { context } = await connectClient(iphone);
     const workerSocket = (await connectWorker(worker)).socket;
 
@@ -712,11 +684,11 @@ describe("routage vers l'exécutant et retour", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lire un fichier",
+        title: "Read a file",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire",
+            description: "Read",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
             riskLevel: "SAFE",
@@ -732,22 +704,22 @@ describe("routage vers l'exécutant et retour", () => {
     await harness.app.clientChannel.attach(context, socket);
     await harness.app.clientChannel.handle(
       context,
-      clientMessage(CLIENT_TO_SERVER.taskCancel, { taskId, reason: "changé d'avis" }, "r1"),
+      clientMessage(CLIENT_TO_SERVER.taskCancel, { taskId, reason: "changed mind" }, "r1"),
     );
 
     expect(socket.acks[0]).toMatchObject({ ok: true, data: { cancelled: true } });
   });
 
-  it("mène deux tâches de front", async () => {
+  it("runs two tasks concurrently", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     const workerSocket = (await connectWorker(worker)).socket;
 
     const bodies = [1, 2].map((n) => ({
-      title: `Lecture ${String(n)}`,
+      title: `Read ${String(n)}`,
       originClientDeviceId: iphone.device.id,
       steps: [
         {
-          description: `Lire ${String(n)}`,
+          description: `Read ${String(n)}`,
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           riskLevel: "SAFE" as const,
@@ -772,7 +744,6 @@ describe("routage vers l'exécutant et retour", () => {
       .ofType(WORKER_MESSAGE.taskDispatch)
       .map((m) => m.payload as WorkerPayload<"worker.task_dispatch">);
 
-    // Deux tâches distinctes, deux étapes distinctes : rien n'est confondu.
     expect(new Set(dispatches.map((d) => d.taskId)).size).toBe(2);
 
     for (const dispatch of dispatches) {
@@ -796,7 +767,7 @@ describe("routage vers l'exécutant et retour", () => {
 });
 
 describe("confirmations", () => {
-  it("achemine la demande aux deux clients, et l'un ou l'autre peut trancher", async () => {
+  it("routes request to both clients, and either can resolve", async () => {
     const iphoneSocket = (await connectClient(iphone)).socket;
     const laptopClient = await connectClient(laptop);
     const workerSocket = (await connectWorker(worker)).socket;
@@ -806,14 +777,13 @@ describe("confirmations", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lecture sensible",
+        title: "Sensitive read",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire un fichier sensible",
+            description: "Read a sensitive file",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
-            // HIGH dépasse le seuil : une confirmation est exigée.
             riskLevel: "HIGH",
           },
         ],
@@ -822,21 +792,18 @@ describe("confirmations", () => {
 
     await until(() => iphoneSocket.ofType(SERVER_TO_CLIENT.confirmationRequired).length > 0);
 
-    // Les deux clients l'ont reçue.
     expect(iphoneSocket.ofType(SERVER_TO_CLIENT.confirmationRequired)).toHaveLength(1);
     expect(laptopClient.socket.ofType(SERVER_TO_CLIENT.confirmationRequired)).toHaveLength(1);
 
-    const demande = iphoneSocket.ofType(SERVER_TO_CLIENT.confirmationRequired)[0]?.payload as {
+    const request = iphoneSocket.ofType(SERVER_TO_CLIENT.confirmationRequired)[0]?.payload as {
       confirmationId: string;
     };
 
-    // La demande part de l'iPhone ; le portable l'approuve. La demande vit au
-    // centre, pas dans le client qui l'a affichée.
     await harness.app.clientChannel.handle(
       laptopClient.context,
       clientMessage(
         CLIENT_TO_SERVER.confirmationRespond,
-        { confirmationId: demande.confirmationId, decision: "approved" },
+        { confirmationId: request.confirmationId, decision: "approved" },
         "r1",
       ),
     );
@@ -846,7 +813,7 @@ describe("confirmations", () => {
     expect(workerSocket.ofType(WORKER_MESSAGE.taskDispatch)).toHaveLength(1);
   });
 
-  it("n'exécute rien si l'utilisateur refuse", async () => {
+  it("executes nothing if user rejects", async () => {
     const iphoneClient = await connectClient(iphone);
     const workerSocket = (await connectWorker(worker)).socket;
 
@@ -855,11 +822,11 @@ describe("confirmations", () => {
       url: "/api/v1/tasks",
       headers: account.authorization,
       payload: {
-        title: "Lecture sensible",
+        title: "Sensitive read",
         originClientDeviceId: iphone.device.id,
         steps: [
           {
-            description: "Lire",
+            description: "Read",
             requiredCapabilities: ["filesystem.read"],
             tool: "device.filesystem.read",
             riskLevel: "HIGH",
@@ -869,14 +836,14 @@ describe("confirmations", () => {
     });
 
     await until(() => iphoneClient.socket.ofType(SERVER_TO_CLIENT.confirmationRequired).length > 0);
-    const demande = iphoneClient.socket.ofType(SERVER_TO_CLIENT.confirmationRequired)[0]
+    const request = iphoneClient.socket.ofType(SERVER_TO_CLIENT.confirmationRequired)[0]
       ?.payload as { confirmationId: string };
 
     await harness.app.clientChannel.handle(
       iphoneClient.context,
       clientMessage(
         CLIENT_TO_SERVER.confirmationRespond,
-        { confirmationId: demande.confirmationId, decision: "rejected" },
+        { confirmationId: request.confirmationId, decision: "rejected" },
         "r1",
       ),
     );
@@ -885,9 +852,7 @@ describe("confirmations", () => {
     expect(workerSocket.ofType(WORKER_MESSAGE.taskDispatch)).toHaveLength(0);
   });
 
-  it("une réponse en double n'est pas une erreur", async () => {
-    // Deux clients peuvent répondre presque en même temps. Le second ne doit pas
-    // voir un message d'échec alors que tout s'est bien passé.
+  it("duplicate response is not an error", async () => {
     const iphoneClient = await connectClient(iphone);
     await connectWorker(worker);
 
@@ -895,7 +860,7 @@ describe("confirmations", () => {
       iphoneClient.context,
       clientMessage(
         CLIENT_TO_SERVER.confirmationRespond,
-        { confirmationId: "inexistante", decision: "approved" },
+        { confirmationId: "nonexistent", decision: "approved" },
         "r1",
       ),
     );

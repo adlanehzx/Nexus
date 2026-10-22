@@ -11,12 +11,12 @@ const fakeLlm = {
   },
   structuredOutput<T>(_request: unknown, _schema: unknown): Promise<T> {
     return Promise.resolve({
-      title: "Ouvrir Chrome",
-      reasoning: "Demande de l'utilisateur",
+      title: "Open Chrome",
+      reasoning: "User request",
       steps: [
         {
           id: "step-1",
-          description: "Ouvre Chrome",
+          description: "Opens Chrome",
           requiredCapabilities: ["app.open"],
           tool: "device.app.open",
           arguments: { app: "chrome" },
@@ -51,7 +51,7 @@ describe("POST /api/v1/tasks/instruct", () => {
     await harness.close();
   });
 
-  it("génère un plan et l'exécute à partir de langage naturel", async () => {
+  it("generates a plan and executes it from natural language", async () => {
     const account = await createAccount(harness, "test@nexus.fr");
     const { device } = await registerDevice(harness, account, {
       name: "PC",
@@ -64,7 +64,7 @@ describe("POST /api/v1/tasks/instruct", () => {
       url: "/api/v1/tasks/instruct",
       headers: account.authorization,
       payload: {
-        instruction: "ouvre Chrome sur mon PC Windows",
+        instruction: "open Chrome on my Windows PC",
         originClientDeviceId: device.id,
       },
     });
@@ -72,12 +72,12 @@ describe("POST /api/v1/tasks/instruct", () => {
     expect(response.statusCode).toBe(202);
 
     const body = response.json<{ data: { title: string; steps: unknown[] } }>();
-    expect(body.data.title).toBe("Ouvrir Chrome");
+    expect(body.data.title).toBe("Open Chrome");
     expect(body.data.steps).toHaveLength(1);
     expect((body.data.steps[0] as { tool: string }).tool).toBe("device.app.open");
   });
 
-  it("refuse l'exécution si la capacité est manquante", async () => {
+  it("rejects execution if capability is missing", async () => {
     const account = await createAccount(harness, "test2@nexus.fr");
     const { device } = await registerDevice(harness, account, {
       name: "PC",
@@ -90,7 +90,7 @@ describe("POST /api/v1/tasks/instruct", () => {
       url: "/api/v1/tasks/instruct",
       headers: account.authorization,
       payload: {
-        instruction: "ouvre Chrome sur mon PC Windows",
+        instruction: "open Chrome on my Windows PC",
         originClientDeviceId: device.id,
       },
     });

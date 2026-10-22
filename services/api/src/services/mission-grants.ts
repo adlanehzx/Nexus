@@ -2,17 +2,17 @@ import { AuthorizationError } from "@nexus/shared";
 import type { MissionGrantClaims } from "@nexus/auth";
 
 /**
- * Cycle de vie d'une assertion de mission.
+ * Lifecycle of a mission grant assertion.
  *
- * `COMPLETED` et `REVOKED` sont tous deux des retraits, et les distinguer n'est
- * pas cosmétique : le premier est le chemin normal — la mission est finie — et
- * le second un chemin d'incident. Les confondre rendrait impossible de répondre
- * à « quelles assertions a-t-on dû retirer en urgence ».
+ * `COMPLETED` and `REVOKED` are both forms of revocation, and distinguishing them
+ * is not cosmetic: the first represents the normal path — the mission finished — while
+ * the second is an incident mitigation path. Conflating them would make it impossible
+ * to answer "which grants had to be revoked urgently".
  */
 export type MissionGrantState = "ACTIVE" | "COMPLETED" | "REVOKED";
 
 export interface MissionGrantRecord {
-  /** Le `jti` de l'assertion. */
+  /** The assertion `jti`. */
   grantId: string;
   missionExternalKey: string;
   userId: string;
@@ -27,13 +27,13 @@ export interface MissionGrantRegistry {
   record(input: Omit<MissionGrantRecord, "status" | "retiredAt">): Promise<void>;
   find(grantId: string): Promise<MissionGrantRecord | undefined>;
   /**
-   * Retire toutes les assertions encore actives d'une mission.
+   * Revokes all still-active assertions for a mission.
    *
-   * L'opération porte sur la mission et non sur une assertion, parce que la
-   * rotation en laisse plusieurs valides en même temps : retirer seulement
-   * celle qu'on a sous la main laisserait les autres ouvertes.
+   * The operation targets the mission rather than a single assertion, because
+   * rotation leaves multiple grants valid simultaneously: revoking only the
+   * current one on hand would leave others open.
    *
-   * @returns le nombre d'assertions retirées.
+   * @returns number of revoked assertions.
    */
   retireMission(
     missionExternalKey: string,
@@ -76,7 +76,7 @@ export class InMemoryMissionGrantRegistry implements MissionGrantRegistry {
   }
 }
 
-/** Ce que le service a besoin de savoir faire du `TokenService`. */
+/** Capabilities required by this service from `TokenService`. */
 export interface MissionGrantSigner {
   issueMissionGrant(input: { userId: string; service: string; missionExternalKey: string }): {
     token: string;
@@ -95,26 +95,25 @@ export interface MissionGrantServiceOptions {
   signer: MissionGrantSigner;
   registry: MissionGrantRegistry;
   /**
-   * Marge avant expiration à partir de laquelle une assertion est renouvelée.
+   * Expiration margin threshold triggering grant renewal.
    *
-   * Large par rapport à la durée de vie — huit heures sur vingt-quatre — parce
-   * que la rotation est opportuniste : elle se produit quand le moteur passe,
-   * et il peut ne pas passer pendant des heures si la mission attend une
-   * décision humaine. Une marge étroite laisserait une mission longue mourir
-   * entre deux sondages.
+   * Broad relative to overall lifespan — eight hours out of twenty-four — because
+   * rotation is opportunistic: it occurs when the engine interacts, which
+   * may pause for hours while awaiting human approval. A narrow margin
+   * would let long-running missions die between polls.
    */
   renewWithinMs?: number;
   now?: () => Date;
 }
 
 /**
- * Émission, vérification, rotation et retrait des assertions de mission.
+ * Issuance, verification, rotation, and revocation of mission grant assertions.
  *
- * Réunir les quatre dans un même service est délibéré : ce sont quatre faces
- * d'une seule invariante — une assertion n'ouvre que si elle est signée, connue
- * du registre, active et non expirée. Les disperser laisserait inévitablement
- * un appelant signer sans enregistrer, et une assertion non enregistrée est
- * précisément celle qu'on ne peut pas retirer.
+ * Consolidating all four in one service is intentional: they are four facets
+ * of a single invariant — a grant only authenticates if signed, recognized by
+ * the registry, active, and unexpired. Dispersing them would inevitably allow
+ * a caller to sign without registering, and an unregistered assertion is
+ * precisely the kind that cannot be revoked.
  */
 export class MissionGrantService {
   readonly #signer: MissionGrantSigner;
@@ -129,16 +128,16 @@ export class MissionGrantService {
     this.#now = options.now ?? (() => new Date());
   }
 
-  /** Émet une assertion **et** l'inscrit au registre, dans cet ordre. */
+  /** Issues an assertion **and** records it in the registry, in that order. */
   async issue(input: {
     userId: string;
     service: string;
     missionExternalKey: string;
   }): Promise<IssuedMissionGrant> {
     const signed = this.#signer.issueMissionGrant(input);
-    // Inscrit avant d'être rendu : une assertion qui circulerait sans être au
-    // registre serait refusée à la première utilisation, ce qui est déroutant,
-    // ou — bien pire si l'on inversait la règle — irrévocable.
+    // Registered prior to returning: an assertion circulating without registry
+    // presence would be rejected upon first use, creating confusion, or
+    // — far worse if the rule were reversed — become irrevocable.
     await this.#registry.record({
       grantId: signed.grantId,
       missionExternalKey: input.missionExternalKey,
@@ -151,34 +150,34 @@ export class MissionGrantService {
   }
 
   /**
-   * Vérifie qu'une assertion déjà authentifiée est toujours exploitable.
+   * Verifies that an already-authenticated assertion remains usable.
    *
-   * La signature a été vérifiée en amont ; ce qui est contrôlé ici est l'état.
-   * Les messages d'erreur ne distinguent pas « inconnue » de « retirée » côté
-   * utilisateur : la différence n'aiderait qu'à sonder le registre.
+   * The cryptographic signature was verified upstream; state is checked here.
+   * Error messages do not distinguish between "unknown" and "revoked" on the
+   * user side: the difference would only aid in probing registry entries.
    */
   async assertUsable(claims: MissionGrantClaims): Promise<MissionGrantRecord> {
     const grant = await this.#registry.find(claims.jti);
     if (grant === undefined) {
       throw new AuthorizationError({
-        message: `Assertion de mission absente du registre : ${claims.jti}`,
+        message: `Mission grant missing from registry: ${claims.jti}`,
         userMessage: "Access denied.",
         context: { grantId: claims.jti },
       });
     }
     if (grant.status !== "ACTIVE") {
       throw new AuthorizationError({
-        message: `Assertion de mission retirée (${grant.status}) : ${claims.jti}`,
+        message: `Mission grant revoked (${grant.status}): ${claims.jti}`,
         userMessage: "Access denied.",
         context: { grantId: claims.jti, status: grant.status },
       });
     }
-    // Le registre reste autoritaire sur l'expiration, en plus de la signature.
-    // Les deux peuvent diverger si l'horloge d'un processus dérive, et la
-    // décision la plus restrictive est la bonne.
+    // The registry remains authoritative on expiration, alongside the signature.
+    // The two can diverge if process clocks drift, and the more restrictive
+    // decision applies.
     if (grant.expiresAt.getTime() <= this.#now().getTime()) {
       throw new AuthorizationError({
-        message: `Assertion de mission expirée : ${claims.jti}`,
+        message: `Mission grant expired: ${claims.jti}`,
         userMessage: "Access denied.",
         context: { grantId: claims.jti },
       });
@@ -187,12 +186,12 @@ export class MissionGrantService {
   }
 
   /**
-   * Renouvelle une assertion qui approche de son terme, ou ne fait rien.
+   * Renews an assertion nearing expiration, or does nothing.
    *
-   * L'ancienne n'est **pas** retirée : elle expirera d'elle-même. La retirer
-   * ici casserait toute requête déjà en vol avec, et le gain serait nul — ce
-   * qu'on veut éviter est une mission qui meurt faute d'assertion valide, pas
-   * une assertion qui vit ses dernières heures.
+   * The old assertion is **not** revoked: it will expire on its own. Revoking
+   * it here would break in-flight requests using it, with no security gain — our
+   * goal is preventing a mission from failing due to an expired grant, not
+   * truncating an assertion during its final hours.
    */
   async renewIfNeeded(grant: MissionGrantRecord): Promise<IssuedMissionGrant | undefined> {
     const remaining = grant.expiresAt.getTime() - this.#now().getTime();
@@ -206,12 +205,12 @@ export class MissionGrantService {
   }
 
   /**
-   * Renouvelle par identifiant, pour les routes qui n'ont que le `jti`.
+   * Renews by identifier, for routes that only have `jti`.
    *
-   * Relit le registre plutôt que de faire transiter l'enregistrement depuis la
-   * garde : une lecture de plus par requête sur cette seule surface, contre un
-   * type de principal qui devrait porter une date d'expiration dont aucune
-   * autre surface n'a l'usage.
+   * Re-reads registry rather than threading the record through the auth
+   * guard: one additional read per request on this surface only, avoiding
+   * polluting the principal type with an expiration timestamp needed nowhere
+   * else.
    */
   async renewById(grantId: string): Promise<IssuedMissionGrant | undefined> {
     const grant = await this.#registry.find(grantId);
@@ -219,7 +218,7 @@ export class MissionGrantService {
     return this.renewIfNeeded(grant);
   }
 
-  /** Retire les assertions d'une mission terminée. */
+  /** Revokes assertions of a completed mission. */
   retire(
     missionExternalKey: string,
     status: Exclude<MissionGrantState, "ACTIVE"> = "COMPLETED",
