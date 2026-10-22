@@ -41,6 +41,10 @@ export function Agents({ api }: { api: DashboardApi }) {
   const [testPrompt, setTestPrompt] = useState("Reply only NEXUS_ACP_OK");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [editingAccId, setEditingAccId] = useState<string | null>(null);
+  const [editingAccName, setEditingAccName] = useState("");
+  const [editingAccPriority, setEditingAccPriority] = useState(2);
 
   const refreshRouting = (): void => {
     void api
@@ -165,12 +169,38 @@ export function Agents({ api }: { api: DashboardApi }) {
     }
   };
 
+  const handleSaveAccount = async (id: string): Promise<void> => {
+    if (!editingAccName.trim()) return;
+    setAccActionLoading(true);
+    setAccountFeedback(null);
+    try {
+      await api.updateProviderAccount(id, {
+        name: editingAccName.trim(),
+        priority: editingAccPriority,
+      });
+      setAccountFeedback(`Identity "${id}" updated.`);
+      setEditingAccId(null);
+      refreshAccounts();
+    } catch (err) {
+      setAccountFeedback(`Update error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAccActionLoading(false);
+    }
+  };
+
   const handleDeleteAccount = async (id: string): Promise<void> => {
+    if (
+      !window.confirm(
+        `Permanently revoke and delete account "${id}"?\n\nData impact: This identity will be permanently removed from agent routing and cannot be used for subsequent tasks.`,
+      )
+    ) {
+      return;
+    }
     setAccActionLoading(true);
     setAccountFeedback(null);
     try {
       await api.deleteProviderAccount(id);
-      setAccountFeedback(`Identity "${id}" deleted.`);
+      setAccountFeedback(`Identity "${id}" revoked and deleted.`);
       refreshAccounts();
     } catch (err) {
       setAccountFeedback(`Deletion error: ${err instanceof Error ? err.message : String(err)}`);
@@ -636,13 +666,30 @@ export function Agents({ api }: { api: DashboardApi }) {
 
       {/* ── Multi-account provider management ── */}
       <div className="settings-panel" style={{ marginTop: "28px" }}>
-        <div className="settings-panel-heading">
+        <div
+          className="settings-panel-heading"
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}
+        >
           <div>
             <h3>Provider Accounts & Isolated Identities</h3>
             <p className="muted">
               Multi-account management (Antigravity, Claude, Codex) with isolated local CLI
               sessions, authentication tracking, quotas, cooldowns, and reliability.
             </p>
+          </div>
+          <div>
+            <select
+              className="field"
+              value={providerFilter}
+              onChange={(e) => setProviderFilter(e.target.value)}
+              style={{ width: "auto" }}
+            >
+              <option value="all">All Providers ({accounts.length})</option>
+              <option value="antigravity">Antigravity</option>
+              <option value="claude">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="openhands">OpenHands</option>
+            </select>
           </div>
         </div>
 
@@ -653,95 +700,157 @@ export function Agents({ api }: { api: DashboardApi }) {
         ) : null}
 
         <div className="agent-grid" style={{ marginBottom: "20px" }}>
-          {accounts.map((acc) => {
-            const isCooldown = acc.cooldown.active;
-            const isExhausted = acc.quotas.exhausted;
-            const isAuthOk = acc.authStatus === "authenticated";
-            const statusClass = isCooldown
-              ? "attention"
-              : isExhausted
+          {accounts
+            .filter((acc) => (providerFilter === "all" ? true : acc.provider === providerFilter))
+            .map((acc) => {
+              const isCooldown = acc.cooldown.active;
+              const isExhausted = acc.quotas.exhausted;
+              const isAuthOk = acc.authStatus === "authenticated";
+              const statusClass = isCooldown
                 ? "attention"
-                : isAuthOk
-                  ? "active"
-                  : "idle";
-            const statusLabel = isCooldown
-              ? "Cooling down"
-              : isExhausted
-                ? "Quota exhausted"
-                : isAuthOk
-                  ? "Authenticated"
-                  : acc.authStatus === "expired"
-                    ? "Expired"
-                    : "Unverified";
+                : isExhausted
+                  ? "attention"
+                  : isAuthOk
+                    ? "active"
+                    : "idle";
+              const statusLabel = isCooldown
+                ? "Cooling down"
+                : isExhausted
+                  ? "Quota exhausted"
+                  : isAuthOk
+                    ? "Authenticated"
+                    : acc.authStatus === "expired"
+                      ? "Expired"
+                      : "Unverified";
 
-            return (
-              <article className="agent-card" key={acc.id}>
-                <div className="agent-card-top">
-                  <div className={`agent-avatar ${statusClass}`}>
-                    {acc.provider.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3>{acc.name}</h3>
-                    <div className="muted">
-                      {acc.id} · Priority P{acc.priority}
+              return (
+                <article className="agent-card" key={acc.id}>
+                  {editingAccId === acc.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                      <h4 style={{ margin: "0 0 4px 0" }}>Edit {acc.id}</h4>
+                      <label style={{ fontSize: "12px" }}>
+                        Account Name / Label
+                        <input
+                          className="field"
+                          value={editingAccName}
+                          onChange={(e) => setEditingAccName(e.target.value)}
+                        />
+                      </label>
+                      <label style={{ fontSize: "12px" }}>
+                        Routing Priority (1 = highest)
+                        <input
+                          className="field"
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={editingAccPriority}
+                          onChange={(e) => setEditingAccPriority(Number(e.target.value))}
+                        />
+                      </label>
+                      <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                        <button
+                          className="button primary compact"
+                          type="button"
+                          disabled={accActionLoading || !editingAccName.trim()}
+                          onClick={() => void handleSaveAccount(acc.id)}
+                        >
+                          {accActionLoading ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          className="button compact"
+                          type="button"
+                          disabled={accActionLoading}
+                          onClick={() => setEditingAccId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <span className={`agent-status ${statusClass}`}>{statusLabel}</span>
-                </div>
+                  ) : (
+                    <>
+                      <div className="agent-card-top">
+                        <div className={`agent-avatar ${statusClass}`}>
+                          {acc.provider.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <h3>{acc.name}</h3>
+                            {acc.priority === 1 ? (
+                              <span className="state-pill good" style={{ fontSize: "10px" }}>★ Primary</span>
+                            ) : null}
+                          </div>
+                          <div className="muted">
+                            {acc.id} · {acc.provider} · Priority P{acc.priority}
+                          </div>
+                        </div>
+                        <span className={`agent-status ${statusClass}`}>{statusLabel}</span>
+                      </div>
 
-                <div className="agent-stats">
-                  <span>
-                    <strong>{Math.round(acc.reliability.score * 100)} %</strong> reliability (
-                    {acc.reliability.successCount}/{acc.reliability.totalRuns})
-                  </span>
-                  <span>
-                    <strong>{acc.reliability.consecutiveFailures}</strong> consec. errors
-                  </span>
-                  <span>
-                    <strong>{acc.cooldown.active ? "Active" : "No"}</strong> cooldown
-                  </span>
-                </div>
+                      <div className="agent-stats">
+                        <span>
+                          <strong>{Math.round(acc.reliability.score * 100)} %</strong> reliability (
+                          {acc.reliability.successCount}/{acc.reliability.totalRuns})
+                        </span>
+                        <span>
+                          <strong>{acc.reliability.consecutiveFailures}</strong> consec. errors
+                        </span>
+                        <span>
+                          <strong>{acc.cooldown.active ? "Active" : "No"}</strong> cooldown
+                        </span>
+                      </div>
 
-                {acc.cooldown.reason ? (
-                  <div
-                    className="muted"
-                    style={{ marginTop: "8px", fontSize: "11px", color: "var(--gradient)" }}
-                  >
-                    Cooldown reason: {acc.cooldown.reason}
-                  </div>
-                ) : null}
+                      {acc.cooldown.reason ? (
+                        <div
+                          className="muted"
+                          style={{ marginTop: "8px", fontSize: "11px", color: "var(--gradient)" }}
+                        >
+                          Cooldown reason: {acc.cooldown.reason}
+                        </div>
+                      ) : null}
 
-                <div className="agent-card-actions">
-                  <button
-                    className="button"
-                    type="button"
-                    disabled={accActionLoading}
-                    onClick={() => void handleTestAccount(acc.id)}
-                  >
-                    Test connection
-                  </button>
-                  <button
-                    className="button"
-                    type="button"
-                    disabled={accActionLoading}
-                    onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
-                  >
-                    {acc.cooldown.active ? "Resume" : "Pause"}
-                  </button>
-                  {!["antigravity-personnel", "claude-main", "codex-main"].includes(acc.id) ? (
-                    <button
-                      className="button danger"
-                      type="button"
-                      disabled={accActionLoading}
-                      onClick={() => void handleDeleteAccount(acc.id)}
-                    >
-                      Delete
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
+                      <div className="agent-card-actions">
+                        <button
+                          className="button"
+                          type="button"
+                          disabled={accActionLoading}
+                          onClick={() => {
+                            setEditingAccId(acc.id);
+                            setEditingAccName(acc.name);
+                            setEditingAccPriority(acc.priority);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="button"
+                          type="button"
+                          disabled={accActionLoading}
+                          onClick={() => void handleTestAccount(acc.id)}
+                        >
+                          Test
+                        </button>
+                        <button
+                          className="button"
+                          type="button"
+                          disabled={accActionLoading}
+                          onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
+                        >
+                          {acc.cooldown.active ? "Resume" : "Pause"}
+                        </button>
+                        <button
+                          className="button danger"
+                          type="button"
+                          disabled={accActionLoading}
+                          onClick={() => void handleDeleteAccount(acc.id)}
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              );
+            })}
         </div>
 
         <div className="agent-add" style={{ marginTop: "16px" }}>

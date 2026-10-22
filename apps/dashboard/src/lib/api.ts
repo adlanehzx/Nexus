@@ -1024,6 +1024,22 @@ export class DashboardApi {
     return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
   }
 
+  updateProviderAccount(
+    id: string,
+    input: {
+      name?: string;
+      profileKey?: string;
+      priority?: number;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<ProviderAccountDto> {
+    return this.#request(
+      "PATCH",
+      `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`,
+      input,
+    );
+  }
+
   routingMatrix(): Promise<{ matrix: AgentRoutingEntry[] }> {
     return this.#get("/api/v1/orchestrator/routing/matrix");
   }

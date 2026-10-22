@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type {
   DashboardApi,
+  ExternalNotificationConfigDto,
   McpConfiguration,
   MissionCollaborationDto,
   PairingTicket,
@@ -2035,6 +2036,35 @@ export function Notifications({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.notifications());
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const [config, setConfig] = useState<ExternalNotificationConfigDto | null>(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configFeedback, setConfigFeedback] = useState<string | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+
+  useEffect(() => {
+    void api
+      .notificationConfig()
+      .then(setConfig)
+      .catch((cause: unknown) => {
+        console.warn("Notification config load skipped:", cause instanceof Error ? cause.message : cause);
+      });
+  }, [api]);
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!config) return;
+    setConfigSaving(true);
+    setConfigFeedback(null);
+    try {
+      await api.saveNotificationConfig(config);
+      setConfigFeedback("External notification configuration saved.");
+      setTimeout(() => setConfigFeedback(null), 3500);
+    } catch (err) {
+      setConfigFeedback(`Save error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setConfigSaving(false);
+    }
+  };
 
   const handleTest = async () => {
     setTesting(true);
@@ -2064,14 +2094,23 @@ export function Notifications({ api }: { api: DashboardApi }) {
             Central log and broadcast to external channels (desktop, mobile push ntfy, webhooks).
           </p>
         </div>
-        <button
-          className="button"
-          type="button"
-          disabled={testing}
-          onClick={() => void handleTest()}
-        >
-          {testing ? "Testing..." : "Test external channels"}
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => setShowConfig((curr) => !curr)}
+          >
+            {showConfig ? "Hide channel config" : "Configure channels"}
+          </button>
+          <button
+            className="button"
+            type="button"
+            disabled={testing}
+            onClick={() => void handleTest()}
+          >
+            {testing ? "Testing..." : "Test external channels"}
+          </button>
+        </div>
       </div>
 
       {testResult !== null ? (
@@ -2079,6 +2118,153 @@ export function Notifications({ api }: { api: DashboardApi }) {
           {testResult}
         </p>
       ) : null}
+
+      {configFeedback !== null ? (
+        <p className="banner success" style={{ marginBottom: "1rem" }}>
+          {configFeedback}
+        </p>
+      ) : null}
+
+      {showConfig && config !== null && (
+        <form
+          className="card"
+          onSubmit={(e) => void handleSaveConfig(e)}
+          style={{ padding: "16px", marginBottom: "20px", border: "1px solid var(--border)" }}
+        >
+          <h3 style={{ marginTop: 0 }}>External Notification Channels</h3>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={config.enabled}
+                onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
+              />
+              <strong>Enable external notification broadcast</strong>
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <label>
+                Desktop Alert Urgency
+                <select
+                  className="field"
+                  value={config.desktop.urgency}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      desktop: {
+                        ...config.desktop,
+                        urgency: e.target.value as "low" | "normal" | "critical",
+                      },
+                    })
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </label>
+
+              <label>
+                Dashboard Base URL
+                <input
+                  className="field"
+                  type="url"
+                  value={config.dashboardBaseUrl}
+                  onChange={(e) => setConfig({ ...config, dashboardBaseUrl: e.target.value })}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <label>
+                Ntfy Server URL
+                <input
+                  className="field"
+                  type="url"
+                  value={config.ntfy.serverUrl}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      ntfy: { ...config.ntfy, serverUrl: e.target.value },
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Ntfy Topic
+                <input
+                  className="field"
+                  type="text"
+                  value={config.ntfy.topic}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      ntfy: { ...config.ntfy, topic: e.target.value },
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+              <label>
+                Webhook URL
+                <input
+                  className="field"
+                  type="url"
+                  placeholder="https://discord.com/api/webhooks/..."
+                  value={config.webhook?.url ?? ""}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      webhook: {
+                        enabled: e.target.value.trim().length > 0,
+                        url: e.target.value,
+                        format: config.webhook?.format ?? "generic",
+                      },
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Webhook Format
+                <select
+                  className="field"
+                  value={config.webhook?.format ?? "generic"}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      webhook: {
+                        enabled: (config.webhook?.url ?? "").length > 0,
+                        url: config.webhook?.url,
+                        format: e.target.value as "discord" | "telegram" | "apprise" | "generic",
+                      },
+                    })
+                  }
+                >
+                  <option value="generic">Generic JSON</option>
+                  <option value="discord">Discord</option>
+                  <option value="telegram">Telegram</option>
+                  <option value="apprise">Apprise</option>
+                </select>
+              </label>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                className="button primary"
+                disabled={configSaving}
+              >
+                {configSaving ? "Saving..." : "Save notification settings"}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
 
       <Section state={state}>
         {(data) => (
