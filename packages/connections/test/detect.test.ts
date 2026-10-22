@@ -4,7 +4,8 @@ import { FORBIDDEN_CONNECTION_FIELDS, connectionSchema } from "../src/model.js";
 import { NodeProcessPort, SystemClock } from "../src/node-process.js";
 import { SafeCommandRunner } from "../src/probes.js";
 import { ProviderRegistry, type ProviderDefinition } from "../src/registry.js";
-import { createFakeBinDir, fakeSecret } from "./fake-binaries.js";
+import type { ClockPort } from "../src/ports.js";
+import { FakeClock, createFakeBinDir, fakeSecret } from "./fake-binaries.js";
 
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 
@@ -32,7 +33,14 @@ function fixtureProvider(overrides: Partial<ProviderDefinition> = {}): ProviderD
   };
 }
 
-function detectorFor(dir: string, provider: ProviderDefinition, platform = "linux" as const) {
+function detectorFor(
+  dir: string,
+  provider: ProviderDefinition,
+  platform = "linux" as const,
+  // Injectable so a test about timestamps does not depend on how fast the
+  // machine runs. The runner keeps a real clock: it races actual processes.
+  clock: ClockPort = new SystemClock(),
+) {
   const audit: DetectionAuditEvent[] = [];
   const detector = new ConnectionDetector({
     registry: new ProviderRegistry([provider]),
@@ -40,7 +48,7 @@ function detectorFor(dir: string, provider: ProviderDefinition, platform = "linu
       process: new NodeProcessPort({ path: dir, platform: "linux" }),
       clock: new SystemClock(),
     }),
-    clock: new SystemClock(),
+    clock,
     platform,
     onAudit: (event) => audit.push(event),
   });
@@ -70,7 +78,10 @@ posixOnly("connection detection", () => {
       const bin = await createFakeBinDir();
       const { detector } = detectorFor(bin.dir, fixtureProvider());
 
-      const connection = await detector.detect("fixture", previousState);
+      const connection = await detector.detect("fixture", {
+        state: previousState,
+        lastSuccessAt: null,
+      });
 
       expect(connection.state).toBe("not_installed");
       expect(connection.errorCategory).toBe("not_found");
@@ -457,5 +468,144 @@ posixOnly("adapter availability is a separate question from the CLI", () => {
     // reported a bridge as installed on the evidence of an unrelated binary.
     expect(connection.executablePath).not.toBeNull();
     expect(connection.adapter?.availability).not.toBe("available");
+  });
+});
+
+posixOnly("the record of a past success survives a later failure", () => {
+  /** A fixture whose script can be rewritten between detections. */
+  async function mutableTool() {
+    const bin = await createFakeBinDir();
+    return {
+      dir: bin.dir,
+      working: () => bin.write("fixture", 'echo "fixture 2.3.4"'),
+      broken: () => bin.write("fixture", 'echo "not logged in" >&2; exit 1'),
+      gibberish: () => bin.write("fixture", 'echo "who knows"'),
+    };
+  }
+
+  it("keeps null until something has actually succeeded", async () => {
+    const bin = await createFakeBinDir();
+    const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.lastSuccessAt).toBeNull();
+    expect(connection.lastCheckedAt).not.toBeNull();
+  });
+
+  it("sets it on the first successful probe", async () => {
+    const tool = await mutableTool();
+    await tool.working();
+    const { detector } = detectorFor(tool.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.lastSuccessAt).toBe(connection.lastCheckedAt);
+  });
+
+  it("preserves it through a later failure while advancing lastCheckedAt", async () => {
+    const tool = await mutableTool();
+    await tool.working();
+    const { detector } = detectorFor(tool.dir, fixtureProvider());
+    const first = await detector.detect("fixture");
+
+    await tool.broken();
+    const second = await detector.detect("fixture", first);
+
+    // The regression this guards: rebuilding from the state alone recomputed
+    // lastSuccessAt as "now if this probe succeeded, else null", so the first
+    // failure erased the record of it ever having worked — the one fact
+    // somebody wants when a connection breaks.
+    expect(second.state).toBe("authentication_required");
+    expect(second.lastSuccessAt).toBe(first.lastSuccessAt);
+    expect(second.lastSuccessAt).not.toBeNull();
+  });
+
+  it("preserves it through a tool disappearing entirely", async () => {
+    const tool = await mutableTool();
+    await tool.working();
+    const { detector } = detectorFor(tool.dir, fixtureProvider());
+    const first = await detector.detect("fixture");
+
+    const gone = await detectorFor(
+      (await createFakeBinDir()).dir,
+      fixtureProvider(),
+    ).detector.detect("fixture", first);
+
+    expect(gone.state).toBe("not_installed");
+    expect(gone.lastSuccessAt).toBe(first.lastSuccessAt);
+  });
+
+  it("replaces it on a later success", async () => {
+    const tool = await mutableTool();
+    await tool.working();
+    const clock = new FakeClock();
+    const { detector } = detectorFor(tool.dir, fixtureProvider(), "linux", clock);
+    const first = await detector.detect("fixture");
+
+    clock.advance(60_000);
+    const second = await detector.detect("fixture", first);
+
+    expect(second.lastSuccessAt).not.toBe(first.lastSuccessAt);
+    expect(Date.parse(second.lastSuccessAt ?? "")).toBeGreaterThan(
+      Date.parse(first.lastSuccessAt ?? ""),
+    );
+  });
+
+  it("never invents a success when the result cannot be represented", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(
+      bin.dir,
+      fixtureProvider({
+        detect: {
+          command: { file: "fixture", args: ["--version"] },
+          verification: "verified",
+          interpret: () => ({ version: "9".repeat(500) }),
+        },
+      }),
+    );
+
+    const connection = await detector.detect("fixture", {
+      state: "connected",
+      lastSuccessAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(connection.errorCategory).toBe("invalid_output");
+    // Neither invented nor erased: nothing succeeded now, and the earlier
+    // success is still a fact.
+    expect(connection.lastSuccessAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(connection.lastSuccessAt).not.toBe(connection.lastCheckedAt);
+  });
+
+  it("keeps null for an unrepresentable result that never succeeded before", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(
+      bin.dir,
+      fixtureProvider({
+        detect: {
+          command: { file: "fixture", args: ["--version"] },
+          verification: "verified",
+          interpret: () => ({ version: "9".repeat(500) }),
+        },
+      }),
+    );
+
+    expect((await detector.detect("fixture")).lastSuccessAt).toBeNull();
+  });
+
+  it("carries history across a whole sweep", async () => {
+    const tool = await mutableTool();
+    await tool.working();
+    const { detector } = detectorFor(tool.dir, fixtureProvider());
+    const [first] = await detector.detectAll();
+
+    await tool.broken();
+    const [second] = await detector.detectAll(new Map([["fixture", first!]]));
+
+    // A `Connection` satisfies `PreviousObservation`, so a caller that stores
+    // connections passes them through without adapting anything.
+    expect(second?.lastSuccessAt).toBe(first?.lastSuccessAt);
   });
 });

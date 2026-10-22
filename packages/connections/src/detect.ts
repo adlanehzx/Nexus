@@ -29,6 +29,32 @@ import { stateRequiresHumanAction, transition } from "./state-machine.js";
  * the basis of a success claim.
  */
 
+/**
+ * What a previous detection left behind.
+ *
+ * ## Why not just the state
+ *
+ * Because a state cannot carry history. Rebuilding a Connection from the
+ * state alone meant `lastSuccessAt` was recomputed as "now if this probe
+ * succeeded, otherwise null" — so the first failure after a working
+ * connection erased the record of it ever having worked. That is the field
+ * somebody looks at to answer "did this ever work, and when did it stop",
+ * which is exactly the question a failure makes them ask.
+ *
+ * Deliberately a narrow structural type rather than `Connection`. A full
+ * `Connection` satisfies it, so a caller holding one passes it directly, but
+ * the detector cannot read anything else from it — and nothing secret can
+ * arrive through a shape with two fields of known type.
+ */
+export interface PreviousObservation {
+  state: ConnectionState;
+  /** ISO 8601 of the last probe that actually succeeded, or `null`. */
+  lastSuccessAt: string | null;
+}
+
+/** The starting point when nothing has been observed yet. */
+const NO_OBSERVATION: PreviousObservation = { state: "not_installed", lastSuccessAt: null };
+
 export interface DetectorOptions {
   registry: ProviderRegistry;
   runner: SafeCommandRunner;
@@ -87,9 +113,14 @@ export class ConnectionDetector {
     this.#onAudit = options.onAudit;
   }
 
-  /** Detects every provider that can run on this platform. */
+  /**
+   * Detects every provider that can run on this platform.
+   *
+   * `previous` maps a provider id to what was last observed for it. A map of
+   * `Connection` values works directly: they satisfy `PreviousObservation`.
+   */
   async detectAll(
-    previous: ReadonlyMap<string, ConnectionState> = new Map(),
+    previous: ReadonlyMap<string, PreviousObservation> = new Map(),
   ): Promise<Connection[]> {
     const definitions = this.#registry.listForPlatform(this.#platform);
     // Sequential, not parallel. These probes spawn processes on a machine
@@ -98,7 +129,7 @@ export class ConnectionDetector {
     const connections: Connection[] = [];
     for (const definition of definitions) {
       connections.push(
-        await this.#detect(definition, previous.get(definition.id) ?? "not_installed"),
+        await this.#detect(definition, previous.get(definition.id) ?? NO_OBSERVATION),
       );
     }
     return connections;
@@ -107,16 +138,17 @@ export class ConnectionDetector {
   /** Detects a single provider by id. Throws `UnknownProviderError` for an unregistered id. */
   async detect(
     providerId: string,
-    previousState: ConnectionState = "not_installed",
+    previous: PreviousObservation = NO_OBSERVATION,
   ): Promise<Connection> {
-    return this.#detect(this.#registry.get(providerId), previousState);
+    return this.#detect(this.#registry.get(providerId), previous);
   }
 
   async #detect(
     definition: ProviderDefinition,
-    previousState: ConnectionState,
+    previous: PreviousObservation,
   ): Promise<Connection> {
     const startedAt = this.#clock.now();
+    const previousState = previous.state;
 
     if (!definition.platforms.includes(this.#platform)) {
       // Not an error and not a probe: there is nothing to run, so nothing runs.
@@ -130,6 +162,7 @@ export class ConnectionDetector {
         // Nothing ran, so nothing is known about the adapter either. The
         // provider not running here says nothing about what is installed.
         adapterAvailability: "unknown",
+        previous,
       });
     }
 
@@ -151,6 +184,7 @@ export class ConnectionDetector {
         // The CLI is absent. That is a fact about the CLI, and the adapter is a
         // separate install — we did not look, so we do not claim.
         adapterAvailability: "unknown",
+        previous,
       });
     }
 
@@ -185,6 +219,7 @@ export class ConnectionDetector {
         succeeded: false,
         // The presence probe failed, so the adapter was never looked at.
         adapterAvailability: "unknown",
+        previous,
       });
     }
 
@@ -201,6 +236,7 @@ export class ConnectionDetector {
         capabilities: [],
         succeeded: false,
         adapterAvailability: "unknown",
+        previous,
       });
     }
 
@@ -221,6 +257,7 @@ export class ConnectionDetector {
         capabilities: interpretation.capabilities ?? [],
         succeeded: true,
         adapterAvailability,
+        previous,
       });
     }
 
@@ -234,6 +271,7 @@ export class ConnectionDetector {
       capabilities: state.capabilities,
       succeeded: state.state === "connected" || state.state === "degraded",
       adapterAvailability,
+      previous,
       probeVerification: sessionProbe.verification,
     });
   }
@@ -368,6 +406,7 @@ export class ConnectionDetector {
       capabilities: readonly string[];
       succeeded: boolean;
       adapterAvailability: AdapterAvailability;
+      previous: PreviousObservation;
       probeVerification?: "verified" | "unverified";
     },
   ): Connection {
@@ -392,7 +431,11 @@ export class ConnectionDetector {
       availableActions: [...definition.actions],
       platform: this.#platform,
       lastCheckedAt: now,
-      lastSuccessAt: result.succeeded ? now : null,
+      // Every check updates `lastCheckedAt`; only a success moves
+      // `lastSuccessAt`. A failure leaves the earlier value alone, because
+      // "it worked at 14:02 and has failed since" is the useful fact and
+      // overwriting it with null destroys exactly that.
+      lastSuccessAt: result.succeeded ? now : result.previous.lastSuccessAt,
       errorCategory: result.errorCategory,
       userMessage: result.errorCategory === null ? null : USER_MESSAGES[result.errorCategory],
       requiresHumanAction: stateRequiresHumanAction(result.state),
@@ -408,7 +451,7 @@ export class ConnectionDetector {
 
     const parsed = connectionSchema.safeParse(candidate);
     if (parsed.success) return parsed.data;
-    return this.#unrepresentable(definition, now);
+    return this.#unrepresentable(definition, now, result.previous);
   }
 
   /**
@@ -417,7 +460,11 @@ export class ConnectionDetector {
    * Built from constants and from the registry, never from probe output, so this
    * one cannot fail validation in turn.
    */
-  #unrepresentable(definition: ProviderDefinition, now: string): Connection {
+  #unrepresentable(
+    definition: ProviderDefinition,
+    now: string,
+    previous: PreviousObservation,
+  ): Connection {
     return connectionSchema.parse({
       id: `${definition.kind}:${definition.id}`,
       providerId: definition.id,
@@ -430,7 +477,10 @@ export class ConnectionDetector {
       availableActions: [...definition.actions],
       platform: this.#platform,
       lastCheckedAt: now,
-      lastSuccessAt: null,
+      // Not `now`: nothing succeeded, and inventing a success timestamp here
+      // would be the worst version of this bug rather than a fix for it. Not
+      // forced to null either — an earlier success is still a fact.
+      lastSuccessAt: previous.lastSuccessAt,
       errorCategory: "invalid_output",
       userMessage: USER_MESSAGES.invalid_output,
       requiresHumanAction: stateRequiresHumanAction("error"),

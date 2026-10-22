@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Connection, ConnectionDetector, ConnectionState } from "@nexus/connections";
+import type { Connection, ConnectionDetector } from "@nexus/connections";
 import { UnknownProviderError } from "@nexus/connections";
 import { ConnectorAuthError, type RequestAuthenticator } from "./auth.js";
 import {
@@ -189,7 +189,10 @@ export class ConnectorServer {
 
       case "connection.detect": {
         if (params.providerId === undefined) {
-          const connections = await this.#detector.detectAll(this.#previousStates());
+          // The stored Connections are passed straight through: they satisfy
+          // `PreviousObservation`, so history such as `lastSuccessAt` survives
+          // a later failure instead of being recomputed from nothing.
+          const connections = await this.#detector.detectAll(this.#observed);
           for (const connection of connections)
             this.#observed.set(connection.providerId, connection);
           return { connections };
@@ -206,14 +209,13 @@ export class ConnectorServer {
   }
 
   async #detectOne(providerId: string): Promise<Connection> {
-    const previous = this.#observed.get(providerId)?.state ?? "not_installed";
-    const connection = await this.#detector.detect(providerId, previous);
+    const previous = this.#observed.get(providerId);
+    const connection =
+      previous === undefined
+        ? await this.#detector.detect(providerId)
+        : await this.#detector.detect(providerId, previous);
     this.#observed.set(providerId, connection);
     return connection;
-  }
-
-  #previousStates(): Map<string, ConnectionState> {
-    return new Map([...this.#observed].map(([id, connection]) => [id, connection.state]));
   }
 
   #fail(
