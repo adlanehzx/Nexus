@@ -75,7 +75,7 @@ export class LocalConnectionManager implements ConnectionCatalogService {
         // ordinary variables for those shims to run at all; without them the
         // probe times out on a tool that works. Secret-shaped names are still
         // stripped, so this cannot be used to hand a token to a child.
-        envAllowlist: extendEnvAllowlist(process.env["NEXUS_PROBE_ENV_ALLOWLIST"]),
+        envAllowlist: extendEnvAllowlist(process.env.NEXUS_PROBE_ENV_ALLOWLIST),
       }),
       clock,
       platform: this.#platform,
