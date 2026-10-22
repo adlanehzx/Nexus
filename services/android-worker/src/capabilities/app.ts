@@ -5,17 +5,11 @@ import type { AppPolicy } from "../policy/app-policy.js";
 import { ActivityLaunchBlockedError, AppNotAvailableError } from "../errors.js";
 
 /**
- * `android.app.list` et `android.app.open`.
- *
- * Aucune des deux n'accepte d'URI ni d'`Intent`. Un `Intent` arbitraire est
- * l'équivalent Android d'une ligne de commande : il peut viser un composant
- * interne d'une autre application, transporter des données, déclencher un
- * paiement. La seule entrée acceptée est un **nom de paquet**, validé, et le
- * système choisit lui-même l'activité de lancement.
+ * `android.app.list` and `android.app.open`.
  */
 
 export const appListInputSchema = z.object({
-  /** Filtre sur le nom affiché ou le paquet, insensible à la casse. */
+  /** Filter on displayed name or package, case-insensitive. */
   nameContains: z.string().max(128).optional(),
   limit: z.number().int().min(1).max(200).default(50),
 });
@@ -41,13 +35,12 @@ export function createAppListCapability(
   return {
     name: "android.app.list",
     description:
-      "Liste les applications ouvrables du téléphone Android de l'utilisateur, " +
-      "parmi celles que la politique locale autorise.",
+      "Lists launchable applications on the user's Android phone, among those allowed by local policy.",
     inputSchema: appListInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
-        nameContains: { type: "string", description: "Filtre sur le nom de l'application" },
+        nameContains: { type: "string", description: "Filter on application name" },
         limit: { type: "number" },
       },
     },
@@ -56,9 +49,6 @@ export function createAppListCapability(
     execute: async (input) => {
       const all = await dependencies.controller.listApps();
 
-      // Le filtrage par la politique passe avant tout le reste : une application
-      // interdite ne doit même pas apparaître dans un inventaire. Sa seule
-      // présence renseigne sur l'utilisateur.
       const permitted = all.filter(
         (app) => app.launchable && dependencies.policy.allows(app.packageName),
       );
@@ -73,8 +63,6 @@ export function createAppListCapability(
                 app.packageName.toLowerCase().includes(needle),
             );
 
-      // Ni version, ni date d'installation, ni permissions : rien de tout cela
-      // n'aide à ouvrir une application.
       return {
         apps: filtered
           .slice(0, input.limit)
@@ -91,16 +79,15 @@ export function createAppOpenCapability(
   return {
     name: "android.app.open",
     description:
-      "Ouvre une application sur le téléphone Android de l'utilisateur, désignée par son " +
-      "nom de paquet. N'accepte ni URI ni intention : le système choisit l'écran d'accueil " +
-      "de l'application.",
+      "Opens an application on the user's Android phone, designated by its package name. " +
+      "Does not accept URIs or intents: the system selects the application's launcher activity.",
     inputSchema: appOpenInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
         packageName: {
           type: "string",
-          description: "Nom de paquet Android, par exemple « com.spotify.music »",
+          description: "Android package name, for example \"com.spotify.music\"",
         },
       },
       required: ["packageName"],
@@ -110,15 +97,13 @@ export function createAppOpenCapability(
     execute: async (input) => {
       const packageName = dependencies.policy.assertAllowed(input.packageName);
 
-      // Vérification d'existence avant lancement : distinguer « pas installée »
-      // de « le système a refusé » évite de renvoyer un diagnostic trompeur.
       if (!(await dependencies.controller.isInstalled(packageName))) {
         throw new AppNotAvailableError(packageName);
       }
 
       const result = await dependencies.controller.openApp(packageName);
       if (!result.launched) {
-        throw new ActivityLaunchBlockedError(packageName, result.reason ?? "refus du système");
+        throw new ActivityLaunchBlockedError(packageName, result.reason ?? "system refusal");
       }
 
       return { packageName, launched: true };

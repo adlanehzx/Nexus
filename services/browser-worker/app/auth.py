@@ -1,8 +1,7 @@
-"""Authentification service-à-service.
+"""Service-to-service authentication.
 
-Le worker n'est jamais exposé à Internet — il vit sur un réseau Docker interne,
-sans port publié. On n'en déduit pas qu'il peut se passer d'authentification :
-la topologie réseau est une protection, pas une preuve d'identité.
+The worker is never exposed to the public Internet — it lives on an internal Docker
+network without exposed ports. Network topology is a layer of defense, not an identity proof.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ def require_token(
     authorization: str | None = Header(default=None),
     settings: Settings | None = None,
 ) -> None:
-    """Vérifie le jeton porteur en temps constant."""
+    """Validate bearer token in constant time."""
     settings = settings or get_settings()
 
     if not authorization or not authorization.lower().startswith("bearer "):
@@ -27,22 +26,21 @@ def require_token(
             detail={
                 "error": {
                     "code": "BROWSER_UNAUTHENTICATED",
-                    "message": "Jeton de service manquant.",
+                    "message": "Missing service token.",
                     "retryable": False,
                 }
             },
         )
 
     presented = authorization[7:].strip()
-    # Comparaison en temps constant : une comparaison naïve laisse fuiter le
-    # jeton octet par octet.
+    # Constant-time comparison prevents timing attacks.
     if not hmac.compare_digest(presented, settings.auth_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "error": {
                     "code": "BROWSER_UNAUTHENTICATED",
-                    "message": "Jeton de service invalide.",
+                    "message": "Invalid service token.",
                     "retryable": False,
                 }
             },

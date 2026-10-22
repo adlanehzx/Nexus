@@ -57,7 +57,7 @@ sources() {
     \( -name '*.ts' -o -name '*.tsx' -o -name '*.mjs' -o -name '*.js' \
        -o -name '*.py' -o -name '*.md' -o -name '*.rs' -o -name '*.kt' \
        -o -name '*.kts' -o -name '*.yml' -o -name '*.sh' -o -name '*.ps1' -o -name '*.sql' \) 2>/dev/null \
-    | grep -v node_modules | grep -v '/dist/' | grep -v '/generated/' | grep -v '/.turbo/' \
+    | grep -v node_modules | grep -v '/dist/' | grep -v '/generated/' | grep -v '/.turbo/' | grep -v '/.venv/' | grep -v '__pycache__' \
     | grep -v 'scripts/translation-status.sh' \
     | { if [ "$area" = "packages" ]; then grep -vE "$ALLOWLIST_REGEX"; else cat; fi; }
 }

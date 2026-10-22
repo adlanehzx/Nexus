@@ -6,18 +6,6 @@ import { AccessibilityDisabledError, UiNodeNotFoundError } from "../errors.js";
 
 /**
  * `android.ui.click`, `android.ui.input`, `android.ui.scroll`.
- *
- * Ces trois capacités reposent sur le **service d'accessibilité**, seul
- * mécanisme légitime d'Android pour agir sur l'interface d'une autre
- * application. Trois conséquences tenues partout dans ce fichier :
- *
- *  1. le service doit être **activé par l'utilisateur** dans les réglages du
- *     système — aucune API ne permet de l'activer par programme, et ce worker
- *     ne cherche pas à contourner cette règle ;
- *  2. sa disponibilité est vérifiée **à chaque appel**, pas seulement au
- *     démarrage : l'utilisateur peut le désactiver pendant qu'une tâche tourne ;
- *  3. rien n'est collecté au passage. Le service lit la hiérarchie de vues pour
- *     trouver l'élément demandé, agit, et n'en conserve rien.
  */
 
 const selectorSchema = z.discriminatedUnion("kind", [
@@ -36,17 +24,14 @@ export const clickInputSchema = z.object({ selector: selectorSchema });
 export const inputTextSchema = z.object({
   selector: selectorSchema,
   /**
-   * Texte à saisir.
-   *
-   * Ne figure dans aucun journal, aucun événement, aucun résultat. C'est le
-   * chemin normal d'un mot de passe.
+   * Text to input. Never logged or exposed in events.
    */
   text: z.string().min(1).max(4_096),
 });
 
 export const scrollInputSchema = z.object({
   direction: z.enum(["up", "down", "left", "right"]),
-  /** Nombre de gestes de défilement. Borné par la politique. */
+  /** Number of scroll gestures. Capped by policy. */
   amount: z.number().int().min(1).max(20).default(1),
 });
 
@@ -65,29 +50,25 @@ const selectorJsonSchema = {
       type: "object",
       properties: { kind: { const: "viewId" }, value: { type: "string" } },
       required: ["kind", "value"],
-      description: "Identifiant de vue Android — le plus stable, à préférer.",
+      description: "Android view ID - most stable, preferred.",
     },
     {
       type: "object",
       properties: { kind: { const: "text" }, value: { type: "string" } },
       required: ["kind", "value"],
-      description: "Texte affiché par l'élément.",
+      description: "Text displayed by the element.",
     },
     {
       type: "object",
       properties: { kind: { const: "contentDescription" }, value: { type: "string" } },
       required: ["kind", "value"],
-      description: "Description d'accessibilité de l'élément.",
+      description: "Accessibility description of the element.",
     },
   ],
 } as const;
 
 /**
- * Vérifie que le service d'accessibilité est actif, maintenant.
- *
- * Appelé au début de chaque exécution et non une fois pour toutes : entre
- * l'annonce des capacités et l'arrivée d'une tâche, l'utilisateur a pu désactiver
- * le service — c'est même un geste qu'on souhaite qu'il fasse librement.
+ * Checks that accessibility service is active now.
  */
 async function assertAccessibility(
   dependencies: UiDependencies,
@@ -98,14 +79,12 @@ async function assertAccessibility(
   }
 }
 
-/** Résout un sélecteur en nœud, en refusant ce qui n'accepte pas l'action. */
+/** Resolves a selector to a node, rejecting nodes that do not accept the action. */
 async function resolveNode(
   dependencies: UiDependencies,
   selector: UiSelector,
   action: "click" | "input",
 ) {
-  // Un clic par coordonnées ne passe par aucun nœud : c'est précisément ce qui
-  // le rend risqué, et pourquoi la politique le refuse par défaut.
   if (selector.kind === "coordinates") return undefined;
 
   const node = await dependencies.controller.findNode(selector);
@@ -121,8 +100,8 @@ export function createUiClickCapability(
   return {
     name: "android.ui.click",
     description:
-      "Appuie sur un élément de l'écran du téléphone Android, désigné par son identifiant " +
-      "de vue, son texte ou sa description. Requiert le service d'accessibilité NEXUS.",
+      "Taps an element on the Android phone screen, designated by view ID, text, or content description. " +
+      "Requires NEXUS accessibility service.",
     inputSchema: clickInputSchema,
     inputJsonSchema: {
       type: "object",
@@ -138,7 +117,7 @@ export function createUiClickCapability(
       const selector = dependencies.policy.assertSelectorAllowed(input.selector);
       await resolveNode(dependencies, selector, "click");
 
-      context.onProgress({ label: `appui sur ${selector.kind}` });
+      context.onProgress({ label: `tap on ${selector.kind}` });
       const result = await dependencies.controller.click(selector, context.signal);
 
       return { clicked: result.clicked, selectorKind: selector.kind };
@@ -152,26 +131,19 @@ export function createUiInputCapability(
   return {
     name: "android.ui.input",
     description:
-      "Saisit du texte dans un champ de l'écran du téléphone Android. " +
-      "Requiert le service d'accessibilité NEXUS.",
+      "Inputs text into a field on the Android phone screen. " +
+      "Requires NEXUS accessibility service.",
     inputSchema: inputTextSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
         selector: selectorJsonSchema,
-        text: { type: "string", description: "Texte à saisir dans le champ" },
+        text: { type: "string", description: "Text to enter into the field" },
       },
       required: ["selector", "text"],
     },
     riskLevel: "MEDIUM",
 
-    /**
-     * `text` ne doit apparaître dans aucun journal.
-     *
-     * Le champ est légitimement nommé — la rédaction générique, qui reconnaît
-     * `password` ou `token`, ne peut rien pour lui. Seule la capacité sait ce
-     * qu'il transporte, et c'est le chemin normal d'un mot de passe.
-     */
     secretArguments: ["text"],
 
     probe: () => dependencies.controller.isAccessibilityEnabled(),
@@ -182,14 +154,10 @@ export function createUiInputCapability(
       const text = dependencies.policy.assertTextAllowed(input.text);
       await resolveNode(dependencies, selector, "input");
 
-      // La progression ne dit que le nombre de caractères. Ni le texte, ni un
-      // extrait, ni sa première lettre.
-      context.onProgress({ label: `saisie de ${String(text.length)} caractères` });
+      context.onProgress({ label: `input of ${String(text.length)} characters` });
 
       const result = await dependencies.controller.inputText(selector, text, context.signal);
 
-      // Le résultat non plus ne porte pas le texte : il traverse le réseau,
-      // entre dans le journal d'exécution du cœur, et s'affiche sur l'iPhone.
       return { entered: result.entered, characters: result.characters };
     },
   };
@@ -201,14 +169,14 @@ export function createUiScrollCapability(
   return {
     name: "android.ui.scroll",
     description:
-      "Fait défiler l'écran du téléphone Android dans une direction donnée. " +
-      "Requiert le service d'accessibilité NEXUS.",
+      "Scrolls the Android phone screen in a given direction. " +
+      "Requires NEXUS accessibility service.",
     inputSchema: scrollInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
         direction: { enum: ["up", "down", "left", "right"] },
-        amount: { type: "number", description: "Nombre de gestes de défilement" },
+        amount: { type: "number", description: "Number of scroll gestures" },
       },
       required: ["direction"],
     },
@@ -223,7 +191,7 @@ export function createUiScrollCapability(
         input.amount,
       );
 
-      context.onProgress({ label: `défilement ${direction}` });
+      context.onProgress({ label: `scrolling ${direction}` });
       const result = await dependencies.controller.scroll(direction, amount, context.signal);
 
       return { scrolled: result.scrolled, direction, amount };

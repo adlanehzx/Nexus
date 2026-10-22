@@ -3,17 +3,14 @@ import { createTaskPlan } from "@nexus/devices";
 import { makeHarness, until, ALLOWED_ROOT, IPHONE, USER_ID } from "./fixtures.js";
 
 /**
- * Le chemin complet, de bout en bout.
+ * Complete end-to-end chain.
  *
  *     client (iPhone) → TaskCoordinator → DeviceSelector → WorkerTransport
- *       → worker Windows → capacité → événements → EventRouter → client
+ *       → Windows worker → capability → events → EventRouter → client
  *
- * Rien n'est simulé sur ce chemin : ce sont le vrai coordinateur, le vrai
- * sélecteur, la vraie passerelle et le vrai worker. Seuls le transport réseau
- * (remplacé par un canal en mémoire) et les appels système sont doublés.
- *
- * C'est ce test qui justifie que le WebSocket de la phase suivante soit un
- * simple adaptateur : tout ce qu'il portera est déjà éprouvé ici.
+ * Nothing is mocked in this chain: these are the real coordinator, selector,
+ * gateway, and worker. Only network transport (replaced by in-memory channel)
+ * and system calls are mocked.
  */
 
 const PERMISSIONS = [
@@ -24,8 +21,8 @@ const PERMISSIONS = [
   "git.diff",
 ];
 
-describe("chaîne complète", () => {
-  it("exécute un plan lancé depuis l'iPhone sur le poste Windows", async () => {
+describe("full chain", () => {
+  it("executes a plan triggered from iPhone on the Windows host", async () => {
     const harness = await makeHarness({
       seed: ({ fileSystem }) => {
         fileSystem.files.set(`${ALLOWED_ROOT}\\leynai\\README.md`, "# LeynAI");
@@ -36,13 +33,13 @@ describe("chaîne complète", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Lire le README du projet",
+      title: "Read project README",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-integration",
       steps: [
         {
-          id: "lire",
-          description: "Lire le README",
+          id: "read",
+          description: "Read README",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           arguments: { path: `${ALLOWED_ROOT}\\leynai\\README.md` },
@@ -58,7 +55,7 @@ describe("chaîne complète", () => {
     expect((executed.steps[0]?.result as { content: string }).content).toBe("# LeynAI");
   });
 
-  it("ramène tous les événements à l'appareil d'origine", async () => {
+  it("routes all events back to origin device", async () => {
     const harness = await makeHarness({
       seed: ({ fileSystem }) => {
         fileSystem.files.set(`${ALLOWED_ROOT}\\notes.txt`, "ok");
@@ -69,13 +66,13 @@ describe("chaîne complète", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Lecture",
+      title: "Read",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-evt",
       steps: [
         {
-          id: "lire",
-          description: "Lire les notes",
+          id: "read",
+          description: "Read notes",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           arguments: { path: `${ALLOWED_ROOT}\\notes.txt` },
@@ -97,10 +94,9 @@ describe("chaîne complète", () => {
       ]),
     );
 
-    // Tout ce qui relève de la tâche porte le fil de routage jusqu'au client
-    // d'origine. Les événements de cycle de vie du worker — connexion,
-    // disponibilité — n'en relèvent pas : ils décrivent la flotte, pas une
-    // demande, et leur origine est légitimement nulle.
+    // Everything pertaining to the task carries the routing thread back to the
+    // origin client. Worker lifecycle events — connection, availability — do not:
+    // they describe the fleet, not a request, and their origin is legitimately null.
     const taskEvents = harness.clientEvents.filter(
       (event) => event.type.startsWith("task.") || event.type.startsWith("worker.task_"),
     );
@@ -110,10 +106,9 @@ describe("chaîne complète", () => {
     }
   });
 
-  it("le sélecteur ne choisit le poste Windows que sur ses capacités", async () => {
-    // La consigne d'architecture : jamais « si la tâche contient X, prendre le
-    // poste fixe ». Le plan ne nomme aucun appareil ; le rapprochement se fait
-    // uniquement sur `requiredCapabilities`.
+  it("selector chooses Windows host solely on capabilities", async () => {
+    // Architecture principle: never "if task has X, choose desktop".
+    // The plan names no device; matching is done purely on `requiredCapabilities`.
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
@@ -125,24 +120,24 @@ describe("chaîne complète", () => {
     });
 
     expect(selection.device.id).toBe(harness.device.id);
-    // L'iPhone est bien candidat connu, mais écarté : il est CLIENT.
+    // iPhone is a known candidate, but rejected: its role is CLIENT.
     expect(selection.rejected.map((r) => r.deviceId)).toContain(IPHONE.id);
   });
 
-  it("échoue proprement quand la capacité n'existe nulle part", async () => {
+  it("fails cleanly when capability exists nowhere", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Notifier sur Android",
+      title: "Notify on Android",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-absent",
       steps: [
         {
-          id: "notifier",
-          description: "Notifier",
+          id: "notify",
+          description: "Notify",
           requiredCapabilities: ["android.notification"],
           tool: "device.android.notification",
           arguments: { title: "x", body: "y" },
@@ -154,33 +149,31 @@ describe("chaîne complète", () => {
     const executed = await harness.coordinator.execute(plan, { userPermissions: PERMISSIONS });
 
     expect(executed.status).toBe("failed");
-    // L'échec survient à la **sélection**, avant tout dispatch : aucun
-    // exécutant ne déclare cette capacité. C'est donc `task.failed` que le
-    // client reçoit, pas `worker.task_failed` — la distinction dit à
-    // l'utilisateur qu'aucun appareil ne sait faire, et non qu'un appareil a
-    // essayé et échoué.
+    // Failure happens during selection, prior to any dispatch: no worker
+    // declares this capability. Therefore client receives `task.failed`,
+    // not `worker.task_failed`.
     const types = harness.clientEvents.map((event) => event.type);
     expect(types).toContain("task.failed");
     expect(types).not.toContain("worker.task_started");
   });
 
-  it("remonte au client un refus de politique locale", async () => {
+  it("reports local policy rejection back to client", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Lire un fichier interdit",
+      title: "Read forbidden file",
       originClientDeviceId: IPHONE.id,
-      correlationId: "corr-refus",
+      correlationId: "corr-denial",
       steps: [
         {
-          id: "lire",
-          description: "Lire les identifiants AWS",
+          id: "read",
+          description: "Read AWS credentials",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
-          arguments: { path: "C:\\Users\\moi\\.aws\\credentials" },
+          arguments: { path: "C:\\Users\\me\\.aws\\credentials" },
           riskLevel: "SAFE",
         },
       ],
@@ -191,15 +184,15 @@ describe("chaîne complète", () => {
     expect(executed.status).toBe("failed");
     expect(executed.steps[0]?.error?.code).toBe("PATH_NOT_ALLOWED");
 
-    // Le message qui atteint le client ne révèle pas l'arborescence.
+    // Message reaching client does not reveal directory tree.
     const failure = harness.clientEvents.find((e) => e.type === "worker.task_failed");
     expect(JSON.stringify(failure)).not.toContain(".aws");
   });
 
-  it("enchaîne plusieurs étapes sur le même exécutant", async () => {
+  it("chains multiple steps on same worker", async () => {
     const harness = await makeHarness({
       seed: ({ fileSystem }) => {
-        fileSystem.files.set(`${ALLOWED_ROOT}\\source.txt`, "contenu");
+        fileSystem.files.set(`${ALLOWED_ROOT}\\source.txt`, "content");
       },
     });
     await harness.attachClient();
@@ -207,25 +200,25 @@ describe("chaîne complète", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Lire puis écrire",
+      title: "Read then write",
       originClientDeviceId: IPHONE.id,
-      correlationId: "corr-chaine",
+      correlationId: "corr-chain",
       steps: [
         {
-          id: "lire",
-          description: "Lire la source",
+          id: "read",
+          description: "Read source",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           arguments: { path: `${ALLOWED_ROOT}\\source.txt` },
           riskLevel: "SAFE",
         },
         {
-          id: "ecrire",
-          description: "Écrire la copie",
+          id: "write",
+          description: "Write copy",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
-          arguments: { path: `${ALLOWED_ROOT}\\copie.txt`, content: "copie" },
-          dependsOn: ["lire"],
+          arguments: { path: `${ALLOWED_ROOT}\\copy.txt`, content: "copy" },
+          dependsOn: ["read"],
           riskLevel: "LOW",
         },
       ],
@@ -236,29 +229,29 @@ describe("chaîne complète", () => {
     });
 
     expect(executed.status).toBe("succeeded");
-    expect(harness.fileSystem.files.get(`${ALLOWED_ROOT}\\copie.txt`)).toBe("copie");
+    expect(harness.fileSystem.files.get(`${ALLOWED_ROOT}\\copy.txt`)).toBe("copy");
   });
 
-  it("consigne les arguments rédigés dans le journal d'exécution du cœur", async () => {
+  it("redacts sensitive arguments in execution log", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Écrire un fichier de configuration",
+      title: "Write configuration file",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-secret",
       steps: [
         {
-          id: "ecrire",
-          description: "Écrire la configuration",
+          id: "write",
+          description: "Write configuration",
           requiredCapabilities: ["filesystem.write"],
           tool: "device.filesystem.write",
           arguments: {
             path: `${ALLOWED_ROOT}\\config.json`,
             content: "{}",
-            apiKey: "sk-doitdisparaitre12345",
+            apiKey: "sk-mustdisappear12345",
           },
           riskLevel: "LOW",
         },
@@ -267,25 +260,25 @@ describe("chaîne complète", () => {
 
     await harness.coordinator.execute(plan, { userPermissions: PERMISSIONS });
 
-    // Ni dans les événements du client, ni dans le journal du worker.
-    expect(JSON.stringify(harness.clientEvents)).not.toContain("sk-doitdisparaitre12345");
-    expect(harness.logger.text).not.toContain("sk-doitdisparaitre12345");
+    // Neither in client events nor in worker logs.
+    expect(JSON.stringify(harness.clientEvents)).not.toContain("sk-mustdisappear12345");
+    expect(harness.logger.text).not.toContain("sk-mustdisappear12345");
   });
 
-  it("le worker reste prêt après un plan échoué", async () => {
+  it("worker remains ready after failed plan", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Échec attendu",
+      title: "Expected failure",
       originClientDeviceId: IPHONE.id,
-      correlationId: "corr-apres",
+      correlationId: "corr-after",
       steps: [
         {
-          id: "lire",
-          description: "Lire ailleurs",
+          id: "read",
+          description: "Read elsewhere",
           requiredCapabilities: ["filesystem.read"],
           tool: "device.filesystem.read",
           arguments: { path: "C:\\Windows\\win.ini" },

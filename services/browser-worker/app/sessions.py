@@ -1,9 +1,8 @@
-"""Cycle de vie des sessions et des tâches.
+"""Session and task lifecycle management.
 
-Une session = un navigateur isolé, appartenant à un utilisateur, avec une durée
-de vie bornée. Une tâche = une exécution dans cette session. Les deux sont en
-mémoire : perdre le worker perd les sessions en cours — que l'agent traite comme
-une erreur réessayable — jamais des données.
+A session = an isolated browser context, owned by a user, with a bounded lifetime.
+A task = a discrete execution in that session. Both are kept in memory: losing
+the worker drops active sessions (handled as retryable by the orchestrator).
 """
 
 from __future__ import annotations
@@ -103,7 +102,7 @@ class _TaskState:
         self.cancel = asyncio.Event()
         self.handle: asyncio.Task[None] | None = None
         self._monotonic_start = time.monotonic()
-        #: Valeurs à masquer si le modèle les recopie dans un événement.
+        #: Secrets to redact if echoed in events.
         self.secrets = secrets
 
     def to_model(self, since: int = -1) -> Task:
@@ -123,7 +122,7 @@ class _TaskState:
 
 
 class SessionManager:
-    """Sessions isolées, tâches, nettoyage, annulation."""
+    """Isolated sessions, tasks, background sweeps, cooperative cancellation."""
 
     def __init__(
         self,
@@ -157,7 +156,7 @@ class SessionManager:
         if len(self._sessions) >= self._max_sessions:
             raise SessionError(
                 ErrorCode.session_busy,
-                f"Limite de {self._max_sessions} sessions simultanées atteinte.",
+                f"Concurrent session limit of {self._max_sessions} reached.",
                 status=429,
             )
 
@@ -173,7 +172,7 @@ class SessionManager:
             headless=headless,
         )
         self._sessions[state.session_id] = state
-        logger.info("session ouverte session_id=%s owner=%s", state.session_id, owner_id)
+        logger.info("session opened session_id=%s owner=%s", state.session_id, owner_id)
         return state.to_model()
 
     def get_session(self, session_id: str) -> Session:
@@ -182,7 +181,7 @@ class SessionManager:
     async def close_session(self, session_id: str) -> None:
         state = self._sessions.get(session_id)
         if state is None:
-            raise SessionError(ErrorCode.session_not_found, "Session inconnue.", status=404)
+            raise SessionError(ErrorCode.session_not_found, "Session not found.", status=404)
 
         state.status = SessionStatus.closing
         if state.active_task_id:
@@ -191,7 +190,7 @@ class SessionManager:
         await self._runner.close_session(session_id)
         state.status = SessionStatus.closed
         self._sessions.pop(session_id, None)
-        logger.info("session fermée session_id=%s", session_id)
+        logger.info("session closed session_id=%s", session_id)
 
     @property
     def open_sessions(self) -> int:
@@ -201,7 +200,7 @@ class SessionManager:
     def running_tasks(self) -> int:
         return sum(1 for t in self._tasks.values() if t.status is TaskStatus.running)
 
-    # ── Tâches ──────────────────────────────────────────────────────────────
+    # ── Tasks ───────────────────────────────────────────────────────────────
 
     def start_task(
         self,
@@ -219,11 +218,11 @@ class SessionManager:
         if session.active_task_id is not None:
             raise SessionError(
                 ErrorCode.session_busy,
-                "Une tâche est déjà en cours dans cette session.",
+                "A task is already running in this session.",
                 status=409,
             )
         if task_id in self._tasks:
-            # Idempotence : un renvoi réseau ne relance pas une navigation.
+            # Idempotence: duplicate network request does not re-trigger execution.
             return self._tasks[task_id].to_model()
 
         task = _TaskState(
@@ -253,19 +252,17 @@ class SessionManager:
     def get_task(self, task_id: str, since: int = -1) -> Task:
         task = self._tasks.get(task_id)
         if task is None:
-            raise SessionError(ErrorCode.task_not_found, "Tâche inconnue.", status=404)
+            raise SessionError(ErrorCode.task_not_found, "Task not found.", status=404)
         return task.to_model(since)
 
     async def cancel_task(self, task_id: str) -> Task:
         task = self._tasks.get(task_id)
         if task is None:
-            raise SessionError(ErrorCode.task_not_found, "Tâche inconnue.", status=404)
+            raise SessionError(ErrorCode.task_not_found, "Task not found.", status=404)
 
         if task.status in TERMINAL_STATUSES:
             return task.to_model()
 
-        # Annulation coopérative d'abord : browser-use termine son étape en
-        # cours plutôt que d'être interrompu au milieu d'un clic.
         task.cancel.set()
         if task.handle is not None:
             with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
@@ -279,7 +276,7 @@ class SessionManager:
             self._finish(task, TaskStatus.cancelled)
         return task.to_model()
 
-    # ── Exécution ───────────────────────────────────────────────────────────
+    # ── Execution ───────────────────────────────────────────────────────────
 
     async def _execute(self, task: _TaskState, session: _SessionState, spec: RunSpec) -> None:
         task.status = TaskStatus.running
@@ -294,7 +291,7 @@ class SessionManager:
             self._finish(task, TaskStatus.cancelled)
             raise
         except Exception as exc:
-            logger.exception("exécution en échec task_id=%s", task.task_id)
+            logger.exception("execution failed task_id=%s", task.task_id)
             task.error = TaskError(
                 code="BROWSER_TASK_FAILED",
                 message=redact_text(str(exc), task.secrets),
@@ -306,8 +303,6 @@ class SessionManager:
             session.active_task_id = None
 
         task.steps = outcome.steps
-        # La sortie passe par la rédaction comme le reste : le modèle recopie
-        # volontiers dans son résultat ce qu'il vient de saisir dans un formulaire.
         task.output = redact_text(outcome.output, task.secrets) if outcome.output else None
 
         if outcome.error_code:
@@ -334,7 +329,7 @@ class SessionManager:
         self, task: _TaskState, session: _SessionState, event_type: str, payload: dict
     ) -> None:
         if event_type not in _EVENT_TYPES:
-            logger.warning("événement inconnu ignoré : %s", event_type)
+            logger.warning("unknown event ignored: %s", event_type)
             return
 
         task.seq += 1
@@ -347,8 +342,6 @@ class SessionManager:
             **payload,
         }
 
-        # Rédaction avant stockage : les événements sont journalisés et renvoyés
-        # au backend, ils ne doivent porter aucun secret.
         for key, value in raw.items():
             if isinstance(value, str) and key not in {"type", "taskId", "sessionId", "ts"}:
                 raw[key] = redact_text(value, task.secrets)
@@ -358,7 +351,7 @@ class SessionManager:
 
             event = TypeAdapter(BrowserEvent).validate_python(raw)
         except Exception:
-            logger.warning("événement non conforme ignoré : %s", event_type)
+            logger.warning("invalid event ignored: %s", event_type)
             return
 
         task.events.append(event)
@@ -385,7 +378,7 @@ class SessionManager:
                 {"status": status.value, "steps": task.steps, "durationMs": task.duration_ms},
             )
         logger.info(
-            "tâche terminée task_id=%s session_id=%s status=%s steps=%s duration_ms=%.0f",
+            "task finished task_id=%s session_id=%s status=%s steps=%s duration_ms=%.0f",
             task.task_id,
             task.session_id,
             status.value,
@@ -393,15 +386,15 @@ class SessionManager:
             task.duration_ms or 0,
         )
 
-    # ── Nettoyage ───────────────────────────────────────────────────────────
+    # ── Sweeper ─────────────────────────────────────────────────────────────
 
     def _require_session(self, session_id: str) -> _SessionState:
         self._expire_due()
         state = self._sessions.get(session_id)
         if state is None:
-            raise SessionError(ErrorCode.session_not_found, "Session inconnue.", status=404)
+            raise SessionError(ErrorCode.session_not_found, "Session not found.", status=404)
         if state.status is not SessionStatus.open:
-            raise SessionError(ErrorCode.session_expired, "Session close ou expirée.", status=410)
+            raise SessionError(ErrorCode.session_expired, "Session closed or expired.", status=410)
         return state
 
     def _expire_due(self) -> None:
@@ -410,9 +403,7 @@ class SessionManager:
             if state.expires_at <= now:
                 state.status = SessionStatus.expired
                 self._sessions.pop(session_id, None)
-                logger.info("session expirée session_id=%s", session_id)
-                # Le navigateur est fermé en arrière-plan : un balayage ne doit
-                # jamais bloquer la requête qui l'a déclenché.
+                logger.info("session expired session_id=%s", session_id)
                 asyncio.create_task(self._safe_close(session_id))  # noqa: RUF006
 
     async def _safe_close(self, session_id: str) -> None:
@@ -428,7 +419,7 @@ class SessionManager:
         self._cleanup = asyncio.create_task(loop())
 
     async def shutdown(self) -> None:
-        """Arrêt gracieux : tâches annulées, navigateurs fermés."""
+        """Graceful shutdown: cancels active tasks and closes browser contexts."""
         if self._cleanup is not None:
             self._cleanup.cancel()
             with contextlib.suppress(asyncio.CancelledError):

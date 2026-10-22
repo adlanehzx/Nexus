@@ -10,14 +10,14 @@ afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
-describe("appairage guide du worker", () => {
-  it("envoie seulement la cle publique et produit une configuration utilisable", async () => {
+describe("guided worker pairing", () => {
+  it("sends only public key and produces usable configuration", async () => {
     const root = mkdtempSync(join(tmpdir(), "nexus-pair-"));
     temporary.push(root);
     const keyPath = join(root, "device.key");
     const envPath = join(root, "worker.env");
     const request = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
-      if (typeof init?.body !== "string") throw new Error("corps JSON attendu");
+      if (typeof init?.body !== "string") throw new Error("JSON body expected");
       const body = JSON.parse(init.body) as Record<string, unknown>;
       expect(body.token).toBe("ticket-secret-a-usage-unique");
       expect(String(body.publicKeyPem)).toContain("BEGIN PUBLIC KEY");
@@ -33,7 +33,7 @@ describe("appairage guide du worker", () => {
     const result = await pairWorker({
       apiUrl: "https://nexus.example.test/",
       token: "ticket-secret-a-usage-unique",
-      name: "PC bureau",
+      name: "Desktop PC",
       keyPath,
       envPath,
       allowedPaths: ["C:\\Projets"],
@@ -50,11 +50,11 @@ describe("appairage guide du worker", () => {
     expect(request).toHaveBeenCalledOnce();
   });
 
-  it("enregistre un worker Linux sans changer le protocole de preuve", async () => {
+  it("registers Linux worker without changing proof protocol", async () => {
     const root = mkdtempSync(join(tmpdir(), "nexus-pair-linux-"));
     temporary.push(root);
     const request = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
-      if (typeof init?.body !== "string") throw new Error("corps JSON attendu");
+      if (typeof init?.body !== "string") throw new Error("JSON body expected");
       const body = JSON.parse(init.body) as Record<string, unknown>;
       expect(body).toMatchObject({ type: "LINUX", platform: "LINUX", role: "WORKER" });
       return Promise.resolve(
@@ -77,7 +77,7 @@ describe("appairage guide du worker", () => {
     expect(readFileSync(join(root, "worker.env"), "utf8")).toContain("NEXUS_WORKER_PLATFORM=LINUX");
   });
 
-  it("refuse le HTTP distant avant de creer une cle", async () => {
+  it("rejects remote HTTP before generating key", async () => {
     const root = mkdtempSync(join(tmpdir(), "nexus-pair-"));
     temporary.push(root);
     await expect(
@@ -92,7 +92,7 @@ describe("appairage guide du worker", () => {
     ).rejects.toThrow("https://");
   });
 
-  it("ne remplace jamais une identite existante", async () => {
+  it("never replaces an existing identity", async () => {
     const root = mkdtempSync(join(tmpdir(), "nexus-pair-"));
     temporary.push(root);
     const keyPath = join(root, "device.key");

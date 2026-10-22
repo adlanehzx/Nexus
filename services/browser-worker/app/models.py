@@ -1,9 +1,8 @@
-"""Modèles du contrat HTTP.
+"""HTTP protocol models.
 
-Miroir de ``packages/browser-client/src/protocol.ts``. Le fichier
-``contract/browser-protocol.json`` est produit depuis les schémas Zod du
-backend, et ``tests/test_contract.py`` vérifie que les deux côtés s'accordent :
-une divergence casse le build, pas la production.
+Mirrors ``packages/browser-client/src/protocol.ts``. The file
+``contract/browser-protocol.json`` is generated from the backend's Zod schemas,
+and ``tests/test_contract.py`` verifies synchronization.
 """
 
 from __future__ import annotations
@@ -22,11 +21,10 @@ def utcnow_iso() -> str:
 
 
 class Intent(StrEnum):
-    """Intention déclarée d'une tâche.
+    """Declared task intent.
 
-    Elle porte le niveau de risque côté agent **et** la restriction réellement
-    appliquée ici : une tâche ``read`` ne peut pas cliquer, même si le modèle le
-    demande. L'intention est une contrainte d'exécution, pas une étiquette.
+    Encodes the risk level on the agent side and the execution constraints enforced here:
+    a ``read`` task cannot trigger click/input actions even if requested by the LLM.
     """
 
     read = "read"
@@ -49,7 +47,7 @@ class TaskStatus(StrEnum):
     failed = "failed"
     cancelled = "cancelled"
     timeout = "timeout"
-    #: Le site exige une action humaine (CAPTCHA, MFA). Jamais contournée.
+    #: Site requires human intervention (CAPTCHA, MFA). Never bypassed autonomously.
     needs_human = "needs_human"
 
 
@@ -66,7 +64,7 @@ TERMINAL_STATUSES = {
 
 
 class CreateSessionRequest(BaseModel):
-    #: Sépare les navigateurs par utilisateur : aucun état ne fuit entre comptes.
+    #: Isolates browsers per user: no state leaks across accounts.
     ownerId: str = Field(min_length=1)
     allowedDomains: list[str] = Field(default_factory=list)
     prohibitedDomains: list[str] = Field(default_factory=list)
@@ -86,7 +84,7 @@ class Session(BaseModel):
     activeTaskId: str | None = None
 
 
-# ── Tâches ──────────────────────────────────────────────────────────────────
+# ── Tasks ───────────────────────────────────────────────────────────────────
 
 
 class RunTaskRequest(BaseModel):
@@ -96,8 +94,8 @@ class RunTaskRequest(BaseModel):
     intent: Intent
     maxSteps: Annotated[int, Field(gt=0, le=50)] = 15
     timeoutSeconds: Annotated[int, Field(gt=0, le=900)] = 180
-    #: Remis à browser-use en ``sensitive_data`` : le modèle voit un marqueur,
-    #: jamais la valeur. Jamais journalisé, jamais renvoyé.
+    #: Passed to browser-use as ``sensitive_data``: the LLM sees placeholders.
+    #: Never logged or returned in responses.
     secrets: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, str] = Field(default_factory=dict)
 
@@ -211,7 +209,7 @@ class ErrorResponse(BaseModel):
 
 
 class ErrorCode(StrEnum):
-    """Contrat public : ces codes ne changent pas."""
+    """Public contract: error codes remain immutable."""
 
     invalid_request = "BROWSER_INVALID_REQUEST"
     session_not_found = "BROWSER_SESSION_NOT_FOUND"

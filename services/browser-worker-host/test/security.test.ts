@@ -8,13 +8,7 @@ import { toSocketUrl } from "../src/connection/link.js";
 import { BROWSER_TOKEN, makeHarness, testConfig } from "./fixtures.js";
 
 /**
- * Les propriétés de sécurité de l'exécutant navigateur, énoncées comme tests.
- *
- * Le navigateur est la surface la plus exposée de NEXUS : il visite du contenu
- * hostile par définition, et il le fait avec les identifiants de l'utilisateur.
- * Certaines propriétés s'observent à l'exécution ; d'autres se vérifient sur le
- * **code source**, parce que ce sont des absences — et une absence ne se
- * démontre pas en essayant une fois, mais en lisant tout.
+ * Security properties of the browser worker stated as executable tests.
  */
 
 const ROOT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -29,28 +23,24 @@ function sourceFiles(directory: string): string[] {
   return found;
 }
 
-/** Retire les commentaires : on juge le code, pas ce qu'il dit de lui-même. */
+/** Strip comments to inspect code only. */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 }
 
 const BASE = {
-  NEXUS_BACKEND_URL: "wss://nexus.exemple.fr",
+  NEXUS_BACKEND_URL: "wss://nexus.example.com",
   DEVICE_ID: "device-browser",
   DEVICE_KEY_PATH: "/secrets/device.pem",
   BROWSER_WORKER_TOKEN: BROWSER_TOKEN,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Aucune capacité générique
+// Execution surface
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("surface d'exécution", () => {
-  it("n'expose aucune exécution de commande ni accès disque", () => {
-    // Un exécutant navigateur qui saurait lancer une commande transformerait
-    // une page hostile en accès à la machine. Il n'y a pas de `terminal.*`, pas
-    // de `filesystem.*`, et aucune capacité générique qui prendrait un nom
-    // d'action en argument.
+describe("execution surface", () => {
+  it("does not expose command execution or disk access", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles(path.join(ROOT, "src"))) {
@@ -63,9 +53,7 @@ describe("surface d'exécution", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("n'écrit ni ne lit de fichier hors de la clé de l'appareil", () => {
-    // Une seule lecture de fichier existe dans tout le paquet : la clé privée,
-    // dans `link.ts`. Toute autre serait une porte vers le disque de l'hôte.
+  it("does not read or write files outside device key", () => {
     const readers: string[] = [];
 
     for (const file of sourceFiles(path.join(ROOT, "src"))) {
@@ -78,8 +66,7 @@ describe("surface d'exécution", () => {
     expect(readers).toEqual(["src/connection/link.ts"]);
   });
 
-  it("ne déclare aucune capacité en dehors du domaine browser", async () => {
-    // Ce que le cœur reçoit à l'enregistrement : rien qui sorte du navigateur.
+  it("declares no capabilities outside browser domain", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -92,10 +79,7 @@ describe("surface d'exécution", () => {
     }
   });
 
-  it("n'écoute sur aucun port", () => {
-    // La forme du port `WorkerLink` le dit déjà — il y a `connect`, il n'y a pas
-    // `listen` — mais un service qui pilote un navigateur visitant du contenu
-    // hostile ne doit surtout pas être joignable.
+  it("does not listen on any port", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles(path.join(ROOT, "src"))) {
@@ -110,14 +94,11 @@ describe("surface d'exécution", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Authentification et identité
+// Authentication and identity
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("authentification", () => {
-  it("n'utilise aucun secret partagé avec le cœur", async () => {
-    // L'authentification auprès du cœur est une signature de défi, pas un
-    // jeton. Un jeton dérobé dans un journal permettrait de se faire passer
-    // pour cet exécutant ; une signature exige la clé, qui ne circule jamais.
+describe("authentication", () => {
+  it("uses no shared secret with core", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -130,8 +111,7 @@ describe("authentification", () => {
     expect(JSON.stringify(harness.link.sent)).not.toContain(BROWSER_TOKEN);
   });
 
-  it("ne transmet jamais le jeton du worker Python au cœur", async () => {
-    // Deux liens, deux secrets, aucun ne franchit la frontière de l'autre.
+  it("never transmits Python worker token to core", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -139,8 +119,8 @@ describe("authentification", () => {
     expect(JSON.stringify(harness.link.sent)).not.toContain(BROWSER_TOKEN);
   });
 
-  it("exige un jeton de service d'une longueur réelle", () => {
-    expect(() => loadBrowserHostConfig({ ...BASE, BROWSER_WORKER_TOKEN: "court" })).toThrow(
+  it("requires a service token of meaningful length", () => {
+    expect(() => loadBrowserHostConfig({ ...BASE, BROWSER_WORKER_TOKEN: "short" })).toThrow(
       WorkerConfigurationError,
     );
   });
@@ -151,19 +131,18 @@ describe("authentification", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("secrets", () => {
-  it("le diagnostic ne rend aucune valeur secrète", () => {
+  it("diagnostic output yields no secret values", () => {
     const description = describeConfig(
-      testConfig({ browserWorkerToken: "un-jeton-tres-secret-et-long" }),
+      testConfig({ browserWorkerToken: "a-very-secret-and-long-token" }),
     );
     const serialised = JSON.stringify(description);
 
-    expect(serialised).not.toContain("un-jeton-tres-secret-et-long");
-    expect(serialised).not.toContain("/inexistant/device.pem");
-    expect(description.browserWorkerToken).toBe("[défini]");
+    expect(serialised).not.toContain("a-very-secret-and-long-token");
+    expect(serialised).not.toContain("/nonexistent/device.pem");
+    expect(description.browserWorkerToken).toBe("[set]");
   });
 
-  it("aucun secret n'est codé dans les sources", () => {
-    // Le fichier d'exemple liste les clés, jamais les valeurs.
+  it("no secrets hardcoded in source files", () => {
     for (const file of sourceFiles(path.join(ROOT, "src"))) {
       const content = readFileSync(file, "utf8");
       expect(content).not.toMatch(/Bearer\s+[A-Za-z0-9_-]{16,}/);
@@ -172,43 +151,39 @@ describe("secrets", () => {
     }
   });
 
-  it("le chemin de la clé ne figure jamais dans un message d'erreur", () => {
+  it("key path never appears in error messages", () => {
     const description = describeConfig(testConfig());
-    expect(Object.values(description)).not.toContain("/inexistant/device.pem");
+    expect(Object.values(description)).not.toContain("/nonexistent/device.pem");
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Réseau
+// Networking
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("réseau", () => {
-  it("refuse une liaison distante en clair vers le cœur", () => {
+describe("networking", () => {
+  it("rejects cleartext remote link to core", () => {
     expect(() =>
-      loadBrowserHostConfig({ ...BASE, NEXUS_BACKEND_URL: "http://nexus.exemple.fr" }),
+      loadBrowserHostConfig({ ...BASE, NEXUS_BACKEND_URL: "http://nexus.example.com" }),
     ).toThrow(WorkerConfigurationError);
-    expect(() => toSocketUrl("ws://nexus.exemple.fr", "/ws/worker")).toThrow(
+    expect(() => toSocketUrl("ws://nexus.example.com", "/ws/worker")).toThrow(
       WorkerConfigurationError,
     );
   });
 
-  it("tolère la boucle locale, où rien ne sort de la machine", () => {
+  it("permits loopback where nothing leaves the machine", () => {
     expect(toSocketUrl("http://localhost:3000", "/ws/worker")).toBe(
       "ws://localhost:3000/ws/worker",
     );
   });
 
-  it("refuse une adresse publique en clair pour le worker Python", () => {
-    // Ce worker ne doit jamais être exposé à Internet. Si son adresse est
-    // publique, elle doit au minimum être chiffrée — et le README dit qu'elle
-    // ne devrait pas être publique du tout.
+  it("rejects cleartext public address for Python worker", () => {
     expect(() =>
-      loadBrowserHostConfig({ ...BASE, BROWSER_WORKER_URL: "http://browser.exemple.fr" }),
+      loadBrowserHostConfig({ ...BASE, BROWSER_WORKER_URL: "http://browser.example.com" }),
     ).toThrow(WorkerConfigurationError);
   });
 
-  it("accepte un nom de service interne", () => {
-    // `browser-worker` sans point : un nom de service Docker, pas un domaine.
+  it("accepts internal service name", () => {
     const config = loadBrowserHostConfig({
       ...BASE,
       BROWSER_WORKER_URL: "http://browser-worker:8100",
@@ -216,21 +191,17 @@ describe("réseau", () => {
     expect(config.browserWorkerUrl).toBe("http://browser-worker:8100");
   });
 
-  it("refuse un protocole exotique", () => {
+  it("rejects exotic protocol", () => {
     expect(() => toSocketUrl("file:///etc/passwd", "/ws/worker")).toThrow(WorkerConfigurationError);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Politique : elle n'est pas ici, et c'est voulu
+// Navigation policy
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("politique de navigation", () => {
-  it("n'est pas réimplémentée dans l'hôte", () => {
-    // La restriction des actions par intention appartient au worker Python
-    // (`policies.py`). Deux politiques finissent par diverger, et c'est la plus
-    // permissive qui gagne. L'hôte transmet l'intention ; il ne la réinterprète
-    // pas.
+describe("navigation policy", () => {
+  it("is not reimplemented in host", () => {
     const offenders: string[] = [];
 
     for (const file of sourceFiles(path.join(ROOT, "src"))) {
@@ -243,9 +214,7 @@ describe("politique de navigation", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("transmet l'intention telle qu'elle, sans la reclasser", async () => {
-    // Un achat reste un achat jusqu'au navigateur. Rétrograder l'intention en
-    // chemin ferait sauter la restriction d'actions du worker Python.
+  it("forwards intent as-is without reclassifying", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -255,7 +224,7 @@ describe("politique de navigation", () => {
       client: harness.client,
     });
 
-    await capabilities.require("browser.purchase").execute({ instructions: "achète" } as never, {
+    await capabilities.require("browser.purchase").execute({ instructions: "purchase" } as never, {
       taskId: "t",
       stepId: "s",
       signal: new AbortController().signal,

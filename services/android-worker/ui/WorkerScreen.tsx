@@ -3,25 +3,12 @@ import { Linking, ScrollView, StyleSheet, Text, View, Pressable } from "react-na
 import type { AndroidWorker } from "../src/worker.js";
 
 /**
- * Écran de gestion du worker.
- *
- * **Ce n'est pas l'interface NEXUS.** On ne discute pas avec l'assistant ici :
- * l'iPhone et le portable Windows restent les clients. Cet écran ne sert qu'à
- * répondre à trois questions, dans cet ordre :
- *
- *  1. le téléphone est-il connecté au cœur ?
- *  2. que sait-il faire, ici et maintenant ?
- *  3. que manque-t-il, et comment l'accorder ?
- *
- * La troisième est la plus importante. Un worker Android passe son temps à
- * perdre des capacités — l'utilisateur désactive un service, refuse une
- * permission, redémarre. Un écran qui affiche « indisponible » sans dire où
- * cliquer transforme un réglage de dix secondes en séance de fouille.
+ * Worker management screen.
  */
 
 interface Props {
   worker: AndroidWorker;
-  /** Période de rafraîchissement de l'affichage. */
+  /** UI refresh interval. */
   refreshMs?: number;
 }
 
@@ -54,7 +41,7 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
   if (snapshot === null) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.muted}>Démarrage…</Text>
+        <Text style={styles.muted}>Starting…</Text>
       </View>
     );
   }
@@ -80,45 +67,44 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
         <View style={styles.heroText}>
           <Text style={styles.kicker}>NEXUS CONNECTION</Text>
           <Text style={styles.title}>
-            {snapshot.state === "ready" ? "CONNECTED" : frenchState(snapshot.state).toUpperCase()}
+            {snapshot.state === "ready" ? "CONNECTED" : formatState(snapshot.state).toUpperCase()}
           </Text>
-          <Text style={styles.subtitle}>Agent système de cet appareil</Text>
+          <Text style={styles.subtitle}>System agent for this device</Text>
         </View>
       </View>
       <Text style={styles.subtitle}>
-        Cet appareil exécute des tâches pour NEXUS. Il n'affiche pas vos conversations : elles
-        restent sur l'iPhone et l'ordinateur.
+        This device executes tasks for NEXUS. It does not display your conversations: those
+        remain on the iPhone and computer.
       </Text>
 
-      <Section title="Connexion">
-        <Row label="État" value={frenchState(snapshot.state)} />
-        <Row label="Authentifié" value={snapshot.authenticated ? "oui" : "non"} />
-        {/* L'identifiant de session n'ouvre rien : ce n'est pas le jeton. */}
+      <Section title="Connection">
+        <Row label="State" value={formatState(snapshot.state)} />
+        <Row label="Authenticated" value={snapshot.authenticated ? "yes" : "no"} />
         <Row label="Session" value={snapshot.sessionId ?? "—"} />
-        <Row label="Tâches en cours" value={String(snapshot.activeTasks)} />
+        <Row label="Active tasks" value={String(snapshot.activeTasks)} />
       </Section>
 
-      <Section title="Santé">
+      <Section title="Health">
         <Row
-          label="Batterie"
-          value={`${String(snapshot.battery.percent)} %${snapshot.battery.charging ? " (en charge)" : ""}`}
+          label="Battery"
+          value={`${String(snapshot.battery.percent)} %${snapshot.battery.charging ? " (charging)" : ""}`}
         />
         <Row
-          label="Économie d'énergie"
-          value={snapshot.battery.powerSaveMode ? "activée" : "non"}
+          label="Power save mode"
+          value={snapshot.battery.powerSaveMode ? "enabled" : "no"}
         />
         <Row
-          label="Disponibilité"
-          value={snapshot.degraded ? "dégradé — tâches non essentielles évitées" : "normale"}
+          label="Availability"
+          value={snapshot.degraded ? "degraded — non-essential tasks avoided" : "normal"}
         />
       </Section>
 
-      <Section title="Autorisations Android">
+      <Section title="Android Permissions">
         <Permission
-          label="Service d'accessibilité"
+          label="Accessibility service"
           granted={availability?.accessibility ?? false}
-          unlocks="appui, saisie, défilement, capture d'écran"
-          howTo="Réglages → Accessibilité → Applications installées → NEXUS Worker"
+          unlocks="tap, input, scroll, screenshot"
+          howTo="Settings → Accessibility → Installed apps → NEXUS Worker"
           onOpen={() => {
             void Linking.sendIntent("android.settings.ACCESSIBILITY_SETTINGS");
           }}
@@ -127,24 +113,23 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
           label="Notifications"
           granted={availability?.notifications ?? false}
           unlocks="android.notification"
-          howTo="Réglages → Applications → NEXUS Worker → Notifications"
+          howTo="Settings → Apps → NEXUS Worker → Notifications"
           onOpen={() => {
             void Linking.openSettings();
           }}
         />
         <Permission
-          label="Capture d'écran"
+          label="Screenshot"
           granted={availability?.screenshot ?? false}
           unlocks="android.ui.screenshot"
-          howTo="Fournie par le service d'accessibilité, sur Android 11 ou plus récent."
+          howTo="Provided by accessibility service, on Android 11 or newer."
         />
       </Section>
 
-      <Section title="Capacités accordées par NEXUS">
+      <Section title="Capabilities granted by NEXUS">
         {snapshot.grantedCapabilities.length === 0 ? (
           <Text style={styles.muted}>
-            Aucune pour l'instant. Le cœur les accorde après l'appairage et l'approbation de
-            l'appareil.
+            None currently. The core grants them after pairing and device approval.
           </Text>
         ) : (
           snapshot.grantedCapabilities.map((capability) => (
@@ -156,9 +141,8 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
       </Section>
 
       <Text style={styles.footer}>
-        NEXUS n'observe pas votre téléphone en continu : ni enregistrement d'écran, ni micro, ni
-        caméra, ni lecture de vos notifications. Chaque action correspond à une tâche que vous avez
-        demandée.
+        NEXUS does not continuously monitor your phone: no screen recording, no microphone, no
+        camera, no reading of your notifications. Each action corresponds to a task you requested.
       </Text>
     </ScrollView>
   );
@@ -182,13 +166,6 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/**
- * Une autorisation, son état, et le chemin exact pour l'accorder.
- *
- * Le bouton mène directement à l'écran système concerné. Le texte du chemin
- * reste affiché malgré tout : sur MIUI, l'arborescence des réglages diffère de
- * l'Android d'origine, et l'intention n'aboutit pas toujours au bon écran.
- */
 function Permission({
   label,
   granted,
@@ -207,18 +184,18 @@ function Permission({
       <View style={styles.row}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={granted ? styles.granted : styles.missing}>
-          {granted ? "accordée" : "manquante"}
+          {granted ? "granted" : "missing"}
         </Text>
       </View>
 
-      <Text style={styles.muted}>Débloque : {unlocks}</Text>
+      <Text style={styles.muted}>Unlocks: {unlocks}</Text>
 
       {!granted && (
         <>
           <Text style={styles.howTo}>{howTo}</Text>
           {onOpen !== undefined && (
             <Pressable style={styles.button} onPress={onOpen}>
-              <Text style={styles.buttonText}>Ouvrir les réglages</Text>
+              <Text style={styles.buttonText}>Open settings</Text>
             </Pressable>
           )}
         </>
@@ -227,15 +204,15 @@ function Permission({
   );
 }
 
-function frenchState(state: string): string {
+function formatState(state: string): string {
   const labels: Record<string, string> = {
-    stopped: "arrêté",
-    connecting: "connexion…",
-    authenticating: "authentification…",
-    registering: "enregistrement…",
-    ready: "prêt",
-    reconnecting: "reconnexion…",
-    stopping: "arrêt…",
+    stopped: "stopped",
+    connecting: "connecting…",
+    authenticating: "authenticating…",
+    registering: "registering…",
+    ready: "ready",
+    reconnecting: "reconnecting…",
+    stopping: "stopping…",
   };
   return labels[state] ?? state;
 }

@@ -1,8 +1,7 @@
-"""Fixtures partagées.
+"""Shared test fixtures.
 
-Le `FakeRunner` remplace la **seule** vraie frontière externe : le navigateur et
-le modèle. Tout le reste — routes, authentification, sessions, politiques,
-événements, annulation, rédaction — s'exécute réellement.
+The `FakeRunner` replaces external dependencies (browser and LLM).
+All routing, auth, sessions, policies, events, cancellation, and redaction execute directly.
 """
 
 from __future__ import annotations
@@ -18,18 +17,18 @@ from app.main import create_app
 from app.models import TaskStatus
 from app.runner import Emit, RunOutcome, RunSpec
 
-TOKEN = "jeton-de-test-suffisamment-long"
+TOKEN = "test-token-sufficiently-long-for-auth"
 
 
 class FakeRunner:
-    """Runner scriptable : il joue une séquence d'événements puis un résultat."""
+    """Scriptable runner emitting simulated event streams and final outcome."""
 
     def __init__(self) -> None:
-        self.outcome = RunOutcome(status=TaskStatus.succeeded, output="42 euros", steps=2)
+        self.outcome = RunOutcome(status=TaskStatus.succeeded, output="42 dollars", steps=2)
         self.events: list[tuple[str, dict]] = [
-            ("navigation", {"url": "https://exemple.test/vols", "title": "Vols"}),
+            ("navigation", {"url": "https://example.com/flights", "title": "Flights"}),
             ("progress", {"step": 1, "maxSteps": 15, "note": None}),
-            ("action", {"action": "extract_content", "target": "prix"}),
+            ("action", {"action": "extract_content", "target": "price"}),
         ]
         self.calls: list[RunSpec] = []
         self.closed: list[str] = []
@@ -52,7 +51,6 @@ class FakeRunner:
             emit(event_type, payload)
 
         if self.wait_for_cancel:
-            # Simule une tâche longue : elle rend la main quand on l'annule.
             await cancel.wait()
             return RunOutcome(status=TaskStatus.cancelled, steps=1)
 
@@ -100,7 +98,7 @@ def run_and_wait(client: TestClient, session_id: str, **overrides) -> dict:
     body = {
         "taskId": overrides.pop("taskId", "task-1"),
         "sessionId": session_id,
-        "instructions": overrides.pop("instructions", "Trouve le prix du billet"),
+        "instructions": overrides.pop("instructions", "Find ticket price"),
         "intent": overrides.pop("intent", "read"),
         **overrides,
     }
@@ -112,4 +110,4 @@ def run_and_wait(client: TestClient, session_id: str, **overrides) -> dict:
         current = client.get(f"/v1/tasks/{task_id}").json()
         if current["status"] not in {"queued", "running"}:
             return current
-    raise AssertionError("la tâche ne s'est jamais terminée")
+    raise AssertionError("task did not finish in time")

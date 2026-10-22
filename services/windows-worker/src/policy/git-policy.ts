@@ -2,31 +2,15 @@ import type { RiskLevel } from "@nexus/tools";
 import { PolicyViolationError } from "../errors.js";
 
 /**
- * Politique Git.
+ * Git policy.
  *
- * La séparation lecture / écriture n'est pas décorative : c'est elle qui décide
- * si NEXUS agit seul ou demande d'abord. `git status` n'a aucune conséquence ;
- * `git checkout` peut effacer un travail non commis, `git commit` inscrit une
- * ligne dans une histoire partagée, `git pull` fusionne du code venu d'ailleurs.
- *
- * Le niveau de risque déclaré ici alimente `PermissionService` et
- * `ConfirmationService` du cœur. Le worker ne décide donc pas seul de ce qui
- * mérite une confirmation — il déclare ce qu'il s'apprête à faire, et le système
- * central tranche.
+ * Separates read vs mutating operations and verifies remote URLs.
  */
 
 export type GitOperation = "status" | "diff" | "branch" | "pull" | "checkout" | "clone" | "commit";
 
-/** Opérations qui ne modifient ni l'arbre de travail ni l'historique. */
 export const GIT_READ_OPERATIONS: readonly GitOperation[] = ["status", "diff", "branch"];
 
-/**
- * Risque par opération.
- *
- * `checkout` est en HIGH et non en MEDIUM : c'est la seule opération de cette
- * liste capable de détruire un travail non enregistré, sans confirmation ni
- * moyen de revenir en arrière.
- */
 export const GIT_RISK: Record<GitOperation, RiskLevel> = {
   status: "SAFE",
   diff: "SAFE",
@@ -42,9 +26,7 @@ export function isReadOperation(operation: GitOperation): boolean {
 }
 
 export interface GitPolicyOptions {
-  /** Autorise les opérations qui écrivent. Défaut : non. */
   allowWrite?: boolean;
-  /** Hôtes acceptés pour `clone`. Vide = aucun clone distant. */
   allowedRemoteHosts?: readonly string[];
 }
 
@@ -71,47 +53,37 @@ export class GitPolicy {
     return GIT_RISK[operation];
   }
 
-  /** @throws {PolicyViolationError} si l'opération écrit sans y être autorisée. */
   assertAllowed(operation: GitOperation): void {
     if (isReadOperation(operation)) return;
     if (this.#allowWrite) return;
 
     throw new PolicyViolationError({
       rule: "git.readOnly",
-      message: `Opération Git modifiante refusée : ${operation}`,
+      message: `Modifying Git operation prohibited: ${operation}`,
       userMessage: `This device is read-only for Git; "${operation}" is refused.`,
       context: { operation },
     });
   }
 
-  /**
-   * Valide l'URL d'un dépôt distant.
-   *
-   * Deux refus qui comptent : un hôte hors liste, et surtout le schéma
-   * `ext::` de Git, qui exécute une commande arbitraire au moment du clone. Il
-   * transformerait `git.clone` en exécution de code sans passer par la politique
-   * d'exécution.
-   */
   assertRemoteAllowed(url: string): void {
     const raw = url.trim();
 
     if (/^(ext|fd|file)::/i.test(raw) || raw.toLowerCase().startsWith("file://")) {
       throw new PolicyViolationError({
         rule: "git.remoteScheme",
-        message: `Schéma de dépôt refusé : ${raw.slice(0, 32)}`,
+        message: `Repository scheme prohibited: ${raw.slice(0, 32)}`,
         userMessage: "That kind of repository address is not allowed.",
       });
     }
 
     let host: string;
     try {
-      // Forme SSH abrégée (`git@github.com:org/dépôt.git`), que `URL` ne lit pas.
       const sshMatch = /^[^@]+@([^:]+):/.exec(raw);
       host = sshMatch?.[1] ?? new URL(raw).hostname;
     } catch {
       throw new PolicyViolationError({
         rule: "git.remoteUrl",
-        message: "Adresse de dépôt illisible",
+        message: "Unreadable repository address",
         userMessage: "The repository address is invalid.",
       });
     }
@@ -119,7 +91,7 @@ export class GitPolicy {
     if (!this.#allowedHosts.has(host.toLowerCase())) {
       throw new PolicyViolationError({
         rule: "git.remoteHost",
-        message: `Hôte de dépôt non autorisé : ${host}`,
+        message: `Repository host not allowed: ${host}`,
         userMessage: `Repositories hosted on "${host}" are not allowed.`,
         context: { host, allowed: [...this.#allowedHosts] },
       });

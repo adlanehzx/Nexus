@@ -22,17 +22,17 @@ export interface PairWorkerResult {
 }
 
 /**
- * Consomme un ticket d'appairage sans jamais persister celui-ci.
+ * Consumes a pairing ticket without ever persisting it.
  *
- * La cle privee est creee localement et seul le PEM public traverse le reseau.
- * Le fichier de configuration ne contient qu'un chemin vers cette cle.
+ * The private key is generated locally and only the public PEM crosses the network.
+ * The configuration file only contains a path to that key.
  */
 export async function pairWorker(input: PairWorkerInput): Promise<PairWorkerResult> {
   const apiUrl = normaliseApiUrl(input.apiUrl);
   const keyPath = resolve(input.keyPath);
   const envPath = resolve(input.envPath);
   if (existsSync(keyPath) || existsSync(envPath)) {
-    throw new Error("une identite existe deja ; revoquez-la avant de la remplacer");
+    throw new Error("an identity already exists; revoke it before replacing");
   }
   const pair = generateKeyPairSync("ed25519");
   const privateKey = pair.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -57,11 +57,11 @@ export async function pairWorker(input: PairWorkerInput): Promise<PairWorkerResu
     { data?: { id?: unknown }; error?: { message?: unknown } } | undefined;
   if (!response.ok) {
     const detail = payload?.error?.message;
-    throw new Error(typeof detail === "string" ? detail : `appairage refuse (${response.status})`);
+    throw new Error(typeof detail === "string" ? detail : `pairing refused (${response.status})`);
   }
   const deviceId = payload?.data?.id;
   if (typeof deviceId !== "string" || deviceId.length === 0) {
-    throw new Error("reponse d'appairage invalide : identifiant absent");
+    throw new Error("invalid pairing response: missing identifier");
   }
 
   mkdirSync(dirname(keyPath), { recursive: true });
@@ -106,10 +106,10 @@ function normaliseApiUrl(raw: string): string {
   const url = new URL(raw);
   const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (!local && url.protocol !== "https:") {
-    throw new Error("une API distante doit utiliser https://");
+    throw new Error("remote API must use https://");
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("l'adresse NEXUS doit utiliser http:// ou https://");
+    throw new Error("NEXUS address must use http:// or https://");
   }
   url.pathname = url.pathname.replace(/\/$/, "");
   url.search = "";
@@ -127,13 +127,13 @@ async function main(args: string[]): Promise<void> {
   const token = args.includes("--token-stdin")
     ? (await readStdin()).trim()
     : valueOf(args, "--token");
-  const name = valueOf(args, "--name") ?? process.env.COMPUTERNAME ?? "PC Windows";
+  const name = valueOf(args, "--name") ?? process.env.COMPUTERNAME ?? "Windows PC";
   const keyPath = valueOf(args, "--key-path");
   const envPath = valueOf(args, "--env-path");
   const allowedPaths = valueOf(args, "--allowed-paths")?.split(",") ?? [];
   const requestedPlatform = (valueOf(args, "--platform") ?? "WINDOWS").toUpperCase();
   if (!["WINDOWS", "LINUX", "MACOS"].includes(requestedPlatform)) {
-    throw new Error("--platform doit etre WINDOWS, LINUX ou MACOS");
+    throw new Error("--platform must be WINDOWS, LINUX, or MACOS");
   }
   if (
     apiUrl === undefined ||
@@ -142,7 +142,7 @@ async function main(args: string[]): Promise<void> {
     envPath === undefined
   ) {
     throw new Error(
-      "usage: pair --api-url <url> (--token <ticket>|--token-stdin) --key-path <fichier> --env-path <fichier> [--name <nom>] [--platform WINDOWS|LINUX|MACOS] [--allowed-paths <chemins>]",
+      "usage: pair --api-url <url> (--token <ticket>|--token-stdin) --key-path <path> --env-path <path> [--name <name>] [--platform WINDOWS|LINUX|MACOS] [--allowed-paths <paths>]",
     );
   }
   const result = await pairWorker({
@@ -154,8 +154,8 @@ async function main(args: string[]): Promise<void> {
     allowedPaths,
     platform: requestedPlatform as "WINDOWS" | "LINUX" | "MACOS",
   });
-  process.stdout.write(`Appareil appaire : ${result.deviceId}\n`);
-  process.stdout.write("Il reste a l'approuver dans NEXUS, page Appareils.\n");
+  process.stdout.write(`Device paired: ${result.deviceId}\n`);
+  process.stdout.write("It must now be approved in NEXUS, on the Devices page.\n");
 }
 
 async function readStdin(): Promise<string> {

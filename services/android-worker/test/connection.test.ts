@@ -3,18 +3,11 @@ import type { WorkerConnection } from "@nexus/devices";
 import { makeHarness, settle, until, generateDeviceKeys, USER_ID } from "./fixtures.js";
 
 /**
- * Authentification, session, reprise — côté Android.
- *
- * L'objectif de ce fichier n'est pas de re-tester le runtime commun : le worker
- * Windows le fait déjà. Il est de vérifier que **le même mécanisme fonctionne
- * avec une clé ECDSA P-256**, celle que le magasin de clés d'Android sait
- * produire, et que le téléphone se comporte comme un exécutant ordinaire.
- *
- * Un identifiant d'appareil n'authentifie rien. Tout repose sur une signature.
+ * Authentication, session, recovery — Android side.
  */
 
-describe("authentification du worker Android", () => {
-  it("ouvre une session sur un challenge signé en P-256", async () => {
+describe("Android worker authentication", () => {
+  it("opens a session with a P-256 signed challenge", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -26,7 +19,7 @@ describe("authentification du worker Android", () => {
     expect(device.status).toBe("ONLINE");
   });
 
-  it("refuse une signature produite par une autre clé", async () => {
+  it("rejects a signature produced by a different key", async () => {
     const harness = await makeHarness();
     harness.credentials.set(harness.device.id, generateDeviceKeys().publicKeyPem);
 
@@ -36,7 +29,7 @@ describe("authentification du worker Android", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse un appareil sans clé publique enregistrée", async () => {
+  it("rejects a device without registered public key", async () => {
     const harness = await makeHarness();
     harness.credentials.revoke(harness.device.id);
 
@@ -46,7 +39,7 @@ describe("authentification du worker Android", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse un appareil pas encore approuvé", async () => {
+  it("rejects a device not yet trusted", async () => {
     const harness = await makeHarness({ trusted: false });
 
     await harness.worker.start().catch(() => undefined);
@@ -55,7 +48,7 @@ describe("authentification du worker Android", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse un appareil révoqué", async () => {
+  it("rejects a revoked device", async () => {
     const harness = await makeHarness();
     await harness.registry.revokeDevice(harness.device.id);
 
@@ -65,7 +58,7 @@ describe("authentification du worker Android", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse le rejeu d'une trame d'authentification", async () => {
+  it("rejects replay of authentication frame", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -82,7 +75,7 @@ describe("authentification du worker Android", () => {
     });
   });
 
-  it("invalide la session dès la révocation de l'appareil", async () => {
+  it("invalidates session upon device revocation", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -93,7 +86,7 @@ describe("authentification du worker Android", () => {
     expect(device.authenticated).toBe(false);
   });
 
-  it("n'écrit jamais le jeton de session dans le journal", async () => {
+  it("never logs session token", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -101,8 +94,8 @@ describe("authentification du worker Android", () => {
   });
 });
 
-describe("enregistrement des capacités", () => {
-  it("enregistre les capacités Android auprès du registre du cœur", async () => {
+describe("capability registration", () => {
+  it("registers Android capabilities with core registry", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -118,7 +111,7 @@ describe("enregistrement des capacités", () => {
     ]);
   });
 
-  it("n'enregistre pas les capacités d'interface sans service d'accessibilité", async () => {
+  it("does not register UI capabilities without accessibility service", async () => {
     const harness = await makeHarness({
       seed: (platform) => {
         platform.ui.accessibilityEnabled = false;
@@ -133,7 +126,7 @@ describe("enregistrement des capacités", () => {
     expect(names).toContain("android.notification");
   });
 
-  it("remonte l'état de la batterie au cœur", async () => {
+  it("reports battery state to core", async () => {
     const harness = await makeHarness({
       seed: (platform) => {
         platform.device.battery = { percent: 42, charging: false, powerSaveMode: false };
@@ -147,11 +140,8 @@ describe("enregistrement des capacités", () => {
   });
 });
 
-describe("changement de disponibilité en cours de route", () => {
-  it("réannonce les capacités quand l'accessibilité est désactivée", async () => {
-    // Le scénario que la liste de vérification physique rejoue à la main : on
-    // coupe le service d'accessibilité, les trois capacités d'interface doivent
-    // disparaître du registre sans redémarrer le worker.
+describe("availability changes during operation", () => {
+  it("re-announces capabilities when accessibility is disabled", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
@@ -170,7 +160,7 @@ describe("changement de disponibilité en cours de route", () => {
     expect(names).not.toContain("android.ui.scroll");
   });
 
-  it("prévient les clients par l'événement existant", async () => {
+  it("notifies clients through existing event", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
@@ -181,8 +171,6 @@ describe("changement de disponibilité en cours de route", () => {
       harness.clientEvents.some((event) => event.type === "device.capabilities_changed"),
     );
 
-    // Le dernier : le premier est l'annonce initiale, qui contenait encore la
-    // capture. C'est la mise à jour qui doit ne plus la mentionner.
     const changed = harness.clientEvents
       .filter((event) => event.type === "device.capabilities_changed")
       .at(-1);
@@ -191,7 +179,7 @@ describe("changement de disponibilité en cours de route", () => {
     expect(JSON.stringify(changed)).not.toContain("android.ui.screenshot");
   });
 
-  it("fait revenir les capacités quand le service est réactivé", async () => {
+  it("restores capabilities when service is re-enabled", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -214,7 +202,7 @@ describe("changement de disponibilité en cours de route", () => {
     expect(names).toContain("android.ui.click");
   });
 
-  it("ne produit aucun événement quand rien ne change", async () => {
+  it("emits no event when nothing changed", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
@@ -234,23 +222,23 @@ describe("changement de disponibilité en cours de route", () => {
   });
 });
 
-describe("coupure et reprise", () => {
-  it("programme une reconnexion après une coupure", async () => {
+describe("outage and recovery", () => {
+  it("schedules reconnection after outage", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.drop("réseau mobile perdu");
+    harness.link.drop("cellular network lost");
     await settle();
 
     expect(harness.worker.state).toBe("reconnecting");
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refait la poignée de main complète, sans réutiliser l'ancien jeton", async () => {
+  it("performs full handshake without reusing old token", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.drop("réseau mobile perdu");
+    harness.link.drop("cellular network lost");
     await settle();
 
     const before = harness.link.sent.filter((e) => e.type === "worker.hello").length;
@@ -262,17 +250,17 @@ describe("coupure et reprise", () => {
     );
   });
 
-  it("libère les étapes en vol côté cœur", async () => {
+  it("releases in-flight steps core side", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    await harness.gateway.detach(harness.device.id, "téléphone hors de portée");
+    await harness.gateway.detach(harness.device.id, "phone out of range");
 
     const device = await harness.registry.requireDevice(harness.device.id);
     expect(device.status).toBe("OFFLINE");
   });
 
-  it("s'arrête proprement et cesse de surveiller la disponibilité", async () => {
+  it("stops cleanly and stops monitoring availability", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -287,9 +275,8 @@ describe("coupure et reprise", () => {
   });
 });
 
-describe("rôle de l'appareil", () => {
-  it("le téléphone est un exécutant, jamais un client", async () => {
-    // Le Redmi n'est pas une interface NEXUS : l'iPhone et le portable le sont.
+describe("device role", () => {
+  it("phone is an executor, never a client", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -300,12 +287,11 @@ describe("rôle de l'appareil", () => {
     expect(clients.map((d) => d.id)).not.toContain(harness.device.id);
   });
 
-  it("ne reçoit aucun événement destiné aux clients", async () => {
+  it("receives no events intended for clients", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
-    // Le routeur ne livre qu'aux appareils dont le rôle reçoit des événements.
     const clients = await harness.registry.getClientDevices(USER_ID);
     expect(clients.map((d) => d.id)).toEqual(["device-iphone"]);
   });

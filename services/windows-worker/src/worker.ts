@@ -12,18 +12,14 @@ import type { WorkerConfig } from "./config.js";
 import { NodeHealthSource } from "./runtime/health.js";
 
 /**
- * Le worker Windows.
+ * Windows worker daemon.
  *
- * Une **composition**, pas une implémentation : tout le cycle de vie — poignée
- * de main, enregistrement, battements de cœur, exécution, reprise — vit dans
- * `WorkerRuntime` de `@nexus/worker-core`, partagé avec le worker Android.
+ * A **composition**, not an implementation: the complete lifecycle — handshake,
+ * registration, heartbeats, task execution, reconnection — lives in `WorkerRuntime`
+ * within `@nexus/worker-core`, shared with the Android worker.
  *
- * Ce fichier n'ajoute que ce qui est propre à Windows : la plateforme annoncée,
- * la version, et une source de santé qui lit `node:os`.
- *
- * **Rien ici ne sait s'il tourne sur le portable ou sur le poste fixe.** Le nom
- * de la machine, son rôle et ses permissions viennent de la configuration et du
- * registre côté cœur.
+ * This file adds only what is specific to Windows: declared platform, version,
+ * and a health source reading `node:os`.
  */
 
 export const WORKER_VERSION = "0.1.0";
@@ -42,7 +38,7 @@ export interface WindowsWorkerOptions {
   random?: () => number;
 }
 
-/** Traduit la configuration Windows vers ce que le runtime commun attend. */
+/** Translates Windows worker configuration to common runtime config. */
 export function toRuntimeConfig(config: WorkerConfig): WorkerRuntimeConfig {
   return {
     deviceId: config.deviceId,
@@ -57,9 +53,6 @@ export function toRuntimeConfig(config: WorkerConfig): WorkerRuntimeConfig {
 }
 
 export function createWindowsWorker(options: WindowsWorkerOptions): WorkerRuntime {
-  // La santé lit le nombre de tâches actives du runtime, que le runtime exige à
-  // sa construction. Ce porteur rompt le cycle sans rendre la référence mutable
-  // au-delà de l'assemblage.
   const holder: { runtime?: WorkerRuntime } = {};
 
   const health =

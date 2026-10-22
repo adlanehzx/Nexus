@@ -1,5 +1,5 @@
-// Le runtime commun à tous les exécutants. Réexporté pour que les appelants du
-// worker Windows n'aient pas à connaître le découpage interne des paquets.
+// Common runtime shared across workers. Re-exported so callers of
+// the Windows worker do not need to know internal package divisions.
 export {
   Backoff,
   ConsoleWorkerLogger,

@@ -3,11 +3,11 @@ import { WORKER_MESSAGE, workerEnvelope, type WorkerPayload } from "@nexus/proto
 import { makeHarness, settle, until, ALLOWED_ROOT, type WorkerHarness } from "./fixtures.js";
 
 /**
- * Réception, exécution et restitution d'une étape.
+ * Reception, execution, and return of a step.
  *
- * Ces tests entrent par où entre le cœur : une trame `worker.task_dispatch`
- * livrée sur le canal. Rien n'appelle une capacité directement — c'est le
- * chemin complet qui est éprouvé, validation comprise.
+ * These tests enter through the same path as the core: a `worker.task_dispatch`
+ * frame delivered over the channel. Nothing calls a capability directly — the
+ * complete path is tested, including validation.
  */
 
 let sequence = 0;
@@ -31,7 +31,7 @@ function dispatchEnvelope(overrides: Partial<WorkerPayload<"worker.task_dispatch
   );
 }
 
-/** Résultats renvoyés au cœur par le worker. */
+/** Results returned to core by worker. */
 function results(harness: WorkerHarness) {
   return harness.link.sent
     .filter((envelope) => envelope.type === WORKER_MESSAGE.taskResult)
@@ -49,8 +49,8 @@ async function dispatch(
   return results(harness).find((result) => result.stepId === payload.stepId);
 }
 
-describe("réception d'une étape", () => {
-  it("exécute une étape valide et renvoie le résultat", async () => {
+describe("step reception", () => {
+  it("executes a valid step and returns the result", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -60,7 +60,7 @@ describe("réception d'une étape", () => {
     expect(harness.runner.runs.some((run) => run.executable === "git")).toBe(true);
   });
 
-  it("refuse une capacité que le worker n'a pas", async () => {
+  it("rejects a capability the worker does not have", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -73,12 +73,12 @@ describe("réception d'une étape", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "CAPABILITY_UNAVAILABLE" } });
   });
 
-  it("refuse une capacité désactivée par la configuration locale", async () => {
+  it("rejects a capability disabled by local configuration", async () => {
     const harness = await makeHarness({ config: { declaredCapabilities: ["filesystem.read"] } });
     await harness.connectWorker();
 
-    // Les sondes de disponibilité ont déjà lancé « git --version ». Ce qui est
-    // vérifié, c'est qu'aucun lancement ne s'y ajoute.
+    // Availability probes already ran "git --version". We verify no additional
+    // command is launched.
     const before = harness.runner.runs.length;
     const result = await dispatch(harness);
 
@@ -89,30 +89,30 @@ describe("réception d'une étape", () => {
     expect(harness.runner.runs).toHaveLength(before);
   });
 
-  it("refuse des arguments qui ne respectent pas le schéma", async () => {
+  it("rejects arguments that violate schema", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
     const before = harness.runner.runs.length;
-    const result = await dispatch(harness, { arguments: { commande: "git status" } });
+    const result = await dispatch(harness, { arguments: { invalidKey: "git status" } });
 
     expect(result).toMatchObject({ ok: false, error: { code: "CAPABILITY_INPUT_INVALID" } });
-    // Rien n'a été lancé : la validation précède toujours l'exécution.
+    // Nothing was launched: validation always precedes execution.
     expect(harness.runner.runs).toHaveLength(before);
   });
 
-  it("ignore une trame de dispatch malformée", async () => {
+  it("ignores a malformed dispatch frame", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.deliver({ v: 1, id: "x", type: "worker.task_dispatch", ts: "pas une date" });
+    harness.link.deliver({ v: 1, id: "x", type: "worker.task_dispatch", ts: "not a date" });
     await settle();
 
     expect(harness.worker.state).toBe("ready");
     expect(results(harness)).toHaveLength(0);
   });
 
-  it("émet une progression pendant l'exécution", async () => {
+  it("emits progress during execution", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
     await dispatch(harness);
@@ -122,8 +122,8 @@ describe("réception d'une étape", () => {
   });
 });
 
-describe("annulation et délais", () => {
-  it("annule une étape en cours sur ordre du cœur", async () => {
+describe("cancellation and timeouts", () => {
+  it("cancels an active step on core request", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.hangUntilAborted = true;
@@ -139,7 +139,7 @@ describe("annulation et délais", () => {
     harness.link.deliver(
       workerEnvelope(
         WORKER_MESSAGE.taskCancel,
-        { taskId: payload.taskId, stepId: payload.stepId, reason: "annulée par NEXUS" },
+        { taskId: payload.taskId, stepId: payload.stepId, reason: "cancelled by NEXUS" },
         { id: "cancel-1", at: new Date() },
       ),
     );
@@ -151,7 +151,7 @@ describe("annulation et délais", () => {
     });
   });
 
-  it("interrompt une étape qui dépasse son délai", async () => {
+  it("interrupts a step that exceeds its timeout", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.hangUntilAborted = true;
@@ -159,9 +159,8 @@ describe("annulation et délais", () => {
     });
     await harness.connectWorker();
 
-    // Le délai s'appuie sur une vraie minuterie : on laisse passer un vrai
-    // court instant plutôt que de simuler l'horloge, sinon c'est le simulacre
-    // qu'on teste et non le délai.
+    // Timeout relies on real timer: we let real time elapse rather than mocking
+    // clock to test actual timeout behavior.
     const envelope = dispatchEnvelope({ timeoutMs: 40 });
     const payload = envelope.payload as WorkerPayload<"worker.task_dispatch">;
     harness.link.deliver(envelope);
@@ -174,7 +173,7 @@ describe("annulation et délais", () => {
     expect(["EXECUTION_TIMEOUT", "EXECUTION_CANCELLED"]).toContain(result?.error?.code);
   }, 10_000);
 
-  it("annule tout ce qui tourne à l'arrêt du worker", async () => {
+  it("cancels everything running upon worker shutdown", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.hangUntilAborted = true;
@@ -185,17 +184,17 @@ describe("annulation et délais", () => {
     harness.link.deliver(dispatchEnvelope());
     await until(() => harness.worker.activeTaskCount === 1);
 
-    await harness.worker.stop("arrêt de service");
+    await harness.worker.stop("service stop");
     await until(() => harness.worker.activeTaskCount === 0);
 
     expect(harness.worker.activeTaskCount).toBe(0);
   });
 });
 
-describe("idempotence et concurrence", () => {
-  it("n'exécute pas deux fois le même identifiant de requête", async () => {
-    // Le cœur peut renvoyer un ordre après une coupure, sans savoir si le
-    // premier est arrivé. Sans cette garde, `git.commit` s'exécuterait deux fois.
+describe("idempotency and concurrency", () => {
+  it("does not execute the same request ID twice", async () => {
+    // Core may re-send a request after an outage without knowing if the first
+    // arrived. Without this guard, `git.commit` would run twice.
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -212,7 +211,7 @@ describe("idempotence et concurrence", () => {
     expect(results(harness)).toHaveLength(1);
   });
 
-  it("refuse une deuxième exécution de la même étape en parallèle", async () => {
+  it("rejects a second concurrent execution of the same step", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.hangUntilAborted = true;
@@ -225,7 +224,7 @@ describe("idempotence et concurrence", () => {
     harness.link.deliver(first);
     await until(() => harness.worker.activeTaskCount === 1);
 
-    harness.link.deliver(dispatchEnvelope({ stepId: payload.stepId, requestId: "req-autre" }));
+    harness.link.deliver(dispatchEnvelope({ stepId: payload.stepId, requestId: "req-other" }));
     await until(() => results(harness).length > 0);
 
     expect(results(harness)[0]).toMatchObject({
@@ -234,9 +233,9 @@ describe("idempotence et concurrence", () => {
     });
   });
 
-  it("refuse une étape de plus quand il est saturé, de façon réessayable", async () => {
-    // Réessayable : la machine n'est pas incapable, elle est occupée. Le
-    // coordinateur peut basculer immédiatement sur un autre exécutant.
+  it("rejects an extra step when saturated, in a retryable manner", async () => {
+    // Retryable: machine is not incapable, it is busy. The coordinator can
+    // immediately failover to another worker.
     const harness = await makeHarness({
       config: { maxConcurrentTasks: 1 },
       seed: ({ runner }) => {
@@ -258,8 +257,8 @@ describe("idempotence et concurrence", () => {
   });
 });
 
-describe("coupure pendant une étape", () => {
-  it("libère l'étape côté cœur, de façon réessayable", async () => {
+describe("disconnection during a step", () => {
+  it("releases the step core-side in a retryable manner", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.hangUntilAborted = true;
@@ -267,11 +266,11 @@ describe("coupure pendant une étape", () => {
     });
     await harness.connectWorker();
 
-    // Le cœur envoie l'ordre par la passerelle, comme en production.
+    // Core sends order via gateway, as in production.
     const controller = new AbortController();
     const pending = harness.gateway.dispatch({
       deviceId: harness.device.id,
-      taskId: "task-coupure",
+      taskId: "task-outage",
       stepId: "step-1",
       tool: "device.terminal.execute",
       capability: "terminal.execute",
@@ -282,7 +281,7 @@ describe("coupure pendant une étape", () => {
     });
 
     await until(() => harness.worker.activeTaskCount === 1);
-    await harness.gateway.detach(harness.device.id, "câble débranché");
+    await harness.gateway.detach(harness.device.id, "cable disconnected");
 
     await expect(pending).resolves.toMatchObject({
       ok: false,
@@ -290,10 +289,10 @@ describe("coupure pendant une étape", () => {
     });
   });
 
-  it("refuse un ordre pour un worker déconnecté", async () => {
+  it("rejects an order for a disconnected worker", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
-    await harness.gateway.detach(harness.device.id, "hors ligne");
+    await harness.gateway.detach(harness.device.id, "offline");
 
     const result = await harness.gateway.dispatch({
       deviceId: harness.device.id,
@@ -313,19 +312,19 @@ describe("coupure pendant une étape", () => {
     });
   });
 
-  it("abandonne une étape dont l'exécutant ne répond plus", async () => {
+  it("aborts a step whose worker no longer responds", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    // La passerelle attend `timeoutMs + marge` ; on rend la marge nulle.
+    // Gateway waits `timeoutMs + margin`; margin is zero here.
     const result = await harness.gateway.dispatch({
       deviceId: harness.device.id,
       taskId: "t",
-      stepId: "s-muet",
-      tool: "device.inconnu",
-      // Une capacité que le worker refusera : il répondra, mais on vérifie
-      // surtout que rien ne reste en suspens dans la table des étapes.
-      capability: "capacite.inexistante",
+      stepId: "s-silent",
+      tool: "device.unknown",
+      // A capability the worker will reject: it will respond, but we verify
+      // nothing remains hanging in the active step table.
+      capability: "capability.nonexistent",
       arguments: {},
       timeoutMs: 2_000,
       signal: new AbortController().signal,
@@ -336,11 +335,11 @@ describe("coupure pendant une étape", () => {
   }, 15_000);
 });
 
-describe("exécution réelle des capacités par le canal", () => {
-  it("lit un fichier autorisé", async () => {
+describe("real capability execution over channel", () => {
+  it("reads an allowed file", async () => {
     const harness = await makeHarness({
       seed: ({ fileSystem }) => {
-        fileSystem.files.set(`${ALLOWED_ROOT}\\notes.md`, "contenu");
+        fileSystem.files.set(`${ALLOWED_ROOT}\\notes.md`, "content");
       },
     });
     await harness.connectWorker();
@@ -352,23 +351,23 @@ describe("exécution réelle des capacités par le canal", () => {
     });
 
     expect(result).toMatchObject({ ok: true });
-    expect((result?.result as { content: string }).content).toBe("contenu");
+    expect((result?.result as { content: string }).content).toBe("content");
   });
 
-  it("refuse une lecture hors des dossiers autorisés", async () => {
+  it("rejects reading outside allowed folders", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
     const result = await dispatch(harness, {
       capability: "filesystem.read",
       tool: "device.filesystem.read",
-      arguments: { path: "C:\\Users\\moi\\.aws\\credentials" },
+      arguments: { path: "C:\\Users\\me\\.aws\\credentials" },
     });
 
     expect(result).toMatchObject({ ok: false, error: { code: "PATH_NOT_ALLOWED" } });
   });
 
-  it("refuse une opération Git modifiante en mode lecture seule", async () => {
+  it("rejects a mutating Git operation in read-only mode", async () => {
     const harness = await makeHarness({ config: { gitAllowWrite: false } });
     await harness.connectWorker();
 
@@ -381,7 +380,7 @@ describe("exécution réelle des capacités par le canal", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "WORKER_POLICY_VIOLATION" } });
   });
 
-  it("accepte une lecture Git dans la même configuration", async () => {
+  it("accepts a Git read in the same configuration", async () => {
     const harness = await makeHarness({ config: { gitAllowWrite: false } });
     await harness.connectWorker();
 

@@ -1,8 +1,8 @@
-"""API HTTP du Browser Worker.
+"""HTTP API for the Browser Worker.
 
-Contrat versionné, authentifié, jamais exposé à Internet. Les routes ne portent
-aucune logique : elles valident, délèguent au `SessionManager`, et traduisent les
-erreurs. Voir ``packages/browser-client`` côté TypeScript.
+Versioned, authenticated contract, isolated on internal Docker networks.
+Routes validate inputs, delegate to `SessionManager`, and serialize responses.
+See ``packages/browser-client`` for TypeScript client implementation.
 """
 
 from __future__ import annotations
@@ -37,11 +37,9 @@ VERSION = "0.1.0"
 
 
 def create_app(*, runner: TaskRunner | None = None, settings: Settings | None = None) -> FastAPI:
-    """Fabrique l'application.
+    """Construct the FastAPI application.
 
-    `runner` est injectable : les tests exercent l'API complète — routes, auth,
-    sessions, politiques, événements — sans navigateur ni modèle. La seule
-    frontière remplacée est celle qui l'est réellement.
+    `runner` is injectable for unit testing without headless browsers or LLMs.
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -58,16 +56,14 @@ def create_app(*, runner: TaskRunner | None = None, settings: Settings | None = 
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        logger.info("démarrage du worker %s", settings.describe())
+        logger.info("starting browser worker %s", settings.describe())
         _warn_on_stale_action_names()
         await manager.start_cleanup(settings.cleanup_interval_seconds)
         try:
             yield
         finally:
-            # Arrêt gracieux : tâches annulées, navigateurs fermés. Sans cela,
-            # un redéploiement laisserait des Chromium orphelins.
             await manager.shutdown()
-            logger.info("worker arrêté")
+            logger.info("browser worker stopped")
 
     app = FastAPI(
         title="NEXUS Browser Worker",
@@ -97,15 +93,11 @@ def create_app(*, runner: TaskRunner | None = None, settings: Settings | None = 
             ).model_dump(),
         )
 
-    # ── Santé ───────────────────────────────────────────────────────────────
+    # ── Health ──────────────────────────────────────────────────────────────
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:
-        """Sonde publique du réseau interne : pas d'authentification.
-
-        Elle ne révèle rien d'exploitable et doit rester joignable même quand le
-        jeton est mal configuré — sinon le diagnostic devient impossible.
-        """
+        """Unauthenticated readiness and health probe for internal networks."""
         version = active_runner.backend_version
         return Health(
             status="ok" if version is not None else "degraded",
@@ -136,16 +128,14 @@ def create_app(*, runner: TaskRunner | None = None, settings: Settings | None = 
     async def close_session(session_id: str) -> None:
         await manager.close_session(session_id)
 
-    # ── Tâches ──────────────────────────────────────────────────────────────
+    # ── Tasks ───────────────────────────────────────────────────────────────
 
     @app.post("/v1/sessions/{session_id}/tasks", response_model=Task, dependencies=[Depends(auth)])
     async def run_task(session_id: str, body: RunTaskRequest) -> Task:
         if body.sessionId != session_id:
-            # Incohérence de chemin : un bug d'appelant, pas une session
-            # manquante. Le code le dit, plutôt que de brouiller le diagnostic.
             raise SessionError(
                 ErrorCode.invalid_request,
-                "L'identifiant de session du corps ne correspond pas à l'URL.",
+                "Session ID in body does not match URL.",
                 status=400,
             )
         return manager.start_task(
@@ -170,12 +160,7 @@ def create_app(*, runner: TaskRunner | None = None, settings: Settings | None = 
 
 
 def _warn_on_stale_action_names() -> None:
-    """Vérifie que les actions restreintes existent toujours dans browser-use.
-
-    Une action renommée en amont ferait silencieusement sauter une restriction :
-    une tâche `read` pourrait se remettre à cliquer. Mieux vaut un avertissement
-    bruyant qu'une permission perdue en silence.
-    """
+    """Verify that restricted actions still exist in browser-use."""
     try:
         from browser_use import Tools
 
@@ -183,7 +168,7 @@ def _warn_on_stale_action_names() -> None:
         actions = getattr(getattr(registry, "registry", None), "actions", None)
         available = set(actions) if actions else set()
     except Exception:
-        logger.warning("actions browser-use non introspectables : restrictions non vérifiées")
+        logger.warning("browser-use actions could not be introspected: restrictions not verified")
         return
 
     if not available:
@@ -191,9 +176,9 @@ def _warn_on_stale_action_names() -> None:
 
     stale = verify_action_names(available)
     if stale:
-        logger.error("actions restreintes introuvables dans browser-use (renommées ?) : %s", stale)
+        logger.error("restricted actions not found in browser-use (renamed?): %s", stale)
 
 
 def build() -> FastAPI:
-    """Point d'entrée uvicorn : ``uvicorn app.main:build --factory``."""
+    """Uvicorn entry point: ``uvicorn app.main:build --factory``."""
     return create_app()

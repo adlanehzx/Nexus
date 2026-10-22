@@ -17,29 +17,15 @@ import { BrowserWorkerHost } from "../src/worker.js";
 import { TestSigner, generateDeviceKeys, testConfig, waitFor } from "./fixtures.js";
 
 /**
- * Bout en bout, avec le **vrai worker Python**.
+ * End-to-end with the **real Python worker**.
  *
- * Ce fichier lance `uvicorn` dans un processus séparé et le pilote depuis un
- * vrai `WorkerGateway`, à travers l'hôte. Ce qui s'exécute réellement : HTTP,
- * sérialisation, jeton de service, sessions, politiques d'intention, et la
- * chaîne NEXUS complète — poignée de main signée, enregistrement, dispatch,
- * résultat.
- *
- * **Ce qui reste hors de portée ici** : `browser-use` et Chromium. Le worker
- * Python répond, applique ses politiques et gère ses sessions sans qu'aucun
- * navigateur ne démarre tant qu'aucune tâche n'aboutit ; une tâche qui
- * atteindrait Chromium demanderait en plus une clé de modèle et un accès
- * réseau. La ligne est dite plutôt que masquée.
- *
- * Activation :
- *   NEXUS_WORKER_PYTHON=/chemin/vers/python pnpm --filter @nexus/browser-worker-host test
- *
- * Sans cette variable, la suite est ignorée : la chaîne Python n'est pas requise
- * pour travailler côté TypeScript.
+ * Launches `uvicorn` in a separate process and drives it from a real `WorkerGateway`
+ * through the host. Runs real HTTP, serialization, service token, sessions,
+ * intent policies, and the complete NEXUS chain.
  */
 
 const PYTHON = process.env.NEXUS_WORKER_PYTHON;
-const TOKEN = "jeton-e2e-suffisamment-long-pour-le-worker";
+const TOKEN = "e2e-token-sufficiently-long-for-worker";
 const PORT = 8142;
 const BASE_URL = `http://127.0.0.1:${String(PORT)}`;
 
@@ -49,7 +35,7 @@ const suite = PYTHON === undefined ? describe.skip : describe;
 
 let python: ChildProcess | undefined;
 
-/** Requete de session minimale, telle que le worker Python l'attend. */
+/** Minimal session request as expected by Python worker. */
 function createSessionRequest() {
   return {
     ownerId: "user-example",
@@ -73,10 +59,10 @@ async function waitForHealth(timeoutMs = 60_000): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  throw new Error(`le worker Python n'a pas démarré : ${String(last)}`);
+  throw new Error(`Python worker did not start: ${String(last)}`);
 }
 
-suite("bout en bout avec le worker Python réel", () => {
+suite("end-to-end with real Python worker", () => {
   beforeAll(async () => {
     python = spawn(
       PYTHON!,
@@ -99,7 +85,7 @@ suite("bout en bout avec le worker Python réel", () => {
     python?.kill();
   });
 
-  it("le worker Python répond, et l'hôte le voit en bonne santé", async () => {
+  it("Python worker responds and host sees it as healthy", async () => {
     const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: TOKEN });
     const health = await client.health();
 
@@ -107,14 +93,12 @@ suite("bout en bout avec le worker Python réel", () => {
     expect(health.protocolVersion).toBeGreaterThan(0);
   });
 
-  it("refuse un jeton de service invalide", async () => {
-    // Le lien interne est authentifié pour de vrai, et ce test le prouve
-    // contre le vrai serveur — pas contre un double.
-    const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: "mauvais-jeton-mais-long" });
+  it("rejects an invalid service token", async () => {
+    const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: "bad-token-but-long-enough" });
     await expect(client.createSession(createSessionRequest())).rejects.toThrow();
   });
 
-  it("traverse la chaîne cœur → passerelle → hôte → worker Python", async () => {
+  it("traverses the core -> gateway -> host -> Python worker chain", async () => {
     const registry = new DeviceRegistry();
     const credentials = new InMemoryCredentialProvider();
     const sessions = new DeviceSessionService({ registry });
@@ -131,7 +115,7 @@ suite("bout en bout avec le worker Python réel", () => {
     const device = await registry.registerDevice({
       id: config.deviceId,
       userId: "user-example",
-      name: "Exécutant navigateur",
+      name: "Browser worker",
       type: "BROWSER_WORKER",
       platform: "WEB",
       role: "WORKER",
@@ -151,7 +135,7 @@ suite("bout en bout avec le worker Python réel", () => {
         link.deliver(envelope);
       },
       close: () => {
-        link.drop("fermé");
+        link.drop("closed");
       },
     };
     link.outbound = (envelope) => gateway.handleMessage(connection, envelope);
@@ -169,7 +153,6 @@ suite("bout en bout avec le worker Python réel", () => {
     await host.start();
     await waitFor(() => host.isAuthenticated);
 
-    // Les capacités arrivent réellement au registre du cœur.
     await waitFor(async () => {
       const current = await registry.requireDevice(device.id);
       return current.capabilities.length > 0;
@@ -177,7 +160,6 @@ suite("bout en bout avec le worker Python réel", () => {
     const current = await registry.requireDevice(device.id);
     expect(current.capabilities.map((entry) => entry.name)).toContain("browser.navigate");
 
-    // Une session navigateur est réellement ouverte côté Python.
     const opened = await client.createSession({
       ownerId: device.id,
       allowedDomains: [],
@@ -189,19 +171,10 @@ suite("bout en bout avec le worker Python réel", () => {
     expect(opened.sessionId).toBeTruthy();
     await client.closeSession(opened.sessionId);
 
-    await host.stop("fin de test");
+    await host.stop("test teardown");
   }, 60_000);
 
-  it("mène une tâche jusqu'à un état terminal, sans jamais rester en suspens", async () => {
-    // Ce qui est éprouvé ici : le cycle de vie réel d'une tâche côté Python —
-    // acceptation, numérotation des événements, état terminal. Sans clé de
-    // modèle ni Chromium, elle n'aboutira pas ; ce qui compte est qu'elle
-    // **se termine** au lieu de laisser l'hôte attendre indéfiniment.
-    //
-    // La politique de domaine elle-même (boucle locale, plages privées, points
-    // de métadonnées cloud) s'applique au moment de la navigation, dans
-    // `browser-use`. Elle est couverte par `tests/test_policies.py` du worker
-    // Python, qui l'exerce directement.
+  it("leads a task to a terminal state without hanging", async () => {
     const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: TOKEN });
     const session = await client.createSession({
       ownerId: "user-example",
@@ -215,7 +188,7 @@ suite("bout en bout avec le worker Python réel", () => {
     const started = await client.runTask({
       taskId: "t-terminal",
       sessionId: session.sessionId,
-      instructions: "Va sur http://169.254.169.254/latest/meta-data/",
+      instructions: "Go to http://169.254.169.254/latest/meta-data/",
       intent: "read",
       maxSteps: 1,
     });
@@ -228,14 +201,12 @@ suite("bout en bout avec le worker Python réel", () => {
     expect(["succeeded", "failed", "cancelled", "timeout", "needs_human"]).toContain(
       finished.status,
     );
-    // L'intention transmise n'est jamais reclassée par le worker.
     expect(finished.intent).toBe("read");
 
     await client.closeSession(session.sessionId);
   }, 45_000);
 });
 
-/** Le dispatch nominal reste couvert sans Python par `integration.test.ts`. */
 export const DISPATCH_REFERENCE = workerEnvelope(
   WORKER_MESSAGE.taskDispatch,
   {
@@ -243,7 +214,7 @@ export const DISPATCH_REFERENCE = workerEnvelope(
     stepId: "s1",
     capability: "browser.navigate",
     tool: "device.browser.navigate",
-    arguments: { instructions: "référence" },
+    arguments: { instructions: "reference" },
     timeoutMs: 1_000,
     riskLevel: "LOW",
     requestId: "r1",

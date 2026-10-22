@@ -1,4 +1,4 @@
-"""API : authentification, sessions, tâches, événements, annulation."""
+"""API: authentication, sessions, tasks, events, cancellation."""
 
 from __future__ import annotations
 
@@ -20,12 +20,11 @@ class TestAuthentication:
         response = client.post(
             "/v1/sessions",
             json={"ownerId": "u"},
-            headers={"authorization": "Bearer mauvais-jeton-mais-assez-long"},
+            headers={"authorization": "Bearer bad-token-sufficiently-long"},
         )
         assert response.status_code == 401
 
     def test_health_stays_reachable_without_token(self, client: TestClient) -> None:
-        # Sinon un jeton mal configuré rendrait le diagnostic impossible.
         response = client.get("/v1/health", headers={"authorization": ""})
         assert response.status_code == 200
         assert response.json()["protocolVersion"] == 1
@@ -71,7 +70,7 @@ class TestSessionLifecycle:
         assert client.get(f"/v1/sessions/{session_id}").status_code == 404
 
     def test_unknown_session_is_404(self, client: TestClient) -> None:
-        response = client.get("/v1/sessions/bs_inexistante")
+        response = client.get("/v1/sessions/bs_nonexistent")
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "BROWSER_SESSION_NOT_FOUND"
 
@@ -82,7 +81,7 @@ class TestTaskExecution:
         task = run_and_wait(client, session_id)
 
         assert task["status"] == "succeeded"
-        assert task["output"] == "42 euros"
+        assert task["output"] == "42 dollars"
         assert task["durationMs"] >= 0
 
     def test_emits_the_full_event_sequence(self, client: TestClient) -> None:
@@ -96,8 +95,6 @@ class TestTaskExecution:
         assert "action" in types
         assert types[-1] == "finished"
 
-        # Numéros strictement croissants et uniques : c'est ce qui permet au
-        # backend de reprendre après une coupure sans rien perdre ni rejouer.
         seqs = [event["seq"] for event in task["events"]]
         assert seqs == sorted(seqs)
         assert len(set(seqs)) == len(seqs)
@@ -114,7 +111,7 @@ class TestTaskExecution:
         self, client: TestClient, runner: FakeRunner
     ) -> None:
         session_id = open_session(client)
-        run_and_wait(client, session_id, intent="purchase", taskId="t-achat")
+        run_and_wait(client, session_id, intent="purchase", taskId="t-purchase")
 
         spec = runner.calls[-1]
         assert spec.intent.value == "purchase"
@@ -127,8 +124,6 @@ class TestTaskExecution:
         run_and_wait(client, session_id, intent="read")
 
         excluded = runner.calls[-1].policy.excluded_actions
-        # La restriction est effective : ces actions ne sont pas remises à
-        # browser-use, le modèle ne peut donc pas les appeler.
         assert "click" in excluded
         assert "input" in excluded
         assert "evaluate" in excluded
@@ -143,7 +138,7 @@ class TestTaskExecution:
             json={
                 "taskId": "t1",
                 "sessionId": session_id,
-                "instructions": "longue",
+                "instructions": "long task",
                 "intent": "read",
             },
         )
@@ -152,7 +147,7 @@ class TestTaskExecution:
             json={
                 "taskId": "t2",
                 "sessionId": session_id,
-                "instructions": "autre",
+                "instructions": "other",
                 "intent": "read",
             },
         )
@@ -165,13 +160,12 @@ class TestTaskExecution:
         run_and_wait(client, session_id, taskId="t-idem")
         before = len(runner.calls)
 
-        # Un renvoi réseau ne doit pas relancer une navigation.
         response = client.post(
             f"/v1/sessions/{session_id}/tasks",
             json={
                 "taskId": "t-idem",
                 "sessionId": session_id,
-                "instructions": "encore",
+                "instructions": "repeat",
                 "intent": "read",
             },
         )
@@ -184,7 +178,7 @@ class TestTaskExecution:
             f"/v1/sessions/{session_id}/tasks",
             json={
                 "taskId": "t",
-                "sessionId": "bs_autre",
+                "sessionId": "bs_other",
                 "instructions": "x",
                 "intent": "read",
             },
@@ -210,12 +204,10 @@ class TestFailures:
     def test_runner_crash_becomes_a_failed_task(
         self, client: TestClient, runner: FakeRunner
     ) -> None:
-        runner.raise_error = RuntimeError("chromium a planté")
+        runner.raise_error = RuntimeError("chromium crashed")
         session_id = open_session(client)
         task = run_and_wait(client, session_id)
 
-        # Une panne du navigateur est un résultat, pas une exception HTTP :
-        # l'agent doit pouvoir l'expliquer.
         assert task["status"] == "failed"
         assert task["error"]["retryable"] is True
         assert "chromium" in task["error"]["message"]
@@ -225,7 +217,7 @@ class TestFailures:
             status=TaskStatus.timeout,
             steps=3,
             error_code="BROWSER_TASK_TIMEOUT",
-            error_message="La tâche a dépassé 180 s.",
+            error_message="Task exceeded 180s timeout.",
             retryable=True,
         )
         session_id = open_session(client)
@@ -235,7 +227,7 @@ class TestFailures:
         assert task["error"]["code"] == "BROWSER_TASK_TIMEOUT"
 
     def test_unknown_task_is_404(self, client: TestClient) -> None:
-        assert client.get("/v1/tasks/inexistante").status_code == 404
+        assert client.get("/v1/tasks/nonexistent").status_code == 404
 
 
 class TestHumanIntervention:
@@ -244,10 +236,10 @@ class TestHumanIntervention:
     ) -> None:
         runner.outcome = RunOutcome(
             status=TaskStatus.needs_human,
-            output="Le site affiche un CAPTCHA à résoudre.",
+            output="The site displays a CAPTCHA challenge.",
             steps=2,
             error_code="BROWSER_HUMAN_INTERVENTION_REQUIRED",
-            error_message="Le site demande une vérification humaine.",
+            error_message="The site requires human verification.",
         )
         session_id = open_session(client)
         task = run_and_wait(client, session_id, intent="login")
@@ -264,13 +256,13 @@ class TestCancellation:
         client.post(
             f"/v1/sessions/{session_id}/tasks",
             json={
-                "taskId": "t-annule",
+                "taskId": "t-cancelled",
                 "sessionId": session_id,
-                "instructions": "tâche longue",
+                "instructions": "long task",
                 "intent": "read",
             },
         )
-        cancelled = client.post("/v1/tasks/t-annule/cancel").json()
+        cancelled = client.post("/v1/tasks/t-cancelled/cancel").json()
 
         assert cancelled["status"] == "cancelled"
 
@@ -291,7 +283,7 @@ class TestCancellation:
             json={
                 "taskId": "t-session",
                 "sessionId": session_id,
-                "instructions": "longue",
+                "instructions": "long task",
                 "intent": "read",
             },
         )
@@ -306,7 +298,7 @@ class TestSecrets:
     ) -> None:
         runner.outcome = RunOutcome(
             status=TaskStatus.succeeded,
-            output="Connecté avec motdepasse-tres-secret",
+            output="Logged in with super-secret-password",
             steps=1,
         )
         session_id = open_session(client)
@@ -314,10 +306,10 @@ class TestSecrets:
             client,
             session_id,
             intent="login",
-            secrets={"password": "motdepasse-tres-secret"},
+            secrets={"password": "super-secret-password"},
         )
 
-        assert "motdepasse-tres-secret" not in str(task)
+        assert "super-secret-password" not in str(task)
         assert "[REDACTED]" in task["output"]
 
     def test_secrets_reach_the_runner_but_not_the_events(
@@ -328,19 +320,11 @@ class TestSecrets:
             client, session_id, intent="login", secrets={"password": "hunter2-long-secret"}
         )
 
-        # browser-use en a besoin pour remplir le formulaire...
         assert runner.calls[-1].secrets == {"password": "hunter2-long-secret"}
-        # ...mais rien n'en ressort.
         assert "hunter2-long-secret" not in str(task["events"])
 
 
 def test_shutdown_closes_everything(runner: FakeRunner, settings) -> None:
-    """L'arrêt du worker ferme les navigateurs restés ouverts.
-
-    On passe par le cycle de vie réel de l'application plutôt que d'appeler
-    `shutdown()` à la main : c'est ce chemin-là qui s'exécute en production, et
-    lui seul tourne dans la bonne boucle asyncio.
-    """
     from app.main import create_app
 
     app = create_app(runner=runner, settings=settings)

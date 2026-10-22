@@ -8,18 +8,10 @@ import { PolicyViolationError } from "../errors.js";
 /**
  * `process.list`, `process.start`, `process.stop`.
  *
- * La contrainte forte est sur l'arrêt : NEXUS ne peut arrêter que **ce qu'il a
- * lancé lui-même**. Le worker tient la liste des processus qu'il a démarrés, et
- * refuse tout identifiant absent de cette liste.
- *
- * Sans cette règle, `process.stop` deviendrait un moyen d'arrêter l'antivirus,
- * le service de sauvegarde, ou la session de travail de l'utilisateur — avec
- * exactement les mêmes permissions que celles accordées pour arrêter un serveur
- * de développement.
+ * `process.stop` is restricted to processes launched by NEXUS itself.
  */
 
 export const listInputSchema = z.object({
-  /** Filtre sur le nom, insensible à la casse. Vide = tout. */
   nameContains: z.string().max(128).optional(),
   limit: z.number().int().min(1).max(500).default(100),
 });
@@ -33,7 +25,6 @@ export const startInputSchema = z.object({
 
 export const stopInputSchema = z.object({
   processId: z.number().int().positive(),
-  /** Arrêt forcé. À réserver aux processus qui ne répondent plus. */
   force: z.boolean().default(false),
 });
 
@@ -41,15 +32,6 @@ export type ListInput = z.infer<typeof listInputSchema>;
 export type StartInput = z.infer<typeof startInputSchema>;
 export type StopInput = z.infer<typeof stopInputSchema>;
 
-/**
- * Registre des processus lancés par NEXUS.
- *
- * Partagé entre `process.start` et `process.stop` : c'est lui qui rend l'arrêt
- * sûr. Il vit dans la mémoire du worker — redémarrer le worker perd la trace des
- * processus lancés, qui deviennent alors non arrêtables par NEXUS. C'est le bon
- * compromis : mieux vaut ne pas pouvoir arrêter que pouvoir arrêter n'importe
- * quoi après un redémarrage.
- */
 export class OwnedProcessRegistry {
   readonly #owned = new Map<number, { executable: string; startedAt: string }>();
 
@@ -87,12 +69,12 @@ export function createProcessListCapability(
 ): LocalCapability<ListInput, { processes: ProcessInfo[]; total: number }> {
   return {
     name: "process.list",
-    description: "Liste les processus en cours sur cet ordinateur.",
+    description: "Lists running processes on this computer.",
     inputSchema: listInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
-        nameContains: { type: "string", description: "Filtre sur le nom du processus" },
+        nameContains: { type: "string", description: "Filter on process name" },
         limit: { type: "number" },
       },
     },
@@ -117,12 +99,12 @@ export function createProcessStartCapability(
 ): LocalCapability<StartInput, { processId: number; executable: string; startedAt: string }> {
   return {
     name: "process.start",
-    description: "Démarre un programme autorisé en arrière-plan sur cet ordinateur.",
+    description: "Starts an allowed program in the background on this computer.",
     inputSchema: startInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
-        executable: { type: "string", description: "Programme autorisé, par son nom" },
+        executable: { type: "string", description: "Allowed program by name" },
         args: { type: "array", items: { type: "string" } },
         workingDirectory: { type: "string" },
       },
@@ -163,13 +145,13 @@ export function createProcessStopCapability(
 ): LocalCapability<StopInput, { processId: number; stopped: boolean }> {
   return {
     name: "process.stop",
-    description: "Arrête un processus précédemment démarré par NEXUS sur cet ordinateur.",
+    description: "Stops a process previously started by NEXUS on this computer.",
     inputSchema: stopInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
-        processId: { type: "number", description: "Identifiant du processus" },
-        force: { type: "boolean", description: "Arrêt forcé" },
+        processId: { type: "number", description: "Process identifier" },
+        force: { type: "boolean", description: "Force stop" },
       },
       required: ["processId"],
     },
@@ -179,7 +161,7 @@ export function createProcessStopCapability(
       if (!dependencies.owned.owns(input.processId)) {
         throw new PolicyViolationError({
           rule: "process.notOwned",
-          message: `Processus ${String(input.processId)} non lancé par NEXUS`,
+          message: `Process ${String(input.processId)} was not started by NEXUS`,
           userMessage: "NEXUS can only stop processes it started itself on this device.",
           context: { processId: input.processId },
         });

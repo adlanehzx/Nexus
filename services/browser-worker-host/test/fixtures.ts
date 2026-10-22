@@ -29,28 +29,24 @@ import { assembleBrowserHost } from "../src/assemble.js";
 import { BrowserWorkerHost } from "../src/worker.js";
 
 /**
- * Harnais de l'exécutant navigateur.
+ * Browser worker harness.
  *
- * Deux principes, les mêmes que pour les workers Windows et Android :
+ * Two principles, same as for Windows and Android workers:
  *
- *  1. **Aucun navigateur réel.** Le worker Python est remplacé par un serveur
- *     HTTP en mémoire qui parle le vrai contrat — mêmes routes, mêmes schémas,
- *     mêmes codes d'erreur. Les tests ne demandent ni Chromium, ni clé de
- *     modèle, et ils sont donc déterministes.
- *  2. **Le reste est réel.** Vraies clés Ed25519, vraies signatures, vrai
- *     `DeviceSessionService`, vraie `WorkerGateway`, vrai `TaskCoordinator`,
- *     vraies enveloppes validées par les schémas du protocole, vrai
- *     `BrowserWorkerClient` qui sérialise et désérialise réellement.
- *
- * Ce que ces tests ne prouvent pas est dit explicitement dans le README : le
- * comportement de `browser-use` et de Chromium eux-mêmes.
+ *  1. **No real browser.** The Python worker is replaced by an in-memory HTTP
+ *     server speaking the real contract — same routes, same schemas, same error
+ *     codes. Tests require neither Chromium nor model key, ensuring determinism.
+ *  2. **Everything else is real.** Real Ed25519 keys, real signatures, real
+ *     `DeviceSessionService`, real `WorkerGateway`, real `TaskCoordinator`,
+ *     real envelopes validated by protocol schemas, real `BrowserWorkerClient`
+ *     that serializes and deserializes.
  */
 
 export const USER_ID = "user-example";
 export const DEVICE_ID = "device-browser";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Double du worker Python
+// Python worker mock
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface FakeTaskOutcome {
@@ -59,16 +55,15 @@ export interface FakeTaskOutcome {
   steps?: number;
   events?: BrowserEvent[];
   error?: { code: string; message: string; retryable: boolean };
-  /** Retarde la fin : sert à éprouver l'annulation et les délais. */
+  /** Delays completion: used to test cancellation and timeouts. */
   hangUntilCancelled?: boolean;
 }
 
 /**
- * Worker Python simulé, au niveau du **transport HTTP**.
+ * Simulated Python worker at the **HTTP transport** level.
  *
- * On remplace `fetch`, pas le client : la sérialisation, les en-têtes, les
- * codes de statut et la validation Zod du client s'exécutent réellement. Un
- * double du client lui-même ne prouverait rien du contrat.
+ * Replaces `fetch`, not the client: serialization, headers, status codes,
+ * and Zod validation run for real.
  */
 export class FakeBrowserWorker {
   health: BrowserWorkerHealth = {
@@ -80,21 +75,21 @@ export class FakeBrowserWorker {
     runningTasks: 0,
   };
 
-  /** Sessions ouvertes, dans l'ordre de création. */
+  /** Open sessions, in creation order. */
   readonly sessions: BrowserSession[] = [];
   readonly closedSessions: string[] = [];
-  /** Listes de domaines recues a la creation de session. */
+  /** Domain lists received at session creation. */
   readonly requestedDomains: { allowed: string[]; prohibited: string[] }[] = [];
-  /** Tâches lancées, avec l'intention réellement transmise. */
+  /** Launched tasks with actual transmitted intent. */
   readonly launched: { taskId: string; sessionId: string; intent: string; instructions: string }[] =
     [];
   readonly cancelled: string[] = [];
 
-  /** Réponse par défaut d'une tâche. Modifiable par test. */
-  outcome: FakeTaskOutcome = { status: "succeeded", output: "résultat", steps: 3 };
-  /** Le service est injoignable : toute requête échoue au niveau réseau. */
+  /** Default task outcome. Modifiable per test. */
+  outcome: FakeTaskOutcome = { status: "succeeded", output: "result", steps: 3 };
+  /** Service is unreachable: any request fails at network level. */
   unreachable = false;
-  /** Refuse la création de session, comme quand le pool est plein. */
+  /** Refuses session creation, simulating pool exhaustion. */
   refuseSessions = false;
 
   #tasks = new Map<string, BrowserTask>();
@@ -105,21 +100,19 @@ export class FakeBrowserWorker {
     this.#authorised = `Bearer ${token}`;
   }
 
-  /** À passer en `fetchImpl` du `BrowserWorkerClient`. */
+  /** Pass as `fetchImpl` to `BrowserWorkerClient`. */
   readonly fetch: typeof fetch = (input, init) => {
     if (this.unreachable) {
       return Promise.reject(new Error("ECONNREFUSED"));
     }
 
-    // `fetch` accepte trois formes ; le client n'en utilise qu'une, mais on
-    // decode les trois plutot que de supposer.
-    const cible =
+    const target =
       typeof input === "string" ? input : input instanceof Request ? input.url : input.href;
-    const url = new URL(cible);
+    const url = new URL(target);
     const method = init?.method ?? "GET";
     const headers = new Headers(init?.headers);
 
-    // Le jeton est vérifié pour de vrai : un test qui l'oublierait doit échouer.
+    // Token is verified for real.
     if (url.pathname !== "/v1/health" && headers.get("authorization") !== this.#authorised) {
       return Promise.resolve(this.#json(401, { error: unauthorised() }));
     }
@@ -140,7 +133,7 @@ export class FakeBrowserWorker {
         return this.#json(503, {
           error: {
             code: "BROWSER_POOL_EXHAUSTED",
-            message: "plus de navigateur disponible",
+            message: "no browser available",
             retryable: true,
           },
         });
@@ -161,9 +154,6 @@ export class FakeBrowserWorker {
         activeTaskId: null,
       };
       this.sessions.push(session);
-      // La politique de domaine appartient au worker Python : on retient ce
-      // qu'on a recu pour que les tests verifient la transmission, sans la
-      // reimplementer ici.
       this.requestedDomains.push({
         allowed: request.allowedDomains ?? [],
         prohibited: request.prohibitedDomains ?? [],
@@ -232,7 +222,7 @@ export class FakeBrowserWorker {
       const id = decodeURIComponent(status[1]!);
       const task = this.#tasks.get(id);
       return task === undefined
-        ? this.#json(404, { error: notFound("tâche") })
+        ? this.#json(404, { error: notFound("task") })
         : this.#json(200, task);
     }
 
@@ -251,24 +241,24 @@ export class FakeBrowserWorker {
 }
 
 function unauthorised() {
-  return { code: "BROWSER_UNAUTHORIZED", message: "jeton invalide", retryable: false };
+  return { code: "BROWSER_UNAUTHORIZED", message: "invalid token", retryable: false };
 }
 
 function notFound(what: string) {
-  return { code: "BROWSER_SESSION_NOT_FOUND", message: `${what} introuvable`, retryable: false };
+  return { code: "BROWSER_SESSION_NOT_FOUND", message: `${what} not found`, retryable: false };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const BROWSER_TOKEN = "jeton-de-test-suffisamment-long";
+export const BROWSER_TOKEN = "test-token-sufficiently-long";
 
 export function testConfig(overrides: Partial<BrowserHostConfig> = {}): BrowserHostConfig {
   return {
     backendUrl: "wss://nexus.test/ws/worker",
     deviceId: DEVICE_ID,
-    deviceKeyPath: "/inexistant/device.pem",
+    deviceKeyPath: "/nonexistent/device.pem",
 
     browserWorkerUrl: "http://127.0.0.1:8100",
     browserWorkerToken: BROWSER_TOKEN,
@@ -292,7 +282,7 @@ export function testConfig(overrides: Partial<BrowserHostConfig> = {}): BrowserH
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Clés et signature
+// Keys and signing
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DeviceKeys {
@@ -300,7 +290,7 @@ export interface DeviceKeys {
   privateKeyPem: string;
 }
 
-/** Vraie paire Ed25519 — la même primitive que les exécutants sur Node. */
+/** Real Ed25519 pair — same primitive as Node workers. */
 export function generateDeviceKeys(): DeviceKeys {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   return {
@@ -323,7 +313,7 @@ export class TestSigner implements CredentialSigner {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Minuteries contrôlées
+// Controlled timers
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class TestTimers implements TimerPort {
@@ -353,7 +343,7 @@ export class TestTimers implements TimerPort {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Harnais complet
+// Full harness
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BROWSER_PERMISSIONS = [
@@ -402,13 +392,10 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Browser
   const keys = generateDeviceKeys();
   const config = testConfig(options.config);
 
-  // Type `BROWSER_WORKER` : un exécutant de la flotte du point de vue du
-  // sélecteur, mais pas un appareil de l'utilisateur. Rôle `WORKER` — il
-  // exécute, il ne pilote pas.
   const device = await registry.registerDevice({
     id: config.deviceId,
     userId: USER_ID,
-    name: "Exécutant navigateur",
+    name: "Browser worker",
     type: "BROWSER_WORKER",
     platform: "WEB",
     role: "WORKER",
@@ -450,7 +437,7 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Browser
       link.deliver(envelope);
     },
     close: () => {
-      link.drop("fermé par le cœur");
+      link.drop("closed by core");
     },
     remoteAddress: "192.0.2.7",
   };
@@ -483,17 +470,13 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Browser
   };
 }
 
-/** Laisse la file de micro-tâches se vider — la poignée de main est asynchrone. */
+/** Let microtask queue flush — handshake is asynchronous. */
 export async function settle(rounds = 12): Promise<void> {
   for (let index = 0; index < rounds; index += 1) await Promise.resolve();
 }
 
 /**
- * Attend qu'une condition devienne vraie, sans horloge réelle.
- *
- * Le prédicat peut être asynchrone — lire le registre du cœur l'est. Sans
- * l'attendre, on testerait la vérité d'un objet `Promise`, qui est toujours
- * vraie, et la boucle rendrait la main immédiatement.
+ * Wait for condition to become true without real clock.
  */
 export async function until(
   predicate: () => boolean | Promise<boolean>,
@@ -507,11 +490,7 @@ export async function until(
 }
 
 /**
- * Attend en laissant tourner l'horloge.
- *
- * Pour tout ce qui traverse une minuterie réelle : le client navigateur sonde
- * l'état d'une tâche toutes les cinq cents millisecondes, et une boucle de
- * micro-tâches ne l'atteint jamais.
+ * Wait allowing clock to tick.
  */
 export async function waitFor(
   predicate: () => boolean | Promise<boolean>,
@@ -522,5 +501,5 @@ export async function waitFor(
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error("condition jamais atteinte");
+  throw new Error("condition never met");
 }

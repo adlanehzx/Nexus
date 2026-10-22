@@ -8,13 +8,7 @@ import { assertProcessSucceeded } from "../runtime/process-runner.js";
 /**
  * `docker.execute`.
  *
- * Même forme que le terminal, et même refus : pas de ligne de commande. Une
- * sous-commande choisie dans une liste, des arguments séparés.
- *
- * La sonde de disponibilité compte particulièrement ici. Sans elle, une machine
- * sans Docker annoncerait quand même la capacité, serait sélectionnée pour une
- * tâche Docker, et échouerait — après avoir écarté une machine qui, elle, aurait
- * su faire.
+ * Runs allowed Docker subcommands.
  */
 
 export const dockerInputSchema = z.object({
@@ -46,14 +40,14 @@ export function createDockerCapability(
   return {
     name: "docker.execute",
     description:
-      "Exécute une opération Docker autorisée sur cet ordinateur (consultation par défaut).",
+      "Executes an allowed Docker operation on this computer (inspection by default).",
     inputSchema: dockerInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
         subcommand: {
           type: "string",
-          description: "Sous-commande Docker, par exemple « ps » ou « logs »",
+          description: 'Docker subcommand, e.g. "ps" or "logs"',
         },
         args: { type: "array", items: { type: "string" } },
       },
@@ -71,7 +65,6 @@ export function createDockerCapability(
         });
         return outcome.status === "completed";
       } catch {
-        // Binaire absent : la sonde échoue, la capacité n'est pas annoncée.
         return false;
       }
     },
@@ -94,8 +87,6 @@ export function createDockerCapability(
 
       assertProcessSucceeded("docker.execute", outcome);
 
-      // Les journaux de conteneurs contiennent régulièrement des variables
-      // d'environnement au démarrage — donc des secrets.
       return {
         subcommand: input.subcommand,
         exitCode: outcome.exitCode,

@@ -6,8 +6,8 @@ import {
   type ProvisioningStore,
 } from "../src/provisioning.js";
 
-describe("appairage au premier lancement Android", () => {
-  it("consomme le ticket avec la cle publique et persiste seulement l'identite", async () => {
+describe("pairing on first Android launch", () => {
+  it("consumes ticket with public key and persists identity only", async () => {
     const saveProvisioning = vi.fn(() => Promise.resolve());
     const native = {
       devicePublicKeyPem: vi.fn(() =>
@@ -16,7 +16,7 @@ describe("appairage au premier lancement Android", () => {
       saveProvisioning,
     } as unknown as NexusNative & ProvisioningStore;
     const request = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
-      if (typeof init?.body !== "string") throw new Error("corps JSON attendu");
+      if (typeof init?.body !== "string") throw new Error("expected JSON body");
       const body = JSON.parse(init.body) as Record<string, unknown>;
       expect(body.token).toBe("ticket-secret-1234567890");
       expect(String(body.publicKeyPem)).toContain("BEGIN PUBLIC KEY");
@@ -30,7 +30,7 @@ describe("appairage au premier lancement Android", () => {
 
     const result = await provisionAndroidWorker({
       payload: "nexus://pair?api=https%3A%2F%2Fnexus.example.test&token=ticket-secret-1234567890",
-      name: "Telephone",
+      name: "Phone",
       keyAlias: "nexus.device.key",
       native,
       fetchImpl: request,
@@ -40,7 +40,7 @@ describe("appairage au premier lancement Android", () => {
     expect(saveProvisioning).toHaveBeenCalledWith("https://nexus.example.test", "android-1");
   });
 
-  it("refuse une destination distante non chiffree", () => {
+  it("rejects unencrypted remote destination", () => {
     expect(() =>
       parsePairingPayload(
         "nexus://pair?api=http%3A%2F%2Fexample.test&token=ticket-secret-1234567890",

@@ -1,49 +1,23 @@
 import { PolicyViolationError } from "@nexus/worker-core";
 
 /**
- * Politique de capture d'écran.
- *
- * Une capture d'écran de téléphone est la donnée la plus sensible que ce worker
- * puisse produire : elle contient ce que l'utilisateur regarde, y compris un
- * message privé, un code à usage unique ou un relevé bancaire.
- *
- * D'où trois règles, appliquées sans exception :
- *
- *  1. **jamais journalisée** — ni l'image, ni son encodage, ni un extrait ;
- *  2. **jamais écrite sur disque** — l'image vit en mémoire, traverse le canal,
- *     et disparaît. Un fichier temporaire survit à un plantage, se retrouve dans
- *     une sauvegarde automatique, et reste lisible par toute application ayant
- *     accès au stockage partagé ;
- *  3. **bornée en taille** — une capture pleine résolution pèse plusieurs
- *     mégaoctets, sature le canal et finit dans une fenêtre de contexte.
- *
- * Et une règle sur la fréquence : ce worker ne capture que sur demande explicite.
- * Il n'existe aucun code d'enregistrement continu, et l'API retenue —
- * `AccessibilityService.takeScreenshot()` — ne permet structurellement pas d'en
- * écrire un.
+ * Screenshot policy.
  */
 
-/** Plus grand côté accepté, en pixels. */
+/** Maximum accepted dimension, in pixels. */
 const DEFAULT_MAX_DIMENSION = 1280;
 const HARD_MAX_DIMENSION = 2048;
 
-/** Taille maximale de l'image encodée, en octets. */
+/** Maximum encoded image size, in bytes. */
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 
-/** Intervalle minimal entre deux captures. */
+/** Minimum interval between two captures. */
 const DEFAULT_MIN_INTERVAL_MS = 1_000;
 
 export interface ScreenshotPolicyOptions {
   maxDimension?: number;
   maxBytes?: number;
-  /**
-   * Intervalle minimal entre deux captures.
-   *
-   * Ce n'est pas une optimisation : c'est ce qui empêche une suite de tâches
-   * d'approcher un enregistrement continu par accumulation. Une capture par
-   * seconde reste une série de captures ponctuelles ; dix par seconde est une
-   * vidéo.
-   */
+  /** Minimum interval between two captures. */
   minIntervalMs?: number;
   now?: () => number;
 }
@@ -71,9 +45,9 @@ export class ScreenshotPolicy {
   }
 
   /**
-   * Autorise une capture, ou refuse si la précédente est trop récente.
+   * Authorizes a capture, or rejects if preceding capture was too recent.
    *
-   * @throws {PolicyViolationError} en cas de cadence excessive.
+   * @throws {PolicyViolationError} on excessive rate.
    */
   assertCaptureAllowed(): void {
     const now = this.#now();
@@ -82,7 +56,7 @@ export class ScreenshotPolicy {
     if (this.#lastCaptureAt !== 0 && elapsed < this.#minIntervalMs) {
       throw new PolicyViolationError({
         rule: "screenshot.rate",
-        message: `Capture trop rapprochée (${String(elapsed)} ms)`,
+        message: `Capture too frequent (${String(elapsed)} ms)`,
         userMessage: "A screenshot was just taken. NEXUS does not capture the screen continuously.",
         context: { elapsedMs: elapsed, minIntervalMs: this.#minIntervalMs },
       });
@@ -92,17 +66,15 @@ export class ScreenshotPolicy {
   }
 
   /**
-   * Valide une image capturée.
+   * Validates captured image.
    *
-   * @throws {PolicyViolationError} si l'image dépasse les bornes. On refuse
-   *   plutôt que de tronquer : une image tronquée est illisible, et la renvoyer
-   *   ferait croire à une réussite.
+   * @throws {PolicyViolationError} if image exceeds bounds.
    */
   assertWithinLimits(image: { bytes: number; width: number; height: number }): void {
     if (image.bytes > this.#maxBytes) {
       throw new PolicyViolationError({
         rule: "screenshot.tooLarge",
-        message: `Capture trop lourde (${String(image.bytes)} octets)`,
+        message: `Capture too large (${String(image.bytes)} bytes)`,
         userMessage: "The screenshot exceeds the allowed size.",
         context: { bytes: image.bytes, max: this.#maxBytes },
       });
@@ -112,7 +84,7 @@ export class ScreenshotPolicy {
     if (largest > this.#maxDimension) {
       throw new PolicyViolationError({
         rule: "screenshot.tooBig",
-        message: `Capture trop grande (${String(largest)} px)`,
+        message: `Capture too big (${String(largest)} px)`,
         userMessage: "The screenshot exceeds the allowed resolution.",
         context: { largest, max: this.#maxDimension },
       });

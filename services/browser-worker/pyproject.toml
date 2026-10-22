@@ -1,7 +1,7 @@
 [project]
 name = "nexus-browser-worker"
 version = "0.1.0"
-description = "Worker Browser Use isolé pour NEXUS"
+description = "Isolated Browser Use worker for NEXUS"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.120",
@@ -29,8 +29,8 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-# Les tests marqués `browser` lancent un vrai navigateur : hors CI par défaut.
-markers = ["browser: nécessite browser-use et un Chromium installés"]
+# Tests marked 'browser' launch a real browser: excluded by default.
+markers = ["browser: requires browser-use and Chromium installed"]
 addopts = "-m 'not browser' -q"
 
 [tool.ruff]

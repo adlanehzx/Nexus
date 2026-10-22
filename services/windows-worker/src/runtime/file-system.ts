@@ -2,13 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Accès disque.
- *
- * Port, pour la même raison que `ProcessRunner` : les tests ne doivent écrire
- * nulle part sur la machine du développeur. Toute la politique de chemins se
- * vérifie contre une implémentation en mémoire, y compris les tentatives
- * d'évasion par lien symbolique — qu'il serait pénible de mettre en scène pour
- * de vrai, et impossible sans privilèges sous Windows.
+ * Disk access port.
  */
 
 export interface FileStat {
@@ -18,13 +12,6 @@ export interface FileStat {
 }
 
 export interface FileSystemPort {
-  /**
-   * Chemin réel, liens résolus.
-   *
-   * Sur un chemin qui n'existe pas encore — cas d'une écriture — remonte au
-   * premier parent existant et le résout. Sinon, créer un fichier serait
-   * impossible à autoriser.
-   */
   realpath(candidate: string): Promise<string>;
   readFile(absolutePath: string, maxBytes: number): Promise<string>;
   writeFile(absolutePath: string, content: string, append: boolean): Promise<number>;
@@ -37,9 +24,6 @@ export class NodeFileSystem implements FileSystemPort {
     let current = candidate;
     const suffixes: string[] = [];
 
-    // On remonte jusqu'au premier parent existant, puis on le résout et on
-    // recolle la queue. Un lien symbolique placé sur un dossier parent est ainsi
-    // détecté même si la cible n'existe pas encore.
     for (let depth = 0; depth < 64; depth += 1) {
       try {
         const real = await fs.realpath(current);

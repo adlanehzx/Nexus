@@ -13,27 +13,12 @@ import type { WorkerRuntime } from "@nexus/worker-core";
 import type { WorkerLink } from "@nexus/worker-core";
 
 /**
- * Point d'entrée du démon exécutant.
+ * Worker daemon entrypoint.
  *
- * **Un processus séparé de l'interface.** Sur le portable, les deux tournent en
- * même temps et servent le même utilisateur, mais ils ne se parlent pas : le
- * démon détient la clé privée de la machine et se connecte au canal exécutant ;
- * la fenêtre détient les jetons de l'utilisateur et se connecte au canal client.
- *
- * Quand l'utilisateur demande depuis la fenêtre quelque chose que ce poste doit
- * faire, la demande sort par le réseau, remonte au cœur, y est autorisée, puis
- * redescend ici. Le trajet paraît long pour deux processus voisins ; il est ce
- * qui garantit qu'aucune interface ne devient une console d'administration.
+ * Runs as a separate process from user interface clients.
  */
 
 export interface StartOptions {
-  /**
-   * Canal vers le cœur.
-   *
-   * Fourni par les tests, qui branchent une boucle locale sur une vraie
-   * `WorkerGateway`. Absent en production : le démon ouvre alors sa WebSocket
-   * sortante.
-   */
   link?: WorkerLink;
   env?: Record<string, string | undefined>;
 }
@@ -44,16 +29,12 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
   const platform = config.platform ?? "WINDOWS";
   const logger = new ConsoleWorkerLogger({ level: config.logLevel, bindings: { WORKER_VERSION } });
 
-  // La politique locale, si elle existe. Un fichier **présent mais invalide**
-  // arrête le démarrage : quelqu'un a écrit une politique, et démarrer en
-  // l'ignorant appliquerait l'inverse de son intention sans le dire. Absente,
-  // le worker se règle sur son environnement, comme avant.
   const policyPath = env.WORKER_POLICY_FILE ?? defaultDevicePolicyPath();
   const loaded = await loadDevicePolicy(policyPath);
   logger.info(
     loaded.source === "file"
-      ? "politique locale chargée"
-      : "aucune politique locale : réglages d'environnement",
+      ? "local policy loaded"
+      : "no local policy: using environment configuration",
     {
       event: "worker.policy",
       source: loaded.source,
@@ -87,9 +68,6 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
     logger,
   });
 
-  // Carte de visite pour l'interface installée sur la même machine. En échec,
-  // on continue : la fenêtre affichera « aucun exécutant détecté », ce qui est
-  // gênant et sans conséquence — refuser de démarrer, non.
   const statePath = await publishWorkerState(
     config.statePath,
     publicStateOf({
@@ -100,11 +78,9 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
     }),
   );
   if (statePath === undefined) {
-    logger.warn("état public non publié : l'interface locale ne détectera pas cet exécutant");
+    logger.warn("public state not published: local interface will not detect this worker");
   }
 
-  // Un arrêt brutal laisserait le cœur attendre des résultats qui n'arriveront
-  // jamais. On annule proprement, on remonte les échecs, puis on ferme.
   const shutdown = (signal: string) => {
     void worker.stop(`signal ${signal}`).finally(() => {
       process.exit(0);
@@ -122,27 +98,16 @@ export async function startWorker(options: StartOptions = {}): Promise<WorkerRun
   return worker;
 }
 
-/**
- * `~/.nexus/device-policy.yaml`.
- *
- * Le même emplacement que celui qu'utilise `nexus policy` : une politique
- * qu'on édite d'un côté et que le worker chercherait ailleurs serait pire
- * qu'aucune politique.
- */
 function defaultDevicePolicyPath(): string {
   return join(homedir(), ".nexus", "device-policy.yaml");
 }
 
-// `main.ts` est aussi importe par les tests. Ne demarrer que lorsqu'il est le
-// point d'entree du processus, jamais lorsqu'une suite importe `startWorker`.
 const invokedAsProgram =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedAsProgram) {
   startWorker().catch((cause: unknown) => {
     const message = cause instanceof Error ? cause.message : String(cause);
-    // Le logger structure n'existe pas encore si la configuration est invalide.
-    // Cette ligne reste volontairement courte et ne rend jamais l'environnement.
     process.stderr.write(`NEXUS worker: ${message}\n`);
     process.exitCode = 1;
   });

@@ -3,36 +3,23 @@ import type { HealthSource } from "@nexus/worker-core";
 import type { BrowserWorkerClient } from "@nexus/browser-client";
 
 /**
- * Santé de l'exécutant navigateur.
+ * Health source for the browser worker host.
  *
- * Elle ne décrit pas la machine : elle décrit **le service qui détient les
- * navigateurs**. Un hôte parfaitement sain devant un worker Python injoignable
- * n'est pas sain — il se ferait choisir par le sélecteur et échouerait.
- *
- * D'où deux notions distinctes, et le sélecteur s'en sert différemment :
- *
- *  - **plus de capacité** — le worker Python a déjà autant de navigateurs
- *    ouverts qu'il en accepte. L'étape attendra plutôt que d'échouer.
- *  - **dégradé** — le worker Python se déclare `degraded`, ou n'a pas répondu
- *    au dernier sondage. L'appareil reste joignable ; on évite simplement de
- *    lui confier ce qui peut aller ailleurs.
- *
- * L'état est **rafraîchi explicitement**, jamais lu au moment du battement :
- * `snapshot()` est synchrone dans le port `HealthSource`, et un appel réseau
- * caché derrière un accesseur synchrone est une source de blocages.
+ * Describes the state of the underlying browser service.
+ * Refreshed explicitly rather than synchronously during heartbeats.
  */
 
 export interface BrowserHealthOptions {
   client: BrowserWorkerClient;
   maxConcurrentTasks: number;
-  /** Tâches en cours côté hôte, lues sur le runtime. */
+  /** Active tasks on the host, read from runtime. */
   activeTasks: () => number;
 }
 
 export class BrowserHealthSource implements HealthSource {
   readonly #options: BrowserHealthOptions;
 
-  /** Dernier état connu du worker Python. `undefined` = jamais interrogé. */
+  /** Last known status of the Python worker. `undefined` = not yet queried. */
   #status: "ok" | "degraded" | "unreachable" | undefined;
   #openSessions = 0;
   #browserUseVersion: string | null = null;
@@ -49,7 +36,7 @@ export class BrowserHealthSource implements HealthSource {
     return this.#browserUseVersion;
   }
 
-  /** Interroge le worker Python. À appeler au démarrage et périodiquement. */
+  /** Probe the Python worker. Called at startup and periodically. */
   async refresh(): Promise<void> {
     try {
       const health = await this.#options.client.health();
@@ -57,8 +44,6 @@ export class BrowserHealthSource implements HealthSource {
       this.#openSessions = health.openSessions;
       this.#browserUseVersion = health.browserUseVersion;
     } catch {
-      // Injoignable : on le retient plutôt que de le taire. Le détail de
-      // l'erreur ne remonte pas — il nommerait un service interne.
       this.#status = "unreachable";
       this.#openSessions = 0;
     }
@@ -80,7 +65,7 @@ export class BrowserHealthSource implements HealthSource {
     return this.#status === "degraded" || this.#status === "unreachable";
   }
 
-  /** Diagnostic pour les journaux. Aucune donnée de navigation n'y figure. */
+  /** Safe diagnostic metadata for logging. */
   describe(): Record<string, unknown> {
     return {
       status: this.status,

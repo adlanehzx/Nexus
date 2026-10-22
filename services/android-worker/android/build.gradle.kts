@@ -1,9 +1,8 @@
 /**
- * Reglages communs a tous les modules.
+ * Common settings for all modules.
  *
- * Les versions sont celles qu'attend React Native 0.81.5 : les changer sans
- * necessite casserait la compilation du greffon natif, qui n'est pas compile ici
- * mais consomme depuis Maven.
+ * Versions are those expected by React Native 0.81.5: changing them unnecessarily
+ * breaks native plugin compilation, which is consumed from Maven.
  */
 plugins {
     id("com.android.application") version "8.11.0" apply false

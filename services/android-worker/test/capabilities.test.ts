@@ -8,11 +8,7 @@ import { makePlatform, testConfig, type FakePlatform } from "./fixtures.js";
 import type { AndroidWorkerConfig } from "../src/config.js";
 
 /**
- * Les capacités Android, une par une.
- *
- * Aucun appel au système : les quatre ports sont remplacés. Ce qui est vérifié,
- * c'est ce que la capacité *demande* au téléphone — quel paquet, quel sélecteur,
- * quel texte — car c'est là que se joue la sécurité.
+ * Android capabilities tested individually.
  */
 
 interface Fixture {
@@ -50,8 +46,8 @@ async function run(fixture: Fixture, name: string, input: unknown, ctx = context
   return capability.execute(validated as never, ctx);
 }
 
-describe("déclaration des capacités", () => {
-  it("annonce les sept capacités quand tout est disponible", async () => {
+describe("capability declaration", () => {
+  it("announces all seven capabilities when everything is available", async () => {
     const fixture = await assemble();
     expect(fixture.capabilities.declare().map((c) => c.name)).toEqual([
       "android.app.list",
@@ -64,9 +60,7 @@ describe("déclaration des capacités", () => {
     ]);
   });
 
-  it("n'annonce pas les capacités d'interface si l'accessibilité est désactivée", async () => {
-    // C'est la garantie centrale : le sélecteur ne doit jamais choisir le
-    // téléphone pour un clic qu'il ne peut pas faire.
+  it("does not announce UI capabilities if accessibility is disabled", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.ui.accessibilityEnabled = false;
     });
@@ -75,12 +69,11 @@ describe("déclaration des capacités", () => {
     expect(declared).not.toContain("android.ui.click");
     expect(declared).not.toContain("android.ui.input");
     expect(declared).not.toContain("android.ui.scroll");
-    // Celles qui n'en dépendent pas restent annoncées.
     expect(declared).toContain("android.app.open");
     expect(declared).toContain("android.notification");
   });
 
-  it("n'annonce pas la capture si elle est indisponible", async () => {
+  it("does not announce screenshot if unavailable", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.screenshots.available = false;
     });
@@ -89,14 +82,14 @@ describe("déclaration des capacités", () => {
     );
   });
 
-  it("n'annonce pas les notifications si la permission est refusée", async () => {
+  it("does not announce notifications if permission is denied", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.notifications.allowed = false;
     });
     expect(fixture.capabilities.declare().map((c) => c.name)).not.toContain("android.notification");
   });
 
-  it("n'annonce que les capacités autorisées par la configuration", async () => {
+  it("announces only capabilities permitted by configuration", async () => {
     const fixture = await assemble({
       declaredCapabilities: ["android.notification", "android.app.list"],
     });
@@ -106,7 +99,7 @@ describe("déclaration des capacités", () => {
     ]);
   });
 
-  it("distingue les trois causes d'indisponibilité", async () => {
+  it("distinguishes causes of unavailability", async () => {
     const fixture = await assemble({ declaredCapabilities: ["android.app.list"] }, (platform) => {
       platform.ui.accessibilityEnabled = false;
     });
@@ -117,14 +110,14 @@ describe("déclaration des capacités", () => {
         context: expect.objectContaining({ reason: expect.stringContaining("configuration") }),
       }),
     );
-    expect(() => fixture.capabilities.require("registre.inexistant")).toThrow(
+    expect(() => fixture.capabilities.require("registry.nonexistent")).toThrow(
       expect.objectContaining({ code: "CAPABILITY_UNAVAILABLE" }),
     );
   });
 });
 
 describe("android.app.list", () => {
-  it("ne liste que les applications lançables et autorisées", async () => {
+  it("lists only launchable and permitted applications", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.app.list", {})) as {
       apps: { packageName: string }[];
@@ -132,14 +125,11 @@ describe("android.app.list", () => {
 
     const names = result.apps.map((app) => app.packageName);
     expect(names).toContain("com.spotify.music");
-    // Les réglages sont refusés par la politique : ils ne doivent même pas
-    // apparaître dans un inventaire — leur présence renseigne sur l'utilisateur.
     expect(names).not.toContain("com.android.settings");
-    // Non lançable : rien à en faire.
     expect(names).not.toContain("com.example.service");
   });
 
-  it("ne renvoie ni version, ni permissions, ni date d'installation", async () => {
+  it("returns neither version, permissions, nor install date", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.app.list", {})) as {
       apps: Record<string, unknown>[];
@@ -148,7 +138,7 @@ describe("android.app.list", () => {
     expect(Object.keys(result.apps[0] ?? {})).toEqual(["packageName", "label"]);
   });
 
-  it("filtre par nom", async () => {
+  it("filters by name", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.app.list", { nameContains: "spot" })) as {
       total: number;
@@ -156,7 +146,7 @@ describe("android.app.list", () => {
     expect(result.total).toBe(1);
   });
 
-  it("respecte la liste d'autorisation", async () => {
+  it("respects allowlist", async () => {
     const fixture = await assemble({ allowedPackages: ["com.whatsapp"] });
     const result = (await run(fixture, "android.app.list", {})) as {
       apps: { packageName: string }[];
@@ -166,7 +156,7 @@ describe("android.app.list", () => {
 });
 
 describe("android.app.open", () => {
-  it("ouvre une application autorisée", async () => {
+  it("opens an allowed application", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.app.open", {
       packageName: "com.spotify.music",
@@ -176,7 +166,7 @@ describe("android.app.open", () => {
     expect(fixture.platform.apps.opened).toEqual(["com.spotify.music"]);
   });
 
-  it("refuse un nom de paquet invalide avant tout appel système", async () => {
+  it("rejects invalid package name before any system call", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.app.open", { packageName: "content://settings/secure" }),
@@ -185,7 +175,7 @@ describe("android.app.open", () => {
     expect(fixture.platform.apps.opened).toHaveLength(0);
   });
 
-  it("refuse les réglages du système", async () => {
+  it("rejects system settings", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.app.open", { packageName: "com.android.settings" }),
@@ -194,16 +184,14 @@ describe("android.app.open", () => {
     expect(fixture.platform.apps.opened).toHaveLength(0);
   });
 
-  it("distingue « pas installée » de « refus du système »", async () => {
+  it("distinguishes not installed from system refusal", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.app.open", { packageName: "com.absent.app" }),
     ).rejects.toMatchObject({ code: "ANDROID_APP_NOT_AVAILABLE" });
   });
 
-  it("remonte un refus de lancement en arrière-plan", async () => {
-    // Cas courant depuis Android 10, et systématique sur MIUI sans l'autorisation
-    // « Afficher les fenêtres contextuelles en arrière-plan ».
+  it("reports background launch refusal", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.apps.launchBlocked = true;
     });
@@ -218,37 +206,35 @@ describe("android.app.open", () => {
 });
 
 describe("android.ui.click", () => {
-  it("appuie sur un élément désigné par son texte", async () => {
+  it("taps element designated by text", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.ui.click", {
-      selector: { kind: "text", value: "Rechercher" },
+      selector: { kind: "text", value: "Search" },
     })) as { clicked: boolean };
 
     expect(result.clicked).toBe(true);
     expect(fixture.platform.ui.clicks).toHaveLength(1);
   });
 
-  it("refuse si le service d'accessibilité a été désactivé entre-temps", async () => {
-    // Vérifié à chaque appel, pas seulement au démarrage : l'utilisateur peut
-    // désactiver le service pendant qu'une tâche tourne, et c'est son droit.
+  it("rejects if accessibility was disabled in the meantime", async () => {
     const fixture = await assemble();
     fixture.platform.ui.accessibilityEnabled = false;
 
     await expect(
-      run(fixture, "android.ui.click", { selector: { kind: "text", value: "Rechercher" } }),
+      run(fixture, "android.ui.click", { selector: { kind: "text", value: "Search" } }),
     ).rejects.toMatchObject({ code: "ANDROID_ACCESSIBILITY_DISABLED", retryable: true });
 
     expect(fixture.platform.ui.clicks).toHaveLength(0);
   });
 
-  it("refuse quand l'élément n'est pas à l'écran", async () => {
+  it("rejects when element is not on screen", async () => {
     const fixture = await assemble();
     await expect(
-      run(fixture, "android.ui.click", { selector: { kind: "text", value: "Absent" } }),
+      run(fixture, "android.ui.click", { selector: { kind: "text", value: "Missing" } }),
     ).rejects.toMatchObject({ code: "ANDROID_UI_NODE_NOT_FOUND" });
   });
 
-  it("refuse un clic sur un élément non cliquable", async () => {
+  it("rejects click on non-clickable element", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.ui.click", {
@@ -259,7 +245,7 @@ describe("android.ui.click", () => {
     expect(fixture.platform.ui.clicks).toHaveLength(0);
   });
 
-  it("refuse un clic par coordonnées par défaut", async () => {
+  it("rejects coordinate click by default", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.ui.click", { selector: { kind: "coordinates", x: 540, y: 1200 } }),
@@ -268,7 +254,7 @@ describe("android.ui.click", () => {
     });
   });
 
-  it("accepte les coordonnées quand la configuration les autorise", async () => {
+  it("accepts coordinates when allowed by configuration", async () => {
     const fixture = await assemble({ allowCoordinateClicks: true });
     const result = (await run(fixture, "android.ui.click", {
       selector: { kind: "coordinates", x: 540, y: 1200 },
@@ -277,7 +263,7 @@ describe("android.ui.click", () => {
     expect(result.clicked).toBe(true);
   });
 
-  it("propage l'annulation", async () => {
+  it("propagates cancellation", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.ui.hangUntilAborted = true;
     });
@@ -286,7 +272,7 @@ describe("android.ui.click", () => {
     const pending = run(
       fixture,
       "android.ui.click",
-      { selector: { kind: "text", value: "Rechercher" } },
+      { selector: { kind: "text", value: "Search" } },
       context({ signal: controller.signal }),
     );
 
@@ -296,29 +282,27 @@ describe("android.ui.click", () => {
 });
 
 describe("android.ui.input", () => {
-  it("saisit du texte dans un champ", async () => {
+  it("inputs text into a field", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.ui.input", {
       selector: { kind: "viewId", value: "com.app:id/field" },
-      text: "bonjour",
+      text: "hello",
     })) as { entered: boolean; characters: number };
 
-    expect(result).toEqual({ entered: true, characters: 7 });
+    expect(result).toEqual({ entered: true, characters: 5 });
   });
 
-  it("ne renvoie jamais le texte saisi", async () => {
-    // Le résultat traverse le réseau, entre dans le journal d'exécution du cœur,
-    // et s'affiche sur l'iPhone. C'est le chemin normal d'un mot de passe.
+  it("never returns the entered text", async () => {
     const fixture = await assemble();
     const result = await run(fixture, "android.ui.input", {
       selector: { kind: "viewId", value: "com.app:id/field" },
-      text: "MonMotDePasse2026",
+      text: "MyPassword2026",
     });
 
-    expect(JSON.stringify(result)).not.toContain("MonMotDePasse2026");
+    expect(JSON.stringify(result)).not.toContain("MyPassword2026");
   });
 
-  it("ne place pas le texte dans la progression", async () => {
+  it("does not place text in progress updates", async () => {
     const fixture = await assemble();
     const labels: string[] = [];
 
@@ -334,10 +318,10 @@ describe("android.ui.input", () => {
     );
 
     expect(labels.join(" ")).not.toContain("SecretAbc123");
-    expect(labels.join(" ")).toContain("12 caractères");
+    expect(labels.join(" ")).toContain("12 characters");
   });
 
-  it("refuse une saisie dans un élément non éditable", async () => {
+  it("rejects input into non-editable element", async () => {
     const fixture = await assemble();
     await expect(
       run(fixture, "android.ui.input", {
@@ -347,7 +331,7 @@ describe("android.ui.input", () => {
     ).rejects.toMatchObject({ context: expect.objectContaining({ rule: "ui.nodeNotEditable" }) });
   });
 
-  it("refuse un texte plus long que la limite du schéma", async () => {
+  it("rejects text longer than schema limit", async () => {
     const fixture = await assemble();
     expect(() =>
       fixture.capabilities.validateInput("android.ui.input", {
@@ -357,7 +341,7 @@ describe("android.ui.input", () => {
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("refuse si le service d'accessibilité est désactivé", async () => {
+  it("rejects if accessibility service is disabled", async () => {
     const fixture = await assemble();
     fixture.platform.ui.accessibilityEnabled = false;
 
@@ -373,7 +357,7 @@ describe("android.ui.input", () => {
 });
 
 describe("android.ui.scroll", () => {
-  it("fait défiler dans la direction demandée", async () => {
+  it("scrolls in the requested direction", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.ui.scroll", {
       direction: "down",
@@ -384,21 +368,21 @@ describe("android.ui.scroll", () => {
     expect(fixture.platform.ui.scrolls).toEqual([{ direction: "down", amount: 3 }]);
   });
 
-  it("refuse une direction inconnue", async () => {
+  it("rejects unknown direction", async () => {
     const fixture = await assemble();
     expect(() =>
-      fixture.capabilities.validateInput("android.ui.scroll", { direction: "diagonale" }),
+      fixture.capabilities.validateInput("android.ui.scroll", { direction: "diagonal" }),
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("refuse une amplitude hors limites", async () => {
+  it("rejects out of bounds amount", async () => {
     const fixture = await assemble();
     expect(() =>
       fixture.capabilities.validateInput("android.ui.scroll", { direction: "down", amount: 500 }),
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("refuse si le service d'accessibilité est désactivé", async () => {
+  it("rejects if accessibility service is disabled", async () => {
     const fixture = await assemble();
     fixture.platform.ui.accessibilityEnabled = false;
 
@@ -409,7 +393,7 @@ describe("android.ui.scroll", () => {
 });
 
 describe("android.ui.screenshot", () => {
-  it("capture l'écran à la demande", async () => {
+  it("captures screen on demand", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.ui.screenshot", {})) as {
       image: string;
@@ -420,18 +404,17 @@ describe("android.ui.screenshot", () => {
     expect(fixture.platform.screenshots.captures).toBe(1);
   });
 
-  it("refuse quand la capture est indisponible", async () => {
+  it("rejects when capture is unavailable", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.screenshots.available = false;
     });
 
-    // La capacité n'est même pas annoncée ; l'exiger explicitement échoue aussi.
     expect(() => fixture.capabilities.require("android.ui.screenshot")).toThrow(
       expect.objectContaining({ code: "CAPABILITY_UNAVAILABLE" }),
     );
   });
 
-  it("refuse deux captures trop rapprochées", async () => {
+  it("rejects two captures that are too frequent", async () => {
     const fixture = await assemble({ screenshotMinIntervalMs: 60_000 });
 
     await run(fixture, "android.ui.screenshot", {});
@@ -442,7 +425,7 @@ describe("android.ui.screenshot", () => {
     expect(fixture.platform.screenshots.captures).toBe(1);
   });
 
-  it("refuse une image dépassant la résolution autorisée", async () => {
+  it("rejects image exceeding allowed resolution", async () => {
     const fixture = await assemble({ screenshotMaxDimension: 480 }, (platform) => {
       platform.screenshots.image = { ...platform.screenshots.image, width: 1_080, height: 2_400 };
     });
@@ -452,14 +435,12 @@ describe("android.ui.screenshot", () => {
     });
   });
 
-  it("marque son résultat comme non conservable", async () => {
-    // C'est ce drapeau qui empêche l'image d'entrer dans le journal d'audit du
-    // cœur. Sans lui, une capture d'écran de téléphone y resterait des mois.
+  it("marks result as sensitive", async () => {
     const fixture = await assemble();
     expect(fixture.capabilities.require("android.ui.screenshot").sensitiveResult).toBe(true);
   });
 
-  it("propage l'annulation", async () => {
+  it("propagates cancellation", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.screenshots.hangUntilAborted = true;
     });
@@ -478,27 +459,27 @@ describe("android.ui.screenshot", () => {
 });
 
 describe("android.notification", () => {
-  it("émet une notification", async () => {
+  it("posts a notification", async () => {
     const fixture = await assemble();
     const result = (await run(fixture, "android.notification", {
-      title: "Tests terminés",
-      body: "240 réussis",
+      title: "Tests completed",
+      body: "240 passed",
     })) as { posted: boolean };
 
     expect(result.posted).toBe(true);
     expect(fixture.platform.notifications.posted).toEqual([
-      { title: "Tests terminés", body: "240 réussis" },
+      { title: "Tests completed", body: "240 passed" },
     ]);
   });
 
-  it("refuse une notification malformée", async () => {
+  it("rejects malformed notification", async () => {
     const fixture = await assemble();
     expect(() =>
       fixture.capabilities.validateInput("android.notification", { title: "", body: "x" }),
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("refuse quand la permission a été révoquée entre-temps", async () => {
+  it("rejects when permission was revoked in the meantime", async () => {
     const fixture = await assemble();
     fixture.platform.notifications.allowed = false;
 
@@ -509,7 +490,7 @@ describe("android.notification", () => {
     expect(fixture.platform.notifications.posted).toHaveLength(0);
   });
 
-  it("remonte un échec de la plateforme", async () => {
+  it("reports platform failure", async () => {
     const fixture = await assemble({}, (platform) => {
       platform.notifications.failNext = true;
     });
@@ -518,7 +499,7 @@ describe("android.notification", () => {
   });
 });
 
-describe("santé du téléphone", () => {
+describe("phone health", () => {
   function makeHealth(battery: { percent: number; charging: boolean; powerSaveMode?: boolean }) {
     const platform = makePlatform();
     platform.device.battery = {
@@ -536,46 +517,43 @@ describe("santé du téléphone", () => {
     });
   }
 
-  it("n'est pas dégradé avec une batterie saine", async () => {
+  it("is not degraded with healthy battery", async () => {
     const health = makeHealth({ percent: 80, charging: false });
     await health.refresh();
     expect(health.isDegraded()).toBe(false);
     expect(health.hasCapacity()).toBe(true);
   });
 
-  it("passe dégradé sous le seuil bas", async () => {
+  it("becomes degraded below low battery threshold", async () => {
     const health = makeHealth({ percent: 15, charging: false });
     await health.refresh();
     expect(health.isDegraded()).toBe(true);
-    // Dégradé annonce une capacité réduite : le sélecteur le voit saturé plus
-    // vite, sans qu'il faille lui apprendre ce qu'est une batterie.
     expect(health.snapshot().maxConcurrentTasks).toBe(1);
   });
 
-  it("n'est pas dégradé en charge, même à bas niveau", async () => {
+  it("is not degraded while charging, even at low level", async () => {
     const health = makeHealth({ percent: 5, charging: true });
     await health.refresh();
     expect(health.isDegraded()).toBe(false);
   });
 
-  it("passe dégradé en mode économie d'énergie", async () => {
-    // Android y bride les tâches de fond : les délais deviennent imprévisibles.
+  it("becomes degraded in power save mode", async () => {
     const health = makeHealth({ percent: 90, charging: false, powerSaveMode: true });
     await health.refresh();
     expect(health.isDegraded()).toBe(true);
   });
 
-  it("refuse toute tâche sous le seuil critique", async () => {
+  it("rejects any task below critical threshold", async () => {
     const health = makeHealth({ percent: 8, charging: false });
     await health.refresh();
     expect(health.hasCapacity()).toBe(false);
   });
 
-  it("garde la dernière valeur connue si la lecture échoue", async () => {
+  it("retains last known value if read fails", async () => {
     const platform = makePlatform();
     const health = new AndroidHealthSource({
       device: {
-        batteryState: () => Promise.reject(new Error("indisponible")),
+        batteryState: () => Promise.reject(new Error("unavailable")),
         sdkVersion: () => platform.device.sdkVersion(),
       },
       maxConcurrentTasks: 1,
@@ -583,11 +561,10 @@ describe("santé du téléphone", () => {
     });
 
     await health.refresh();
-    // Une lecture qui échoue ne doit pas faire disparaître le worker du registre.
     expect(health.snapshot().activeTasks).toBe(0);
   });
 
-  it("ne remonte ni position, ni réseau, ni identité", async () => {
+  it("reports neither location, network, nor identity", async () => {
     const health = makeHealth({ percent: 50, charging: false });
     await health.refresh();
 
@@ -600,8 +577,8 @@ describe("santé du téléphone", () => {
   });
 });
 
-describe("surveillance de la disponibilité", () => {
-  it("signale le premier état observé", async () => {
+describe("availability monitoring", () => {
+  it("reports first observed state", async () => {
     const platform = makePlatform();
     const changes: unknown[] = [];
     const watcher = new AvailabilityWatcher({
@@ -616,7 +593,7 @@ describe("surveillance de la disponibilité", () => {
     expect(changes).toHaveLength(1);
   });
 
-  it("ne signale rien quand rien ne change", async () => {
+  it("reports nothing when nothing changes", async () => {
     const platform = makePlatform();
     const watcher = new AvailabilityWatcher({
       platform,
@@ -628,7 +605,7 @@ describe("surveillance de la disponibilité", () => {
     expect(await watcher.check()).toBe(false);
   });
 
-  it("signale la désactivation du service d'accessibilité", async () => {
+  it("reports accessibility service disabling", async () => {
     const platform = makePlatform();
     const changes: { accessibility: boolean }[] = [];
     const watcher = new AvailabilityWatcher({
@@ -646,9 +623,9 @@ describe("surveillance de la disponibilité", () => {
     expect(changes.at(-1)?.accessibility).toBe(false);
   });
 
-  it("traite une sonde en échec comme une indisponibilité", async () => {
+  it("treats failing probe as unavailable", async () => {
     const platform = makePlatform();
-    platform.ui.isAccessibilityEnabled = () => Promise.reject(new Error("pont indisponible"));
+    platform.ui.isAccessibilityEnabled = () => Promise.reject(new Error("bridge unavailable"));
 
     const watcher = new AvailabilityWatcher({
       platform,

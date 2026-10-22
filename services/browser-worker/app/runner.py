@@ -1,9 +1,8 @@
-"""Exécution d'une tâche de navigation.
+"""Execution of browser navigation tasks.
 
-``TaskRunner`` est la frontière avec browser-use. Tout le reste du worker —
-sessions, cycle de vie, politiques, API — ne dépend que de ce protocole, ce qui
-permet de le tester sans navigateur ni modèle. Les vraies frontières externes
-sont ici, et seulement ici.
+``TaskRunner`` forms the abstraction boundary over browser-use. All other worker
+components — sessions, lifecycle, policies, API — depend solely on this protocol,
+enabling isolated unit testing without physical browsers or LLMs.
 """
 
 from __future__ import annotations
@@ -32,8 +31,8 @@ class RunSpec:
     policy: TaskPolicy
     max_steps: int
     timeout_seconds: int
-    #: Identifiants de site. Remis à browser-use en ``sensitive_data`` : le
-    #: modèle voit un marqueur, jamais la valeur.
+    #: Site credentials passed to browser-use as ``sensitive_data``:
+    #: placeholders are presented to the model instead of raw values.
     secrets: dict[str, str] = field(default_factory=dict)
     headless: bool = True
 
@@ -48,7 +47,7 @@ class RunOutcome:
     retryable: bool = False
 
 
-#: Signature d'émission d'un événement : ``(type, payload)``.
+#: Event emission callback: ``(type, payload)``.
 Emit = Callable[[str, dict[str, Any]], None]
 
 
@@ -62,12 +61,11 @@ class TaskRunner(Protocol):
 
 
 class BrowserUseRunner:
-    """Adaptateur browser-use.
+    """browser-use adapter.
 
-    Le seul module du worker qui importe ``browser_use``. L'import est différé
-    au premier usage : le worker démarre — et répond à ``/v1/health`` — même si
-    le navigateur n'est pas installé, ce qui rend le diagnostic possible au lieu
-    de laisser un conteneur en boucle de redémarrage.
+    The sole module importing ``browser_use``. The import is deferred until
+    first invocation so the service boots and answers ``/v1/health`` even if
+    system Chromium is not installed.
     """
 
     def __init__(self, *, model: str, api_key: str | None = None) -> None:
@@ -82,7 +80,7 @@ class BrowserUseRunner:
             try:
                 import browser_use
 
-                self._version = getattr(browser_use, "__version__", "inconnue")
+                self._version = getattr(browser_use, "__version__", "unknown")
             except ImportError:
                 self._version = None
         return self._version
@@ -96,19 +94,16 @@ class BrowserUseRunner:
         return ChatAnthropic(**kwargs)
 
     async def _browser_for(self, spec: RunSpec) -> Any:
-        """Un navigateur par session : aucun état ne fuit d'une tâche à l'autre."""
+        """One isolated browser context per session."""
         existing = self._browsers.get(spec.session_id)
         if existing is not None:
             return existing
 
         from browser_use import Browser, BrowserProfile
 
-        # Les restrictions de domaine vivent sur `BrowserProfile`, PAS sur
-        # `Browser` : les passer au mauvais objet les rendrait silencieusement
-        # inopérantes — le navigateur irait partout en croyant être bridé.
         profile_kwargs: dict[str, Any] = {
             "headless": spec.headless,
-            # Profil éphémère : cookies et stockage disparaissent avec la session.
+            # Ephemeral user profile: cookies and storage disappear with the session.
             "user_data_dir": None,
         }
         if spec.policy.domains.allowed:
@@ -122,18 +117,14 @@ class BrowserUseRunner:
         return browser
 
     def _build_tools(self, spec: RunSpec) -> Any | None:
-        """Retire les actions interdites par l'intention.
-
-        C'est la restriction **effective** : un ``read`` ne dispose pas de
-        l'action « cliquer ». Le prompt n'est que la seconde ligne de défense.
-        """
+        """Strip actions disallowed by task intent."""
         excluded = spec.policy.excluded_actions
         if not excluded:
             return None
         try:
             from browser_use import Tools
-        except ImportError:  # pragma: no cover - dépend de la version installée
-            logger.warning("browser_use.Tools indisponible : restriction par prompt seulement")
+        except ImportError:  # pragma: no cover
+            logger.warning("browser_use.Tools unavailable: falling back to prompt restriction only")
             return None
         return Tools(exclude_actions=excluded)
 
@@ -149,7 +140,7 @@ class BrowserUseRunner:
             return RunOutcome(
                 status=TaskStatus.failed,
                 error_code="BROWSER_WORKER_UNAVAILABLE",
-                error_message=f"browser-use n'est pas installé : {exc}",
+                error_message=f"browser-use is not installed: {exc}",
                 retryable=False,
             )
 
@@ -158,7 +149,7 @@ class BrowserUseRunner:
         steps = 0
 
         async def on_step_end(agent: Any) -> None:
-            """Publie l'avancement de l'étape qui vient de se terminer."""
+            """Emit step progress notification."""
             nonlocal steps
             steps += 1
             emit("progress", {"step": steps, "maxSteps": spec.max_steps, "note": None})
@@ -166,20 +157,13 @@ class BrowserUseRunner:
                 emit(event_type, payload)
 
         async def should_stop() -> bool:
-            """Annulation coopérative, consultée par browser-use entre deux étapes.
-
-            C'est le mécanisme prévu par la bibliothèque : l'agent finit son
-            étape courante puis s'arrête, au lieu d'être interrompu au milieu
-            d'un clic.
-            """
+            """Cooperative cancellation callback."""
             return cancel.is_set()
 
         agent_kwargs: dict[str, Any] = {
             "task": spec.policy.prompt(spec.instructions),
             "llm": llm,
             "browser": browser,
-            # `max_steps` appartient à `run()`, pas au constructeur : `Agent`
-            # accepte des kwargs libres et l'avalerait sans effet.
             "task_id": spec.task_id,
             "register_should_stop_callback": should_stop,
             "step_timeout": min(spec.timeout_seconds, 120),
@@ -187,7 +171,6 @@ class BrowserUseRunner:
         if tools is not None:
             agent_kwargs["tools"] = tools
         if spec.secrets:
-            # browser-use substitue ces valeurs sans jamais les envoyer au modèle.
             agent_kwargs["sensitive_data"] = dict(spec.secrets)
 
         agent = Agent(**_supported_kwargs(Agent, agent_kwargs))
@@ -202,7 +185,7 @@ class BrowserUseRunner:
                 status=TaskStatus.timeout,
                 steps=steps,
                 error_code="BROWSER_TASK_TIMEOUT",
-                error_message=f"La tâche a dépassé {spec.timeout_seconds} s.",
+                error_message=f"Task exceeded {spec.timeout_seconds}s timeout.",
                 retryable=True,
             )
         except DomainBlocked as exc:
@@ -213,7 +196,7 @@ class BrowserUseRunner:
                 error_message=str(exc),
             )
         except Exception as exc:
-            logger.exception("échec de la tâche %s", spec.task_id)
+            logger.exception("task failed %s", spec.task_id)
             return RunOutcome(
                 status=TaskStatus.failed,
                 steps=steps,
@@ -228,20 +211,18 @@ class BrowserUseRunner:
         output = redact_text(_extract_output(history), tuple(spec.secrets.values()))
         duration = time.monotonic() - started
         logger.info(
-            "tâche terminée task_id=%s steps=%s duration=%.2fs", spec.task_id, steps, duration
+            "task finished task_id=%s steps=%s duration=%.2fs", spec.task_id, steps, duration
         )
 
         if needs_human_intervention(output):
-            # Une protection humaine n'est ni contournée ni traitée comme un
-            # échec : on rend la main à l'utilisateur.
             return RunOutcome(
                 status=TaskStatus.needs_human,
                 output=output,
                 steps=steps,
                 error_code="BROWSER_HUMAN_INTERVENTION_REQUIRED",
                 error_message=(
-                    "Le site demande une vérification humaine (CAPTCHA ou "
-                    "authentification à deux facteurs). Je ne la contourne pas."
+                    "The site requires human verification (CAPTCHA or "
+                    "two-factor authentication). Autonomous bypass is prohibited."
                 ),
             )
 
@@ -260,16 +241,12 @@ class BrowserUseRunner:
                         await result
                     return
                 except Exception:
-                    logger.warning("fermeture du navigateur %s en échec", session_id)
+                    logger.warning("browser shutdown failed for %s", session_id)
                     return
 
 
 async def _run_agent(agent: Any, max_steps: int, on_step_end: Any) -> Any:
-    """Appelle ``agent.run`` en ne passant que les arguments qu'il accepte.
-
-    L'API de browser-use évolue vite. Plutôt que d'épingler une signature qui
-    cassera à la prochaine version, on inspecte celle qui est installée.
-    """
+    """Call ``agent.run`` with supported arguments."""
     kwargs = _supported_kwargs(agent.run, {"max_steps": max_steps, "on_step_end": on_step_end})
     return await agent.run(**kwargs)
 
@@ -277,7 +254,7 @@ async def _run_agent(agent: Any, max_steps: int, on_step_end: Any) -> Any:
 def _supported_kwargs(target: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     try:
         signature = inspect.signature(target)
-    except (TypeError, ValueError):  # pragma: no cover - objets non introspectables
+    except (TypeError, ValueError):  # pragma: no cover
         return kwargs
 
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
@@ -286,16 +263,12 @@ def _supported_kwargs(target: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     accepted = set(signature.parameters)
     dropped = sorted(set(kwargs) - accepted)
     if dropped:
-        logger.debug("arguments ignorés par %s : %s", getattr(target, "__name__", target), dropped)
+        logger.debug("arguments ignored by %s: %s", getattr(target, "__name__", target), dropped)
     return {key: value for key, value in kwargs.items() if key in accepted}
 
 
 def _describe_step(agent: Any) -> list[tuple[str, dict[str, Any]]]:
-    """Traduit l'état interne de browser-use en événements du contrat.
-
-    Défensif par construction : l'introspection d'une bibliothèque tierce ne doit
-    jamais interrompre une tâche qui, par ailleurs, se déroule bien.
-    """
+    """Map browser-use step state to protocol event payloads."""
     events: list[tuple[str, dict[str, Any]]] = []
     try:
         state = getattr(agent, "state", None)
@@ -321,19 +294,19 @@ def _describe_step(agent: Any) -> list[tuple[str, dict[str, Any]]]:
             if names:
                 events.append(("action", {"action": str(names[-1]), "target": None}))
     except Exception:
-        logger.debug("introspection d'étape impossible", exc_info=True)
+        logger.debug("step introspection failed", exc_info=True)
     return events
 
 
 def _extract_output(history: Any) -> str:
-    """Récupère le résultat final, quelle que soit la forme de l'historique."""
+    """Extract final text output from execution history."""
     for attr in ("final_result", "extracted_content"):
         getter = getattr(history, attr, None)
         if callable(getter):
             try:
                 value = getter()
             except Exception:
-                logger.debug("lecture de history.%s impossible", attr, exc_info=True)
+                logger.debug("reading history.%s failed", attr, exc_info=True)
                 continue
             if isinstance(value, str) and value.strip():
                 return value

@@ -5,42 +5,33 @@ import type { NexusNative, NexusProvisioningNative } from "../src/bridge/native-
 import type { AndroidWorker } from "../src/worker.js";
 import { provisionAndroidWorker } from "../src/provisioning.js";
 import { WorkerScreen } from "./WorkerScreen.js";
-import reglages from "../nexus.config.json";
+import settings from "../nexus.config.json";
 
 /**
- * Racine de l'application worker.
- *
- * Elle fait trois choses : lire les réglages, démarrer le worker, afficher son
- * état. Elle n'exécute aucune capacité et ne parle jamais au cœur — c'est
- * `WorkerRuntime` qui le fait, depuis `startAndroidWorker`.
- *
- * **Le démarrage a lieu une seule fois**, gardé par une référence plutôt que par
- * l'état : en mode strict de React, un effet est joué deux fois, et deux workers
- * ouvriraient deux sessions pour le même appareil. Le cœur en fermerait une, et
- * le téléphone passerait son temps à se reconnecter.
+ * Root of worker application.
  */
 export function App() {
-  const demarrage = useRef(false);
+  const startup = useRef(false);
   const [worker, setWorker] = useState<AndroidWorker | null>(null);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [configuration, setConfiguration] = useState<Record<string, string> | null | undefined>();
   const [pairingPayload, setPairingPayload] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
 
-  const natif = NativeModules.NexusWorker as (NexusNative & NexusProvisioningNative) | undefined;
+  const native = NativeModules.NexusWorker as (NexusNative & NexusProvisioningNative) | undefined;
 
   useEffect(() => {
-    if (natif === undefined) {
-      setErreur(
-        "Le module natif NexusWorker est introuvable. L'application n'a pas été construite avec NexusWorkerPackage.",
+    if (native === undefined) {
+      setError(
+        "NexusWorker native module not found. The app was not built with NexusWorkerPackage.",
       );
       return;
     }
 
-    void natif
+    void native
       .loadProvisioning()
       .then((persisted) => {
-        const bundled = reglages as Record<string, string>;
+        const bundled = settings as Record<string, string>;
         if (persisted !== null) {
           setConfiguration({
             ...bundled,
@@ -54,20 +45,17 @@ export function App() {
         }
       })
       .catch((cause: unknown) =>
-        setErreur(cause instanceof Error ? cause.message : "Configuration Android illisible."),
+        setError(cause instanceof Error ? cause.message : "Unreadable Android configuration."),
       );
-  }, [natif]);
+  }, [native]);
 
   useEffect(() => {
-    if (natif === undefined || configuration === undefined || configuration === null) return;
-    if (demarrage.current) return;
-    demarrage.current = true;
+    if (native === undefined || configuration === undefined || configuration === null) return;
+    if (startup.current) return;
+    startup.current = true;
 
     const env = { ...configuration };
 
-    // En développement, on réutilise l'hôte de Metro (10.0.2.2 sur émulateur,
-    // localhost sur téléphone via adb reverse). En production, la valeur
-    // dans nexus.config.json est conservée telle quelle.
     if (__DEV__) {
       const scriptURL = NativeModules.SourceCode?.scriptURL as string | undefined;
       if (scriptURL) {
@@ -81,58 +69,56 @@ export function App() {
             );
           }
         } catch (e) {
-          console.error("NEXUS_BACKEND_URL: Erreur lors de la résolution dynamique de l'hôte", e);
+          console.error("NEXUS_BACKEND_URL: Error resolving dynamic host", e);
         }
       } else {
-        console.warn("NEXUS_BACKEND_URL: Impossible de trouver l'URL Metro (scriptURL vide)");
+        console.warn("NEXUS_BACKEND_URL: Unable to find Metro URL (empty scriptURL)");
       }
     }
 
-    void startAndroidWorker({ native: natif, env })
-      .then(({ worker: demarre }) => {
-        setWorker(demarre);
+    void startAndroidWorker({ native, env })
+      .then(({ worker: started }) => {
+        setWorker(started);
       })
       .catch((cause: unknown) => {
-        // Le message d'une `WorkerConfigurationError` énumère les variables
-        // fautives. Il ne contient aucune valeur, et donc aucun secret.
-        setErreur(cause instanceof Error ? cause.message : String(cause));
+        setError(cause instanceof Error ? cause.message : String(cause));
       });
-  }, [configuration, natif]);
+  }, [configuration, native]);
 
   const pair = (): void => {
-    if (natif === undefined) return;
+    if (native === undefined) return;
     setPairingBusy(true);
-    setErreur(null);
+    setError(null);
     void provisionAndroidWorker({
       payload: pairingPayload,
       name: "Android Worker",
       keyAlias: "nexus.device.key",
-      native: natif,
+      native,
     })
       .then((persisted) => {
         setConfiguration({
-          ...(reglages as Record<string, string>),
+          ...(settings as Record<string, string>),
           NEXUS_BACKEND_URL: persisted.apiUrl,
           DEVICE_ID: persisted.deviceId,
         });
       })
       .catch((cause: unknown) =>
-        setErreur(cause instanceof Error ? cause.message : "Appairage impossible."),
+        setError(cause instanceof Error ? cause.message : "Pairing failed."),
       )
       .finally(() => setPairingBusy(false));
   };
 
-  if (erreur !== null) {
+  if (error !== null) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <Text style={styles.title}>NEXUS Worker</Text>
-        <Text style={styles.error}>{erreur}</Text>
+        <Text style={styles.error}>{error}</Text>
         <Text style={styles.muted}>
-          Vérifiez le lien puis créez un nouveau code depuis NEXUS → Appareils si celui-ci a expiré.
+          Verify the link then generate a new code from NEXUS → Devices if this one has expired.
         </Text>
         {configuration === null ? (
-          <Pressable style={styles.button} onPress={() => setErreur(null)}>
-            <Text style={styles.buttonText}>Réessayer</Text>
+          <Pressable style={styles.button} onPress={() => setError(null)}>
+            <Text style={styles.buttonText}>Retry</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -142,10 +128,10 @@ export function App() {
   if (configuration === null) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Ajouter ce téléphone</Text>
+        <Text style={styles.title}>Add this phone</Text>
         <Text style={styles.muted}>
-          Dans le dashboard NEXUS, ouvre Appareils, crée un code puis copie le lien Android ici. Il
-          expire après cinq minutes et ne contient aucun mot de passe.
+          In the NEXUS dashboard, open Devices, create a code, then paste the Android link here. It
+          expires after 5 minutes and contains no password.
         </Text>
         <TextInput
           style={styles.input}
@@ -162,10 +148,10 @@ export function App() {
           disabled={pairingBusy || pairingPayload.trim().length === 0}
           onPress={pair}
         >
-          <Text style={styles.buttonText}>{pairingBusy ? "Appairage…" : "Appairer"}</Text>
+          <Text style={styles.buttonText}>{pairingBusy ? "Pairing…" : "Pair"}</Text>
         </Pressable>
         <Text style={styles.muted}>
-          La clé privée est créée dans Android Keystore et ne quitte jamais ce téléphone.
+          The private key is created in Android Keystore and never leaves this phone.
         </Text>
       </ScrollView>
     );
@@ -175,7 +161,7 @@ export function App() {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <Text style={styles.title}>NEXUS Worker</Text>
-        <Text style={styles.muted}>Démarrage…</Text>
+        <Text style={styles.muted}>Starting…</Text>
       </ScrollView>
     );
   }

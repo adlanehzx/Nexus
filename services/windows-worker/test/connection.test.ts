@@ -10,18 +10,11 @@ import { testConfig, FakeProcessRunner, FakeFileSystem, TestTimers } from "./fix
 import type { WorkerConnection } from "@nexus/devices";
 
 /**
- * Authentification, session, reprise.
- *
- * Le point que ces tests défendent : **un identifiant d'appareil n'authentifie
- * rien**. Il est public — il apparaît dans l'interface, dans les journaux, dans
- * les événements. Tout ce qui suit repose sur une signature.
- *
- * La poignée de main est jouée en entier, avec de vraies clés Ed25519 et le
- * vrai `DeviceSessionService` du cœur. Seul le transport est en mémoire.
+ * Authentication, session lifecycle, and reconnection.
  */
 
-describe("authentification du worker", () => {
-  it("ouvre une session sur un challenge correctement signé", async () => {
+describe("worker authentication", () => {
+  it("opens a session upon correctly signed challenge", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -33,11 +26,10 @@ describe("authentification du worker", () => {
     expect(device.status).toBe("ONLINE");
   });
 
-  it("refuse un worker dont la signature est invalide", async () => {
+  it("rejects worker with invalid signature", async () => {
     const harness = await makeHarness();
-    // Le worker signe avec une autre clé que celle enregistrée pour l'appareil.
-    const autres = generateDeviceKeys();
-    harness.credentials.set(harness.device.id, autres.publicKeyPem);
+    const others = generateDeviceKeys();
+    harness.credentials.set(harness.device.id, others.publicKeyPem);
 
     await harness.worker.start().catch(() => undefined);
     await settle();
@@ -47,7 +39,7 @@ describe("authentification du worker", () => {
     expect(device.authenticated).toBe(false);
   });
 
-  it("refuse un appareil sans clé publique enregistrée", async () => {
+  it("rejects device without registered public key", async () => {
     const harness = await makeHarness();
     harness.credentials.revoke(harness.device.id);
 
@@ -57,9 +49,7 @@ describe("authentification du worker", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse un appareil pas encore approuvé", async () => {
-    // Un appareil fraîchement appairé est PENDING : il peut se connecter, il
-    // n'obtient pas de session tant qu'un humain ne l'a pas approuvé.
+  it("rejects device not yet approved", async () => {
     const harness = await makeHarness({ trusted: false });
 
     await harness.worker.start().catch(() => undefined);
@@ -68,7 +58,7 @@ describe("authentification du worker", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse un appareil révoqué", async () => {
+  it("rejects revoked device", async () => {
     const harness = await makeHarness();
     await harness.registry.revokeDevice(harness.device.id);
 
@@ -78,11 +68,10 @@ describe("authentification du worker", () => {
     expect(harness.worker.isAuthenticated).toBe(false);
   });
 
-  it("refuse le rejeu d'une trame d'authentification", async () => {
+  it("rejects replay of authentication envelope", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    // On rejoue telle quelle la trame d'authentification déjà envoyée.
     const authenticate = harness.link.sent.find(
       (envelope) => envelope.type === "worker.authenticate",
     );
@@ -100,7 +89,7 @@ describe("authentification du worker", () => {
     });
   });
 
-  it("invalide la session dès que l'appareil est révoqué", async () => {
+  it("invalidates session once device is revoked", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -114,29 +103,28 @@ describe("authentification du worker", () => {
     expect(device.authenticated).toBe(false);
   });
 
-  it("borne les capacités négociées à celles que l'appareil déclare", async () => {
+  it("caps negotiated capabilities to declared capabilities", async () => {
     const harness = await makeHarness({ config: { declaredCapabilities: ["git.status"] } });
     await harness.connectWorker();
 
     expect(harness.worker.grantedCapabilities).toEqual(["git.status"]);
   });
 
-  it("n'écrit jamais le jeton de session dans le journal", async () => {
+  it("never logs session token", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
     const sessionEnvelope = harness.link.sent.find((e) => e.type === "worker.authenticate");
     expect(sessionEnvelope).toBeDefined();
 
-    // Le jeton n'apparaît que dans la trame `worker.session`, jamais ailleurs.
     const token = (harness.worker.describe().sessionId as string | null) ?? "";
     expect(harness.logger.text).not.toContain("token");
     expect(harness.logger.text).toContain(token);
   });
 });
 
-describe("enregistrement des capacités", () => {
-  it("enregistre les capacités auprès du registre du cœur", async () => {
+describe("capability registration", () => {
+  it("registers capabilities with core registry", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -148,7 +136,7 @@ describe("enregistrement des capacités", () => {
     );
   });
 
-  it("n'enregistre pas une capacité dont l'outil est absent", async () => {
+  it("does not register capability whose tool is missing", async () => {
     const harness = await makeHarness({
       seed: ({ runner }) => {
         runner.missing.add("docker");
@@ -163,7 +151,7 @@ describe("enregistrement des capacités", () => {
     expect(names).toContain("git.status");
   });
 
-  it("n'enregistre que les capacités autorisées localement", async () => {
+  it("only registers locally allowed capabilities", async () => {
     const harness = await makeHarness({
       config: { declaredCapabilities: ["filesystem.read", "git.status"] },
     });
@@ -173,7 +161,7 @@ describe("enregistrement des capacités", () => {
     expect(device.capabilities.map((c) => c.name)).toEqual(["filesystem.read", "git.status"]);
   });
 
-  it("remonte la santé au cœur", async () => {
+  it("reports health to core", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -183,8 +171,8 @@ describe("enregistrement des capacités", () => {
   });
 });
 
-describe("battement de cœur", () => {
-  it("met à jour la présence de l'appareil", async () => {
+describe("heartbeat", () => {
+  it("updates device presence", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -197,7 +185,7 @@ describe("battement de cœur", () => {
     expect(after.status).toBe("ONLINE");
   });
 
-  it("est refusé s'il est rejoué", async () => {
+  it("rejects replayed heartbeat", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
     await harness.worker.sendHeartbeat();
@@ -216,17 +204,16 @@ describe("battement de cœur", () => {
     });
   });
 
-  it("est programmé après l'enregistrement", async () => {
+  it("is scheduled after registration", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    // Une minuterie est en attente : celle du prochain battement.
     expect(harness.timers.delays).toContain(20_000);
   });
 });
 
-describe("attente exponentielle", () => {
-  it("croît puis plafonne", () => {
+describe("exponential backoff", () => {
+  it("grows and caps at maximum", () => {
     const backoff = new Backoff({ minMs: 1_000, maxMs: 10_000, jitter: 0, random: () => 0.5 });
 
     expect(backoff.next()).toBe(1_000);
@@ -237,18 +224,16 @@ describe("attente exponentielle", () => {
     expect(backoff.next()).toBe(10_000);
   });
 
-  it("disperse les tentatives", () => {
-    // Sans bruit, tous les workers d'un utilisateur reconnectent à la même
-    // milliseconde et refont tomber le cœur au moment où il redémarre.
-    const bas = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0.5, random: () => 0 });
-    const haut = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0.5, random: () => 1 });
+  it("scatters retry attempts with jitter", () => {
+    const low = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0.5, random: () => 0 });
+    const high = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0.5, random: () => 1 });
 
-    bas.next();
-    haut.next();
-    expect(bas.next()).toBeLessThan(haut.next());
+    low.next();
+    high.next();
+    expect(low.next()).toBeLessThan(high.next());
   });
 
-  it("ne descend jamais sous le minimum ni au-dessus du plafond", () => {
+  it("never strays below minimum or above ceiling", () => {
     const backoff = new Backoff({ minMs: 1_000, maxMs: 5_000, jitter: 0.9, random: () => 0 });
     for (let index = 0; index < 10; index += 1) {
       const delay = backoff.next();
@@ -257,7 +242,7 @@ describe("attente exponentielle", () => {
     }
   });
 
-  it("repart à zéro après une connexion établie", () => {
+  it("resets to base delay after successful connection", () => {
     const backoff = new Backoff({ minMs: 1_000, maxMs: 60_000, jitter: 0, random: () => 0.5 });
     backoff.next();
     backoff.next();
@@ -266,12 +251,12 @@ describe("attente exponentielle", () => {
   });
 });
 
-describe("coupure et reprise", () => {
-  it("programme une reconnexion après une coupure", async () => {
+describe("disconnection and recovery", () => {
+  it("schedules reconnection following link drop", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.drop("réseau coupé");
+    harness.link.drop("network cut");
     await settle();
 
     expect(harness.worker.state).toBe("reconnecting");
@@ -279,13 +264,11 @@ describe("coupure et reprise", () => {
     expect(harness.timers.delays.some((delay) => delay >= 1_000)).toBe(true);
   });
 
-  it("refait la poignée de main complète, sans réutiliser l'ancien jeton", async () => {
-    // Une session dont on ne sait pas si elle est encore valide n'est pas une
-    // session : on resigne un challenge neuf.
+  it("performs full handshake without reusing stale token", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.drop("réseau coupé");
+    harness.link.drop("network cut");
     await settle();
 
     const before = harness.link.sent.filter((e) => e.type === "worker.hello").length;
@@ -296,7 +279,7 @@ describe("coupure et reprise", () => {
     expect(after).toBeGreaterThan(before);
   });
 
-  it("réessaie après un échec de connexion, sans tempête", async () => {
+  it("retries upon connection failure without storms", async () => {
     const harness = await makeHarness();
     harness.link.failNextConnect = true;
 
@@ -304,26 +287,25 @@ describe("coupure et reprise", () => {
     await settle();
 
     expect(harness.worker.state).toBe("reconnecting");
-    // Une seule reconnexion programmée, pas une par tentative accumulée.
     expect(harness.timers.pending.size).toBe(1);
   });
 
-  it("ne programme pas deux reconnexions pour deux coupures rapprochées", async () => {
+  it("does not schedule duplicate reconnections for rapid drops", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    harness.link.drop("coupure 1");
-    harness.link.drop("coupure 2");
+    harness.link.drop("outage 1");
+    harness.link.drop("outage 2");
     await settle();
 
     expect(harness.timers.pending.size).toBe(1);
   });
 
-  it("libère les étapes en vol côté cœur quand le worker disparaît", async () => {
+  it("releases in-flight steps in core when worker disconnects", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    await harness.gateway.detach(harness.device.id, "câble débranché");
+    await harness.gateway.detach(harness.device.id, "cable unplugged");
 
     const device = await harness.registry.requireDevice(harness.device.id);
     expect(device.status).toBe("OFFLINE");
@@ -331,8 +313,8 @@ describe("coupure et reprise", () => {
   });
 });
 
-describe("arrêt propre", () => {
-  it("ferme le canal et oublie la session", async () => {
+describe("clean shutdown", () => {
+  it("closes channel and clears session", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -343,7 +325,7 @@ describe("arrêt propre", () => {
     expect(harness.link.state).toBe("closed");
   });
 
-  it("annule les minuteries et ne reconnecte pas", async () => {
+  it("cancels timers and does not reconnect", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -355,40 +337,32 @@ describe("arrêt propre", () => {
   });
 });
 
-describe("architecture : un seul worker, deux machines", () => {
-  /**
-   * Le test qui compte le plus de ce lot.
-   *
-   * La même classe, la même configuration de code, le même assemblage —
-   * enregistrés une fois en `BOTH` (le portable, qui est aussi un client) et une
-   * fois en `WORKER` (le poste fixe, machine d'exécution). Rien dans le worker
-   * ne lit ce rôle : il vient du registre, côté cœur.
-   */
+describe("architecture: single worker implementation, two machines", () => {
   async function connectAs(role: "BOTH" | "WORKER", deviceId: string, name: string) {
     const harness = await makeHarness({ role, deviceName: name, config: { deviceId } });
     await harness.connectWorker();
     return harness;
   }
 
-  it("s'enregistre en BOTH sur le portable", async () => {
-    const harness = await connectAs("BOTH", "device-portable", "Portable Windows");
+  it("registers as BOTH on the laptop", async () => {
+    const harness = await connectAs("BOTH", "device-portable", "Windows Laptop");
     const device = await harness.registry.requireDevice("device-portable");
 
     expect(device.role).toBe("BOTH");
     expect(harness.worker.state).toBe("ready");
   });
 
-  it("s'enregistre en WORKER sur le poste fixe", async () => {
-    const harness = await connectAs("WORKER", "device-poste-fixe", "Poste fixe");
+  it("registers as WORKER on the desktop PC", async () => {
+    const harness = await connectAs("WORKER", "device-poste-fixe", "Desktop PC");
     const device = await harness.registry.requireDevice("device-poste-fixe");
 
     expect(device.role).toBe("WORKER");
     expect(harness.worker.state).toBe("ready");
   });
 
-  it("annonce exactement les mêmes capacités dans les deux rôles", async () => {
-    const portable = await connectAs("BOTH", "device-portable", "Portable Windows");
-    const fixe = await connectAs("WORKER", "device-poste-fixe", "Poste fixe");
+  it("announces identical capabilities in both roles", async () => {
+    const portable = await connectAs("BOTH", "device-portable", "Windows Laptop");
+    const fixe = await connectAs("WORKER", "device-poste-fixe", "Desktop PC");
 
     const capabilitiesOf = async (harness: typeof portable, id: string) =>
       (await harness.registry.requireDevice(id)).capabilities.map((c) => c.name);
@@ -398,39 +372,35 @@ describe("architecture : un seul worker, deux machines", () => {
     );
   });
 
-  it("ne contient aucune décision fondée sur le nom de la machine", async () => {
-    // Deux noms radicalement différents, comportement identique : c'est ce qui
-    // garantit qu'ajouter une quatrième machine est une écriture en base, pas
-    // une modification du worker.
-    const a = await connectAs("WORKER", "device-a", "Poste fixe du salon");
+  it("contains no decisions based on machine hostname", async () => {
+    const a = await connectAs("WORKER", "device-a", "Living room desktop");
     const b = await connectAs("WORKER", "device-b", "ZZZ-9000");
 
     expect(a.worker.grantedCapabilities).toEqual(b.worker.grantedCapabilities);
     expect(a.worker.state).toBe(b.worker.state);
   });
 
-  it("seul le rôle décide qui peut recevoir une tâche", async () => {
-    const portable = await connectAs("BOTH", "device-portable", "Portable");
+  it("role determines task assignment eligibility", async () => {
+    const portable = await connectAs("BOTH", "device-portable", "Laptop");
 
     const workers = await portable.registry.getWorkerDevices(USER_ID);
     const clients = await portable.registry.getClientDevices(USER_ID);
 
-    // Le portable est dans les deux listes ; l'iPhone n'est que client.
     expect(workers.map((d) => d.id)).toContain("device-portable");
     expect(clients.map((d) => d.id)).toContain("device-portable");
     expect(workers.map((d) => d.id)).not.toContain("device-iphone");
   });
 });
 
-describe("garde-fous du canal", () => {
-  it("ignore une trame d'un type inconnu au lieu de tomber", async () => {
+describe("channel safeguards", () => {
+  it("ignores frame with unknown type instead of crashing", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
     harness.link.deliver({
       v: 1,
       id: "x",
-      type: "worker.telepathie",
+      type: "worker.telepathy",
       ts: new Date().toISOString(),
       payload: {},
     });
@@ -439,10 +409,7 @@ describe("garde-fous du canal", () => {
     expect(harness.worker.state).toBe("ready");
   });
 
-  it("refuse d'exécuter un ordre reçu avant l'ouverture de session", async () => {
-    // Le cœur ne dispatche que vers un worker authentifié. Mais un worker qui
-    // exécuterait sur simple réception ferait reposer toute la sécurité sur le
-    // bon comportement de l'autre bout.
+  it("refuses to execute task dispatched before session establishment", async () => {
     const runner = new FakeProcessRunner();
     const config = testConfig();
     const { capabilities } = assembleCapabilities({

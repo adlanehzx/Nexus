@@ -1,4 +1,4 @@
-"""Politiques : intentions, domaines, protections humaines."""
+"""Policies: intents, domains, and human intervention safeguards."""
 
 from __future__ import annotations
 
@@ -18,8 +18,6 @@ from app.policies import (
 class TestIntentRestrictions:
     def test_read_cannot_click_or_type(self) -> None:
         excluded = excluded_actions(Intent.read)
-        # Restriction EFFECTIVE : ces actions ne sont pas remises à browser-use,
-        # le modèle ne peut donc pas les appeler.
         assert "click" in excluded
         assert "input" in excluded
         assert "send_keys" in excluded
@@ -30,8 +28,6 @@ class TestIntentRestrictions:
         assert "input" not in excluded
 
     def test_javascript_is_never_available(self) -> None:
-        # `evaluate` exécute du JS arbitraire : elle contournerait toute
-        # restriction posée au niveau de l'interface.
         for intent in Intent:
             assert "evaluate" in excluded_actions(intent)
 
@@ -46,8 +42,6 @@ class TestIntentRestrictions:
         assert len(excluded_actions(Intent.read)) > len(excluded_actions(Intent.interact))
 
     def test_renamed_action_is_reported(self) -> None:
-        # Une action renommée en amont ferait sauter une restriction en silence.
-        # C'est arrivé pendant le développement : ce garde-fou l'a rattrapé.
         stale = verify_action_names({"click", "input"})
         assert "evaluate" in stale
         assert "click" not in stale
@@ -62,17 +56,16 @@ class TestIntentRestrictions:
 class TestPrompt:
     @pytest.mark.parametrize("intent", list(Intent))
     def test_safety_rules_come_first(self, intent: Intent) -> None:
-        prompt = build_prompt(intent, "Achète le billet")
-        assert prompt.index("CAPTCHA") < prompt.index("Achète le billet")
-        assert "authentification à deux facteurs" in prompt
-        # Le contenu des pages est une donnée, jamais une instruction.
-        assert "DONNÉE" in prompt
+        prompt = build_prompt(intent, "Buy the ticket")
+        assert prompt.index("CAPTCHA") < prompt.index("Buy the ticket")
+        assert "two-factor authentication" in prompt
+        assert "DATA" in prompt
 
     def test_read_prompt_forbids_interaction(self) -> None:
-        assert "LECTURE SEULE" in build_prompt(Intent.read, "x")
+        assert "READ ONLY" in build_prompt(Intent.read, "x")
 
     def test_purchase_prompt_requires_amount(self) -> None:
-        assert "montant exact" in build_prompt(Intent.purchase, "x")
+        assert "exact amount" in build_prompt(Intent.purchase, "x")
 
 
 class TestDomains:
@@ -89,19 +82,19 @@ class TestDomains:
                 policy.check(url)
 
     def test_allows_public_hosts(self) -> None:
-        DomainPolicy().check("https://exemple.test/page")
+        DomainPolicy().check("https://example.com/page")
 
     def test_allowlist_excludes_everything_else(self) -> None:
-        policy = DomainPolicy(allowed=("exemple.test", "*.vols.test"))
-        policy.check("https://exemple.test/a")
-        policy.check("https://www.vols.test/b")
+        policy = DomainPolicy(allowed=("example.com", "*.flights.test"))
+        policy.check("https://example.com/a")
+        policy.check("https://www.flights.test/b")
         with pytest.raises(DomainBlocked):
-            policy.check("https://autre.test/c")
+            policy.check("https://other.test/c")
 
     def test_denylist_wins_over_allowlist(self) -> None:
-        policy = DomainPolicy(allowed=("*.test",), prohibited=("interdit.test",))
+        policy = DomainPolicy(allowed=("*.test",), prohibited=("forbidden.test",))
         with pytest.raises(DomainBlocked):
-            policy.check("https://interdit.test/x")
+            policy.check("https://forbidden.test/x")
 
     def test_private_hosts_allowed_only_when_asked(self) -> None:
         DomainPolicy(allow_private_hosts=True).check("http://127.0.0.1:8999/")
@@ -111,12 +104,12 @@ class TestHumanIntervention:
     @pytest.mark.parametrize(
         "text",
         [
-            "Le site affiche un CAPTCHA",
+            "The site displays a CAPTCHA",
             "Please complete the reCAPTCHA",
-            "Un code de vérification a été envoyé",
+            "A verification code was sent",
             "Enter your one-time code",
             "Two-factor authentication required",
-            "Cochez « je ne suis pas un robot »",
+            "Check 'I am not a robot'",
             "Open your authenticator app",
         ],
     )
@@ -125,19 +118,18 @@ class TestHumanIntervention:
 
     @pytest.mark.parametrize(
         "text",
-        ["Le billet coûte 42 euros", "Vol Paris-Alger vendredi 20h15", ""],
+        ["The ticket costs 42 dollars", "Flight Paris-Algiers Friday 8:15pm", ""],
     )
     def test_ignores_ordinary_results(self, text: str) -> None:
         assert not needs_human_intervention(text)
 
-
     def test_blocks_ip_bypasses(self) -> None:
         policy = DomainPolicy()
         for url in (
-            "http://2130706433/",        # Decimal 127.0.0.1
-            "http://0177.0.0.1/",        # Octal bypass
-            "http://[::ffff:127.0.0.1]/",# IPv6 mapped
-            "http://[::1]/",             # IPv6 localhost
+            "http://2130706433/",
+            "http://0177.0.0.1/",
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::1]/",
         ):
             with pytest.raises(DomainBlocked, match="IP"):
                 policy.check(url)

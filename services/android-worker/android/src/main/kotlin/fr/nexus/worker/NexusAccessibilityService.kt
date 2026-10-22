@@ -13,33 +13,16 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
- * Service d'accessibilité NEXUS.
+ * NEXUS Accessibility Service.
  *
- * C'est le seul mécanisme légitime d'Android pour agir sur l'interface d'une
- * autre application, et il ne peut être activé que par l'utilisateur, depuis
- * Réglages → Accessibilité. Aucune API ne permet de l'activer par programme, et
- * ce service ne cherche pas à contourner cette règle.
- *
- * Trois principes tenus dans tout ce fichier :
- *
- *  1. **Rien n'est collecté.** `onAccessibilityEvent` ne fait rien. Le service
- *     ne lit la hiérarchie de vues qu'au moment où une tâche le demande, agit,
- *     et n'en conserve aucune trace.
- *  2. **Rien n'est enregistré en continu.** La capture est ponctuelle, sur
- *     appel, et l'API utilisée ne permet structurellement pas un flux vidéo.
- *  3. **Aucune décision n'est prise ici.** La validation, les politiques et les
- *     permissions ont déjà été appliquées côté TypeScript, dans du code
- *     testable. Ce service exécute ce qu'on lui demande, ou échoue.
+ * This is Android's legitimate mechanism to interact with the UI of another
+ * application, enabled only by the user in Settings → Accessibility.
  */
 class NexusAccessibilityService : AccessibilityService() {
 
     companion object {
         /**
-         * Instance courante, ou `null` si l'utilisateur n'a pas activé le service.
-         *
-         * C'est cette référence que consulte `isAccessibilityEnabled()` : elle
-         * dit l'état réel, ici et maintenant, et non ce qui était vrai au
-         * démarrage.
+         * Current instance, or `null` if the user has not enabled the service.
          */
         @Volatile
         var instance: NexusAccessibilityService? = null
@@ -63,24 +46,16 @@ class NexusAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Aucun traitement.
-     *
-     * Le service est déclaré sur `typeWindowStateChanged` uniquement, et n'en
-     * fait rien : il n'observe pas ce que l'utilisateur fait. Le corps vide
-     * n'est pas un oubli — c'est la garantie qu'aucune donnée d'interface n'est
-     * collectée en dehors d'une tâche explicite.
+     * No background collection.
      */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
     override fun onInterrupt() = Unit
 
-    // ── Recherche d'éléments ────────────────────────────────────────────────
+    // ── Element Search ──────────────────────────────────────────────────────
 
     /**
-     * Résout un sélecteur en nœud de l'écran actif.
-     *
-     * Renvoie `null` si rien ne correspond — cas parfaitement ordinaire quand
-     * l'écran a changé entre la décision et l'action.
+     * Resolves a selector to a node in the active window.
      */
     fun findNode(selector: UiSelector): AccessibilityNodeInfo? {
         val root = rootInActiveWindow ?: return null
@@ -96,9 +71,6 @@ class NexusAccessibilityService : AccessibilityService() {
 
             is UiSelector.ContentDescription -> findByContentDescription(root, selector.value)
 
-            // Un appui par coordonnées ne passe par aucun nœud : c'est
-            // précisément ce qui le rend risqué, et pourquoi la politique le
-            // refuse par défaut.
             is UiSelector.Coordinates -> null
         }
     }
@@ -116,7 +88,7 @@ class NexusAccessibilityService : AccessibilityService() {
         return null
     }
 
-    /** Décrit un nœud pour le côté TypeScript, sans rien conserver. */
+    /** Describes a node for TypeScript without retaining any reference. */
     fun describe(node: AccessibilityNodeInfo): Map<String, Any?> {
         val bounds = android.graphics.Rect().also { node.getBoundsInScreen(it) }
 
@@ -140,11 +112,7 @@ class NexusAccessibilityService : AccessibilityService() {
     // ── Actions ─────────────────────────────────────────────────────────────
 
     /**
-     * Appuie sur un élément.
-     *
-     * Remonte au premier ancêtre cliquable si le nœud trouvé ne l'est pas
-     * lui-même : un libellé à l'intérieur d'un bouton est le cas le plus
-     * courant. La politique a déjà vérifié que la cible accepte un clic.
+     * Taps an element.
      */
     fun performClick(selector: UiSelector): Boolean {
         if (selector is UiSelector.Coordinates) {
@@ -160,14 +128,7 @@ class NexusAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Saisit du texte dans un champ.
-     *
-     * `ACTION_SET_TEXT` remplace le contenu au lieu de simuler des frappes :
-     * c'est plus fiable, et surtout cela ne passe pas par le clavier, donc le
-     * texte n'est pas soumis à la correction automatique ni enregistré dans le
-     * dictionnaire personnel de l'utilisateur.
-     *
-     * **Le texte n'est jamais journalisé ici, ni ailleurs.**
+     * Inputs text into a field.
      */
     fun performInput(selector: UiSelector, text: String): Boolean {
         var node = findNode(selector) ?: return false
@@ -182,12 +143,7 @@ class NexusAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Fait défiler l'écran.
-     *
-     * On privilégie l'action d'accessibilité d'un conteneur défilant, qui
-     * respecte la sémantique de l'application. Le geste tactile n'est utilisé
-     * qu'à défaut, et pour les directions horizontales que l'action ne couvre
-     * pas toujours.
+     * Scrolls the screen.
      */
     fun performScroll(direction: String, amount: Int): Boolean {
         val root = rootInActiveWindow ?: return false
@@ -219,7 +175,7 @@ class NexusAccessibilityService : AccessibilityService() {
         return null
     }
 
-    // ── Gestes ──────────────────────────────────────────────────────────────
+    // ── Gestures ────────────────────────────────────────────────────────────
 
     private fun dispatchTap(x: Float, y: Float): Boolean {
         val path = Path().apply { moveTo(x, y) }
@@ -259,19 +215,10 @@ class NexusAccessibilityService : AccessibilityService() {
         return dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
     }
 
-    // ── Capture d'écran ─────────────────────────────────────────────────────
+    // ── Screenshots ─────────────────────────────────────────────────────────
 
     /**
-     * Capture l'écran, une fois.
-     *
-     * `takeScreenshot()` (Android 11+) est le mécanisme de **moindre privilège** :
-     * aucune permission au-delà du service d'accessibilité déjà activé, aucun
-     * dialogue système supplémentaire, aucun jeton persistant — et surtout, une
-     * image par appel. `MediaProjection` ouvrirait un flux vidéo continu là où
-     * une image suffit.
-     *
-     * L'image est redimensionnée et encodée en mémoire ; **aucun fichier n'est
-     * écrit**. Le bitmap est recyclé immédiatement après l'encodage.
+     * Captures screen on demand.
      */
     suspend fun takeScreenshotBase64(maxDimension: Int): NexusScreenshot? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
@@ -282,23 +229,17 @@ class NexusAccessibilityService : AccessibilityService() {
                 screenshotExecutor,
                 object : TakeScreenshotCallback {
                     override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                        // Le système rend un tampon MATÉRIEL, pas une image. Il est
-                        // refermé dès la copie faite : un `HardwareBuffer` laissé
-                        // ouvert retient de la mémoire graphique que le ramasse-
-                        // miettes ne libère pas.
                         val buffer = screenshot.hardwareBuffer
-                        val materiel = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
+                        val hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                         buffer.close()
 
-                        if (materiel == null) {
+                        if (hardwareBitmap == null) {
                             continuation.resume(null)
                             return
                         }
 
-                        // Copie logicielle : un bitmap matériel ne peut être ni
-                        // redimensionné ni relu pixel par pixel.
-                        val bitmap = materiel.copy(Bitmap.Config.ARGB_8888, false)
-                        materiel.recycle()
+                        val bitmap = hardwareBitmap.copy(Bitmap.Config.ARGB_8888, false)
+                        hardwareBitmap.recycle()
 
                         if (bitmap == null) {
                             continuation.resume(null)
@@ -308,8 +249,6 @@ class NexusAccessibilityService : AccessibilityService() {
                         val scaled = downscale(bitmap, maxDimension)
                         val encoded = encodePng(scaled)
 
-                        // Les tampons sont libérés tout de suite : une image
-                        // d'écran retenue en mémoire est une fuite qui dure.
                         if (scaled !== bitmap) scaled.recycle()
                         bitmap.recycle()
 
@@ -353,12 +292,7 @@ class NexusAccessibilityService : AccessibilityService() {
 }
 
 /**
- * Résultat d'une capture. Vit en mémoire, n'est jamais écrit sur disque.
- *
- * Le préfixe `Nexus` n'est pas cosmétique : `AccessibilityService` déclare son
- * propre type imbriqué `ScreenshotResult`, celui que le rappel système reçoit.
- * Deux types du même nom rendaient le nôtre inatteignable depuis l'intérieur du
- * service, où le type imbriqué l'emporte.
+ * Screenshot result kept in memory, never written to disk.
  */
 data class NexusScreenshot(
     val base64: String,
@@ -369,11 +303,7 @@ data class NexusScreenshot(
 )
 
 /**
- * Sélecteur d'élément d'interface.
- *
- * Miroir exact du type `UiSelector` côté TypeScript. L'ordre de préférence est
- * le même : identifiant de vue, puis texte, puis description, et les coordonnées
- * en dernier recours seulement.
+ * UI element selector.
  */
 sealed interface UiSelector {
     data class ViewId(val value: String) : UiSelector
@@ -382,7 +312,7 @@ sealed interface UiSelector {
     data class Coordinates(val x: Int, val y: Int) : UiSelector
 
     companion object {
-        /** Décode le JSON produit par `native-bridge.ts`. */
+        /** Decodes JSON produced by `native-bridge.ts`. */
         fun fromJson(json: String): UiSelector? {
             val obj = org.json.JSONObject(json)
             return when (obj.optString("kind")) {

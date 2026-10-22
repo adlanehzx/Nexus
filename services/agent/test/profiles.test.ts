@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadProfile } from "../src/profiles.js";
 
-describe("registre ACP NEXUS", () => {
-  it("charge uniquement un profil structuré et développe HOME", async () => {
+describe("NEXUS ACP registry", () => {
+  it("loads only a structured profile and expands HOME", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-acp-"));
     const registry = join(directory, "profiles.json");
     await writeFile(
@@ -15,7 +15,7 @@ describe("registre ACP NEXUS", () => {
           claude: {
             command: "${HOME}/bin/claude",
             args: ["--cwd", "${HOME}/work"],
-            system_prompt: "Relis avant de répondre.",
+            system_prompt: "Review before replying.",
             reasoning_effort: "high",
             additional_dirs: ["${HOME}/shared"],
             config_options: { mode: "review" },
@@ -30,12 +30,12 @@ describe("registre ACP NEXUS", () => {
     expect(profile.command).toMatch(/\/bin\/claude$/);
     expect(profile.args[1]).toMatch(/\/work$/);
     expect(profile.additional_dirs[0]).toMatch(/\/shared$/);
-    expect(profile.system_prompt).toBe("Relis avant de répondre.");
+    expect(profile.system_prompt).toBe("Review before replying.");
     expect(profile.reasoning_effort).toBe("high");
     expect(profile.config_options).toEqual({ mode: "review" });
   });
 
-  it("refuse une clé de profil inconnue", async () => {
+  it("rejects an unknown profile key", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-acp-"));
     const registry = join(directory, "profiles.json");
     await writeFile(registry, '{"profiles":{}}', { mode: 0o600 });
@@ -43,7 +43,7 @@ describe("registre ACP NEXUS", () => {
     await expect(loadProfile(registry, "missing")).rejects.toThrow("unknown_profile");
   });
 
-  it("gère l'isolation de session_dir et les variables d'environnement", async () => {
+  it("handles session_dir isolation and environment variables", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-acp-"));
     const registry = join(directory, "profiles.json");
     await writeFile(

@@ -5,18 +5,14 @@ import { SessionPool } from "./runtime/session-pool.js";
 import { createBrowseCapabilities } from "./capabilities/browse.js";
 
 /**
- * Assemblage de l'exécutant navigateur.
+ * Assemble the browser worker host.
  *
- * Un seul endroit relie le client HTTP, le pool de sessions et les capacités.
- * Le reste du code ne construit rien : il reçoit ce dont il a besoin. C'est ce
- * qui permet aux tests de remplacer le worker Python par un double et
- * d'éprouver toute la chaîne — validation, session, progression, annulation,
- * erreurs — sans navigateur, sans Chromium et sans clé de modèle.
+ * Connects the HTTP client, session pool, and capabilities in a single location.
  */
 
 export interface AssembleOptions {
   config: BrowserHostConfig;
-  /** Injecté par les tests. En service, construit depuis la configuration. */
+  /** Injected by tests. In production, constructed from config. */
   client?: BrowserWorkerClient;
 }
 
@@ -42,9 +38,7 @@ export function assembleBrowserHost(options: AssembleOptions): AssembledBrowserH
     prohibitedDomains: config.prohibitedDomains,
     ttlSeconds: config.sessionTtlSeconds,
     headless: config.headless,
-    // Le propriétaire vu par le worker Python est l'appareil, pas l'humain :
-    // le registre du cœur lie déjà cet appareil à un utilisateur, et le nom de
-    // l'utilisateur n'a rien à faire dans un service qui visite des sites tiers.
+    // The owner reported to the Python worker is the device ID.
     ownerId: config.deviceId,
   });
 

@@ -14,16 +14,9 @@ import { createScreenshotCapability } from "./capabilities/screenshot.js";
 import { createNotificationCapability } from "./capabilities/notification.js";
 
 /**
- * Assemblage du worker Android.
+ * Assembly of the Android worker.
  *
- * Un seul endroit relie les politiques, les ports système et les capacités. Le
- * reste du code ne construit rien : il reçoit ce dont il a besoin. C'est ce qui
- * permet aux tests de remplacer les quatre ports Android et d'éprouver toute la
- * chaîne — validation, politique, délais, annulation, rédaction — sans
- * émulateur, sans APK, et sans toucher au téléphone.
- *
- * Rien ici ne dépend du modèle de téléphone. Le Redmi Note 10S passe par ces
- * mêmes lignes qu'un autre appareil Android.
+ * Single point wiring policies, system ports, and capabilities.
  */
 
 export interface AssembleOptions {

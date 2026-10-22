@@ -1,7 +1,7 @@
-"""Journalisation structurée.
+"""Structured logging.
 
-Un log est un événement, pas une phrase. Le filtre de rédaction est installé sur
-le gestionnaire racine : rien ne s'écrit sans passer par lui.
+A log entry is an event, not a sentence. The redacting filter is installed on the
+root handler: nothing is output without passing through it.
 """
 
 from __future__ import annotations
@@ -41,5 +41,5 @@ def configure_logging(level: str = "INFO") -> None:
     root.addHandler(handler)
     root.setLevel(level.upper())
 
-    # browser-use est bavard : son détail n'a pas sa place dans nos journaux.
+    # browser-use is verbose: silence internal debug output.
     logging.getLogger("browser_use").setLevel(logging.WARNING)

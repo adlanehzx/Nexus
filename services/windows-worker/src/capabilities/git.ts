@@ -7,29 +7,17 @@ import type { ProcessRunner } from "../runtime/process-runner.js";
 import { assertProcessSucceeded } from "../runtime/process-runner.js";
 
 /**
- * Capacités Git.
+ * Git capabilities.
  *
- * Sept capacités distinctes plutôt qu'un `git.execute` unique. La différence
- * n'est pas cosmétique : elle est ce qui permet à l'utilisateur d'accorder
- * `git.status` sans accorder `git.checkout`, et au cœur d'exiger une
- * confirmation pour l'une et pas pour l'autre.
- *
- * Un `git.execute` générique rendrait tout cela impossible — il faudrait
- * inspecter les arguments pour deviner l'intention, c'est-à-dire réintroduire
- * l'analyse de chaînes que ce worker refuse partout ailleurs.
- *
- * Les niveaux de risque viennent de `GitPolicy` et alimentent `PermissionService`
- * et `ConfirmationService` du cœur. Le worker déclare ; le cœur tranche.
+ * Dedicated capabilities per operation: status, diff, branch, pull, checkout, commit, clone.
  */
 
 const repositorySchema = z.object({
-  /** Dépôt local, sous une racine autorisée. */
   repositoryPath: z.string().min(1).max(4_096),
 });
 
 export const gitStatusInputSchema = repositorySchema;
 export const gitDiffInputSchema = repositorySchema.extend({
-  /** Limité aux fichiers indexés si vrai. */
   staged: z.boolean().default(false),
   path: z.string().max(4_096).optional(),
 });
@@ -38,26 +26,18 @@ export const gitPullInputSchema = repositorySchema.extend({
   remote: z.string().max(128).default("origin"),
 });
 export const gitCheckoutInputSchema = repositorySchema.extend({
-  /**
-   * Branche existante. Pas de création implicite : trop facile à confondre.
-   *
-   * Le nom ne peut pas commencer par « - » : Git relirait `--orphan` ou
-   * `--force` comme une option, et l'argument cesserait d'être un argument.
-   */
   branch: z
     .string()
     .min(1)
     .max(255)
-    .regex(/^[A-Za-z0-9_][A-Za-z0-9._\-/]*$/, "nom de branche invalide"),
+    .regex(/^[A-Za-z0-9_][A-Za-z0-9._\-/]*$/, "invalid branch name"),
 });
 export const gitCommitInputSchema = repositorySchema.extend({
   message: z.string().min(1).max(4_096),
-  /** Indexe tout le suivi avant de valider. */
   all: z.boolean().default(false),
 });
 export const gitCloneInputSchema = z.object({
   url: z.string().min(1).max(2_048),
-  /** Dossier de destination, sous une racine autorisée. */
   destination: z.string().min(1).max(4_096),
   depth: z.number().int().min(1).max(1_000).optional(),
 });
@@ -78,15 +58,6 @@ export interface GitDependencies {
   defaultTimeoutMs: number;
 }
 
-/**
- * Environnement d'un appel Git.
- *
- * `GIT_TERMINAL_PROMPT=0` est essentiel : sans lui, un dépôt privé fait attendre
- * Git sur une invite de mot de passe que personne ne verra jamais, et l'étape
- * expire au bout de cinq minutes au lieu d'échouer tout de suite.
- *
- * `GIT_ASKPASS` vide ferme la seconde porte : l'invite graphique.
- */
 function gitEnv(env: Record<string, string | undefined>): Record<string, string> {
   const passthrough: Record<string, string> = {};
   for (const name of ["PATH", "SYSTEMROOT", "TEMP", "TMP", "HOME", "USERPROFILE"]) {
@@ -115,8 +86,6 @@ async function runGit(
 
   assertProcessSucceeded(`git.${operation}`, outcome);
 
-  // Une URL de dépôt contenant un jeton (`https://x-token:ghp_…@github.com/…`)
-  // est recopiée telle quelle par Git dans ses messages d'erreur.
   return {
     operation,
     exitCode: outcome.exitCode,
@@ -128,7 +97,7 @@ async function runGit(
 
 const repositoryJsonSchema = {
   type: "object",
-  properties: { repositoryPath: { type: "string", description: "Chemin du dépôt local" } },
+  properties: { repositoryPath: { type: "string", description: "Path to local repository" } },
   required: ["repositoryPath"],
 } as const;
 
@@ -186,7 +155,7 @@ export function createGitCapabilities(
   const capabilities = [
     makeRepositoryCapability({
       operation: "status",
-      description: "Affiche l'état d'un dépôt Git local.",
+      description: "Displays the status of a local Git repository.",
       inputSchema: gitStatusInputSchema,
       argsFor: () => ["status", "--porcelain=v1", "--branch"],
       dependencies,
@@ -194,22 +163,20 @@ export function createGitCapabilities(
 
     makeRepositoryCapability({
       operation: "diff",
-      description: "Affiche les modifications d'un dépôt Git local.",
+      description: "Displays changes in a local Git repository.",
       inputSchema: gitDiffInputSchema,
       inputJsonSchema: {
         type: "object",
         properties: {
           repositoryPath: { type: "string" },
-          staged: { type: "boolean", description: "Limiter aux fichiers indexés" },
-          path: { type: "string", description: "Restreindre à un chemin" },
+          staged: { type: "boolean", description: "Limit to staged files" },
+          path: { type: "string", description: "Restrict to path" },
         },
         required: ["repositoryPath"],
       },
       argsFor: (input) => [
         "diff",
         ...(input.staged ? ["--staged"] : []),
-        // `--` ferme la liste des options : un chemin nommé `--upload-pack=…`
-        // ne peut plus être relu comme une option de Git.
         ...(input.path === undefined ? [] : ["--", input.path]),
       ],
       dependencies,
@@ -217,7 +184,7 @@ export function createGitCapabilities(
 
     makeRepositoryCapability({
       operation: "branch",
-      description: "Liste les branches d'un dépôt Git local.",
+      description: "Lists branches of a local Git repository.",
       inputSchema: gitBranchInputSchema,
       argsFor: () => ["branch", "--list", "--all", "--no-color"],
       dependencies,
@@ -225,13 +192,13 @@ export function createGitCapabilities(
 
     makeRepositoryCapability({
       operation: "pull",
-      description: "Récupère et fusionne les modifications distantes d'un dépôt Git local.",
+      description: "Fetches and merges remote changes into a local Git repository.",
       inputSchema: gitPullInputSchema,
       inputJsonSchema: {
         type: "object",
         properties: {
           repositoryPath: { type: "string" },
-          remote: { type: "string", description: "Dépôt distant, par défaut « origin »" },
+          remote: { type: "string", description: 'Remote name, defaults to "origin"' },
         },
         required: ["repositoryPath"],
       },
@@ -241,32 +208,30 @@ export function createGitCapabilities(
 
     makeRepositoryCapability({
       operation: "checkout",
-      description: "Bascule un dépôt Git local sur une branche existante.",
+      description: "Switches a local Git repository to an existing branch.",
       inputSchema: gitCheckoutInputSchema,
       inputJsonSchema: {
         type: "object",
         properties: {
           repositoryPath: { type: "string" },
-          branch: { type: "string", description: "Branche existante" },
+          branch: { type: "string", description: "Existing branch" },
         },
         required: ["repositoryPath", "branch"],
       },
-      // Le « -- » final ferme la liste des options après la branche : Git ne
-      // peut plus relire quoi que ce soit comme un drapeau.
       argsFor: (input) => ["checkout", input.branch, "--"],
       dependencies,
     }),
 
     makeRepositoryCapability({
       operation: "commit",
-      description: "Enregistre une révision dans un dépôt Git local.",
+      description: "Records a revision in a local Git repository.",
       inputSchema: gitCommitInputSchema,
       inputJsonSchema: {
         type: "object",
         properties: {
           repositoryPath: { type: "string" },
-          message: { type: "string", description: "Message de révision" },
-          all: { type: "boolean", description: "Indexer les fichiers suivis modifiés" },
+          message: { type: "string", description: "Commit message" },
+          all: { type: "boolean", description: "Stage all modified tracked files" },
         },
         required: ["repositoryPath", "message"],
       },
@@ -280,26 +245,19 @@ export function createGitCapabilities(
   return capabilities as unknown as LocalCapability<never, unknown>[];
 }
 
-/**
- * `git.clone` — le seul qui parle à l'extérieur.
- *
- * Deux vérifications que les autres n'ont pas : l'hôte du dépôt doit être
- * autorisé, et la destination doit tomber sous une racine autorisée. Sans la
- * seconde, un clone écrirait où bon lui semble.
- */
 function createGitCloneCapability(
   dependencies: GitDependencies,
 ): LocalCapability<z.infer<typeof gitCloneInputSchema>, GitResult> {
   return {
     name: "git.clone",
-    description: "Clone un dépôt Git distant autorisé dans un dossier autorisé.",
+    description: "Clones an allowed remote Git repository into an allowed folder.",
     inputSchema: gitCloneInputSchema,
     inputJsonSchema: {
       type: "object",
       properties: {
-        url: { type: "string", description: "Adresse du dépôt" },
-        destination: { type: "string", description: "Dossier de destination" },
-        depth: { type: "number", description: "Profondeur d'historique" },
+        url: { type: "string", description: "Repository address" },
+        destination: { type: "string", description: "Destination folder" },
+        depth: { type: "number", description: "History depth" },
       },
       required: ["url", "destination"],
     },

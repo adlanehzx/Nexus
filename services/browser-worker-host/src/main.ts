@@ -5,35 +5,11 @@ import { CoreLink, FileCredentialSigner } from "./connection/link.js";
 import { BrowserWorkerHost, WORKER_VERSION } from "./worker.js";
 
 /**
- * Point d'entrée de l'exécutant navigateur.
- *
- * Même forme que `main.ts` du démon Windows et de l'application Android :
- * configuration, capacités, canal, signature, démarrage. C'est voulu — trois
- * exécutants, un seul cycle de vie.
- *
- * ## Ce que ce processus est
- *
- * Un **hôte**, pas un navigateur. Il ne connaît ni `browser-use` ni Chromium :
- * il traduit des capacités NEXUS en appels au worker Python, qui tourne à côté
- * (ADR-006). Le séparer garde trois propriétés : un Chromium qui plante ne
- * fait pas tomber la session avec le cœur, la mémoire du navigateur est
- * cloisonnée, et le processus qui visite du contenu hostile ne détient pas la
- * clé de l'appareil.
- *
- * ## Ce qu'il n'est pas
- *
- * Il n'écoute sur aucun port. Il n'accepte aucune connexion entrante. Il ne
- * décide d'aucune permission : le cœur autorise, le worker Python restreint les
- * actions, et cet hôte transporte.
+ * Entry point for the browser worker host daemon.
  */
 
 export interface StartOptions {
-  /**
-   * Canal vers le cœur.
-   *
-   * Fourni par les tests, qui branchent une boucle locale sur une vraie
-   * `WorkerGateway`. Absent en service : l'hôte ouvre sa WebSocket sortante.
-   */
+  /** Core link transport. Injected by tests, defaults to outbound WebSocket. */
   link?: WorkerLink;
   env?: Record<string, string | undefined>;
   logger?: WorkerLogger;
@@ -46,12 +22,9 @@ export interface StartedBrowserHost {
 }
 
 /**
- * Construit et démarre l'hôte.
+ * Construct and start the browser worker host.
  *
- * @throws {WorkerConfigurationError} si la configuration est incomplète. On
- *   refuse de démarrer plutôt que de s'annoncer sans savoir joindre le
- *   navigateur : le sélecteur choisirait cet exécutant, et chaque étape
- *   échouerait après avoir écarté quelqu'un qui aurait su faire.
+ * @throws {WorkerConfigurationError} if configuration is incomplete.
  */
 export async function startBrowserWorkerHost(
   options: StartOptions = {},
@@ -65,9 +38,7 @@ export async function startBrowserWorkerHost(
 
   const { capabilities, client, sessions } = assembleBrowserHost({ config });
 
-  // `describeConfig` ne rend que des noms et des présences : ni le jeton du
-  // worker Python, ni le chemin de la clé de l'appareil n'y figurent.
-  logger.info("configuration chargée", describeConfig(config));
+  logger.info("configuration loaded", describeConfig(config));
 
   const link = options.link ?? new CoreLink({ backendUrl: config.backendUrl });
 
@@ -86,11 +57,7 @@ export async function startBrowserWorkerHost(
 }
 
 /**
- * Démarre l'hôte et l'arrête proprement sur signal.
- *
- * Un arrêt brutal laisserait deux traces : le cœur attendrait des résultats qui
- * n'arriveront jamais, et des Chromium resteraient ouverts jusqu'à expiration
- * de leur TTL. On annule, on remonte les échecs, on ferme les navigateurs.
+ * Start host and wire graceful shutdown on OS process signals.
  */
 export async function runBrowserWorkerHost(options: StartOptions = {}): Promise<void> {
   const { host, logger } = await startBrowserWorkerHost(options);
@@ -103,7 +70,7 @@ export async function runBrowserWorkerHost(options: StartOptions = {}): Promise<
     void host
       .stop(`signal ${signal}`)
       .catch((cause: unknown) => {
-        logger.error("arrêt incomplet", {
+        logger.error("shutdown incomplete", {
           cause: cause instanceof Error ? cause.message : String(cause),
         });
       })

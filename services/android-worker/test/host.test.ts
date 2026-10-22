@@ -4,21 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * L'hôte Android — le Kotlin qui porte le worker.
- *
- * Ces vérifications portent sur des **propriétés d'architecture**, pas sur des
- * comportements : « le service de premier plan n'est pas un exécutant parallèle »
- * ne se démontre pas en l'appelant, mais en constatant que rien ne peut s'y lier
- * et qu'aucun chemin ne mène d'un récepteur de diffusion à une capacité.
- *
- * Elles s'écrivent donc sur le source. C'est le même parti que `security.test.ts`
- * prend déjà pour le manifeste, et pour la même raison : une absence se prouve
- * en lisant tout, pas en essayant une fois.
- *
- * **Ce que ces tests ne prouvent pas** : que le Kotlin se comporte comme prévu
- * sur un téléphone. Ils prouvent qu'il ne contient pas ce qu'il ne doit pas
- * contenir. Le comportement, lui, s'observe sur appareil — le README en tient la
- * liste.
+ * Android host — Kotlin scaffolding for worker.
  */
 
 const ROOT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -28,7 +14,7 @@ function kotlin(name: string): string {
   return readFileSync(path.join(KOTLIN, `${name}.kt`), "utf8");
 }
 
-/** Retire les commentaires : on juge le code, pas ce qu'il dit de lui-même. */
+/** Strips comments: tests inspect code, not comments. */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 }
@@ -41,14 +27,11 @@ function manifest(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Les classes déclarées au manifeste existent
+// Declared manifest classes exist
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("cohérence du manifeste", () => {
-  it("chaque classe déclarée existe réellement", () => {
-    // Un manifeste qui nomme une classe absente produit un APK qui ne s'installe
-    // pas — et l'erreur n'apparaît qu'au moment de l'installation, loin de la
-    // cause. Ce test la rapproche.
+describe("manifest consistency", () => {
+  it("each declared class actually exists", () => {
     const declared = [...manifest().matchAll(/android:name="\.([A-Za-z0-9_]+)"/g)].map(
       (match) => match[1]!,
     );
@@ -56,52 +39,40 @@ describe("cohérence du manifeste", () => {
     expect(declared.length).toBeGreaterThan(0);
 
     for (const name of declared) {
-      expect(existsSync(path.join(KOTLIN, `${name}.kt`)), `${name}.kt manquant`).toBe(true);
+      expect(existsSync(path.join(KOTLIN, `${name}.kt`)), `${name}.kt missing`).toBe(true);
     }
   });
 
-  it("le projet Gradle existe et déclare l'espace de noms hors du manifeste", () => {
-    // Depuis le greffon Android 8, `package=` au manifeste est une erreur de
-    // compilation : l'espace de noms appartient au fichier de construction.
+  it("Gradle project exists and declares namespace outside manifest", () => {
     const build = readFileSync(path.join(ROOT, "android", "app", "build.gradle.kts"), "utf8");
 
     expect(build).toContain('namespace = "fr.nexus.worker"');
     expect(manifest()).not.toContain("package=");
   });
 
-  it("ne demande pas la permission de dessiner par-dessus les autres applications", () => {
-    // React Native l'ajoute à la variante de débogage, pour son menu de
-    // développement. Combinée au service d'accessibilité, elle permettrait de
-    // superposer une fenêtre pendant qu'un appui est simulé — le montage exact
-    // d'une attaque par superposition. Le manifeste la retire explicitement.
+  it("does not request permission to draw over other applications", () => {
     expect(manifest()).toContain('android:name="android.permission.SYSTEM_ALERT_WINDOW"');
     expect(manifest()).toContain('tools:node="remove"');
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Le service de premier plan n'est pas un second exécutant
+// Foreground service is not a second executor
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("service de premier plan", () => {
-  it("n'expose aucun canal de liaison", () => {
-    // La propriété structurelle : `onBind` renvoie `null`, donc rien — ni une
-    // application tierce, ni notre propre code — ne peut s'y attacher pour lui
-    // envoyer un ordre.
+describe("foreground service", () => {
+  it("exposes no binding channel", () => {
     const source = stripComments(kotlin("WorkerForegroundService"));
     expect(source).toMatch(/override fun onBind\([^)]*\): IBinder\? = null/);
   });
 
-  it("n'est pas exporté", () => {
+  it("is not exported", () => {
     expect(manifest()).toMatch(
       /<service[\s\S]{0,200}android:name="\.WorkerForegroundService"[\s\S]{0,200}android:exported="false"/,
     );
   });
 
-  it("n'exécute aucune capacité", () => {
-    // Le point de l'architecture : le service gère un cycle de vie. Le chemin
-    // vers une capacité part du cœur et passe par `WorkerRuntime` — il ne part
-    // jamais d'ici.
+  it("executes no capabilities", () => {
     const source = stripComments(kotlin("WorkerForegroundService"));
 
     expect(source).not.toMatch(/CapabilityRegistry|executeCapability|performClick|takeScreenshot/);
@@ -109,9 +80,7 @@ describe("service de premier plan", () => {
     expect(source).not.toMatch(/Runtime\.getRuntime|ProcessBuilder|exec\(/);
   });
 
-  it("ne reconnaît que démarrer et arrêter", () => {
-    // Deux actions, et aucun champ à lire dans l'intention : il n'y a pas de
-    // « commande » transportable. Une intention inconnue est ignorée.
+  it("recognizes only start and stop", () => {
     const source = stripComments(kotlin("WorkerForegroundService"));
 
     const actions = [...source.matchAll(/const val ACTION_[A-Z_]+ =/g)];
@@ -120,31 +89,23 @@ describe("service de premier plan", () => {
     expect(source).not.toMatch(/getStringExtra|getBundleExtra|getSerializableExtra/);
   });
 
-  it("n'affiche aucun contenu de tâche dans sa notification", () => {
-    // Une notification permanente s'affiche sur un écran verrouillé. Un titre
-    // de tâche peut contenir un nom, une adresse, un fichier.
+  it("displays no task content in its notification", () => {
     const source = stripComments(kotlin("WorkerForegroundService"));
     expect(source).toContain("VISIBILITY_SECRET");
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Le récepteur de démarrage
+// Boot receiver
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("récepteur de démarrage", () => {
-  it("vérifie l'action reçue", () => {
-    // `BOOT_COMPLETED` est une diffusion protégée, mais un récepteur exporté
-    // reçoit ce qu'on lui envoie et ne doit pas agir sur une intention qu'il
-    // n'attendait pas.
+describe("boot receiver", () => {
+  it("checks received action", () => {
     const source = stripComments(kotlin("BootReceiver"));
     expect(source).toContain("intent.action != Intent.ACTION_BOOT_COMPLETED");
   });
 
-  it("ne fait que démarrer le service", () => {
-    // Une capacité exécutée depuis ici tournerait hors de toute session : sans
-    // authentification, sans autorisation, sans tâche. Un redémarrage du
-    // téléphone deviendrait un déclencheur d'action.
+  it("only starts the service", () => {
     const source = stripComments(kotlin("BootReceiver"));
 
     expect(source).toContain("WorkerForegroundService.start");
@@ -153,105 +114,77 @@ describe("récepteur de démarrage", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// L'enregistrement du module natif
+// Native module registration
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("surface native", () => {
-  it("n'enregistre qu'un seul module", () => {
-    // Ce fichier est le point exact où le JavaScript se voit accorder l'accès au
-    // système. La liste tient en une ligne, et c'est la propriété qu'on garde.
+describe("native surface", () => {
+  it("registers only one module", () => {
     const source = stripComments(kotlin("NexusWorkerPackage"));
 
     expect(source).toContain("listOf(NexusWorkerModule(reactContext))");
     expect(source).toContain("emptyList()");
   });
 
-  it("n'utilise pas l'autolinking", () => {
-    // Une bibliothèque native introduite par transitivité n'est pas un détail
-    // sur un appareil qui détient un service d'accessibilité : la liste des
-    // paquets est écrite à la main pour qu'aucune ne s'y ajoute sans revue.
+  it("does not use autolinking", () => {
     const application = stripComments(kotlin("NexusWorkerApplication"));
 
-    // Deux paquets, nommés : ceux de React Native, et le nôtre.
     expect(application).toContain("MainReactPackage()");
     expect(application).toContain("NexusWorkerPackage()");
 
-    // `PackageList` est la classe générée par l'autolinking. Son absence est la
-    // propriété qu'on garde : rien ne peut s'ajouter à la liste sans qu'on
-    // l'écrive.
     expect(application).not.toContain("PackageList");
 
     const build = readFileSync(path.join(ROOT, "android", "app", "build.gradle.kts"), "utf8");
     expect(build).not.toContain("autolinkLibrariesWithApp");
   });
 
-  it("l'activité n'exécute aucune capacité", () => {
+  it("activity executes no capabilities", () => {
     const source = stripComments(kotlin("WorkerActivity"));
     expect(source).not.toMatch(/NexusAccessibilityService|NexusWorkerModule|openApp|performClick/);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Aucun secret dans les fichiers de construction
+// No secrets versioned in build files
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("aucun secret versionné", () => {
+describe("no secrets versioned", () => {
   const gradle = () =>
     [
       path.join(ROOT, "android", "app", "build.gradle.kts"),
       path.join(ROOT, "android", "build.gradle.kts"),
       path.join(ROOT, "android", "settings.gradle.kts"),
       path.join(ROOT, "android", "gradle.properties"),
-    ].map((fichier) => ({ fichier, contenu: readFileSync(fichier, "utf8") }));
+    ].map((file) => ({ file, content: readFileSync(file, "utf8") }));
 
-  it("aucune valeur de signature en littéral", () => {
-    // La version précédente interdisait les **identifiants**
-    // (`storePassword`, `keyPassword`, `storeFile`). C'était trop large : signer
-    // une publication exige de nommer ces propriétés Gradle, et la règle
-    // interdisait donc la seule façon correcte de signer en même temps que la
-    // mauvaise.
-    //
-    // Ce qui doit être interdit est la **valeur** : un mot de passe ou un chemin
-    // de keystore écrit en clair dans un fichier versionné. Lire
-    // `System.getenv(...)` est au contraire exactement ce qu'on veut.
-    for (const { fichier, contenu } of gradle()) {
-      expect(contenu, fichier).not.toMatch(
+  it("no literal signing credentials", () => {
+    for (const { file, content } of gradle()) {
+      expect(content, file).not.toMatch(
         /(storePassword|keyPassword|storeFile|keyAlias)\s*=\s*"[^"]/,
       );
-      // Un mot de passe déposé dans `gradle.properties` serait la voie la plus
-      // naturelle, et la pire : ce fichier est versionné.
-      expect(contenu, fichier).not.toMatch(/^[A-Za-z_]*(?:KEYSTORE|KEY)_PASSWORD\s*=/m);
+      expect(content, file).not.toMatch(/^[A-Za-z_]*(?:KEYSTORE|KEY)_PASSWORD\s*=/m);
     }
   });
 
-  it("la signature vient de l'environnement, et de rien d'autre", () => {
+  it("signing configuration comes from environment only", () => {
     const app = gradle().find((entry) =>
-      entry.fichier.endsWith(path.join("app", "build.gradle.kts")),
+      entry.file.endsWith(path.join("app", "build.gradle.kts")),
     );
     expect(app).toBeDefined();
-    const contenu = app?.contenu ?? "";
+    const content = app?.content ?? "";
 
-    // L'assertion positive compte autant que l'interdiction : sans elle, un
-    // jour quelqu'un câblerait la signature sur un fichier local du dépôt, ce
-    // qui ne déclencherait aucune des règles ci-dessus.
     for (const variable of [
       "NEXUS_KEYSTORE_PATH",
       "NEXUS_KEYSTORE_PASSWORD",
       "NEXUS_KEY_ALIAS",
       "NEXUS_KEY_PASSWORD",
     ]) {
-      expect(contenu, variable).toContain(`System.getenv("${variable}")`);
+      expect(content, variable).toContain(`System.getenv("${variable}")`);
     }
 
-    // Et sans keystore complet, l'APK n'est pas signé : un artefact qui refuse
-    // de s'installer vaut mieux qu'une clé versionnée.
-    expect(contenu).toMatch(/signingConfig\s*=\s*if\s*\(signingReady\)/);
+    expect(content).toMatch(/signingConfig\s*=\s*if\s*\(signingReady\)/);
   });
 
-  it("le fichier de réglages embarqué ne contient qu'un alias de clé", () => {
-    // La clé de l'appareil est une **référence** dans le magasin de clés
-    // d'Android. Rien de secret ne peut donc figurer dans ce fichier — et rien
-    // n'y figure.
+  it("embedded settings file contains only key alias", () => {
     const config = JSON.parse(readFileSync(path.join(ROOT, "nexus.config.json"), "utf8")) as Record<
       string,
       string
@@ -259,11 +192,11 @@ describe("aucun secret versionné", () => {
 
     expect(config.DEVICE_KEY_ALIAS).toBe("nexus.device.key");
 
-    for (const [clef, valeur] of Object.entries(config)) {
-      expect(clef, "aucune variable ne doit porter un secret").not.toMatch(
+    for (const [key, value] of Object.entries(config)) {
+      expect(key, "no variable should contain a secret").not.toMatch(
         /SECRET|TOKEN|PASSWORD|PRIVATE_KEY/i,
       );
-      expect(String(valeur)).not.toMatch(/BEGIN [A-Z ]*PRIVATE KEY/);
+      expect(String(value)).not.toMatch(/BEGIN [A-Z ]*PRIVATE KEY/);
     }
   });
 });

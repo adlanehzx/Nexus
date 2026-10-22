@@ -4,18 +4,7 @@ import { createTaskPlan } from "@nexus/devices";
 import { makeHarness, settle, until, waitFor, type BrowserHarness } from "./fixtures.js";
 
 /**
- * La chaîne complète, du cœur jusqu'au contrat HTTP du navigateur.
- *
- * C'est ce que la Phase 9 devait rendre possible :
- *
- *     cœur → WorkerGateway → session authentifiée → exécutant navigateur
- *          → capacité → worker Python
- *
- * Rien n'est simulé du côté NEXUS : vraie `WorkerGateway`, vraie signature
- * Ed25519, vrai `DeviceSessionService`, vrai `TaskCoordinator`, vraies
- * enveloppes validées par les schémas du protocole. Le seul double est le
- * worker Python, et il est remplacé **au niveau HTTP** — le client sérialise et
- * valide réellement.
+ * Complete chain from core to browser HTTP contract.
  */
 
 let sequence = 0;
@@ -29,7 +18,7 @@ function dispatchEnvelope(overrides: Partial<WorkerPayload<"worker.task_dispatch
       stepId: `step-${String(sequence)}`,
       capability: "browser.navigate",
       tool: "device.browser.navigate",
-      arguments: { instructions: "relève le prix du billet" },
+      arguments: { instructions: "check ticket price" },
       timeoutMs: 30_000,
       riskLevel: "LOW",
       requestId: `req-${String(sequence)}`,
@@ -52,21 +41,16 @@ async function dispatch(
   const envelope = dispatchEnvelope(overrides);
   const payload = envelope.payload as WorkerPayload<"worker.task_dispatch">;
   harness.link.deliver(envelope);
-  // `waitForTask` du client sonde l'etat avec une minuterie : une attente sur la
-  // seule file de micro-taches ne l'atteindrait jamais.
   await waitFor(() => results(harness).some((result) => result.stepId === payload.stepId));
   return results(harness).find((result) => result.stepId === payload.stepId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Session worker
+// Core session
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("session auprès du cœur", () => {
-  it("s'authentifie par signature du défi, comme les autres exécutants", async () => {
-    // Aucun jeton partagé avec le cœur : l'exécutant navigateur prouve qu'il
-    // détient la clé de l'appareil. C'est le même mécanisme que le worker
-    // Windows et le worker Android — il n'y a pas de second système.
+describe("core session", () => {
+  it("authenticates via challenge signature like other workers", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -74,7 +58,7 @@ describe("session auprès du cœur", () => {
     expect(harness.host.state).toBe("ready");
   });
 
-  it("annonce ses quatre capacités au registre du cœur", async () => {
+  it("announces its four capabilities to core registry", async () => {
     const harness = await makeHarness();
     await harness.connect();
     await until(async () => {
@@ -91,9 +75,7 @@ describe("session auprès du cœur", () => {
     ]);
   });
 
-  it("n'annonce rien quand le worker Python ne répond pas", async () => {
-    // L'exécutant reste joignable mais ne sait rien faire : le sélecteur doit
-    // l'écarter plutôt que de lui confier une étape vouée à l'échec.
+  it("announces nothing when Python worker does not respond", async () => {
     const harness = await makeHarness({ seed: (python) => (python.unreachable = true) });
     await harness.connect();
     await settle(30);
@@ -103,7 +85,7 @@ describe("session auprès du cœur", () => {
     expect(harness.host.health.isDegraded()).toBe(true);
   });
 
-  it("un appareil non approuvé n'obtient pas de session", async () => {
+  it("untrusted device does not obtain a session", async () => {
     const harness = await makeHarness({ trusted: false });
     await harness.host.start();
     await settle(30);
@@ -113,11 +95,11 @@ describe("session auprès du cœur", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exécution dispatchée par le cœur
+// Step execution from core
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("exécution d'une étape venue du cœur", () => {
-  it("traverse la chaîne complète et rend le résultat", async () => {
+describe("step execution from core", () => {
+  it("traverses entire chain and returns result", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -128,9 +110,7 @@ describe("exécution d'une étape venue du cœur", () => {
     expect(harness.python.launched[0]?.intent).toBe("read");
   });
 
-  it("refuse une capacité que cet exécutant n'a pas", async () => {
-    // Le point de cloisonnement : un exécutant navigateur ne lance pas de
-    // commande shell, même si le cœur le lui demandait.
+  it("rejects capability not held by this worker", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -145,9 +125,7 @@ describe("exécution d'une étape venue du cœur", () => {
     expect(result?.error?.code).toBe("CAPABILITY_UNAVAILABLE");
   });
 
-  it("refuse une capacité retirée par la configuration locale", async () => {
-    // Un déploiement qui interdit l'achat automatique : la capacité n'est ni
-    // annoncée, ni exécutable, même sur dispatch direct.
+  it("rejects capability removed by local configuration", async () => {
     const harness = await makeHarness({
       config: { declaredCapabilities: ["browser.navigate"] },
     });
@@ -156,7 +134,7 @@ describe("exécution d'une étape venue du cœur", () => {
     const result = await dispatch(harness, {
       capability: "browser.purchase",
       tool: "device.browser.purchase",
-      arguments: { instructions: "achète le billet" },
+      arguments: { instructions: "purchase the ticket" },
       riskLevel: "CRITICAL",
     });
 
@@ -164,7 +142,7 @@ describe("exécution d'une étape venue du cœur", () => {
     expect(result?.error?.code).toBe("CAPABILITY_UNAVAILABLE");
   });
 
-  it("valide les arguments avant d'ouvrir un navigateur", async () => {
+  it("validates arguments before opening browser", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -172,16 +150,15 @@ describe("exécution d'une étape venue du cœur", () => {
 
     expect(result?.ok).toBe(false);
     expect(result?.error?.code).toBe("CAPABILITY_INPUT_INVALID");
-    // Rien n'a été ouvert : la validation précède l'appel réseau.
     expect(harness.python.sessions).toEqual([]);
   });
 
-  it("remonte la progression au cœur pendant la navigation", async () => {
+  it("reports progress to core during navigation", async () => {
     const harness = await makeHarness({
       seed: (python) => {
         python.outcome = {
           status: "succeeded",
-          output: "129 €",
+          output: "$129",
           steps: 2,
           events: [
             {
@@ -209,13 +186,11 @@ describe("exécution d'une étape venue du cœur", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sessions navigateur
+// Browser session isolation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("isolation des sessions navigateur", () => {
-  it("réutilise la même session pour les étapes d'une même tâche", async () => {
-    // « Connecte-toi, puis commande » est une tâche à deux étapes. Ouvrir deux
-    // navigateurs perdrait la connexion entre les deux.
+describe("browser session isolation", () => {
+  it("reuses same session for steps of same task", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -226,10 +201,7 @@ describe("isolation des sessions navigateur", () => {
     expect(harness.python.launched.map((entry) => entry.sessionId)).toEqual(["sess-1", "sess-1"]);
   });
 
-  it("n'utilise jamais la même session pour deux tâches différentes", async () => {
-    // Le point d'isolation. Une tâche qui s'est connectée à une banque ne doit
-    // pas laisser sa session ouverte à la tâche suivante, qui visitera
-    // peut-être un site hostile.
+  it("never uses same session for two different tasks", async () => {
     const harness = await makeHarness();
     await harness.connect();
 
@@ -241,46 +213,39 @@ describe("isolation des sessions navigateur", () => {
     expect(used.size).toBe(2);
   });
 
-  it("transmet les listes de domaines au worker Python", async () => {
-    // La politique est appliquée là-bas, par le navigateur lui-même. Ce qui se
-    // vérifie ici est qu'elle est bien transmise — la perdre reviendrait à
-    // naviguer sans restriction.
+  it("transmits domain lists to Python worker", async () => {
     const harness = await makeHarness({
       config: {
-        allowedDomains: ["exemple.fr"],
-        prohibitedDomains: ["ads.exemple.fr"],
+        allowedDomains: ["example.com"],
+        prohibitedDomains: ["ads.example.com"],
       },
     });
     await harness.connect();
     await dispatch(harness);
 
     expect(harness.python.requestedDomains[0]).toEqual({
-      allowed: ["exemple.fr"],
-      prohibited: ["ads.exemple.fr"],
+      allowed: ["example.com"],
+      prohibited: ["ads.example.com"],
     });
   });
 
-  it("ferme les navigateurs à l'arrêt", async () => {
-    // Un Chromium laissé ouvert survit au processus et consomme jusqu'à
-    // expiration de son TTL.
+  it("closes browsers on shutdown", async () => {
     const harness = await makeHarness();
     await harness.connect();
     await dispatch(harness, { taskId: "task-a" });
 
-    await harness.host.stop("fin de test");
+    await harness.host.stop("test teardown");
 
     expect(harness.python.closedSessions).toEqual(["sess-1"]);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sélection par le cœur
+// Core selection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("sélection par le cœur", () => {
-  it("le sélecteur choisit l'exécutant navigateur sur la capacité, pas sur son nom", async () => {
-    // Rien dans le cœur ne connaît « le worker navigateur ». Il connaît des
-    // capacités, et cet appareil a annoncé `browser.navigate`.
+describe("core selection", () => {
+  it("selector picks browser worker on capability, not name", async () => {
     const harness = await makeHarness();
     await harness.connect();
     await until(async () => {
@@ -290,16 +255,16 @@ describe("sélection par le cœur", () => {
 
     const plan = createTaskPlan({
       userId: "user-example",
-      title: "Chercher un prix",
+      title: "Check price",
       originClientDeviceId: harness.device.id,
       correlationId: "corr-browser",
       steps: [
         {
           id: "s1",
-          description: "Relever le prix",
+          description: "Check price",
           requiredCapabilities: ["browser.navigate"],
           tool: "device.browser.navigate",
-          arguments: { instructions: "prix du billet" },
+          arguments: { instructions: "ticket price" },
           riskLevel: "LOW",
         },
       ],
@@ -316,14 +281,11 @@ describe("sélection par le cœur", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Annulation
+// Cancellation
 // ───────────────────────────────────────────────────────────────────────────────
 
-describe("annulation", () => {
-  it("propage l'annulation du cœur jusqu'au navigateur", async () => {
-    // Une navigation dure des minutes. Quand l'utilisateur renonce, le
-    // navigateur doit s'arrêter — sinon un Chromium continue de cliquer sur un
-    // site pour une tâche que plus personne n'attend.
+describe("cancellation", () => {
+  it("propagates cancellation from core to browser", async () => {
     const harness = await makeHarness({
       seed: (python) => {
         python.outcome = { status: "running", hangUntilCancelled: true };
@@ -338,17 +300,16 @@ describe("annulation", () => {
     harness.link.deliver(
       workerEnvelope(
         WORKER_MESSAGE.taskCancel,
-        { taskId: "task-long", stepId: "step-long", reason: "l'utilisateur a renoncé" },
+        { taskId: "task-long", stepId: "step-long", reason: "user aborted" },
         { id: "env-cancel", at: new Date() },
       ),
     );
 
-    // Le worker Python reçoit réellement l'ordre d'annulation.
     await waitFor(() => harness.python.cancelled.length > 0);
     expect(harness.python.cancelled[0]).toContain("task-long");
   });
 
-  it("rend une étape annulée au cœur, pas un succès silencieux", async () => {
+  it("returns cancelled step to core rather than silent success", async () => {
     const harness = await makeHarness({
       seed: (python) => {
         python.outcome = { status: "running", hangUntilCancelled: true };
@@ -362,7 +323,7 @@ describe("annulation", () => {
     harness.link.deliver(
       workerEnvelope(
         WORKER_MESSAGE.taskCancel,
-        { taskId: "task-x", stepId: "step-x", reason: "arrêt" },
+        { taskId: "task-x", stepId: "step-x", reason: "stop" },
         { id: "env-cancel-2", at: new Date() },
       ),
     );

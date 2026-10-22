@@ -37,38 +37,24 @@ import { assembleCapabilities } from "../src/assemble.js";
 import { AndroidWorker } from "../src/worker.js";
 
 /**
- * Harnais de test.
- *
- * Deux principes, comme pour le worker Windows :
- *
- *  1. **Aucun appel Android réel.** Les quatre ports sont remplacés par des
- *     doubles en mémoire. Les tests ne demandent ni émulateur, ni APK, ni
- *     téléphone — et ils sont donc déterministes.
- *  2. **Le reste est réel.** Vraies clés ECDSA P-256, vraies signatures, vrai
- *     `DeviceSessionService`, vraie `WorkerGateway`, vrai `TaskCoordinator`,
- *     vraies enveloppes validées par les schémas du protocole.
- *
- * Ce que ces tests ne prouvent pas est aussi important : le comportement du
- * système Android lui-même. La liste de vérification sur appareil physique du
- * README couvre ce qui ne peut pas l'être ici.
+ * Test harness.
  */
 
 export const USER_ID = "user-example";
 export const IPHONE = { id: "device-iphone", name: "iPhone" };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Doubles des ports Android
+// Android Port Doubles
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class FakeAppController implements AndroidAppController {
   apps: AndroidApp[] = [
     { packageName: "com.spotify.music", label: "Spotify", launchable: true },
     { packageName: "com.whatsapp", label: "WhatsApp", launchable: true },
-    { packageName: "com.android.settings", label: "Paramètres", launchable: true },
+    { packageName: "com.android.settings", label: "Settings", launchable: true },
     { packageName: "com.example.service", label: "Service", launchable: false },
   ];
   readonly opened: string[] = [];
-  /** Le système refuse le lancement — cas courant depuis Android 10. */
   launchBlocked = false;
 
   listApps(): Promise<AndroidApp[]> {
@@ -94,11 +80,10 @@ export class FakeUiController implements AndroidUiController {
   readonly clicks: UiSelector[] = [];
   readonly inputs: { selector: UiSelector; length: number }[] = [];
   readonly scrolls: { direction: ScrollDirection; amount: number }[] = [];
-  /** Ne rend la main qu'à l'annulation — pour éprouver délais et annulation. */
   hangUntilAborted = false;
 
   nodes = new Map<string, UiNode>([
-    ["text:Rechercher", node({ text: "Rechercher", clickable: true, viewId: "com.app:id/search" })],
+    ["text:Search", node({ text: "Search", clickable: true, viewId: "com.app:id/search" })],
     ["viewId:com.app:id/field", node({ viewId: "com.app:id/field", editable: true })],
     ["viewId:com.app:id/label", node({ viewId: "com.app:id/label" })],
   ]);
@@ -122,8 +107,6 @@ export class FakeUiController implements AndroidUiController {
     text: string,
     signal: AbortSignal,
   ): Promise<{ entered: boolean; characters: number }> {
-    // On n'enregistre que la longueur : ce double ne doit pas retenir un mot de
-    // passe plus longtemps que le code de production.
     this.inputs.push({ selector, length: text.length });
     return this.#maybeHang(signal, { entered: true, characters: text.length });
   }
@@ -142,7 +125,7 @@ export class FakeUiController implements AndroidUiController {
 
     return new Promise<T>((_, reject) => {
       const abort = () => {
-        reject(new Error("annulée"));
+        reject(new Error("cancelled"));
       };
       if (signal.aborted) abort();
       else signal.addEventListener("abort", abort, { once: true });
@@ -167,7 +150,6 @@ function node(overrides: Partial<UiNode>): UiNode {
 export class FakeScreenshotProvider implements AndroidScreenshotProvider {
   available = true;
   captures = 0;
-  /** Image renvoyée. Volontairement minuscule : ce n'est pas le sujet du test. */
   image: Screenshot = {
     base64: "aW1hZ2UtZmFjdGljZQ==",
     format: "png",
@@ -187,7 +169,7 @@ export class FakeScreenshotProvider implements AndroidScreenshotProvider {
     if (!this.hangUntilAborted) return Promise.resolve(this.image);
     return new Promise<Screenshot>((_, reject) => {
       const abort = () => {
-        reject(new Error("annulée"));
+        reject(new Error("cancelled"));
       };
       if (signal.aborted) abort();
       else signal.addEventListener("abort", abort, { once: true });
@@ -210,7 +192,7 @@ export class FakeNotificationController implements AndroidNotificationController
   }> {
     if (this.failNext) {
       this.failNext = false;
-      return Promise.reject(new Error("NotificationManager indisponible"));
+      return Promise.reject(new Error("NotificationManager unavailable"));
     }
     this.posted.push({ title: input.title, body: input.body });
     return Promise.resolve({ posted: true, notificationId: this.posted.length });
@@ -277,7 +259,7 @@ export function testConfig(overrides: Partial<AndroidWorkerConfig> = {}): Androi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Clés et signature
+// Keys and Signing
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DeviceKeys {
@@ -285,12 +267,6 @@ export interface DeviceKeys {
   privateKeyPem: string;
 }
 
-/**
- * Vraie paire ECDSA P-256.
- *
- * P-256 et non Ed25519 : c'est ce que le magasin de clés d'Android sait faire,
- * et donc ce que le Redmi utilisera réellement.
- */
 export function generateDeviceKeys(): DeviceKeys {
   const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   return {
@@ -299,7 +275,6 @@ export function generateDeviceKeys(): DeviceKeys {
   };
 }
 
-/** Signataire de test : imite le magasin de clés d'Android côté Node. */
 export class TestEcdsaSigner implements CredentialSigner {
   readonly #pem: string;
 
@@ -314,7 +289,7 @@ export class TestEcdsaSigner implements CredentialSigner {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Minuteries contrôlées
+// Controlled Timers
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class TestTimers implements TimerPort {
@@ -344,7 +319,7 @@ export class TestTimers implements TimerPort {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Harnais complet
+// Full Harness
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AndroidHarness {
@@ -386,8 +361,6 @@ export const ANDROID_PERMISSIONS = [
 export async function makeHarness(options: HarnessOptions = {}): Promise<AndroidHarness> {
   const registry = new DeviceRegistry();
   const credentials = new InMemoryCredentialProvider();
-  // Le cœur vérifie une signature P-256 : c'est le seul réglage qui change par
-  // rapport au worker Windows, et il tient dans un port déjà existant.
   const sessions = new DeviceSessionService({ registry, verifier: ecdsaP256Verifier });
   const router = new EventRouter({ registry });
   const gateway = new WorkerGateway({ registry, sessions, credentials, router });
@@ -397,12 +370,10 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Android
   const keys = generateDeviceKeys();
   const config = testConfig(options.config);
 
-  // Rôle WORKER, et pas BOTH : le Redmi n'est pas un client NEXUS. Il exécute,
-  // il ne reçoit pas les événements de l'utilisateur.
   const device = await registry.registerDevice({
     id: config.deviceId,
     userId: USER_ID,
-    name: "Téléphone Android",
+    name: "Android Phone",
     type: "ANDROID",
     platform: "ANDROID",
     role: "WORKER",
@@ -447,7 +418,7 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Android
       link.deliver(envelope);
     },
     close: () => {
-      link.drop("fermé par le cœur");
+      link.drop("closed by core");
     },
     remoteAddress: "192.0.2.42",
   };
@@ -489,12 +460,10 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Android
   };
 }
 
-/** Laisse la file de micro-tâches se vider — la poignée de main est asynchrone. */
 export async function settle(rounds = 12): Promise<void> {
   for (let index = 0; index < rounds; index += 1) await Promise.resolve();
 }
 
-/** Attend qu'une condition devienne vraie, sans horloge réelle. */
 export async function until(predicate: () => boolean, rounds = 300): Promise<boolean> {
   for (let index = 0; index < rounds; index += 1) {
     if (predicate()) return true;

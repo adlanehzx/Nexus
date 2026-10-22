@@ -4,12 +4,7 @@ import { UiPolicy } from "../src/policy/ui-policy.js";
 import { ScreenshotPolicy } from "../src/policy/screenshot-policy.js";
 
 /**
- * Les politiques sont la frontière réelle du worker Android.
- *
- * Les assertions portent sur le **code** d'erreur et sur la règle enfreinte,
- * jamais sur le texte du message : `code` est un contrat public et stable,
- * `message` est technique. Accrocher des tests au second les ferait échouer à la
- * première reformulation, ce qui apprend à ignorer les échecs.
+ * Policies are the real perimeter of the Android worker.
  */
 
 interface CaughtError {
@@ -31,12 +26,12 @@ function throwsWith(action: () => unknown, code: string, rule?: string): CaughtE
   return caught ?? {};
 }
 
-describe("politique d'applications", () => {
-  it("accepte un nom de paquet valide", () => {
+describe("application policy", () => {
+  it("accepts a valid package name", () => {
     expect(new AppPolicy().assertAllowed("com.spotify.music")).toBe("com.spotify.music");
   });
 
-  it("refuse une forme qui n'est pas un nom de paquet", () => {
+  it("rejects non-package name syntax", () => {
     const policy = new AppPolicy();
     for (const invalid of [
       "com",
@@ -50,7 +45,7 @@ describe("politique d'applications", () => {
     }
   });
 
-  it("refuse les réglages du système, même sans liste d'autorisation", () => {
+  it("rejects system settings, even without an allowlist", () => {
     throwsWith(
       () => new AppPolicy().assertAllowed("com.android.settings"),
       "WORKER_POLICY_VIOLATION",
@@ -58,7 +53,7 @@ describe("politique d'applications", () => {
     );
   });
 
-  it("refuse aussi les sous-paquets d'un paquet interdit", () => {
+  it("also rejects subpackages of a forbidden package", () => {
     throwsWith(
       () => new AppPolicy().assertAllowed("com.android.settings.suggestion"),
       "WORKER_POLICY_VIOLATION",
@@ -66,16 +61,15 @@ describe("politique d'applications", () => {
     );
   });
 
-  it("refuse une application dont le nom trahit un usage sensible", () => {
+  it("rejects an application whose name suggests sensitive usage", () => {
     throwsWith(
-      () => new AppPolicy().assertAllowed("com.exemple.passwordmanager"),
+      () => new AppPolicy().assertAllowed("com.example.passwordmanager"),
       "WORKER_POLICY_VIOLATION",
       "app.sensitive",
     );
   });
 
-  it("le refus l'emporte sur la liste d'autorisation", () => {
-    // Une liste d'autorisation mal renseignée ne doit pas rouvrir les réglages.
+  it("denial takes precedence over allowlist", () => {
     const policy = new AppPolicy({ allowedPackages: ["com.android.settings"] });
     throwsWith(
       () => policy.assertAllowed("com.android.settings"),
@@ -84,7 +78,7 @@ describe("politique d'applications", () => {
     );
   });
 
-  it("refuse ce qui n'est pas dans la liste d'autorisation", () => {
+  it("rejects what is not in the allowlist", () => {
     const policy = new AppPolicy({ allowedPackages: ["com.spotify.music"] });
     expect(policy.allows("com.spotify.music")).toBe(true);
     throwsWith(
@@ -94,20 +88,20 @@ describe("politique d'applications", () => {
     );
   });
 
-  it("accepte tout ce qui n'est pas refusé quand la liste est vide", () => {
+  it("accepts anything not denied when allowlist is empty", () => {
     const policy = new AppPolicy();
     expect(policy.hasAllowList).toBe(false);
     expect(policy.allows("com.whatsapp")).toBe(true);
   });
 
-  it("accepte un refus supplémentaire venu de la configuration", () => {
+  it("accepts additional denial from configuration", () => {
     const policy = new AppPolicy({ deniedPackages: ["com.whatsapp"] });
     throwsWith(() => policy.assertAllowed("com.whatsapp"), "WORKER_POLICY_VIOLATION", "app.denied");
   });
 });
 
-describe("politique d'interface", () => {
-  it("accepte un sélecteur par identifiant de vue", () => {
+describe("UI policy", () => {
+  it("accepts a selector by view ID", () => {
     const selector = new UiPolicy().assertSelectorAllowed({
       kind: "viewId",
       value: "com.app:id/search",
@@ -115,8 +109,7 @@ describe("politique d'interface", () => {
     expect(selector).toEqual({ kind: "viewId", value: "com.app:id/search" });
   });
 
-  it("refuse les clics par coordonnées par défaut", () => {
-    // Cliquer en (540, 1200) touche ce qui s'y trouve, pas ce qu'on visait.
+  it("rejects coordinate clicks by default", () => {
     throwsWith(
       () => new UiPolicy().assertSelectorAllowed({ kind: "coordinates", x: 540, y: 1200 }),
       "WORKER_POLICY_VIOLATION",
@@ -124,7 +117,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("accepte les coordonnées quand la configuration les autorise", () => {
+  it("accepts coordinates when allowed by configuration", () => {
     const policy = new UiPolicy({ allowCoordinateClicks: true });
     expect(policy.assertSelectorAllowed({ kind: "coordinates", x: 10, y: 20 })).toEqual({
       kind: "coordinates",
@@ -133,7 +126,7 @@ describe("politique d'interface", () => {
     });
   });
 
-  it("refuse des coordonnées hors de l'écran", () => {
+  it("rejects coordinates outside screen bounds", () => {
     const policy = new UiPolicy({
       allowCoordinateClicks: true,
       screenBounds: { width: 1080, height: 2400 },
@@ -145,7 +138,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse un sélecteur vide", () => {
+  it("rejects empty selector", () => {
     throwsWith(
       () => new UiPolicy().assertSelectorAllowed({ kind: "text", value: "   " }),
       "WORKER_POLICY_VIOLATION",
@@ -153,7 +146,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse un sélecteur démesuré", () => {
+  it("rejects oversized selector", () => {
     throwsWith(
       () => new UiPolicy().assertSelectorAllowed({ kind: "text", value: "x".repeat(500) }),
       "WORKER_POLICY_VIOLATION",
@@ -161,12 +154,11 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("accepte un texte de saisie et le rend intact", () => {
-    // Le texte doit atteindre le champ tel quel : c'est peut-être un mot de passe.
-    expect(new UiPolicy().assertTextAllowed("mot de passe")).toBe("mot de passe");
+  it("accepts input text and returns it intact", () => {
+    expect(new UiPolicy().assertTextAllowed("password")).toBe("password");
   });
 
-  it("refuse un texte vide", () => {
+  it("rejects empty text", () => {
     throwsWith(
       () => new UiPolicy().assertTextAllowed(""),
       "WORKER_POLICY_VIOLATION",
@@ -174,19 +166,18 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse un texte démesuré sans le recopier dans l'erreur", () => {
+  it("rejects oversized text without copying it into the error", () => {
     const error = throwsWith(
-      () => new UiPolicy({ maxInputLength: 10 }).assertTextAllowed("secret-tres-long-a-saisir"),
+      () => new UiPolicy({ maxInputLength: 10 }).assertTextAllowed("very-long-secret-to-input"),
       "WORKER_POLICY_VIOLATION",
       "ui.textTooLong",
     );
 
-    // L'erreur donne la longueur, jamais le contenu.
-    expect(JSON.stringify(error)).not.toContain("secret-tres-long");
+    expect(JSON.stringify(error)).not.toContain("very-long-secret");
     expect(error.context?.length).toBe(25);
   });
 
-  it("refuse une amplitude de défilement excessive", () => {
+  it("rejects excessive scroll amount", () => {
     throwsWith(
       () => new UiPolicy({ maxScrollAmount: 5 }).assertScrollAllowed("down", 50),
       "WORKER_POLICY_VIOLATION",
@@ -194,7 +185,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse une amplitude non entière ou nulle", () => {
+  it("rejects non-integer or zero scroll amount", () => {
     const policy = new UiPolicy();
     throwsWith(
       () => policy.assertScrollAllowed("down", 0),
@@ -208,9 +199,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse un clic sur un élément non cliquable", () => {
-    // Sans cette règle, le système propagerait le clic au parent — donc à un
-    // élément qu'on n'a pas choisi.
+  it("rejects click on non-clickable element", () => {
     throwsWith(
       () => new UiPolicy().assertNodeAccepts({ clickable: false, editable: false }, "click"),
       "WORKER_POLICY_VIOLATION",
@@ -218,7 +207,7 @@ describe("politique d'interface", () => {
     );
   });
 
-  it("refuse une saisie dans un élément non éditable", () => {
+  it("rejects input into non-editable element", () => {
     throwsWith(
       () => new UiPolicy().assertNodeAccepts({ clickable: true, editable: false }, "input"),
       "WORKER_POLICY_VIOLATION",
@@ -227,13 +216,12 @@ describe("politique d'interface", () => {
   });
 });
 
-describe("politique de capture d'écran", () => {
-  it("autorise une première capture", () => {
+describe("screenshot policy", () => {
+  it("authorizes a first screenshot", () => {
     expect(() => new ScreenshotPolicy().assertCaptureAllowed()).not.toThrow();
   });
 
-  it("refuse une capture trop rapprochée", () => {
-    // La barrière contre l'enregistrement continu par accumulation.
+  it("rejects too frequent capture", () => {
     let now = 1_000;
     const policy = new ScreenshotPolicy({ minIntervalMs: 1_000, now: () => now });
 
@@ -242,7 +230,7 @@ describe("politique de capture d'écran", () => {
     throwsWith(() => policy.assertCaptureAllowed(), "WORKER_POLICY_VIOLATION", "screenshot.rate");
   });
 
-  it("autorise à nouveau une fois l'intervalle écoulé", () => {
+  it("authorizes again once interval has elapsed", () => {
     let now = 1_000;
     const policy = new ScreenshotPolicy({ minIntervalMs: 1_000, now: () => now });
 
@@ -251,7 +239,7 @@ describe("politique de capture d'écran", () => {
     expect(() => policy.assertCaptureAllowed()).not.toThrow();
   });
 
-  it("refuse une image trop lourde", () => {
+  it("rejects image exceeding byte size limit", () => {
     throwsWith(
       () =>
         new ScreenshotPolicy({ maxBytes: 1_000 }).assertWithinLimits({
@@ -264,7 +252,7 @@ describe("politique de capture d'écran", () => {
     );
   });
 
-  it("refuse une image trop grande", () => {
+  it("rejects image exceeding dimension limit", () => {
     throwsWith(
       () =>
         new ScreenshotPolicy({ maxDimension: 720 }).assertWithinLimits({
@@ -277,7 +265,7 @@ describe("politique de capture d'écran", () => {
     );
   });
 
-  it("plafonne la résolution demandée, quoi qu'en dise la configuration", () => {
+  it("caps requested resolution regardless of configuration", () => {
     expect(new ScreenshotPolicy({ maxDimension: 99_999 }).maxDimension).toBe(2_048);
   });
 });

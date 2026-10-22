@@ -1,12 +1,7 @@
 import { AppError, type ErrorSeverity } from "@nexus/shared";
 
 /**
- * Erreurs propres à l'exécutant navigateur.
- *
- * Le reste vient de `@nexus/worker-core` — `CapabilityUnavailableError`,
- * `CapabilityInputError`, `ExecutionTimeoutError`, `ExecutionCancelledError`.
- * On ne redéclare que ce qui n'existe nulle part ailleurs, et chaque classe
- * répond à une question que les autres ne posent pas.
+ * Domain errors specific to the browser worker host.
  */
 
 export {
@@ -19,16 +14,9 @@ export {
 } from "@nexus/worker-core";
 
 /**
- * Le site demande une vérification humaine.
+ * Target website requires human intervention (CAPTCHA or MFA).
  *
- * **Ce n'est pas un échec technique, et ce n'est pas non plus un refus de
- * NEXUS.** C'est un point d'arrêt prévu : un CAPTCHA ou un second facteur
- * existe pour qu'un humain le franchisse. Le worker ne le contourne pas, ne le
- * résout pas, et n'essaie pas — il rend la main.
- *
- * `retryable` est faux : réessayer sans intervention humaine reproduira
- * exactement la même demande, et une reprise automatique donnerait à l'agent
- * l'illusion qu'insister peut marcher.
+ * This is an intentional stopping point, not a technical worker failure.
  */
 export class HumanVerificationRequiredError extends AppError {
   readonly code = "BROWSER_NEEDS_HUMAN";
@@ -38,15 +26,14 @@ export class HumanVerificationRequiredError extends AppError {
 
   constructor(capability: string, message: string) {
     super({
-      message: `${capability} : vérification humaine requise`,
-      // Rédigé pour être relayé tel quel : c'est l'utilisateur qui doit agir.
+      message: `${capability}: human verification required`,
       userMessage: message,
       context: { capability },
     });
   }
 }
 
-/** La navigation s'est terminée sans produire de résultat exploitable. */
+/** Navigation completed without producing actionable results. */
 export class BrowserTaskFailedError extends AppError {
   readonly code = "BROWSER_TASK_FAILED";
   readonly httpStatus = 502;
@@ -62,11 +49,9 @@ export class BrowserTaskFailedError extends AppError {
     },
   ) {
     super({
-      message: `${capability} : tâche navigateur terminée en ${detail.status}`,
+      message: `${capability}: browser task ended in ${detail.status}`,
       userMessage:
-        detail.message ?? `La navigation s'est terminée sans résultat (${detail.status}).`,
-      // Le code du worker Python est conservé : il distingue un domaine refusé
-      // d'un délai dépassé, et le perdre rendrait le diagnostic impossible.
+        detail.message ?? `Navigation completed without result (${detail.status}).`,
       context: { capability, status: detail.status, workerCode: detail.code ?? null },
     });
     this.retryable = detail.retryable;
@@ -74,10 +59,7 @@ export class BrowserTaskFailedError extends AppError {
 }
 
 /**
- * Le worker Python ne répond pas.
- *
- * Distinct d'un échec de tâche : ici rien n'a été tenté. C'est réessayable, et
- * le cœur peut légitimement redispatcher.
+ * Python browser worker is unreachable.
  */
 export class BrowserWorkerUnreachableError extends AppError {
   readonly code = "BROWSER_WORKER_UNREACHABLE";
@@ -86,9 +68,8 @@ export class BrowserWorkerUnreachableError extends AppError {
 
   constructor(cause?: string) {
     super({
-      message: "le worker Browser Use ne répond pas",
+      message: "Browser Use worker is not responding",
       userMessage: "The browsing service is temporarily unavailable.",
-      // L'URL n'y figure pas : elle nomme un service interne.
       context: cause === undefined ? {} : { cause },
     });
   }

@@ -2,13 +2,7 @@ import { spawn } from "node:child_process";
 import { ExecutionCancelledError, ExecutionTimeoutError } from "../errors.js";
 
 /**
- * Lancement de processus.
- *
- * C'est un **port**, et pour une raison très concrète : les tests de ce paquet
- * ne doivent lancer aucun processus sur la machine du développeur. Toute la
- * chaîne — validation, politique, délais, annulation, rédaction — se teste
- * contre une implémentation en mémoire ; seul ce fichier touche réellement au
- * système.
+ * Process execution port.
  */
 
 export interface ProcessSpawnRequest {
@@ -18,9 +12,7 @@ export interface ProcessSpawnRequest {
   env: Record<string, string>;
   timeoutMs: number;
   signal?: AbortSignal | undefined;
-  /** Sortie au fil de l'eau, pour la progression. Déjà rédigée par l'appelant. */
   onOutput?: ((chunk: { stream: "stdout" | "stderr"; text: string }) => void) | undefined;
-  /** Au-delà, la sortie est tronquée : un `git log` complet n'a pas à tout remonter. */
   maxOutputBytes?: number;
 }
 
@@ -34,7 +26,6 @@ export interface ProcessOutcome {
   stderr: string;
   durationMs: number;
   status: ProcessStatus;
-  /** Vrai si la sortie a été tronquée à `maxOutputBytes`. */
   truncated: boolean;
 }
 
@@ -51,25 +42,14 @@ export interface StartedProcess {
 }
 
 export interface ProcessRunner {
-  /** Lance et attend la fin. */
   run(request: ProcessSpawnRequest): Promise<ProcessOutcome>;
-  /** Lance sans attendre — le processus survit à la tâche. */
   start(request: Omit<ProcessSpawnRequest, "timeoutMs">): Promise<StartedProcess>;
-  /** Arrête un processus. `force` équivaut à un `taskkill /F`. */
   stop(processId: number, force: boolean): Promise<boolean>;
   list(): Promise<ProcessInfo[]>;
 }
 
 const DEFAULT_MAX_OUTPUT = 256 * 1024;
 
-/**
- * Implémentation Node.
- *
- * Un détail non négociable partout ici : **`shell: false`**. C'est la ligne qui
- * fait qu'un argument reste un argument. Avec un shell, `git` suivi de
- * `["log", "; rm -rf ."]` exécuterait deux commandes ; sans shell, il exécute
- * `git` avec un argument bizarre, qui échoue proprement.
- */
 export class NodeProcessRunner implements ProcessRunner {
   run(request: ProcessSpawnRequest): Promise<ProcessOutcome> {
     const startedAt = Date.now();
@@ -165,8 +145,6 @@ export class NodeProcessRunner implements ProcessRunner {
 
       child.once("error", reject);
       child.once("spawn", () => {
-        // Détaché du worker : redémarrer NEXUS ne doit pas tuer ce que
-        // l'utilisateur a demandé de lancer.
         child.unref();
         resolve({
           processId: child.pid ?? -1,
@@ -198,13 +176,6 @@ export class NodeProcessRunner implements ProcessRunner {
   }
 }
 
-/**
- * Analyse la sortie CSV de `tasklist`.
- *
- * Format : `"nom","pid","session","n° session","mémoire"`. Une ligne illisible
- * est ignorée plutôt que de faire échouer la liste entière — un inventaire
- * partiel vaut mieux qu'une erreur.
- */
 export function parseTasklistCsv(csv: string): ProcessInfo[] {
   const processes: ProcessInfo[] = [];
 
@@ -227,12 +198,11 @@ export function parseTasklistCsv(csv: string): ProcessInfo[] {
   return processes;
 }
 
-/** Traduit une issue de processus en erreur `AppError`, ou la laisse passer. */
 export function assertProcessSucceeded(capability: string, outcome: ProcessOutcome): void {
   if (outcome.status === "timeout") {
     throw new ExecutionTimeoutError(capability, outcome.durationMs);
   }
   if (outcome.status === "cancelled") {
-    throw new ExecutionCancelledError(capability, "annulée pendant l'exécution");
+    throw new ExecutionCancelledError(capability, "cancelled during execution");
   }
 }

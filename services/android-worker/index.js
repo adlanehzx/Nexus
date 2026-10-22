@@ -1,22 +1,22 @@
 /**
- * Point d'entrée React Native de l'application worker.
+ * React Native entry point for worker application.
  *
- * Il ne fait qu'installer les deux globales que le moteur d'Android n'a pas,
- * puis enregistrer le composant racine. Tout le reste — configuration,
- * capacités, poignée de main, exécution — part de `startAndroidWorker`, appelé
- * par `ui/App.tsx`, et vit dans le code TypeScript partagé et testé.
+ * It installs the two globals that the Android engine lacks,
+ * then registers the root component. Everything else — configuration,
+ * capabilities, handshake, execution — starts from `startAndroidWorker`,
+ * called by `ui/App.tsx`, and lives in shared and tested TypeScript code.
  */
 import { Buffer } from "./shim/node-buffer.js";
 import { getRandomValues } from "./shim/node-crypto.js";
 import { AppRegistry } from "react-native";
 
-// Hermes n'a ni `Buffer`, ni la Web Crypto API. `@nexus/shared` a besoin de la
-// seconde pour produire ses identifiants — c'est la source d'aléa commune à
-// Node, au navigateur, à Tauri et à Android. On les installe AVANT tout import
-// applicatif : le premier identifiant généré échouerait sinon.
+// Hermes has neither `Buffer` nor the Web Crypto API. `@nexus/shared` needs the
+// latter to produce its IDs — it is the common randomness source across Node,
+// browser, Tauri, and Android. We install them BEFORE any application import:
+// the first generated ID would otherwise fail.
 //
-// L'aléa vient de `java.security.SecureRandom`, via le module natif. Jamais de
-// `Math.random` : ces octets deviennent des identifiants de requête.
+// Randomness comes from `java.security.SecureRandom` via the native module.
+// Never `Math.random`: these bytes become request IDs.
 if (globalThis.Buffer === undefined) globalThis.Buffer = Buffer;
 if (globalThis.crypto === undefined) globalThis.crypto = { getRandomValues };
 else if (globalThis.crypto.getRandomValues === undefined) {

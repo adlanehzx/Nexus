@@ -13,17 +13,10 @@ import {
 } from "./fixtures.js";
 
 /**
- * Le chemin complet, de bout en bout.
+ * End-to-end integration path.
  *
  *     iPhone → TaskCoordinator → DeviceSelector → WorkerTransport
- *       → worker Android → capacité → événements → EventRouter → iPhone
- *
- * Rien n'est simulé sur ce chemin : ce sont le vrai coordinateur, le vrai
- * sélecteur, la vraie passerelle et le vrai worker. Seuls le transport réseau
- * et les quatre ports Android sont doublés.
- *
- * C'est ce fichier qui justifie que le WebSocket de la phase suivante soit un
- * simple adaptateur : tout ce qu'il portera est déjà éprouvé ici.
+ *       → Android worker → capability → events → EventRouter → iPhone
  */
 
 let sequence = 0;
@@ -37,7 +30,7 @@ function dispatchEnvelope(overrides: Partial<WorkerPayload<"worker.task_dispatch
       stepId: `step-${String(sequence)}`,
       capability: "android.notification",
       tool: "device.android.notification",
-      arguments: { title: "Bonjour", body: "Test" },
+      arguments: { title: "Hello", body: "Test" },
       timeoutMs: 10_000,
       riskLevel: "MEDIUM",
       requestId: `req-${String(sequence)}`,
@@ -64,24 +57,24 @@ async function dispatch(
   return results(harness).find((result) => result.stepId === payload.stepId);
 }
 
-describe("chaîne complète", () => {
-  it("exécute une notification demandée depuis l'iPhone", async () => {
+describe("full chain", () => {
+  it("executes a notification requested from iPhone", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Prévenir sur le téléphone",
+      title: "Notify on phone",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-android",
       steps: [
         {
-          id: "notifier",
-          description: "Notifier la fin des tests",
+          id: "notify",
+          description: "Notify tests completed",
           requiredCapabilities: ["android.notification"],
           tool: "device.android.notification",
-          arguments: { title: "Tests", body: "Terminés" },
+          arguments: { title: "Tests", body: "Completed" },
           riskLevel: "LOW",
         },
       ],
@@ -93,23 +86,23 @@ describe("chaîne complète", () => {
 
     expect(executed.status).toBe("succeeded");
     expect(executed.steps[0]?.selectedDeviceId).toBe(harness.device.id);
-    expect(harness.platform.notifications.posted).toEqual([{ title: "Tests", body: "Terminés" }]);
+    expect(harness.platform.notifications.posted).toEqual([{ title: "Tests", body: "Completed" }]);
   });
 
-  it("ramène les événements de tâche à l'appareil d'origine", async () => {
+  it("routes task events back to origin device", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Ouvrir Spotify",
+      title: "Open Spotify",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-open",
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir Spotify",
+          id: "open",
+          description: "Open Spotify",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           arguments: { packageName: "com.spotify.music" },
@@ -138,7 +131,7 @@ describe("chaîne complète", () => {
     }
   });
 
-  it("le sélecteur choisit le téléphone sur ses capacités, jamais sur son nom", async () => {
+  it("selector chooses phone based on capabilities, never on device name", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -149,11 +142,10 @@ describe("chaîne complète", () => {
     });
 
     expect(selection.device.id).toBe(harness.device.id);
-    // L'iPhone est connu, mais écarté : il est CLIENT.
     expect(selection.rejected.map((r) => r.deviceId)).toContain(IPHONE.id);
   });
 
-  it("ne choisit pas le téléphone quand l'accessibilité est coupée", async () => {
+  it("does not select phone when accessibility is disabled", async () => {
     const harness = await makeHarness({
       seed: (platform) => {
         platform.ui.accessibilityEnabled = false;
@@ -170,20 +162,20 @@ describe("chaîne complète", () => {
     expect(selection).toBeUndefined();
   });
 
-  it("remonte au client un refus de politique Android", async () => {
+  it("reports Android policy denial back to client", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Ouvrir les réglages",
+      title: "Open settings",
       originClientDeviceId: IPHONE.id,
-      correlationId: "corr-refus",
+      correlationId: "corr-denial",
       steps: [
         {
-          id: "ouvrir",
-          description: "Ouvrir les réglages du système",
+          id: "open",
+          description: "Open system settings",
           requiredCapabilities: ["android.app.open"],
           tool: "device.android.app.open",
           arguments: { packageName: "com.android.settings" },
@@ -201,20 +193,20 @@ describe("chaîne complète", () => {
     expect(harness.platform.apps.opened).toHaveLength(0);
   });
 
-  it("échoue proprement quand aucun exécutant ne sait faire", async () => {
+  it("fails cleanly when no worker supports the capability", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Lancer un terminal",
+      title: "Launch a terminal",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-absent",
       steps: [
         {
           id: "shell",
-          description: "Exécuter une commande",
+          description: "Execute a command",
           requiredCapabilities: ["terminal.execute"],
           tool: "device.terminal.execute",
           arguments: {},
@@ -231,9 +223,7 @@ describe("chaîne complète", () => {
     expect(harness.clientEvents.map((e) => e.type)).toContain("task.failed");
   });
 
-  it("ne conserve pas la capture d'écran dans le journal d'exécution", async () => {
-    // Le point le plus sensible de ce lot : l'image atteint le client qui l'a
-    // demandée, et le journal d'audit n'en garde qu'une mention.
+  it("does not store screenshots in execution log", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
@@ -249,13 +239,13 @@ describe("chaîne complète", () => {
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Voir l'écran",
+      title: "View screen",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-capture",
       steps: [
         {
           id: "capture",
-          description: "Capturer l'écran",
+          description: "Capture screen",
           requiredCapabilities: ["android.ui.screenshot"],
           tool: "device.android.ui.screenshot",
           arguments: {},
@@ -267,30 +257,28 @@ describe("chaîne complète", () => {
     const executed = await coordinator.execute(plan, { userPermissions: ANDROID_PERMISSIONS });
     expect(executed.status).toBe("succeeded");
 
-    // Le client reçoit bien l'image…
     expect(JSON.stringify(executed.steps[0]?.result)).toContain("aW1hZ2UtZmFjdGljZQ==");
 
-    // …et le journal d'exécution ne la contient pas.
     const executions = await store.listExecutions(plan.id);
     expect(executions).toHaveLength(1);
     expect(executions[0]?.result).toBe(SENSITIVE_RESULT_PLACEHOLDER);
     expect(JSON.stringify(executions)).not.toContain("aW1hZ2UtZmFjdGljZQ==");
   });
 
-  it("ne place jamais l'image dans un événement", async () => {
+  it("never includes screenshot image in an event", async () => {
     const harness = await makeHarness();
     await harness.attachClient();
     await harness.connectWorker();
 
     const plan = createTaskPlan({
       userId: USER_ID,
-      title: "Voir l'écran",
+      title: "View screen",
       originClientDeviceId: IPHONE.id,
       correlationId: "corr-capture-evt",
       steps: [
         {
           id: "capture",
-          description: "Capturer l'écran",
+          description: "Capture screen",
           requiredCapabilities: ["android.ui.screenshot"],
           tool: "device.android.ui.screenshot",
           arguments: {},
@@ -305,7 +293,7 @@ describe("chaîne complète", () => {
     expect(harness.logger.text).not.toContain("aW1hZ2UtZmFjdGljZQ==");
   });
 
-  it("le worker reste prêt après un plan échoué", async () => {
+  it("worker remains ready after a failed plan", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -321,8 +309,8 @@ describe("chaîne complète", () => {
   });
 });
 
-describe("protocole de tâche", () => {
-  it("refuse une capacité que le téléphone n'a pas", async () => {
+describe("task protocol", () => {
+  it("rejects capability that phone does not have", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -335,16 +323,16 @@ describe("protocole de tâche", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "CAPABILITY_UNAVAILABLE" } });
   });
 
-  it("refuse des arguments qui ne respectent pas le schéma", async () => {
+  it("rejects arguments that violate schema", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
-    const result = await dispatch(harness, { arguments: { titre: "mauvais champ" } });
+    const result = await dispatch(harness, { arguments: { invalidField: "bad field" } });
     expect(result).toMatchObject({ ok: false, error: { code: "CAPABILITY_INPUT_INVALID" } });
     expect(harness.platform.notifications.posted).toHaveLength(0);
   });
 
-  it("n'exécute pas deux fois le même identifiant de requête", async () => {
+  it("does not execute the same request ID twice", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
 
@@ -359,7 +347,7 @@ describe("protocole de tâche", () => {
     expect(results(harness)).toHaveLength(1);
   });
 
-  it("refuse une étape de plus quand le téléphone est saturé", async () => {
+  it("rejects extra step when phone is saturated", async () => {
     const harness = await makeHarness({
       config: { maxConcurrentTasks: 1 },
     });
@@ -370,7 +358,7 @@ describe("protocole de tâche", () => {
       dispatchEnvelope({
         capability: "android.ui.click",
         tool: "device.android.ui.click",
-        arguments: { selector: { kind: "text", value: "Rechercher" } },
+        arguments: { selector: { kind: "text", value: "Search" } },
       }),
     );
     await until(() => harness.worker.activeTaskCount === 1);
@@ -384,7 +372,7 @@ describe("protocole de tâche", () => {
     });
   });
 
-  it("annule une étape en cours sur ordre du cœur", async () => {
+  it("cancels an in-progress step on core order", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
     harness.platform.ui.hangUntilAborted = true;
@@ -392,7 +380,7 @@ describe("protocole de tâche", () => {
     const envelope = dispatchEnvelope({
       capability: "android.ui.click",
       tool: "device.android.ui.click",
-      arguments: { selector: { kind: "text", value: "Rechercher" } },
+      arguments: { selector: { kind: "text", value: "Search" } },
     });
     const payload = envelope.payload as WorkerPayload<"worker.task_dispatch">;
     harness.link.deliver(envelope);
@@ -401,7 +389,7 @@ describe("protocole de tâche", () => {
     harness.link.deliver(
       workerEnvelope(
         WORKER_MESSAGE.taskCancel,
-        { taskId: payload.taskId, stepId: payload.stepId, reason: "annulée par NEXUS" },
+        { taskId: payload.taskId, stepId: payload.stepId, reason: "cancelled by NEXUS" },
         { id: "cancel-1", at: new Date() },
       ),
     );
@@ -410,7 +398,7 @@ describe("protocole de tâche", () => {
     expect(results(harness)[0]?.ok).toBe(false);
   });
 
-  it("libère l'étape côté cœur quand le téléphone disparaît", async () => {
+  it("releases step core-side when phone disconnects", async () => {
     const harness = await makeHarness();
     await harness.connectWorker();
     harness.platform.ui.hangUntilAborted = true;
@@ -418,18 +406,18 @@ describe("protocole de tâche", () => {
     const controller = new AbortController();
     const pending = harness.gateway.dispatch({
       deviceId: harness.device.id,
-      taskId: "task-coupure",
+      taskId: "task-outage",
       stepId: "step-1",
       tool: "device.android.ui.click",
       capability: "android.ui.click",
-      arguments: { selector: { kind: "text", value: "Rechercher" } },
+      arguments: { selector: { kind: "text", value: "Search" } },
       timeoutMs: 60_000,
       signal: controller.signal,
       onProgress: () => undefined,
     });
 
     await until(() => harness.worker.activeTaskCount === 1);
-    await harness.gateway.detach(harness.device.id, "réseau mobile perdu");
+    await harness.gateway.detach(harness.device.id, "cellular network lost");
 
     await expect(pending).resolves.toMatchObject({
       ok: false,

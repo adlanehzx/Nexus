@@ -7,54 +7,16 @@ import { BrowserTaskFailedError, HumanVerificationRequiredError } from "../error
 import type { SessionPool } from "../runtime/session-pool.js";
 
 /**
- * Les capacités `browser.*` de l'exécutant navigateur.
+ * `browser.*` capabilities for the browser worker host.
  *
- * ## Une capacité par intention, jamais une capacité générique
- *
- * C'est le point de sécurité du fichier. Lire le prix d'un billet et acheter ce
- * billet sont techniquement le même geste — un clic — mais ce ne sont pas les
- * mêmes actes. Les séparer en quatre capacités distinctes est ce qui permet au
- * reste de NEXUS de faire son travail sans rien savoir du navigateur :
- *
- *  - `PermissionService` exige `browser.purchase` pour acheter, et l'utilisateur
- *    voit cette ligne dans ses réglages ;
- *  - `ConfirmationBroker` demande l'accord humain à partir du niveau de risque ;
- *  - `DeviceSelector` n'envoie une étape qu'à un appareil qui l'a annoncée.
- *
- * Le nom de la capacité **est** le nom de la permission (`permissionForCapability`
- * est l'identité). Un seul espace de nommage traverse le système, des réglages
- * de l'utilisateur jusqu'à l'action dans la page.
- *
- * ## Ce que ce fichier ne fait pas
- *
- * Il ne pilote aucun navigateur. Il traduit une capacité NEXUS en appel au
- * worker Python, qui détient `browser-use` et Chromium (ADR-006). La
- * restriction réelle des actions — un `read` ne peut pas cliquer, `evaluate`
- * n'existe pour personne — est appliquée **là-bas**, dans `policies.py`, parce
- * qu'un cœur compromis ne doit pas pouvoir transformer une lecture en achat.
- *
- * Il n'y a donc pas de politique dupliquée ici, et c'est délibéré : deux
- * politiques finissent toujours par diverger, et c'est la plus permissive qui
- * gagne.
+ * Dedicated capabilities per intent (navigate, interact, login, purchase)
+ * map directly to permissions and risk levels.
  */
 
-/**
- * Arguments d'une tâche de navigation.
- *
- * Identiques pour les quatre capacités : ce qui les distingue est l'intention,
- * pas la forme de l'appel.
- */
 export const browseInputSchema = z.object({
-  /** Ce qu'il faut obtenir, en langage naturel. */
+  /** Natural language instructions. */
   instructions: z.string().min(3).max(4_000),
-  /**
-   * Point de départ. Sans lui, les instructions doivent dire où aller.
-   *
-   * **`http` et `https` uniquement.** `new URL()` accepte n'importe quel
-   * schéma : `javascript:`, `file:`, `data:`. Aucun n'a de sens ici, et le
-   * premier est une exécution de code déguisée en adresse. On les refuse avant
-   * qu'ils ne voyagent jusqu'au navigateur.
-   */
+  /** Starting URL. HTTP and HTTPS only. */
   url: z
     .string()
     .url()
@@ -63,29 +25,21 @@ export const browseInputSchema = z.object({
         const protocol = URL.parse(value)?.protocol;
         return protocol === "http:" || protocol === "https:";
       },
-      { message: "seuls http:// et https:// sont acceptés" },
+      { message: "only http:// and https:// are accepted" },
     )
     .optional(),
-  /**
-   * Étapes maximales.
-   *
-   * Plafonné par la configuration de l'hôte : une tâche qui boucle coûte des
-   * appels au modèle et tient un Chromium ouvert.
-   */
+  /** Maximum task steps. */
   maxSteps: z.number().int().min(1).max(50).optional(),
 });
 
 export type BrowseInput = z.infer<typeof browseInputSchema>;
 
 export interface BrowseResult {
-  /** Ce que la navigation a produit, en texte. */
   output: string;
   status: string;
   steps: number;
   durationMs: number;
-  /** Dernière URL réellement visitée, quand il y en a eu une. */
   visitedUrl: string | null;
-  /** Session navigateur utilisée — utile pour enchaîner dans la même tâche. */
   sessionId: string;
 }
 
@@ -102,53 +56,42 @@ interface IntentSpec {
   description: string;
 }
 
-/**
- * Les quatre intentions, et les capacités qui leur correspondent.
- *
- * `browser.navigate` et `browser.interact` figurent déjà au catalogue de
- * permissions du cœur et dans `DEFAULT_CAPABILITIES.BROWSER_WORKER`. `login` et
- * `purchase` prolongent la même série : elles sont déclarées par
- * `INTENT_PERMISSIONS` du client navigateur depuis l'origine.
- */
 export const BROWSER_INTENTS: readonly IntentSpec[] = [
   {
     capability: "browser.navigate",
     intent: "read",
     riskLevel: "LOW",
     description:
-      "Ouvre une page web et en extrait de l'information : prix, horaires, disponibilité, contenu. " +
-      "LECTURE SEULE — ne clique pas, ne remplit aucun formulaire, ne se connecte à rien. " +
-      "À utiliser pour toute recherche d'information sur le web.",
+      "Open a web page and extract information: prices, schedules, availability, content. " +
+      "READ ONLY — does not click action buttons, fill forms, or sign in. " +
+      "Use for general web research.",
   },
   {
     capability: "browser.interact",
     intent: "interact",
     riskLevel: "MEDIUM",
     description:
-      "Interagit avec une page web : cliquer, remplir un formulaire, filtrer, rechercher. " +
-      "N'effectue ni connexion ni paiement.",
+      "Interact with a web page: click, fill forms, filter, search. " +
+      "Does not sign in or execute payments.",
   },
   {
     capability: "browser.login",
     intent: "login",
     riskLevel: "HIGH",
     description:
-      "Se connecte à un site avec des identifiants déjà enregistrés par l'utilisateur. " +
-      "Ne contourne JAMAIS un CAPTCHA ni une authentification à deux facteurs : si le site en " +
-      "demande une, la tâche s'arrête et rend la main à l'utilisateur.",
+      "Sign in to a website with existing user credentials. " +
+      "NEVER bypasses CAPTCHA or two-factor authentication: if challenged, halts and returns control to user.",
   },
   {
     capability: "browser.purchase",
     intent: "purchase",
     riskLevel: "CRITICAL",
     description:
-      "Finalise un achat ou une réservation payante. Action IRRÉVERSIBLE et engageante " +
-      "financièrement. À n'utiliser qu'après avoir présenté le montant exact et obtenu l'accord " +
-      "explicite de l'utilisateur.",
+      "Finalize a purchase or paid reservation. IRREVERSIBLE, financially binding action. " +
+      "Only execute after displaying exact amount and obtaining explicit user confirmation.",
   },
 ];
 
-/** Construit les quatre capacités de navigation. */
 export function createBrowseCapabilities(
   dependencies: BrowseDependencies,
 ): LocalCapability<BrowseInput, BrowseResult>[] {
@@ -169,22 +112,15 @@ function createBrowseCapability(
       properties: {
         instructions: {
           type: "string",
-          description: "Ce qu'il faut obtenir, en langage naturel",
+          description: "What to achieve, in natural language",
         },
-        url: { type: "string", description: "Page de départ" },
+        url: { type: "string", description: "Starting web page" },
         maxSteps: { type: "integer", minimum: 1, maximum: 50 },
       },
       required: ["instructions"],
     },
     riskLevel: spec.riskLevel,
 
-    /**
-     * Le worker Python répond-il ?
-     *
-     * Une capacité annoncée qu'on ne peut pas honorer est pire que pas de
-     * capacité du tout : le sélecteur choisirait cet exécutant et l'étape
-     * échouerait après avoir écarté quelqu'un qui, lui, aurait su faire.
-     */
     probe: async (): Promise<boolean> => {
       try {
         await dependencies.client.health();
@@ -195,21 +131,15 @@ function createBrowseCapability(
     },
 
     execute: async (input, context): Promise<BrowseResult> => {
-      // Une session par tâche NEXUS : deux tâches ne partagent jamais de
-      // cookies, d'onglets ni d'historique. Les étapes successives d'une même
-      // tâche, elles, la réutilisent — sans quoi « connecte-toi puis
-      // commande » ouvrirait deux navigateurs et perdrait la session.
       const sessionId = await dependencies.sessions.acquire(context.taskId, context.signal);
 
       const instructions =
         input.url === undefined
           ? input.instructions
-          : `Va sur ${input.url}, puis : ${input.instructions}`;
+          : `Go to ${input.url}, then: ${input.instructions}`;
 
       const started = await dependencies.client.runTask(
         {
-          // L'identifiant d'étape rend le lancement idempotent : un renvoi
-          // après coupure ne relance pas une seconde navigation.
           taskId: `${context.taskId}-${context.stepId}`.slice(0, 120),
           sessionId,
           instructions,
@@ -235,12 +165,6 @@ function createBrowseCapability(
   };
 }
 
-/**
- * Traduit l'issue d'une tâche navigateur en résultat de capacité.
- *
- * Trois issues, trois traitements distincts — et surtout, `needs_human` n'est
- * **pas** un échec.
- */
 function finalize(
   spec: IntentSpec,
   task: BrowserTask,
@@ -248,16 +172,11 @@ function finalize(
   visitedUrl: string | null,
 ): BrowseResult {
   if (task.status === "needs_human") {
-    // Le site demande une vérification humaine. On ne la contourne pas : on
-    // s'arrête et on rend la main, avec un message rédigé pour être relayé tel
-    // quel à l'utilisateur. Ce worker ne contient aucun code de résolution de
-    // CAPTCHA et n'en contiendra pas.
     throw new HumanVerificationRequiredError(
       spec.capability,
       task.error?.message ??
-        "Le site demande une vérification humaine (CAPTCHA ou authentification à deux " +
-          "facteurs). Je ne la contourne pas : prends la main sur cette étape, puis " +
-          "redemande-moi de continuer.",
+        "The site requires human verification (CAPTCHA or two-factor authentication). " +
+          "Autonomous bypass is prohibited: please complete this step, then instruct me to continue.",
     );
   }
 
@@ -280,25 +199,17 @@ function finalize(
   };
 }
 
-/**
- * Traduit un événement du worker en progression lisible.
- *
- * Ce qui remonte au cœur est **ce que fait l'agent**, pas ce qu'il pense en
- * détail : une étape, une page ouverte, une action. Le raisonnement interne du
- * modèle est tronqué à cent vingt caractères — assez pour suivre, pas assez
- * pour exposer une chaîne de pensée complète dans le journal du tableau de bord.
- */
 function describeEvent(event: BrowserEvent): { percent?: number; label?: string } | undefined {
   switch (event.type) {
     case "navigation":
-      return { label: `Ouverture de ${hostOf(event.url)}` };
+      return { label: `Opening ${hostOf(event.url)}` };
     case "action":
-      return { label: `${event.action}${event.target === null ? "" : ` : ${event.target}`}` };
+      return { label: `${event.action}${event.target === null ? "" : `: ${event.target}`}` };
     case "thinking":
       return { label: event.text.slice(0, 120) };
     case "progress":
       return {
-        label: `Étape ${String(event.step)}/${String(event.maxSteps)}`,
+        label: `Step ${String(event.step)}/${String(event.maxSteps)}`,
         percent: Math.round((event.step / event.maxSteps) * 100),
       };
     default:

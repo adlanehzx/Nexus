@@ -2,22 +2,7 @@ import type { WorkerLogger } from "@nexus/worker-core";
 import type { AndroidPlatform } from "../ports.js";
 
 /**
- * Surveillance de la disponibilité des capacités.
- *
- * Sur un poste de travail, ce qu'un worker sait faire ne change pas : Git est
- * installé ou ne l'est pas. Sur un téléphone, **cela change en permanence, et
- * c'est voulu** — l'utilisateur désactive le service d'accessibilité parce qu'il
- * prête son téléphone, révoque les notifications, redémarre.
- *
- * Sans surveillance, le cœur continuerait de croire que `android.ui.click` est
- * disponible, le sélecteur choisirait le Redmi, et l'étape échouerait après
- * avoir écarté un exécutant capable. La réannonce n'est donc pas un confort :
- * c'est ce qui rend la sélection honnête.
- *
- * Le sondage est périodique et non événementiel, faute de diffusion système pour
- * l'activation d'un service d'accessibilité. L'intervalle est large — quelques
- * dizaines de secondes — parce que la vérification touche le système et que
- * l'utilisateur ne bascule pas ces réglages toutes les secondes.
+ * Capability availability monitoring.
  */
 
 export interface AvailabilitySnapshot {
@@ -29,7 +14,7 @@ export interface AvailabilitySnapshot {
 export interface AvailabilityWatcherOptions {
   platform: AndroidPlatform;
   logger: WorkerLogger;
-  /** Appelée quand la disponibilité change. Réannonce les capacités au cœur. */
+  /** Called when availability changes. Re-announces capabilities to core. */
   onChange: (snapshot: AvailabilitySnapshot) => Promise<void> | void;
 }
 
@@ -51,19 +36,14 @@ export class AvailabilityWatcher {
   }
 
   /**
-   * Relève l'état sans le signaler.
-   *
-   * Appelé au démarrage, avant la connexion : les capacités seront annoncées
-   * par la poignée de main elle-même. Sans cette amorce, la première
-   * vérification périodique croirait à un changement et réannoncerait une liste
-   * identique, quelques secondes après l'avoir déjà envoyée.
+   * Reads state without notifying.
    */
   async prime(): Promise<AvailabilitySnapshot> {
     this.#last = await this.probe();
     return this.#last;
   }
 
-  /** Interroge le système. Chaque test est indépendant des autres. */
+  /** Queries system. Each check is independent. */
   async probe(): Promise<AvailabilitySnapshot> {
     const [accessibility, screenshot, notifications] = await Promise.all([
       this.#safely(() => this.#platform.ui.isAccessibilityEnabled()),
@@ -75,10 +55,7 @@ export class AvailabilityWatcher {
   }
 
   /**
-   * Sonde, et signale si quelque chose a changé.
-   *
-   * Renvoie `true` quand un changement a été signalé — ce que les tests
-   * observent, et ce qui déclenche la réannonce.
+   * Probes and notifies if anything changed.
    */
   async check(): Promise<boolean> {
     const snapshot = await this.probe();
@@ -91,13 +68,11 @@ export class AvailabilityWatcher {
     const previous = this.#last;
     this.#last = snapshot;
 
-    // Premier passage : on note l'état sans le présenter comme un changement,
-    // mais on réannonce quand même — le cœur doit connaître l'état initial.
     this.#logger.info(
-      previous === undefined ? "disponibilité initiale" : "disponibilité modifiée",
+      previous === undefined ? "initial availability" : "availability changed",
       {
-        accessibilité: snapshot.accessibility,
-        capture: snapshot.screenshot,
+        accessibility: snapshot.accessibility,
+        screenshot: snapshot.screenshot,
         notifications: snapshot.notifications,
       },
     );
@@ -106,7 +81,7 @@ export class AvailabilityWatcher {
     return true;
   }
 
-  /** Une sonde qui échoue vaut une indisponibilité : dans le doute, on n'annonce pas. */
+  /** A failing probe is treated as unavailable. */
   async #safely(probe: () => Promise<boolean>): Promise<boolean> {
     try {
       return await probe();

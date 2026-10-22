@@ -1,11 +1,7 @@
-"""Rédaction des secrets.
+"""Secret redaction.
 
-Appliquée avant toute journalisation et avant tout renvoi au backend. Deux
-niveaux, parce qu'un seul ne suffit pas : par NOM de clé, et par FORME de
-valeur — un secret finit toujours par se retrouver dans un champ innocemment
-nommé.
-
-Ce module ne connaît rien du reste du worker : il se teste seul.
+Applied before any logging or response payloads are returned to the backend.
+Two levels of defense: by key NAME and by value PATTERN.
 """
 
 from __future__ import annotations
@@ -29,11 +25,11 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"^ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."),
     re.compile(r"^Bearer\s+\S{16,}$", re.IGNORECASE),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    # Numéro de carte : 13 à 19 chiffres, avec ou sans séparateurs.
+    # Payment card number: 13-19 digits, with optional separators.
     re.compile(r"^(?:\d[ -]?){13,19}$"),
 )
 
-#: Motifs masqués partout dans un texte libre (sortie de tâche, message d'erreur).
+#: Patterns redacted within arbitrary free-text (task outputs, error messages).
 INLINE_PATTERNS = (
     re.compile(r"\b(?:\d[ -]?){13,19}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
@@ -47,13 +43,13 @@ def _looks_secret(value: str) -> bool:
 
 
 def redact(value: Any, max_depth: int = 8) -> Any:
-    """Copie profonde, secrets masqués. Ne lève jamais."""
+    """Deep copy with secrets redacted. Never raises."""
     if isinstance(value, str):
         return REDACTED if _looks_secret(value) else value
     if isinstance(value, (int, float, bool)) or value is None:
         return value
     if max_depth <= 0:
-        return "[profondeur maximale atteinte]"
+        return "[max depth reached]"
     if isinstance(value, (list, tuple)):
         return [redact(item, max_depth - 1) for item in value]
     if isinstance(value, dict):
@@ -65,10 +61,10 @@ def redact(value: Any, max_depth: int = 8) -> Any:
 
 
 def redact_text(text: str, extra: tuple[str, ...] = ()) -> str:
-    """Masque les secrets dans un texte libre.
+    """Mask secrets within free-text.
 
-    ``extra`` reçoit les valeurs connues d'identifiants de la tâche : même si le
-    modèle les recopie dans son résultat, elles n'en sortent pas.
+    ``extra`` accepts known task secrets: even if the model echoes them,
+    they are redacted before output.
     """
     out = text or ""
     for secret in extra:
@@ -80,7 +76,7 @@ def redact_text(text: str, extra: tuple[str, ...] = ()) -> str:
 
 
 class RedactingFilter(logging.Filter):
-    """Filtre de journalisation : dernier rideau avant l'écriture."""
+    """Logging filter: final guard before log output."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):

@@ -10,8 +10,8 @@ afterEach(async () => {
   await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-describe("paquet Linux du worker", () => {
-  it("embarque une politique explicite et valide", async () => {
+describe("worker Linux packaging", () => {
+  it("embeds explicit and valid policy", async () => {
     const installer = await readFile(
       resolve(process.cwd(), "../../packaging/linux/install-worker.sh"),
       "utf8",
@@ -31,7 +31,7 @@ describe("paquet Linux du worker", () => {
     expect(loaded.policy.network.egress).toBe("deny");
   });
 
-  it("fixe le chemin de politique dans l'image", async () => {
+  it("pins policy path in image", async () => {
     const dockerfile = await readFile(
       resolve(process.cwd(), "../../infrastructure/docker/worker.Dockerfile"),
       "utf8",

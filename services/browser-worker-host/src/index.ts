@@ -1,4 +1,4 @@
-// Le runtime commun à tous les exécutants, réexporté pour les appelants.
+// Shared worker runtime re-exported for callers.
 export {
   LocalCapabilityRegistry,
   LoopbackLink,

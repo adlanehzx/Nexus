@@ -6,17 +6,7 @@ import { PolicyViolationError } from "../errors.js";
 /**
  * `browser.open`.
  *
- * Volontairement minuscule, et **ce n'est pas un doublon de Browser Use**. La
- * distinction :
- *
- *  - **Browser Use** pilote un navigateur : il lit une page, clique, remplit un
- *    formulaire, comprend ce qu'il voit. C'est un worker spécialisé, avec sa
- *    propre isolation de session.
- *  - **`browser.open`** ouvre une page *devant l'utilisateur*, sur son écran.
- *    C'est une action de restitution, pas d'automatisation.
- *
- * Les confondre reviendrait à donner deux chemins d'automatisation du web, dont
- * l'un sans aucune des protections de l'autre.
+ * Opens a web page in the user's desktop browser.
  */
 
 export const browserOpenInputSchema = z.object({
@@ -25,12 +15,6 @@ export const browserOpenInputSchema = z.object({
 
 export type BrowserOpenInput = z.infer<typeof browserOpenInputSchema>;
 
-/**
- * Schémas d'URL acceptés.
- *
- * `file://` ouvrirait un fichier local hors de toute politique de chemins ;
- * `javascript:` exécuterait du code dans le navigateur de l'utilisateur.
- */
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 
 export interface BrowserDependencies {
@@ -44,12 +28,12 @@ export function createBrowserOpenCapability(
   return {
     name: "browser.open",
     description:
-      "Ouvre une page web dans le navigateur de l'utilisateur, sur son écran. " +
-      "N'automatise rien : pour naviguer ou interagir, NEXUS utilise son worker navigateur dédié.",
+      "Opens a web page in the user's browser on their screen. " +
+      "Does not automate browsing: to navigate or interact, NEXUS uses its dedicated browser worker.",
     inputSchema: browserOpenInputSchema,
     inputJsonSchema: {
       type: "object",
-      properties: { url: { type: "string", description: "Adresse http(s) à ouvrir" } },
+      properties: { url: { type: "string", description: "http(s) address to open" } },
       required: ["url"],
     },
     riskLevel: "LOW",
@@ -59,14 +43,12 @@ export function createBrowserOpenCapability(
       if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
         throw new PolicyViolationError({
           rule: "browser.protocol",
-          message: `Schéma d'URL refusé : ${url.protocol}`,
+          message: `URL scheme not allowed: ${url.protocol}`,
           userMessage: "Only http and https addresses can be opened.",
           context: { protocol: url.protocol },
         });
       }
 
-      // `start` passe par le shell ; on invoque directement le gestionnaire
-      // d'URL de Windows, avec l'adresse en argument séparé.
       const outcome = await dependencies.runner.run({
         executable: "rundll32",
         args: ["url.dll,FileProtocolHandler", url.toString()],

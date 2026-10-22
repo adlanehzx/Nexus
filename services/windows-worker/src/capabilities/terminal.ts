@@ -9,24 +9,14 @@ import { assertProcessSucceeded } from "../runtime/process-runner.js";
 /**
  * `terminal.execute`.
  *
- * L'API est structurée, et c'est le point central de tout ce paquet. Il n'existe
- * **aucun** champ `command: string` : le cœur envoie un exécutable choisi dans
- * une liste et des arguments qui resteront des arguments.
- *
- * Écrire `{ command: "git status" }` obligerait le worker à découper la chaîne,
- * donc à réimplémenter les règles de découpage d'un shell — et à se tromper,
- * comme tout le monde s'y trompe. Écrire `{ executable: "git", args: ["status"] }`
- * supprime la question.
+ * Structured execution taking program name and argument array.
  */
 
 export const terminalInputSchema = z.object({
-  /** Nom d'un programme autorisé. Ni chemin, ni chaîne de commande. */
   executable: z.string().min(1).max(128),
   args: z.array(z.string().max(4_096)).max(64).default([]),
-  /** Doit tomber sous une racine autorisée, comme n'importe quel chemin. */
   workingDirectory: z.string().optional(),
   timeoutMs: z.number().int().min(1_000).max(1_800_000).optional(),
-  /** Variables transmises. Bornées par la liste blanche de la politique. */
   env: z.record(z.string(), z.string()).optional(),
 });
 
@@ -37,15 +27,15 @@ export const terminalInputJsonSchema = {
   properties: {
     executable: {
       type: "string",
-      description: "Programme à lancer, par son nom seul (ex. « git »). Jamais un chemin.",
+      description: "Program to launch, by name only (e.g. \"git\"). Never a path.",
     },
     args: {
       type: "array",
       items: { type: "string" },
-      description: "Arguments, un par élément. Ne jamais assembler une ligne de commande ici.",
+      description: "Arguments, one per element. Never assemble a command line string here.",
     },
-    workingDirectory: { type: "string", description: "Répertoire de travail" },
-    timeoutMs: { type: "number", description: "Délai maximal en millisecondes" },
+    workingDirectory: { type: "string", description: "Working directory" },
+    timeoutMs: { type: "number", description: "Maximum timeout in milliseconds" },
   },
   required: ["executable"],
 } as const;
@@ -64,7 +54,6 @@ export interface TerminalDependencies {
   execPolicy: ExecPolicy;
   pathPolicy: PathPolicy;
   runner: ProcessRunner;
-  /** Environnement du worker, filtré par la politique avant transmission. */
   env: Record<string, string | undefined>;
   defaultTimeoutMs: number;
 }
@@ -75,8 +64,8 @@ export function createTerminalCapability(
   return {
     name: "terminal.execute",
     description:
-      "Exécute un programme autorisé avec des arguments structurés sur cet ordinateur. " +
-      "Ne prend pas de ligne de commande : indiquer le programme et ses arguments séparément.",
+      "Executes an allowed program with structured arguments on this computer. " +
+      "Does not take a command line: specify the program and its arguments separately.",
     inputSchema: terminalInputSchema,
     inputJsonSchema: terminalInputJsonSchema,
     riskLevel: "HIGH",
@@ -96,7 +85,7 @@ export function createTerminalCapability(
           ? undefined
           : await dependencies.pathPolicy.resolve(input.workingDirectory);
 
-      context.onProgress({ label: `${validated.executable} en cours` });
+      context.onProgress({ label: `${validated.executable} running` });
 
       const outcome = await dependencies.runner.run({
         executable: validated.executable,
@@ -109,10 +98,6 @@ export function createTerminalCapability(
 
       assertProcessSucceeded("terminal.execute", outcome);
 
-      // La rédaction s'applique ici, avant que quoi que ce soit ne quitte la
-      // machine. Ce qu'un programme écrit sur sa sortie n'est pas maîtrisé : un
-      // script de déploiement qui affiche son jeton ne doit pas le faire entrer
-      // dans le journal du cœur.
       return {
         processId: outcome.processId,
         exitCode: outcome.exitCode,

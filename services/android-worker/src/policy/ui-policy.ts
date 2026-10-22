@@ -2,21 +2,7 @@ import { PolicyViolationError } from "@nexus/worker-core";
 import type { ScrollDirection, UiSelector } from "../ports.js";
 
 /**
- * Politique d'automatisation d'interface.
- *
- * C'est la politique la plus délicate du worker, parce qu'un clic est
- * irréversible et qu'on ne sait jamais tout à fait sur quoi on clique. Trois
- * décisions la gouvernent :
- *
- *  1. **Les coordonnées sont un dernier recours, désactivé par défaut.** Cliquer
- *     en (540, 1200) revient à toucher ce qui s'y trouve — un bouton « Payer »
- *     si l'écran a changé entre-temps. Les sélecteurs sémantiques (identifiant
- *     de vue, texte, description) désignent un élément, pas un endroit.
- *  2. **Un clic exige un élément réellement cliquable.** Le service
- *     d'accessibilité sait le dire ; ne pas le vérifier reviendrait à envoyer
- *     l'événement au hasard dans la hiérarchie.
- *  3. **Le texte saisi ne sort jamais.** Ni journal, ni événement, ni résultat.
- *     `android.ui.input` est le chemin normal d'un mot de passe.
+ * UI automation policy.
  */
 
 const MAX_SELECTOR_LENGTH = 256;
@@ -24,14 +10,9 @@ const MAX_INPUT_LENGTH = 4_096;
 const MAX_SCROLL_AMOUNT = 20;
 
 export interface UiPolicyOptions {
-  /**
-   * Autorise les clics par coordonnées.
-   *
-   * Faux par défaut. À n'activer que si une application refuse obstinément de
-   * fournir des identifiants de vue, et en connaissance de cause.
-   */
+  /** Allows coordinate clicks. */
   allowCoordinateClicks?: boolean;
-  /** Bornes de l'écran, pour rejeter une coordonnée hors dalle. */
+  /** Screen bounds, to reject out-of-screen coordinates. */
   screenBounds?: { width: number; height: number };
   maxInputLength?: number;
   maxScrollAmount?: number;
@@ -55,17 +36,16 @@ export class UiPolicy {
   }
 
   /**
-   * Valide un sélecteur.
+   * Validates a selector.
    *
-   * @throws {PolicyViolationError} sur une valeur vide, trop longue, ou sur des
-   *   coordonnées non autorisées ou hors écran.
+   * @throws {PolicyViolationError} on empty, too long, or disallowed coordinates.
    */
   assertSelectorAllowed(selector: UiSelector): UiSelector {
     if (selector.kind === "coordinates") {
       if (!this.#allowCoordinates) {
         throw new PolicyViolationError({
           rule: "ui.coordinatesDisabled",
-          message: "Clic par coordonnées désactivé",
+          message: "Coordinate taps disabled",
           userMessage:
             "Coordinate taps are disabled on this device: they hit a place on the " +
             "screen, not an identified element.",
@@ -75,13 +55,13 @@ export class UiPolicy {
       if (!Number.isFinite(selector.x) || !Number.isFinite(selector.y)) {
         throw new PolicyViolationError({
           rule: "ui.coordinatesInvalid",
-          message: "Coordonnées non numériques",
+          message: "Non-numeric coordinates",
         });
       }
       if (selector.x < 0 || selector.y < 0) {
         throw new PolicyViolationError({
           rule: "ui.coordinatesNegative",
-          message: "Coordonnées négatives",
+          message: "Negative coordinates",
         });
       }
       if (
@@ -90,7 +70,7 @@ export class UiPolicy {
       ) {
         throw new PolicyViolationError({
           rule: "ui.coordinatesOutOfBounds",
-          message: "Coordonnées hors de l'écran",
+          message: "Coordinates off screen",
           userMessage: "The target point is off screen.",
         });
       }
@@ -102,13 +82,13 @@ export class UiPolicy {
     if (value.length === 0) {
       throw new PolicyViolationError({
         rule: "ui.selectorEmpty",
-        message: `Sélecteur ${selector.kind} vide`,
+        message: `Empty ${selector.kind} selector`,
       });
     }
     if (value.length > MAX_SELECTOR_LENGTH) {
       throw new PolicyViolationError({
         rule: "ui.selectorTooLong",
-        message: `Sélecteur ${selector.kind} trop long`,
+        message: `Selector ${selector.kind} too long`,
       });
     }
 
@@ -116,27 +96,20 @@ export class UiPolicy {
   }
 
   /**
-   * Valide un texte à saisir.
-   *
-   * Renvoie le texte tel quel : il doit atteindre le champ intact. Ce qui est
-   * borné, c'est sa longueur — une saisie d'un mégaoctet dans un champ de
-   * recherche n'a aucun usage légitime et fige l'interface.
-   *
-   * **Le texte n'apparaît nulle part ailleurs.** Ni ici, ni dans l'erreur.
+   * Validates text to input.
    */
   assertTextAllowed(text: string): string {
     if (text.length === 0) {
       throw new PolicyViolationError({
         rule: "ui.textEmpty",
-        message: "Texte de saisie vide",
+        message: "Empty input text",
         userMessage: "No text to type was given.",
       });
     }
     if (text.length > this.#maxInput) {
       throw new PolicyViolationError({
         rule: "ui.textTooLong",
-        // La longueur seule : le contenu ne doit pas atteindre le journal.
-        message: `Texte de saisie trop long (${String(text.length)} caractères)`,
+        message: `Input text too long (${String(text.length)} characters)`,
         userMessage: "The text to type exceeds the allowed length.",
         context: { length: text.length },
       });
@@ -144,14 +117,14 @@ export class UiPolicy {
     if (text.includes("\0")) {
       throw new PolicyViolationError({
         rule: "ui.textNul",
-        message: "Texte de saisie contenant un caractère nul",
+        message: "Input text contains a null character",
       });
     }
 
     return text;
   }
 
-  /** Valide une direction et une amplitude de défilement. */
+  /** Validates scroll direction and amount. */
   assertScrollAllowed(
     direction: ScrollDirection,
     amount: number,
@@ -159,14 +132,14 @@ export class UiPolicy {
     if (!Number.isInteger(amount) || amount < 1) {
       throw new PolicyViolationError({
         rule: "ui.scrollAmount",
-        message: `Amplitude de défilement invalide : ${String(amount)}`,
+        message: `Invalid scroll amount: ${String(amount)}`,
         userMessage: "The scroll amount must be a positive integer.",
       });
     }
     if (amount > this.#maxScroll) {
       throw new PolicyViolationError({
         rule: "ui.scrollTooFar",
-        message: `Amplitude de défilement excessive : ${String(amount)}`,
+        message: `Excessive scroll amount: ${String(amount)}`,
         userMessage: `Scrolling is limited to ${String(this.#maxScroll)} gestures per operation.`,
         context: { amount, max: this.#maxScroll },
       });
@@ -176,10 +149,7 @@ export class UiPolicy {
   }
 
   /**
-   * Vérifie qu'un nœud accepte réellement l'action demandée.
-   *
-   * Sans cela, on enverrait un clic à un élément qui n'en attend pas, et le
-   * système le propagerait au parent — donc à un élément qu'on n'a pas choisi.
+   * Verifies that a node accepts the requested action.
    */
   assertNodeAccepts(
     node: { clickable: boolean; editable: boolean },
@@ -188,14 +158,14 @@ export class UiPolicy {
     if (action === "click" && !node.clickable) {
       throw new PolicyViolationError({
         rule: "ui.nodeNotClickable",
-        message: "L'élément visé n'est pas cliquable",
+        message: "Target element is not clickable",
         userMessage: "The target element does not accept a tap.",
       });
     }
     if (action === "input" && !node.editable) {
       throw new PolicyViolationError({
         rule: "ui.nodeNotEditable",
-        message: "L'élément visé n'est pas un champ de saisie",
+        message: "Target element is not an editable field",
         userMessage: "The target element is not a text field.",
       });
     }

@@ -19,11 +19,11 @@ import type { AndroidApp, AndroidBatteryState, Screenshot, UiNode } from "../src
 import { ANDROID_PERMISSIONS, USER_ID, generateDeviceKeys, until } from "./fixtures.js";
 
 /**
- * Attente sur un predicat asynchrone.
+ * Wait for an asynchronous predicate.
  *
- * `until` du harnais ne fait tourner que la file de micro-taches et ne sait pas
- * attendre une promesse : lui passer un predicat `async` reviendrait a tester la
- * verite d'un objet Promise, qui est toujours vraie.
+ * The harness `until` only drains microtasks and cannot await a promise;
+ * passing an `async` predicate to it would test the truthiness of a Promise object,
+ * which is always true.
  */
 async function untilAsync(predicate: () => Promise<boolean>, label = "condition"): Promise<void> {
   const deadline = Date.now() + 4_000;
@@ -31,33 +31,27 @@ async function untilAsync(predicate: () => Promise<boolean>, label = "condition"
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error(`jamais atteint : ${label}`);
+  throw new Error(`never reached: ${label}`);
 }
 
 /**
- * Le point d'entrée, éprouvé de bout en bout.
+ * Entry point, verified end-to-end.
  *
- * Ce fichier part de là où l'application Android part réellement : un module
- * natif et un jeu de variables. Il traverse ensuite tout ce que `main.ts`
- * assemble — configuration, politiques, capacités, signature par le magasin de
- * clés, poignée de main — jusqu'à une session ouverte auprès d'un vrai
- * `WorkerGateway`.
+ * This file starts from where the Android application actually starts: a native module
+ * and environment variables. It exercises everything that `main.ts` assembles:
+ * configuration, policies, capabilities, keystore signing, handshake,
+ * up to an open session with a real `WorkerGateway`.
  *
- * Le seul double est `NexusNative`, c'est-à-dire la frontière avec Kotlin. C'est
- * exactement la ligne que ces tests ne peuvent pas franchir sans téléphone, et
- * elle est étroite : quinze méthodes, énumérées dans `native-bridge.ts`.
+ * The only double is `NexusNative`, representing the boundary with Kotlin.
  */
 
 const DEVICE_ID = "device-redmi";
 
 /**
- * Double du module natif.
+ * Native module test double.
  *
- * Il imite le magasin de clés en signant avec une vraie clé P-256 : c'est la
- * courbe qu'AndroidKeyStore sait produire, et le cœur la vérifie ici avec le
- * vrai `ecdsaP256Verifier`. Ce qui n'est pas imité, c'est l'inextractibilité de
- * la clé — une propriété du matériel, qu'aucun test hors appareil ne peut
- * établir.
+ * Simulates keystore signing with a real P-256 key: this is the curve
+ * AndroidKeyStore produces, and core verifies it here with `ecdsaP256Verifier`.
  */
 class FakeNative implements NexusNative {
   readonly #privateKeyPem: string;
@@ -143,17 +137,14 @@ class FakeNative implements NexusNative {
   }
 
   /**
-   * Clé publique correspondant à la clé privée du double.
-   *
-   * Le vrai magasin la fabrique à la première lecture ; ici elle existe déjà.
+   * Public key corresponding to the test double private key.
    */
   devicePublicKeyPem(): Promise<string> {
     return Promise.resolve(this.#publicKeyPem);
   }
 
   /**
-   * Aléa. Le double n'a pas à être cryptographique — aucun test n'en dépend
-   * pour sa sécurité — mais il doit être correctement encodé.
+   * Secure random bytes in base64.
    */
   secureRandomBase64(count: number): string {
     return randomBytes(count).toString("base64");
@@ -181,7 +172,7 @@ function baseEnv(overrides: Record<string, string | undefined> = {}) {
   };
 }
 
-/** Le cœur, en vrai : registre, sessions P-256, passerelle, coordinateur. */
+/** Core services: registry, P-256 sessions, gateway, coordinator. */
 async function bootCore() {
   const registry = new DeviceRegistry();
   const credentials = new InMemoryCredentialProvider();
@@ -196,7 +187,7 @@ async function bootCore() {
   const device = await registry.registerDevice({
     id: DEVICE_ID,
     userId: USER_ID,
-    name: "Téléphone Android",
+    name: "Android Phone",
     type: "ANDROID",
     platform: "ANDROID",
     role: "WORKER",
@@ -213,7 +204,7 @@ async function bootCore() {
       link.deliver(envelope);
     },
     close: () => {
-      link.drop("fermé par le cœur");
+      link.drop("closed by core");
     },
   };
   link.outbound = (envelope) => gateway.handleMessage(connection, envelope);
@@ -222,11 +213,11 @@ async function bootCore() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Démarrage
+// Startup
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("startAndroidWorker", () => {
-  it("part d'un module natif et de variables, et arrive à une session ouverte", async () => {
+  it("starts from a native module and environment variables to reach an open session", async () => {
     const core = await bootCore();
     const native = new FakeNative(core.keys);
     const logger = new MemoryWorkerLogger();
@@ -242,13 +233,13 @@ describe("startAndroidWorker", () => {
     expect(worker.isAuthenticated).toBe(true);
     expect(config.deviceId).toBe(DEVICE_ID);
 
-    // La signature est passée par l'alias, jamais par une clé en clair.
+    // Signature passes via alias, never plaintext key.
     expect(native.signedAliases).toEqual(["nexus.device.key"]);
 
-    await worker.stop("fin de test");
+    await worker.stop("end of test");
   });
 
-  it("annonce au cœur les capacités réellement disponibles", async () => {
+  it("advertises actually available capabilities to core", async () => {
     const core = await bootCore();
     const native = new FakeNative(core.keys);
 
@@ -263,13 +254,12 @@ describe("startAndroidWorker", () => {
     await untilAsync(async () => {
       const device = await core.registry.requireDevice(DEVICE_ID);
       return device.capabilities.length > 0;
-    }, "capacites enregistrees");
+    }, "registered capabilities");
 
     const device = await core.registry.requireDevice(DEVICE_ID);
     const names = device.capabilities.map((capability) => capability.name).sort();
 
-    // Les sept capacités NEXUS existantes, sous leurs noms existants. Le point
-    // d'entrée n'en invente aucune et n'en retire aucune.
+    // The seven existing NEXUS capabilities under their existing names.
     expect(names).toEqual([
       "android.app.list",
       "android.app.open",
@@ -280,13 +270,11 @@ describe("startAndroidWorker", () => {
       "android.ui.scroll",
     ]);
 
-    await worker.stop("fin de test");
+    await worker.stop("end of test");
   });
 
-  it("n'annonce pas ce que l'utilisateur n'a pas accordé", async () => {
-    // Le service d'accessibilité éteint : quatre capacités disparaissent, et le
-    // sélecteur du cœur cessera de choisir ce téléphone pour elles. C'est le
-    // comportement voulu — mieux vaut ne pas être choisi qu'échouer après.
+  it("does not advertise what the user has not granted", async () => {
+    // Accessibility disabled: four capabilities disappear.
     const core = await bootCore();
     const native = new FakeNative(core.keys);
     native.accessibilityEnabled = false;
@@ -303,19 +291,17 @@ describe("startAndroidWorker", () => {
     await untilAsync(async () => {
       const device = await core.registry.requireDevice(DEVICE_ID);
       return device.capabilities.length > 0;
-    }, "capacites enregistrees");
+    }, "registered capabilities");
 
     const device = await core.registry.requireDevice(DEVICE_ID);
     const names = device.capabilities.map((capability) => capability.name).sort();
 
     expect(names).toEqual(["android.app.list", "android.app.open", "android.notification"]);
 
-    await worker.stop("fin de test");
+    await worker.stop("end of test");
   });
 
-  it("exécute une tâche venue du cœur jusqu'au module natif", async () => {
-    // La chaîne complète que la Phase 8 devait rendre possible :
-    // cœur → passerelle → runtime → capacité → politique → pont → natif.
+  it("executes a task from core down to the native module", async () => {
     const core = await bootCore();
     const native = new FakeNative(core.keys);
 
@@ -330,7 +316,7 @@ describe("startAndroidWorker", () => {
     await untilAsync(async () => {
       const device = await core.registry.requireDevice(DEVICE_ID);
       return device.capabilities.length > 0;
-    }, "capacites enregistrees");
+    }, "registered capabilities");
 
     const outcome = await core.gateway.dispatch({
       deviceId: DEVICE_ID,
@@ -347,12 +333,10 @@ describe("startAndroidWorker", () => {
     expect(outcome.ok).toBe(true);
     expect(native.opened).toEqual(["com.spotify.music"]);
 
-    await worker.stop("fin de test");
+    await worker.stop("end of test");
   });
 
-  it("refuse de démarrer sur une configuration incomplète", async () => {
-    // Un worker à moitié configuré s'annoncerait, se ferait choisir, puis
-    // échouerait tâche après tâche. On préfère l'échec au démarrage.
+  it("refuses to start on incomplete configuration", async () => {
     const native = new FakeNative(generateDeviceKeys());
 
     await expect(
@@ -360,22 +344,18 @@ describe("startAndroidWorker", () => {
     ).rejects.toThrow(WorkerConfigurationError);
   });
 
-  it("refuse une adresse distante en clair", async () => {
+  it("refuses cleartext remote backend address", async () => {
     const native = new FakeNative(generateDeviceKeys());
 
     await expect(
       startAndroidWorker({
         native,
-        env: baseEnv({ NEXUS_BACKEND_URL: "ws://nexus.exemple.fr" }),
+        env: baseEnv({ NEXUS_BACKEND_URL: "ws://nexus.example.com" }),
       }),
     ).rejects.toThrow(WorkerConfigurationError);
   });
 
-  it("ouvre son propre canal quand aucun ne lui est fourni", async () => {
-    // Sans `link`, `main.ts` construit une `AndroidWebSocketLink`. Il n'y a pas
-    // de cœur en face ici : ce qui est vérifié, c'est que le point d'entrée ne
-    // s'arrête pas sur un échec de connexion — la reprise du runtime est le
-    // mécanisme prévu, et l'application doit rester vivante.
+  it("opens its own link when none is provided", async () => {
     const native = new FakeNative(generateDeviceKeys());
 
     const { worker } = await startAndroidWorker({
@@ -390,10 +370,10 @@ describe("startAndroidWorker", () => {
     expect(worker.isAuthenticated).toBe(false);
     expect(["reconnecting", "connecting", "idle"]).toContain(worker.state);
 
-    await worker.stop("fin de test");
+    await worker.stop("end of test");
   });
 
-  it("s'arrête proprement et ne se reconnecte pas", async () => {
+  it("stops cleanly and does not reconnect", async () => {
     const core = await bootCore();
     const native = new FakeNative(core.keys);
 
@@ -405,7 +385,7 @@ describe("startAndroidWorker", () => {
     });
 
     await until(() => worker.isAuthenticated);
-    await worker.stop("arrêt demandé");
+    await worker.stop("stop requested");
 
     expect(worker.isAuthenticated).toBe(false);
     expect(core.link.state).toBe("closed");

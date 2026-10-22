@@ -1,11 +1,9 @@
-"""Test de contrat TypeScript ↔ Python.
+"""Contract test: TypeScript ↔ Python.
 
-Le backend et le worker évoluent séparément : un champ renommé d'un côté casse
-l'autre en production, pas au build (cf. risque R7). Ce test compare les schémas
-JSON produits depuis Zod (`packages/browser-client`) aux modèles Pydantic d'ici.
+Backend and worker evolve independently. This test compares the JSON schemas
+emitted from Zod (`packages/browser-client`) against the Pydantic models in Python.
 
-Régénérer le contrat après toute modification du protocole :
-
+Regenerate contract after modifying protocol:
     pnpm --filter @nexus/browser-client contract:emit
 """
 
@@ -37,8 +35,8 @@ CONTRACT_PATH = Path(__file__).resolve().parents[1] / "contract" / "browser-prot
 def contract() -> dict[str, Any]:
     if not CONTRACT_PATH.exists():
         pytest.fail(
-            f"contrat absent : {CONTRACT_PATH}\n"
-            "Lancer : pnpm --filter @nexus/browser-client contract:emit"
+            f"contract missing: {CONTRACT_PATH}\n"
+            "Run: pnpm --filter @nexus/browser-client contract:emit"
         )
     return json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
@@ -73,29 +71,26 @@ def test_field_names_match(contract: dict[str, Any], name: str, model: Any) -> N
     py_props = _properties(_model_schema(model))
 
     assert ts_props == py_props, (
-        f"{name} : champs divergents\n"
-        f"  seulement côté TypeScript : {sorted(ts_props - py_props)}\n"
-        f"  seulement côté Python     : {sorted(py_props - ts_props)}"
+        f"{name}: divergent fields\n"
+        f"  TypeScript only: {sorted(ts_props - py_props)}\n"
+        f"  Python only    : {sorted(py_props - ts_props)}"
     )
 
 
 def test_task_fields_match(contract: dict[str, Any]) -> None:
-    # `Task` référence `BrowserEvent`, dont le schéma Pydantic passe par $defs :
-    # on compare donc les seules propriétés de premier niveau.
     ts_props = _properties(contract["schemas"]["Task"])
     py_props = _properties(_model_schema(Task))
     assert ts_props == py_props
 
 
 def test_required_fields_match_on_requests(contract: dict[str, Any]) -> None:
-    """Un champ obligatoire d'un côté et facultatif de l'autre casse en production."""
     for name, model in (
         ("CreateSessionRequest", CreateSessionRequest),
         ("RunTaskRequest", RunTaskRequest),
     ):
         ts_required = _required(contract["schemas"][name])
         py_required = _required(_model_schema(model))
-        assert ts_required == py_required, f"{name} : obligatoires divergents"
+        assert ts_required == py_required, f"{name}: divergent required fields"
 
 
 def test_intent_values_match(contract: dict[str, Any]) -> None:
@@ -111,11 +106,10 @@ def test_task_status_values_match(contract: dict[str, Any]) -> None:
 
 
 def test_event_types_match(contract: dict[str, Any]) -> None:
-    """Chaque variante d'événement existe des deux côtés, avec les mêmes champs."""
     variants = contract["schemas"]["BrowserEvent"].get("anyOf") or contract["schemas"][
         "BrowserEvent"
     ].get("oneOf")
-    assert variants, "le schéma d'événement doit être une union discriminée"
+    assert variants, "event schema must be a discriminated union"
 
     ts_by_type: dict[str, set[str]] = {}
     for variant in variants:
@@ -136,28 +130,27 @@ def test_event_types_match(contract: dict[str, Any]) -> None:
             py_by_type[event_type] = set(properties)
 
     assert set(ts_by_type) == set(py_by_type), (
-        f"types d'événements divergents\n"
-        f"  TypeScript : {sorted(ts_by_type)}\n"
-        f"  Python     : {sorted(py_by_type)}"
+        f"divergent event types\n"
+        f"  TypeScript: {sorted(ts_by_type)}\n"
+        f"  Python    : {sorted(py_by_type)}"
     )
 
     for event_type, ts_fields in ts_by_type.items():
         assert ts_fields == py_by_type[event_type], (
-            f"événement « {event_type} » : champs divergents\n"
-            f"  TypeScript : {sorted(ts_fields)}\n"
-            f"  Python     : {sorted(py_by_type[event_type])}"
+            f"event '{event_type}': divergent fields\n"
+            f"  TypeScript: {sorted(ts_fields)}\n"
+            f"  Python    : {sorted(py_by_type[event_type])}"
         )
 
 
 def test_python_accepts_a_typescript_shaped_payload(contract: dict[str, Any]) -> None:
-    """Vérification de bout en bout : une charge utile conforme au schéma TS passe."""
-    assert contract["schemas"]["RunTaskRequest"]  # le contrat est bien chargé
+    assert contract["schemas"]["RunTaskRequest"]
 
     request = RunTaskRequest.model_validate(
         {
             "taskId": "run-1:0:browser.read:abc",
             "sessionId": "bs_1234",
-            "instructions": "Trouve le prix du billet",
+            "instructions": "Find ticket price",
             "intent": "read",
             "maxSteps": 15,
             "timeoutSeconds": 180,

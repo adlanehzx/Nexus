@@ -6,11 +6,7 @@ import { BROWSER_INTENTS, browseInputSchema } from "../src/capabilities/browse.j
 import { BROWSER_TOKEN, FakeBrowserWorker, testConfig } from "./fixtures.js";
 
 /**
- * Les capacités, éprouvées isolément.
- *
- * Ce fichier ne monte ni cœur, ni session : il vérifie ce que les capacités
- * déclarent et ce qu'elles font du contrat HTTP. Le chemin complet
- * cœur → passerelle → runtime → capacité est éprouvé dans `integration.test.ts`.
+ * Browser capabilities tested in isolation.
  */
 
 interface Rig {
@@ -31,7 +27,6 @@ function rig(overrides: Parameters<typeof testConfig>[0] = {}): Rig {
   return { registry: assembled.capabilities, python, sessions: assembled.sessions };
 }
 
-/** Contexte d'exécution d'une capacité, tel que le runtime le fournit. */
 function context(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
   return {
     taskId: "task-1",
@@ -44,14 +39,11 @@ function context(overrides: Partial<CapabilityContext> = {}): CapabilityContext 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Déclaration
+// Capability declaration
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("déclaration des capacités", () => {
-  it("expose une capacité par intention, et pas une capacité générique", () => {
-    // Le point de sécurité du lot. Une seule capacité `browser.act` porterait le
-    // même risque pour lire un prix et pour payer — le système de permissions et
-    // les confirmations n'auraient alors plus rien à distinguer.
+describe("capability declaration", () => {
+  it("exposes one capability per intent rather than a generic capability", () => {
     const { registry } = rig();
 
     expect(registry.names).toEqual([
@@ -62,7 +54,7 @@ describe("déclaration des capacités", () => {
     ]);
   });
 
-  it("gradue le risque de la lecture à l'achat", () => {
+  it("graduates risk from read to purchase", () => {
     const risks = Object.fromEntries(
       BROWSER_INTENTS.map((spec) => [spec.capability, spec.riskLevel]),
     );
@@ -75,10 +67,7 @@ describe("déclaration des capacités", () => {
     });
   });
 
-  it("n'expose aucune capacité d'exécution de code ni d'accès disque", () => {
-    // `evaluate`, l'écriture de fichiers, le téléversement : rien de tout cela
-    // ne doit exister ici. Le worker Python les retire aussi, pour toutes les
-    // intentions — mais l'absence commence par ne pas les déclarer.
+  it("exposes no code execution or disk access capabilities", () => {
     const { registry } = rig();
 
     for (const name of registry.names) {
@@ -89,9 +78,7 @@ describe("déclaration des capacités", () => {
     expect(registry.names).not.toContain("filesystem.read");
   });
 
-  it("respecte la liste blanche de la configuration", () => {
-    // Un déploiement qui ne veut pas d'achat automatique le dit une fois, dans
-    // sa configuration, et la capacité n'est jamais annoncée au cœur.
+  it("respects allowlist from configuration", () => {
     const { registry } = rig({ declaredCapabilities: ["browser.navigate"] });
 
     expect(registry.declare().map((entry) => entry.name)).toEqual(["browser.navigate"]);
@@ -100,33 +87,30 @@ describe("déclaration des capacités", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Validation des arguments
+// Argument validation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validation des arguments", () => {
-  it("refuse des instructions vides ou démesurées", () => {
+describe("argument validation", () => {
+  it("rejects empty or excessively large instructions", () => {
     expect(browseInputSchema.safeParse({ instructions: "" }).success).toBe(false);
     expect(browseInputSchema.safeParse({ instructions: "x".repeat(4_001) }).success).toBe(false);
-    expect(browseInputSchema.safeParse({ instructions: "lis le prix" }).success).toBe(true);
+    expect(browseInputSchema.safeParse({ instructions: "check the price" }).success).toBe(true);
   });
 
-  it("refuse une URL qui n'en est pas une", () => {
-    // Sans cette borne, `javascript:` ou `file:` arriveraient jusqu'au
-    // navigateur — la politique de domaine du worker Python les refuserait,
-    // mais mieux vaut ne pas les faire voyager.
+  it("rejects an invalid URL", () => {
     const parsed = browseInputSchema.safeParse({
-      instructions: "lis la page",
+      instructions: "read the page",
       url: "javascript:alert(1)",
     });
     expect(parsed.success).toBe(false);
   });
 
-  it("plafonne le nombre d'étapes", () => {
-    expect(browseInputSchema.safeParse({ instructions: "va", maxSteps: 51 }).success).toBe(false);
-    expect(browseInputSchema.safeParse({ instructions: "va", maxSteps: 0 }).success).toBe(false);
+  it("caps maximum steps", () => {
+    expect(browseInputSchema.safeParse({ instructions: "go", maxSteps: 51 }).success).toBe(false);
+    expect(browseInputSchema.safeParse({ instructions: "go", maxSteps: 0 }).success).toBe(false);
   });
 
-  it("rejette les arguments invalides avant tout appel réseau", async () => {
+  it("rejects invalid arguments prior to network calls", async () => {
     const { registry, python } = rig();
 
     expect(() => registry.validateInput("browser.navigate", { instructions: "" })).toThrow();
@@ -137,19 +121,16 @@ describe("validation des arguments", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exécution
+// Execution
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("exécution", () => {
-  it("transmet l'intention correspondant à la capacité", async () => {
-    // C'est ici que la séparation devient réelle : le worker Python restreint
-    // les actions à partir de cette intention. `browser.navigate` ne peut pas
-    // cliquer, même si les instructions le demandent.
+describe("execution", () => {
+  it("transmits intent corresponding to capability", async () => {
     const { registry, python } = rig();
 
     for (const spec of BROWSER_INTENTS) {
       const capability = registry.require(spec.capability);
-      await capability.execute({ instructions: "fais quelque chose" } as never, context());
+      await capability.execute({ instructions: "do something" } as never, context());
     }
 
     expect(python.launched.map((entry) => entry.intent)).toEqual([
@@ -160,36 +141,34 @@ describe("exécution", () => {
     ]);
   });
 
-  it("préfixe les instructions avec l'URL de départ", async () => {
+  it("prefixes instructions with starting URL", async () => {
     const { registry, python } = rig();
     const capability = registry.require("browser.navigate");
 
     await capability.execute(
-      { instructions: "relève le prix", url: "https://exemple.fr/vols" } as never,
+      { instructions: "check the ticket price", url: "https://example.com/flights" } as never,
       context(),
     );
 
     expect(python.launched[0]?.instructions).toBe(
-      "Va sur https://exemple.fr/vols, puis : relève le prix",
+      "Go to https://example.com/flights, then: check the ticket price",
     );
   });
 
-  it("plafonne les étapes à la configuration, même si l'appelant demande plus", async () => {
+  it("caps steps to configuration even if caller requests more", async () => {
     const { registry, python } = rig({ maxSteps: 5 });
     const capability = registry.require("browser.navigate");
 
-    await capability.execute({ instructions: "cherche", maxSteps: 50 } as never, context());
+    await capability.execute({ instructions: "search", maxSteps: 50 } as never, context());
 
-    // Le plafond du déploiement gagne : une tâche qui boucle coûte des appels au
-    // modèle et tient un navigateur ouvert.
     expect(python.launched).toHaveLength(1);
   });
 
-  it("rend le résultat, les étapes et l'URL visitée", async () => {
+  it("returns result, steps, and visited URL", async () => {
     const { registry, python } = rig();
     python.outcome = {
       status: "succeeded",
-      output: "Le billet coûte 129 €",
+      output: "The ticket costs $129",
       steps: 4,
       events: [
         {
@@ -198,7 +177,7 @@ describe("exécution", () => {
           sessionId: "sess-1",
           seq: 1,
           ts: new Date().toISOString(),
-          url: "https://exemple.fr/vols",
+          url: "https://example.com/flights",
           title: null,
         },
       ],
@@ -206,24 +185,22 @@ describe("exécution", () => {
 
     const capability = registry.require("browser.navigate");
     const result = (await capability.execute(
-      { instructions: "prix du billet" } as never,
+      { instructions: "ticket price" } as never,
       context(),
     )) as { output: string; steps: number; visitedUrl: string | null; sessionId: string };
 
-    expect(result.output).toBe("Le billet coûte 129 €");
+    expect(result.output).toBe("The ticket costs $129");
     expect(result.steps).toBe(4);
-    expect(result.visitedUrl).toBe("https://exemple.fr/vols");
+    expect(result.visitedUrl).toBe("https://example.com/flights");
     expect(result.sessionId).toBe("sess-1");
   });
 
-  it("remonte la progression sans exposer le raisonnement complet", async () => {
-    // Le tableau de bord montre ce que fait l'agent — une étape, une page, une
-    // action — pas sa chaîne de pensée intégrale.
+  it("reports progress without exposing full reasoning chain", async () => {
     const { registry, python } = rig();
-    const long = "je réfléchis très longuement à ce que je vais faire ensuite ".repeat(10);
+    const long = "I am thinking carefully about what step to take next ".repeat(10);
     python.outcome = {
       status: "succeeded",
-      output: "fini",
+      output: "done",
       events: [
         {
           type: "thinking",
@@ -249,64 +226,60 @@ describe("exécution", () => {
     const progress: { percent?: number; label?: string }[] = [];
     const capability = registry.require("browser.navigate");
     await capability.execute(
-      { instructions: "va" } as never,
+      { instructions: "go" } as never,
       context({
         onProgress: (entry: { percent?: number; label?: string }) => progress.push(entry),
       }),
     );
 
-    const thinking = progress.find((entry) => entry.label?.startsWith("je réfléchis") === true);
+    const thinking = progress.find((entry) => entry.label?.startsWith("I am thinking") === true);
     expect(thinking?.label?.length).toBeLessThanOrEqual(120);
-    expect(progress).toContainEqual({ label: "Étape 2/10", percent: 20 });
+    expect(progress).toContainEqual({ label: "Step 2/10", percent: 20 });
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Erreurs
+// Errors
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("erreurs", () => {
-  it("ne contourne pas une vérification humaine", async () => {
-    // CAPTCHA ou second facteur : on s'arrête et on rend la main. Le message
-    // est destiné à l'utilisateur, pas au journal.
+describe("errors", () => {
+  it("does not bypass human verification", async () => {
     const { registry, python } = rig();
     python.outcome = {
       status: "needs_human",
-      error: { code: "BROWSER_NEEDS_HUMAN", message: "Le site demande un code", retryable: false },
+      error: { code: "BROWSER_NEEDS_HUMAN", message: "The site requires a code", retryable: false },
     };
 
     const capability = registry.require("browser.login");
     await expect(
-      capability.execute({ instructions: "connecte-toi" } as never, context()),
+      capability.execute({ instructions: "log in" } as never, context()),
     ).rejects.toMatchObject({ code: "BROWSER_NEEDS_HUMAN", retryable: false });
   });
 
-  it("remonte un échec de navigation avec le code du worker", async () => {
+  it("propagates navigation failure with worker error code", async () => {
     const { registry, python } = rig();
     python.outcome = {
       status: "failed",
-      error: { code: "BROWSER_DOMAIN_BLOCKED", message: "domaine refusé", retryable: false },
+      error: { code: "BROWSER_DOMAIN_BLOCKED", message: "domain blocked", retryable: false },
     };
 
     const capability = registry.require("browser.navigate");
     await expect(
-      capability.execute({ instructions: "va" } as never, context()),
+      capability.execute({ instructions: "go" } as never, context()),
     ).rejects.toMatchObject({ code: "BROWSER_TASK_FAILED", retryable: false });
   });
 
-  it("distingue un worker injoignable d'une tâche échouée", async () => {
-    // L'un est réessayable, l'autre non. Les confondre ferait boucler le cœur
-    // sur une tâche qui échouera toujours, ou abandonner un service qui redémarre.
+  it("distinguishes unreachable worker from failed task", async () => {
     const { registry, python } = rig();
     python.unreachable = true;
 
     const capability = registry.require("browser.navigate");
     await expect(
-      capability.execute({ instructions: "va" } as never, context()),
+      capability.execute({ instructions: "go" } as never, context()),
     ).rejects.toMatchObject({ code: "BROWSER_WORKER_UNREACHABLE", retryable: true });
   });
 
-  it("ne s'annonce pas quand le worker Python ne répond pas", async () => {
+  it("does not announce capabilities when Python worker does not respond", async () => {
     const { registry, python } = rig();
     python.unreachable = true;
     await registry.probeAll();
@@ -314,7 +287,7 @@ describe("erreurs", () => {
     expect(registry.declare()).toEqual([]);
   });
 
-  it("s'annonce de nouveau quand le worker Python revient", async () => {
+  it("announces capabilities again when Python worker recovers", async () => {
     const { registry, python } = rig();
     python.unreachable = true;
     await registry.probeAll();

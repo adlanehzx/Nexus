@@ -150,7 +150,7 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
         const prompt =
           profile.system_prompt === undefined
             ? request.prompt
-            : `${profile.system_prompt.trim()}\n\nMission utilisateur :\n${request.prompt}`;
+            : `${profile.system_prompt.trim()}\n\nUser mission:\n${request.prompt}`;
         void session.prompt(prompt);
         let response = "";
         for (;;) {

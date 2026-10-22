@@ -6,12 +6,7 @@ import { assembleForTest, ALLOWED_ROOT, type AssembledFixture } from "./fixtures
 import type { CapabilityContext } from "@nexus/worker-core";
 
 /**
- * Les capacités, une par une.
- *
- * Aucun processus n'est lancé et aucun fichier n'est écrit : `ProcessRunner` et
- * `FileSystemPort` sont remplacés. Ce qui est vérifié, c'est exactement ce que
- * la capacité *demande* au système — quels arguments, dans quel ordre, avec quel
- * environnement — car c'est là que se joue la sécurité.
+ * Worker capabilities tested one by one.
  */
 
 function context(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
@@ -31,8 +26,8 @@ async function run(fixture: AssembledFixture, name: string, input: unknown, ctx 
   return capability.execute(validated as never, ctx);
 }
 
-describe("registre local", () => {
-  it("annonce les capacités disponibles", async () => {
+describe("local capability registry", () => {
+  it("announces available capabilities", async () => {
     const fixture = await assembleForTest();
     const declared = fixture.capabilities.declare().map((capability) => capability.name);
 
@@ -56,15 +51,10 @@ describe("registre local", () => {
         "app.open",
       ]),
     );
-    // Le compte exact, et pas seulement « contient » : une capacité qui
-    // apparaîtrait sans qu'on l'ait voulue est un élargissement silencieux de ce
-    // que NEXUS peut faire à cette machine.
     expect(declared).toHaveLength(16);
   });
 
-  it("n'annonce pas une capacité dont l'outil est absent", async () => {
-    // Docker n'est pas installé : la sonde échoue, la capacité disparaît de
-    // l'annonce. Elle n'apparaîtra donc pas au sélecteur, qui choisira ailleurs.
+  it("does not announce capability whose tool is missing", async () => {
     const fixture = await assembleForTest({}, ({ runner }) => {
       runner.missing.add("docker");
     });
@@ -74,7 +64,7 @@ describe("registre local", () => {
     expect(declared).toContain("git.status");
   });
 
-  it("refuse d'exécuter une capacité indisponible", async () => {
+  it("refuses to execute an unavailable capability", async () => {
     const fixture = await assembleForTest({}, ({ runner }) => {
       runner.missing.add("docker");
     });
@@ -84,7 +74,7 @@ describe("registre local", () => {
     );
   });
 
-  it("n'annonce que les capacités autorisées par la configuration", async () => {
+  it("only announces capabilities allowed by configuration", async () => {
     const fixture = await assembleForTest({
       declaredCapabilities: ["filesystem.read", "git.status"],
     });
@@ -95,7 +85,7 @@ describe("registre local", () => {
     ]);
   });
 
-  it("refuse une capacité présente mais non autorisée localement", async () => {
+  it("rejects locally unauthorized capability even if present", async () => {
     const fixture = await assembleForTest({ declaredCapabilities: ["filesystem.read"] });
 
     expect(() => fixture.capabilities.require("terminal.execute")).toThrow(
@@ -106,14 +96,14 @@ describe("registre local", () => {
     );
   });
 
-  it("refuse une capacité inconnue", async () => {
+  it("rejects unknown capability", async () => {
     const fixture = await assembleForTest();
     expect(() => fixture.capabilities.require("registry.wipe")).toThrow(
       expect.objectContaining({ code: "CAPABILITY_UNAVAILABLE" }),
     );
   });
 
-  it("refuse un enregistrement en double", () => {
+  it("rejects duplicate capability registration", () => {
     const registry = new LocalCapabilityRegistry();
     const definition = {
       name: "test.echo",
@@ -129,10 +119,10 @@ describe("registre local", () => {
     );
   });
 
-  it("nomme le champ fautif quand les arguments sont invalides", async () => {
+  it("names the faulty field when arguments are invalid", async () => {
     const fixture = await assembleForTest();
 
-    expect(() => fixture.capabilities.validateInput("filesystem.read", { chemin: "x" })).toThrow(
+    expect(() => fixture.capabilities.validateInput("filesystem.read", { invalidKey: "x" })).toThrow(
       expect.objectContaining({
         code: "CAPABILITY_INPUT_INVALID",
         context: expect.objectContaining({
@@ -142,7 +132,7 @@ describe("registre local", () => {
     );
   });
 
-  it("dresse un inventaire motivé", async () => {
+  it("produces a reasoned capability inventory", async () => {
     const fixture = await assembleForTest(
       { declaredCapabilities: ["filesystem.read", "docker.execute"] },
       ({ runner }) => {
@@ -161,7 +151,7 @@ describe("registre local", () => {
 });
 
 describe("terminal.execute", () => {
-  it("exécute un programme autorisé sans shell", async () => {
+  it("executes an allowed program without shell", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "terminal.execute", {
       executable: "git",
@@ -175,23 +165,23 @@ describe("terminal.execute", () => {
     });
   });
 
-  it("refuse un exécutable non autorisé", async () => {
+  it("rejects an unauthorized executable", async () => {
     const fixture = await assembleForTest();
     await expect(
-      run(fixture, "terminal.execute", { executable: "curl", args: ["https://exemple.fr"] }),
+      run(fixture, "terminal.execute", { executable: "curl", args: ["https://example.com"] }),
     ).rejects.toMatchObject({ code: "EXECUTABLE_NOT_ALLOWED" });
 
     expect(fixture.runner.runs).toHaveLength(0);
   });
 
-  it("refuse un argument mal typé au schéma", async () => {
+  it("rejects mistyped argument according to schema", async () => {
     const fixture = await assembleForTest();
     expect(() =>
       fixture.capabilities.validateInput("terminal.execute", { executable: "git", args: [42] }),
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("refuse un répertoire de travail hors des racines", async () => {
+  it("rejects working directory outside allowed roots", async () => {
     const fixture = await assembleForTest();
     await expect(
       run(fixture, "terminal.execute", {
@@ -204,7 +194,7 @@ describe("terminal.execute", () => {
     expect(fixture.runner.runs).toHaveLength(0);
   });
 
-  it("traduit un dépassement de délai en erreur réessayable", async () => {
+  it("translates execution timeout into retryable error", async () => {
     const fixture = await assembleForTest();
     fixture.runner.outcomes.set("git", { status: "timeout", exitCode: null });
 
@@ -213,7 +203,7 @@ describe("terminal.execute", () => {
     ).rejects.toMatchObject({ code: "EXECUTION_TIMEOUT", retryable: true });
   });
 
-  it("propage l'annulation jusqu'au processus", async () => {
+  it("propagates cancellation to underlying process", async () => {
     const fixture = await assembleForTest();
     fixture.runner.hangUntilAborted = true;
 
@@ -229,21 +219,17 @@ describe("terminal.execute", () => {
     await expect(pending).rejects.toMatchObject({ code: "EXECUTION_CANCELLED" });
   });
 
-  it("ne transmet que les variables d'environnement autorisées", async () => {
+  it("only transmits allowed environment variables", async () => {
     const fixture = await assembleForTest();
     await run(fixture, "terminal.execute", { executable: "git", args: ["status"] });
 
-    // `PATH` et `TEMP` sont autorisées ; tout le reste de l'environnement du
-    // worker — dont le chemin de sa clé privée — reste chez lui.
     expect(fixture.runner.runs[0]?.env).toEqual({
       PATH: "C:\\Windows;C:\\Program Files\\Git\\cmd",
       TEMP: "C:\\Temp",
     });
   });
 
-  it("rédige les secrets de la sortie du processus", async () => {
-    // Un script qui affiche sa clé d'API : la valeur ne doit pas quitter la
-    // machine, alors même que le worker n'a aucun contrôle sur ce qu'il exécute.
+  it("redacts secrets from process output", async () => {
     const fixture = await assembleForTest();
     fixture.runner.outcomes.set("git", {
       stdout: "remote: https://x-token:ghp_abcdefghijklmnopqrstuvwxyz0123@github.com/a/b\n",
@@ -262,33 +248,33 @@ describe("terminal.execute", () => {
 });
 
 describe("filesystem", () => {
-  it("lit un fichier autorisé", async () => {
+  it("reads an allowed file", async () => {
     const fixture = await assembleForTest({}, ({ fileSystem }) => {
-      fileSystem.files.set(`${ALLOWED_ROOT}\\notes.md`, "bonjour");
+      fileSystem.files.set(`${ALLOWED_ROOT}\\notes.md`, "hello");
     });
 
     const result = (await run(fixture, "filesystem.read", {
       path: `${ALLOWED_ROOT}\\notes.md`,
     })) as { content: string };
 
-    expect(result.content).toBe("bonjour");
+    expect(result.content).toBe("hello");
   });
 
-  it("refuse une lecture hors des racines", async () => {
+  it("rejects read outside allowed roots", async () => {
     const fixture = await assembleForTest();
     await expect(
-      run(fixture, "filesystem.read", { path: "C:\\Users\\moi\\.aws\\credentials" }),
+      run(fixture, "filesystem.read", { path: "C:\\Users\\me\\.aws\\credentials" }),
     ).rejects.toMatchObject({ code: "PATH_NOT_ALLOWED" });
   });
 
-  it("refuse une remontée par ..", async () => {
+  it("rejects traversal via ..", async () => {
     const fixture = await assembleForTest();
     await expect(
       run(fixture, "filesystem.read", { path: `${ALLOWED_ROOT}\\..\\Windows\\win.ini` }),
     ).rejects.toMatchObject({ code: "PATH_NOT_ALLOWED" });
   });
 
-  it("rédige les secrets d'un fichier lu", async () => {
+  it("redacts secrets in read files", async () => {
     const fixture = await assembleForTest({}, ({ fileSystem }) => {
       fileSystem.files.set(
         `${ALLOWED_ROOT}\\.env`,
@@ -304,7 +290,7 @@ describe("filesystem", () => {
     expect(result.content).not.toContain("sk-secret1234567890abcd");
   });
 
-  it("écrit un fichier autorisé", async () => {
+  it("writes an allowed file", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "filesystem.write", {
       path: `${ALLOWED_ROOT}\\out.txt`,
@@ -315,7 +301,7 @@ describe("filesystem", () => {
     expect(fixture.fileSystem.files.get(`${ALLOWED_ROOT}\\out.txt`)).toBe("ok");
   });
 
-  it("refuse une écriture hors des racines", async () => {
+  it("rejects write outside allowed roots", async () => {
     const fixture = await assembleForTest();
     await expect(
       run(fixture, "filesystem.write", { path: "C:\\Windows\\evil.dll", content: "x" }),
@@ -324,46 +310,46 @@ describe("filesystem", () => {
     expect(fixture.fileSystem.writes).toHaveLength(0);
   });
 
-  it("refuse d'écraser un fichier sans demande explicite", async () => {
+  it("refuses to overwrite existing file without explicit flag", async () => {
     const fixture = await assembleForTest({}, ({ fileSystem }) => {
-      fileSystem.files.set(`${ALLOWED_ROOT}\\important.txt`, "travail de six mois");
+      fileSystem.files.set(`${ALLOWED_ROOT}\\important.txt`, "six months of work");
     });
 
     await expect(
       run(fixture, "filesystem.write", {
         path: `${ALLOWED_ROOT}\\important.txt`,
-        content: "oups",
+        content: "oops",
       }),
     ).rejects.toMatchObject({ code: "WORKER_POLICY_VIOLATION" });
 
     expect(fixture.fileSystem.files.get(`${ALLOWED_ROOT}\\important.txt`)).toBe(
-      "travail de six mois",
+      "six months of work",
     );
   });
 
-  it("accepte l'écrasement quand il est demandé", async () => {
+  it("allows overwrite when explicitly requested", async () => {
     const fixture = await assembleForTest({}, ({ fileSystem }) => {
-      fileSystem.files.set(`${ALLOWED_ROOT}\\brouillon.txt`, "ancien");
+      fileSystem.files.set(`${ALLOWED_ROOT}\\draft.txt`, "old");
     });
 
     await run(fixture, "filesystem.write", {
-      path: `${ALLOWED_ROOT}\\brouillon.txt`,
-      content: "nouveau",
+      path: `${ALLOWED_ROOT}\\draft.txt`,
+      content: "new",
       overwrite: true,
     });
 
-    expect(fixture.fileSystem.files.get(`${ALLOWED_ROOT}\\brouillon.txt`)).toBe("nouveau");
+    expect(fixture.fileSystem.files.get(`${ALLOWED_ROOT}\\draft.txt`)).toBe("new");
   });
 });
 
 describe("process", () => {
-  it("liste les processus", async () => {
+  it("lists running processes", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "process.list", {})) as { total: number };
     expect(result.total).toBe(2);
   });
 
-  it("filtre la liste par nom", async () => {
+  it("filters process list by name", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "process.list", { nameContains: "chrome" })) as {
       total: number;
@@ -371,25 +357,25 @@ describe("process", () => {
     expect(result.total).toBe(1);
   });
 
-  it("démarre un programme autorisé", async () => {
+  it("starts an allowed program", async () => {
     const fixture = await assembleForTest();
     const started = (await run(fixture, "process.start", {
       executable: "node",
-      args: ["serveur.js"],
+      args: ["server.js"],
     })) as { processId: number };
 
     expect(started.processId).toBeGreaterThan(0);
     expect(fixture.runner.started[0]).toMatchObject({ executable: "node" });
   });
 
-  it("refuse de démarrer un programme non autorisé", async () => {
+  it("refuses to start an unauthorized program", async () => {
     const fixture = await assembleForTest();
     await expect(
       run(fixture, "process.start", { executable: "regedit", args: [] }),
     ).rejects.toMatchObject({ code: "EXECUTABLE_NOT_ALLOWED" });
   });
 
-  it("arrête un processus que NEXUS a lancé", async () => {
+  it("stops a process launched by NEXUS", async () => {
     const fixture = await assembleForTest();
     const started = (await run(fixture, "process.start", {
       executable: "node",
@@ -403,10 +389,7 @@ describe("process", () => {
     expect(stopped.stopped).toBe(true);
   });
 
-  it("refuse d'arrêter un processus que NEXUS n'a pas lancé", async () => {
-    // Sans cette règle, `process.stop` permettrait d'arrêter l'antivirus ou la
-    // session de travail de l'utilisateur avec les mêmes permissions que celles
-    // accordées pour arrêter un serveur de développement.
+  it("refuses to stop a process not launched by NEXUS", async () => {
     const fixture = await assembleForTest();
     await expect(run(fixture, "process.stop", { processId: 1001 })).rejects.toMatchObject({
       code: "WORKER_POLICY_VIOLATION",
@@ -418,7 +401,7 @@ describe("process", () => {
 });
 
 describe("docker", () => {
-  it("exécute une opération de consultation autorisée", async () => {
+  it("executes an allowed inspection operation", async () => {
     const fixture = await assembleForTest();
     await run(fixture, "docker.execute", { subcommand: "ps", args: ["-a"] });
 
@@ -426,17 +409,17 @@ describe("docker", () => {
     expect(dockerRuns.at(-1)?.args).toEqual(["ps", "-a"]);
   });
 
-  it("refuse une opération non autorisée", async () => {
+  it("rejects unauthorized operation", async () => {
     const fixture = await assembleForTest();
     await expect(
       run(fixture, "docker.execute", { subcommand: "run", args: ["ubuntu"] }),
     ).rejects.toMatchObject({ code: "WORKER_POLICY_VIOLATION" });
   });
 
-  it("rédige les secrets des journaux de conteneur", async () => {
+  it("redacts secrets from container logs", async () => {
     const fixture = await assembleForTest();
     fixture.runner.outcomes.set("docker", {
-      stdout: "env: DATABASE_PASSWORD=motdepassesecret\n",
+      stdout: "env: DATABASE_PASSWORD=secretpassword\n",
     });
 
     const result = (await run(fixture, "docker.execute", {
@@ -444,12 +427,12 @@ describe("docker", () => {
       args: ["api"],
     })) as { stdout: string };
 
-    expect(result.stdout).not.toContain("motdepassesecret");
+    expect(result.stdout).not.toContain("secretpassword");
   });
 });
 
 describe("git", () => {
-  it("exécute une lecture sans autorisation d'écriture", async () => {
+  it("executes read operation without write permission", async () => {
     const fixture = await assembleForTest();
     await run(fixture, "git.status", { repositoryPath: `${ALLOWED_ROOT}\\leynai` });
 
@@ -458,7 +441,7 @@ describe("git", () => {
     expect(gitRuns.at(-1)?.cwd).toBe(`${ALLOWED_ROOT}\\leynai`);
   });
 
-  it("refuse une écriture quand la configuration est en lecture seule", async () => {
+  it("rejects mutating operation in read-only mode", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: false });
     await expect(
       run(fixture, "git.pull", { repositoryPath: `${ALLOWED_ROOT}\\leynai` }),
@@ -468,7 +451,7 @@ describe("git", () => {
     });
   });
 
-  it("autorise l'écriture quand la configuration l'accorde", async () => {
+  it("authorizes mutating operations when configured", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await run(fixture, "git.pull", { repositoryPath: `${ALLOWED_ROOT}\\leynai` });
 
@@ -476,9 +459,7 @@ describe("git", () => {
     expect(gitRuns.at(-1)?.args).toEqual(["pull", "--ff-only", "origin"]);
   });
 
-  it("empêche Git d'attendre une invite de mot de passe", async () => {
-    // Sans cela, un dépôt privé bloquerait jusqu'au délai maximal au lieu
-    // d'échouer tout de suite.
+  it("prevents Git from hanging on password prompts", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await run(fixture, "git.pull", { repositoryPath: `${ALLOWED_ROOT}\\leynai` });
 
@@ -486,7 +467,7 @@ describe("git", () => {
     expect(gitRuns.at(-1)?.env).toMatchObject({ GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "" });
   });
 
-  it("refuse un nom de branche qui serait relu comme une option", async () => {
+  it("rejects branch name that looks like a CLI flag", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     expect(() =>
       fixture.capabilities.validateInput("git.checkout", {
@@ -496,7 +477,7 @@ describe("git", () => {
     ).toThrow(expect.objectContaining({ code: "CAPABILITY_INPUT_INVALID" }));
   });
 
-  it("ferme la liste des options après la branche", async () => {
+  it("closes option list after branch name", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await run(fixture, "git.checkout", {
       repositoryPath: `${ALLOWED_ROOT}\\leynai`,
@@ -507,7 +488,7 @@ describe("git", () => {
     expect(gitRuns.at(-1)?.args).toEqual(["checkout", "main", "--"]);
   });
 
-  it("refuse un clone depuis un hôte non autorisé", async () => {
+  it("rejects clone from unauthorized host", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await expect(
       run(fixture, "git.clone", {
@@ -517,7 +498,7 @@ describe("git", () => {
     ).rejects.toMatchObject({ context: expect.objectContaining({ rule: "git.remoteHost" }) });
   });
 
-  it("refuse un clone vers une destination hors des racines", async () => {
+  it("rejects clone to destination outside allowed roots", async () => {
     const fixture = await assembleForTest({ gitAllowWrite: true });
     await expect(
       run(fixture, "git.clone", {
@@ -529,17 +510,16 @@ describe("git", () => {
 });
 
 describe("browser.open", () => {
-  it("ouvre une adresse https", async () => {
+  it("opens https URL", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "browser.open", {
-      url: "https://exemple.fr/page",
+      url: "https://example.com/page",
     })) as { opened: boolean };
 
     expect(result.opened).toBe(true);
   });
 
-  it("refuse un schéma autre que http(s)", async () => {
-    // `file://` ouvrirait un fichier local hors de toute politique de chemins.
+  it("rejects schemes other than http(s)", async () => {
     const fixture = await assembleForTest();
     expect(() =>
       fixture.capabilities.validateInput("browser.open", { url: "file:///C:/Windows/win.ini" }),
@@ -551,44 +531,33 @@ describe("browser.open", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// app.open
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe("app.open", () => {
-  it("ouvre une application connue, sans l'attendre", async () => {
-    // `start` et non `run` : une fenêtre survit à la tâche qui l'a ouverte.
-    // L'attendre bloquerait l'étape jusqu'à ce que l'utilisateur la ferme.
+  it("opens known application without awaiting window close", async () => {
     const fixture = await assembleForTest();
     const result = (await run(fixture, "app.open", { app: "chrome" })) as { app: string };
 
     expect(result.app).toBe("chrome");
     expect(fixture.runner.started).toHaveLength(1);
     expect(fixture.runner.started[0]?.executable).toContain("chrome.exe");
-    // Aucun argument : les arguments d'une application graphique sont un second
-    // canal d'injection — `chrome --load-extension=…` charge du code.
     expect(fixture.runner.started[0]?.args).toEqual([]);
     expect(fixture.runner.runs).toHaveLength(0);
   });
 
-  it("le nom est insensible à la casse", async () => {
+  it("application name is case insensitive", async () => {
     const fixture = await assembleForTest();
     await expect(run(fixture, "app.open", { app: "Chrome" })).resolves.toBeDefined();
   });
 
-  it("refuse une application inconnue, et dit lesquelles existent", async () => {
+  it("rejects unknown application and lists known ones", async () => {
     const fixture = await assembleForTest();
 
-    await expect(run(fixture, "app.open", { app: "malveillant" })).rejects.toMatchObject({
+    await expect(run(fixture, "app.open", { app: "malicious" })).rejects.toMatchObject({
       code: "EXECUTABLE_NOT_ALLOWED",
     });
     expect(fixture.runner.started).toHaveLength(0);
   });
 
-  it("n'accepte pas un chemin — c'est toute la garantie", async () => {
-    // La table de résolution est la frontière. Accepter un chemin la
-    // contournerait entièrement et ferait de `app.open` une exécution
-    // arbitraire déguisée.
+  it("does not accept paths", async () => {
     const fixture = await assembleForTest();
 
     for (const app of [
@@ -605,10 +574,9 @@ describe("app.open", () => {
     expect(fixture.runner.started).toHaveLength(0);
   });
 
-  it("ne transmet pas l'environnement du worker", async () => {
-    // Il contient le chemin de la clé privée de l'appareil.
+  it("does not forward worker environment to opened application", async () => {
     const fixture = await assembleForTest();
-    await run(fixture, "app.open", { app: "bloc-notes" });
+    await run(fixture, "app.open", { app: "notepad" });
 
     const transmitted = Object.keys(fixture.runner.started[0]?.env ?? {});
     expect(transmitted).toEqual(expect.arrayContaining([]));
@@ -616,30 +584,26 @@ describe("app.open", () => {
   });
 });
 
-describe("table des applications", () => {
-  it("décode les entrées bien formées", () => {
+describe("applications table", () => {
+  it("parses well-formed entries", () => {
     const parsed = parseApplications([
       "chrome=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-      "Spotify=C:\\Users\\moi\\AppData\\Roaming\\Spotify\\Spotify.exe",
+      "Spotify=C:\\Users\\me\\AppData\\Roaming\\Spotify\\Spotify.exe",
     ]);
 
     expect(parsed.get("chrome")).toContain("chrome.exe");
-    // Le nom est normalisé en minuscules : l'utilisateur écrit « Spotify »,
-    // le modèle écrira « spotify ».
     expect(parsed.get("spotify")).toContain("Spotify.exe");
   });
 
-  it("ignore ce qui est mal formé plutôt que de refuser de démarrer", () => {
-    // Une ligne douteuse ne doit pas priver l'utilisateur de son worker entier.
-    // Ce qui n'est pas décodé n'est simplement pas ouvrable.
+  it("ignores malformed entries gracefully without failing startup", () => {
     const parsed = parseApplications([
-      "sans-separateur",
-      "=sans-nom",
-      "sans-chemin=",
-      "nul=C:\\a\u0000b.exe",
-      "bon=C:\\Windows\\notepad.exe",
+      "no-separator",
+      "=no-name",
+      "no-path=",
+      "null=C:\\a\u0000b.exe",
+      "valid=C:\\Windows\\notepad.exe",
     ]);
 
-    expect([...parsed.keys()]).toEqual(["bon"]);
+    expect([...parsed.keys()]).toEqual(["valid"]);
   });
 });
