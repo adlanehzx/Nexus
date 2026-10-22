@@ -1,7 +1,8 @@
-import { chmod, unlink } from "node:fs/promises";
+import { chmod } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { ConnectorServer } from "./server.js";
 import { CURRENT_PROTOCOL_VERSION } from "./protocol.js";
+import { prepareSocketPath, removeStaleSocket } from "./socket.js";
 
 /**
  * The transport, and nothing else.
@@ -141,9 +142,10 @@ export async function startConnector(options: ConnectorHttpOptions): Promise<Run
 
   if (options.listen.kind === "unix") {
     const path = options.listen.path;
-    // A leftover socket from a previous run would make `listen` fail with
-    // EADDRINUSE even though nothing is listening.
-    await unlink(path).catch(() => undefined);
+    // Checks the parent directory and removes a leftover socket — only an
+    // actual socket. Anything else at this path, including a symbolic link,
+    // makes the connector refuse to start rather than delete it. See socket.ts.
+    await prepareSocketPath(path);
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen({ path }, resolve);
@@ -156,10 +158,10 @@ export async function startConnector(options: ConnectorHttpOptions): Promise<Run
       async close() {
         await new Promise<void>((resolve) => server.close(() => resolve()));
         // Node already unlinks the socket on close, so this is belt and braces
-        // for the case where it did not get that far. Mutation testing shows
-        // removing it changes nothing today, which is why it is explained
-        // rather than silently kept.
-        await unlink(path).catch(() => undefined);
+        // for the case where it did not get that far. It goes through the same
+        // narrow removal as startup: by the time we shut down, something else
+        // may be at this path, and shutdown is not a licence to delete it.
+        await removeStaleSocket(path).catch(() => undefined);
       },
     };
   }

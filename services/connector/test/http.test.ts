@@ -5,7 +5,7 @@ import {
   SafeCommandRunner,
   SystemClock,
 } from "@nexus/connections";
-import { stat } from "node:fs/promises";
+import { mkdtemp, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -194,6 +194,34 @@ posixOnly("connector over a Unix socket", () => {
     // Without this the socket inherits the umask, and a world-writable socket
     // makes the loopback argument meaningless.
     expect(mode.toString(8)).toBe("600");
+  });
+
+  it("refuses to start rather than delete a file that is not a socket", async () => {
+    const { server } = connectorServer();
+    const dir = await mkdtemp(join(tmpdir(), "nexus-http-socket-"));
+    const path = join(dir, "connector.sock");
+    await writeFile(path, "a file somebody cares about", "utf8");
+
+    await expect(startConnector({ server, listen: { kind: "unix", path } })).rejects.toThrow(
+      /not a socket/,
+    );
+    // Not starting is the right outcome: a connector that cannot bind is a
+    // missing feature, one that deleted the wrong file is data loss.
+    await expect(readFile(path, "utf8")).resolves.toBe("a file somebody cares about");
+  });
+
+  it("refuses to start rather than follow a symbolic link at its path", async () => {
+    const { server } = connectorServer();
+    const dir = await mkdtemp(join(tmpdir(), "nexus-http-socket-"));
+    const target = join(dir, "precious.txt");
+    const path = join(dir, "connector.sock");
+    await writeFile(target, "do not delete me", "utf8");
+    await symlink(target, path);
+
+    await expect(startConnector({ server, listen: { kind: "unix", path } })).rejects.toThrow(
+      /symbolic link/,
+    );
+    await expect(readFile(target, "utf8")).resolves.toBe("do not delete me");
   });
 
   it("removes the socket when it shuts down", async () => {
