@@ -70,7 +70,8 @@ whose job is running local binaries.
 
 ## What is actually working today
 
-- Presence detection for `codex`, `claude` and `agy`, via `--version`.
+- Presence detection for `codex`, `claude` and `agy`, via `--version`, on Linux
+  and macOS.
 - The full protocol: version negotiation, authentication, replay protection,
   redacted audit, loopback and Unix socket transports.
 
@@ -86,5 +87,22 @@ whose job is running local binaries.
 - **Nonces are held in memory.** A restart forgets them, so a request captured
   seconds beforehand could be replayed once afterwards; the timestamp check
   bounds that to the acceptance window.
+- **Windows is not supported.** npm installs its executables there as `.cmd`
+  shims, a `.cmd` cannot be started without `cmd.exe`, and quoting arguments for
+  `cmd.exe` is the problem CVE-2024-27980 exists about. Declaring support would
+  mean either lying about what works or adding a `shell: true` path, and a
+  version probe is not worth an injection surface. The refusal is enforced in
+  code (`launchability` in `@nexus/connections`) and reports
+  `unsupported_platform`, not `not_found`, so nobody is sent to reinstall a tool
+  that is fine. Lifting it means resolving a shim to the Node script it wraps and
+  verifying that on a real Windows machine; the Windows behaviour assumed here
+  was read from Node's documented restriction, not observed.
+- **No adapter availability is ever claimed.** The provider CLI and the ACP
+  adapter are separate installs, no adapter probe is declared yet, so
+  availability reports `unknown` rather than guessing from the CLI.
+- **No adapter is classified as officially maintained.** An npm scope is a name
+  and does not establish who publishes under it. Codex and Claude adapters are
+  `unknown`, Antigravity is `community`, and each records the vendor evidence
+  that would justify an upgrade.
 - **Not wired into the API or the dashboard.** Those are deliberately untouched
   in this batch.

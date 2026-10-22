@@ -1,5 +1,6 @@
 import { redactText, truncate } from "@nexus/shared";
 import type { ConnectionErrorCategory } from "./model.js";
+import { UnsupportedExecutableError } from "./node-process.js";
 import type { ClockPort, ProcessPort, SpawnedProcess } from "./ports.js";
 
 /**
@@ -209,14 +210,18 @@ export class SafeCommandRunner {
     try {
       child = this.#process.spawn(resolved, command.args, { env });
     } catch (error) {
-      // A spawn that throws is almost always a missing binary. Classifying it
-      // here keeps every caller from re-deriving the same conclusion.
+      // A spawn that throws is almost always a missing binary — except when the
+      // port refused to launch something that would need a shell, which is a
+      // platform limitation. Reporting that as `not_found` would send somebody
+      // to reinstall a tool that is correctly installed.
+      const category: ConnectionErrorCategory =
+        error instanceof UnsupportedExecutableError ? "unsupported_platform" : "not_found";
       return this.#finish(command, {
         ok: false,
         exitCode: null,
         stdout: "",
         stderr: redactText(error instanceof Error ? error.message : String(error)),
-        errorCategory: "not_found",
+        errorCategory: category,
         durationMs: this.#clock.now() - startedAt,
         timedOut: false,
         truncated: false,

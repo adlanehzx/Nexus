@@ -42,8 +42,27 @@ export function parseVersionLine(stdout: string): ProbeInterpretation | undefine
   return match?.[1] === undefined ? undefined : { version: match[1] };
 }
 
-/** Platforms the ACP command-line tools run on. Mobile is excluded: they need a shell and a filesystem. */
-const DESKTOP_PLATFORMS = ["linux", "darwin", "win32"] as const;
+/**
+ * Platforms these providers are declared to support.
+ *
+ * Windows is **excluded**, and not for lack of interest. npm installs its
+ * executables there as `.cmd` shims, a `.cmd` cannot be started without
+ * `cmd.exe`, and running anything through `cmd.exe` means quoting arguments for
+ * it — the problem CVE-2024-27980 exists about, and one nobody has solved
+ * reliably. Declaring `win32` support would mean either lying about what works
+ * or adding a `shell: true` path, and a probe is not worth an injection
+ * surface.
+ *
+ * What would lift this: resolving the shim to the real target it wraps (npm
+ * shims are generated wrappers around a JavaScript entry point, so the honest
+ * route is to launch the Node binary with that script as an argument, which
+ * needs no interpreter), verified on a real Windows machine. The mechanism is
+ * ready — `launchability` in node-process.ts already refuses what it must — and
+ * nothing here needs to change except this list and a resolver.
+ *
+ * Mobile is excluded for the simpler reason that these are command-line tools.
+ */
+const DESKTOP_PLATFORMS = ["linux", "darwin"] as const;
 
 export const CODEX_PROVIDER: ProviderDefinition = {
   id: "codex",

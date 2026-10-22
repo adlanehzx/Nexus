@@ -30,6 +30,61 @@ import type { ClockPort, ProcessPort, SpawnedProcess, SpawnOptions } from "./por
  */
 const MAX_CAPTURED_BYTES = 1024 * 1024;
 
+/**
+ * Extensions Windows cannot start without a command interpreter.
+ *
+ * A `.cmd` or `.bat` file is a script for `cmd.exe`, not an image
+ * `CreateProcess` can load. Node used to paper over this; since the fix for
+ * CVE-2024-27980 it refuses, because the only way to run one is through
+ * `cmd.exe`, and quoting arguments safely for `cmd.exe` is not something anyone
+ * has managed to do reliably — which is what that CVE was about.
+ */
+const WINDOWS_SHELL_SCRIPT_EXTENSIONS = [".cmd", ".bat"] as const;
+
+/**
+ * Whether a resolved path can be launched without a shell.
+ *
+ * This matters because npm installs its executables on Windows as `.cmd`
+ * shims. So the tools NEXUS wants to probe are, on that platform, precisely the
+ * files that cannot be started without `cmd.exe` — and `shell: true` would
+ * reintroduce the injection class this package exists to exclude. There is no
+ * third option available here, so the answer is "not launchable", reported as
+ * such rather than worked around.
+ *
+ * Pure and platform-injectable: the rule is about Windows, and no test on this
+ * repository's CI runs there.
+ */
+export function launchability(
+  resolvedPath: string,
+  platform: NodeJS.Platform,
+): { launchable: true } | { launchable: false; reason: string } {
+  if (platform !== "win32") return { launchable: true };
+  const lowered = resolvedPath.toLowerCase();
+  const extension = WINDOWS_SHELL_SCRIPT_EXTENSIONS.find((suffix) => lowered.endsWith(suffix));
+  if (extension === undefined) return { launchable: true };
+  return {
+    launchable: false,
+    reason: `${extension} files require a command interpreter, and NEXUS does not use one`,
+  };
+}
+
+/**
+ * Raised instead of spawning something that would need a shell.
+ *
+ * A distinct type so the caller can classify it as `unsupported_platform`
+ * rather than `not_found`: the file is there, and telling somebody to
+ * reinstall a tool that is correctly installed wastes their afternoon.
+ */
+export class UnsupportedExecutableError extends Error {
+  readonly resolvedPath: string;
+
+  constructor(resolvedPath: string, reason: string) {
+    super(`cannot launch ${resolvedPath} without a shell: ${reason}`);
+    this.name = "UnsupportedExecutableError";
+    this.resolvedPath = resolvedPath;
+  }
+}
+
 class NodeSpawnedProcess implements SpawnedProcess {
   readonly #exit: Promise<number>;
   #stdout = "";
@@ -108,10 +163,12 @@ class NodeSpawnedProcess implements SpawnedProcess {
 export class NodeProcessPort implements ProcessPort {
   readonly #pathValue: string;
   readonly #pathExt: readonly string[];
+  readonly #platform: NodeJS.Platform;
 
   constructor(options: { path?: string; pathExt?: string; platform?: NodeJS.Platform } = {}) {
     this.#pathValue = options.path ?? process.env.PATH ?? "";
     const platform = options.platform ?? process.platform;
+    this.#platform = platform;
     const rawExt = options.pathExt ?? process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD";
     // On POSIX an executable needs no extension; on Windows it needs one, and
     // resolving `codex` to `codex.cmd` is what makes npm-installed tools
@@ -120,6 +177,11 @@ export class NodeProcessPort implements ProcessPort {
   }
 
   spawn(file: string, args: readonly string[], options: SpawnOptions): SpawnedProcess {
+    // Checked here rather than at resolution time so that "the file exists" and
+    // "the file can be run safely" stay separate answers, and so no caller can
+    // reach the spawn by resolving a path some other way.
+    const verdict = launchability(file, this.#platform);
+    if (!verdict.launchable) throw new UnsupportedExecutableError(file, verdict.reason);
     return new NodeSpawnedProcess(file, args, options);
   }
 
