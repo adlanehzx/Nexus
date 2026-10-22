@@ -26,8 +26,10 @@ import {
   ExpoTextToSpeech,
   FetchHttpClient,
   KeychainStorage,
+  LocalSpeechToText,
   NativeSocket,
   OptimisticNetworkMonitor,
+  PiperTextToSpeech,
   UnavailableSpeechToText,
 } from "./platform.js";
 
@@ -137,8 +139,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
         dispatch,
       }),
       voice: new VoicePipeline({
-        speechToText: new UnavailableSpeechToText(),
-        textToSpeech: new ExpoTextToSpeech(),
+        speechToText: new LocalSpeechToText(),
+        textToSpeech: new PiperTextToSpeech(),
         locale: "en-US",
         onStateChange: setVoiceState,
         onPartial: setPartialTranscript,

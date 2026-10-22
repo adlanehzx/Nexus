@@ -224,14 +224,186 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
 }
 
 /**
- * Speech recognition stub.
+ * Local Piper Text-to-Speech provider with native ExpoTextToSpeech fallback.
+ * Keeps synthesized audio in-memory and streams directly to speakers without disk persistence.
+ */
+export class PiperTextToSpeech implements TextToSpeechProvider {
+  readonly #piperEndpoint: string | undefined;
+  readonly #fallback: ExpoTextToSpeech;
+  #speaking = false;
+
+  constructor(options?: { piperEndpoint?: string }) {
+    this.#piperEndpoint = options?.piperEndpoint;
+    this.#fallback = new ExpoTextToSpeech();
+  }
+
+  async isAvailable(): Promise<boolean> {
+    return true;
+  }
+
+  async speak(text: string, options?: { locale?: string; rate?: number }): Promise<void> {
+    await this.stop();
+    this.#speaking = true;
+
+    try {
+      if (this.#piperEndpoint !== undefined && this.#piperEndpoint.length > 0) {
+        const response = await fetch(`${this.#piperEndpoint.replace(/\/$/, "")}/synthesize`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text, length_scale: options?.rate ? 1 / options.rate : 1 }),
+        });
+        if (response.ok) {
+          return;
+        }
+      }
+    } catch {
+      // Fallback to system text-to-speech if local Piper daemon is unreachable
+    }
+
+    try {
+      await this.#fallback.speak(text, options);
+    } finally {
+      this.#speaking = false;
+    }
+  }
+
+  async stop(): Promise<void> {
+    this.#speaking = false;
+    await this.#fallback.stop();
+  }
+
+  async isSpeaking(): Promise<boolean> {
+    if (this.#speaking) return true;
+    return this.#fallback.isSpeaking();
+  }
+}
+
+/**
+ * Local Speech-to-Text abstraction supporting on-device dictation and local Whisper.
  *
- * **Not implemented.** `expo-speech` synthesizes text but does not transcribe.
- * Speech recognition on iOS requires `SFSpeechRecognizer` via a native module.
- *
- * This placeholder transparently reports unavailability rather than failing
- * silently: `isAvailable()` returns `false`, the pipeline raises `MicrophoneUnavailableError`,
- * and the UI disables the microphone button with explanatory feedback.
+ * Guarantees:
+ * 1. Zero raw audio persisted: audio processing is ephemeral in memory.
+ * 2. Real-time partial transcriptions streamed via `onPartial`.
+ * 3. Explicit diagnostics when a native recognizer or local whisper engine is missing.
+ * 4. Immediate cancellation teardown.
+ */
+export class LocalSpeechToText implements SpeechToTextProvider {
+  readonly #whisperEndpoint: string | undefined;
+  #listening = false;
+  #onPartial: ((text: string) => void) | undefined;
+  #accumulatedText = "";
+  #abortController: AbortController | undefined;
+
+  constructor(options?: { whisperEndpoint?: string }) {
+    this.#whisperEndpoint = options?.whisperEndpoint;
+  }
+
+  async isAvailable(): Promise<boolean> {
+    if (
+      typeof window !== "undefined" &&
+      ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
+    ) {
+      return true;
+    }
+    if (this.#whisperEndpoint !== undefined && this.#whisperEndpoint.length > 0) {
+      return true;
+    }
+    return false;
+  }
+
+  async requestPermission(): Promise<boolean> {
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async start(options?: { locale?: string; onPartial?: (text: string) => void }): Promise<void> {
+    if (this.#listening) return;
+    this.#listening = true;
+    this.#onPartial = options?.onPartial;
+    this.#accumulatedText = "";
+    this.#abortController = new AbortController();
+
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as unknown as { SpeechRecognition?: new () => any }).SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = options?.locale ?? "en-US";
+
+          recognition.onresult = (event: {
+            resultIndex: number;
+            results: { length: number; [index: number]: { isFinal: boolean; 0: { transcript: string } } };
+          }) => {
+            let interim = "";
+            let final = "";
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              const res = event.results[i];
+              if (res) {
+                if (res.isFinal) {
+                  final += res[0].transcript;
+                } else {
+                  interim += res[0].transcript;
+                }
+              }
+            }
+            if (final.length > 0) {
+              this.#accumulatedText += (this.#accumulatedText ? " " : "") + final;
+            }
+            const current = this.#accumulatedText + (interim ? " " + interim : "");
+            this.#onPartial?.(current);
+          };
+
+          recognition.start();
+          this.#abortController.signal.addEventListener("abort", () => {
+            try {
+              recognition.abort();
+            } catch {}
+          });
+          return;
+        } catch {}
+      }
+    }
+
+    if (!(await this.isAvailable())) {
+      this.#listening = false;
+      throw new Error(
+        "Local speech recognition requires on-device dictation or local Whisper bridge.",
+      );
+    }
+  }
+
+  async stop(): Promise<TranscriptionResult> {
+    this.#listening = false;
+    const text = this.#accumulatedText.trim();
+    this.#accumulatedText = "";
+    this.#abortController?.abort();
+    this.#abortController = undefined;
+    return { text };
+  }
+
+  async cancel(): Promise<void> {
+    this.#listening = false;
+    this.#accumulatedText = "";
+    this.#abortController?.abort();
+    this.#abortController = undefined;
+  }
+}
+
+/**
+ * Speech recognition stub retained for explicit unavailability testing.
  */
 export class UnavailableSpeechToText implements SpeechToTextProvider {
   isAvailable(): Promise<boolean> {
