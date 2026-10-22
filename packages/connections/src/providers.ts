@@ -51,13 +51,13 @@ export const CODEX_PROVIDER: ProviderDefinition = {
   kind: "acp",
   platforms: DESKTOP_PLATFORMS,
   adapter: {
-    provenance: "official",
-    // The evidence is the publishing scope, which is checkable from the repo:
-    // services/agent/config/profiles.example.json runs
-    // @agentclientprotocol/codex-acp, published under the scope that owns the
-    // Agent Client Protocol itself.
+    // Not `official`. The npm scope was the only evidence available, and a
+    // scope does not prove who maintains what is published under it — telling a
+    // user that OpenAI stands behind this adapter is a claim this repository
+    // cannot support. `unknown` says what we actually know.
+    provenance: "unknown",
     provenanceEvidence:
-      "ACP adapter published under the @agentclientprotocol npm scope, as referenced in services/agent/config/profiles.example.json.",
+      "Unknown maintainer. The adapter is referenced in services/agent/config/profiles.example.json under the @agentclientprotocol npm scope, but a scope is a name and does not establish who publishes under it. To classify as official, record an authoritative vendor statement: the adapter listed as supported in the vendor's own documentation, or the npm package linked from a vendor-controlled domain.",
   },
   detect: {
     command: { file: "codex", args: ["--version"], timeoutMs: 10_000 },
@@ -74,9 +74,10 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
   kind: "acp",
   platforms: DESKTOP_PLATFORMS,
   adapter: {
-    provenance: "official",
+    // See CODEX_PROVIDER: same reasoning, same missing evidence.
+    provenance: "unknown",
     provenanceEvidence:
-      "ACP adapter published under the @agentclientprotocol npm scope, as referenced in services/agent/config/profiles.example.json.",
+      "Unknown maintainer. The adapter is referenced in services/agent/config/profiles.example.json under the @agentclientprotocol npm scope, but a scope is a name and does not establish who publishes under it. To classify as official, record an authoritative vendor statement: the adapter listed as supported in the vendor's own documentation, or the npm package linked from a vendor-controlled domain.",
   },
   detect: {
     command: { file: "claude", args: ["--version"], timeoutMs: 10_000 },

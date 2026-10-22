@@ -123,6 +123,17 @@ export type ConnectionPlatform = z.infer<typeof connectionPlatformSchema>;
 export const adapterProvenanceSchema = z.enum(["official", "community", "unknown"]);
 export type AdapterProvenance = z.infer<typeof adapterProvenanceSchema>;
 
+/**
+ * Whether the ACP adapter is installed.
+ *
+ * Deliberately not a boolean. "I have not looked" and "I looked and it is not
+ * there" are different facts, and collapsing them means reporting one of them
+ * as the other. The only way to reach `available` is evidence from an adapter
+ * probe; absence of evidence yields `unknown`.
+ */
+export const adapterAvailabilitySchema = z.enum(["available", "missing", "unknown"]);
+export type AdapterAvailability = z.infer<typeof adapterAvailabilitySchema>;
+
 export const connectionSchema = z
   .object({
     /** Stable across restarts and across detections. `kind:providerId[:instance]`. */
@@ -181,11 +192,29 @@ export const connectionSchema = z
 
     adapter: z
       .object({
-        /** Present when a separate adapter process bridges to this provider. */
-        available: z.boolean(),
+        /**
+         * Whether the ACP adapter itself is present.
+         *
+         * Three values, not a boolean, and never derived from the CLI. The
+         * provider's command-line tool and the ACP adapter that bridges to it
+         * are separate components installed separately: `codex` can be on PATH
+         * with no adapter, and an adapter can be installed for a CLI that is
+         * gone. A boolean forces a guess, and the guess that gets made is
+         * "the CLI is here, so the adapter must be" — which is how a surface
+         * ends up offering an action that cannot run.
+         *
+         * `unknown` is the honest answer until an adapter probe exists. It is
+         * not a placeholder for `available`.
+         */
+        availability: adapterAvailabilitySchema,
         provenance: adapterProvenanceSchema,
-        /** Why we call it official or community. Mandatory, auditable. */
-        provenanceEvidence: z.string().min(1).max(200),
+        /**
+         * Why this provenance was assigned, and what would change it.
+         *
+         * Mandatory and auditable. An unexplained claim about who maintains
+         * someone else's software cannot be checked by a reader.
+         */
+        provenanceEvidence: z.string().min(1).max(400),
       })
       .strict()
       .nullable(),

@@ -333,3 +333,129 @@ posixOnly("output a provider's own answer cannot be represented", () => {
     expect(connection.capabilities).toEqual([]);
   });
 });
+
+posixOnly("adapter availability is a separate question from the CLI", () => {
+  /** A provider whose adapter is probed by a second fake binary. */
+  function withAdapterProbe(
+    verification: "verified" | "unverified",
+    interpret: (stdout: string) => { available: boolean } | undefined = (stdout) => ({
+      available: stdout.includes("adapter ok"),
+    }),
+  ): ProviderDefinition {
+    const base = fixtureProvider();
+    return {
+      ...base,
+      adapter: {
+        ...base.adapter,
+        probe: {
+          command: { file: "fixture-adapter", args: ["--version"] },
+          verification,
+          interpret,
+        },
+      },
+    };
+  }
+
+  it("reports missing when the CLI is present and the adapter is not", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    // No fixture-adapter written: the adapter binary is genuinely absent.
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("verified"));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("detected");
+    expect(connection.adapter?.availability).toBe("missing");
+  });
+
+  it("reports unknown when the CLI is missing, rather than guessing about the adapter", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture-adapter", 'echo "adapter ok"');
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("verified"));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("not_installed");
+    // We never looked at the adapter, so we do not claim either way — and in
+    // this case the adapter really is installed while the CLI is not, which is
+    // exactly the pairing a boolean cannot express.
+    expect(connection.adapter?.availability).toBe("unknown");
+  });
+
+  it("reports unknown when no adapter probe exists", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    // The case for every provider NEXUS ships today.
+    expect(connection.adapter?.availability).toBe("unknown");
+  });
+
+  it("reports available only when a verified probe says so", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-adapter", 'echo "adapter ok"');
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("verified"));
+
+    const connection = await detector.detect("fixture");
+
+    expect(connection.state).toBe("detected");
+    expect(connection.adapter?.availability).toBe("available");
+  });
+
+  it("caps an unverified probe claiming availability at unknown", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-adapter", 'echo "adapter ok"');
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("unverified"));
+
+    expect((await detector.detect("fixture")).adapter?.availability).toBe("unknown");
+  });
+
+  it("trusts an absent binary even from an unverified probe", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("unverified"));
+
+    // "The file is not there" comes from the operating system, not a parser, so
+    // the parser's verification is irrelevant to it.
+    expect((await detector.detect("fixture")).adapter?.availability).toBe("missing");
+  });
+
+  it("says unknown when the adapter answers something it cannot read", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-adapter", 'echo "???"');
+    const { detector } = detectorFor(
+      bin.dir,
+      withAdapterProbe("verified", () => undefined),
+    );
+
+    expect((await detector.detect("fixture")).adapter?.availability).toBe("unknown");
+  });
+
+  it("says unknown when the adapter probe fails for a reason other than absence", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    await bin.write("fixture-adapter", 'echo "permission denied" >&2; exit 1');
+    const { detector } = detectorFor(bin.dir, withAdapterProbe("verified"));
+
+    // A probe that could not run is not evidence the adapter is gone.
+    expect((await detector.detect("fixture")).adapter?.availability).toBe("unknown");
+  });
+
+  it("never derives adapter availability from the executable path", async () => {
+    const bin = await createFakeBinDir();
+    await bin.write("fixture", 'echo "fixture 2.3.4"');
+    const { detector } = detectorFor(bin.dir, fixtureProvider());
+
+    const connection = await detector.detect("fixture");
+
+    // The regression this guards: `available: executablePath !== null`, which
+    // reported a bridge as installed on the evidence of an unrelated binary.
+    expect(connection.executablePath).not.toBeNull();
+    expect(connection.adapter?.availability).not.toBe("available");
+  });
+});

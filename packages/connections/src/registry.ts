@@ -61,6 +61,26 @@ export interface ProbeInterpretation {
   capabilities?: readonly string[];
 }
 
+/**
+ * A probe for the ACP adapter, as opposed to the provider's own CLI.
+ *
+ * Separate from `detect` because they answer different questions about
+ * different components. `codex --version` says the CLI is installed; it says
+ * nothing about whether the ACP adapter that bridges to it is. Conflating them
+ * produces a surface offering an action that cannot run.
+ */
+export interface AdapterProbe {
+  command: DeclaredCommand;
+  verification: ProbeVerification;
+  /**
+   * Interprets a successful probe.
+   *
+   * Receives redacted, truncated output. `undefined` means "not recognised",
+   * which yields `unknown` rather than a guess in either direction.
+   */
+  interpret?: (stdout: string) => { available: boolean } | undefined;
+}
+
 export interface ProviderDefinition {
   id: string;
   displayName: string;
@@ -70,13 +90,23 @@ export interface ProviderDefinition {
   adapter: {
     provenance: AdapterProvenance;
     /**
-     * Why that provenance was assigned, in one sentence.
+     * Why that provenance was assigned, and what would change it.
      *
-     * Mandatory, because "official" is a claim about someone else's software and
-     * an unexplained claim cannot be checked. If the evidence is a published
-     * package scope, say so; if there is none, the provenance is not `official`.
+     * Mandatory, because "official" is a claim about who maintains someone
+     * else's software and an unexplained claim cannot be checked. A published
+     * package scope is not such evidence: scopes are names, and a name does not
+     * establish who stands behind what is published under it. Anything short of
+     * an authoritative vendor statement means `unknown` or `community`, and the
+     * text must record the exact source that would justify an upgrade.
      */
     provenanceEvidence: string;
+    /**
+     * How to find out whether the adapter is installed.
+     *
+     * Optional, and absent for every provider NEXUS currently ships: without
+     * one, availability is reported as `unknown`, never as `available`.
+     */
+    probe?: AdapterProbe;
   };
   /** Presence probe. Must be side-effect free and must not need a session. */
   detect: ProviderProbe;

@@ -90,7 +90,9 @@ describe("built-in providers", () => {
   it("justifies every provenance claim", () => {
     for (const provider of BUILT_IN_PROVIDERS) {
       expect(provider.adapter.provenanceEvidence.length).toBeGreaterThan(20);
-      expect(provider.adapter.provenanceEvidence.length).toBeLessThanOrEqual(200);
+      // Bounded by the same limit the connection schema enforces, so a
+      // definition cannot carry evidence a Connection would then refuse.
+      expect(provider.adapter.provenanceEvidence.length).toBeLessThanOrEqual(400);
     }
   });
 
@@ -98,13 +100,35 @@ describe("built-in providers", () => {
     // The adapter is a third-party package wrapping someone else's binary.
     // Labelling it official would tell a user somebody stands behind it.
     expect(ANTIGRAVITY_PROVIDER.adapter.provenance).toBe("community");
-    expect(CODEX_PROVIDER.adapter.provenance).toBe("official");
-    expect(CLAUDE_PROVIDER.adapter.provenance).toBe("official");
   });
 
-  it("bases an official claim on the publishing scope named in the evidence", () => {
-    for (const provider of [CODEX_PROVIDER, CLAUDE_PROVIDER]) {
-      expect(provider.adapter.provenanceEvidence).toContain("@agentclientprotocol");
+  it("claims nothing official without vendor evidence", () => {
+    // An npm scope is a name. It does not establish who publishes under it, so
+    // it cannot support "officially maintained by OpenAI" or "by Anthropic".
+    expect(CODEX_PROVIDER.adapter.provenance).toBe("unknown");
+    expect(CLAUDE_PROVIDER.adapter.provenance).toBe("unknown");
+  });
+
+  it("ships no provider claiming official status at all", () => {
+    // Structural, so adding a provider cannot smuggle the claim back in: an
+    // `official` label has to arrive with a reviewed change to this assertion.
+    expect(BUILT_IN_PROVIDERS.filter((p) => p.adapter.provenance === "official")).toEqual([]);
+  });
+
+  it("records what would justify upgrading each unproven claim", () => {
+    // Evidence that only explains the current label is a dead end for whoever
+    // picks this up later; it has to name the source that would change it.
+    for (const provider of BUILT_IN_PROVIDERS) {
+      if (provider.adapter.provenance === "official") continue;
+      expect(provider.adapter.provenanceEvidence).toMatch(
+        /to classify as official|no vendor publication evidence/i,
+      );
+    }
+  });
+
+  it("declares no adapter probe yet, so availability is never claimed", () => {
+    for (const provider of BUILT_IN_PROVIDERS) {
+      expect(provider.adapter.probe).toBeUndefined();
     }
   });
 

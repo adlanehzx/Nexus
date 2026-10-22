@@ -1,4 +1,5 @@
 import type {
+  AdapterAvailability,
   Connection,
   ConnectionErrorCategory,
   ConnectionPlatform,
@@ -126,6 +127,9 @@ export class ConnectionDetector {
         executablePath: null,
         capabilities: [],
         succeeded: false,
+        // Nothing ran, so nothing is known about the adapter either. The
+        // provider not running here says nothing about what is installed.
+        adapterAvailability: "unknown",
       });
     }
 
@@ -144,6 +148,9 @@ export class ConnectionDetector {
         executablePath: null,
         capabilities: [],
         succeeded: false,
+        // The CLI is absent. That is a fact about the CLI, and the adapter is a
+        // separate install — we did not look, so we do not claim.
+        adapterAvailability: "unknown",
       });
     }
 
@@ -176,6 +183,8 @@ export class ConnectionDetector {
         executablePath,
         capabilities: [],
         succeeded: false,
+        // The presence probe failed, so the adapter was never looked at.
+        adapterAvailability: "unknown",
       });
     }
 
@@ -191,8 +200,14 @@ export class ConnectionDetector {
         executablePath,
         capabilities: [],
         succeeded: false,
+        adapterAvailability: "unknown",
       });
     }
+
+    // The adapter is probed only once the CLI has answered, because a provider
+    // whose CLI is broken tells us nothing useful about its bridge. The result
+    // is a separate fact carried alongside, never folded into the state.
+    const adapterAvailability = await this.#adapterAvailability(definition);
 
     const sessionProbe = definition.authenticate;
     if (!sessionProbe) {
@@ -205,6 +220,7 @@ export class ConnectionDetector {
         executablePath,
         capabilities: interpretation.capabilities ?? [],
         succeeded: true,
+        adapterAvailability,
       });
     }
 
@@ -217,8 +233,41 @@ export class ConnectionDetector {
       executablePath,
       capabilities: state.capabilities,
       succeeded: state.state === "connected" || state.state === "degraded",
+      adapterAvailability,
       probeVerification: sessionProbe.verification,
     });
+  }
+
+  /**
+   * Looks for the ACP adapter, as a question separate from the CLI.
+   *
+   * The rules mirror the session probe's, for the same reason: a claim only
+   * strengthens on evidence.
+   *
+   *  - No probe declared — the case for every shipped provider — yields
+   *    `unknown`. Never `available`.
+   *  - The adapter binary genuinely absent yields `missing`. That conclusion
+   *    comes from the operating system rather than from a parser, so an
+   *    unverified probe is still trusted for it.
+   *  - A parser saying "available" is trusted only when the probe is
+   *    `verified`; otherwise `unknown`.
+   *  - A parser saying "not available", or any other failure, yields `unknown`
+   *    when unverified: wrongly reporting `missing` sends somebody to reinstall
+   *    something that is already there.
+   */
+  async #adapterAvailability(definition: ProviderDefinition): Promise<AdapterAvailability> {
+    const probe = definition.adapter.probe;
+    if (!probe) return "unknown";
+
+    const outcome = await this.#runner.run(probe.command, this.#env);
+    if (!outcome.ok) {
+      return outcome.errorCategory === "not_found" ? "missing" : "unknown";
+    }
+
+    const parsed = probe.interpret === undefined ? undefined : probe.interpret(outcome.stdout);
+    if (parsed === undefined) return "unknown";
+    if (probe.verification !== "verified") return "unknown";
+    return parsed.available ? "available" : "missing";
   }
 
   #sessionState(
@@ -318,6 +367,7 @@ export class ConnectionDetector {
       executablePath: string | null;
       capabilities: readonly string[];
       succeeded: boolean;
+      adapterAvailability: AdapterAvailability;
       probeVerification?: "verified" | "unverified";
     },
   ): Connection {
@@ -347,7 +397,10 @@ export class ConnectionDetector {
       userMessage: result.errorCategory === null ? null : USER_MESSAGES[result.errorCategory],
       requiresHumanAction: stateRequiresHumanAction(result.state),
       adapter: {
-        available: result.executablePath !== null,
+        // Never derived from `executablePath`. The CLI and the adapter are
+        // separate installs, so the presence of one is not evidence about the
+        // other.
+        availability: result.adapterAvailability,
         provenance: definition.adapter.provenance,
         provenanceEvidence: definition.adapter.provenanceEvidence,
       },
@@ -382,7 +435,7 @@ export class ConnectionDetector {
       userMessage: USER_MESSAGES.invalid_output,
       requiresHumanAction: stateRequiresHumanAction("error"),
       adapter: {
-        available: false,
+        availability: "unknown",
         provenance: definition.adapter.provenance,
         provenanceEvidence: definition.adapter.provenanceEvidence,
       },

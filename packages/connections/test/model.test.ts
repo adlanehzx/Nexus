@@ -23,7 +23,11 @@ function validConnection() {
     errorCategory: null,
     userMessage: null,
     requiresHumanAction: false,
-    adapter: { available: true, provenance: "official" as const, provenanceEvidence: "scope" },
+    adapter: {
+      availability: "unknown" as const,
+      provenance: "unknown" as const,
+      provenanceEvidence: "no vendor publication evidence available",
+    },
   };
 }
 
@@ -62,7 +66,7 @@ describe("connection model", () => {
     expect(() =>
       connectionSchema.parse({
         ...connection,
-        adapter: { available: true, provenance: "official", provenanceEvidence: "" },
+        adapter: { availability: "unknown", provenance: "unknown", provenanceEvidence: "" },
       }),
     ).toThrow();
   });
@@ -76,5 +80,37 @@ describe("connection model", () => {
   it("keeps the state vocabulary closed", () => {
     expect(connectionStateSchema.options).toHaveLength(10);
     expect(() => connectionStateSchema.parse("working")).toThrow();
+  });
+});
+
+describe("adapter availability", () => {
+  it.each(["available", "missing", "unknown"])("accepts %s", (availability) => {
+    const connection = validConnection();
+    expect(() =>
+      connectionSchema.parse({ ...connection, adapter: { ...connection.adapter, availability } }),
+    ).not.toThrow();
+  });
+
+  it("refuses a boolean where the three-state value belongs", () => {
+    // The shape this replaced. A boolean cannot say "I have not looked", so it
+    // forces a guess, and the guess made was "the CLI is here, so the adapter
+    // must be".
+    const connection = validConnection();
+    expect(() =>
+      connectionSchema.parse({
+        ...connection,
+        adapter: { available: true, provenance: "unknown", provenanceEvidence: "x" },
+      }),
+    ).toThrow();
+  });
+
+  it("refuses an availability value nobody declared", () => {
+    const connection = validConnection();
+    expect(() =>
+      connectionSchema.parse({
+        ...connection,
+        adapter: { ...connection.adapter, availability: "probably" },
+      }),
+    ).toThrow();
   });
 });
