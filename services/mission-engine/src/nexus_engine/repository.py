@@ -1201,8 +1201,8 @@ class MissionRepository:
             remaining_fallbacks = fallbacks[1:] if next_profile is not None else fallbacks
             if category in {"auth_required", "quota_exhausted"} and next_profile is None:
                 retry = False
-            # Human refusal is never retried even if attempts remain.
-            if category == "confirmation_declined":
+            # Confirmation terminal outcomes are never retried even if attempts remain.
+            if category.startswith("confirmation_"):
                 retry = False
                 next_profile = None
             cooldown_until = (
@@ -1210,7 +1210,7 @@ class MissionRepository:
                 if cooldown_seconds is not None
                 else None
             )
-            if category != "confirmation_declined":
+            if not category.startswith("confirmation_"):
                 connection.execute(
                     """
                     UPDATE profile_health SET status=?,cooldown_until=?,
@@ -1219,12 +1219,13 @@ class MissionRepository:
                     """,
                     (health_status, cooldown_until, category, current, lease.profile_key),
                 )
+            terminal_state = "cancelled" if category == "confirmation_cancelled" else "failed"
             connection.execute(
                 """
-                UPDATE attempts SET state='failed',error_json=?,finished_at=?,updated_at=?,
+                UPDATE attempts SET state=?,error_json=?,finished_at=?,updated_at=?,
                     lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL WHERE id=?
                 """,
-                (error_json, current, current, lease.attempt_id),
+                (terminal_state, error_json, current, current, lease.attempt_id),
             )
             if retry:
                 next_attempt = timestamp(
@@ -1267,12 +1268,12 @@ class MissionRepository:
                     )
             if not retry:
                 connection.execute(
-                    "UPDATE tasks SET state='failed',error_json=?,updated_at=? WHERE id=?",
-                    (error_json, current, lease.task_id),
+                    "UPDATE tasks SET state=?,error_json=?,updated_at=? WHERE id=?",
+                    (terminal_state, error_json, current, lease.task_id),
                 )
                 connection.execute(
-                    "UPDATE missions SET state='failed',updated_at=? WHERE id=?",
-                    (current, lease.mission_id),
+                    "UPDATE missions SET state=?,updated_at=? WHERE id=?",
+                    (terminal_state, current, lease.mission_id),
                 )
                 connection.execute(
                     """
@@ -1291,12 +1292,16 @@ class MissionRepository:
                 current,
             )
             if not retry:
+                task_event = "task.cancelled" if terminal_state == "cancelled" else "task.failed"
+                mission_event = (
+                    "mission.cancelled" if terminal_state == "cancelled" else "mission.failed"
+                )
                 self._emit(
                     connection,
                     "task",
                     lease.task_id,
-                    "task.failed",
-                    f"task:{lease.task_id}:failed",
+                    task_event,
+                    f"task:{lease.task_id}:{terminal_state}",
                     {"task_id": lease.task_id, "attempt_id": lease.attempt_id},
                     current,
                 )
@@ -1304,8 +1309,8 @@ class MissionRepository:
                     connection,
                     "mission",
                     lease.mission_id,
-                    "mission.failed",
-                    f"mission:{lease.mission_id}:failed",
+                    mission_event,
+                    f"mission:{lease.mission_id}:{terminal_state}",
                     {"mission_id": lease.mission_id},
                     current,
                 )
@@ -1313,9 +1318,15 @@ class MissionRepository:
     @staticmethod
     def _classify_failure(error: str) -> tuple[str, str, int | None]:
         normalized = error.lower()
-        # Human refusal does not degrade profile health.
+        if "confirmation_cancelled" in normalized:
+            return "confirmation_cancelled", "available", None
+        if "confirmation_expired" in normalized:
+            return "confirmation_expired", "available", None
+        if "confirmation_rejected" in normalized:
+            return "confirmation_rejected", "available", None
+        # Backward-compatible category used by older Agent Core bridges.
         if "confirmation_declined" in normalized:
-            return "confirmation_declined", "available", None
+            return "confirmation_rejected", "available", None
         if "auth" in normalized or "credential" in normalized or "401" in normalized:
             return "auth_required", "auth_required", None
         if "quota" in normalized or "usage_limit" in normalized:

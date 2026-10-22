@@ -241,6 +241,32 @@ def test_bridge_reports_a_pending_confirmation_without_failing() -> None:
 
 
 @pytest.mark.parametrize(
+    ("stop_reason", "category"),
+    [
+        ("confirmation_rejected", "confirmation_rejected"),
+        ("confirmation_expired", "confirmation_expired"),
+        ("cancelled", "confirmation_cancelled"),
+    ],
+)
+def test_bridge_preserves_distinct_confirmation_terminal_reasons(
+    stop_reason: str, category: str
+) -> None:
+    with pytest.raises(AcpError) as error:
+        _gateway(_declined_payload(stop_reason)).execute(
+            mission_external_key="bridge-demo",
+            task_key="delegated",
+            instruction="Organize my emails",
+            assertion="signed-assertion",
+            conversation_id=None,
+            attempt_id="attempt-1",
+            timeout_seconds=120,
+            heartbeat=lambda: None,
+        )
+
+    assert error.value.category == category
+
+
+@pytest.mark.parametrize(
     ("status", "category"),
     [
         (401, "auth_required"),
@@ -511,7 +537,7 @@ def test_an_approved_confirmation_resumes_and_completes_the_task(tmp_path) -> No
 
 def test_a_refused_confirmation_fails_without_retrying(tmp_path) -> None:
     def declining(**_values):  # noqa: ANN003, ANN202
-        raise AcpError("stopped: confirmation_rejected", category="confirmation_declined")
+        raise AcpError("stopped: confirmation_rejected", category="confirmation_rejected")
 
     repository, worker, _gw, mission_id = _suspended_task(tmp_path, [])
     worker.agent_core.execute = declining  # type: ignore[assignment]
@@ -520,13 +546,13 @@ def test_a_refused_confirmation_fails_without_retrying(tmp_path) -> None:
 
     task = _task_row(repository, mission_id)
     assert task["state"] == "failed"
-    assert "confirmation_declined" in str(task["error_json"])
+    assert "confirmation_rejected" in str(task["error_json"])
     assert repository.mission(mission_id)["state"] == "failed"
 
 
 def test_a_human_refusal_leaves_the_profile_healthy(tmp_path) -> None:
     def declining(**_values):  # noqa: ANN003, ANN202
-        raise AcpError("stopped: confirmation_rejected", category="confirmation_declined")
+        raise AcpError("stopped: confirmation_rejected", category="confirmation_rejected")
 
     repository, worker, _gw, _mission = _suspended_task(tmp_path, [])
     worker.agent_core.execute = declining  # type: ignore[assignment]
@@ -535,6 +561,27 @@ def test_a_human_refusal_leaves_the_profile_healthy(tmp_path) -> None:
     health = {item["key"]: item for item in repository.profile_activity()}
     assert "agent-core" not in health
     assert health["codex"]["consecutive_failures"] == 0
+
+
+@pytest.mark.parametrize(
+    ("category", "expected_state"),
+    [("confirmation_expired", "failed"), ("confirmation_cancelled", "cancelled")],
+)
+def test_confirmation_expiry_and_cancellation_are_terminal_without_retry(
+    tmp_path, category: str, expected_state: str
+) -> None:
+    def stopping(**_values):  # noqa: ANN003, ANN202
+        raise AcpError(f"stopped: {category}", category=category)
+
+    repository, worker, _gateway_value, mission_id = _suspended_task(tmp_path, [])
+    worker.agent_core.execute = stopping  # type: ignore[assignment]
+
+    assert worker.run_once() is True
+    task = _task_row(repository, mission_id)
+    assert task["state"] == expected_state
+    assert category in str(task["error_json"])
+    assert repository.mission(mission_id)["state"] == expected_state
+    assert worker.run_once() is False
 
 
 def test_the_migration_adds_the_awaiting_state_to_existing_databases(tmp_path) -> None:

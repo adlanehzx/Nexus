@@ -13,8 +13,12 @@ from nexus_engine.domain import MissionOwner
 #: Service identifier in delegation assertions.
 SERVICE_NAME = "mission-engine"
 
-#: Run stop reasons indicating user refusal or expiration.
-DECLINED_STOP_REASONS = frozenset({"confirmation_rejected", "confirmation_expired"})
+#: Confirmation terminal reasons mapped without collapsing user intent.
+CONFIRMATION_STOP_CATEGORIES = {
+    "confirmation_rejected": "confirmation_rejected",
+    "confirmation_expired": "confirmation_expired",
+    "cancelled": "confirmation_cancelled",
+}
 
 
 @dataclass(frozen=True)
@@ -276,9 +280,10 @@ def _read_run(body: Any) -> AgentCoreOutcome:
         renewed_expires_at=renewed_expires_at,
     )
 
-    if stop_reason in DECLINED_STOP_REASONS:
+    confirmation_category = CONFIRMATION_STOP_CATEGORIES.get(stop_reason or "")
+    if confirmation_category is not None:
         raise AcpError(
-            f"Agent Core run stopped: {stop_reason}", category="confirmation_declined"
+            f"Agent Core run stopped: {stop_reason}", category=confirmation_category
         )
 
     if outcome.awaits_confirmation or status == "waiting_for_confirmation":
