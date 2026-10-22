@@ -69,7 +69,7 @@ jobs:
 
       - name: Build and publish API
         id: api-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infrastructure/docker/api.Dockerfile
@@ -87,7 +87,7 @@ jobs:
 
       - name: Build and publish dashboard
         id: dashboard-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infrastructure/docker/dashboard.Dockerfile
@@ -105,7 +105,7 @@ jobs:
 
       - name: Build and publish migrator
         id: migrate-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infrastructure/docker/migrate.Dockerfile
@@ -123,7 +123,7 @@ jobs:
 
       - name: Build and publish multi-architecture Linux worker
         id: worker-image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infrastructure/docker/worker.Dockerfile
