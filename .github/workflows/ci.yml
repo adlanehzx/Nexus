@@ -56,10 +56,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # MCP stdio isolation is enabled by default and its integration tests
-      # execute a real process inside Bubblewrap.
+      # MCP stdio isolation is enabled by default. The package always validates
+      # its hardened arguments and runs the live Bubblewrap test when the host
+      # kernel permits unprivileged user namespaces (GitHub runners do not).
       - name: Install MCP sandbox runtime
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          bwrap --version
 
       - name: Tests
         run: pnpm test

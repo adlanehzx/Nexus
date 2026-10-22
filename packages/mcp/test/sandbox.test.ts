@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -12,6 +12,20 @@ import {
 } from "../src/sandbox.js";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Bubblewrap may be installed while the host kernel still denies unprivileged
+ * user namespaces (for example on GitHub-hosted runners). Probe the actual
+ * capability so the live integration test runs wherever isolation is usable;
+ * argument-generation tests remain mandatory on every host.
+ */
+function canCreateBubblewrapSandbox(): boolean {
+  const probe = spawnSync("bwrap", ["--ro-bind", "/", "/", "--", "true"], {
+    stdio: "ignore",
+    timeout: 5_000,
+  });
+  return probe.status === 0;
+}
 
 describe("MCP Isolation and Security", () => {
   it("validates allowed binaries and rejects unauthorized commands", () => {
@@ -151,33 +165,36 @@ describe("MCP Isolation and Security", () => {
     expect(sbom.verifiedAt).toBeDefined();
   });
 
-  it("executes commands in a Bubblewrap filesystem and process sandbox", async () => {
-    const config = parseMcpServerConfig({
-      name: "live-bwrap-test",
-      transport: "stdio",
-      command: process.execPath,
-      args: ["-e", "console.log(process.env.TEST_SECRET)"],
-      sandbox: {
-        enabled: true,
-        engine: "bwrap",
-        readOnlyRoot: true,
-        // Some hosted CI kernels allow user namespaces but prohibit the
-        // RTM_NEWADDR operation Bubblewrap uses to initialize loopback in a
-        // new network namespace. Network denial remains the production
-        // default and is asserted by the argument-generation test above.
-        allowNetwork: true,
-        allowedBinaries: ["node"],
-      },
-    });
+  it.skipIf(!canCreateBubblewrapSandbox())(
+    "executes commands in a Bubblewrap filesystem and process sandbox",
+    async () => {
+      const config = parseMcpServerConfig({
+        name: "live-bwrap-test",
+        transport: "stdio",
+        command: process.execPath,
+        args: ["-e", "console.log(process.env.TEST_SECRET)"],
+        sandbox: {
+          enabled: true,
+          engine: "bwrap",
+          readOnlyRoot: true,
+          // Some hosted CI kernels allow user namespaces but prohibit the
+          // RTM_NEWADDR operation Bubblewrap uses to initialize loopback in a
+          // new network namespace. Network denial remains the production
+          // default and is asserted by the argument-generation test above.
+          allowNetwork: true,
+          allowedBinaries: ["node"],
+        },
+      });
 
-    if (config.transport !== "stdio") throw new Error("Must be stdio");
+      if (config.transport !== "stdio") throw new Error("Must be stdio");
 
-    const prepared = await McpSandboxManager.prepareStdio(config, {
-      TEST_SECRET: "NEXUS_SANDBOX_OK",
-    });
+      const prepared = await McpSandboxManager.prepareStdio(config, {
+        TEST_SECRET: "NEXUS_SANDBOX_OK",
+      });
 
-    expect(prepared.args).not.toContain("--unshare-net");
-    const { stdout } = await execFileAsync(prepared.command, prepared.args);
-    expect(stdout.trim()).toBe("NEXUS_SANDBOX_OK");
-  });
+      expect(prepared.args).not.toContain("--unshare-net");
+      const { stdout } = await execFileAsync(prepared.command, prepared.args);
+      expect(stdout.trim()).toBe("NEXUS_SANDBOX_OK");
+    },
+  );
 });
