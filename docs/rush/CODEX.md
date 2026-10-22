@@ -31,7 +31,7 @@ installers or device pairing here.
 | ID  | Deliverable                                    | Status | Commit    | Evidence                                              |
 | --- | ---------------------------------------------- | ------ | --------- | ----------------------------------------------------- |
 | C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
-| C1  | Durable mission lifecycle and restart recovery | IN_PROGRESS |           |                                                       |
+| C1  | Durable mission lifecycle and restart recovery | DONE   | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
 | C2  | Context, memory and token-budget management    | TODO   |           |                                                       |
 | C3  | Health, quota-aware routing and agent fallback | TODO   |           |                                                       |
 | C4  | Human confirmation and safe retry semantics    | TODO   |           |                                                       |
@@ -93,12 +93,22 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-22T22:14:59+02:00
-- Completed at:
-- Commit:
+- Completed at: 2026-10-22T22:17:12+02:00
+- Commit: `f3c0213263a1faafa5e108cc676fa0baccaa03c7`
 - Commands and results:
-- Notes:
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests/test_durable_lifecycle.py -q` — passed: 6 tests before the migration and terminal-action cases were added.
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests/test_durable_lifecycle.py` — passed: 9 tests.
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests` — passed: 122 tests, 1 deprecation warning.
+  - `git diff --check` — passed.
+- Notes: Two independent ready tasks receive concurrent leases while their join remains blocked. An
+  expired lease is reclaimed with the same attempt and conversation IDs after repository restart.
+  Timeout budgets reach the gateway, retry backoff prevents early acquisition, attempt limits stop
+  further work, and submission idempotency survives restart. Completed and refused actions each stay
+  at one execution after restart. Outbox delivery now uses expiring fenced leases, stable downstream
+  dedupe keys and explicit acknowledge/release transitions. The schema change only adds nullable
+  outbox lease columns; no backup was required, and the legacy migration test proves row preservation.
 
 ## C2 — Context, memory and token-budget management
 
@@ -214,11 +224,12 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID   | Task | Severity | Status   | Description                                                                                                             | Reproduction or evidence                                                                                                                      | Fix commit         |
-| ---- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| C0-1 | C0   | High     | RESOLVED | The documented Mission Engine command could not install `pytest` because test dependencies were only an optional extra. | `uv run --project services/mission-engine pytest -q` exited 2 with `Failed to spawn: pytest`.                                                 | `c7d013a`          |
-| C0-2 | C0   | Medium   | RESOLVED | Unscoped pytest collected the browser-worker suite from the repository root.                                            | The command collected 113 items then failed importing `app`; the scoped command passes 113 tests and the final gate now names the suite path. | `c526f6f`         |
-| C0-3 | C0   | Medium   | RESOLVED | Direct package tests require built internal workspace exports.                                                          | Baseline Agent Core/Memory runs failed package resolution; dependency-closure build followed by both suites passes.                           | `c7d013a`          |
+| ID   | Task | Severity | Status   | Description                                                                                                                       | Reproduction or evidence                                                                                                                      | Fix commit |
+| ---- | ---- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| C0-1 | C0   | High     | RESOLVED | The documented Mission Engine command could not install `pytest` because test dependencies were only an optional extra.           | `uv run --project services/mission-engine pytest -q` exited 2 with `Failed to spawn: pytest`.                                                 | `c7d013a`  |
+| C0-2 | C0   | Medium   | RESOLVED | Unscoped pytest collected the browser-worker suite from the repository root.                                                      | The command collected 113 items then failed importing `app`; the scoped command passes 113 tests and the final gate now names the suite path. | `c526f6f`  |
+| C0-3 | C0   | Medium   | RESOLVED | Direct package tests require built internal workspace exports.                                                                    | Baseline Agent Core/Memory runs failed package resolution; dependency-closure build followed by both suites passes.                           | `c7d013a`  |
+| C1-1 | C1   | High     | RESOLVED | Mission outbox events had no claim or acknowledgement fencing, allowing concurrent or restarted publishers to duplicate delivery. | The restart test reclaims the same event and rejects the stale publisher token; only the current lease can acknowledge it.                    | `f3c0213`  |
 
 ## Improvements for the adjustment phase
 
@@ -230,9 +241,10 @@ Record improvements that are useful but not required for the rush acceptance cri
 
 ## Cross-agent handoffs
 
-| ID    | From/to                    | Contract or dependency                                                                                                                                                                  | Status | Evidence or target commit |
-| ----- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
-| C0-H1 | Codex to Claude and Gemini | Use `services/mission-engine/tests/fixtures/complete_mission.json` as the deterministic integration scenario; preserve its event names when adapting connection and dashboard fixtures. | OPEN   | Target C5 integration     |
+| ID    | From/to                    | Contract or dependency                                                                                                                                                                              | Status | Evidence or target commit |
+| ----- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
+| C0-H1 | Codex to Claude and Gemini | Use `services/mission-engine/tests/fixtures/complete_mission.json` as the deterministic integration scenario; preserve its event names when adapting connection and dashboard fixtures.             | OPEN   | Target C5 integration     |
+| C1-H1 | Codex to event consumers   | Outbox consumers must publish with `dedupe_key`, then call `acknowledge_outbox`; failed delivery must call `release_outbox`. Lease tokens are fencing tokens and must never be reused after expiry. | OPEN   | `f3c0213`                 |
 
 ## Final verification
 
