@@ -57,7 +57,10 @@ jobs:
         run: pnpm typecheck
 
       - name: Tests
-        run: pnpm test
+        # GitHub's two-core runners can starve the real MCP stdio child process
+        # when every Vitest workspace starts at once. Keep package-level tests
+        # parallel while bounding cross-package concurrency.
+        run: pnpm exec turbo run test --concurrency=2
 
       # Generated Tauri schemas and runtime-owned configuration are excluded.
       - name: Format
