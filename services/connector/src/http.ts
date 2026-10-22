@@ -1,7 +1,7 @@
 import { chmod } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { ConnectorServer } from "./server.js";
-import { CURRENT_PROTOCOL_VERSION } from "./protocol.js";
+import { CURRENT_PROTOCOL_VERSION, type ConnectorErrorCode } from "./protocol.js";
 import { prepareSocketPath, removeStaleSocket } from "./socket.js";
 
 /**
@@ -55,7 +55,15 @@ function reply(response: ServerResponse, status: number, body: unknown): void {
   response.end(payload);
 }
 
-function protocolError(code: string, message: string): unknown {
+/**
+ * A transport-level refusal, in the protocol's own error shape.
+ *
+ * `code` is typed as `ConnectorErrorCode` rather than `string` on purpose: this
+ * file builds error payloads by hand, and when the code enum changed a free
+ * `string` let it keep emitting a code that no longer existed. The compiler now
+ * catches that instead of a reader having to.
+ */
+function protocolError(code: ConnectorErrorCode, message: string): unknown {
   return { ok: false, protocolVersion: CURRENT_PROTOCOL_VERSION, error: { code, message } };
 }
 
@@ -96,7 +104,11 @@ async function handle(
   // presence of the header is itself the answer. The signature would refuse
   // these anyway; refusing before reading a body is cheaper and clearer.
   if (request.headers.origin !== undefined) {
-    return reply(response, 403, protocolError("unauthenticated", "This request was refused."));
+    return reply(
+      response,
+      403,
+      protocolError("authentication_failed", "This request was refused."),
+    );
   }
 
   // Requiring a JSON content type keeps a form post — which a page can make

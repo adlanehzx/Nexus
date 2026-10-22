@@ -106,17 +106,44 @@ export const connectorRequestSchema = z
   .strict();
 export type ConnectorRequest = z.infer<typeof connectorRequestSchema>;
 
+/**
+ * Error codes a caller can see.
+ *
+ * There is exactly **one** authentication code. An unknown client, a signature
+ * that does not verify, a stale timestamp and a reused nonce are four different
+ * facts internally and one answer externally, because each distinction narrows
+ * what an attacker has to change next: "replayed" confirms the signature was
+ * good, "expired" confirms the key was accepted, and "unknown client" confirms
+ * which identifiers exist. The precise reason is recorded in the local audit
+ * trail, where the operator can see it and a caller cannot.
+ */
 export const connectorErrorCodeSchema = z.enum([
   "unsupported_protocol_version",
   "malformed_request",
-  "unauthenticated",
-  "replayed_request",
-  "expired_request",
+  /** Every authentication failure, without exception. */
+  "authentication_failed",
   "unknown_method",
   "unknown_provider",
   "internal_error",
 ]);
 export type ConnectorErrorCode = z.infer<typeof connectorErrorCodeSchema>;
+
+/**
+ * Why authentication failed, for the audit trail only.
+ *
+ * Never serialised into a response. The type exists so the distinction is not
+ * lost — an operator reading logs needs it to tell a clock problem from an
+ * attack — while the wire protocol stays uniform.
+ */
+export const connectorAuthFailureReasonSchema = z.enum([
+  "unknown_client",
+  "invalid_signature",
+  "expired_timestamp",
+  "future_timestamp",
+  "malformed_timestamp",
+  "replayed_nonce",
+]);
+export type ConnectorAuthFailureReason = z.infer<typeof connectorAuthFailureReasonSchema>;
 
 /**
  * Responses carry no credential, by construction.

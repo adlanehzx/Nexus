@@ -16,6 +16,7 @@ import { NonceStore, RequestAuthenticator } from "../src/auth.js";
 import {
   canonicalJson,
   canonicalRequestBytes,
+  connectorErrorCodeSchema,
   connectorMethodSchema,
   connectorRequestSchema,
 } from "../src/protocol.js";
@@ -216,7 +217,7 @@ posixOnly("connector server", () => {
 
     const response = await server.handle(stranger.sign({ method: "health" }));
 
-    expect(!response.ok && response.error.code).toBe("unauthenticated");
+    expect(!response.ok && response.error.code).toBe("authentication_failed");
   });
 
   it("refuses a signature that does not verify", async () => {
@@ -225,7 +226,7 @@ posixOnly("connector server", () => {
 
     const response = await server.handle(forged);
 
-    expect(!response.ok && response.error.code).toBe("unauthenticated");
+    expect(!response.ok && response.error.code).toBe("authentication_failed");
   });
 
   it("refuses a signature captured from a different method", async () => {
@@ -239,7 +240,7 @@ posixOnly("connector server", () => {
       params: { method: "connection.detect" },
     });
 
-    expect(!escalated.ok && escalated.error.code).toBe("unauthenticated");
+    expect(!escalated.ok && escalated.error.code).toBe("authentication_failed");
   });
 
   it("refuses a replayed request", async () => {
@@ -249,7 +250,7 @@ posixOnly("connector server", () => {
     expect((await server.handle(request)).ok).toBe(true);
     const replayed = await server.handle(request);
 
-    expect(!replayed.ok && replayed.error.code).toBe("replayed_request");
+    expect(!replayed.ok && replayed.error.code).toBe("authentication_failed");
   });
 
   it("refuses a request older than the acceptance window", async () => {
@@ -261,7 +262,7 @@ posixOnly("connector server", () => {
 
     const response = await server.handle(stale);
 
-    expect(!response.ok && response.error.code).toBe("expired_request");
+    expect(!response.ok && response.error.code).toBe("authentication_failed");
   });
 
   it("refuses a request dated in the future", async () => {
@@ -274,7 +275,7 @@ posixOnly("connector server", () => {
     const response = await server.handle(ahead);
 
     // Accepting it would extend how long a captured request stays usable.
-    expect(!response.ok && response.error.code).toBe("expired_request");
+    expect(!response.ok && response.error.code).toBe("authentication_failed");
   });
 
   it("does not burn a nonce on a request that failed to authenticate", async () => {
@@ -360,6 +361,7 @@ posixOnly("connector server", () => {
 
     expect(Object.keys(audit[0] ?? {}).toSorted()).toEqual([
       "at",
+      "authFailureReason",
       "clientId",
       "durationMs",
       "errorCode",
@@ -377,7 +379,7 @@ describe("authenticator ordering", () => {
   it("checks the timestamp before spending a signature verification", async () => {
     // Order is a denial-of-service property: verifying first would let an
     // unauthenticated caller spend CPU at will with stale requests.
-    const { server, client } = await harness({ acceptanceWindowMs: 1_000 });
+    const { server, client, audit } = await harness({ acceptanceWindowMs: 1_000 });
     const stale = client.sign(
       { method: "health" },
       { issuedAt: new Date(Date.now() - 60_000).toISOString(), signature: "AAAA" },
@@ -385,8 +387,105 @@ describe("authenticator ordering", () => {
 
     const response = await server.handle(stale);
 
-    // A bad signature on a stale request reports the timestamp, which is only
+    // The response says only "refused". The audit says which check tripped, and
+    // a bad signature on a stale request recording the timestamp is only
     // possible if the timestamp was checked first.
-    expect(!response.ok && response.error.code).toBe("expired_request");
+    expect(!response.ok && response.error.code).toBe("authentication_failed");
+    expect(audit.at(-1)?.authFailureReason).toBe("expired_timestamp");
+  });
+});
+
+posixOnly("authentication failures look identical from outside", () => {
+  /** Produces every distinct authentication failure against one server. */
+  async function failures() {
+    const { server, client, audit } = await harness({ acceptanceWindowMs: 1_000 });
+    const stranger = createTestClient("not-registered");
+    const reused = client.sign({ method: "health" });
+    await server.handle(reused);
+
+    const responses = [
+      await server.handle(stranger.sign({ method: "health" })),
+      await server.handle(client.sign({ method: "health" }, { signature: "AAAA" })),
+      await server.handle(reused),
+      await server.handle(
+        client.sign(
+          { method: "health" },
+          { issuedAt: new Date(Date.now() - 60_000).toISOString() },
+        ),
+      ),
+      await server.handle(
+        client.sign(
+          { method: "health" },
+          { issuedAt: new Date(Date.now() + 600_000).toISOString() },
+        ),
+      ),
+    ];
+    return { responses, audit };
+  }
+
+  it("returns one code for every cause", async () => {
+    const { responses } = await failures();
+
+    const codes = new Set(
+      responses.map((response) => (response.ok ? "accepted" : response.error.code)),
+    );
+    expect([...codes]).toEqual(["authentication_failed"]);
+  });
+
+  it("returns byte-identical error objects", async () => {
+    const { responses } = await failures();
+
+    // Not merely the same code: the same payload. A difference in wording, in
+    // field order, or an extra key is an oracle just as useful as a distinct
+    // code would be.
+    const serialised = new Set(
+      responses.map((response) => JSON.stringify(response.ok ? { ok: true } : response.error)),
+    );
+    expect(serialised.size).toBe(1);
+  });
+
+  it("exposes no code that names a cause", () => {
+    // Structural, so the enum cannot regrow "replayed" or "expired" later.
+    for (const code of connectorErrorCodeSchema.options) {
+      expect(code).not.toMatch(/replay|expired|nonce|signature|unknown_client|timestamp/i);
+    }
+  });
+
+  it("keeps every cause distinguishable in the local audit", async () => {
+    const { audit } = await failures();
+
+    // An operator still has to be able to tell a clock problem from an attack;
+    // that information moved rather than disappeared.
+    const reasons = audit
+      .map((event) => event.authFailureReason)
+      .filter((reason): reason is NonNullable<typeof reason> => reason !== null);
+    expect(new Set(reasons)).toEqual(
+      new Set([
+        "unknown_client",
+        "invalid_signature",
+        "replayed_nonce",
+        "expired_timestamp",
+        "future_timestamp",
+      ]),
+    );
+  });
+
+  it("records no reason when the failure was not about authentication", async () => {
+    const { server, audit } = await harness();
+
+    await server.handle({ nonsense: true });
+
+    expect(audit.at(-1)?.authFailureReason).toBeNull();
+  });
+
+  it("never serialises the reason into a response", async () => {
+    const { server } = await harness();
+    const stranger = createTestClient("not-registered");
+
+    const response = await server.handle(stranger.sign({ method: "health" }));
+
+    expect(JSON.stringify(response)).not.toMatch(
+      /unknown_client|invalid_signature|replayed|expired_timestamp|future_timestamp/,
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
   SUPPORTED_PROTOCOL_VERSIONS,
   canonicalRequestBytes,
   connectorRequestSchema,
+  type ConnectorAuthFailureReason,
   type ConnectorErrorCode,
   type ConnectorMethod,
   type ConnectorResponse,
@@ -32,6 +33,14 @@ export interface ConnectorAuditEvent {
   providerId: string | null;
   ok: boolean;
   errorCode: ConnectorErrorCode | null;
+  /**
+   * Why authentication failed, when it did.
+   *
+   * Local only. This is the field that keeps "the nonce was reused" and "the
+   * key is unknown" distinguishable for whoever operates the connector, while
+   * the response says neither.
+   */
+  authFailureReason: ConnectorAuthFailureReason | null;
   durationMs: number;
   /** True for a method that spawned a process. */
   executed: boolean;
@@ -48,9 +57,8 @@ export interface ConnectorServerOptions {
 const ERROR_MESSAGES: Record<ConnectorErrorCode, string> = {
   unsupported_protocol_version: "This connector does not speak the requested protocol version.",
   malformed_request: "This request does not match the connector protocol.",
-  unauthenticated: "This request was refused.",
-  replayed_request: "This request was refused.",
-  expired_request: "This request was refused.",
+  // One sentence for every authentication failure. See the code enum.
+  authentication_failed: "This request was refused.",
   unknown_method: "This connector does not provide that method.",
   unknown_provider: "This connection type is not available in this installation.",
   internal_error: "The connector could not complete this request.",
@@ -85,6 +93,7 @@ export class ConnectorServer {
         providerId: null,
         startedAt,
         executed: false,
+        authFailureReason: null,
       });
     }
 
@@ -97,6 +106,7 @@ export class ConnectorServer {
       providerId,
       startedAt,
       executed: false,
+      authFailureReason: null as ConnectorAuthFailureReason | null,
     };
 
     if (!SUPPORTED_PROTOCOL_VERSIONS.includes(request.protocolVersion as 1)) {
@@ -124,8 +134,15 @@ export class ConnectorServer {
       });
       frame.clientId = client.clientId;
     } catch (error) {
-      const code = error instanceof ConnectorAuthError ? error.connectorCode : "internal_error";
-      return this.#fail(request.requestId, code, frame);
+      if (!(error instanceof ConnectorAuthError)) {
+        return this.#fail(request.requestId, "internal_error", frame);
+      }
+      // The reason goes to the audit trail; the response does not carry it and
+      // there is no code to carry it in. That is the whole point.
+      return this.#fail(request.requestId, "authentication_failed", {
+        ...frame,
+        authFailureReason: error.reason,
+      });
     }
 
     frame.executed = EXECUTING_METHODS.includes(method);
@@ -208,6 +225,7 @@ export class ConnectorServer {
       providerId: string | null;
       startedAt: number;
       executed: boolean;
+      authFailureReason: ConnectorAuthFailureReason | null;
     },
   ): ConnectorResponse {
     this.#audit({ ...frame, requestId, ok: false, errorCode: code });
@@ -228,6 +246,7 @@ export class ConnectorServer {
     errorCode: ConnectorErrorCode | null;
     startedAt: number;
     executed: boolean;
+    authFailureReason: ConnectorAuthFailureReason | null;
   }): void {
     this.#onAudit?.({
       at: new Date(this.#now()).toISOString(),
@@ -237,6 +256,7 @@ export class ConnectorServer {
       providerId: input.providerId,
       ok: input.ok,
       errorCode: input.errorCode,
+      authFailureReason: input.authFailureReason,
       durationMs: this.#now() - input.startedAt,
       executed: input.executed,
     });

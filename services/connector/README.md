@@ -45,9 +45,19 @@ method, parameters, request id, timestamp, nonce and client id — so a signatur
 observed on a harmless `connection.list` cannot be reused to make the connector
 run probes.
 
-Every refusal returns the same sentence. Telling a caller whether the key was
-unknown, the signature wrong, the nonce reused or the timestamp stale hands them
-a way to narrow down what to change.
+Every authentication failure returns the same code and the same sentence —
+`authentication_failed`, "This request was refused." — whatever the cause. There
+is no `replayed_request` and no `expired_request`, because each distinction
+narrows what an attacker has to change next: "replayed" confirms the signature
+was good, "expired" confirms the key was accepted, and "unknown client"
+confirms which identifiers exist. The payload is identical byte for byte, not
+merely the code; a difference in wording or an extra field is an oracle too.
+
+The precise reason is kept, in the local audit trail only, as
+`authFailureReason`: one of `unknown_client`, `invalid_signature`,
+`expired_timestamp`, `future_timestamp`, `malformed_timestamp` or
+`replayed_nonce`. An operator still needs to tell a clock problem from an
+attack; that information moved, it did not disappear.
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual, verify as verifySignature } from "node:crypto";
 import { AppError } from "@nexus/shared";
-import type { ConnectorErrorCode } from "./protocol.js";
+import type { ConnectorAuthFailureReason } from "./protocol.js";
 
 /**
  * Authenticating a local request.
@@ -20,18 +20,25 @@ import type { ConnectorErrorCode } from "./protocol.js";
 export class ConnectorAuthError extends AppError {
   readonly code = "CONNECTOR_AUTH_FAILED";
   readonly httpStatus = 401;
-  readonly connectorCode: ConnectorErrorCode;
+  /**
+   * The precise cause, for the audit trail.
+   *
+   * Carried on the error rather than encoded in it, so the single place that
+   * builds a response cannot accidentally forward it. There is no mapping from
+   * this value to an external code: every one of them answers the same way.
+   */
+  readonly reason: ConnectorAuthFailureReason;
 
-  constructor(connectorCode: ConnectorErrorCode, detail: string) {
+  constructor(reason: ConnectorAuthFailureReason, detail: string) {
     super({
       message: `connector request rejected: ${detail}`,
       // Deliberately uniform across causes. Telling a caller whether the key was
       // unknown, the signature wrong, the nonce reused or the timestamp stale
       // hands them a way to narrow down what to change.
       userMessage: "This request was refused.",
-      context: { connectorCode },
+      context: { reason },
     });
-    this.connectorCode = connectorCode;
+    this.reason = reason;
   }
 }
 
@@ -124,31 +131,39 @@ export class RequestAuthenticator {
     canonical: Buffer;
   }): ConnectorClient {
     const issuedAt = Date.parse(input.issuedAt);
-    if (Number.isNaN(issuedAt))
-      throw new ConnectorAuthError("malformed_request", "unparseable issuedAt");
+    if (Number.isNaN(issuedAt)) {
+      // Defensive: the schema already requires an ISO 8601 timestamp, so this
+      // is unreachable through the protocol. It is an authentication failure
+      // all the same — anything else would make the shape of the timestamp
+      // distinguishable from the rest.
+      throw new ConnectorAuthError("malformed_timestamp", "unparseable issuedAt");
+    }
 
     const now = this.#now();
     if (issuedAt > now + this.#clockSkewMs) {
       // A request from the future is not a clock problem to accommodate: it
       // would extend the window a captured request stays valid for.
-      throw new ConnectorAuthError("expired_request", "issuedAt is in the future");
+      throw new ConnectorAuthError("future_timestamp", "issuedAt is in the future");
     }
     if (now - issuedAt > this.#acceptanceWindowMs) {
-      throw new ConnectorAuthError("expired_request", "issuedAt is outside the acceptance window");
+      throw new ConnectorAuthError(
+        "expired_timestamp",
+        "issuedAt is outside the acceptance window",
+      );
     }
 
     const client = this.#clients.get(input.clientId);
-    if (!client) throw new ConnectorAuthError("unauthenticated", "unknown client");
+    if (!client) throw new ConnectorAuthError("unknown_client", "unknown client");
 
     if (!verifyEd25519(client.publicKey, input.canonical, input.signature)) {
-      throw new ConnectorAuthError("unauthenticated", "signature does not verify");
+      throw new ConnectorAuthError("invalid_signature", "signature does not verify");
     }
 
     // Nonce last, and only after the signature verifies. Recording a nonce for
     // an unverified request would let an unauthenticated caller burn the nonce
     // of a request it merely observed, and so deny the real client its retry.
     if (!this.#nonces.remember(input.nonce, now)) {
-      throw new ConnectorAuthError("replayed_request", "nonce already used");
+      throw new ConnectorAuthError("replayed_nonce", "nonce already used");
     }
 
     return client;
