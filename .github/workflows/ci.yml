@@ -56,11 +56,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # MCP stdio isolation is enabled by default and its integration tests
+      # execute a real process inside Bubblewrap.
+      - name: Install MCP sandbox runtime
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Tests
-        # GitHub's two-core runners can starve the real MCP stdio child process
-        # when every Vitest workspace starts at once. Keep package-level tests
-        # parallel while bounding cross-package concurrency.
-        run: pnpm exec turbo run test --concurrency=2
+        run: pnpm test
 
       # Generated Tauri schemas and runtime-owned configuration are excluded.
       - name: Format
