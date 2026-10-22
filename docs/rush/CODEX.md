@@ -31,7 +31,7 @@ installers or device pairing here.
 | ID  | Deliverable                                    | Status | Commit    | Evidence                                              |
 | --- | ---------------------------------------------- | ------ | --------- | ----------------------------------------------------- |
 | C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
-| C1  | Durable mission lifecycle and restart recovery | TODO   |           |                                                       |
+| C1  | Durable mission lifecycle and restart recovery | IN_PROGRESS |           |                                                       |
 | C2  | Context, memory and token-budget management    | TODO   |           |                                                       |
 | C3  | Health, quota-aware routing and agent fallback | TODO   |           |                                                       |
 | C4  | Human confirmation and safe retry semantics    | TODO   |           |                                                       |
@@ -93,8 +93,8 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-22T22:14:59+02:00
 - Completed at:
 - Commit:
 - Commands and results:
@@ -217,7 +217,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID   | Task | Severity | Status   | Description                                                                                                             | Reproduction or evidence                                                                                                                      | Fix commit         |
 | ---- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | C0-1 | C0   | High     | RESOLVED | The documented Mission Engine command could not install `pytest` because test dependencies were only an optional extra. | `uv run --project services/mission-engine pytest -q` exited 2 with `Failed to spawn: pytest`.                                                 | `c7d013a`          |
-| C0-2 | C0   | Medium   | RESOLVED | Unscoped pytest collected the browser-worker suite from the repository root.                                            | The command collected 113 items then failed importing `app`; the scoped command passes 113 tests and the final gate now names the suite path. | C0 evidence commit |
+| C0-2 | C0   | Medium   | RESOLVED | Unscoped pytest collected the browser-worker suite from the repository root.                                            | The command collected 113 items then failed importing `app`; the scoped command passes 113 tests and the final gate now names the suite path. | `c526f6f`         |
 | C0-3 | C0   | Medium   | RESOLVED | Direct package tests require built internal workspace exports.                                                          | Baseline Agent Core/Memory runs failed package resolution; dependency-closure build followed by both suites passes.                           | `c7d013a`          |
 
 ## Improvements for the adjustment phase

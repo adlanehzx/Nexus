@@ -59,6 +59,19 @@ class Lease:
     agent_core_confirmation_id: str | None = None
 
 
+@dataclass(frozen=True)
+class OutboxLease:
+    id: int
+    aggregate_type: str
+    aggregate_id: str
+    event_type: str
+    dedupe_key: str
+    payload: dict[str, Any]
+    lease_owner: str
+    lease_token: str
+    lease_expires_at: str
+
+
 class MissionRepository:
     def __init__(self, database: Database):
         self.db = database
@@ -1293,6 +1306,102 @@ class MissionRepository:
                     (self._like_prefix(external_prefix), bounded),
                 ).fetchall()
             return [self._mission_snapshot(connection, str(row["id"])) for row in rows]
+
+    def claim_outbox(self, owner: str, lease_seconds: int = 30) -> OutboxLease | None:
+        """Claims one pending event with a fencing token.
+
+        An expired delivery lease is reclaimable after a process restart. Consumers
+        must use ``dedupe_key`` as their downstream idempotency key and acknowledge
+        with the returned lease.
+        """
+        if not owner:
+            raise ValueError("an outbox lease owner is required")
+        current_dt = now_utc()
+        current = timestamp(current_dt)
+        expiry = timestamp(current_dt + timedelta(seconds=lease_seconds))
+        token = secrets.token_urlsafe(24)
+        with self.db.transaction(immediate=True) as connection:
+            row = connection.execute(
+                """
+                SELECT id,aggregate_type,aggregate_id,event_type,dedupe_key,payload_json
+                FROM outbox
+                WHERE delivered_at IS NULL AND available_at<=?
+                  AND (lease_expires_at IS NULL OR lease_expires_at<=?)
+                ORDER BY id
+                LIMIT 1
+                """,
+                (current, current),
+            ).fetchone()
+            if row is None:
+                return None
+            changed = connection.execute(
+                """
+                UPDATE outbox SET lease_owner=?,lease_token=?,lease_expires_at=?
+                WHERE id=? AND delivered_at IS NULL
+                  AND (lease_expires_at IS NULL OR lease_expires_at<=?)
+                """,
+                (owner, token, expiry, row["id"], current),
+            ).rowcount
+            if changed != 1:
+                return None
+            return OutboxLease(
+                id=int(row["id"]),
+                aggregate_type=str(row["aggregate_type"]),
+                aggregate_id=str(row["aggregate_id"]),
+                event_type=str(row["event_type"]),
+                dedupe_key=str(row["dedupe_key"]),
+                payload=json.loads(str(row["payload_json"])),
+                lease_owner=owner,
+                lease_token=token,
+                lease_expires_at=expiry,
+            )
+
+    def acknowledge_outbox(self, lease: OutboxLease) -> None:
+        """Marks a claimed event delivered if its fencing token is still current."""
+        current = timestamp()
+        with self.db.transaction(immediate=True) as connection:
+            changed = connection.execute(
+                """
+                UPDATE outbox SET delivered_at=?,lease_owner=NULL,lease_token=NULL,
+                    lease_expires_at=NULL
+                WHERE id=? AND delivered_at IS NULL AND lease_owner=? AND lease_token=?
+                  AND lease_expires_at>?
+                """,
+                (
+                    current,
+                    lease.id,
+                    lease.lease_owner,
+                    lease.lease_token,
+                    current,
+                ),
+            ).rowcount
+            if changed != 1:
+                raise LeaseLostError(f"outbox:{lease.id}")
+
+    def release_outbox(self, lease: OutboxLease, retry_delay_seconds: int = 1) -> None:
+        """Releases a failed delivery for a bounded later retry."""
+        if retry_delay_seconds < 0:
+            raise ValueError("outbox retry delay cannot be negative")
+        current_dt = now_utc()
+        available = timestamp(current_dt + timedelta(seconds=retry_delay_seconds))
+        with self.db.transaction(immediate=True) as connection:
+            changed = connection.execute(
+                """
+                UPDATE outbox SET available_at=?,lease_owner=NULL,lease_token=NULL,
+                    lease_expires_at=NULL
+                WHERE id=? AND delivered_at IS NULL AND lease_owner=? AND lease_token=?
+                  AND lease_expires_at>?
+                """,
+                (
+                    available,
+                    lease.id,
+                    lease.lease_owner,
+                    lease.lease_token,
+                    timestamp(current_dt),
+                ),
+            ).rowcount
+            if changed != 1:
+                raise LeaseLostError(f"outbox:{lease.id}")
 
     @staticmethod
     def _like_prefix(value: str) -> str:

@@ -140,6 +140,9 @@ CREATE TABLE IF NOT EXISTS outbox (
     payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
     available_at TEXT NOT NULL,
     delivered_at TEXT,
+    lease_owner TEXT,
+    lease_token TEXT,
+    lease_expires_at TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -433,6 +436,12 @@ class Database:
                 connection.execute(
                     "ALTER TABLE missions ADD COLUMN owner_assertion_expires_at TEXT"
                 )
+            outbox_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(outbox)")
+            }
+            for column in ("lease_owner", "lease_token", "lease_expires_at"):
+                if column not in outbox_columns:
+                    connection.execute(f"ALTER TABLE outbox ADD COLUMN {column} TEXT")
             # Apply state check migration and restore schema.
             self._widen_state_checks(connection)
             connection.executescript(SCHEMA)
