@@ -753,7 +753,7 @@ export class DashboardApi {
 
   updateDeviceCapabilities(
     deviceId: string,
-    capabilities: Array<{ name: string; enabled: boolean; description?: string }>,
+    capabilities: { name: string; enabled: boolean; description?: string }[],
   ): Promise<{ capabilities: string[] }> {
     return this.#request("PUT", `/api/v1/devices/${encodeURIComponent(deviceId)}/capabilities`, {
       capabilities,

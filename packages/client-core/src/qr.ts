@@ -169,7 +169,14 @@ export function generateQrMatrix(text: string, ecc: "L" | "M" = "L"): boolean[][
 
   // Matrix construction
   const size = 17 + 4 * vInfo.version;
-  const matrix: (boolean | null)[][] = Array.from({ length: size }, () => Array(size).fill(null));
+  const matrix: (boolean | null)[][] = [];
+  for (let r = 0; r < size; r++) {
+    const row: (boolean | null)[] = [];
+    for (let c = 0; c < size; c++) {
+      row.push(null);
+    }
+    matrix.push(row);
+  }
 
   // 1. Finder patterns (7x7) + separators
   const placeFinder = (r: number, c: number) => {

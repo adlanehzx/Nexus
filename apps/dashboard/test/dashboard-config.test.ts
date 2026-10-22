@@ -49,9 +49,6 @@ describe("Dashboard configuration and account administration", () => {
     );
 
     const session = createSession("http://localhost:3000");
-    // Pre-populate session tokens in memory
-    (session as unknown as { restoreWithTokens?: (a: string, r: string) => void })
-    // Use private state or simulate valid login
     await session.login("admin@example.test", "secure-password");
 
     const api = new DashboardApi(session);

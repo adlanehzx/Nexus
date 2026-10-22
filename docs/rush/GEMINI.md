@@ -246,12 +246,20 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-22T22:52:45+02:00
+- Completed at: 2026-10-22T22:57:40+02:00
+- Commit: 7e12be3
 - Commands and results:
+  - `pnpm verify`: exit 0 (54 turbo tasks successful across all 34 monorepo packages)
+  - `pnpm release:check`: exit 0 (937 tracked files verified)
+  - `pnpm translation:status`: exit 0 (0 untranslated strings)
 - Notes:
+  - Added health checks for `api` and `dashboard` services to `infrastructure/docker/docker-compose.yml`.
+  - Added explicit prerequisites, installation, and clean uninstallation documentation in `packaging/arch/README.md` and `packaging/windows/README.md`.
+  - Updated `packaging/linux/README.md` with complete prerequisites and teardown commands.
+  - Added explicit support level warning banner to `infrastructure/kubernetes/README.md` labeling Kubernetes as `Optional / Alpha`.
+  - Fixed linting typing errors in `@nexus/client-core` and `@nexus/dashboard`.
 
 ## Findings and errors
 
@@ -264,6 +272,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing       | apps/dashboard/test/dashboard-config.test.ts | 075ccde |
 | F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps | apps/dashboard/test/device-pairing.test.ts | 480e832 |
 | F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git | services/android-worker/android/app/src/main/assets/index.android.bundle | 4d09477 |
+| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml | 7e12be3 |
 
 ## Improvements for the adjustment phase
 

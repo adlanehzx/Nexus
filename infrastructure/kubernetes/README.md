@@ -1,5 +1,9 @@
 # NEXUS on Kubernetes / k3s
 
+> [!NOTE] Support Status: **Optional / Alpha**
+> Docker Compose is the primary, officially tested server deployment for NEXUS.
+> Kubernetes manifests are provided as an optional reference for operators managing persistent multi-node Linux infrastructure. Due to stateful local runtime configs, the API deployment currently runs in single-replica mode (`strategy: Recreate`).
+
 This deployment targets the **control plane**: dashboard, API, PostgreSQL, and Redis. ACP agents and workers remain on the machines where their accounts and subscriptions are authenticated. A phone or laptop is never a Kubernetes node.
 
 ## k3s Installation

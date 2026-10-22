@@ -123,7 +123,7 @@ export function Devices({ api }: { api: DashboardApi }) {
   const [pairingLabel, setPairingLabel] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
   const [editingCapabilitiesDeviceId, setEditingCapabilitiesDeviceId] = useState<string | null>(null);
-  const [editingCapabilities, setEditingCapabilities] = useState<Array<{ name: string; enabled: boolean }>>([]);
+  const [editingCapabilities, setEditingCapabilities] = useState<{ name: string; enabled: boolean }[]>([]);
 
   useEffect(() => {
     if (pairing === null) return;
