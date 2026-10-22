@@ -28,15 +28,15 @@ installers or device pairing here.
 
 ## Progress summary
 
-| ID  | Deliverable                                    | Status | Commit | Evidence |
-| --- | ---------------------------------------------- | ------ | ------ | -------- |
-| C0  | Baseline and executable acceptance scenarios   | IN_PROGRESS |        | Base `f34e3a3c20a02702019e04a88ce38f4bbbf6fa4e` |
-| C1  | Durable mission lifecycle and restart recovery | TODO   |        |          |
-| C2  | Context, memory and token-budget management    | TODO   |        |          |
-| C3  | Health, quota-aware routing and agent fallback | TODO   |        |          |
-| C4  | Human confirmation and safe retry semantics    | TODO   |        |          |
-| C5  | Cross-agent integration and full product E2E   | TODO   |        |          |
-| C6  | Rush closure report and adjustment backlog     | TODO   |        |          |
+| ID  | Deliverable                                    | Status | Commit    | Evidence                                              |
+| --- | ---------------------------------------------- | ------ | --------- | ----------------------------------------------------- |
+| C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
+| C1  | Durable mission lifecycle and restart recovery | TODO   |           |                                                       |
+| C2  | Context, memory and token-budget management    | TODO   |           |                                                       |
+| C3  | Health, quota-aware routing and agent fallback | TODO   |           |                                                       |
+| C4  | Human confirmation and safe retry semantics    | TODO   |           |                                                       |
+| C5  | Cross-agent integration and full product E2E   | TODO   |           |                                                       |
+| C6  | Rush closure report and adjustment backlog     | TODO   |           |                                                       |
 
 ## C0 — Baseline and executable acceptance scenarios
 
@@ -52,12 +52,31 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-22T22:11:32+02:00
-- Completed at:
-- Commit:
+- Completed at: 2026-10-22T22:14:30+02:00
+- Commit: `c7d013a114be0fbbaeb0dbc9586e10579f673d84`
 - Commands and results:
-- Notes: Base commit: `f34e3a3c20a02702019e04a88ce38f4bbbf6fa4e`.
+  - `uv run --project services/mission-engine pytest -q` — failed before the fix: exit 2,
+    `pytest` executable missing.
+  - `pnpm --filter @nexus/agent-core test -- --run` — baseline failed: 2 suites failed to
+    resolve unbuilt workspace packages; 1 suite and 6 tests passed.
+  - `pnpm --filter @nexus/memory test -- --run` — baseline failed: 6 suites failed to resolve
+    unbuilt workspace packages; 1 suite and 2 tests passed.
+  - `uv lock --project services/mission-engine` — passed, 27 packages resolved.
+  - `uv run --project services/mission-engine pytest` — dependency bootstrap succeeded, then
+    collection failed because unscoped pytest also collected `services/browser-worker/tests`.
+  - `pnpm --filter @nexus/agent-core... build` — passed for 6 projects.
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests` — passed:
+    113 tests, 1 deprecation warning.
+  - `pnpm --filter @nexus/agent-core test` — passed: 3 files, 42 tests.
+  - `pnpm --filter @nexus/memory test` — passed: 6 files and 109 tests; 1 file and 7 tests
+    skipped by their existing capability guards.
+- Notes: Base commit: `f34e3a3c20a02702019e04a88ce38f4bbbf6fa4e`. The deterministic
+  fixture proves a dependency DAG with parallel-ready tasks, ACP failure and fallback, one risky tool
+  call, durable confirmation, a restart checkpoint, idempotent tool completion and final verification.
+  Reopening its SQLite database preserves the submitted mission. The existing legacy state-check
+  migration test remains part of the 113-test passing suite.
 
 ## C1 — Durable mission lifecycle and restart recovery
 
@@ -195,34 +214,36 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID  | Task | Severity | Status | Description | Reproduction or evidence | Fix commit |
-| --- | ---- | -------- | ------ | ----------- | ------------------------ | ---------- |
-|     |      |          |        |             |                          |            |
+| ID   | Task | Severity | Status   | Description                                                                                                             | Reproduction or evidence                                                                                                                      | Fix commit         |
+| ---- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| C0-1 | C0   | High     | RESOLVED | The documented Mission Engine command could not install `pytest` because test dependencies were only an optional extra. | `uv run --project services/mission-engine pytest -q` exited 2 with `Failed to spawn: pytest`.                                                 | `c7d013a`          |
+| C0-2 | C0   | Medium   | RESOLVED | Unscoped pytest collected the browser-worker suite from the repository root.                                            | The command collected 113 items then failed importing `app`; the scoped command passes 113 tests and the final gate now names the suite path. | C0 evidence commit |
+| C0-3 | C0   | Medium   | RESOLVED | Direct package tests require built internal workspace exports.                                                          | Baseline Agent Core/Memory runs failed package resolution; dependency-closure build followed by both suites passes.                           | `c7d013a`          |
 
 ## Improvements for the adjustment phase
 
 Record improvements that are useful but not required for the rush acceptance criteria.
 
-| ID  | Source task | Priority | Improvement | Why deferred | Suggested next action |
-| --- | ----------- | -------- | ----------- | ------------ | --------------------- |
-|     |             |          |             |              |                       |
+| ID    | Source task | Priority | Improvement                                              | Why deferred                                                | Suggested next action                                                      |
+| ----- | ----------- | -------- | -------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| C0-I1 | C0          | Medium   | Replace deprecated Starlette `httpx` compatibility path. | The warning does not affect correctness or rush acceptance. | Upgrade the compatible FastAPI/Starlette test client stack after the rush. |
 
 ## Cross-agent handoffs
 
-| ID  | From/to | Contract or dependency | Status | Evidence or target commit |
-| --- | ------- | ---------------------- | ------ | ------------------------- |
-|     |         |                        |        |                           |
+| ID    | From/to                    | Contract or dependency                                                                                                                                                                  | Status | Evidence or target commit |
+| ----- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
+| C0-H1 | Codex to Claude and Gemini | Use `services/mission-engine/tests/fixtures/complete_mission.json` as the deterministic integration scenario; preserve its event names when adapting connection and dashboard fixtures. | OPEN   | Target C5 integration     |
 
 ## Final verification
 
-| Gate                 | Exact command                                     | Result  | Evidence/date |
-| -------------------- | ------------------------------------------------- | ------- | ------------- |
-| Format               | `pnpm format:check`                               | NOT RUN |               |
-| Lint                 | `pnpm lint`                                       | NOT RUN |               |
-| Typecheck            | `pnpm typecheck`                                  | NOT RUN |               |
-| Build                | `pnpm build`                                      | NOT RUN |               |
-| TypeScript tests     | `pnpm test`                                       | NOT RUN |               |
-| Mission Engine tests | `uv run --project services/mission-engine pytest` | NOT RUN |               |
-| Release hygiene      | `pnpm release:check`                              | NOT RUN |               |
-| Translation gate     | `pnpm translation:check`                          | NOT RUN |               |
-| Full E2E             | Record the repository command here                | NOT RUN |               |
+| Gate                 | Exact command                                                                   | Result  | Evidence/date |
+| -------------------- | ------------------------------------------------------------------------------- | ------- | ------------- |
+| Format               | `pnpm format:check`                                                             | NOT RUN |               |
+| Lint                 | `pnpm lint`                                                                     | NOT RUN |               |
+| Typecheck            | `pnpm typecheck`                                                                | NOT RUN |               |
+| Build                | `pnpm build`                                                                    | NOT RUN |               |
+| TypeScript tests     | `pnpm test`                                                                     | NOT RUN |               |
+| Mission Engine tests | `uv run --project services/mission-engine pytest services/mission-engine/tests` | NOT RUN |               |
+| Release hygiene      | `pnpm release:check`                                                            | NOT RUN |               |
+| Translation gate     | `pnpm translation:check`                                                        | NOT RUN |               |
+| Full E2E             | Record the repository command here                                              | NOT RUN |               |
