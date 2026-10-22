@@ -213,12 +213,23 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-22T22:47:00+02:00
+- Completed at: 2026-10-22T22:52:15+02:00
+- Commit: 4d09477
 - Commands and results:
+  - `pnpm --filter @nexus/desktop test`: 5 test files, 45 tests passed
+  - `pnpm --filter @nexus/desktop build`: exit 0 (built in 195ms)
+  - `pnpm --filter @nexus/voice test`: 4 test files, 44 tests passed
+  - `pnpm --filter @nexus/android-worker test`: 9 test files, 191 tests passed
+  - `pnpm --filter @nexus/mobile typecheck`: exit 0 (cleanly typed)
+  - `pnpm --filter @nexus/client-core test test/outbox.test.ts`: 14 tests passed
+  - `node scripts/check-release-hygiene.mjs`: passed (938 tracked files)
 - Notes:
+  - Added self-revocation workflow in mobile `SettingsScreen` with explicit confirmation prompt before signing out and clearing secure storage.
+  - Removed stale generated 600KB+ `index.android.bundle` from version control in `services/android-worker` and added ignore patterns in `.gitignore`.
+  - Verified local Whisper and Piper contracts in `packages/voice`: explicitly validates binary and model availability with `VoiceUnavailableError`, never returning fake successes.
+  - Verified `Outbox` in `@nexus/client-core`: enforces client-side idempotency keys upon enqueuing, rejects non-idempotent routes, and prohibits queueing confirmation dialogs.
 
 ## G5 — Reproducible packaging and public user docs
 
@@ -252,6 +263,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states    | apps/dashboard/test/format.test.ts        | 45e46d9    |
 | F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing       | apps/dashboard/test/dashboard-config.test.ts | 075ccde |
 | F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps | apps/dashboard/test/device-pairing.test.ts | 480e832 |
+| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git | services/android-worker/android/app/src/main/assets/index.android.bundle | 4d09477 |
 
 ## Improvements for the adjustment phase
 

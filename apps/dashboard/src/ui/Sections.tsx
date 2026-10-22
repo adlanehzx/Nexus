@@ -281,7 +281,7 @@ export function Devices({ api }: { api: DashboardApi }) {
               </button>
             </div>
             <div className="callout info" style={{ marginTop: "12px", fontSize: "0.85rem", opacity: 0.9 }}>
-              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its Tailscale IP or MagicDNS hostname (e.g. <code>http://nexus.tailnet.ts.net:3000</code>). Do not expose private tailnet keys or credentials.
+              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its Tailscale IP or MagicDNS hostname (e.g. <code>http://nexus-core.example-tailnet.ts.net:3000</code>). Do not expose private tailnet keys or credentials.
             </div>
             <small style={{ display: "block", marginTop: "8px" }}>
               Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}. Single-use ticket.

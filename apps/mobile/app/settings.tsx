@@ -50,6 +50,37 @@ export default function SettingsScreen() {
           Session tokens are stored in the iOS Keychain, encrypted by the system and excluded from
           iCloud backups.
         </Text>
+        {nexus.session.deviceId ? (
+          <Pressable
+            style={[styles.signOut, { borderColor: theme.color.danger, marginTop: 12 }]}
+            onPress={() => {
+              Alert.alert(
+                "Revoke this device?",
+                "Permanently revoke this mobile device from NEXUS. All active sessions will be terminated.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Revoke",
+                    style: "destructive",
+                    onPress: () => {
+                      void nexus.api
+                        .revokeDevice(nexus.session.deviceId!)
+                        .catch(() => undefined)
+                        .finally(() => {
+                          void nexus.signOut().then(() => router.replace("/login"));
+                        });
+                    },
+                  },
+                ],
+              );
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.signOutText, { color: theme.color.danger }]}>
+              Revoke this device
+            </Text>
+          </Pressable>
+        ) : null}
       </Section>
 
       <Section title="Connection">

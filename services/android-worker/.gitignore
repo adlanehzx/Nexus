@@ -12,6 +12,8 @@ android/local.properties
 # The tracked reference configuration contains no secrets; ignore local variants.
 nexus.config.local.json
 
-# ── Metro ───────────────────────────────────────────────────────────────────
+# ── Metro & Bundles ─────────────────────────────────────────────────────────
 .metro-health-check*
 *.jsbundle
+*.bundle
+android/app/src/main/assets/index.android.bundle
