@@ -83,7 +83,7 @@ describe("administration scope remains bounded", () => {
 
     for (const route of [...paths, ...templates]) {
       expect(route, route).toMatch(
-        /^\/api\/v1\/(dashboard|orchestrator|devices|tasks|memory|notifications|mission-control)(\/|$)/,
+        /^\/api\/v1\/(dashboard|orchestrator|connections|devices|tasks|memory|notifications|mission-control)(\/|$)/,
       );
     }
   });

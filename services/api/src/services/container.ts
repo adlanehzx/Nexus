@@ -86,6 +86,7 @@ import { AgentRouter } from "./agent-router.js";
 import { SharedArtifactStore } from "./shared-artifacts.js";
 import { AgentCollaborationService } from "./agent-collaboration.js";
 import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
+import { LocalConnectionManager, type ConnectionCatalogService } from "./connection-manager.js";
 
 /**
  * Assembly of API services.
@@ -210,6 +211,8 @@ export interface ServiceContainerOptions {
   observabilityDirectory?: string;
   /** LLM provider for TaskPlanner. */
   llmProvider?: LLMProvider;
+  /** Local CLI and ACP adapter discovery. Injectable for API tests. */
+  connectionManager?: ConnectionCatalogService;
 }
 
 export class ServiceContainer {
@@ -281,12 +284,15 @@ export class ServiceContainer {
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
   readonly llmProvider: LLMProvider | undefined;
+  /** Secret-free local connection catalogue and safe diagnostic probes. */
+  readonly connections: ConnectionCatalogService;
 
   readonly #now: () => Date;
   readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
+    this.connections = options.connectionManager ?? new LocalConnectionManager();
     const now = options.now ?? (() => new Date());
     this.#now = now;
 

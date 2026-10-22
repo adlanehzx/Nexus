@@ -29,6 +29,7 @@
     "@nexus/auth": "workspace:*",
     "@nexus/browser-client": "workspace:*",
     "@nexus/config": "workspace:*",
+    "@nexus/connections": "workspace:*",
     "@nexus/database": "workspace:*",
     "@nexus/devices": "workspace:*",
     "@nexus/llm": "workspace:*",

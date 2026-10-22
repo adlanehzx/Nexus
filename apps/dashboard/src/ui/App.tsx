@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardApi, createSession } from "../lib/api.js";
 import { Agents } from "./Agents.js";
+import { Connections } from "./Connections.js";
 import { NexusChat } from "./NexusChat.js";
 import {
   Browser,
@@ -58,13 +59,17 @@ const SUPERVISION_SECTIONS = [
 ] as const;
 
 type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
-type SectionId = SupervisionId | "chat" | "agents" | "settings";
+type SectionId = SupervisionId | "chat" | "agents" | "connections" | "settings";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
   agents: {
     title: "Agents",
     description: "Capabilities, availability, and quotas of your AI team.",
+  },
+  connections: {
+    title: "Connections",
+    description: "Discover local agent CLIs without importing their credentials.",
   },
   settings: { title: "Settings", description: "Persistent rules of the multi-agent engine." },
   overview: {
@@ -162,6 +167,13 @@ export function App() {
               onSelect={navigate}
             />
             <NavItem
+              id="connections"
+              label="Connections"
+              icon="connections"
+              current={section}
+              onSelect={navigate}
+            />
+            <NavItem
               id="settings"
               label="Settings"
               icon="settings"
@@ -245,6 +257,8 @@ function renderSection(section: SectionId, api: DashboardApi) {
       return <NexusChat api={api} />;
     case "agents":
       return <Agents api={api} />;
+    case "connections":
+      return <Connections api={api} />;
     case "settings":
       return <Settings api={api} />;
     case "overview":
@@ -306,6 +320,7 @@ function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     chat: "M4 5h16v11H8l-4 4V5Z",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
+    connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
     overview: "M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",

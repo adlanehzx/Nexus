@@ -776,6 +776,9 @@ importers:
       '@nexus/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@nexus/connections':
+        specifier: workspace:*
+        version: link:../../packages/connections
       '@nexus/database':
         specifier: workspace:*
         version: link:../../packages/database

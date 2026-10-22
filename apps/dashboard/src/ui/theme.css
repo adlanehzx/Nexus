@@ -876,6 +876,189 @@ details.card[open] > summary {
   gap: 8px;
   margin-top: 15px;
 }
+
+/* Provider connections */
+.connections-page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+.connection-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 22px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-grand);
+  background:
+    radial-gradient(circle at 0 0, rgb(139 147 255 / 12%), transparent 38%), var(--surface);
+}
+.connection-hero h2 {
+  max-width: 660px;
+  margin: 5px 0 8px;
+  font-size: clamp(19px, 3vw, 27px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.connection-hero p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--texte-faible);
+}
+.connection-kicker {
+  color: var(--accent-vif);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.connection-scope {
+  margin: 12px 0 18px;
+  padding: 11px 13px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond-eleve);
+  color: var(--texte-faible);
+  font-size: 11px;
+}
+.connection-scope strong {
+  color: var(--texte);
+}
+.connection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 14px;
+}
+.connection-card {
+  display: flex;
+  min-height: 330px;
+  flex-direction: column;
+  padding: 18px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-grand);
+  background: var(--surface);
+}
+.connection-card:hover {
+  border-color: var(--bordure-claire);
+}
+.connection-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.connection-card-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.connection-logo {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--bordure-claire);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--texte-faible);
+  font-weight: 800;
+}
+.connection-logo.good {
+  border-color: rgb(95 211 154 / 48%);
+  color: var(--ok);
+}
+.connection-logo.warning {
+  border-color: rgb(233 173 91 / 48%);
+  color: var(--degrade);
+}
+.connection-logo.danger {
+  border-color: rgb(242 118 118 / 48%);
+  color: var(--hs);
+}
+.connection-provider-id {
+  color: var(--texte-faible);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.connection-state {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--texte-faible);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.connection-state.good {
+  color: var(--ok);
+}
+.connection-state.warning {
+  color: var(--degrade);
+}
+.connection-state.danger {
+  color: var(--hs);
+}
+.connection-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 18px 0 12px;
+  padding-top: 15px;
+  border-top: 1px solid var(--bordure);
+}
+.connection-details div {
+  min-width: 0;
+}
+.connection-details dt {
+  color: var(--texte-faible);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.connection-details dd {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: var(--texte);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.connection-path {
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--fond);
+  color: #bdc4d0;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-message,
+.connection-evidence {
+  margin: 10px 0 0;
+  color: var(--texte-faible);
+  font-size: 10px;
+}
+.connection-message {
+  color: var(--degrade);
+}
+.connection-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 15px;
+  color: var(--texte-faible);
+  font-size: 9px;
+}
+.connection-actions {
+  display: flex;
+  gap: 6px;
+}
+.connection-actions a {
+  text-decoration: none;
+}
 .settings-panel {
   margin-top: 18px;
   padding: 20px;
@@ -1073,6 +1256,17 @@ details.card[open] > summary {
 }
 
 @media (max-width: 760px) {
+  .connection-hero,
+  .connection-card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .connection-grid {
+    grid-template-columns: 1fr;
+  }
+  .connection-actions {
+    justify-content: flex-end;
+  }
   .pairing-heading {
     align-items: stretch;
     flex-direction: column;

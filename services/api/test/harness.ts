@@ -59,6 +59,7 @@ export interface ApiHarness {
 import type { LLMProvider } from "@nexus/llm";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
+import type { ConnectionCatalogService } from "../src/services/connection-manager.js";
 
 export async function makeApi(
   options: {
@@ -66,6 +67,7 @@ export async function makeApi(
     llmProvider?: LLMProvider;
     missionControl?: MissionControlPort;
     runtimeConfiguration?: RuntimeConfigurationStore;
+    connectionManager?: ConnectionCatalogService;
     publicApiUrl?: string;
     expectedWorkerVersion?: string;
   } = {},
@@ -82,6 +84,9 @@ export async function makeApi(
     ...(options.runtimeConfiguration === undefined
       ? {}
       : { runtimeConfiguration: options.runtimeConfiguration }),
+    ...(options.connectionManager === undefined
+      ? {}
+      : { connectionManager: options.connectionManager }),
     ...(options.publicApiUrl === undefined ? {} : { publicApiUrl: options.publicApiUrl }),
     ...(options.expectedWorkerVersion === undefined
       ? {}

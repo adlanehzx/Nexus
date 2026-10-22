@@ -39,6 +39,59 @@ export interface Overview {
   recentActivity: ActivityEntry[];
 }
 
+export interface ConnectionObservation {
+  id: string;
+  providerId: string;
+  kind: "acp" | "mcp" | "network" | "device";
+  displayName: string;
+  state:
+    | "not_installed"
+    | "detected"
+    | "authentication_required"
+    | "authenticating"
+    | "testing"
+    | "connected"
+    | "degraded"
+    | "expired"
+    | "disconnected"
+    | "error";
+  version: string | null;
+  executablePath: string | null;
+  capabilities: string[];
+  availableActions: string[];
+  platform: "linux" | "darwin" | "win32" | "android" | "unknown";
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  authStatus: "authenticated" | "unauthenticated" | "expired" | "unknown";
+  errorCategory: string | null;
+  userMessage: string | null;
+  requiresHumanAction: boolean;
+  adapter: {
+    availability: "available" | "missing" | "unknown";
+    provenance: "official" | "community" | "unknown";
+    provenanceEvidence: string;
+  } | null;
+}
+
+export interface ConnectionCatalogEntry {
+  providerId: string;
+  displayName: string;
+  kind: "acp" | "mcp" | "network" | "device";
+  platforms: ("linux" | "darwin" | "win32" | "android" | "unknown")[];
+  supportedOnThisHost: boolean;
+  actions: ("detect" | "test" | "sign_in" | "sign_out" | "install" | "open_docs")[];
+  docsUrl: string | null;
+  adapter: {
+    provenance: "official" | "community" | "unknown";
+    provenanceEvidence: string;
+  };
+  observation: ConnectionObservation | null;
+}
+
+export interface ConnectionCatalog {
+  connections: ConnectionCatalogEntry[];
+}
+
 export interface DeviceRow {
   id: string;
   name: string;
@@ -825,6 +878,18 @@ export class DashboardApi {
 
   agents(): Promise<AgentRegistry> {
     return this.#get("/api/v1/orchestrator/agents");
+  }
+
+  connections(): Promise<ConnectionCatalog> {
+    return this.#get("/api/v1/connections");
+  }
+
+  detectConnections(): Promise<ConnectionCatalog> {
+    return this.#request("POST", "/api/v1/connections/detect");
+  }
+
+  testConnection(providerId: string): Promise<ConnectionCatalogEntry> {
+    return this.#request("POST", `/api/v1/connections/${encodeURIComponent(providerId)}/test`);
   }
 
   runtimeSettings(): Promise<RuntimeSettings> {
