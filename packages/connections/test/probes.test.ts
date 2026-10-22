@@ -159,10 +159,10 @@ posixOnly("SafeCommandRunner with real processes", () => {
 
     const outcome = await runner.run(
       { file: "dumpenv", args: [] },
-      { PATH: bin.dir, HOME: "/home/tester", GITHUB_TOKEN: "must-not-be-inherited" },
+      { PATH: bin.dir, HOME: "/nexus-fake-home", GITHUB_TOKEN: "must-not-be-inherited" },
     );
 
-    expect(outcome.stdout).toContain("HOME=/home/tester");
+    expect(outcome.stdout).toContain("HOME=/nexus-fake-home");
     expect(outcome.stdout).not.toContain("must-not-be-inherited");
     expect(outcome.stdout).toContain("GITHUB_TOKEN=");
   });
@@ -227,9 +227,13 @@ describe("environment construction", () => {
   });
 
   it("keeps only allowlisted names", () => {
-    const env = runner.buildEnv({ PATH: "/usr/bin", HOME: "/home/a", SOMETHING_ELSE: "x" });
+    const env = runner.buildEnv({
+      PATH: "/usr/bin",
+      HOME: "/nexus-fake-home",
+      SOMETHING_ELSE: "x",
+    });
 
-    expect(env).toEqual({ PATH: "/usr/bin", HOME: "/home/a" });
+    expect(env).toEqual({ PATH: "/usr/bin", HOME: "/nexus-fake-home" });
   });
 
   it("drops a secret-shaped name even when a provider asks for it", () => {
