@@ -33,7 +33,7 @@ installers or device pairing here.
 | C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
 | C1  | Durable mission lifecycle and restart recovery | DONE   | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
 | C2  | Context, memory and token-budget management    | DONE   | `f535de8` | 43 Agent Core and 109 Memory tests passed             |
-| C3  | Health, quota-aware routing and agent fallback | IN_PROGRESS |           |                                                       |
+| C3  | Health, quota-aware routing and agent fallback | DONE   | `09f79b0` | 18 routing repository and 123 engine tests passed     |
 | C4  | Human confirmation and safe retry semantics    | TODO   |           |                                                       |
 | C5  | Cross-agent integration and full product E2E   | TODO   |           |                                                       |
 | C6  | Rush closure report and adjustment backlog     | TODO   |           |                                                       |
@@ -161,12 +161,20 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-22T22:20:50+02:00
-- Completed at:
-- Commit:
+- Completed at: 2026-10-22T22:21:26+02:00
+- Commit: `09f79b0031568a4d40219e5e54deb070981e09a6`
 - Commands and results:
-- Notes:
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests/test_repository.py` — passed: 18 tests.
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests` — passed: 123 tests, 1 deprecation warning.
+  - `git diff --check` — passed.
+- Notes: Each route attempt now persists ordered candidates, observed health, selected profile and a
+  stable reason. Unknown quota remains nullable and is recorded as `unknown`, never converted to a
+  numeric allowance. Existing tests plus the new evidence cover controlled fallback, exhausted-profile
+  avoidance, cooldown, retry context and stable attempt idempotency. The implementation consumes only
+  configured/observed health; it adds no provider scraping or token extraction. The routing table is an
+  additive migration and preserves existing rows without requiring a backup.
 
 ## C4 — Human confirmation and safe retry semantics
 
@@ -245,6 +253,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | C1-1 | C1   | High     | RESOLVED | Mission outbox events had no claim or acknowledgement fencing, allowing concurrent or restarted publishers to duplicate delivery.                         | The restart test reclaims the same event and rejects the stale publisher token; only the current lease can acknowledge it.                    | `f3c0213`  |
 | C2-1 | C2   | High     | RESOLVED | Agent Core persisted messages but discarded assembled context during confirmation suspension, so resumed calls lost decisions, constraints and citations. | A regression test suspends, reloads stored state, resumes, and observes the same citation in the second model system prompt.                  | `f535de8`  |
 | C2-2 | C2   | Low      | RESOLVED | Direct Agent Core typecheck read the previous Memory build output after the cross-package type changed.                                                   | Rebuilding Memory followed by both package typechecks passes.                                                                                 | `f535de8`  |
+| C3-1 | C3   | High     | RESOLVED | Routing selected healthy or fallback profiles but did not persist candidates, observations or the audit reason.                                           | Mission snapshots now contain routing decisions; tests prove quota-exhausted fallback and explicit unknown quota.                             | `09f79b0`  |
 
 ## Improvements for the adjustment phase
 
@@ -261,6 +270,7 @@ Record improvements that are useful but not required for the rush acceptance cri
 | ----- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
 | C0-H1 | Codex to Claude and Gemini | Use `services/mission-engine/tests/fixtures/complete_mission.json` as the deterministic integration scenario; preserve its event names when adapting connection and dashboard fixtures.             | OPEN   | Target C5 integration     |
 | C1-H1 | Codex to event consumers   | Outbox consumers must publish with `dedupe_key`, then call `acknowledge_outbox`; failed delivery must call `release_outbox`. Lease tokens are fencing tokens and must never be reused after expiry. | OPEN   | `f3c0213`                 |
+| C3-H1 | Codex to Gemini dashboard  | Mission task snapshots include `routing_decisions` with `selected_profile`, JSON candidates/observations, `reason` and `created_at`; render the reason without treating unknown quota as unlimited. | OPEN   | `09f79b0`                 |
 
 ## Final verification
 
