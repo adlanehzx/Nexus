@@ -10,8 +10,8 @@ WORKDIR /repo
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @nexus/dashboard...
-# Une URL vide active le mode same-origin : nginx relaie /api et /ws. Aucun
-# nom de machine ni secret n'est fige dans les fichiers JavaScript publics.
+# An empty URL enables same-origin mode: nginx proxies /api and /ws without
+# embedding a host name or secret in public JavaScript.
 ENV VITE_NEXUS_URL=""
 RUN pnpm --filter @nexus/dashboard... run build
 

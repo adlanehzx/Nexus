@@ -1,28 +1,20 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!--
-      Aucune ressource distante : ni police, ni script, ni feuille de style.
-      Tout est empaqueté. Une coquille de bureau qui charge du code depuis
-      Internet donne à quiconque contrôle ce domaine la main sur la machine.
+      No remote fonts, scripts, or stylesheets. Everything is bundled. A desktop
+      shell that loads code from the Internet hands control to that domain.
 
-      `ipc:` et `http://ipc.localhost` ne sont pas une ouverture vers le réseau :
-      c'est ainsi que Tauri v2 fait dialoguer la fenêtre avec son propre backend
-      Rust — le second sous Windows, le premier ailleurs. Sans eux, le moindre
-      `invoke` est refusé par cette politique, et l'application échoue dès la
-      lecture du trousseau, sans jamais atteindre le cœur.
-
-      `tauri.conf.json` les déclarait déjà ; cette balise, non. Le navigateur
-      applique l'intersection des deux, donc la plus restrictive l'emportait.
+      Tauri v2 uses `ipc:` and `http://ipc.localhost` to connect the window to
+      its Rust backend. Both this policy and tauri.conf.json must permit them.
     -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost https: wss:"
     />
-    <!-- Servi depuis le paquet, jamais depuis un domaine tiers : la CSP
-         ci-dessus n'autorise que « self ». -->
+    <!-- Bundled locally; the CSP permits no third-party source. -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>NEXUS</title>
   </head>

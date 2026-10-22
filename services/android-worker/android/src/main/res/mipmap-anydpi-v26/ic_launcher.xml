@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Icone adaptative. `minSdk` vaut 30, donc la variante `anydpi-v26` suffit :
-  aucune version d'Android visee ne retombe sur une icone bitmap.
+  Adaptive icon. minSdk 30 makes the anydpi-v26 variant sufficient.
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/nexus_icon" />

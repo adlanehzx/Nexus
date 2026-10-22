@@ -1,75 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Manifeste du worker Android NEXUS.
+  NEXUS Android worker manifest.
 
-  Ce fichier est la déclaration publique de tout ce que l'application peut
-  demander au système. Il se lit comme une liste de pouvoirs, et c'est
-  volontairement une liste courte : chaque ligne ajoutée élargit ce que NEXUS
-  peut faire au téléphone.
-
-  Ce qui ne s'y trouve PAS, et ne doit pas s'y trouver :
-
-    QUERY_ALL_PACKAGES        — l'inventaire logiciel complet. Remplacé par un
-                                <queries> sur les activités lançables, qui donne
-                                exactement les applications ouvrables.
-    BIND_NOTIFICATION_LISTENER_SERVICE — la lecture des notifications reçues.
-    RECORD_AUDIO, CAMERA      — aucun usage ici.
-    READ_SMS, READ_CONTACTS   — aucun usage ici.
-    foregroundServiceType="mediaProjection" — la capture passe par le service
-                                d'accessibilité, qui ne peut pas filmer.
+  This is the public list of powers the app may request. It deliberately omits
+  QUERY_ALL_PACKAGES, notification access, audio, camera, SMS, contacts, and
+  media projection. Launchable-app queries and accessibility screenshots provide
+  the narrower capabilities the worker actually needs.
 -->
 <!--
-  L'attribut `package` ne figure volontairement pas ici : depuis le plugin Gradle
-  Android 8, l'espace de noms est declare dans `app/build.gradle.kts`
-  (`namespace = "fr.nexus.worker"`) et le repeter au manifeste est une erreur de
-  compilation.
+  Android Gradle Plugin 8 reads the namespace from app/build.gradle.kts; repeating
+  a package attribute here is a compilation error.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Connexion sortante vers le cœur. Aucun port entrant n'est ouvert. -->
+    <!-- Outbound core connection only; no inbound port is opened. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
-      Service de premier plan : maintient la connexion sortante quand l'écran
-      est éteint. Android exige une notification permanente, ce qui est une
-      bonne chose — l'utilisateur voit en permanence que le worker tourne.
+      Foreground service keeps the outbound connection alive with the screen off.
+      Android requires a permanent notification so the worker remains visible.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
-    <!-- Émettre des notifications. Permission d'exécution depuis Android 13. -->
+    <!-- Runtime notification permission on Android 13 and later. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Reconnexion automatique après un redémarrage du téléphone. -->
+    <!-- Reconnect automatically after device reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
-      RETRAIT explicite de la permission de dessiner par-dessus les autres
-      applications.
-
-      React Native l'ajoute a la variante de DEBOGAGE, pour son menu de
-      developpement. Sur cette application elle est inacceptable : combinee au
-      service d'accessibilite, elle permettrait de superposer une fenetre a
-      celle d'une autre application pendant qu'un appui est simule — c'est
-      exactement le montage d'une attaque par superposition.
-
-      Le prix est connu et assume : le menu de developpement de React Native ne
-      pourra pas s'afficher en surimpression. Cela ne coute rien a un worker qui
-      n'a pas d'interface a mettre au point.
+      Explicitly remove the overlay permission added by React Native debug builds.
+      Combining overlays with accessibility gestures would enable tapjacking.
     -->
     <uses-permission
         android:name="android.permission.SYSTEM_ALERT_WINDOW"
         tools:node="remove" />
 
     <!--
-      Visibilité des paquets (Android 11+).
-
-      Sans cette déclaration, `getInstalledPackages()` ne renvoie presque rien.
-      Avec elle, l'application voit les applications **lançables** — exactement
-      ce dont `android.app.list` et `android.app.open` ont besoin, et rien de
-      plus. C'est l'alternative de moindre privilège à QUERY_ALL_PACKAGES.
+      Android 11+ package visibility, limited to launchable applications instead
+      of the broad QUERY_ALL_PACKAGES permission.
     -->
     <queries>
         <intent>
@@ -88,12 +60,9 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Écran de gestion du worker. Ce n'est pas l'interface NEXUS. -->
+        <!-- Worker management screen, not the main NEXUS interface. -->
         <!--
-          `exported="true"` parce qu'elle porte l'icone de lancement : sans cela
-          l'utilisateur n'aurait aucun moyen d'ouvrir l'ecran de gestion, donc
-          aucun moyen de voir ce qui manque au worker. Elle ne lit aucune donnee
-          de l'intention qui la demarre : rien ne peut lui etre transmis.
+          exported is required for the launcher activity. It consumes no intent data.
         -->
         <activity
             android:name=".WorkerActivity"
@@ -109,13 +78,8 @@
         </activity>
 
         <!--
-          Service d'accessibilité.
-
-          `android:permission` restreint la liaison au système lui-même : aucune
-          autre application ne peut s'y connecter. Il n'est actif que si
-          l'utilisateur l'a explicitement activé dans les réglages — aucune API
-          ne permet de l'activer par programme, et ce worker ne cherche pas à
-          contourner cette règle.
+          Accessibility service bound only by the system. It runs only after the
+          user explicitly enables it in Android settings.
         -->
         <service
             android:name=".NexusAccessibilityService"
@@ -130,10 +94,8 @@
         </service>
 
         <!--
-          Service de premier plan qui porte la connexion.
-
-          `dataSync` et non `mediaProjection` : ce service synchronise des
-          données avec le cœur, il ne filme rien.
+          Foreground connection service. dataSync is used because it synchronizes
+          with the core and captures no video.
         -->
         <service
             android:name=".WorkerForegroundService"
@@ -141,11 +103,8 @@
             android:foregroundServiceType="dataSync" />
 
         <!--
-          `exported="true"` est requis pour recevoir une diffusion du systeme.
-          `BOOT_COMPLETED` est une diffusion PROTEGEE : seul le systeme peut
-          l'emettre, aucune application tierce ne le peut. Le recepteur verifie
-          malgre tout l'action recue, et ne fait qu'une chose — demarrer le
-          service. Il n'execute jamais de capacite.
+          exported is required for the protected BOOT_COMPLETED system broadcast.
+          The receiver validates the action and only starts the service.
         -->
         <receiver
             android:name=".BootReceiver"

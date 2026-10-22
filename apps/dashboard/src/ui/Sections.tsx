@@ -39,11 +39,11 @@ export function Overview({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.overview());
 
   return (
-    <div className="contenu">
+    <div className="content">
       <Section state={state}>
         {(data) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={formatCount(data.devices.online)} label="online devices" />
               <Metric value={formatCount(data.workers.connected)} label="connected workers" />
               <Metric value={formatCount(data.tasks.running)} label="running tasks" />
@@ -74,7 +74,7 @@ export function Overview({ api }: { api: DashboardApi }) {
                   <td>
                     <State tone={entry.level} label={HEALTH_LABELS[entry.level]} />
                   </td>
-                  <td className="faible">{entry.detail}</td>
+                  <td className="muted">{entry.detail}</td>
                 </tr>
               ))}
             </Table>
@@ -86,7 +86,7 @@ export function Overview({ api }: { api: DashboardApi }) {
               <Table head={["When", "Source", "Event"]}>
                 {sortActivity(data.recentActivity).map((entry, index) => (
                   <tr key={`${entry.at}-${String(index)}`}>
-                    <td className="faible">{formatAge(entry.at)}</td>
+                    <td className="muted">{formatAge(entry.at)}</td>
                     <td>
                       <State
                         tone={entry.level === "info" ? "ok" : entry.level}
@@ -163,14 +163,14 @@ export function Devices({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
+    <div className="content">
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="card pairing-card" aria-labelledby="pairing-title">
         <div className="pairing-heading">
           <div>
             <span className="eyebrow">NEW WORKER</span>
             <h3 id="pairing-title">Add machine</h3>
-            <p className="faible">
+            <p className="muted">
               The code expires after five minutes and can only be used once. The machine will remain
               pending until approved below.
             </p>
@@ -179,13 +179,13 @@ export function Devices({ api }: { api: DashboardApi }) {
             <label htmlFor="pairing-label">Expected name</label>
             <input
               id="pairing-label"
-              className="champ"
+              className="field"
               value={pairingLabel}
               placeholder="Office PC"
               onChange={(event) => setPairingLabel(event.target.value)}
             />
             <button
-              className="bouton primary"
+              className="button primary"
               type="button"
               disabled={pairingBusy}
               onClick={issuePairing}
@@ -219,27 +219,27 @@ export function Devices({ api }: { api: DashboardApi }) {
             <code>{windowsCommand}</code>
             <div className="table-actions">
               <button
-                className="bouton"
+                className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(windowsCommand)}
               >
                 Copy command
               </button>
               <button
-                className="bouton"
+                className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(pairing.payload)}
               >
                 Copy Android link
               </button>
               <button
-                className="bouton"
+                className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(linuxCommand)}
               >
                 Copy Linux command
               </button>
-              <button className="bouton" type="button" onClick={() => setPairing(null)}>
+              <button className="button" type="button" onClick={() => setPairing(null)}>
                 Hide code
               </button>
             </div>
@@ -270,7 +270,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                 <tr key={device.id}>
                   <td>
                     {device.name}
-                    <div className="faible mono">{device.type}</div>
+                    <div className="muted mono">{device.type}</div>
                   </td>
                   <td>{device.role}</td>
                   <td>{device.platform}</td>
@@ -306,8 +306,8 @@ export function Devices({ api }: { api: DashboardApi }) {
                           .map((capability) => capability.name)
                           .join(", ")}
                   </td>
-                  <td className="faible">{formatAge(device.lastHeartbeatAt)}</td>
-                  <td className="faible">
+                  <td className="muted">{formatAge(device.lastHeartbeatAt)}</td>
+                  <td className="muted">
                     {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
                     {device.health.cpuLoad === null
                       ? ""
@@ -316,7 +316,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                       ? ""
                       : ` · battery ${String(device.health.batteryPercent)} %`}
                   </td>
-                  <td className="mono faible">
+                  <td className="mono muted">
                     {device.grantedPermissions.length === 0
                       ? "—"
                       : device.grantedPermissions.join(", ")}
@@ -325,7 +325,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                     <div className="table-actions">
                       {device.trust === "PENDING" ? (
                         <button
-                          className="bouton"
+                          className="button"
                           type="button"
                           onClick={() => act(() => api.trustDevice(device.id))}
                         >
@@ -335,7 +335,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                       {device.trust !== "REVOKED" ? (
                         <>
                           <button
-                            className="bouton"
+                            className="button"
                             type="button"
                             onClick={() => {
                               const value = window.prompt(
@@ -357,7 +357,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                             Permissions
                           </button>
                           <button
-                            className="bouton danger"
+                            className="button danger"
                             type="button"
                             onClick={() => {
                               if (window.confirm(`Permanently revoke ${device.name}?`))
@@ -388,7 +388,7 @@ export function Workers({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.workers());
 
   return (
-    <div className="contenu">
+    <div className="content">
       <Section state={state}>
         {(data) =>
           data.workers.length === 0 ? (
@@ -401,12 +401,12 @@ export function Workers({ api }: { api: DashboardApi }) {
                   <tr key={worker.id}>
                     <td>
                       {worker.name}
-                      <div className="faible mono">{worker.role}</div>
+                      <div className="muted mono">{worker.role}</div>
                     </td>
                     <td>
                       <State tone={derived} label={WORKER_LABELS[derived]} />
                     </td>
-                    <td className="faible">
+                    <td className="muted">
                       {/* The declared role and open channel are two different things:
                           a paired but disconnected worker will not execute anything,
                           and showing only the role would suggest otherwise. */}
@@ -420,7 +420,7 @@ export function Workers({ api }: { api: DashboardApi }) {
                             : (worker.health.activeTasks / worker.health.maxConcurrentTasks) * 100
                         }
                       />
-                      <span className="faible">
+                      <span className="muted">
                         {worker.health.activeTasks}/{worker.health.maxConcurrentTasks}
                       </span>
                     </td>
@@ -429,7 +429,7 @@ export function Workers({ api }: { api: DashboardApi }) {
                         ? "—"
                         : worker.capabilities.map((capability) => capability.name).join(", ")}
                     </td>
-                    <td className="faible">{formatAge(worker.lastHeartbeatAt)}</td>
+                    <td className="muted">{formatAge(worker.lastHeartbeatAt)}</td>
                   </tr>
                 );
               })}
@@ -451,7 +451,7 @@ export function Tasks({ api }: { api: DashboardApi }) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   return (
-    <div className="contenu">
+    <div className="content">
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) =>
@@ -472,7 +472,7 @@ export function Tasks({ api }: { api: DashboardApi }) {
                   >
                     <td>
                       {task.title}
-                      <div className="faible mono">
+                      <div className="muted mono">
                         {task.source.toUpperCase()} · {task.correlationId}
                       </div>
                     </td>
@@ -482,13 +482,13 @@ export function Tasks({ api }: { api: DashboardApi }) {
                     <td>
                       <Bar percent={task.progressPercent} />
                     </td>
-                    <td className="faible mono">
+                    <td className="muted mono">
                       {task.source === "acp"
                         ? "orchestrator"
                         : task.originClientDeviceId.slice(0, 8)}
                     </td>
-                    <td className="faible">{formatAge(task.createdAt)}</td>
-                    <td className="faible">
+                    <td className="muted">{formatAge(task.createdAt)}</td>
+                    <td className="muted">
                       {formatDuration(
                         task.startedAt === null || task.completedAt === null
                           ? null
@@ -502,7 +502,7 @@ export function Tasks({ api }: { api: DashboardApi }) {
                         task.status,
                       ) ? (
                         <button
-                          className="bouton danger"
+                          className="button danger"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -573,15 +573,15 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
           <Table head={["#", "Description", "Tool", "Capabilities", "Status", "Worker", "Risk"]}>
             {task.steps.map((step, index) => (
               <tr key={step.id}>
-                <td className="faible">{index + 1}</td>
+                <td className="muted">{index + 1}</td>
                 <td>{step.description}</td>
                 <td className="mono">{step.tool}</td>
-                <td className="mono faible">{step.requiredCapabilities.join(", ")}</td>
+                <td className="mono muted">{step.requiredCapabilities.join(", ")}</td>
                 <td>
                   <State tone={taskTone(step.status)} label={step.status} />
                 </td>
                 <td>{step.selectedDeviceName ?? "—"}</td>
-                <td className="faible">{step.riskLevel}</td>
+                <td className="muted">{step.riskLevel}</td>
               </tr>
             ))}
           </Table>
@@ -598,13 +598,13 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
                   <td>
                     <State tone={taskTone(execution.status)} label={execution.status} />
                   </td>
-                  <td className="faible">{formatDuration(execution.durationMs)}</td>
-                  <td className="mono faible">
+                  <td className="muted">{formatDuration(execution.durationMs)}</td>
+                  <td className="mono muted">
                     {execution.result === null
                       ? "—"
                       : JSON.stringify(execution.result).slice(0, 120)}
                   </td>
-                  <td className="faible">
+                  <td className="muted">
                     {execution.error === null
                       ? "—"
                       : `${execution.error.code} — ${execution.error.message}`}
@@ -663,8 +663,8 @@ export function Runs({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
-      <p className="faible" style={{ marginTop: 0 }}>
+    <div className="content">
+      <p className="muted" style={{ marginTop: 0 }}>
         Status, actions, tools, progress, results, errors, and metrics. The model's reasoning is not
         exposed — the server does not transmit it.
       </p>
@@ -672,7 +672,7 @@ export function Runs({ api }: { api: DashboardApi }) {
       <Section state={observability}>
         {(summary) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={formatCount(summary.totals.runs)} label="analyzed runs" />
               <Metric value={asPercent(summary.rates.fallback)} label="fallback rate" />
               <Metric
@@ -715,7 +715,7 @@ export function Runs({ api }: { api: DashboardApi }) {
         )}
       </Section>
 
-      {action === null ? null : <p className="faible">{action}</p>}
+      {action === null ? null : <p className="muted">{action}</p>}
 
       <Section state={state}>
         {(data) =>
@@ -738,19 +738,19 @@ export function Runs({ api }: { api: DashboardApi }) {
                     <td>
                       <State tone={runTone(run.status)} label={run.status} />
                     </td>
-                    <td className="faible">{run.stopReason ?? "—"}</td>
+                    <td className="muted">{run.stopReason ?? "—"}</td>
                     <td>{run.iterations}</td>
                     <td>
                       {run.metrics.toolCalls}
                       {run.metrics.failedToolCalls > 0 ? (
-                        <span style={{ color: "var(--hs)" }}>
+                        <span style={{ color: "var(--down)" }}>
                           {" "}
                           ({run.metrics.failedToolCalls} failed)
                         </span>
                       ) : null}
                     </td>
-                    <td className="faible">{formatDuration(run.durationMs)}</td>
-                    <td className="faible">
+                    <td className="muted">{formatDuration(run.durationMs)}</td>
+                    <td className="muted">
                       {formatCount(run.metrics.inputTokens)} ↓ /{" "}
                       {formatCount(run.metrics.outputTokens)} ↑
                     </td>
@@ -772,30 +772,30 @@ export function Runs({ api }: { api: DashboardApi }) {
                         {run.tools.map((tool) => (
                           <tr key={tool.callId}>
                             <td className="mono">{tool.tool}</td>
-                            <td className="mono faible">{tool.action}</td>
+                            <td className="mono muted">{tool.action}</td>
                             <td>
                               <State
                                 tone={tool.status === "success" ? "ok" : "down"}
                                 label={tool.status}
                               />
                             </td>
-                            <td className="faible">{tool.riskLevel}</td>
-                            <td className="faible">{formatDuration(tool.durationMs)}</td>
-                            <td className="faible">{tool.attempts}</td>
-                            <td className="faible">{tool.errorCode ?? "—"}</td>
+                            <td className="muted">{tool.riskLevel}</td>
+                            <td className="muted">{formatDuration(tool.durationMs)}</td>
+                            <td className="muted">{tool.attempts}</td>
+                            <td className="muted">{tool.errorCode ?? "—"}</td>
                           </tr>
                         ))}
                       </Table>
                     )}
 
                     <h3>Result</h3>
-                    <p>{run.response ?? <span className="faible">No final response.</span>}</p>
+                    <p>{run.response ?? <span className="muted">No final response.</span>}</p>
 
-                    <button className="bouton" type="button" onClick={() => void replay(run.runId)}>
+                    <button className="button" type="button" onClick={() => void replay(run.runId)}>
                       Replay (analysis only)
                     </button>
                     {run.replayOfRunId === null ? null : (
-                      <p className="faible">
+                      <p className="muted">
                         Replay of run <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
                       </p>
                     )}
@@ -806,7 +806,7 @@ export function Runs({ api }: { api: DashboardApi }) {
                         <Table head={["When", "Iteration", "Code", "Message"]}>
                           {run.errors.map((error, index) => (
                             <tr key={`${error.at}-${String(index)}`}>
-                              <td className="faible">{formatAge(error.at)}</td>
+                              <td className="muted">{formatAge(error.at)}</td>
                               <td>{error.iteration}</td>
                               <td className="mono">{error.code}</td>
                               <td>{error.message}</td>
@@ -817,7 +817,7 @@ export function Runs({ api }: { api: DashboardApi }) {
                     )}
 
                     <h3>Metrics</h3>
-                    <div className="mesures">
+                    <div className="metrics">
                       <Metric value={run.metrics.model} label="model" />
                       <Metric value={formatCount(run.metrics.inputTokens)} label="input tokens" />
                       <Metric value={formatCount(run.metrics.outputTokens)} label="output tokens" />
@@ -856,7 +856,7 @@ export function Tools({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.tools());
 
   return (
-    <div className="contenu">
+    <div className="content">
       <Section state={state}>
         {(data) =>
           data.tools.length === 0 ? (
@@ -867,9 +867,9 @@ export function Tools({ api }: { api: DashboardApi }) {
                 <tr key={tool.name}>
                   <td className="mono">{tool.name}</td>
                   <td>{tool.source}</td>
-                  <td className="faible">{tool.description}</td>
+                  <td className="muted">{tool.description}</td>
                   <td>{tool.riskLevel}</td>
-                  <td className="mono faible">{tool.requiredPermissions.join(", ") || "—"}</td>
+                  <td className="mono muted">{tool.requiredPermissions.join(", ") || "—"}</td>
                   <td>
                     <State
                       tone={tool.allowed ? "ok" : "degraded"}
@@ -955,7 +955,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
+    <div className="content">
       {message === null ? null : <p className="banner success">{message}</p>}
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
@@ -964,7 +964,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           <label>
             Name
             <input
-              className="champ mono"
+              className="field mono"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="filesystem"
@@ -973,7 +973,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           <label>
             Transport
             <select
-              className="champ"
+              className="field"
               value={transport}
               onChange={(event) => setTransport(event.target.value as "stdio" | "http" | "sse")}
             >
@@ -985,7 +985,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           <label className="settings-wide">
             {transport === "stdio" ? "Command" : "URL"}
             <input
-              className="champ mono"
+              className="field mono"
               value={target}
               onChange={(event) => setTarget(event.target.value)}
               placeholder={transport === "stdio" ? "npx" : "https://…"}
@@ -995,7 +995,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Arguments · one per line
               <textarea
-                className="champ mono"
+                className="field mono"
                 rows={3}
                 value={args}
                 onChange={(event) => setArgs(event.target.value)}
@@ -1005,7 +1005,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           <label className="settings-wide">
             {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON to vault://nexus/…
             <textarea
-              className="champ mono"
+              className="field mono"
               rows={3}
               value={secretRefs}
               onChange={(event) => setSecretRefs(event.target.value)}
@@ -1015,7 +1015,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
         </div>
         <div className="settings-actions">
           <button
-            className="bouton primary"
+            className="button primary"
             type="button"
             disabled={name === "" || target === ""}
             onClick={save}
@@ -1048,7 +1048,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                   <td>
                     {server.name}
                     {server.serverInfo === null ? null : (
-                      <div className="faible mono">
+                      <div className="muted mono">
                         {server.serverInfo.name} {server.serverInfo.version}
                       </div>
                     )}
@@ -1062,15 +1062,15 @@ export function Mcp({ api }: { api: DashboardApi }) {
                   <td>{server.toolCount}</td>
                   <td>{server.consecutiveFailures}</td>
                   <td>{server.reconnectAttempts}</td>
-                  <td className="faible">
+                  <td className="muted">
                     {server.circuitOpenUntil === null
                       ? "closed"
                       : `open until ${server.circuitOpenUntil}`}
                   </td>
-                  <td className="faible">{server.lastError ?? "—"}</td>
+                  <td className="muted">{server.lastError ?? "—"}</td>
                   <td>
                     <button
-                      className="bouton compact"
+                      className="button compact"
                       type="button"
                       onClick={() =>
                         act(() => api.reconnectMcp(server.name), `${server.name} reconnected.`)
@@ -1079,7 +1079,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                       Reconnect
                     </button>{" "}
                     <button
-                      className="bouton compact danger"
+                      className="button compact danger"
                       type="button"
                       onClick={() => {
                         if (window.confirm(`Delete server ${server.name}?`))
@@ -1139,12 +1139,12 @@ export function Browser({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
+    <div className="content">
       {message === null ? null : <p className="banner success">{message}</p>}
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
         <h3>Configure Browser Use</h3>
-        <p className="faible">
+        <p className="muted">
           Local mode uses the official harness with Codex or Claude as the brain. It requires no API
           keys and maintains a separate NEXUS Chromium profile.
         </p>
@@ -1152,7 +1152,7 @@ export function Browser({ api }: { api: DashboardApi }) {
           <label className="settings-wide">
             Mode
             <select
-              className="champ"
+              className="field"
               value={mode}
               onChange={(event) => setMode(event.target.value as "local-harness" | "remote-worker")}
             >
@@ -1164,7 +1164,7 @@ export function Browser({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Local CDP URL
               <input
-                className="champ mono"
+                className="field mono"
                 value={cdpUrl}
                 onChange={(event) => setCdpUrl(event.target.value)}
               />
@@ -1174,7 +1174,7 @@ export function Browser({ api }: { api: DashboardApi }) {
               <label className="settings-wide">
                 Worker URL
                 <input
-                  className="champ mono"
+                  className="field mono"
                   value={baseUrl}
                   onChange={(event) => setBaseUrl(event.target.value)}
                 />
@@ -1182,7 +1182,7 @@ export function Browser({ api }: { api: DashboardApi }) {
               <label className="settings-wide">
                 Token reference
                 <input
-                  className="champ mono"
+                  className="field mono"
                   value={tokenRef}
                   onChange={(event) => setTokenRef(event.target.value)}
                 />
@@ -1200,7 +1200,7 @@ export function Browser({ api }: { api: DashboardApi }) {
         </div>
         <div className="settings-actions">
           <button
-            className="bouton primary"
+            className="button primary"
             type="button"
             onClick={() =>
               act(
@@ -1217,7 +1217,7 @@ export function Browser({ api }: { api: DashboardApi }) {
             Save
           </button>
           <button
-            className="bouton"
+            className="button"
             type="button"
             onClick={() => act(() => api.testBrowser(), "Browser worker reachable.")}
           >
@@ -1228,7 +1228,7 @@ export function Browser({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={data.configured ? "yes" : "no"} label="configured" />
               <Metric
                 value={data.reachable ? "ready" : "unreachable"}
@@ -1237,9 +1237,9 @@ export function Browser({ api }: { api: DashboardApi }) {
               />
             </div>
 
-            <p className="faible">{data.detail}</p>
+            <p className="muted">{data.detail}</p>
             {data.configuration?.mode === "remote-worker" ? (
-              <p className="faible">
+              <p className="muted">
                 Secret: {data.tokenConfigured ? "present in keyring" : "missing"}
               </p>
             ) : null}
@@ -1292,7 +1292,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
+    <div className="content">
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) => {
@@ -1310,7 +1310,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
 
           return (
             <>
-              <div className="mesures">
+              <div className="metrics">
                 <Metric value={data.configured ? "yes" : "no"} label="configured" />
                 <Metric
                   value={data.reachable ? "reachable" : "unreachable"}
@@ -1334,10 +1334,10 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 <Metric value={formatCount(activeRuns)} label="active missions" />
               </div>
 
-              <p className="faible">{data.detail}</p>
+              <p className="muted">{data.detail}</p>
 
               <h3>NEXUS · ACP profiles</h3>
-              <p className="mono faible">
+              <p className="mono muted">
                 {data.health === null || data.health.profiles.length === 0
                   ? "none"
                   : data.health.profiles.join(", ")}
@@ -1347,13 +1347,13 @@ export function MissionControl({ api }: { api: DashboardApi }) {
               <div className="admin-form-card schedule-form-card">
                 <div className="inline-admin-form schedule-form">
                   <input
-                    className="champ"
+                    className="field"
                     value={scheduleName}
                     onChange={(event) => setScheduleName(event.target.value)}
                     placeholder="Schedule name"
                   />
                   <select
-                    className="champ"
+                    className="field"
                     value={scheduleKind}
                     onChange={(event) => setScheduleKind(event.target.value as "one_shot" | "cron")}
                   >
@@ -1361,7 +1361,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                     <option value="one_shot">One-shot</option>
                   </select>
                   <select
-                    className="champ"
+                    className="field"
                     value={scheduleProfile}
                     onChange={(event) => setScheduleProfile(event.target.value)}
                   >
@@ -1373,28 +1373,28 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                     ))}
                   </select>
                   <input
-                    className="champ"
+                    className="field"
                     value={scheduleTimezone}
                     onChange={(event) => setScheduleTimezone(event.target.value)}
                     placeholder="Europe/Paris"
                   />
                   {scheduleKind === "cron" ? (
                     <input
-                      className="champ mono"
+                      className="field mono"
                       value={scheduleCron}
                       onChange={(event) => setScheduleCron(event.target.value)}
                       placeholder="0 8 * * 1-5"
                     />
                   ) : (
                     <input
-                      className="champ"
+                      className="field"
                       type="datetime-local"
                       value={scheduleRunAt}
                       onChange={(event) => setScheduleRunAt(event.target.value)}
                     />
                   )}
                   <select
-                    className="champ"
+                    className="field"
                     value={scheduleCatchUp}
                     onChange={(event) =>
                       setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
@@ -1406,14 +1406,14 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   </select>
                 </div>
                 <textarea
-                  className="champ schedule-instruction"
+                  className="field schedule-instruction"
                   value={scheduleInstruction}
                   onChange={(event) => setScheduleInstruction(event.target.value)}
                   placeholder="Mission to execute automatically"
                   rows={3}
                 />
                 <button
-                  className="bouton"
+                  className="button"
                   type="button"
                   disabled={
                     data.health?.scheduler_enabled !== true ||
@@ -1460,7 +1460,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   Create schedule
                 </button>
                 {data.health?.scheduler_enabled === true ? null : (
-                  <p className="faible">Schedule dispatcher is disabled.</p>
+                  <p className="muted">Schedule dispatcher is disabled.</p>
                 )}
               </div>
 
@@ -1485,7 +1485,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                         {schedule.schedule_kind === "cron" ? schedule.cron_expression : "one-shot"}
                       </summary>
                       <div className="schedule-details">
-                        <p className="faible">
+                        <p className="muted">
                           Timezone: {schedule.timezone} · Next run:{" "}
                           {schedule.next_run_at === null
                             ? "none"
@@ -1495,7 +1495,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                         <div className="actions-row">
                           {schedule.state === "active" ? (
                             <button
-                              className="bouton secondaire compact"
+                              className="button secondaire compact"
                               type="button"
                               onClick={() => act(() => api.pauseSchedule(schedule.id))}
                             >
@@ -1503,7 +1503,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                             </button>
                           ) : schedule.state === "paused" ? (
                             <button
-                              className="bouton compact"
+                              className="button compact"
                               type="button"
                               onClick={() => act(() => api.resumeSchedule(schedule.id))}
                             >
@@ -1511,7 +1511,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                             </button>
                           ) : null}
                           <button
-                            className="bouton secondaire compact"
+                            className="button secondaire compact"
                             type="button"
                             onClick={() => {
                               setActionError(null);
@@ -1536,7 +1536,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                         {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
                             schedule.id
                           ]?.length === 0 ? (
-                          <p className="faible">No occurrences executed.</p>
+                          <p className="muted">No occurrences executed.</p>
                         ) : (
                           <Table head={["Scheduled", "State", "Mission", "Error"]}>
                             {scheduleHistory[schedule.id]?.map((run) => (
@@ -1556,10 +1556,8 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                                     label={run.state}
                                   />
                                 </td>
-                                <td className="mono faible">
-                                  {run.mission_id?.slice(0, 8) ?? "—"}
-                                </td>
-                                <td className="faible">{run.error_code ?? "—"}</td>
+                                <td className="mono muted">{run.mission_id?.slice(0, 8) ?? "—"}</td>
+                                <td className="muted">{run.error_code ?? "—"}</td>
                               </tr>
                             ))}
                           </Table>
@@ -1615,11 +1613,11 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                                   label={task.state}
                                 />
                               </td>
-                              <td className="faible">
+                              <td className="muted">
                                 {task.depends_on.length === 0 ? "—" : task.depends_on.join(", ")}
                               </td>
                               <td>{task.attempts.length}</td>
-                              <td className="faible">
+                              <td className="muted">
                                 {first === undefined
                                   ? "—"
                                   : formatDuration(
@@ -1641,20 +1639,20 @@ export function MissionControl({ api }: { api: DashboardApi }) {
               <h3>Paper Portfolios</h3>
               <div className="inline-admin-form">
                 <input
-                  className="champ"
+                  className="field"
                   value={accountName}
                   onChange={(event) => setAccountName(event.target.value)}
                   placeholder="Portfolio name"
                 />
                 <input
-                  className="champ"
+                  className="field"
                   value={bankroll}
                   onChange={(event) => setBankroll(event.target.value)}
                   inputMode="decimal"
                   placeholder="Capital EUR"
                 />
                 <button
-                  className="bouton"
+                  className="button"
                   type="button"
                   onClick={() =>
                     act(() =>
@@ -1690,7 +1688,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 <Table head={["Created", "State", "Mission", "Error"]}>
                   {data.recent_runs.map((run) => (
                     <tr key={run.id}>
-                      <td className="faible">{formatAge(run.created_at)}</td>
+                      <td className="muted">{formatAge(run.created_at)}</td>
                       <td>
                         <State
                           tone={
@@ -1705,8 +1703,8 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                           label={run.state}
                         />
                       </td>
-                      <td className="mono faible">{run.mission_id.slice(0, 8)}</td>
-                      <td className="faible">{run.error_code ?? "—"}</td>
+                      <td className="mono muted">{run.mission_id.slice(0, 8)}</td>
+                      <td className="muted">{run.error_code ?? "—"}</td>
                     </tr>
                   ))}
                 </Table>
@@ -1715,19 +1713,19 @@ export function MissionControl({ api }: { api: DashboardApi }) {
               <h3>Paper Research Market</h3>
               <div className="inline-admin-form market-form">
                 <input
-                  className="champ"
+                  className="field"
                   value={marketQuestion}
                   onChange={(event) => setMarketQuestion(event.target.value)}
                   placeholder="Market question"
                 />
                 <input
-                  className="champ"
+                  className="field"
                   type="datetime-local"
                   value={marketClose}
                   onChange={(event) => setMarketClose(event.target.value)}
                 />
                 <button
-                  className="bouton"
+                  className="button"
                   type="button"
                   disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
                   onClick={() => {
@@ -1744,7 +1742,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                 </button>
               </div>
 
-              <p className="faible">
+              <p className="muted">
                 Creation of missions and paper portfolios uses the NEXUS administrator API. No live
                 trading paths are exposed.
               </p>
@@ -1784,7 +1782,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
     >
       <button
         type="button"
-        className="bouton"
+        className="button"
         style={{ fontSize: "0.85rem", padding: "4px 10px" }}
         onClick={() => void toggle()}
       >
@@ -1792,7 +1790,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
       </button>
 
       {loading ? (
-        <p className="faible" style={{ marginTop: "6px" }}>
+        <p className="muted" style={{ marginTop: "6px" }}>
           Loading collaboration workspace…
         </p>
       ) : null}
@@ -1806,7 +1804,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
               Shared Artifacts ({collab.artifacts.length})
             </h4>
             {collab.artifacts.length === 0 ? (
-              <p className="faible">No files generated in this mission.</p>
+              <p className="muted">No files generated in this mission.</p>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {collab.artifacts.map((art) => (
@@ -1824,7 +1822,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                   >
                     <div>
                       <strong>{art.name}</strong>
-                      <div className="faible" style={{ fontSize: "0.75rem" }}>
+                      <div className="muted" style={{ fontSize: "0.75rem" }}>
                         {(art.sizeBytes / 1024).toFixed(1)} KB · {art.mimeType} · {art.taskKey}
                       </div>
                     </div>
@@ -1832,7 +1830,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                       href={api.artifactDownloadUrl(missionId, art.uri)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bouton primary"
+                      className="button primary"
                       style={{ fontSize: "0.75rem", padding: "2px 8px" }}
                     >
                       Open
@@ -1861,7 +1859,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                   <p>
                     <strong>{d.issue}</strong>
                   </p>
-                  <p className="faible">{d.recommendation}</p>
+                  <p className="muted">{d.recommendation}</p>
                 </div>
               ))}
             </div>
@@ -1887,7 +1885,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                   >
                     <strong>{st.title}</strong> ({st.key}) ·{" "}
                     <span className="badge">{st.priority}</span>
-                    <div className="faible">{st.reason}</div>
+                    <div className="muted">{st.reason}</div>
                   </div>
                 ))}
               </div>
@@ -1912,18 +1910,18 @@ export function Memory({ api }: { api: DashboardApi }) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   return (
-    <div className="contenu">
+    <div className="content">
       <div className="admin-form-card">
         <h3>Add Memory</h3>
         <div className="inline-admin-form memory-form">
           <input
-            className="champ"
+            className="field"
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="What NEXUS should remember"
           />
           <select
-            className="champ"
+            className="field"
             value={layer}
             onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
           >
@@ -1931,7 +1929,7 @@ export function Memory({ api }: { api: DashboardApi }) {
             <option value="PREFERENCE">Preference</option>
           </select>
           <input
-            className="champ"
+            className="field"
             value={tags}
             onChange={(event) => setTags(event.target.value)}
             placeholder="tags, comma, separated"
@@ -1945,7 +1943,7 @@ export function Memory({ api }: { api: DashboardApi }) {
             sensitive content verified
           </label>
           <button
-            className="bouton primary"
+            className="button primary"
             type="button"
             disabled={content.trim().length === 0}
             onClick={() => {
@@ -1978,7 +1976,7 @@ export function Memory({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={formatCount(data.total)} label="memories" />
               <Metric value={formatCount(data.byLayer.PREFERENCE ?? 0)} label="preferences" />
               <Metric value={formatCount(data.byOrigin.AGENT ?? 0)} label="inferred by agent" />
@@ -1996,12 +1994,12 @@ export function Memory({ api }: { api: DashboardApi }) {
                 {data.recent.map((record) => (
                   <tr key={record.id}>
                     <td>{record.content}</td>
-                    <td className="faible">{record.layer}</td>
-                    <td className="faible">{record.origin}</td>
-                    <td className="faible">{formatAge(record.createdAt)}</td>
+                    <td className="muted">{record.layer}</td>
+                    <td className="muted">{record.origin}</td>
+                    <td className="muted">{formatAge(record.createdAt)}</td>
                     <td>
                       <button
-                        className="bouton danger"
+                        className="button danger"
                         type="button"
                         onClick={() => {
                           if (!window.confirm("Permanently forget this memory?")) return;
@@ -2058,16 +2056,16 @@ export function Notifications({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu">
+    <div className="content">
       <div className="agents-heading">
         <div>
           <h2>Notifications</h2>
-          <p className="faible">
+          <p className="muted">
             Central log and broadcast to external channels (desktop, mobile push ntfy, webhooks).
           </p>
         </div>
         <button
-          className="bouton"
+          className="button"
           type="button"
           disabled={testing}
           onClick={() => void handleTest()}
@@ -2085,7 +2083,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={formatCount(data.unread)} label="unread" />
               <Metric value={formatCount(data.notifications.length)} label="stored" />
             </div>
@@ -2096,7 +2094,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
               <Table head={["When", "Severity", "Title", "Body", "Read", "Actions"]}>
                 {data.notifications.map((notification) => (
                   <tr key={notification.id}>
-                    <td className="faible">{formatAge(notification.createdAt)}</td>
+                    <td className="muted">{formatAge(notification.createdAt)}</td>
                     <td>
                       <State
                         tone={
@@ -2110,12 +2108,12 @@ export function Notifications({ api }: { api: DashboardApi }) {
                       />
                     </td>
                     <td>{notification.title}</td>
-                    <td className="faible">{notification.body}</td>
-                    <td className="faible">{notification.readAt === null ? "no" : "yes"}</td>
+                    <td className="muted">{notification.body}</td>
+                    <td className="muted">{notification.readAt === null ? "no" : "yes"}</td>
                     <td>
                       {notification.readAt === null ? (
                         <button
-                          className="bouton"
+                          className="button"
                           type="button"
                           onClick={() =>
                             void api
@@ -2148,11 +2146,11 @@ export function Security({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.security());
 
   return (
-    <div className="contenu">
+    <div className="content">
       <Section state={state}>
         {(data) => (
           <>
-            <div className="mesures">
+            <div className="metrics">
               <Metric value={formatCount(data.trust.trusted)} label="trusted devices" />
               <Metric
                 value={formatCount(data.trust.pending)}
@@ -2172,7 +2170,7 @@ export function Security({ api }: { api: DashboardApi }) {
             </div>
 
             <h3>Effective Permissions</h3>
-            <p className="mono faible">
+            <p className="mono muted">
               {data.permissions.length === 0 ? "none" : data.permissions.join(", ")}
             </p>
 
@@ -2183,7 +2181,7 @@ export function Security({ api }: { api: DashboardApi }) {
               <Table head={["When", "Type", "Summary"]}>
                 {data.events.map((event, index) => (
                   <tr key={`${event.at}-${String(index)}`}>
-                    <td className="faible">{formatAge(event.at)}</td>
+                    <td className="muted">{formatAge(event.at)}</td>
                     <td className="mono">{event.kind}</td>
                     <td>{event.summary}</td>
                   </tr>
@@ -2209,10 +2207,10 @@ export function Logs({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.logs(applied));
 
   return (
-    <div className="contenu">
+    <div className="content">
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <select
-          className="champ"
+          className="field"
           value={level}
           onChange={(event) => {
             setLevel(event.target.value);
@@ -2225,7 +2223,7 @@ export function Logs({ api }: { api: DashboardApi }) {
         </select>
 
         <input
-          className="champ"
+          className="field"
           style={{ flex: 1 }}
           value={search}
           placeholder="Search messages…"
@@ -2236,7 +2234,7 @@ export function Logs({ api }: { api: DashboardApi }) {
 
         <button
           type="button"
-          className="bouton"
+          className="button"
           onClick={() => {
             setApplied({
               ...(level === "" ? {} : { level }),
@@ -2257,7 +2255,7 @@ export function Logs({ api }: { api: DashboardApi }) {
             <Table head={["When", "Level", "Message", "Correlation"]}>
               {data.entries.map((entry, index) => (
                 <tr key={`${entry.at}-${String(index)}`}>
-                  <td className="faible mono">{entry.at.slice(11, 23)}</td>
+                  <td className="muted mono">{entry.at.slice(11, 23)}</td>
                   <td>
                     <State
                       tone={
@@ -2271,7 +2269,7 @@ export function Logs({ api }: { api: DashboardApi }) {
                     />
                   </td>
                   <td>{entry.message}</td>
-                  <td className="faible mono">{entry.correlationId ?? "—"}</td>
+                  <td className="muted mono">{entry.correlationId ?? "—"}</td>
                 </tr>
               ))}
             </Table>

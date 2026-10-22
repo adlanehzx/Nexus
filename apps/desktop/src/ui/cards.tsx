@@ -14,7 +14,7 @@ import type { ConfirmationView, MessageView, TaskView, ToolCallView } from "@nex
 
 export function MessageBubble({ message }: { message: MessageView }) {
   return (
-    <div className={`bulle ${message.role}`}>
+    <div className={`bubble ${message.role}`}>
       {message.content}
       {message.streaming ? <span aria-label="streaming response"> ▌</span> : null}
     </div>
@@ -50,13 +50,13 @@ export function TaskCard(props: {
   const isRunning = task.status === "running" || task.status === "pending";
 
   return (
-    <article className="carte">
+    <article className="card">
       <header>
         <strong>{task.title}</strong>
-        <span className={`etiquette ${taskTone(task.status)}`}>{STATUS_LABELS[task.status]}</span>
+        <span className={`tag ${taskTone(task.status)}`}>{STATUS_LABELS[task.status]}</span>
       </header>
 
-      <div className="faible">
+      <div className="muted">
         {task.label ?? `${String(task.stepCount)} step(s)`}
         {props.deviceName === undefined ? null : ` · on ${props.deviceName}`}
         {task.startedAt === null ? null : ` · started at ${formatTime(task.startedAt)}`}
@@ -64,24 +64,24 @@ export function TaskCard(props: {
       </div>
 
       {task.originClientDeviceId === null ? null : (
-        <div className="faible">Requested from: {task.originClientDeviceId}</div>
+        <div className="muted">Requested from: {task.originClientDeviceId}</div>
       )}
 
       {task.error === null ? null : (
-        <div className="faible" style={{ color: "var(--nexus-danger)" }}>
+        <div className="muted" style={{ color: "var(--nexus-danger)" }}>
           {task.error.code} — {task.error.message}
         </div>
       )}
 
-      <div className="jauge">
+      <div className="gauge">
         <div style={{ width: `${String(task.percent)}%` }} />
       </div>
 
       {isRunning && props.onCancel !== undefined ? (
-        <div className="rangee" style={{ marginTop: 10 }}>
+        <div className="row" style={{ marginTop: 10 }}>
           <button
             type="button"
-            className="bouton danger"
+            className="button danger"
             onClick={() => {
               props.onCancel?.(task.id);
             }}
@@ -98,11 +98,11 @@ export function TaskCard(props: {
 
 export function ToolCard({ call }: { call: ToolCallView }) {
   return (
-    <article className="carte">
+    <article className="card">
       <header>
         <strong>{call.tool}</strong>
         <span
-          className={`etiquette ${
+          className={`tag ${
             call.status === "succeeded" ? "ok" : call.status === "failed" ? "ko" : ""
           }`}
         >
@@ -113,8 +113,8 @@ export function ToolCard({ call }: { call: ToolCallView }) {
               : "failed"}
         </span>
       </header>
-      <div className="faible">{call.summary}</div>
-      <div className="faible">risk: {call.riskLevel}</div>
+      <div className="muted">{call.summary}</div>
+      <div className="muted">risk: {call.riskLevel}</div>
     </article>
   );
 }
@@ -134,24 +134,24 @@ export function ConfirmationCard(props: {
   const isHighRisk = confirmation.riskLevel === "HIGH" || confirmation.riskLevel === "CRITICAL";
 
   return (
-    <article className={`carte confirmation ${isHighRisk ? "critique" : ""}`}>
+    <article className={`card confirmation ${isHighRisk ? "critical" : ""}`}>
       <header>
         <strong>{confirmation.action}</strong>
-        <span className={`etiquette ${isHighRisk ? "ko" : "attention"}`}>
+        <span className={`tag ${isHighRisk ? "ko" : "attention"}`}>
           risk {confirmation.riskLevel}
         </span>
       </header>
 
       <div>{confirmation.description}</div>
       {confirmation.capability === null ? null : (
-        <div className="faible">capability: {confirmation.capability}</div>
+        <div className="muted">capability: {confirmation.capability}</div>
       )}
-      <div className="faible">valid until {formatTime(confirmation.expiresAt)}</div>
+      <div className="muted">valid until {formatTime(confirmation.expiresAt)}</div>
 
       <div className="actions">
         <button
           type="button"
-          className="bouton"
+          className="button"
           disabled={confirmation.answered}
           onClick={() => {
             props.onDecide(confirmation.id, "rejected");
@@ -163,7 +163,7 @@ export function ConfirmationCard(props: {
         {isHighRisk && !armed ? (
           <button
             type="button"
-            className="bouton approuver"
+            className="button approve"
             disabled={confirmation.answered}
             onClick={() => {
               setArmed(true);
@@ -174,7 +174,7 @@ export function ConfirmationCard(props: {
         ) : (
           <button
             type="button"
-            className="bouton primaire approuver"
+            className="button primary approve"
             disabled={confirmation.answered}
             onClick={() => {
               props.onDecide(confirmation.id, "approved");
@@ -212,12 +212,12 @@ export function ErrorBanner(props: {
   if (props.error === null) return null;
 
   return (
-    <div className="banner error rangee">
+    <div className="banner error row">
       <span style={{ flex: 1 }}>{props.error.message}</span>
-      <button type="button" className="bouton" onClick={props.onRetry}>
+      <button type="button" className="button" onClick={props.onRetry}>
         Retry
       </button>
-      <button type="button" className="bouton" onClick={props.onDismiss}>
+      <button type="button" className="button" onClick={props.onDismiss}>
         Dismiss
       </button>
     </div>

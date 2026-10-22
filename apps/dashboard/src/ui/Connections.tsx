@@ -48,7 +48,7 @@ export function Connections({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="contenu connections-page">
+    <div className="content connections-page">
       <section className="connection-hero">
         <div>
           <span className="connection-kicker">Local discovery</span>
@@ -59,7 +59,7 @@ export function Connections({ api }: { api: DashboardApi }) {
           </p>
         </div>
         <button
-          className="bouton primary"
+          className="button primary"
           type="button"
           disabled={busy !== null}
           onClick={() => void scan()}
@@ -151,12 +151,12 @@ function ConnectionCard({
         <span>{checkedLabel(observation)}</span>
         <div className="connection-actions">
           {entry.docsUrl === null ? null : (
-            <a className="bouton compact" href={entry.docsUrl} target="_blank" rel="noreferrer">
+            <a className="button compact" href={entry.docsUrl} target="_blank" rel="noreferrer">
               Documentation
             </a>
           )}
           <button
-            className="bouton compact"
+            className="button compact"
             type="button"
             disabled={busy || !entry.supportedOnThisHost}
             onClick={onTest}

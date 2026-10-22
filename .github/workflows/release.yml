@@ -1,6 +1,5 @@
-# Publication reproductible de l'API et paquets installables des clients.
-# Les paquets restent générables sans secrets de signature afin que la chaîne
-# soit testable ; ils sont alors explicitement signalés comme non signés.
+# Reproducible API publishing and installable client packages.
+# Packages remain buildable without signing secrets and are clearly marked unsigned.
 name: Release
 
 on:
@@ -9,11 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag existant à publier (vX.Y.Z)
+        description: Existing tag to publish (vX.Y.Z)
         required: true
         type: string
       signer:
-        description: "Signer les paquets clients lorsque les secrets sont configurés"
+        description: "Sign client packages when signing secrets are configured"
         type: boolean
         default: false
 
@@ -29,11 +28,11 @@ permissions:
 
 jobs:
   validate:
-    name: Revalider la source
+    name: Revalidate source
     uses: ./.github/workflows/ci.yml
 
   publish:
-    name: Image, SBOM et signature
+    name: Images, SBOMs, and signatures
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -43,12 +42,12 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Valider le tag et le nom d'image
+      - name: Validate tag and image names
         env:
           REQUESTED_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           if [[ ! "$REQUESTED_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Tag invalide: $REQUESTED_TAG" >&2
+            echo "Invalid tag: $REQUESTED_TAG" >&2
             exit 1
           fi
           echo "RELEASE_TAG=$REQUESTED_TAG" >> "$GITHUB_ENV"
@@ -61,14 +60,14 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Se connecter à GHCR
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Construire et publier l'API
+      - name: Build and publish API
         id: api-image
         uses: docker/build-push-action@v6
         with:
@@ -86,7 +85,7 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Construire et publier le dashboard
+      - name: Build and publish dashboard
         id: dashboard-image
         uses: docker/build-push-action@v6
         with:
@@ -104,7 +103,7 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Construire et publier le migrateur
+      - name: Build and publish migrator
         id: migrate-image
         uses: docker/build-push-action@v6
         with:
@@ -122,7 +121,7 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Construire et publier le worker Linux multiarchitecture
+      - name: Build and publish multi-architecture Linux worker
         id: worker-image
         uses: docker/build-push-action@v6
         with:
@@ -141,10 +140,10 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Installer Cosign
+      - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Signer les images sans clé statique
+      - name: Sign images without a static key
         env:
           API_DIGEST: ${{ steps.api-image.outputs.digest }}
           DASHBOARD_DIGEST: ${{ steps.dashboard-image.outputs.digest }}
@@ -156,10 +155,10 @@ jobs:
           cosign sign --yes "$MIGRATE_IMAGE@$MIGRATE_DIGEST"
           cosign sign --yes "$WORKER_IMAGE@$WORKER_DIGEST"
 
-      - name: Installer Syft
+      - name: Install Syft
         uses: anchore/sbom-action/download-syft@v0
 
-      - name: Générer les artefacts de release
+      - name: Generate release artifacts
         run: |
           git archive --format=tar.gz --prefix="nexus-${RELEASE_TAG}/" \
             --output="nexus-${RELEASE_TAG}.tar.gz" "$RELEASE_TAG"
@@ -179,7 +178,7 @@ jobs:
             "nexus-${RELEASE_TAG}-worker.sbom.spdx.json" \
             install-worker.sh > SHA256SUMS
 
-      - name: Publier la release GitHub
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -196,13 +195,12 @@ jobs:
             --title "NEXUS ${RELEASE_TAG}"
 
   desktop:
-    name: Bureau — ${{ matrix.label }}
+    name: Desktop — ${{ matrix.label }}
     needs: validate
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
-      # `fail-fast: false` : un échec sur macOS ne doit pas priver de
-      # l'AppImage, qui est peut-être la seule dont on a besoin aujourd'hui.
+      # A macOS failure must not prevent Linux or Windows artifacts.
       fail-fast: false
       matrix:
         include:
@@ -237,9 +235,8 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
-      # Dépendances système de WebKitGTK. Sans elles, la compilation échoue sur
-      # une erreur de `pkg-config` qui ne nomme pas le paquet manquant.
-      - name: Dépendances Linux
+      # WebKitGTK system dependencies required by the Linux build.
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -247,20 +244,19 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev patchelf \
             libsecret-1-dev
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build du monorepo
+      - name: Build monorepo
         run: pnpm build
 
-      - name: Construire les paquets
+      - name: Build packages
         run: pnpm --filter @nexus/desktop exec tauri build --bundles ${{ matrix.bundles }}
         env:
-          # Signature de code Windows. Absents, le paquet est produit non signé.
-          # Les secrets ne sont jamais écrits dans un fichier du dépôt.
+          # Windows code signing. Without these values, the package remains unsigned.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Signature et notarisation macOS, mêmes règles.
+          # macOS signing and notarization follow the same rule.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -268,26 +264,24 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Dire ce qui a été produit, et si c'est signé
+      - name: Report artifacts and signing status
         shell: bash
         run: |
-          echo "## Paquets — ${{ matrix.label }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Packages — ${{ matrix.label }}" >> "$GITHUB_STEP_SUMMARY"
           find apps/desktop/src-tauri/target/release/bundle -type f \
             \( -name '*.AppImage' -o -name '*.deb' -o -name '*.msi' -o -name '*.exe' -o -name '*.dmg' \) \
-            -printf '%f\t%s octets\n' 2>/dev/null \
+            -printf '%f\t%s bytes\n' 2>/dev/null \
             | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY" || true
           if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] && [ -z "${APPLE_CERTIFICATE:-}" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Paquets NON SIGNÉS** : aucun secret de signature fourni." >> "$GITHUB_STEP_SUMMARY"
+            echo "**UNSIGNED packages**: no signing secret was provided." >> "$GITHUB_STEP_SUMMARY"
           fi
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
 
-      # L'installateur du worker, qui n'est pas la coquille de bureau : un démon
-      # Node sans interface, qui doit tourner sans session ouverte. `makensis`
-      # est fourni avec les runners Windows.
-      - name: Installateur du worker
+      # The worker is a headless Node daemon and has its own installer.
+      - name: Build worker installer
         if: runner.os == 'Windows'
         working-directory: packaging/windows
         shell: bash
@@ -338,17 +332,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build du monorepo
+      - name: Build monorepo
         run: pnpm build
 
-      # Le keystore arrive par un secret encodé en base64 et n'est écrit que
-      # dans le répertoire de travail du runner, jamais dans le dépôt. Sans lui,
-      # Gradle produit un APK non signé — ce qui prouve la chaîne de
-      # construction sans prouver la signature, et c'est dit comme tel.
-      - name: Déposer le keystore, s'il existe
+      # Decode the optional keystore only inside the runner workspace.
+      - name: Provision keystore when available
         id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -360,30 +351,27 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Construire l'APK
+      - name: Build APK
         working-directory: services/android-worker/android
         env:
           NEXUS_KEYSTORE_PATH: ${{ runner.temp }}/nexus-release.jks
           NEXUS_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           NEXUS_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NEXUS_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        # Une seule commande dans les deux cas : c'est le build Gradle qui
-        # décide, en lisant l'environnement. Deux chemins d'appel voudraient
-        # dire deux comportements à maintenir, et celui qu'on n'exerce pas est
-        # celui qui casse.
+        # One Gradle command handles both signed and unsigned builds from the environment.
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Dire si l'APK est signé
+      - name: Report APK signing status
         run: |
           echo "## Android" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ steps.keystore.outputs.present }}" = "true" ]; then
-            echo "- APK **signé** avec le keystore fourni." >> "$GITHUB_STEP_SUMMARY"
+            echo "- APK **signed** with the supplied keystore." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- APK **NON SIGNÉ** : aucun keystore fourni. Non installable sur un téléphone." >> "$GITHUB_STEP_SUMMARY"
+            echo "- **UNSIGNED APK**: no keystore supplied; not installable on a device." >> "$GITHUB_STEP_SUMMARY"
           fi
-          find . -name '*.apk' -printf '  - %f\t%s octets\n' >> "$GITHUB_STEP_SUMMARY" || true
+          find . -name '*.apk' -printf '  - %f\t%s bytes\n' >> "$GITHUB_STEP_SUMMARY" || true
 
       - uses: actions/upload-artifact@v4
         with:

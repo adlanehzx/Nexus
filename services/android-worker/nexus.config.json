@@ -1,5 +1,5 @@
 {
-  "_lisez_moi": "Reglages du worker Android. AUCUN SECRET ICI : la cle de l'appareil est designee par un ALIAS dans le magasin de cles d'Android et ne quitte jamais le telephone. Editer ce fichier avant de construire l'APK — voir README, section Installation.",
+  "_read_me": "Android worker settings. NO SECRETS: the device key is referenced by an Android Keystore alias and never leaves the phone. Edit this file before building the APK; see the README installation section.",
 
   "NEXUS_BACKEND_URL": "",
   "DEVICE_ID": "",

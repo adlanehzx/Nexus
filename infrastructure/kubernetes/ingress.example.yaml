@@ -1,6 +1,5 @@
-# Exemple pour k3s/Traefik. Copier en ingress.yaml, remplacer le domaine et le
-# secret TLS, puis appliquer séparément. Tout passe par le dashboard afin que
-# le navigateur utilise une seule origine ; nginx relaie /api et /ws à l'API.
+# k3s/Traefik example. Copy to ingress.yaml, replace the domain and TLS secret,
+# then apply separately. One dashboard origin proxies /api and /ws to the API.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

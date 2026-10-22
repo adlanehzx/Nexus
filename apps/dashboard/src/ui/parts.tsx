@@ -8,9 +8,9 @@ import { useCallback, useEffect, useState } from "react";
 
 export function Metric(props: { value: string; label: string; alert?: boolean }) {
   return (
-    <div className={`mesure ${props.alert === true ? "alerte" : ""}`}>
-      <div className="valeur">{props.value}</div>
-      <div className="libelle">{props.label}</div>
+    <div className={`metric ${props.alert === true ? "alert" : ""}`}>
+      <div className="value">{props.value}</div>
+      <div className="label">{props.label}</div>
     </div>
   );
 }
@@ -18,8 +18,8 @@ export function Metric(props: { value: string; label: string; alert?: boolean })
 /** Status badge with tone color and descriptive label. */
 export function State({ tone, label }: { tone: string; label: string }) {
   return (
-    <span className="etat">
-      <span className={`puce ${tone}`} aria-hidden="true" />
+    <span className="state">
+      <span className={`badge ${tone}`} aria-hidden="true" />
       {label}
     </span>
   );
@@ -29,7 +29,7 @@ export function Bar({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
   return (
     <div
-      className="jauge"
+      className="gauge"
       title={`${String(value)} %`}
       role="progressbar"
       aria-label="Usage"
@@ -61,7 +61,7 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 
 export function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="vide">
+    <div className="empty-state">
       <strong>No data</strong>
       <span>{children}</span>
     </div>
@@ -121,7 +121,7 @@ export function Section<T>(props: {
     return (
       <div className="banner error section-error" role="alert">
         <span>{props.state.error}</span>
-        <button className="bouton compact" type="button" onClick={props.state.reload}>
+        <button className="button compact" type="button" onClick={props.state.reload}>
           Retry
         </button>
       </div>

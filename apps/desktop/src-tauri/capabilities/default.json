@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenetre principale. Volontairement minimales : ce qui n'est pas ici n'est pas atteignable depuis le moteur de rendu.",
+  "description": "Intentionally minimal main-window permissions. Anything omitted is inaccessible from the renderer.",
   "windows": ["main"],
   "permissions": ["core:default", "notification:default", "opener:allow-open-url"]
 }

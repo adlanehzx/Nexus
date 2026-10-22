@@ -46,20 +46,25 @@ set -euo pipefail
 ALLOWLIST_REGEX='packages/web-search/src/evidence\.ts|packages/memory/src/commands\.ts|packages/memory/src/extraction\.ts|packages/memory/src/sensitivity\.ts|packages/memory/src/embedding\.ts|packages/memory/test/sensitivity\.test\.ts'
 
 ACCENTS='[àâäéèêëîïôöùûüçœÀÂÉÈÊËÎÏÔÙÛÇŒ]'
-FRENCH_ASCII="\b(dans|avec|sans|pour|cette|fichier|fichiers|dossier|dossiers|aucune|aucun|chaque|plusieurs|tous|toutes)\b|\b(connexion|indisponible|introuvable|utilisateur|utilisateurs|jeton|jetons)\b|\b(erreur|erreurs|requete|requetes|reponse|reponses|succes|echec|echecs)\b|\b(n'est|c'est|s'il|d'un|d'une|l'un|l'une|qu'un|qu'une)\b|\b(pas de|ne pas|au moins|en cours|non valide|est valide|n'a pas|ne peut)\b|\b(doit|doivent|peut|peuvent|sont|etait|sera|seront)\b|\b(titre|objet|prenom|adresse|adresses)\b|\b(injoignable|exploitable|redirection|redirections)\b|\b(autorise|autorisee|autoriser|interdit|interdite|bloque|bloquee)\b|\b(brouillon|brouillons|boite|envoi|envoyer|supprimer|modifier)\b|\b(recherche|securite|confidentialite)\b|\b(autre|autres|comme|aussi|meme|selon|sous)\b|\b(chiffrement|sauvegarde|sauvegardes|restauration)\b|\b(parametres|journaux)\b|\b(toujours|jamais|souvent|parfois|maintenant)\b|\b(authentification|requise|identifiants?)\b"
+FRENCH_ASCII="\b(dans|avec|pour|cette|fichier|fichiers|dossier|dossiers|aucune|aucun|chaque|plusieurs|tous|toutes)\b|\b(connexion|indisponible|introuvable|utilisateur|utilisateurs|jeton|jetons)\b|\b(erreur|erreurs|requete|requetes|reponse|reponses|succes|echec|echecs)\b|\b(n'est|c'est|s'il|d'un|d'une|l'un|l'une|qu'un|qu'une)\b|\b(pas de|ne pas|au moins|en cours|non valide|est valide|n'a pas|ne peut)\b|\b(doit|doivent|peut|peuvent|sont|etait|sera|seront)\b|\b(titre|objet|prenom|adresse|adresses)\b|\b(injoignable|exploitable|redirection|redirections)\b|\b(autorise|autorisee|autoriser|interdit|interdite|bloque|bloquee)\b|\b(brouillon|brouillons|boite|envoi|envoyer|supprimer|modifier)\b|\b(recherche|securite|confidentialite)\b|\b(autre|autres|comme|aussi|meme|selon|sous)\b|\b(chiffrement|sauvegarde|sauvegardes|restauration)\b|\b(parametres|journaux)\b|\b(toujours|jamais|souvent|parfois|maintenant)\b|\b(authentification|requise|identifiants?)\b"
 PATTERN="($ACCENTS|$FRENCH_ASCII)"
 
-AREAS=(docs packages services apps evals mcp scripts infrastructure packaging)
+AREAS=(root .github docs packages services apps evals mcp scripts infrastructure packaging)
 
 sources() {
   local area="$1"
-  find "$area" -type f \
-    \( -name '*.ts' -o -name '*.tsx' -o -name '*.mjs' -o -name '*.js' \
-       -o -name '*.py' -o -name '*.md' -o -name '*.rs' -o -name '*.kt' \
-       -o -name '*.kts' -o -name '*.yml' -o -name '*.sh' -o -name '*.ps1' -o -name '*.sql' \) 2>/dev/null \
-    | grep -v node_modules | grep -v '/dist/' | grep -v '/generated/' | grep -v '/.turbo/' | grep -v '/.venv/' | grep -v '__pycache__' \
-    | grep -v 'scripts/translation-status.sh' \
-    | { if [ "$area" = "packages" ]; then grep -vE "$ALLOWLIST_REGEX"; else cat; fi; }
+  if [ "$area" = "root" ]; then
+    git ls-files | awk 'index($0, "/") == 0'
+  else
+    git ls-files "$area"
+  fi \
+    | grep -vE '(^|/)(node_modules|dist|generated|\.turbo|\.venv|__pycache__)/' \
+    | grep -vE '(\.bundle$|/gen/)' \
+    | grep -v '^scripts/translation-status\.sh$' \
+    | grep -vE "$ALLOWLIST_REGEX" \
+    | while IFS= read -r file; do
+        grep -Iq . "$file" && printf '%s\n' "$file"
+      done
 }
 
 if [ "${1:-}" = "--files" ]; then
@@ -87,7 +92,7 @@ total_lines=0
 declare -A area_lines
 
 for area in "${AREAS[@]}"; do
-  [ -d "$area" ] || continue
+  [ "$area" = "root" ] || [ -d "$area" ] || continue
   files=$({ sources "$area" | xargs -r grep -i -lE "$PATTERN" 2>/dev/null || true; } | wc -l | tr -d ' ')
   lines=$({ sources "$area" | xargs -r grep -i -hE "$PATTERN" 2>/dev/null || true; } | wc -l | tr -d ' ')
   area_lines["$area"]="$lines"

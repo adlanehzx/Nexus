@@ -325,21 +325,21 @@ export function Agents({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <section className="agents-page contenu">
+    <section className="agents-page content">
       <div className="agents-heading">
         <div>
           <h2>Agents</h2>
-          <p className="faible">
+          <p className="muted">
             Profiles available for the orchestrator to select for your missions.
           </p>
         </div>
-        <button className="bouton" type="button" onClick={refresh}>
+        <button className="button" type="button" onClick={refresh}>
           Refresh
         </button>
       </div>
 
       {error !== null ? <div className="banner error">{error}</div> : null}
-      {registry === null ? <div className="vide">Loading registry…</div> : null}
+      {registry === null ? <div className="empty-state">Loading registry…</div> : null}
 
       <div className="agent-grid">
         {registry?.configured.map((agent) => {
@@ -358,7 +358,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                 <div className={`agent-avatar ${state}`}>{agent.key.slice(0, 1).toUpperCase()}</div>
                 <div>
                   <h3>{agent.key}</h3>
-                  <div className="faible">
+                  <div className="muted">
                     {profile?.name ?? "NEXUS Profile"} · {profile?.agent_kind ?? "ACP"}
                   </div>
                 </div>
@@ -385,14 +385,14 @@ export function Agents({ api }: { api: DashboardApi }) {
               </div>
               <div className="agent-card-actions">
                 <button
-                  className="bouton"
+                  className="button"
                   type="button"
                   onClick={() => edit(agent.agent_profile_id)}
                 >
                   Configure
                 </button>
                 <button
-                  className="bouton danger"
+                  className="button danger"
                   type="button"
                   disabled={busy || agent.running_tasks > 0}
                   onClick={() => disable(agent.key)}
@@ -410,12 +410,12 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div className="settings-panel-heading">
             <div>
               <h3>ACP Settings · {editing}</h3>
-              <p className="faible">
+              <p className="muted">
                 Modifications are persistent and saved. Credentials remain in CLI keyrings and are
                 never displayed here.
               </p>
             </div>
-            <button className="bouton" type="button" onClick={() => setEditing(null)}>
+            <button className="button" type="button" onClick={() => setEditing(null)}>
               Close
             </button>
           </div>
@@ -424,7 +424,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label>
               Display name
               <input
-                className="champ"
+                className="field"
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
               />
@@ -432,7 +432,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label>
               ACP model
               <input
-                className="champ"
+                className="field"
                 value={editModel}
                 placeholder="Default adapter model"
                 onChange={(event) => setEditModel(event.target.value.slice(0, 200))}
@@ -441,7 +441,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Command
               <input
-                className="champ mono"
+                className="field mono"
                 value={editCommand}
                 onChange={(event) => setEditCommand(event.target.value)}
               />
@@ -449,7 +449,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Arguments · one per line
               <textarea
-                className="champ mono settings-textarea"
+                className="field mono settings-textarea"
                 value={editArgs}
                 onChange={(event) => setEditArgs(event.target.value)}
               />
@@ -457,7 +457,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label>
               Reasoning effort
               <select
-                className="champ"
+                className="field"
                 value={editReasoning}
                 onChange={(event) => setEditReasoning(event.target.value)}
               >
@@ -474,7 +474,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               System prompt specific to this agent
               <textarea
-                className="champ settings-textarea"
+                className="field settings-textarea"
                 value={editSystemPrompt}
                 onChange={(event) => setEditSystemPrompt(event.target.value.slice(0, 32_000))}
               />
@@ -482,7 +482,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Additional allowed directories · absolute paths, one per line
               <textarea
-                className="champ mono"
+                className="field mono"
                 rows={3}
                 value={editAdditionalDirs}
                 onChange={(event) => setEditAdditionalDirs(event.target.value)}
@@ -491,7 +491,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Advanced ACP options · JSON, applied only if supported by adapter
               <textarea
-                className="champ mono"
+                className="field mono"
                 rows={4}
                 value={editConfigOptions}
                 onChange={(event) => setEditConfigOptions(event.target.value)}
@@ -499,7 +499,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             </label>
             <div className="settings-wide policy-box">
               <strong>Permissions: workspace + explicitly allowed directories</strong>
-              <span className="faible">
+              <span className="muted">
                 Write access allowed inside mission workspace. Pathless deletions and outside access
                 are denied. This guardrail cannot be disabled.
               </span>
@@ -507,7 +507,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           </div>
 
           <div className="settings-actions">
-            <button className="bouton primary" type="button" disabled={busy} onClick={saveProfile}>
+            <button className="button primary" type="button" disabled={busy} onClick={saveProfile}>
               Save
             </button>
           </div>
@@ -517,7 +517,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Test workspace
               <input
-                className="champ mono"
+                className="field mono"
                 value={testWorkspace}
                 onChange={(event) => setTestWorkspace(event.target.value)}
               />
@@ -525,14 +525,14 @@ export function Agents({ api }: { api: DashboardApi }) {
             <label className="settings-wide">
               Test prompt
               <input
-                className="champ"
+                className="field"
                 value={testPrompt}
                 onChange={(event) => setTestPrompt(event.target.value)}
               />
             </label>
           </div>
           <div className="settings-actions">
-            <button className="bouton" type="button" disabled={busy} onClick={testProfile}>
+            <button className="button" type="button" disabled={busy} onClick={testProfile}>
               Test agent
             </button>
           </div>
@@ -543,14 +543,14 @@ export function Agents({ api }: { api: DashboardApi }) {
       <div className="agent-add">
         <div>
           <h3>Create an ACP agent in NEXUS</h3>
-          <p className="faible">
+          <p className="muted">
             Start from a secured ACP adapter. NEXUS creates the profile and registers it directly
             with the orchestrator, without requesting your provider credentials.
           </p>
         </div>
         <div className="agent-create-form">
           <select
-            className="champ"
+            className="field"
             value={template}
             onChange={(event) => setTemplate(event.target.value)}
           >
@@ -562,7 +562,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             ))}
           </select>
           <input
-            className="champ"
+            className="field"
             value={newName}
             placeholder="Profile name"
             onChange={(event) => {
@@ -572,19 +572,19 @@ export function Agents({ api }: { api: DashboardApi }) {
             }}
           />
           <input
-            className="champ"
+            className="field"
             value={newKey}
             placeholder="nexus-name"
             onChange={(event) => setNewKey(normalizeKey(event.target.value))}
           />
           <input
-            className="champ"
+            className="field"
             value={model}
             placeholder="Optional model"
             onChange={(event) => setModel(event.target.value.slice(0, 200))}
           />
           <button
-            className="bouton primary"
+            className="button primary"
             type="button"
             disabled={busy || template.length === 0 || newName.length === 0 || newKey.length === 0}
             onClick={create}
@@ -597,14 +597,14 @@ export function Agents({ api }: { api: DashboardApi }) {
       <div className="agent-add secondary">
         <div>
           <h3>Import existing ACP profile</h3>
-          <p className="faible">For a custom adapter already configured in NEXUS.</p>
+          <p className="muted">For a custom adapter already configured in NEXUS.</p>
         </div>
         {candidates.length === 0 ? (
-          <div className="faible">All available ACP profiles are already registered.</div>
+          <div className="muted">All available ACP profiles are already registered.</div>
         ) : (
           <div className="agent-add-form">
             <select
-              className="champ"
+              className="field"
               value={selected}
               onChange={(event) => choose(event.target.value)}
             >
@@ -616,14 +616,14 @@ export function Agents({ api }: { api: DashboardApi }) {
               ))}
             </select>
             <input
-              className="champ"
+              className="field"
               value={key}
               placeholder="short-name"
               pattern="[a-z][a-z0-9_-]{0,63}"
               onChange={(event) => setKey(normalizeKey(event.target.value))}
             />
             <button
-              className="bouton primary"
+              className="button primary"
               type="button"
               disabled={busy || selected.length === 0 || key.length === 0}
               onClick={register}
@@ -639,7 +639,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div className="settings-panel-heading">
           <div>
             <h3>Provider Accounts & Isolated Identities</h3>
-            <p className="faible">
+            <p className="muted">
               Multi-account management (Antigravity, Claude, Codex) with isolated local CLI
               sessions, authentication tracking, quotas, cooldowns, and reliability.
             </p>
@@ -682,7 +682,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </div>
                   <div>
                     <h3>{acc.name}</h3>
-                    <div className="faible">
+                    <div className="muted">
                       {acc.id} · Priority P{acc.priority}
                     </div>
                   </div>
@@ -704,8 +704,8 @@ export function Agents({ api }: { api: DashboardApi }) {
 
                 {acc.cooldown.reason ? (
                   <div
-                    className="faible"
-                    style={{ marginTop: "8px", fontSize: "11px", color: "var(--degrade)" }}
+                    className="muted"
+                    style={{ marginTop: "8px", fontSize: "11px", color: "var(--gradient)" }}
                   >
                     Cooldown reason: {acc.cooldown.reason}
                   </div>
@@ -713,7 +713,7 @@ export function Agents({ api }: { api: DashboardApi }) {
 
                 <div className="agent-card-actions">
                   <button
-                    className="bouton"
+                    className="button"
                     type="button"
                     disabled={accActionLoading}
                     onClick={() => void handleTestAccount(acc.id)}
@@ -721,18 +721,16 @@ export function Agents({ api }: { api: DashboardApi }) {
                     Test connection
                   </button>
                   <button
-                    className="bouton"
+                    className="button"
                     type="button"
                     disabled={accActionLoading}
                     onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
                   >
                     {acc.cooldown.active ? "Resume" : "Pause"}
                   </button>
-                  {!["antigravity-personnel", "claude-principal", "codex-principal"].includes(
-                    acc.id,
-                  ) ? (
+                  {!["antigravity-personnel", "claude-main", "codex-main"].includes(acc.id) ? (
                     <button
-                      className="bouton danger"
+                      className="button danger"
                       type="button"
                       disabled={accActionLoading}
                       onClick={() => void handleDeleteAccount(acc.id)}
@@ -749,11 +747,11 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div className="agent-add" style={{ marginTop: "16px" }}>
           <div>
             <h3>Add provider identity</h3>
-            <p className="faible">e.g. antigravity-secondary, claude-backup, codex-dev.</p>
+            <p className="muted">e.g. antigravity-secondary, claude-backup, codex-dev.</p>
           </div>
           <div className="agent-add-form">
             <select
-              className="champ"
+              className="field"
               value={newAccProvider}
               onChange={(e) => {
                 setNewAccProvider(e.target.value);
@@ -765,19 +763,19 @@ export function Agents({ api }: { api: DashboardApi }) {
               <option value="codex">Codex (ChatGPT Plus subscription)</option>
             </select>
             <input
-              className="champ"
+              className="field"
               value={newAccId}
               placeholder="unique-identifier"
               onChange={(e) => setNewAccId(normalizeKey(e.target.value))}
             />
             <input
-              className="champ"
+              className="field"
               value={newAccName}
               placeholder="Full name (e.g. Claude Backup)"
               onChange={(e) => setNewAccName(e.target.value)}
             />
             <input
-              className="champ"
+              className="field"
               type="number"
               min={1}
               max={10}
@@ -787,7 +785,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               onChange={(e) => setNewAccPriority(Number(e.target.value) || 1)}
             />
             <button
-              className="bouton primary"
+              className="button primary"
               type="button"
               disabled={accActionLoading || !newAccId.trim() || !newAccName.trim()}
               onClick={() => void handleCreateAccount()}
@@ -815,13 +813,13 @@ export function Agents({ api }: { api: DashboardApi }) {
           >
             <div>
               <h3>Smart Routing & Feedback Learning</h3>
-              <p className="faible">
+              <p className="muted">
                 Dynamic multi-criteria scoring (affinities, auth, 5h/weekly quotas, cooldowns,
                 latency, history) replacing static priorities.
               </p>
             </div>
             <button
-              className="bouton"
+              className="button"
               type="button"
               onClick={() => void handleResetRouting()}
               title="Resets success metrics and learned scores"
@@ -907,16 +905,16 @@ export function Agents({ api }: { api: DashboardApi }) {
 
           {/* Simulateur de routage */}
           <div
-            className="carte"
+            className="card"
             style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}
           >
             <h4 style={{ margin: "0 0 10px 0" }}>Routing Evaluation Simulator</h4>
-            <p className="faible" style={{ marginBottom: "12px" }}>
+            <p className="muted" style={{ marginBottom: "12px" }}>
               Test which route and agent the orchestrator selects for a given instruction.
             </p>
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
               <input
-                className="champ"
+                className="field"
                 type="text"
                 placeholder="e.g. Fix the bug in services/api/src/auth.ts and add a vitest test"
                 value={testRoutingInstruction}
@@ -927,7 +925,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                 style={{ flex: 1 }}
               />
               <button
-                className="bouton primary"
+                className="button primary"
                 type="button"
                 disabled={routingLoading || !testRoutingInstruction.trim()}
                 onClick={() => void handleEvaluateRouting()}
@@ -997,7 +995,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                             ({agent.unavailabilityReason})
                           </span>
                         ) : null}
-                        <div className="faible" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
+                        <div className="muted" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
                           Compat: {agent.breakdown.compatibility} · Auth:{" "}
                           {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·
                           Reliability: {agent.breakdown.health} · Perf:{" "}

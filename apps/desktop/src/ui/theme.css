@@ -21,7 +21,7 @@
   --nexus-fast: 140ms;
   --nexus-normal: 260ms;
   --nexus-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --barre: 244px;
+  --bar: 244px;
 }
 * {
   box-sizing: border-box;
@@ -84,11 +84,11 @@ button:disabled {
 }
 .app {
   display: grid;
-  grid-template-columns: var(--barre) minmax(0, 1fr);
+  grid-template-columns: var(--bar) minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
 }
-.laterale {
+.sidebar {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -158,7 +158,7 @@ button:disabled {
 .nav-item[aria-current="page"] .nav-icon {
   color: var(--nexus-accent);
 }
-.pastille {
+.badge {
   min-width: 19px;
   padding: 1px 6px;
   border-radius: 999px;
@@ -194,13 +194,13 @@ button:disabled {
     0 0 0 3px rgba(117, 227, 173, 0.09),
     0 0 12px rgba(117, 227, 173, 0.5);
 }
-.principal {
+.main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
 }
-.entete {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -210,7 +210,7 @@ button:disabled {
   background: rgba(7, 10, 16, 0.46);
   backdrop-filter: blur(14px);
 }
-.entete h2 {
+.header h2 {
   margin: 1px 0 0;
   font-size: 21px;
   font-weight: 600;
@@ -220,13 +220,13 @@ button:disabled {
   color: var(--nexus-muted);
   font-size: 12px;
 }
-.contenu {
+.content {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 28px;
 }
-.contenu > h3 {
+.content > h3 {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--nexus-muted);
@@ -234,10 +234,10 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.contenu > h3:not(:first-child) {
+.content > h3:not(:first-child) {
   margin-top: 30px;
 }
-.carte {
+.card {
   position: relative;
   margin-bottom: 10px;
   padding: 16px;
@@ -250,28 +250,28 @@ button:disabled {
     transform var(--nexus-normal) var(--nexus-ease),
     background var(--nexus-normal) var(--nexus-ease);
 }
-.carte:hover {
+.card:hover {
   border-color: var(--nexus-line-strong);
   background: linear-gradient(135deg, rgba(22, 34, 50, 0.92), rgba(13, 19, 29, 0.78));
 }
-.carte header {
+.card header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
 }
-.faible {
+.muted {
   color: var(--nexus-muted);
   font-size: 12px;
 }
-.rangee {
+.row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
 }
-.etiquette {
+.tag {
   padding: 3px 8px;
   border: 1px solid var(--nexus-line);
   border-radius: 999px;
@@ -283,32 +283,32 @@ button:disabled {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.etiquette.ok {
+.tag.ok {
   color: var(--nexus-success);
   border-color: rgba(117, 227, 173, 0.25);
 }
-.etiquette.attention {
+.tag.attention {
   color: var(--nexus-warning);
   border-color: rgba(255, 203, 107, 0.25);
 }
-.etiquette.ko {
+.tag.ko {
   color: var(--nexus-danger);
   border-color: rgba(255, 127, 143, 0.25);
 }
-.jauge {
+.gauge {
   height: 4px;
   margin-top: 10px;
   overflow: hidden;
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.07);
 }
-.jauge > div {
+.gauge > div {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--nexus-accent-deep), var(--nexus-accent));
   box-shadow: 0 0 12px rgba(125, 232, 255, 0.5);
 }
-.bouton {
+.button {
   padding: 8px 12px;
   border: 1px solid var(--nexus-line-strong);
   border-radius: 9px;
@@ -319,24 +319,24 @@ button:disabled {
     background var(--nexus-fast) var(--nexus-ease),
     border-color var(--nexus-fast) var(--nexus-ease);
 }
-.bouton:hover:not(:disabled) {
+.button:hover:not(:disabled) {
   background: rgba(125, 232, 255, 0.09);
   border-color: rgba(125, 232, 255, 0.35);
 }
-.bouton:active:not(:disabled) {
+.button:active:not(:disabled) {
   transform: scale(0.98);
 }
-.bouton.primaire {
+.button.primary {
   border-color: rgba(125, 232, 255, 0.52);
   background: linear-gradient(135deg, #318fc8, #76dcf4);
   color: #05111a;
   font-weight: 750;
 }
-.bouton.danger {
+.button.danger {
   color: var(--nexus-danger);
   border-color: rgba(255, 127, 143, 0.36);
 }
-.champ {
+.field {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--nexus-line-strong);
@@ -348,11 +348,10 @@ button:disabled {
     border-color var(--nexus-fast),
     box-shadow var(--nexus-fast);
 }
-.champ:focus {
+.field:focus {
   border-color: var(--nexus-accent);
   box-shadow: 0 0 0 3px rgba(125, 232, 255, 0.1);
 }
-.banniere,
 .banner {
   padding: 9px 28px;
   border-bottom: 1px solid var(--nexus-line);
@@ -360,12 +359,11 @@ button:disabled {
   color: var(--nexus-muted);
   font-size: 12px;
 }
-.banniere.erreur,
 .banner.error {
   color: var(--nexus-danger);
   background: rgba(255, 127, 143, 0.08);
 }
-.vide {
+.empty-state {
   padding: 52px 20px;
   color: var(--nexus-muted);
   text-align: center;
@@ -376,13 +374,13 @@ button:disabled {
   flex: 1;
   min-height: 0;
 }
-.liste-conversations {
+.conversation-list {
   padding: 18px 10px;
   overflow: auto;
   border-right: 1px solid var(--nexus-line);
   background: rgba(6, 9, 15, 0.3);
 }
-.liste-conversations > button {
+.conversation-list > button {
   display: block;
   width: 100%;
   margin-bottom: 4px;
@@ -396,12 +394,12 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.liste-conversations > button:hover,
-.liste-conversations > button[aria-current="true"] {
+.conversation-list > button:hover,
+.conversation-list > button[aria-current="true"] {
   background: rgba(125, 232, 255, 0.08);
   color: var(--nexus-text);
 }
-.fil {
+.feed {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -419,7 +417,7 @@ button:disabled {
   overflow: auto;
   padding: 22px max(22px, 7vw);
 }
-.bulle {
+.bubble {
   max-width: 68ch;
   margin-bottom: 12px;
   padding: 12px 14px;
@@ -429,20 +427,20 @@ button:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.bulle.user {
+.bubble.user {
   margin-left: auto;
   border-color: rgba(125, 232, 255, 0.28);
   border-radius: 14px 4px 14px 14px;
   background: linear-gradient(135deg, rgba(32, 105, 153, 0.64), rgba(21, 58, 93, 0.74));
 }
-.compositeur {
+.composer {
   display: flex;
   gap: 9px;
   padding: 14px 20px;
   border-top: 1px solid var(--nexus-line);
   background: rgba(7, 10, 16, 0.74);
 }
-.compositeur textarea {
+.composer textarea {
   flex: 1;
   min-height: 42px;
   max-height: 130px;
@@ -452,7 +450,7 @@ button:disabled {
   border-color: rgba(255, 203, 107, 0.4);
   background: linear-gradient(135deg, rgba(78, 59, 20, 0.3), rgba(18, 27, 40, 0.9));
 }
-.confirmation.critique {
+.confirmation.critical {
   border-color: rgba(255, 127, 143, 0.65);
 }
 .confirmation .actions {
@@ -461,7 +459,7 @@ button:disabled {
   gap: 8px;
   margin-top: 12px;
 }
-.confirmation .actions .approuver {
+.confirmation .actions .approve {
   border-color: rgba(117, 227, 173, 0.45);
   color: var(--nexus-success);
 }
@@ -585,7 +583,7 @@ button:disabled {
   gap: 8px;
   margin-top: 24px;
 }
-.login-panel .bouton {
+.login-panel .button {
   width: 100%;
   margin-top: 12px;
   padding: 11px;
@@ -639,7 +637,7 @@ button:disabled {
   .sidebar-presence {
     display: none;
   }
-  .laterale {
+  .sidebar {
     padding: 15px 10px;
   }
   .brand-lockup {
@@ -654,13 +652,13 @@ button:disabled {
   .nav-icon {
     font-size: 18px;
   }
-  .entete {
+  .header {
     padding: 15px 18px;
   }
   .conversation {
     grid-template-columns: 1fr;
   }
-  .liste-conversations {
+  .conversation-list {
     display: none;
   }
   .messages {
@@ -669,10 +667,10 @@ button:disabled {
   .chat-presence {
     padding: 11px 18px;
   }
-  .chat-presence .faible {
+  .chat-presence .muted {
     display: none;
   }
-  .contenu {
+  .content {
     padding: 18px;
   }
   .login-shell {

@@ -5,9 +5,8 @@ metadata:
   namespace: nexus
 spec:
   replicas: 1
-  # Les réglages runtime sont encore sur un PVC ReadWriteOnce. Recreate évite
-  # deux pods concurrents pendant un rollout ; ne pas augmenter replicas avant
-  # migration de ces réglages vers PostgreSQL ou un magasin RWX transactionnel.
+  # Runtime settings still use a ReadWriteOnce PVC. Recreate prevents concurrent
+  # pods during rollout; do not scale before moving settings to transactional storage.
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: nexus-api }

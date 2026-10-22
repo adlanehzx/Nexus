@@ -1,21 +1,8 @@
-# Intégration continue NEXUS.
+# NEXUS continuous integration.
 #
-# Ce workflow existe parce que son absence a coûté cher : `pnpm lint` échouait
-# depuis septembre sur 95 erreurs, et personne ne le voyait — `pnpm verify`
-# s'arrête au lint, donc en le lançant on ne voyait même pas les tests passer.
-# Un magasin PostgreSQL entier était inutilisable sans que rien ne le signale.
-#
-# Deux principes de conception :
-#
-#   1. **Les étapes sont séparées.** `pnpm verify` enchaîne tout et s'arrête à
-#      la première erreur ; ici build, lint, typecheck et tests ont chacun leur
-#      étape, pour qu'un échec de lint ne cache pas un test rouge.
-#   2. **Les tests qui exigent une base sont isolés dans leur propre job.** Le
-#      gros de la suite tourne sur des magasins en mémoire et une base SQLite
-#      temporaire, donc sans service. Mais ce qui n'est vérifié que contre une
-#      doublure n'est pas vérifié : le job `persistence` monte un PostgreSQL
-#      éphémère et écrit vraiment, parce que c'est précisément un défaut de
-#      production invisible aux doublures qui a motivé ce workflow.
+# Gates are separate so one lint failure cannot hide failing tests. Tests that
+# need a real database use isolated jobs with disposable PostgreSQL instances;
+# an in-memory double cannot validate production persistence behavior.
 
 name: CI
 
@@ -35,35 +22,29 @@ permissions:
 
 jobs:
   node:
-    name: Monorepo TypeScript
+    name: TypeScript monorepo
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
 
-      - name: Installer pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          # La version vient de `packageManager` dans package.json : la répéter
-          # ici la ferait dériver au prochain changement.
+          # package.json is the single source of truth for the pnpm version.
           run_install: false
 
       - uses: actions/setup-node@v5
         with:
-          # `.nvmrc` est la source de vérité. `engine-strict` est actif et
-          # pnpm 11, ESLint 10 et Prisma 7 refusent de tourner en deçà de
-          # Node 22.13 : une version plus ancienne échouerait, mais tard.
+          # .nvmrc is the single source of truth for Node.js.
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Le client Prisma est généré, pas versionné. `build` le produit via le
-      # paquet @nexus/database, mais lint et typecheck en ont besoin aussi :
-      # sans lui, les types des magasins deviennent `any` et les règles
-      # `no-unsafe-*` passent à côté de tout.
-      - name: Générer le client Prisma
+      # Lint and typecheck also require the generated Prisma client.
+      - name: Generate Prisma client
         run: pnpm db:generate
 
       - name: Build
@@ -78,16 +59,15 @@ jobs:
       - name: Tests
         run: pnpm test
 
-      # Bloquant depuis que l'arriéré est purgé. Deux catégories en sont
-      # exclues, et pour des raisons différentes : les schémas générés par
-      # Tauri, qu'une génération réécrirait, et la configuration que Mission
-      # Engine écrit lui-même — imposer un autre style la ferait re-salir à
-      # chaque modification de réglage. Voir `.prettierignore`.
+      # Generated Tauri schemas and runtime-owned configuration are excluded.
       - name: Format
         run: pnpm format:check
 
-      - name: Hygiène de publication
+      - name: Release hygiene
         run: pnpm release:check
+
+      - name: English-only repository
+        run: pnpm translation:check
 
   mission-engine:
     name: Mission Engine (Python)
@@ -99,29 +79,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Installer uv
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      # `--extra dev` et non `--dev` : pytest est déclaré dans
-      # `[project.optional-dependencies]`, que `--dev` ne touche pas — celui-ci
-      # ne vise que `[dependency-groups]`. Sans cela, `uv run pytest` échoue sur
-      # un binaire absent.
-      - name: Installer les dépendances
+      # pytest lives in project.optional-dependencies, hence --extra dev.
+      - name: Install dependencies
         run: uv sync --frozen --extra dev
 
       - name: Tests
         run: uv run pytest -q
 
   persistence:
-    name: Magasins Prisma (PostgreSQL réel)
+    name: Prisma stores (real PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # Un service éphémère, et non la base d'un poste : ces tests écrivent
-    # vraiment. L'image suit celle du compose de développement, sinon la CI
-    # validerait un PostgreSQL que personne n'exécute.
+    # These tests write to a disposable service using the development image.
     services:
       postgres:
         image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -152,32 +127,26 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Les paquets de l'espace de travail s'importent par leur `exports`, qui
-      # pointe sur `dist/`. Sans build, `@nexus/database` ne résout pas — et le
-      # cas ne se voit pas en local, où `dist/` traîne d'une construction
-      # précédente. Le build produit aussi le client Prisma.
+      # Workspace exports point at dist, so a clean build is required.
       - name: Build
         run: pnpm build
 
-      # `migrate deploy` et non `db push` : c'est la commande du déploiement.
-      # Elle vérifie donc aussi que les migrations s'appliquent dans l'ordre sur
-      # une base vierge — ce qu'aucun autre job ne fait.
-      - name: Appliquer les migrations
+      # Use the production migration command against a blank database.
+      - name: Apply migrations
         run: pnpm --filter @nexus/database exec prisma migrate deploy
 
-      - name: Tests d'intégration
+      - name: Integration tests
         run: pnpm test:pg
 
   e2e-confirmation:
-    name: Confirmation de bout en bout
+    name: End-to-end confirmation
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    # Le seul job qui fait tourner les deux processus ensemble : l'API Node, le
-    # moteur Python, PostgreSQL, et un vrai redémarrage de processus au milieu.
+    # Runs the Node API, Python engine, PostgreSQL, and a real process restart.
     services:
       postgres:
         image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -208,39 +177,36 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer uv
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Installer les dépendances Node
+      - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Installer les dépendances Python
+      - name: Install Python dependencies
         working-directory: services/mission-engine
         run: uv sync --frozen --extra dev
 
       - name: Build
         run: pnpm build
 
-      - name: Appliquer les migrations
+      - name: Apply migrations
         run: pnpm --filter @nexus/database exec prisma migrate deploy
 
-      - name: Scénario complet
+      - name: Full scenario
         run: pnpm --filter @nexus/api e2e:confirmation
 
-      - name: Contrat calendrier Agent Core TypeScript ↔ Python
+      - name: Agent Core schedule contract (TypeScript to Python)
         run: pnpm --filter @nexus/api e2e:schedule-grant
 
   e2e-chain:
-    name: Chaîne d'agents de bout en bout
+    name: End-to-end agent chain
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    # Un job distinct de `e2e-confirmation`, et non une étape de plus : les deux
-    # scénarios éprouvent des chaînes différentes, et un échec doit nommer
-    # laquelle. Partager le job ferait aussi que le second ne tournerait jamais
-    # quand le premier tombe.
+    # Separate from confirmation so either execution chain can fail independently.
     services:
       postgres:
         image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -271,37 +237,34 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer uv
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Installer les dépendances Node
+      - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Installer les dépendances Python
+      - name: Install Python dependencies
         working-directory: services/mission-engine
         run: uv sync --frozen --extra dev
 
-      # Le scénario lance le runtime ACP compilé et les magasins compilés : il
-      # lit `dist`, pas les sources.
+      # The scenario executes compiled ACP runtime and stores from dist.
       - name: Build
         run: pnpm build
 
-      - name: Appliquer les migrations
+      - name: Apply migrations
         run: pnpm --filter @nexus/database exec prisma migrate deploy
 
-      - name: Scénario complet
+      - name: Full scenario
         run: pnpm --filter @nexus/api e2e:chain
 
   backup-restore:
-    name: Sauvegarde et restauration
+    name: Backup and restore
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # Une sauvegarde dont on n'a jamais tenté la restauration n'est pas une
-    # sauvegarde : on découvre son état le jour où on en a besoin. Ce job la
-    # crée puis la restaure vraiment, dans une base jetable.
+    # A backup is valid only after a real restore into a disposable database.
     services:
       postgres:
         image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -329,11 +292,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # Le client doit etre de la meme version majeure que le serveur : celui de
-      # la distribution est en 16 et `pg_dump` refuse un serveur 17. La CLI sait
-      # se replier sur le conteneur, mais ce job doit exercer le chemin natif --
-      # le repli a ses propres tests.
-      - name: Installer les clients PostgreSQL 17 et SQLite
+      # Match the PostgreSQL client major version to the server.
+      - name: Install PostgreSQL 17 and SQLite clients
         run: |
           sudo apt-get update
           sudo apt-get install -y curl ca-certificates lsb-release sqlite3
@@ -342,23 +302,19 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          # Le chemin versionne, explicitement : avec les clients 16 et 17
-          # installes cote a cote, le wrapper Debian peut resoudre `pg_dump` et
-          # `pg_restore` sur des versions differentes -- et `pg_restore` 16
-          # refuse alors une archive ecrite par `pg_dump` 17.
+          # Use the versioned path so dump and restore cannot resolve to different majors.
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
           /usr/lib/postgresql/17/bin/pg_dump --version
           /usr/lib/postgresql/17/bin/pg_restore --version
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      # Un `.env` minimal : la commande lit sa configuration là où une
-      # installation réelle la lit, et non depuis des variables du job.
-      - name: Préparer une installation jetable
+      # Exercise configuration from the same .env location as a real installation.
+      - name: Prepare disposable installation
         run: |
           cat > .env <<'ENV'
           NODE_ENV=development
@@ -367,39 +323,33 @@ jobs:
           ENV
           chmod 600 .env
 
-      - name: Appliquer les migrations
+      - name: Apply migrations
         run: pnpm --filter @nexus/database exec prisma migrate deploy
 
-      - name: Sauvegarder
+      - name: Create backup
         run: pnpm nexus backup --passphrase "${{ github.sha }}"
 
-      # Le cœur du job : restaurer pour de vrai dans une base jetable, et
-      # comparer à l'archive.
-      - name: Vérifier que l'archive est restaurable
+      - name: Verify archive can be restored
         run: |
           ARCHIVE=$(ls -t backups/*.nxbk | head -1)
           pnpm nexus backup --verify "$ARCHIVE" --passphrase "${{ github.sha }}"
 
-      - name: Refuser une archive altérée
+      - name: Reject a tampered archive
         run: |
           ARCHIVE=$(ls -t backups/*.nxbk | head -1)
           cp "$ARCHIVE" /tmp/tamper.nxbk
           node -e 'const f="/tmp/tamper.nxbk";const fs=require("node:fs");const d=fs.readFileSync(f);d[d.length-10]^=0xff;fs.writeFileSync(f,d)'
           if pnpm nexus backup --verify /tmp/tamper.nxbk --passphrase "${{ github.sha }}"; then
-            echo "une archive altérée a été acceptée" >&2
+            echo "a tampered archive was accepted" >&2
             exit 1
           fi
 
   blank-machine:
-    name: Réinstallation sur machine vide
+    name: Blank-machine reinstall
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Le critère de réussite de la priorité 0, et le seul qui compte vraiment :
-    # réinstaller sur une machine vide et retrouver missions, conversations et
-    # agents. Le scénario part d'un `git clone` neuf -- aucun `.env`, aucun
-    # `dist`, aucune donnée -- y déroule l'installation complète, restaure, puis
-    # vérifie ce qu'il devait retrouver.
+    # Proves a fresh clone can install, restore, and recover missions, conversations, and agents.
     services:
       postgres:
         image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -433,12 +383,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer uv
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      - name: Installer les clients PostgreSQL 17 et SQLite
+      - name: Install PostgreSQL 17 and SQLite clients
         run: |
           sudo apt-get update
           sudo apt-get install -y curl ca-certificates lsb-release sqlite3
@@ -449,36 +399,26 @@ jobs:
           sudo apt-get install -y postgresql-client-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      # L'environnement Python du moteur : le semis de la mission passe par son
-      # dépôt, qui est le seul à connaître son schéma.
-      - name: Installer l'environnement du moteur
+      # Mission seeding uses the engine repository, which owns its schema.
+      - name: Install engine environment
         working-directory: services/mission-engine
         run: uv sync --frozen --extra dev
 
-      - name: Scénario complet
+      - name: Full scenario
         run: bash scripts/blank-machine-restore.sh
 
   desktop-compile:
-    name: Coquille de bureau (compilation)
+    name: Desktop shell (compile)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # La compilation complète des paquets vit dans le workflow « Paquets »,
-    # déclenché par étiquette : trois systèmes à dix minutes chacun
-    # transformeraient chaque commit en quart d'heure d'attente.
-    #
-    # Ce job-ci compile la coquille sous Linux à chaque poussée, et attrape la
-    # classe d'erreur la plus fréquente et la plus coûteuse : une dépendance
-    # déclarée pour une seule plateforme. C'est exactement ce qui était cassé —
-    # `keyring` avec `features = ["windows-native"]` dans les dépendances
-    # communes rendait la coquille inconstructible ailleurs que sur Windows,
-    # donc l'AppImage, le deb et le dmg impossibles, sans que rien ne le dise.
+    # Compile the shell on Linux on every push to catch platform-specific dependency mistakes.
     steps:
       - uses: actions/checkout@v5
 
@@ -498,32 +438,20 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
-      - name: Dépendances WebKitGTK
+      - name: Install WebKitGTK dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build du monorepo
+      - name: Build monorepo
         run: pnpm build
 
-      # `cargo check` et non `tauri build` : on vérifie que ça **compile** sur
-      # une autre plateforme que Windows, pas qu'on sait fabriquer un paquet —
-      # ce dernier point est le travail du workflow de publication.
-      #
-      # `--locked` est rétabli : le verrou a été régénéré par ce job lui-même,
-      # récupéré depuis son artefact et committé. La construction est donc
-      # reproductible — deux exécutions résolvent les mêmes versions.
-      #
-      # L'étape qui suit garde la détection de dérive : elle ne devrait plus
-      # jamais se déclencher, et c'est précisément pour cela qu'on la laisse. Le
-      # jour où une dépendance change, le message dira quoi faire au lieu de
-      # laisser `--locked` échouer sur « cannot update the lock file », qui ne
-      # nomme pas le geste.
-      - name: Compiler la coquille
+      # cargo check verifies cross-platform compilation; packaging belongs to release CI.
+      - name: Compile desktop shell
         working-directory: apps/desktop/src-tauri
         run: cargo check --locked --all-targets
 
@@ -582,17 +510,16 @@ jobs:
           echo "Every commit is signed off." >> "$GITHUB_STEP_SUMMARY"
 
   security:
-    name: Secrets et dépendances
+    name: Secrets and dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
-          # gitleaks a besoin de l'historique pour inspecter les commits, pas
-          # seulement l'arbre de travail.
+          # gitleaks needs history, not only the working tree.
           fetch-depth: 0
 
-      - name: Rechercher des secrets
+      - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -606,34 +533,17 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Deux étapes, deux exigences, parce que les deux niveaux n'appellent pas
-      # la même réponse.
-      #
-      # Les critiques sont **bloquantes**. Il n'y en a plus : les deux qui
-      # restaient — `proxy-addr` et `shell-quote` — sont corrigées par un
-      # plancher dans `pnpm-workspace.yaml`. Cette étape est donc ce qui empêche
-      # une régression, et non un vœu.
-      # Les évaluations de sécurité agentique, nommées à part.
-      #
-      # Elles tournent déjà dans `pnpm test` du job TypeScript, mais un échec y
-      # ressemblerait à n'importe quel test cassé. Ici, l'étape dit ce qu'elle
-      # mesure : une barrière a cédé. `turbo run` plutôt que `pnpm --filter`,
-      # pour que les paquets dont elles dépendent soient construits.
-      - name: Évaluations de sécurité agentique
+      # Keep agentic security evaluations visible as a dedicated gate.
+      - name: Agentic security evaluations
         run: pnpm turbo run test --filter=@nexus/security-evals
 
-      - name: Auditer les dépendances (critique)
+      - name: Audit dependencies (critical)
         run: pnpm audit --prod --audit-level critical
 
-      # Le reste **signale sans bloquer**, et la raison est écrite plutôt que
-      # cachée : trente-six avis transitifs subsistent, dont la correction ne
-      # dépend pas de ce dépôt. Immobiliser chaque branche dessus ferait
-      # désactiver l'étape à la première urgence ; la supprimer reviendrait à ne
-      # pas auditer. Le jour où l'arriéré est purgé, il suffit de retirer
-      # `continue-on-error`.
-      - name: Auditer les dépendances (élevé et moindre)
+      # Remaining transitive advisories are reported without blocking until upstream fixes land.
+      - name: Audit dependencies (high and lower)
         continue-on-error: true
         run: pnpm audit --prod --audit-level high

@@ -1,16 +1,13 @@
 /**
- * Babel pour React Native.
+ * Babel configuration for React Native.
  *
- * Le préréglage officiel, sans ajout : ce paquet ne contient ni décorateurs, ni
- * transformation exotique. Le code TypeScript est celui que Vitest exécute déjà.
+ * Use the official preset. This package has no decorators or custom transforms.
  */
 module.exports = {
   presets: ["module:@react-native/babel-preset"],
   plugins: [
-    // `zod` publie `export * as core from "..."`. Le prereglage de React Native
-    // ne transforme pas cette forme, et Metro s'arrete dessus. Zod est une
-    // dependance directe du worker — validation des entrees de chaque capacite —
-    // et n'est donc pas contournable.
+    // React Native's preset does not transform Zod's namespace export syntax,
+    // so handle it explicitly before Metro consumes the bundle.
     "@babel/plugin-transform-export-namespace-from",
   ],
 };

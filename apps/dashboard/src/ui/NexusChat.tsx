@@ -178,7 +178,7 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
       >
         <div style={{ width: `${String(percent)}%` }} />
       </div>
-      <div className="faible">
+      <div className="muted">
         NEXUS orchestrating mission · {mission.completedTasks}/{mission.totalTasks} tasks completed
       </div>
     </div>

@@ -7,13 +7,13 @@ export function Settings({ api }: { api: DashboardApi }) {
   const secrets = useSection(() => api.secrets());
 
   return (
-    <div className="contenu settings-page">
+    <div className="content settings-page">
       <div className="agents-heading">
         <div>
           <h2>Settings</h2>
-          <p className="faible">Persistent settings for the NEXUS multi-agent engine.</p>
+          <p className="muted">Persistent settings for the NEXUS multi-agent engine.</p>
         </div>
-        <button className="bouton" type="button" onClick={state.reload}>
+        <button className="button" type="button" onClick={state.reload}>
           Refresh
         </button>
       </div>
@@ -46,7 +46,7 @@ function SecretsForm({
   return (
     <section className="settings-panel">
       <h3>Local secret vault</h3>
-      <p className="faible">
+      <p className="muted">
         Values are written to the Linux keyring and are never read back by the browser. Only secret
         names appear here.
       </p>
@@ -54,7 +54,7 @@ function SecretsForm({
         <label>
           Name
           <input
-            className="champ mono"
+            className="field mono"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="mcp-token"
@@ -63,7 +63,7 @@ function SecretsForm({
         <label>
           Secret value
           <input
-            className="champ mono"
+            className="field mono"
             type="password"
             autoComplete="new-password"
             value={secret}
@@ -73,7 +73,7 @@ function SecretsForm({
       </div>
       <div className="settings-actions">
         <button
-          className="bouton primary"
+          className="button primary"
           type="button"
           disabled={name === "" || secret.length < 4}
           onClick={() => {
@@ -92,14 +92,14 @@ function SecretsForm({
         </button>
       </div>
       {names.length === 0 ? (
-        <p className="vide">No secrets stored.</p>
+        <p className="empty-state">No secrets stored.</p>
       ) : (
         <ul>
           {names.map((item) => (
             <li key={item}>
               <code>vault://nexus/{item}</code>{" "}
               <button
-                className="bouton danger"
+                className="button danger"
                 type="button"
                 onClick={() => {
                   if (window.confirm(`Delete secret ${item}?`))
@@ -169,7 +169,7 @@ function SettingsForm({
         <label>
           Max task timeout · seconds
           <input
-            className="champ"
+            className="field"
             type="number"
             min={10}
             max={86400}
@@ -180,7 +180,7 @@ function SettingsForm({
         <label>
           Max attempts
           <input
-            className="champ"
+            className="field"
             type="number"
             min={1}
             max={10}
@@ -191,7 +191,7 @@ function SettingsForm({
         <label>
           Retry delay · seconds
           <input
-            className="champ"
+            className="field"
             type="number"
             min={1}
             max={3600}
@@ -202,7 +202,7 @@ function SettingsForm({
         <label>
           Context budget · characters
           <input
-            className="champ"
+            className="field"
             type="number"
             min={4000}
             max={400000}
@@ -223,7 +223,7 @@ function SettingsForm({
         <label className="settings-wide">
           Research priority · comma-separated profiles
           <input
-            className="champ mono"
+            className="field mono"
             value={value.research_priority.join(", ")}
             onChange={(event) => priorities("research_priority", event.target.value)}
           />
@@ -231,7 +231,7 @@ function SettingsForm({
         <label className="settings-wide">
           Critical review priority
           <input
-            className="champ mono"
+            className="field mono"
             value={value.review_priority.join(", ")}
             onChange={(event) => priorities("review_priority", event.target.value)}
           />
@@ -239,14 +239,14 @@ function SettingsForm({
         <label className="settings-wide">
           Final synthesis priority
           <input
-            className="champ mono"
+            className="field mono"
             value={value.synthesis_priority.join(", ")}
             onChange={(event) => priorities("synthesis_priority", event.target.value)}
           />
         </label>
         <div className="settings-wide policy-box">
           <strong>Non-disableable guardrails</strong>
-          <span className="faible">
+          <span className="muted">
             ACP execution restricted to workspace, pathless deletion rejected, secrets excluded from
             API responses, live trading disabled, and administrator authentication mandatory.
           </span>
@@ -254,7 +254,7 @@ function SettingsForm({
       </div>
       <div className="settings-actions">
         <button
-          className="bouton primary"
+          className="button primary"
           type="button"
           disabled={busy}
           onClick={() => {

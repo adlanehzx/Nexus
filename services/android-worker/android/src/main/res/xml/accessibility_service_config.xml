@@ -1,24 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Configuration du service d'accessibilité NEXUS.
+  NEXUS accessibility service configuration.
 
-  Chaque attribut ci-dessous élargit ce que le service peut voir ou faire. Ils
-  sont donc réduits au strict nécessaire, et commentés un par un.
-
-  Ce qui n'est PAS demandé :
-
-    accessibilityEventTypes="typeAllMask"  — recevoir tous les événements
-        d'interface reviendrait à observer en continu tout ce que l'utilisateur
-        fait sur son téléphone. On demande `typeWindowStateChanged` seul, qui
-        suffit à savoir qu'un écran a changé.
-
-    flagRetrieveInteractiveWindows — l'accès aux fenêtres d'arrière-plan.
-        Le worker agit sur l'écran actif, pas sur ce qui est masqué.
-
-    canRequestFilterKeyEvents — l'interception des frappes clavier. C'est un
-        enregistreur de frappe, quel que soit l'usage qu'on en fait.
-
-    canRequestFingerprintGestures — sans objet ici.
+  Each attribute expands what the service can observe or do. The worker requests
+  only active-window changes, never all events, background windows, key filtering,
+  or fingerprint gestures.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
 
@@ -41,29 +27,21 @@
     android:notificationTimeout="100" />
 
 <!--
-  Notes sur les attributs retenus.
+  Notes on retained attributes.
 
   flagReportViewIds
-      Rend `findAccessibilityNodeInfosByViewId` utilisable. C'est ce qui permet
-      de cibler un élément par son identifiant de vue — le sélecteur le plus
-      stable, et celui que la politique préfère aux coordonnées.
+      Enables stable view-id selection instead of coordinates.
 
   canRetrieveWindowContent
-      Nécessaire pour trouver un élément avant d'agir dessus. Le service lit la
-      hiérarchie de vues au moment de l'action et n'en conserve rien.
+      Reads the active hierarchy at action time and retains nothing.
 
   canPerformGestures
-      Nécessaire pour les gestes de défilement et, lorsque la configuration
-      l'autorise explicitement, les appuis par coordonnées.
+      Enables scrolling and explicitly authorized coordinate taps.
 
   canTakeScreenshot
-      Active `AccessibilityService.takeScreenshot()` (Android 11+). C'est le
-      mécanisme de capture de moindre privilège : une image, sur appel, sans
-      MediaProjection ni flux vidéo. Voir le README pour la comparaison.
+      Enables one-shot Android 11+ screenshots without MediaProjection or video.
 
   packageNames=""
-      Vide signifie « toutes les applications ». Restreindre ici serait
-      préférable, mais la liste des applications que NEXUS peut piloter est un
-      réglage utilisateur, appliqué à l'exécution par `AppPolicy` et
-      `UiPolicy` — un manifeste ne se modifie pas sans réinstaller l'APK.
+      Empty means all apps. Runtime AppPolicy and UiPolicy apply the user-managed
+      allowlist because changing a manifest would require reinstalling the APK.
 -->

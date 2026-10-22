@@ -47,10 +47,10 @@ export function Chat() {
 
   return (
     <div className="conversation">
-      <aside className="liste-conversations">
+      <aside className="conversation-list">
         <button
           type="button"
-          className="bouton primaire"
+          className="button primary"
           style={{ width: "100%", marginBottom: 10 }}
           onClick={() => {
             void nexus.openConversation(null);
@@ -73,7 +73,7 @@ export function Chat() {
         ))}
       </aside>
 
-      <div className="fil">
+      <div className="feed">
         {confirmations.length === 0 ? null : (
           <div style={{ padding: "12px 18px 0" }}>
             {confirmations.map((confirmation) => (
@@ -90,7 +90,7 @@ export function Chat() {
 
         <div className="messages" ref={threadRef}>
           {nexus.timeline.length === 0 ? (
-            <p className="vide">
+            <p className="empty-state">
               Ask NEXUS anything. Resulting tasks will execute on the capable device — this machine,
               your workstation, or phone.
             </p>
@@ -114,9 +114,9 @@ export function Chat() {
           ))}
         </div>
 
-        <div className="compositeur">
+        <div className="composer">
           <textarea
-            className="champ"
+            className="field"
             value={text}
             placeholder={
               interactive
@@ -139,7 +139,7 @@ export function Chat() {
 
           <button
             type="button"
-            className="bouton primaire"
+            className="button primary"
             disabled={!interactive || isSending || text.trim().length === 0}
             onClick={sendCurrentMessage}
           >
@@ -167,7 +167,7 @@ function MicroButton() {
     return (
       <button
         type="button"
-        className="bouton"
+        className="button"
         disabled
         title="Speech recognition is not available on this device."
       >
@@ -190,7 +190,7 @@ function MicroButton() {
   return (
     <button
       type="button"
-      className={`bouton ${nexus.voiceState === "listening" ? "primaire" : ""}`}
+      className={`button ${nexus.voiceState === "listening" ? "primary" : ""}`}
       title={error ?? "Hold to talk"}
       onPointerDown={() => {
         setError(null);

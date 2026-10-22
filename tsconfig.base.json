@@ -24,9 +24,8 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    // Types globaux déclarés explicitement : aucun paquet @types installé par
-    // hasard ne fuite dans la portée globale, et la résolution ne dépend pas de
-    // la disposition des liens symboliques de pnpm.
+    // Declare globals explicitly so unrelated @types packages cannot leak into
+    // scope and resolution does not depend on pnpm's symlink layout.
     "types": ["node"],
 
     "declaration": true,

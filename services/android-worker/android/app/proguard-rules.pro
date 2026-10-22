@@ -1,8 +1,4 @@
-# Regles de reduction pour la version de production.
-#
-# React Native accede a une partie du code par reflexion : le pont natif
-# resout les methodes @ReactMethod par leur nom. Les supprimer casserait le
-# worker sans erreur de compilation.
+# Production shrinker rules. React Native resolves @ReactMethod members by name.
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -keep class fr.nexus.worker.NexusWorkerModule { *; }

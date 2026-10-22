@@ -38,7 +38,7 @@ export function Login() {
       <section className="login-panel" aria-label="Sign in to NEXUS">
         <span className="eyebrow">Secure connection</span>
         <h2>Sign in to NEXUS</h2>
-        <p className="faible">Windows desktop — client and local worker.</p>
+        <p className="muted">Windows desktop — client and local worker.</p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -50,7 +50,7 @@ export function Login() {
           </label>
           <input
             id="nexus-email"
-            className="champ"
+            className="field"
             type="email"
             autoComplete="username"
             placeholder="Email address"
@@ -64,7 +64,7 @@ export function Login() {
           </label>
           <input
             id="nexus-password"
-            className="champ"
+            className="field"
             type="password"
             autoComplete="current-password"
             placeholder="Password"
@@ -75,7 +75,7 @@ export function Login() {
           />
           <button
             type="submit"
-            className="bouton primaire"
+            className="button primary"
             disabled={busy || email.trim().length === 0 || password.length === 0}
           >
             {busy ? "Establishing session…" : "Sign In"}

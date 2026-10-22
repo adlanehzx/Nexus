@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Corpus d'évaluations de sécurité agentique : le modèle est supposé compromis",
+  "description": "Agentic security evaluation corpus that assumes a compromised model",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",

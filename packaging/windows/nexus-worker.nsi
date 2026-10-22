@@ -1,15 +1,11 @@
-; Installateur du worker NEXUS pour Windows.
+; NEXUS worker installer for Windows.
 ;
-; Le MSI produit par Tauri installe la *coquille de bureau*. Le worker est autre
-; chose : un démon Node sans interface, qui doit tourner sans session ouverte.
-; D'où un installateur à lui.
+; The MSI produced by Tauri installs the desktop shell. The worker is a
+; headless Node daemon that must run without an interactive session.
 ;
-; NSIS et non MSI : un MSI demande WiX et une chaîne de construction
-; supplémentaire, pour un gain nul ici — nous n'avons ni déploiement par
-; stratégie de groupe ni désinstallation pilotée à distance. NSIS produit un
-; exécutable unique, et `makensis` tourne sur le runner Windows comme en local.
+; NSIS produces one executable and `makensis` runs both locally and in CI.
 ;
-; Construction :
+; Build:
 ;   makensis -DVERSION=1.0.0 -DSOURCE_DIR=..\..\services\windows-worker nexus-worker.nsi
 
 !include "MUI2.nsh"
@@ -23,69 +19,54 @@
   !define SOURCE_DIR "..\..\services\windows-worker"
 !endif
 
-Name "NEXUS — exécutant"
+Name "NEXUS — worker"
 OutFile "nexus-worker-${VERSION}-setup.exe"
 Unicode true
 
-; Par machine, et non par utilisateur : un service Windows est une ressource de
-; la machine, et l'installer dans le profil d'un utilisateur produirait un
-; service dont les fichiers disparaissent quand ce profil est supprimé.
+; Install per machine because a Windows service is a machine resource.
 InstallDir "$PROGRAMFILES64\NEXUS\worker"
 RequestExecutionLevel admin
 
 !define MUI_ABORTWARNING
-; Pas de page de licence : le dépôt n'en porte pas, et pointer un fichier
-; absent fait échouer `makensis` — un installateur qui ne se construit pas est
-; plus coûteux qu'une page en moins.
+; Do not reference a license file that may be absent from a source archive.
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "French"
+!insertmacro MUI_LANGUAGE "English"
 
 Section "Worker" SecWorker
   SetOutPath "$INSTDIR"
 
-  ; Le code compilé et ses dépendances. `dist` doit exister : l'installateur ne
-  ; compile pas, il installe — et confondre les deux donne un installateur qui
-  ; échoue sur une machine sans outils de développement.
+  ; Install prebuilt code and dependencies. The installer never compiles source.
   File /r "${SOURCE_DIR}\dist"
   File /r "${SOURCE_DIR}\node_modules"
   File "${SOURCE_DIR}\package.json"
-  ; Le script de service est installé avec le worker : le message final y
-  ; renvoie, et un message qui désigne un fichier absent est pire que pas de
-  ; message.
+  ; Ship the service and pairing scripts referenced by the completion message.
   File "install-worker-service.ps1"
   File "setup-worker.ps1"
 
-  ; Le modèle de configuration, jamais la configuration : `.env` contient le
-  ; chemin de la clé privée de CETTE machine, donc il se remplit après
-  ; l'installation et ne doit pas être écrasé par une mise à jour.
+  ; Ship only the template. Never overwrite this machine's private configuration.
   SetOverwrite off
   File /oname=.env.example "${SOURCE_DIR}\.env.example"
   SetOverwrite on
 
-  ; La configuration n'est pas créée ici : setup-worker.ps1 la produit seulement
-  ; après avoir consommé un ticket valide. Créer un modèle à cet emplacement
-  ; ferait croire à setup qu'une identité existe déjà et bloquerait l'appairage.
+  ; setup-worker.ps1 creates configuration only after consuming a valid ticket.
   CreateDirectory "$COMMONAPPDATA\NEXUS"
 
-  ; Node n'est pas embarqué. L'embarquer figerait une version qu'il faudrait
-  ; mettre à jour nous-mêmes à chaque correctif de sécurité de Node — or ce
-  ; worker exécute des commandes sur la machine, c'est le dernier endroit où
-  ; l'on veut un runtime en retard.
+  ; Keep Node external so platform administrators can apply security updates.
   nsExec::ExecToStack 'cmd /c where node'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Node 24 est requis et n'a pas été trouvé.$\n$\nInstallez-le (https://nodejs.org) puis relancez cet installateur."
+    MessageBox MB_ICONSTOP "Node 24 is required and was not found.$\n$\nInstall it from https://nodejs.org, then run this installer again."
     Abort
   ${EndIf}
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusWorker" \
-    "DisplayName" "NEXUS — exécutant"
+    "DisplayName" "NEXUS — worker"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusWorker" \
     "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusWorker" \
@@ -95,21 +76,18 @@ Section "Worker" SecWorker
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusWorker" \
     "NoModify" 1
 
-  ; Le service **n'est pas** installé automatiquement, et c'est une décision.
-  ;
-  ; Il faut d'abord appairer la machine. Un service installé et démarré avant
-  ; cela échoue en boucle et masque la cause réelle.
-  DetailPrint "Service non installé : appairez d'abord la machine depuis NEXUS > Appareils"
+  ; Pair the machine before installing the service. Starting an unconfigured
+  ; service would fail repeatedly and hide the actual cause.
+  DetailPrint "Service not installed: pair this machine from NEXUS > Devices first"
 SectionEnd
 
 Function .onInstSuccess
   MessageBox MB_ICONINFORMATION \
-    "Worker installé.$\n$\nDans NEXUS > Appareils, créez un code d'appairage puis lancez :$\n$\npowershell -ExecutionPolicy Bypass -File $INSTDIR\setup-worker.ps1 -NexusUrl https://votre-nexus -PairingToken VOTRE_CODE"
+    "Worker installed.$\n$\nIn NEXUS > Devices, create a pairing code, then run:$\n$\npowershell -ExecutionPolicy Bypass -File $INSTDIR\setup-worker.ps1 -NexusUrl https://your-nexus -PairingToken YOUR_CODE"
 FunctionEnd
 
 Section "Uninstall"
-  ; Le service d'abord : supprimer les fichiers d'un service en marche laisse un
-  ; service qui redémarre en boucle sur un binaire absent.
+  ; Stop and remove the service before deleting its executable files.
   nsExec::ExecToLog 'sc.exe stop nexus-worker'
   nsExec::ExecToLog 'sc.exe delete nexus-worker'
 
@@ -124,10 +102,7 @@ Section "Uninstall"
 
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NexusWorker"
 
-  ; La configuration et les journaux restent. Une désinstallation qui emporte
-  ; l'identifiant d'appareil et le chemin de la clé obligerait à réappairer
-  ; après une simple mise à jour — et une mise à jour passe par une
-  ; désinstallation.
+  ; Preserve configuration and logs so an upgrade does not require pairing again.
   MessageBox MB_ICONINFORMATION \
-    "Worker désinstallé.$\n$\nLa configuration est conservée dans $COMMONAPPDATA\NEXUS.$\nSupprimez-la à la main si vous ne réinstallerez pas."
+    "Worker uninstalled.$\n$\nConfiguration remains in $COMMONAPPDATA\NEXUS.$\nRemove it manually if you do not plan to reinstall."
 SectionEnd

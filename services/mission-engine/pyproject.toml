@@ -11,10 +11,8 @@ dependencies = [
   "fastapi>=0.115,<1",
   "pydantic>=2.10,<3",
   "uvicorn>=0.34,<1",
-  # Verification Ed25519 des jetons de service emis par l'API. Le moteur ne
-  # detient que la cle publique : il verifie, il n'emet pas. Une dependance
-  # eprouvee plutot qu'une implementation maison -- on n'ecrit pas sa propre
-  # arithmetique sur courbe, meme pour verifier.
+  # Verify API-issued Ed25519 service tokens with a proven implementation.
+  # The engine holds only the public key and never issues tokens.
   "cryptography>=44,<47",
 ]
 

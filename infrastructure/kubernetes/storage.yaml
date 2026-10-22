@@ -31,9 +31,8 @@ spec:
     requests:
       storage: 4Gi
 ---
-# Les réglages modifiables depuis le dashboard, artefacts et journaux sont
-# locaux au processus. Ce volume impose donc une seule réplique API tant que
-# ces données n'ont pas été migrées vers PostgreSQL ou un stockage RWX.
+# Dashboard settings, artifacts, and logs are process-local. Keep one API replica
+# until this state moves to PostgreSQL or transactional RWX storage.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

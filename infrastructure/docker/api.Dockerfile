@@ -1,11 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Image du service API.
-# Contexte de build : la racine du monorepo (cf. docker-compose.yml).
-#
-# Trois étapes : dépendances → build → runtime. La dernière ne contient que le
-# JavaScript compilé et les dépendances de production — ni sources TypeScript,
-# ni outils de build, ni devDependencies.
+# API service image built from the monorepo root.
+# The runtime stage contains only compiled JavaScript and production dependencies.
 
 ARG NODE_VERSION=24.20.0
 ARG PNPM_VERSION=11.25.0
@@ -19,11 +15,12 @@ RUN npm install -g pnpm@${PNPM_VERSION} && npm cache clean --force
 WORKDIR /repo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dépendances — couche mise en cache tant que les manifestes ne changent pas.
+# Dependencies: cached until manifests change.
 FROM base AS deps
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY packages/shared/package.json      packages/shared/
+COPY packages/connections/package.json packages/connections/
 COPY packages/config/package.json      packages/config/
 COPY packages/protocol/package.json    packages/protocol/
 COPY packages/auth/package.json        packages/auth/
@@ -37,7 +34,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @nexus/api...
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Build — génère le client Prisma puis compile le TypeScript.
+# Build: generate the Prisma client and compile TypeScript.
 FROM deps AS builder
 
 COPY tsconfig.base.json turbo.json ./
@@ -46,9 +43,7 @@ COPY services/api/ services/api/
 
 RUN pnpm --filter @nexus/api... run build
 
-# `pnpm deploy` produit une arborescence autonome : le paquet, ses dépendances
-# d'espace de travail réduites à leurs `files` publiés, et les seules
-# dépendances de production.
+# `pnpm deploy` produces a standalone production tree.
 RUN pnpm --filter @nexus/api --prod deploy --legacy /out
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -56,8 +51,7 @@ FROM node:${NODE_VERSION}-alpine AS runtime
 
 ENV NODE_ENV=production
 
-# `dumb-init` fait office de PID 1 : il transmet SIGTERM au processus Node, ce
-# dont dépend l'arrêt gracieux.
+# dumb-init forwards SIGTERM to Node for graceful shutdown.
 RUN apk add --no-cache dumb-init
 RUN mkdir -p \
       /var/lib/nexus/models \
@@ -72,8 +66,7 @@ COPY --from=builder --chown=node:node /out ./
 USER node
 EXPOSE 3000
 
-# La sonde interroge la liveness : elle ne doit pas dépendre de PostgreSQL, sous
-# peine de faire redémarrer un conteneur sain quand la base ralentit.
+# Liveness must not depend on PostgreSQL or restart a healthy API when the database slows down.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.API_PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 

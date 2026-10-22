@@ -30,7 +30,7 @@ const NAVIGATION: { screen: Screen; icon: string }[] = [
 export function App() {
   const nexus = useNexus();
   const [ecran, setEcran] = useState<Screen>("chat");
-  if (!nexus.ready) return <p className="vide">Opening NEXUS…</p>;
+  if (!nexus.ready) return <p className="empty-state">Opening NEXUS…</p>;
   if (!nexus.authenticated) return <Login />;
 
   const attente = pendingConfirmations(nexus.state).length;
@@ -45,7 +45,7 @@ export function App() {
   });
   return (
     <div className="app nexus-background">
-      <nav className="laterale" aria-label="NEXUS Navigation">
+      <nav className="sidebar" aria-label="NEXUS Navigation">
         <div className="brand-lockup">
           <NexusOrb state={visualState} compact />
           <div>
@@ -71,11 +71,11 @@ export function App() {
             />
             <span>Local worker</span>
           </div>
-          <div className="faible">{nexus.worker.state}</div>
+          <div className="muted">{nexus.worker.state}</div>
         </div>
       </nav>
-      <main className="principal">
-        <header className="entete">
+      <main className="main">
+        <header className="header">
           <div>
             <span className="eyebrow">NEXUS / {ecran}</span>
             <h2>{TITRES[ecran]}</h2>
@@ -125,7 +125,7 @@ function NavItem(props: {
       </span>
       <span>{TITRES[props.screen]}</span>
       {props.badge === undefined || props.badge === 0 ? null : (
-        <span className="pastille">{props.badge}</span>
+        <span className="badge">{props.badge}</span>
       )}
     </button>
   );

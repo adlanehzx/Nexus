@@ -12,7 +12,7 @@ data:
   METRICS_HOST: 0.0.0.0
   METRICS_PORT: "9464"
   CORS_ORIGINS: https://nexus.example.invalid
-  # Adresse HTTPS joignable par les workers ; requise pour emettre un ticket.
+  # HTTPS address reachable by workers; required to issue pairing tickets.
   PUBLIC_API_URL: https://nexus.example.invalid
   REDIS_URL: redis://nexus-redis:6379
   MEMORY_EMBEDDING_BACKEND: neural
@@ -21,5 +21,5 @@ data:
   NEXUS_RUNTIME_CONFIG_DIR: /var/lib/nexus/runtime-config
   NEXUS_BROWSER_ARTIFACTS_DIR: /var/lib/nexus/artifacts/browser
   NEXUS_OBSERVABILITY_DIR: /var/lib/nexus/observability
-  # URL HTTPS privée du Mission Engine qui reste près des agents ACP.
+  # Private Mission Engine HTTPS URL kept close to ACP agents.
   MISSION_CONTROL_URL: ""

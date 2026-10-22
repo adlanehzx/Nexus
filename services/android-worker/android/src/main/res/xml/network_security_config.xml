@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Configuration de securite reseau.
-
-  Le trafic en clair est refuse globalement : le worker se connecte depuis
-  n'importe quel reseau, y compris un point d'acces public, et le jeton de
-  session ne peut pas y transiter en clair.
-
-  L'exception locale sert au developpement contre un backend sur la machine de
-  developpement (10.0.2.2 est l'hote vu depuis l'emulateur Android). Elle ne
-  couvre aucune adresse routable.
+  Network security configuration. Cleartext is denied globally. The local
+  exception supports development against the host visible from an emulator and
+  does not cover any routable address.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">

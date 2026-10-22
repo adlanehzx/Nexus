@@ -1,20 +1,15 @@
-# ── Artefacts de construction Android ───────────────────────────────────────
-# Le cache Gradle, les binaires intermediaires et l'APK. Tout se reconstruit a
-# partir des sources ; rien de tout cela n'a sa place dans l'historique.
+# ── Android build artifacts ─────────────────────────────────────────────────
 android/.gradle/
 android/.kotlin/
 android/build/
 android/app/build/
 android/app/.cxx/
 
-# Chemin du SDK Android, propre a chaque machine. Le greffon Gradle le deduit
-# de ANDROID_HOME quand ce fichier est absent — c'est le comportement voulu.
+# Machine-specific Android SDK path. Gradle falls back to ANDROID_HOME.
 android/local.properties
 
-# ── Reglages du worker ──────────────────────────────────────────────────────
-# `nexus.config.json` est VERSIONNE avec des valeurs de reference : il ne
-# contient aucun secret, la cle de l'appareil etant designee par un alias dans
-# le magasin de cles d'Android. Une variante locale, elle, ne l'est pas.
+# ── Local worker settings ───────────────────────────────────────────────────
+# The tracked reference configuration contains no secrets; ignore local variants.
 nexus.config.local.json
 
 # ── Metro ───────────────────────────────────────────────────────────────────

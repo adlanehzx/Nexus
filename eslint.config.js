@@ -1,4 +1,4 @@
-// ESLint 10 — configuration plate, partagée par tout le monorepo.
+// ESLint 10 flat configuration shared by the entire monorepo.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
@@ -13,14 +13,11 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/src/generated/**",
       "**/*.d.ts",
-      // Serveur MCP de test : exécuté comme processus enfant, hors projet TS.
+      // MCP test server executed as a child process outside the TS project.
       "**/test/*.mjs",
-      // Interface React Native du worker Android et adaptateurs vers le moteur
-      // JavaScript d'Android. Ils sont compilés par Metro, avec le préréglage
-      // Babel de React Native et sa résolution de modules — pas par le projet
-      // TypeScript du dépôt, dont ils ne suivent ni la résolution `NodeNext`
-      // ni la contrainte `erasableSyntaxOnly`. Le code métier, lui, est dans
-      // `src/` et reste vérifié ici.
+      // Android React Native UI and JavaScript engine adapters are compiled by
+      // Metro and Babel, not by the repository's NodeNext TypeScript project.
+      // Business logic remains checked under src/.
       "services/android-worker/ui/**",
       "services/android-worker/shim/**",
       "services/android-worker/index.js",
@@ -42,25 +39,24 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Une variable inutilisée est un bug en puissance ; le préfixe _ est l'échappatoire explicite.
+      // Unused variables are errors; an underscore is the explicit escape hatch.
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
-      // Les imports de types doivent être effaçables (cf. erasableSyntaxOnly).
+      // Type imports must remain erasable.
       "@typescript-eslint/consistent-type-imports": [
         "error",
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
-      // On veut savoir quand une promesse n'est pas attendue : c'est la source nº 1
-      // de bugs silencieux dans un serveur.
+      // Unawaited promises are a primary source of silent server failures.
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "no-console": ["error", { allow: ["warn", "error"] }],
     },
   },
 
-  // Les tests ont le droit d'être plus souples sur les assertions de type.
+  // Tests may use looser type assertions.
   {
     files: ["**/test/**/*.ts", "**/*.test.ts"],
     rules: {
@@ -70,7 +66,7 @@ export default tseslint.config(
     },
   },
 
-  // Fichiers de configuration à la racine des paquets : hors projet TS.
+  // Root package configuration files live outside package TS projects.
   {
     files: ["**/*.config.js", "**/*.config.ts", "eslint.config.js"],
     ...tseslint.configs.disableTypeChecked,
@@ -78,12 +74,10 @@ export default tseslint.config(
 
   {
     /**
-     * Scripts de scénario, hors projet TypeScript.
+     * Scenario scripts outside the TypeScript project.
      *
-     * Ils sont exécutés par Node, pas compilés, et ne figurent donc dans aucun
-     * `tsconfig` — le service de projet ne peut pas les typer. Plutôt que de les
-     * exclure du lint, on y désactive les seules règles qui exigent un type :
-     * les erreurs ordinaires, elles, restent attrapées.
+     * Node executes these scripts directly, so no tsconfig can provide type
+     * information. Disable only type-aware rules and retain ordinary linting.
      */
     files: ["**/scripts/**/*.mjs"],
     ...tseslint.configs.disableTypeChecked,

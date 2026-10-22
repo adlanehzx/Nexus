@@ -40,7 +40,7 @@
     "worker:image": "docker build -f infrastructure/docker/worker.Dockerfile -t nexus-worker:local .",
     "k8s:render": "kubectl kustomize infrastructure/kubernetes",
     "translation:status": "bash scripts/translation-status.sh",
-    "translation:check": "bash scripts/translation-status.sh --check"
+    "translation:check": "bash scripts/translation-status.sh --check all"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

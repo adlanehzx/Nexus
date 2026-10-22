@@ -2,9 +2,8 @@
 #
 # Browser Use worker.
 #
-# Image lourde par nature : elle embarque Chromium. Elle est isolée du reste —
-# réseau interne sans port publié, aucun secret applicatif, utilisateur non
-# privilégié — parce qu'elle visite du contenu hostile par définition.
+# Chromium makes this image large. It remains isolated, unprivileged, and free
+# of application secrets because it visits hostile content by design.
 
 ARG PYTHON_VERSION=3.12
 
@@ -17,8 +16,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# `dumb-init` en PID 1 : sans lui, SIGTERM n'atteint pas Python et l'arrêt
-# gracieux — fermeture des navigateurs — ne s'exécute jamais.
+# dumb-init forwards SIGTERM so Python can close browsers gracefully.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dumb-init \
     && rm -rf /var/lib/apt/lists/*
@@ -34,8 +32,7 @@ RUN pip install --no-cache-dir "." \
 USER worker
 EXPOSE 8100
 
-# Sonde de liveness : elle n'ouvre aucun navigateur, donc un Chromium lent ne
-# provoque pas de redémarrage en boucle.
+# Liveness opens no browser, so a slow Chromium cannot cause restart loops.
 HEALTHCHECK --interval=20s --timeout=5s --start-period=40s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/v1/health', timeout=4).status==200 else 1)"
 

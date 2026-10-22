@@ -1,24 +1,24 @@
 :root {
-  --fond: #0d0f12;
-  --fond-eleve: #111318;
+  --background: #0d0f12;
+  --elevated-background: #111318;
   --surface: #16191f;
   --surface-2: #1d2027;
   --surface-3: #242832;
-  --bordure: #282c34;
-  --bordure-claire: #363b46;
-  --texte: #f4f5f7;
-  --texte-faible: #9298a3;
+  --border: #282c34;
+  --light-border: #363b46;
+  --text: #f4f5f7;
+  --muted-text: #9298a3;
   --accent: #8b93ff;
-  --accent-vif: #a4aaff;
-  --accent-doux: rgb(139 147 255 / 11%);
+  --bright-accent: #a4aaff;
+  --soft-accent: rgb(139 147 255 / 11%);
   --ok: #5fd39a;
-  --degrade: #e9ad5b;
-  --hs: #f27676;
-  --inconnu: #747b88;
-  --rayon: 8px;
-  --rayon-grand: 12px;
-  --barre: 240px;
-  --ombre: 0 16px 40px rgb(0 0 0 / 22%);
+  --gradient: #e9ad5b;
+  --down: #f27676;
+  --unknown: #747b88;
+  --radius: 8px;
+  --large-radius: 12px;
+  --bar: 240px;
+  --shadow: 0 16px 40px rgb(0 0 0 / 22%);
   color-scheme: dark;
 }
 
@@ -32,8 +32,8 @@ body,
   margin: 0;
 }
 body {
-  background: var(--fond);
-  color: var(--texte);
+  background: var(--background);
+  color: var(--text);
   font:
     13px/1.5 Inter,
     ui-sans-serif,
@@ -48,7 +48,7 @@ body {
   display: grid;
   min-height: 100%;
   place-items: center;
-  background: var(--fond);
+  background: var(--background);
 }
 .session-restoring .brand-mark {
   animation: session-pulse 1s ease-in-out infinite alternate;
@@ -72,7 +72,7 @@ button:disabled {
   cursor: not-allowed;
 }
 :focus-visible {
-  outline: 2px solid var(--accent-vif);
+  outline: 2px solid var(--bright-accent);
   outline-offset: 2px;
 }
 ::selection {
@@ -81,10 +81,10 @@ button:disabled {
 
 .app {
   display: grid;
-  grid-template-columns: var(--barre) minmax(0, 1fr);
+  grid-template-columns: var(--bar) minmax(0, 1fr);
   height: 100%;
 }
-.laterale {
+.sidebar {
   position: relative;
   z-index: 2;
   display: flex;
@@ -93,7 +93,7 @@ button:disabled {
   padding: 16px 10px 12px;
   overflow-y: auto;
   background: #111318;
-  border-right: 1px solid var(--bordure);
+  border-right: 1px solid var(--border);
 }
 .nexus-home {
   display: flex;
@@ -102,7 +102,7 @@ button:disabled {
   width: 100%;
   padding: 8px;
   border: 0;
-  border-radius: var(--rayon);
+  border-radius: var(--radius);
   background: transparent;
   text-align: left;
 }
@@ -119,7 +119,7 @@ button:disabled {
 }
 .nexus-home small,
 .sidebar-footer small {
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
 }
 .brand-mark {
@@ -128,10 +128,10 @@ button:disabled {
   height: 34px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 9px;
   background: var(--surface-2);
-  color: var(--accent-vif);
+  color: var(--bright-accent);
   font-weight: 800;
 }
 .navigation {
@@ -145,7 +145,7 @@ button:disabled {
 .nav-group.nav-primary {
   margin-top: 0;
   padding-bottom: 15px;
-  border-bottom: 1px solid var(--bordure);
+  border-bottom: 1px solid var(--border);
 }
 .nav-label {
   padding: 0 10px 5px;
@@ -165,7 +165,7 @@ button:disabled {
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   text-align: left;
   transition:
     background 0.15s ease,
@@ -174,15 +174,15 @@ button:disabled {
 }
 .nav-item:hover {
   background: rgb(255 255 255 / 3%);
-  color: var(--texte);
+  color: var(--text);
 }
 .nav-item[aria-current="page"] {
-  border-color: var(--bordure);
+  border-color: var(--border);
   background: var(--surface-2);
-  color: var(--texte);
+  color: var(--text);
 }
 .nav-item[aria-current="page"] .nav-icon {
-  color: var(--accent-vif);
+  color: var(--bright-accent);
 }
 .nav-icon {
   width: 17px;
@@ -195,7 +195,7 @@ button:disabled {
   gap: 9px;
   margin-top: auto;
   padding: 14px 10px 5px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 11px;
 }
 .sidebar-footer strong {
@@ -211,33 +211,33 @@ button:disabled {
   box-shadow: 0 0 10px rgb(80 216 144 / 60%);
 }
 
-.principal {
+.main {
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  background: var(--fond);
+  background: var(--background);
 }
-.entete {
+.header {
   display: flex;
   min-height: 82px;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   padding: 15px clamp(18px, 3vw, 36px);
-  border-bottom: 1px solid var(--bordure);
-  background: var(--fond);
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
 }
-.entete h1 {
+.header h1 {
   margin: 2px 0 0;
   font-size: clamp(18px, 2vw, 22px);
   line-height: 1.2;
   letter-spacing: -0.025em;
 }
-.entete p {
+.header p {
   margin: 4px 0 0;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 12px;
 }
 .eyebrow {
@@ -246,7 +246,7 @@ button:disabled {
   font-weight: 800;
   letter-spacing: 0.14em;
 }
-.contenu {
+.content {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -277,10 +277,10 @@ button:disabled {
   flex-direction: column;
 }
 
-.bouton {
+.button {
   min-height: 34px;
   padding: 6px 12px;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 7px;
   background: var(--surface);
   color: #cbd6e2;
@@ -288,48 +288,48 @@ button:disabled {
     border-color 0.15s ease,
     background 0.15s ease;
 }
-.bouton:hover:not(:disabled) {
+.button:hover:not(:disabled) {
   border-color: #52667f;
   background: var(--surface-2);
 }
-.bouton.primary {
+.button.primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #06111e;
   font-weight: 750;
 }
-.bouton.primary:hover:not(:disabled) {
-  background: var(--accent-vif);
+.button.primary:hover:not(:disabled) {
+  background: var(--bright-accent);
 }
-.bouton.danger {
-  color: var(--hs);
+.button.danger {
+  color: var(--down);
   border-color: rgb(255 112 112 / 35%);
 }
-.bouton.compact {
+.button.compact {
   min-height: 28px;
   padding: 3px 8px;
   font-size: 11px;
 }
-.bouton:disabled {
+.button:disabled {
   opacity: 0.42;
 }
-.champ {
+.field {
   width: 100%;
   min-height: 38px;
   padding: 8px 10px;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 7px;
-  background: var(--fond-eleve);
-  color: var(--texte);
+  background: var(--elevated-background);
+  color: var(--text);
   outline: none;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
-.champ:hover {
+.field:hover {
   border-color: #465a72;
 }
-.champ:focus {
+.field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(110 168 254 / 10%);
 }
@@ -337,8 +337,8 @@ button:disabled {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: 11.5px;
 }
-.faible {
-  color: var(--texte-faible);
+.muted {
+  color: var(--muted-text);
 }
 h3 {
   margin: 28px 0 11px;
@@ -351,38 +351,38 @@ h3:first-child {
   margin-top: 0;
 }
 
-.mesures {
+.metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
   gap: 10px;
   margin-bottom: 26px;
 }
-.mesure {
+.metric {
   position: relative;
   min-height: 88px;
   padding: 15px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background: var(--surface);
 }
-.mesure .valeur {
+.metric .value {
   font-size: 24px;
   font-weight: 680;
   line-height: 1.15;
   letter-spacing: -0.035em;
 }
-.mesure .libelle {
+.metric .label {
   margin-top: 8px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 11px;
 }
-.mesure.alerte .valeur {
-  color: var(--hs);
+.metric.alert .value {
+  color: var(--down);
 }
 
 .scroll-x {
   overflow-x: auto;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
 }
@@ -395,7 +395,7 @@ table {
 th,
 td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--bordure);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
 }
@@ -425,82 +425,75 @@ tbody tr:hover {
   flex-wrap: wrap;
   gap: 6px;
 }
-.etat {
+.state {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   white-space: nowrap;
 }
-.puce {
+.badge {
   width: 7px;
   height: 7px;
   flex: none;
   border-radius: 999px;
-  background: var(--inconnu);
+  background: var(--unknown);
   box-shadow: 0 0 0 3px rgb(114 128 150 / 10%);
 }
-.puce.ok,
-.puce.accepting {
+.badge.ok,
+.badge.accepting {
   background: var(--ok);
   box-shadow: 0 0 0 3px rgb(80 216 144 / 10%);
 }
-.puce.degraded,
-.puce.saturated,
-.puce.degrade {
-  background: var(--degrade);
+.badge.degraded,
+.badge.saturated,
+.badge.warning {
+  background: var(--gradient);
   box-shadow: 0 0 0 3px rgb(244 184 96 / 10%);
 }
-.puce.down,
-.puce.revoked,
-.puce.disconnected,
-.puce.error {
-  background: var(--hs);
+.badge.down,
+.badge.revoked,
+.badge.disconnected,
+.badge.error {
+  background: var(--down);
   box-shadow: 0 0 0 3px rgb(255 112 112 / 10%);
 }
-.jauge {
+.gauge {
   width: 90px;
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-3);
 }
-.jauge > div {
+.gauge > div {
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
 }
-.vide {
+.empty-state {
   display: grid;
   gap: 4px;
   padding: 46px 18px;
-  border: 1px dashed var(--bordure);
+  border: 1px dashed var(--border);
   border-radius: 12px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   text-align: center;
 }
-.vide strong {
+.empty-state strong {
   color: #b8c6d6;
   font-size: 12px;
 }
-.banniere,
 .banner {
   margin: 10px 0;
   padding: 10px 12px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface-2);
 }
-.banniere.erreur,
-.banniere.error,
-.banner.erreur,
 .banner.error {
   border-color: rgb(255 112 112 / 28%);
   background: rgb(255 112 112 / 7%);
   color: #ff9696;
 }
-.banniere.succes,
-.banniere.success,
-.banner.succes,
 .banner.success {
   border-color: rgb(80 216 144 / 28%);
   background: rgb(80 216 144 / 7%);
@@ -510,7 +503,7 @@ tbody tr:hover {
 details.card {
   margin-top: 14px;
   padding: 14px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
 }
@@ -554,7 +547,7 @@ details.card[open] > summary {
 }
 .pairing-create label {
   grid-column: 1 / -1;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 11px;
 }
 .pairing-platforms {
@@ -567,13 +560,13 @@ details.card[open] > summary {
   display: grid;
   gap: 4px;
   padding: 10px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--fond-eleve);
+  background: var(--elevated-background);
 }
 .pairing-platforms span,
 .pairing-ticket small {
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 11px;
 }
 .pairing-ticket {
@@ -625,7 +618,7 @@ details.card[open] > summary {
 }
 
 /* Conversation */
-.section-chat .entete {
+.section-chat .header {
   border-bottom-color: transparent;
 }
 .nexus-chat {
@@ -643,17 +636,17 @@ details.card[open] > summary {
   overflow-y: auto;
   padding: 28px 4px 20px;
   scrollbar-width: thin;
-  scrollbar-color: var(--bordure-claire) transparent;
+  scrollbar-color: var(--light-border) transparent;
 }
 .chat-welcome {
   max-width: 590px;
   margin: clamp(45px, 10vh, 115px) auto 0;
   text-align: center;
-  color: var(--texte-faible);
+  color: var(--muted-text);
 }
 .chat-welcome h2 {
   margin: 18px 0 9px;
-  color: var(--texte);
+  color: var(--text);
   font-size: clamp(25px, 4vw, 34px);
   line-height: 1.15;
   letter-spacing: -0.04em;
@@ -669,10 +662,10 @@ details.card[open] > summary {
   height: 52px;
   margin: auto;
   place-items: center;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 13px;
   background: var(--surface);
-  color: var(--accent-vif);
+  color: var(--bright-accent);
   font-size: 21px;
   font-weight: 800;
 }
@@ -684,7 +677,7 @@ details.card[open] > summary {
   max-width: 650px;
   margin-right: 0;
   padding: 14px 17px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 16px 16px 4px 16px;
   background: var(--surface-2);
 }
@@ -703,7 +696,7 @@ details.card[open] > summary {
 }
 .chat-error {
   padding: 10px 0;
-  color: var(--hs);
+  color: var(--down);
 }
 .agent-line {
   display: flex;
@@ -713,10 +706,10 @@ details.card[open] > summary {
 }
 .agent-line span {
   padding: 3px 9px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
 }
 .progress-track {
@@ -737,14 +730,14 @@ details.card[open] > summary {
   align-items: flex-end;
   gap: 10px;
   padding: 13px;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 17px;
   background: rgb(17 24 33 / 95%);
-  box-shadow: var(--ombre);
+  box-shadow: var(--shadow);
 }
 .chat-composer:focus-within {
   border-color: var(--accent);
-  box-shadow: var(--ombre);
+  box-shadow: var(--shadow);
 }
 .chat-composer textarea {
   flex: 1;
@@ -754,7 +747,7 @@ details.card[open] > summary {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--texte);
+  color: var(--text);
   font: inherit;
   line-height: 1.55;
 }
@@ -798,13 +791,13 @@ details.card[open] > summary {
 }
 .agent-card {
   padding: 17px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background: var(--surface);
   transition: border-color 0.15s ease;
 }
 .agent-card:hover {
-  border-color: var(--bordure-claire);
+  border-color: var(--light-border);
 }
 .agent-card-top {
   display: flex;
@@ -813,7 +806,7 @@ details.card[open] > summary {
 }
 .agent-card-top h3 {
   margin: 0 0 2px;
-  color: var(--texte);
+  color: var(--text);
   font-size: 14px;
   letter-spacing: 0;
   text-transform: none;
@@ -826,7 +819,7 @@ details.card[open] > summary {
   place-items: center;
   border-radius: 12px;
   background: var(--surface-2);
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-weight: 750;
 }
 .agent-avatar.active {
@@ -834,7 +827,7 @@ details.card[open] > summary {
   box-shadow: inset 0 0 0 1px rgb(80 216 144 / 65%);
 }
 .agent-avatar.attention {
-  color: var(--degrade);
+  color: var(--gradient);
   box-shadow: inset 0 0 0 1px rgb(244 184 96 / 65%);
 }
 .agent-status {
@@ -842,14 +835,14 @@ details.card[open] > summary {
   padding: 4px 8px;
   border-radius: 999px;
   background: var(--surface-2);
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
 }
 .agent-status.active {
   color: var(--ok);
 }
 .agent-status.attention {
-  color: var(--degrade);
+  color: var(--gradient);
 }
 .agent-stats {
   display: grid;
@@ -857,15 +850,15 @@ details.card[open] > summary {
   gap: 10px;
   margin-top: 17px;
   padding-top: 14px;
-  border-top: 1px solid var(--bordure);
-  color: var(--texte-faible);
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
   font-size: 10px;
 }
 .agent-stats strong {
   display: block;
   overflow: hidden;
   margin-bottom: 2px;
-  color: var(--texte);
+  color: var(--text);
   font-size: 13px;
   text-overflow: ellipsis;
 }
@@ -888,8 +881,8 @@ details.card[open] > summary {
   justify-content: space-between;
   gap: 28px;
   padding: 22px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background:
     radial-gradient(circle at 0 0, rgb(139 147 255 / 12%), transparent 38%), var(--surface);
 }
@@ -903,10 +896,10 @@ details.card[open] > summary {
 .connection-hero p {
   max-width: 720px;
   margin: 0;
-  color: var(--texte-faible);
+  color: var(--muted-text);
 }
 .connection-kicker {
-  color: var(--accent-vif);
+  color: var(--bright-accent);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -915,14 +908,14 @@ details.card[open] > summary {
 .connection-scope {
   margin: 12px 0 18px;
   padding: 11px 13px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-  background: var(--fond-eleve);
-  color: var(--texte-faible);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--elevated-background);
+  color: var(--muted-text);
   font-size: 11px;
 }
 .connection-scope strong {
-  color: var(--texte);
+  color: var(--text);
 }
 .connection-grid {
   display: grid;
@@ -934,12 +927,12 @@ details.card[open] > summary {
   min-height: 330px;
   flex-direction: column;
   padding: 18px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background: var(--surface);
 }
 .connection-card:hover {
-  border-color: var(--bordure-claire);
+  border-color: var(--light-border);
 }
 .connection-card-heading {
   display: flex;
@@ -956,10 +949,10 @@ details.card[open] > summary {
   height: 42px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--bordure-claire);
+  border: 1px solid var(--light-border);
   border-radius: 12px;
   background: var(--surface-2);
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-weight: 800;
 }
 .connection-logo.good {
@@ -968,14 +961,14 @@ details.card[open] > summary {
 }
 .connection-logo.warning {
   border-color: rgb(233 173 91 / 48%);
-  color: var(--degrade);
+  color: var(--gradient);
 }
 .connection-logo.danger {
   border-color: rgb(242 118 118 / 48%);
-  color: var(--hs);
+  color: var(--down);
 }
 .connection-provider-id {
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
   text-transform: uppercase;
 }
@@ -984,7 +977,7 @@ details.card[open] > summary {
   padding: 4px 8px;
   border-radius: 999px;
   background: var(--surface-2);
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
   text-transform: capitalize;
 }
@@ -992,10 +985,10 @@ details.card[open] > summary {
   color: var(--ok);
 }
 .connection-state.warning {
-  color: var(--degrade);
+  color: var(--gradient);
 }
 .connection-state.danger {
-  color: var(--hs);
+  color: var(--down);
 }
 .connection-details {
   display: grid;
@@ -1003,13 +996,13 @@ details.card[open] > summary {
   gap: 12px;
   margin: 18px 0 12px;
   padding-top: 15px;
-  border-top: 1px solid var(--bordure);
+  border-top: 1px solid var(--border);
 }
 .connection-details div {
   min-width: 0;
 }
 .connection-details dt {
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1017,7 +1010,7 @@ details.card[open] > summary {
 .connection-details dd {
   overflow: hidden;
   margin: 3px 0 0;
-  color: var(--texte);
+  color: var(--text);
   font-size: 12px;
   text-overflow: ellipsis;
   text-transform: capitalize;
@@ -1027,7 +1020,7 @@ details.card[open] > summary {
   overflow: hidden;
   padding: 8px 10px;
   border-radius: 7px;
-  background: var(--fond);
+  background: var(--background);
   color: #bdc4d0;
   font-size: 10px;
   text-overflow: ellipsis;
@@ -1036,11 +1029,11 @@ details.card[open] > summary {
 .connection-message,
 .connection-evidence {
   margin: 10px 0 0;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 10px;
 }
 .connection-message {
-  color: var(--degrade);
+  color: var(--gradient);
 }
 .connection-card-footer {
   display: flex;
@@ -1049,7 +1042,7 @@ details.card[open] > summary {
   gap: 10px;
   margin-top: auto;
   padding-top: 15px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 9px;
 }
 .connection-actions {
@@ -1062,8 +1055,8 @@ details.card[open] > summary {
 .settings-panel {
   margin-top: 18px;
   padding: 20px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background: var(--surface);
 }
 .settings-panel-heading {
@@ -1076,7 +1069,7 @@ details.card[open] > summary {
 .settings-panel-heading h3,
 .settings-panel h3 {
   margin: 0 0 4px;
-  color: var(--texte);
+  color: var(--text);
   font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
@@ -1092,7 +1085,7 @@ details.card[open] > summary {
 .settings-grid label {
   display: grid;
   gap: 6px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 11px;
 }
 .settings-wide {
@@ -1106,30 +1099,30 @@ details.card[open] > summary {
   display: grid;
   gap: 5px;
   padding: 13px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 9px;
-  background: var(--fond-eleve);
+  background: var(--elevated-background);
 }
 .test-result {
   max-height: 260px;
   overflow: auto;
   padding: 13px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 9px;
-  background: var(--fond);
-  color: var(--texte);
+  background: var(--background);
+  color: var(--text);
   white-space: pre-wrap;
 }
 .agent-add {
   margin-top: 22px;
   padding: 20px;
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon-grand);
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
   background: var(--surface);
 }
 .agent-add h3 {
   margin: 0 0 4px;
-  color: var(--texte);
+  color: var(--text);
   font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
@@ -1165,7 +1158,7 @@ details.card[open] > summary {
 .admin-form-card {
   margin-bottom: 18px;
   padding: 15px;
-  border: 1px solid var(--bordure);
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
 }
@@ -1176,7 +1169,7 @@ details.card[open] > summary {
   display: flex !important;
   align-items: center;
   gap: 7px;
-  color: var(--texte-faible);
+  color: var(--muted-text);
 }
 .check-label input {
   accent-color: var(--accent);
@@ -1188,7 +1181,7 @@ details.card[open] > summary {
   min-height: 100%;
   place-items: center;
   padding: 24px;
-  background: var(--fond);
+  background: var(--background);
 }
 .login-shell {
   width: min(400px, 100%);
@@ -1212,17 +1205,15 @@ details.card[open] > summary {
 }
 .login-intro p {
   margin: 0;
-  color: var(--texte-faible);
+  color: var(--muted-text);
   font-size: 13px;
 }
-.connexion,
 .login-form {
   display: flex;
   width: 100%;
   flex-direction: column;
   gap: 15px;
 }
-.connexion label,
 .login-form label {
   display: grid;
   gap: 7px;
@@ -1242,12 +1233,12 @@ details.card[open] > summary {
 
 @media (max-width: 1050px) {
   :root {
-    --barre: 218px;
+    --bar: 218px;
   }
   .agent-create-form {
     grid-template-columns: 1fr 1fr;
   }
-  .agent-create-form .bouton {
+  .agent-create-form .button {
     grid-column: 1 / -1;
   }
   .inline-admin-form.memory-form {
@@ -1278,13 +1269,13 @@ details.card[open] > summary {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
   }
-  .laterale {
+  .sidebar {
     display: block;
     padding: 8px 10px;
     overflow-x: auto;
     overflow-y: hidden;
     border-right: 0;
-    border-bottom: 1px solid var(--bordure);
+    border-bottom: 1px solid var(--border);
   }
   .nexus-home {
     display: none;
@@ -1301,7 +1292,7 @@ details.card[open] > summary {
     margin: 0;
     padding: 0 8px 0 0;
     border: 0;
-    border-right: 1px solid var(--bordure);
+    border-right: 1px solid var(--border);
   }
   .nav-group:last-child {
     border-right: 0;
@@ -1320,11 +1311,11 @@ details.card[open] > summary {
     width: 15px;
     height: 15px;
   }
-  .entete {
+  .header {
     min-height: 79px;
     padding: 12px 15px;
   }
-  .entete p {
+  .header p {
     display: none;
   }
   .logout-button {
@@ -1344,7 +1335,7 @@ details.card[open] > summary {
   .refresh-button {
     font-size: 0;
   }
-  .contenu {
+  .content {
     padding: 18px 13px 38px;
   }
   .nexus-chat {
@@ -1371,7 +1362,7 @@ details.card[open] > summary {
     grid-template-columns: 1fr;
   }
   .settings-wide,
-  .agent-create-form .bouton {
+  .agent-create-form .button {
     grid-column: auto;
   }
   .login-page {
@@ -1389,14 +1380,14 @@ details.card[open] > summary {
   .nav-item[aria-current="page"] span {
     display: inline;
   }
-  .mesures {
+  .metrics {
     grid-template-columns: 1fr 1fr;
   }
-  .mesure {
+  .metric {
     min-height: 88px;
     padding: 13px;
   }
-  .mesure .valeur {
+  .metric .value {
     font-size: 22px;
   }
   .agent-stats {

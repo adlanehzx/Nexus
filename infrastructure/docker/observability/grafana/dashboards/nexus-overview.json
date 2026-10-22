@@ -47,7 +47,7 @@
       "id": 4,
       "options": { "showTime": true, "wrapLogMessage": true },
       "targets": [{ "expr": "{job=\"nexus-docker\"} | json", "refId": "A" }],
-      "title": "Journaux NEXUS",
+      "title": "NEXUS logs",
       "type": "logs"
     }
   ],

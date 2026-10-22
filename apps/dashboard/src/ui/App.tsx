@@ -146,7 +146,7 @@ export function App() {
 
   return (
     <div className="app">
-      <aside className="laterale">
+      <aside className="sidebar">
         <button className="nexus-home" type="button" onClick={() => navigate("chat")}>
           <span className="brand-mark" aria-hidden="true">
             N
@@ -206,8 +206,8 @@ export function App() {
         </div>
       </aside>
 
-      <main className={`principal section-${section}`}>
-        <header className="entete">
+      <main className={`main section-${section}`}>
+        <header className="header">
           <div>
             <div className="eyebrow">
               NEXUS / {section === "chat" ? "WORKSPACE" : "SUPERVISION"}
@@ -219,7 +219,7 @@ export function App() {
             {section === "chat" ? null : (
               <button
                 type="button"
-                className="bouton refresh-button"
+                className="button refresh-button"
                 onClick={() => setRefreshKey((value) => value + 1)}
               >
                 <svg
@@ -236,7 +236,7 @@ export function App() {
             )}
             <button
               type="button"
-              className="bouton logout-button"
+              className="button logout-button"
               onClick={() => void session.logout().finally(() => setAuthenticated(false))}
             >
               Sign out
@@ -389,7 +389,7 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
           <label>
             Email address
             <input
-              className="champ"
+              className="field"
               type="email"
               autoComplete="username"
               placeholder="name@example.com"
@@ -400,7 +400,7 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
           <label>
             Password
             <input
-              className="champ"
+              className="field"
               type="password"
               autoComplete="current-password"
               placeholder="••••••••"
@@ -410,7 +410,7 @@ function Login({ onSignIn }: { onSignIn: (email: string, password: string) => Pr
           </label>
           <button
             type="submit"
-            className="bouton primary login-submit"
+            className="button primary login-submit"
             disabled={busy || email.trim().length === 0 || password.length === 0}
           >
             {busy ? "Signing in…" : "Sign in"}

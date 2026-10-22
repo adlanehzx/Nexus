@@ -1,30 +1,22 @@
-# Paquet Arch Linux de la coquille NEXUS.
+# Arch Linux package for the NEXUS desktop shell, built from source.
 #
-# Construit depuis les sources, et non depuis un binaire téléchargé : sur Arch,
-# un paquet qui embarque un binaire opaque est exactement ce qu'on ne veut pas
-# installer, et le dépôt est de toute façon la source.
-#
-# Usage :
+# Usage:
 #   cd packaging/arch && makepkg -si
 #
-# `pkgver` est remplacé par la version de `apps/desktop/src-tauri/tauri.conf.json`
-# au moment de la publication ; la valeur ici est celle du dépôt.
+# Release automation replaces pkgver from the Tauri configuration.
 pkgname=nexus-desktop
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Assistant personnel local NEXUS — coquille de bureau"
+pkgdesc="NEXUS local personal assistant desktop shell"
 arch=('x86_64')
 url="https://github.com/adlanehzx/Nexus"
 license=('UNLICENSED')
 
-# webkit2gtk-4.1 et gtk3 sont les dépendances réelles de la coquille. Les
-# déclarer évite le pire : un paquet qui s'installe puis refuse de démarrer.
+# Declare actual runtime dependencies so the installed application can start.
 depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3' 'librsvg')
 makedepends=('rust' 'cargo' 'nodejs>=24' 'pnpm' 'git')
 
-# Pas de `source=()` : ce PKGBUILD se construit depuis l'arbre courant.
-# Un paquet officiel utiliserait une archive signée ; ici l'arbre *est* la
-# source, et prétendre le contraire compliquerait sans rien garantir.
+# No source array: this PKGBUILD builds from the current source tree.
 options=('!strip' '!debug')
 
 build() {
@@ -38,9 +30,7 @@ package() {
   cd "$startdir/../.."
   local bundle="apps/desktop/src-tauri/target/release/bundle"
 
-  # On réutilise le contenu du paquet Debian produit par Tauri plutôt que de
-  # réimplémenter l'arborescence : deux descriptions du même agencement
-  # finiraient par ne plus coïncider.
+  # Reuse Tauri's Debian layout instead of maintaining a second installation tree.
   install -Dm755 "$bundle/deb/"*/data/usr/bin/NEXUS "$pkgdir/usr/bin/nexus-desktop"
   install -Dm644 "$bundle/deb/"*/data/usr/share/applications/*.desktop \
     "$pkgdir/usr/share/applications/nexus-desktop.desktop"
