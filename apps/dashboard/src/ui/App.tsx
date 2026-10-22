@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { SessionManager } from "@nexus/client-core";
 import { DashboardApi, createSession } from "../lib/api.js";
 import { Agents } from "./Agents.js";
 import { Connections } from "./Connections.js";

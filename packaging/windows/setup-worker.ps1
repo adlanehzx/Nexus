@@ -1,8 +1,9 @@
-<# Appaire, configure et installe le worker NEXUS en une commande. #>
+<# Pairs, configures and installs the NEXUS worker in a single command. #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$NexusUrl,
-    [Parameter(Mandatory = $true)][string]$PairingToken,
+    [Parameter(Mandatory = $false)][string]$PairingToken,
+    [switch]$TokenStdin,
     [string]$Name = $env:COMPUTERNAME,
     [string[]]$AllowedPaths = @((Join-Path $env:USERPROFILE 'Documents\NEXUS')),
     [string]$InstallDir = (Join-Path $env:ProgramFiles 'NEXUS\worker'),
@@ -12,10 +13,24 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
-if (-not $node) { throw 'Node 24 ou plus recent est requis.' }
+if (-not $node) { throw 'Node 24 or newer is required.' }
 
 $pairEntry = Join-Path $InstallDir 'dist\pair.js'
-if (-not (Test-Path $pairEntry)) { throw "Installateur incomplet : $pairEntry absent." }
+if (-not (Test-Path $pairEntry)) { throw "Incomplete installer: $pairEntry not found." }
+
+if ($TokenStdin) {
+    $PairingToken = ($input | Out-String).Trim()
+} elseif (-not $PairingToken) {
+    if ([Environment]::UserInteractive) {
+        $secure = Read-Host -Prompt 'Enter pairing token' -AsSecureString
+        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        $PairingToken = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+    }
+}
+
+if (-not $PairingToken) {
+    throw 'Pairing token is required. Pass via pipeline with -TokenStdin or enter when prompted.'
+}
 
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 $keyPath = Join-Path $ConfigDir 'nexus-device.key'

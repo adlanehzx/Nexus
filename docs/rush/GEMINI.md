@@ -29,12 +29,12 @@ mission scheduling, context compression or routing decisions.
 
 ## Progress summary
 
-| ID  | Deliverable                                   | Status | Commit  | Evidence                                                                    |
-| --- | --------------------------------------------- | ------ | ------- | --------------------------------------------------------------------------- |
-| G0  | UX inventory and executable onboarding states | DONE   | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
-| G1  | First-run setup wizard                        | DONE   | f0e5ef5 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
-| G2  | Dashboard configuration and connection UX     | DONE   | 075ccde | 37 dashboard tests passed; provider account mutations, notification config  |
-| G3  | Device discovery, pairing and worker install  | TODO   |        |          |
+| ID  | Deliverable                                   | Status      | Commit  | Evidence                                                                    |
+| --- | --------------------------------------------- | ----------- | ------- | --------------------------------------------------------------------------- |
+| G0  | UX inventory and executable onboarding states | DONE        | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
+| G1  | First-run setup wizard                        | DONE        | f0e5ef5 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
+| G2  | Dashboard configuration and connection UX     | DONE        | 980ac28 | 37 dashboard tests passed; provider account mutations, notification config  |
+| G3  | Device discovery, pairing and worker install  | IN_PROGRESS |         |                                                                             |
 | G4  | Desktop, mobile and voice completion          | TODO   |        |          |
 | G5  | Reproducible packaging and public user docs   | TODO   |        |          |
 
@@ -180,12 +180,23 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-22T22:32:40+02:00
+- Completed at: 2026-10-22T22:45:30+02:00
+- Commit: 480e832
 - Commands and results:
+  - `pnpm --filter @nexus/client-core test`: 172 tests passed
+  - `pnpm --filter @nexus/dashboard test`: 6 test files, 41 tests passed
+  - `pnpm --filter @nexus/devices test`: 6 test files, 113 tests passed
+  - `pnpm --filter @nexus/device-policy test`: 1 test file, 24 tests passed
+  - `pnpm --filter @nexus/dashboard build`: exit 0 (built in 203ms)
 - Notes:
+  - Implemented zero-dependency SVG QR code generator in `@nexus/client-core/src/qr.ts` with Reed-Solomon GF(256) error correction for pairing payloads.
+  - Embedded SVG QR code directly in Dashboard's `Devices` component for instant mobile pairing.
+  - Fixed Windows and Linux worker installer scripts to stream pairing tokens via stdin (`-TokenStdin` and `--token-stdin`) so secrets never leak on command line arguments or process tables (`ps`).
+  - Added disconnect sessions button (`DELETE /api/v1/devices/:id/sessions`), capability toggling / pause worker inline editor (`PUT /api/v1/devices/:id/capabilities`), prolonged-offline detection badge, and explicit data-impact confirmation dialog for device revocation.
+  - Added clear, optional Tailscale multi-host guidance without exposing user tailnet data.
+  - Added comprehensive verification in `apps/dashboard/test/device-pairing.test.ts`.
 
 ## G4 — Desktop, mobile and voice completion
 
@@ -240,6 +251,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration | packages/client-core/test/session.test.ts | d147a69    |
 | F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states    | apps/dashboard/test/format.test.ts        | 45e46d9    |
 | F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing       | apps/dashboard/test/dashboard-config.test.ts | 075ccde |
+| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps | apps/dashboard/test/device-pairing.test.ts | 480e832 |
 
 ## Improvements for the adjustment phase
 

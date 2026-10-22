@@ -747,6 +747,19 @@ export class DashboardApi {
     return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/revoke`);
   }
 
+  disconnectDevice(deviceId: string): Promise<{ closed: number }> {
+    return this.#request("DELETE", `/api/v1/devices/${encodeURIComponent(deviceId)}/sessions`);
+  }
+
+  updateDeviceCapabilities(
+    deviceId: string,
+    capabilities: Array<{ name: string; enabled: boolean; description?: string }>,
+  ): Promise<{ capabilities: string[] }> {
+    return this.#request("PUT", `/api/v1/devices/${encodeURIComponent(deviceId)}/capabilities`, {
+      capabilities,
+    });
+  }
+
   updateDevicePermissions(deviceId: string, grantedPermissions: string[]): Promise<unknown> {
     return this.#request("PATCH", `/api/v1/devices/${encodeURIComponent(deviceId)}/permissions`, {
       grantedPermissions,

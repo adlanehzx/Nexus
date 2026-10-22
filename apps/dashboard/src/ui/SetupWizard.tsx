@@ -267,8 +267,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     try {
       await api.createProviderAccount({
         id: `${entry.providerId}-primary`,
-        providerId: entry.providerId,
-        label: `${entry.displayName} Primary`,
+        provider: entry.providerId,
+        name: `${entry.displayName} Primary`,
+        profileKey: "default",
         priority: 1,
       });
       await testProvider(entry.providerId);
@@ -298,14 +299,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     setBrowserSuccessMsg(null);
     try {
       if (browserMode === "disabled") {
-        await api.saveBrowserConfig({ enabled: false, mode: "local-harness", cdpUrl: "http://127.0.0.1:9222" });
+        await api.configureBrowser({ enabled: false, mode: "local-harness", cdpUrl: "http://127.0.0.1:9222" });
         setBrowserSuccessMsg("Browser automation disabled.");
       } else if (browserMode === "local-harness") {
-        await api.saveBrowserConfig({ enabled: true, mode: "local-harness", cdpUrl });
+        await api.configureBrowser({ enabled: true, mode: "local-harness", cdpUrl });
         await api.testBrowser();
         setBrowserSuccessMsg("Local browser harness configured and verified.");
       } else {
-        await api.saveBrowserConfig({
+        await api.configureBrowser({
           enabled: true,
           mode: "remote-worker",
           baseUrl: remoteWorkerUrl,
@@ -333,12 +334,26 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         .map((a) => a.trim())
         .filter((a) => a.length > 0);
 
-      await api.saveMcpServer(id, {
+      await api.saveMcp({
+        name: id,
+        enabled: true,
         transport: "stdio",
         command: mcpServerCommand.trim(),
         args,
         env: {},
         envRefs: {},
+        defaultPermissions: [],
+        defaultRisk: "LOW",
+        toolPolicies: {},
+        connectTimeoutMs: 10_000,
+        requestTimeoutMs: 30_000,
+        autoReconnect: true,
+        maxReconnectAttempts: 3,
+        reconnectInitialDelayMs: 1_000,
+        reconnectMaxDelayMs: 10_000,
+        circuitBreakerThreshold: 5,
+        circuitBreakerResetMs: 30_000,
+        exposeResources: true,
       });
       setMcpSuccessMsg(`MCP server "${id}" registered.`);
       setMcpServerName("");
@@ -356,7 +371,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     setBusy(true);
     setError(null);
     try {
-      const ticket = await api.createPairingTicket({ role: "WORKER", ttlSeconds: 900 });
+      const ticket = await api.createPairingTicket("Setup Wizard Worker");
       setWorkerPairingTicket(ticket);
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "Failed to generate pairing ticket.";

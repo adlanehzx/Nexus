@@ -11,14 +11,36 @@ WORKSPACE="${NEXUS_WORKSPACE:-$HOME/NEXUS}"
 NAME="${NEXUS_WORKER_NAME:-$(hostname)}"
 
 usage() {
-  echo "Usage: $0 <NEXUS_URL> <TOKEN> [ALLOWED_WORKSPACE]" >&2
+  echo "Usage: printf '%s' \"\$TOKEN\" | $0 <NEXUS_URL> [ALLOWED_WORKSPACE]" >&2
+  echo "   or: $0 <NEXUS_URL> --token-stdin [ALLOWED_WORKSPACE]" >&2
   exit 2
 }
 
-[ "$#" -ge 2 ] || usage
+[ "$#" -ge 1 ] || usage
 API_URL="$1"
-PAIRING_TOKEN="$2"
-[ "$#" -lt 3 ] || WORKSPACE="$3"
+
+if [ "${2:-}" = "--token-stdin" ] || [ "$#" -eq 1 ]; then
+  if [ -t 0 ]; then
+    printf 'Enter pairing token: ' >&2
+    stty -echo 2>/dev/null || true
+    read -r PAIRING_TOKEN
+    stty echo 2>/dev/null || true
+    printf '\n' >&2
+  else
+    PAIRING_TOKEN="$(cat)"
+  fi
+  if [ "$#" -ge 3 ] && [ "${2:-}" = "--token-stdin" ]; then
+    WORKSPACE="$3"
+  elif [ "$#" -ge 2 ] && [ "${2:-}" != "--token-stdin" ]; then
+    WORKSPACE="$2"
+  fi
+elif [ "$#" -ge 2 ]; then
+  PAIRING_TOKEN="$2"
+  [ "$#" -lt 3 ] || WORKSPACE="$3"
+  echo "Notice: Passing tokens on command-line arguments can expose secrets to other local users via ps. Prefer piping via stdin: printf '%s' \"\$TOKEN\" | $0 $API_URL" >&2
+else
+  usage
+fi
 
 command -v docker >/dev/null 2>&1 || {
   echo "Docker is required on this machine." >&2

@@ -10,3 +10,4 @@ export * from "./transport.js";
 export * from "./outbox.js";
 export * from "./updater.js";
 export * from "./crash.js";
+export * from "./qr.js";

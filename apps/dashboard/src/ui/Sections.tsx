@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { generateQrSvg } from "@nexus/client-core";
 import type {
   DashboardApi,
   ExternalNotificationConfigDto,
@@ -121,6 +122,8 @@ export function Devices({ api }: { api: DashboardApi }) {
   const [pairing, setPairing] = useState<PairingTicket | null>(null);
   const [pairingLabel, setPairingLabel] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [editingCapabilitiesDeviceId, setEditingCapabilitiesDeviceId] = useState<string | null>(null);
+  const [editingCapabilities, setEditingCapabilities] = useState<Array<{ name: string; enabled: boolean }>>([]);
 
   useEffect(() => {
     if (pairing === null) return;
@@ -144,14 +147,23 @@ export function Devices({ api }: { api: DashboardApi }) {
   const windowsCommand = (() => {
     if (pairing === null) return null;
     const payload = new URL(pairing.payload);
-    const apiUrl = payload.searchParams.get("api") ?? "https://votre-nexus";
-    return `powershell -ExecutionPolicy Bypass -File "C:\\Program Files\\NEXUS\\worker\\setup-worker.ps1" -NexusUrl "${apiUrl}" -PairingToken "${pairing.token}"`;
+    const apiUrl = payload.searchParams.get("api") ?? "https://your-nexus-server";
+    return `powershell -Command "'${pairing.token}' | & 'C:\\Program Files\\NEXUS\\worker\\setup-worker.ps1' -NexusUrl '${apiUrl}' -TokenStdin"`;
   })();
   const linuxCommand = (() => {
     if (pairing === null) return null;
     const payload = new URL(pairing.payload);
-    const apiUrl = payload.searchParams.get("api") ?? "https://votre-nexus";
-    return `curl -fLO https://github.com/adlanehzx/Nexus/releases/latest/download/install-worker.sh && chmod +x install-worker.sh && ./install-worker.sh "${apiUrl}" "${pairing.token}" "$HOME/NEXUS"`;
+    const apiUrl = payload.searchParams.get("api") ?? "https://your-nexus-server";
+    return `curl -fLO https://github.com/adlanehzx/Nexus/releases/latest/download/install-worker.sh && chmod +x install-worker.sh && printf '%s' '${pairing.token}' | ./install-worker.sh '${apiUrl}' '$HOME/NEXUS'`;
+  })();
+
+  const qrSvg = (() => {
+    if (pairing === null) return null;
+    try {
+      return generateQrSvg(pairing.payload);
+    } catch {
+      return null;
+    }
   })();
 
   const act = (operation: () => Promise<unknown>): void => {
@@ -216,22 +228,46 @@ export function Devices({ api }: { api: DashboardApi }) {
           </div>
         ) : (
           <div className="pairing-ticket" role="status">
-            <strong>Windows command to run as Administrator</strong>
+            {qrSvg !== null ? (
+              <div
+                className="pairing-qr-wrapper"
+                style={{
+                  display: "inline-flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  padding: "16px",
+                  background: "#ffffff",
+                  borderRadius: "8px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div
+                  aria-label="Pairing QR Code"
+                  dangerouslySetInnerHTML={{ __html: qrSvg }}
+                />
+                <span style={{ fontSize: "0.8rem", color: "#111", marginTop: "8px", fontWeight: 500 }}>
+                  Scan with NEXUS mobile app
+                </span>
+              </div>
+            ) : null}
+            <strong>Windows (run in Administrator PowerShell — secret piped via stdin):</strong>
             <code>{windowsCommand}</code>
+            <strong>Linux / Docker (secret piped via stdin):</strong>
+            <code>{linuxCommand}</code>
             <div className="table-actions">
               <button
                 className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(windowsCommand)}
               >
-                Copy command
+                Copy Windows command
               </button>
               <button
                 className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(pairing.payload)}
               >
-                Copy Android link
+                Copy pairing link
               </button>
               <button
                 className="button"
@@ -244,7 +280,12 @@ export function Devices({ api }: { api: DashboardApi }) {
                 Hide code
               </button>
             </div>
-            <small>Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}.</small>
+            <div className="callout info" style={{ marginTop: "12px", fontSize: "0.85rem", opacity: 0.9 }}>
+              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its Tailscale IP or MagicDNS hostname (e.g. <code>http://nexus.tailnet.ts.net:3000</code>). Do not expose private tailnet keys or credentials.
+            </div>
+            <small style={{ display: "block", marginTop: "8px" }}>
+              Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}. Single-use ticket.
+            </small>
           </div>
         )}
       </section>
@@ -267,112 +308,207 @@ export function Devices({ api }: { api: DashboardApi }) {
                 "Actions",
               ]}
             >
-              {data.devices.map((device) => (
-                <tr key={device.id}>
-                  <td>
-                    {device.name}
-                    <div className="muted mono">{device.type}</div>
-                  </td>
-                  <td>{device.role}</td>
-                  <td>{device.platform}</td>
-                  <td>
-                    <State
-                      tone={
-                        device.status === "ONLINE"
-                          ? "ok"
-                          : device.status === "DEGRADED"
-                            ? "degraded"
-                            : "down"
-                      }
-                      label={device.status}
-                    />
-                  </td>
-                  <td>
-                    <State
-                      tone={
-                        device.trust === "TRUSTED"
-                          ? "ok"
-                          : device.trust === "PENDING"
-                            ? "degraded"
-                            : "revoked"
-                      }
-                      label={device.trust}
-                    />
-                  </td>
-                  <td className="mono">
-                    {device.capabilities.length === 0
-                      ? "—"
-                      : device.capabilities
-                          .filter((capability) => capability.enabled)
-                          .map((capability) => capability.name)
-                          .join(", ")}
-                  </td>
-                  <td className="muted">{formatAge(device.lastHeartbeatAt)}</td>
-                  <td className="muted">
-                    {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
-                    {device.health.cpuLoad === null
-                      ? ""
-                      : ` · CPU ${String(Math.round(device.health.cpuLoad * 100))} %`}
-                    {device.health.batteryPercent === null
-                      ? ""
-                      : ` · battery ${String(device.health.batteryPercent)} %`}
-                  </td>
-                  <td className="mono muted">
-                    {device.grantedPermissions.length === 0
-                      ? "—"
-                      : device.grantedPermissions.join(", ")}
-                  </td>
-                  <td>
-                    <div className="table-actions">
-                      {device.trust === "PENDING" ? (
-                        <button
-                          className="button"
-                          type="button"
-                          onClick={() => act(() => api.trustDevice(device.id))}
-                        >
-                          Approve
-                        </button>
-                      ) : null}
-                      {device.trust !== "REVOKED" ? (
-                        <>
+              {data.devices.map((device) => {
+                const isProlongedOffline =
+                  device.status === "OFFLINE" &&
+                  (device.lastHeartbeatAt === null ||
+                    Date.now() - new Date(device.lastHeartbeatAt).getTime() > 3_600_000);
+                const isEditingCapabilities = editingCapabilitiesDeviceId === device.id;
+                return (
+                  <tr key={device.id}>
+                    <td>
+                      {device.name}
+                      <div className="muted mono">{device.type}</div>
+                    </td>
+                    <td>{device.role}</td>
+                    <td>{device.platform}</td>
+                    <td>
+                      <State
+                        tone={
+                          device.trust === "REVOKED"
+                            ? "revoked"
+                            : device.status === "ONLINE"
+                              ? "ok"
+                              : device.status === "DEGRADED"
+                                ? "degraded"
+                                : isProlongedOffline
+                                  ? "down"
+                                  : "degraded"
+                        }
+                        label={
+                          device.trust === "REVOKED"
+                            ? "REVOKED"
+                            : isProlongedOffline
+                              ? "OFFLINE (PROLONGED)"
+                              : device.status
+                        }
+                      />
+                    </td>
+                    <td>
+                      <State
+                        tone={
+                          device.trust === "TRUSTED"
+                            ? "ok"
+                            : device.trust === "PENDING"
+                              ? "degraded"
+                              : "revoked"
+                        }
+                        label={device.trust}
+                      />
+                    </td>
+                    <td className="mono">
+                      {isEditingCapabilities ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {editingCapabilities.map((cap, idx) => (
+                            <label key={cap.name} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem" }}>
+                              <input
+                                type="checkbox"
+                                checked={cap.enabled}
+                                onChange={(e) => {
+                                  const updated = [...editingCapabilities];
+                                  updated[idx] = { ...cap, enabled: e.target.checked };
+                                  setEditingCapabilities(updated);
+                                }}
+                              />
+                              {cap.name}
+                            </label>
+                          ))}
+                          <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => {
+                                setEditingCapabilities(editingCapabilities.map((c) => ({ ...c, enabled: false })));
+                              }}
+                            >
+                              Pause all
+                            </button>
+                            <button
+                              className="button primary"
+                              type="button"
+                              onClick={() => {
+                                act(async () => {
+                                  await api.updateDeviceCapabilities(device.id, editingCapabilities);
+                                  setEditingCapabilitiesDeviceId(null);
+                                });
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => setEditingCapabilitiesDeviceId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {device.capabilities.length === 0
+                            ? "—"
+                            : device.capabilities
+                                .filter((capability) => capability.enabled)
+                                .map((capability) => capability.name)
+                                .join(", ") || "(all paused)"}
+                        </div>
+                      )}
+                    </td>
+                    <td className="muted">{formatAge(device.lastHeartbeatAt)}</td>
+                    <td className="muted">
+                      {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
+                      {device.health.cpuLoad === null
+                        ? ""
+                        : ` · CPU ${String(Math.round(device.health.cpuLoad * 100))} %`}
+                      {device.health.batteryPercent === null
+                        ? ""
+                        : ` · battery ${String(device.health.batteryPercent)} %`}
+                    </td>
+                    <td className="mono muted">
+                      {device.grantedPermissions.length === 0
+                        ? "—"
+                        : device.grantedPermissions.join(", ")}
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        {device.trust === "PENDING" ? (
                           <button
                             className="button"
                             type="button"
-                            onClick={() => {
-                              const value = window.prompt(
-                                "Comma-separated permissions",
-                                device.grantedPermissions.join(", "),
-                              );
-                              if (value !== null)
-                                act(() =>
-                                  api.updateDevicePermissions(
-                                    device.id,
-                                    value
-                                      .split(",")
-                                      .map((item) => item.trim())
-                                      .filter(Boolean),
-                                  ),
+                            onClick={() => act(() => api.trustDevice(device.id))}
+                          >
+                            Approve
+                          </button>
+                        ) : null}
+                        {device.trust !== "REVOKED" ? (
+                          <>
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => {
+                                if (isEditingCapabilities) {
+                                  setEditingCapabilitiesDeviceId(null);
+                                } else {
+                                  setEditingCapabilitiesDeviceId(device.id);
+                                  setEditingCapabilities([...device.capabilities]);
+                                }
+                              }}
+                            >
+                              {isEditingCapabilities ? "Close" : "Capabilities"}
+                            </button>
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => {
+                                const value = window.prompt(
+                                  "Comma-separated permissions",
+                                  device.grantedPermissions.join(", "),
                                 );
-                            }}
-                          >
-                            Permissions
-                          </button>
-                          <button
-                            className="button danger"
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm(`Permanently revoke ${device.name}?`))
-                                act(() => api.revokeDevice(device.id));
-                            }}
-                          >
-                            Revoke
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                                if (value !== null)
+                                  act(() =>
+                                    api.updateDevicePermissions(
+                                      device.id,
+                                      value
+                                        .split(",")
+                                        .map((item) => item.trim())
+                                        .filter(Boolean),
+                                    ),
+                                  );
+                              }}
+                            >
+                              Permissions
+                            </button>
+                            {device.status === "ONLINE" ? (
+                              <button
+                                className="button"
+                                type="button"
+                                onClick={() => act(() => api.disconnectDevice(device.id))}
+                              >
+                                Disconnect
+                              </button>
+                            ) : null}
+                            <button
+                              className="button danger"
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Permanently revoke ${device.name}? All active sessions will terminate and credentials will be destroyed.`,
+                                  )
+                                )
+                                  act(() => api.revokeDevice(device.id));
+                              }}
+                            >
+                              Revoke
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </Table>
           )
         }
@@ -2239,7 +2375,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
                       ...config,
                       webhook: {
                         enabled: (config.webhook?.url ?? "").length > 0,
-                        url: config.webhook?.url,
+                        ...(config.webhook?.url ? { url: config.webhook.url } : {}),
                         format: e.target.value as "discord" | "telegram" | "apprise" | "generic",
                       },
                     })
