@@ -27,7 +27,7 @@ export const terminalInputJsonSchema = {
   properties: {
     executable: {
       type: "string",
-      description: "Program to launch, by name only (e.g. \"git\"). Never a path.",
+      description: 'Program to launch, by name only (e.g. "git"). Never a path.',
     },
     args: {
       type: "array",

@@ -824,8 +824,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       const store = app.services.runtimeConfiguration;
       const vault = app.services.vault;
-      if (store === undefined || vault === undefined)
-        throw new Error("Configuration unavailable.");
+      if (store === undefined || vault === undefined) throw new Error("Configuration unavailable.");
       const parsed = browserConfigurationSchema.parse(request.body);
       if (parsed.mode === "local-harness") {
         const url = new URL(parsed.cdpUrl);

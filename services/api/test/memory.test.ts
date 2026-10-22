@@ -252,7 +252,9 @@ describe("forget", () => {
       headers: example.authorization,
       payload: { all: true },
     });
-    expect(withoutConf.json<{ data: { needsConfirmation: boolean } }>().data.needsConfirmation).toBe(true);
+    expect(
+      withoutConf.json<{ data: { needsConfirmation: boolean } }>().data.needsConfirmation,
+    ).toBe(true);
 
     const withConf = await harness.app.inject({
       method: "POST",

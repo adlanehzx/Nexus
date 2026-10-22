@@ -218,9 +218,7 @@ export class SharedArtifactStore {
       !normalizedTarget.startsWith(normalizedParent + "/") &&
       normalizedTarget !== normalizedParent
     ) {
-      throw new ArtifactSecurityError(
-        `Directory traversal attempt detected: ${targetPath}`,
-      );
+      throw new ArtifactSecurityError(`Directory traversal attempt detected: ${targetPath}`);
     }
   }
 }

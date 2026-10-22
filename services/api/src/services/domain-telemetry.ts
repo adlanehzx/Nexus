@@ -41,7 +41,9 @@ export interface ObservabilitySummary {
 }
 
 const meter = metrics.getMeter("nexus.domain");
-const runsCounter = meter.createCounter("nexus_agent_runs", { description: "Completed agent runs" });
+const runsCounter = meter.createCounter("nexus_agent_runs", {
+  description: "Completed agent runs",
+});
 const tokensCounter = meter.createCounter("nexus_agent_tokens", {
   description: "Tokens per agent",
 });

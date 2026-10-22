@@ -452,7 +452,9 @@ export const corpus: SecurityEval[] = [
         ),
         ok(
           "safety instruction repeated after data fence",
-          hasSafetyInstruction && distinguishesDataFromInstruction && independentOfAdversarialPayload,
+          hasSafetyInstruction &&
+            distinguishesDataFromInstruction &&
+            independentOfAdversarialPayload,
           `${String(after.length)} characters after fence`,
         ),
       ];

@@ -223,11 +223,7 @@ async function main() {
     token: account.accessToken,
     body: { decision: "approved" },
   });
-  assert(
-    "confirmation approved by owner",
-    approved.status === 200,
-    `HTTP ${approved.status}`,
-  );
+  assert("confirmation approved by owner", approved.status === 200, `HTTP ${approved.status}`);
 
   const finished = await until(
     "task resumed and finished",

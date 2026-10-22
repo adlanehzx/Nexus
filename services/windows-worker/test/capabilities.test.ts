@@ -122,7 +122,9 @@ describe("local capability registry", () => {
   it("names the faulty field when arguments are invalid", async () => {
     const fixture = await assembleForTest();
 
-    expect(() => fixture.capabilities.validateInput("filesystem.read", { invalidKey: "x" })).toThrow(
+    expect(() =>
+      fixture.capabilities.validateInput("filesystem.read", { invalidKey: "x" }),
+    ).toThrow(
       expect.objectContaining({
         code: "CAPABILITY_INPUT_INVALID",
         context: expect.objectContaining({

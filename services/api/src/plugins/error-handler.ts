@@ -82,9 +82,7 @@ function translate(error: FastifyError): AppError {
     // message: without them, diagnosis was reduced to "somewhere in this route",
     // which is exactly what cost an evening on lastSeenAt.
     return toAppError(
-      new Error(
-        `Response does not match schema on ${error.method} ${error.url}: ${error.message}`,
-      ),
+      new Error(`Response does not match schema on ${error.method} ${error.url}: ${error.message}`),
     );
   }
 

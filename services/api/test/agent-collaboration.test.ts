@@ -131,8 +131,7 @@ describe("AgentCollaborationService", () => {
         taskKey: "security_review",
         profileKey: "claude",
         output: {
-          summary:
-            "Major contradiction: the lack of locking introduces a critical race condition.",
+          summary: "Major contradiction: the lack of locking introduces a critical race condition.",
           payloadType: "contradiction_claim" as const,
           confidenceScore: 0.95,
           assumptions: [],

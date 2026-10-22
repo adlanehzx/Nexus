@@ -33,8 +33,7 @@ let prisma: PrismaClient;
 beforeAll(async () => {
   if (DATABASE_URL === undefined) {
     throw new Error(
-      "DATABASE_URL is required: these tests write to a real PostgreSQL. " +
-        "See pnpm test:pg.",
+      "DATABASE_URL is required: these tests write to a real PostgreSQL. " + "See pnpm test:pg.",
     );
   }
   prisma = createDatabaseClient({ url: DATABASE_URL });

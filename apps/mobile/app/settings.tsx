@@ -45,12 +45,10 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="This device">
-        <Text style={styles.value}>
-          {nexus.session.deviceId ?? "not registered with NEXUS"}
-        </Text>
+        <Text style={styles.value}>{nexus.session.deviceId ?? "not registered with NEXUS"}</Text>
         <Text style={styles.hint}>
-          Session tokens are stored in the iOS Keychain, encrypted by the system and
-          excluded from iCloud backups.
+          Session tokens are stored in the iOS Keychain, encrypted by the system and excluded from
+          iCloud backups.
         </Text>
       </Section>
 

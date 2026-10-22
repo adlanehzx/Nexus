@@ -211,9 +211,7 @@ export function ConfirmationCard({
           ]}
           onPress={approve}
           accessibilityRole="button"
-          accessibilityLabel={
-            armed ? "Confirm this action" : "Approve this action"
-          }
+          accessibilityLabel={armed ? "Confirm this action" : "Approve this action"}
         >
           <Text style={styles.buttonApproveText}>{armed ? "Confirm" : "Approve"}</Text>
         </Pressable>

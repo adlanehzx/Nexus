@@ -50,8 +50,7 @@ export class BrowserTaskFailedError extends AppError {
   ) {
     super({
       message: `${capability}: browser task ended in ${detail.status}`,
-      userMessage:
-        detail.message ?? `Navigation completed without result (${detail.status}).`,
+      userMessage: detail.message ?? `Navigation completed without result (${detail.status}).`,
       context: { capability, status: detail.status, workerCode: detail.code ?? null },
     });
     this.retryable = detail.retryable;

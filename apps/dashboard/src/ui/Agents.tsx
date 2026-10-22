@@ -173,9 +173,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       setAccountFeedback(`Identity "${id}" deleted.`);
       refreshAccounts();
     } catch (err) {
-      setAccountFeedback(
-        `Deletion error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      setAccountFeedback(`Deletion error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setAccActionLoading(false);
     }
@@ -1002,7 +1000,8 @@ export function Agents({ api }: { api: DashboardApi }) {
                         <div className="faible" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
                           Compat: {agent.breakdown.compatibility} · Auth:{" "}
                           {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·
-                          Reliability: {agent.breakdown.health} · Perf: {agent.breakdown.performance}
+                          Reliability: {agent.breakdown.health} · Perf:{" "}
+                          {agent.breakdown.performance}
                         </div>
                       </div>
                       <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>

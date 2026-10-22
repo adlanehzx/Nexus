@@ -38,9 +38,7 @@ describe("Agent Core HTTP", () => {
     const occurrences = llm.requests[0]?.messages.filter(
       (message) =>
         message.role === "user" &&
-        message.content.some(
-          (block) => block.type === "text" && block.text === "Reply now",
-        ),
+        message.content.some((block) => block.type === "text" && block.text === "Reply now"),
     );
     expect(occurrences).toHaveLength(1);
 

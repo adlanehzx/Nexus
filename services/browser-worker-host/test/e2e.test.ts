@@ -94,7 +94,10 @@ suite("end-to-end with real Python worker", () => {
   });
 
   it("rejects an invalid service token", async () => {
-    const client = new BrowserWorkerClient({ baseUrl: BASE_URL, token: "bad-token-but-long-enough" });
+    const client = new BrowserWorkerClient({
+      baseUrl: BASE_URL,
+      token: "bad-token-but-long-enough",
+    });
     await expect(client.createSession(createSessionRequest())).rejects.toThrow();
   });
 

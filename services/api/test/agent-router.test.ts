@@ -40,9 +40,7 @@ describe("Intelligent Agent Routing", () => {
     expect(codeTask.requiresBrowser).toBe(false);
 
     // 2. Research task
-    const researchTask = router.classifyTask(
-      "Research and analyze official Fastify documentation",
-    );
+    const researchTask = router.classifyTask("Research and analyze official Fastify documentation");
     expect(researchTask.primaryCategory).toBe("research");
 
     // 3. Review task
@@ -52,16 +50,12 @@ describe("Intelligent Agent Routing", () => {
     expect(reviewTask.primaryCategory).toBe("review");
 
     // 4. Browser task
-    const browserTask = router.classifyTask(
-      "Open Chromium browser and click the login button",
-    );
+    const browserTask = router.classifyTask("Open Chromium browser and click the login button");
     expect(browserTask.primaryCategory).toBe("browser");
     expect(browserTask.requiresBrowser).toBe(true);
 
     // 5. Synthesis task
-    const synthesisTask = router.classifyTask(
-      "Write the final synthesis and summary of results",
-    );
+    const synthesisTask = router.classifyTask("Write the final synthesis and summary of results");
     expect(synthesisTask.primaryCategory).toBe("synthesis");
   });
 

@@ -39,8 +39,7 @@ export function createDockerCapability(
 ): LocalCapability<DockerInput, DockerResult> {
   return {
     name: "docker.execute",
-    description:
-      "Executes an allowed Docker operation on this computer (inspection by default).",
+    description: "Executes an allowed Docker operation on this computer (inspection by default).",
     inputSchema: dockerInputSchema,
     inputJsonSchema: {
       type: "object",

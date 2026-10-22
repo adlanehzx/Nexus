@@ -118,9 +118,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           aria-label="Mission for NEXUS"
           value={draft}
           disabled={activeMission !== null}
-          placeholder={
-            activeMission === null ? "Give NEXUS a mission…" : "Agents are working…"
-          }
+          placeholder={activeMission === null ? "Give NEXUS a mission…" : "Agents are working…"}
           rows={3}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {

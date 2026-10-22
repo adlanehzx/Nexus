@@ -723,7 +723,9 @@ export function Runs({ api }: { api: DashboardApi }) {
             <Empty>No recorded runs.</Empty>
           ) : (
             <>
-              <Table head={["Run", "Status", "Stop Reason", "Iterations", "Tools", "Duration", "Tokens"]}>
+              <Table
+                head={["Run", "Status", "Stop Reason", "Iterations", "Tools", "Duration", "Tokens"]}
+              >
                 {data.runs.map((run) => (
                   <tr
                     key={run.runId}
@@ -765,15 +767,7 @@ export function Runs({ api }: { api: DashboardApi }) {
                       <Empty>No tools called.</Empty>
                     ) : (
                       <Table
-                        head={[
-                          "Tool",
-                          "Action",
-                          "Status",
-                          "Risk",
-                          "Duration",
-                          "Attempts",
-                          "Error",
-                        ]}
+                        head={["Tool", "Action", "Status", "Risk", "Duration", "Attempts", "Error"]}
                       >
                         {run.tools.map((tool) => (
                           <tr key={tool.callId}>
@@ -825,14 +819,8 @@ export function Runs({ api }: { api: DashboardApi }) {
                     <h3>Metrics</h3>
                     <div className="mesures">
                       <Metric value={run.metrics.model} label="model" />
-                      <Metric
-                        value={formatCount(run.metrics.inputTokens)}
-                        label="input tokens"
-                      />
-                      <Metric
-                        value={formatCount(run.metrics.outputTokens)}
-                        label="output tokens"
-                      />
+                      <Metric value={formatCount(run.metrics.inputTokens)} label="input tokens" />
+                      <Metric value={formatCount(run.metrics.outputTokens)} label="output tokens" />
                       <Metric value={formatCount(run.metrics.cacheReadTokens)} label="cache read" />
                     </div>
                   </div>
@@ -872,9 +860,7 @@ export function Tools({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.tools.length === 0 ? (
-            <Empty>
-              No registered tools. The catalog populates when the agent service starts.
-            </Empty>
+            <Empty>No registered tools. The catalog populates when the agent service starts.</Empty>
           ) : (
             <Table head={["Tool", "Source", "Description", "Risk", "Permissions", "Allowed"]}>
               {data.tools.map((tool) => (
@@ -1159,8 +1145,8 @@ export function Browser({ api }: { api: DashboardApi }) {
       <section className="settings-panel">
         <h3>Configure Browser Use</h3>
         <p className="faible">
-          Local mode uses the official harness with Codex or Claude as the brain. It requires no
-          API keys and maintains a separate NEXUS Chromium profile.
+          Local mode uses the official harness with Codex or Claude as the brain. It requires no API
+          keys and maintains a separate NEXUS Chromium profile.
         </p>
         <div className="settings-grid">
           <label className="settings-wide">
@@ -1539,9 +1525,7 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                                 )
                                 .catch((cause: unknown) =>
                                   setActionError(
-                                    cause instanceof Error
-                                      ? cause.message
-                                      : "History unavailable.",
+                                    cause instanceof Error ? cause.message : "History unavailable.",
                                   ),
                                 );
                             }}
@@ -1804,9 +1788,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
         style={{ fontSize: "0.85rem", padding: "4px 10px" }}
         onClick={() => void toggle()}
       >
-        {open
-          ? "Hide artifacts and collaboration"
-          : "Shared Artifacts & Cross-Agent Collaboration"}
+        {open ? "Hide artifacts and collaboration" : "Shared Artifacts & Cross-Agent Collaboration"}
       </button>
 
       {loading ? (
@@ -1984,9 +1966,7 @@ export function Memory({ api }: { api: DashboardApi }) {
                   state.reload();
                 })
                 .catch((cause: unknown) =>
-                  setActionError(
-                    cause instanceof Error ? cause.message : "Unable to save.",
-                  ),
+                  setActionError(cause instanceof Error ? cause.message : "Unable to save."),
                 );
             }}
           >
@@ -2252,8 +2232,7 @@ export function Logs({ api }: { api: DashboardApi }) {
           onChange={(event) => {
             setSearch(event.target.value);
           }}
-        >
-        </input>
+        ></input>
 
         <button
           type="button"

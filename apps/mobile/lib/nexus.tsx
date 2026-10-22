@@ -241,9 +241,7 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (session.deviceId === null) {
-        throw new Error(
-          "This device is not yet registered with NEXUS. Open settings to pair it.",
-        );
+        throw new Error("This device is not yet registered with NEXUS. Open settings to pair it.");
       }
 
       await api.instruct({

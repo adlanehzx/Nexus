@@ -366,7 +366,10 @@ describe("devices", () => {
   });
 
   it("does not return another account's device", async () => {
-    const other = await registerDevice(harness, member, { name: "Member Workstation", role: "BOTH" });
+    const other = await registerDevice(harness, member, {
+      name: "Member Workstation",
+      role: "BOTH",
+    });
 
     expect((await get(`/api/v1/dashboard/devices/${other.device.id}`, admin)).statusCode).toBe(404);
   });

@@ -47,9 +47,7 @@ export default function TasksScreen() {
           />
         )}
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            No tasks yet. Ask NEXUS anything in the conversation.
-          </Text>
+          <Text style={styles.empty}>No tasks yet. Ask NEXUS anything in the conversation.</Text>
         }
       />
     </View>

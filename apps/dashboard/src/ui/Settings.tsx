@@ -47,8 +47,8 @@ function SecretsForm({
     <section className="settings-panel">
       <h3>Local secret vault</h3>
       <p className="faible">
-        Values are written to the Linux keyring and are never read back by the browser.
-        Only secret names appear here.
+        Values are written to the Linux keyring and are never read back by the browser. Only secret
+        names appear here.
       </p>
       <div className="settings-grid">
         <label>

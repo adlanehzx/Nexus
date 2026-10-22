@@ -73,8 +73,8 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
         </View>
       </View>
       <Text style={styles.subtitle}>
-        This device executes tasks for NEXUS. It does not display your conversations: those
-        remain on the iPhone and computer.
+        This device executes tasks for NEXUS. It does not display your conversations: those remain
+        on the iPhone and computer.
       </Text>
 
       <Section title="Connection">
@@ -89,10 +89,7 @@ export function WorkerScreen({ worker, refreshMs = 2_000 }: Props) {
           label="Battery"
           value={`${String(snapshot.battery.percent)} %${snapshot.battery.charging ? " (charging)" : ""}`}
         />
-        <Row
-          label="Power save mode"
-          value={snapshot.battery.powerSaveMode ? "enabled" : "no"}
-        />
+        <Row label="Power save mode" value={snapshot.battery.powerSaveMode ? "enabled" : "no"} />
         <Row
           label="Availability"
           value={snapshot.degraded ? "degraded — non-essential tasks avoided" : "normal"}

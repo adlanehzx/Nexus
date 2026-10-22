@@ -147,9 +147,7 @@ export class AgentCollaborationService {
     if (/diff\s+--git|@@\s+-[0-9]+,[0-9]+\s+\+[0-9]+,[0-9]+\s+@@/i.test(text)) {
       payloadType = "code_patch";
     } else if (
-      /\b(vulnerability|flaw|security\s+audit|compliance\s+audit|cve|injection)\b/i.test(
-        text,
-      )
+      /\b(vulnerability|flaw|security\s+audit|compliance\s+audit|cve|injection)\b/i.test(text)
     ) {
       payloadType = "audit_report";
     } else if (/\b(contradiction|disagreement|invalid|major\s+error|refutation)\b/i.test(text)) {

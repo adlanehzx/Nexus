@@ -9,15 +9,9 @@ export const llmTaskStepSchema = z.object({
   requiredCapabilities: z
     .array(z.string())
     .describe("Capabilities required for this step (strictly from the provided list)"),
-  tool: z
-    .string()
-    .describe("The tool to invoke (must always match 'device.<capability>')"),
-  arguments: z
-    .record(z.string(), z.unknown())
-    .describe("Specific arguments to pass to the tool"),
-  dependsOn: z
-    .array(z.string())
-    .describe("List of step IDs that must succeed before this one"),
+  tool: z.string().describe("The tool to invoke (must always match 'device.<capability>')"),
+  arguments: z.record(z.string(), z.unknown()).describe("Specific arguments to pass to the tool"),
+  dependsOn: z.array(z.string()).describe("List of step IDs that must succeed before this one"),
   riskLevel: riskLevelSchema.describe(
     "Estimated risk level of the step. Never use MEDIUM if SAFE, LOW, HIGH or CRITICAL is more appropriate.",
   ),
@@ -25,9 +19,7 @@ export const llmTaskStepSchema = z.object({
 
 export const llmTaskPlanSchema = z.object({
   title: z.string().describe("Overall title of the planned task"),
-  steps: z
-    .array(llmTaskStepSchema)
-    .describe("Ordered sequence of steps to accomplish the task"),
+  steps: z.array(llmTaskStepSchema).describe("Ordered sequence of steps to accomplish the task"),
   reasoning: z.string().describe("Reasoning explaining why the plan was constructed this way"),
 });
 

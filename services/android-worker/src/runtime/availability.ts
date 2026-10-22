@@ -68,14 +68,11 @@ export class AvailabilityWatcher {
     const previous = this.#last;
     this.#last = snapshot;
 
-    this.#logger.info(
-      previous === undefined ? "initial availability" : "availability changed",
-      {
-        accessibility: snapshot.accessibility,
-        screenshot: snapshot.screenshot,
-        notifications: snapshot.notifications,
-      },
-    );
+    this.#logger.info(previous === undefined ? "initial availability" : "availability changed", {
+      accessibility: snapshot.accessibility,
+      screenshot: snapshot.screenshot,
+      notifications: snapshot.notifications,
+    });
 
     await this.#onChange(snapshot);
     return true;

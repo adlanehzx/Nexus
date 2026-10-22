@@ -87,7 +87,7 @@ export function createAppOpenCapability(
       properties: {
         packageName: {
           type: "string",
-          description: "Android package name, for example \"com.spotify.music\"",
+          description: 'Android package name, for example "com.spotify.music"',
         },
       },
       required: ["packageName"],

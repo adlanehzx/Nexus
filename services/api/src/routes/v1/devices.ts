@@ -173,8 +173,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
            */
           .refine((body) => body.role === "CLIENT" || body.publicKeyPem !== undefined, {
             path: ["publicKeyPem"],
-            message:
-              "A public key is required for an executor device (WORKER or BOTH).",
+            message: "A public key is required for an executor device (WORKER or BOTH).",
           }),
         response: { 201: okSchema(deviceSchema) },
       },
@@ -254,9 +253,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       if (apiUrl === undefined) {
         // Reject rather than guess: a QR with the wrong address
         // fails on the phone, far from the root cause.
-        throw new Error(
-          "QR pairing requires PUBLIC_API_URL: the address your devices can reach.",
-        );
+        throw new Error("QR pairing requires PUBLIC_API_URL: the address your devices can reach.");
       }
       const { ticket, code } = await app.services.pairing.issue({
         userId,

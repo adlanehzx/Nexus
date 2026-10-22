@@ -62,7 +62,10 @@ type SectionId = SupervisionId | "chat" | "agents" | "settings";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
-  agents: { title: "Agents", description: "Capabilities, availability, and quotas of your AI team." },
+  agents: {
+    title: "Agents",
+    description: "Capabilities, availability, and quotas of your AI team.",
+  },
   settings: { title: "Settings", description: "Persistent rules of the multi-agent engine." },
   overview: {
     title: "Overview",
@@ -150,13 +153,7 @@ export function App() {
         </button>
         <nav className="navigation" aria-label="Main navigation">
           <div className="nav-group nav-primary">
-            <NavItem
-              id="chat"
-              label="Chat"
-              icon="chat"
-              current={section}
-              onSelect={navigate}
-            />
+            <NavItem id="chat" label="Chat" icon="chat" current={section} onSelect={navigate} />
             <NavItem
               id="agents"
               label="Agents"

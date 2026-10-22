@@ -120,8 +120,8 @@ export default function ChatScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>What can I do?</Text>
             <Text style={styles.emptyText}>
-              Ask NEXUS to run tests on your workstation, trigger actions on your phone,
-              or notify you when tasks complete.
+              Ask NEXUS to run tests on your workstation, trigger actions on your phone, or notify
+              you when tasks complete.
             </Text>
           </View>
         }

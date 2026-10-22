@@ -166,9 +166,7 @@ describe("no secrets versioned", () => {
   });
 
   it("signing configuration comes from environment only", () => {
-    const app = gradle().find((entry) =>
-      entry.file.endsWith(path.join("app", "build.gradle.kts")),
-    );
+    const app = gradle().find((entry) => entry.file.endsWith(path.join("app", "build.gradle.kts")));
     expect(app).toBeDefined();
     const content = app?.content ?? "";
 
