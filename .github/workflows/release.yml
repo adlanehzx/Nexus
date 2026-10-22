@@ -289,14 +289,14 @@ jobs:
           VERSION="$(node -p "require('../../apps/desktop/src-tauri/tauri.conf.json').version")"
           makensis -DVERSION="$VERSION" nexus-worker.nsi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nexus-worker-installer
           path: packaging/windows/*-setup.exe
           if-no-files-found: ignore
         if: runner.os == 'Windows'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nexus-desktop-${{ runner.os }}
           path: |
@@ -373,7 +373,7 @@ jobs:
           fi
           find . -name '*.apk' -printf '  - %f\t%s bytes\n' >> "$GITHUB_STEP_SUMMARY" || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nexus-android-apk
           path: services/android-worker/android/**/*.apk
