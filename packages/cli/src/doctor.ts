@@ -301,12 +301,7 @@ async function networkChecks({ probes, env }: DoctorContext): Promise<CheckResul
 
   const tailscale = await detectTailscale(tailscaleExec);
   if (tailscale.running) {
-    results.push(
-      ok(
-        "Tailscale network",
-        `active${tailscale.ip ? ` (${tailscale.ip})` : ""}`,
-      ),
-    );
+    results.push(ok("Tailscale network", `active${tailscale.ip ? ` (${tailscale.ip})` : ""}`));
   } else if (tailscale.installed) {
     results.push(
       warn(

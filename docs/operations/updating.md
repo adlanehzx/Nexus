@@ -9,11 +9,13 @@ This guide explains how to safely update an existing NEXUS installation to the l
 Before performing an update, take a backup of your configuration and database:
 
 ### Quick Dashboard Backup (No Terminal)
+
 1. Open **Settings** in the NEXUS dashboard.
 2. Scroll to the **Backup & Restore Assistant**.
 3. Click **Export configuration backup** to download `nexus-configuration-backup-YYYY-MM-DD.json`.
 
 ### Full System Snapshot (CLI)
+
 ```bash
 # Creates an archive containing database, secrets, and environment
 pnpm nexus backup create --output nexus-pre-update.tar.gz
@@ -90,6 +92,7 @@ curl http://localhost:3000/api/v1/health
 ## 6. Rollback Procedure
 
 If an update encounters an issue:
+
 1. Revert Git commits: `git checkout <PREVIOUS_COMMIT>`
 2. Restore database and configuration:
    ```bash

@@ -24,13 +24,16 @@ pnpm docker:down
 ## 2. Removing Host Workers
 
 ### Linux / Docker Worker
+
 ```bash
 docker rm -f nexus-worker
 rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/nexus-worker"
 ```
 
 ### Windows Worker Service
+
 Open PowerShell as Administrator:
+
 ```powershell
 # Stop and uninstall the NexusWorker Windows service
 Stop-Service -Name "NexusWorker" -ErrorAction SilentlyContinue
@@ -40,6 +43,7 @@ Remove-Item -Recurse -Force "$env:LOCALAPPDATA\nexus-worker" -ErrorAction Silent
 ```
 
 ### Android Worker
+
 Uninstall the NEXUS Worker application from Android Settings. The private key stored in Android Keystore will be destroyed automatically by the OS.
 
 ---
@@ -71,7 +75,9 @@ pnpm clean
 ```
 
 ### Linux Keyring Vault Cleanup
+
 If you stored secrets in the Linux Secret Service / Keyring:
+
 ```bash
 # List and remove stored secrets
 secret-tool clear service nexus

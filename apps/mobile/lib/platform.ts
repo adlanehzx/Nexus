@@ -223,6 +223,26 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
   }
 }
 
+interface WebSpeechEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      0: { transcript: string };
+    };
+  };
+}
+
+type WebSpeechRecognition = new () => {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: WebSpeechEvent) => void) | null;
+  start: () => void;
+  abort: () => void;
+};
+
 /**
  * Local Piper Text-to-Speech provider with native ExpoTextToSpeech fallback.
  * Keeps synthesized audio in-memory and streams directly to speakers without disk persistence.
@@ -237,8 +257,8 @@ export class PiperTextToSpeech implements TextToSpeechProvider {
     this.#fallback = new ExpoTextToSpeech();
   }
 
-  async isAvailable(): Promise<boolean> {
-    return true;
+  isAvailable(): Promise<boolean> {
+    return Promise.resolve(true);
   }
 
   async speak(text: string, options?: { locale?: string; rate?: number }): Promise<void> {
@@ -272,8 +292,8 @@ export class PiperTextToSpeech implements TextToSpeechProvider {
     await this.#fallback.stop();
   }
 
-  async isSpeaking(): Promise<boolean> {
-    if (this.#speaking) return true;
+  isSpeaking(): Promise<boolean> {
+    if (this.#speaking) return Promise.resolve(true);
     return this.#fallback.isSpeaking();
   }
 }
@@ -298,17 +318,17 @@ export class LocalSpeechToText implements SpeechToTextProvider {
     this.#whisperEndpoint = options?.whisperEndpoint;
   }
 
-  async isAvailable(): Promise<boolean> {
+  isAvailable(): Promise<boolean> {
     if (
       typeof window !== "undefined" &&
       ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
     ) {
-      return true;
+      return Promise.resolve(true);
     }
     if (this.#whisperEndpoint !== undefined && this.#whisperEndpoint.length > 0) {
-      return true;
+      return Promise.resolve(true);
     }
-    return false;
+    return Promise.resolve(false);
   }
 
   async requestPermission(): Promise<boolean> {
@@ -332,9 +352,12 @@ export class LocalSpeechToText implements SpeechToTextProvider {
     this.#abortController = new AbortController();
 
     if (typeof window !== "undefined") {
+      const windowObject = window as unknown as {
+        SpeechRecognition?: WebSpeechRecognition;
+        webkitSpeechRecognition?: WebSpeechRecognition;
+      };
       const SpeechRecognition =
-        (window as unknown as { SpeechRecognition?: new () => any }).SpeechRecognition ||
-        (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
+        windowObject.SpeechRecognition ?? windowObject.webkitSpeechRecognition;
 
       if (SpeechRecognition) {
         try {
@@ -343,10 +366,7 @@ export class LocalSpeechToText implements SpeechToTextProvider {
           recognition.interimResults = true;
           recognition.lang = options?.locale ?? "en-US";
 
-          recognition.onresult = (event: {
-            resultIndex: number;
-            results: { length: number; [index: number]: { isFinal: boolean; 0: { transcript: string } } };
-          }) => {
+          recognition.onresult = (event: WebSpeechEvent) => {
             let interim = "";
             let final = "";
             for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -370,10 +390,14 @@ export class LocalSpeechToText implements SpeechToTextProvider {
           this.#abortController.signal.addEventListener("abort", () => {
             try {
               recognition.abort();
-            } catch {}
+            } catch (_ignored: unknown) {
+              // The recognizer may already be stopped during teardown.
+            }
           });
           return;
-        } catch {}
+        } catch (_ignored: unknown) {
+          // Fall through to the configured local Whisper bridge.
+        }
       }
     }
 
@@ -385,20 +409,21 @@ export class LocalSpeechToText implements SpeechToTextProvider {
     }
   }
 
-  async stop(): Promise<TranscriptionResult> {
+  stop(): Promise<TranscriptionResult> {
     this.#listening = false;
     const text = this.#accumulatedText.trim();
     this.#accumulatedText = "";
     this.#abortController?.abort();
     this.#abortController = undefined;
-    return { text };
+    return Promise.resolve({ text });
   }
 
-  async cancel(): Promise<void> {
+  cancel(): Promise<void> {
     this.#listening = false;
     this.#accumulatedText = "";
     this.#abortController?.abort();
     this.#abortController = undefined;
+    return Promise.resolve();
   }
 }
 

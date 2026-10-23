@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-10-22
 
 ### Added
+
 - **Interactive Setup Wizard**: `nexus setup` with automated prerequisite checks, idempotent Ed25519 auth signing key and AES-256 master key generation (stored in `.env` with mode `0600` without stdout leakage), Docker vs dev mode selection, and automatic Tailscale detection.
 - **Enhanced Diagnostics (`nexus doctor`)**: System validation including master encryption key checks, loopback warning on `PUBLIC_API_URL`, Tailscale status probing, and actionable remedy instructions.
 - **Terminal-Free Supervision Dashboard**:
@@ -28,11 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Strict AGPL-3.0-or-later license demarcation across packages and packaging scripts.
 
 ### Changed
+
 - Rebuilt Android Worker JS bundle (`services/android-worker/android/app/src/main/assets/index.android.bundle`) eliminating obsolete French strings and hardcoded local IP addresses.
 - Updated connector documentation note in `services/connector/README.md` reflecting Fastify core API `/api/v1/connections` and Dashboard integration.
 - Translated packaging PowerShell scripts (`packaging/windows/setup-worker.ps1`) to English.
 - Updated Arch Linux package configuration (`packaging/arch/PKGBUILD`) to `AGPL-3.0-or-later`.
 
 ### Fixed
+
 - Fixed hardcoded French URL fallback `"https://votre-nexus"` in dashboard device pairing payload, dynamically resolving to `window.location.origin`.
 - Fixed connection state conflation, guaranteeing that `connected` is strictly reserved for live verified sessions and never faked for detected CLIs.

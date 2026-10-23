@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { DashboardApi, RuntimeSettings } from "../lib/api.js";
+import type {
+  BrowserSection,
+  DashboardApi,
+  McpConfiguration,
+  RuntimeSettings,
+} from "../lib/api.js";
 import { Section, useSection } from "./parts.js";
 
 export function Settings({ api }: { api: DashboardApi }) {
@@ -23,7 +28,146 @@ export function Settings({ api }: { api: DashboardApi }) {
       <Section state={secrets}>
         {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
       </Section>
+      <BackupRestorePanel
+        api={api}
+        onReloadAll={() => {
+          state.reload();
+          secrets.reload();
+        }}
+      />
     </div>
+  );
+}
+
+function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadAll: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [restoreJson, setRestoreJson] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleExport = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const [settings, mcp, browser] = await Promise.all([
+        api.runtimeSettings(),
+        api.mcp(),
+        api.browser(),
+      ]);
+      const backupData = {
+        version: "1.0.0",
+        exportedAt: new Date().toISOString(),
+        settings,
+        mcpConfigurations: mcp.configurations,
+        browserConfiguration: browser.configuration,
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `nexus-configuration-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("Configuration backup file downloaded successfully.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Backup export failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async (): Promise<void> => {
+    if (restoreJson.trim() === "") return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const parsed: unknown = JSON.parse(restoreJson);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("Invalid backup format: root must be an object.");
+      }
+      const backup = parsed as Record<string, unknown>;
+      if (typeof backup.settings === "object" && backup.settings !== null) {
+        await api.updateRuntimeSettings(backup.settings as RuntimeSettings);
+      }
+      if (Array.isArray(backup.mcpConfigurations)) {
+        for (const config of backup.mcpConfigurations) {
+          if (typeof config === "object" && config !== null && "name" in config) {
+            await api.saveMcp(config as McpConfiguration);
+          }
+        }
+      }
+      if (typeof backup.browserConfiguration === "object" && backup.browserConfiguration !== null) {
+        await api.configureBrowser(
+          backup.browserConfiguration as NonNullable<BrowserSection["configuration"]>,
+        );
+      }
+      setRestoreJson("");
+      setMessage("Configuration restored successfully and applied to active services.");
+      onReloadAll();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Configuration restore failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="settings-panel">
+      <div className="settings-panel-heading">
+        <div>
+          <h3>Backup &amp; Restore Assistant</h3>
+          <p className="muted">
+            Export or restore platform configuration. Secrets remain in the vault and are never
+            exported.
+          </p>
+        </div>
+      </div>
+      <div className="settings-actions">
+        <button
+          className="button primary"
+          type="button"
+          disabled={busy}
+          onClick={() => void handleExport()}
+        >
+          {busy ? "Exporting…" : "Export configuration backup"}
+        </button>
+      </div>
+      <div className="settings-grid">
+        <label className="settings-wide">
+          Restore configuration from JSON
+          <textarea
+            className="field mono"
+            rows={6}
+            value={restoreJson}
+            onChange={(event) => setRestoreJson(event.target.value)}
+            placeholder="Paste an exported NEXUS configuration backup here."
+          />
+        </label>
+      </div>
+      <div className="settings-actions">
+        <button
+          className="button"
+          type="button"
+          disabled={busy || restoreJson.trim() === ""}
+          onClick={() => void handleRestore()}
+        >
+          Restore and apply
+        </button>
+      </div>
+      <div className="policy-box" style={{ marginTop: "16px" }}>
+        <strong>Complete system backups</strong>
+        <p className="muted" style={{ margin: "4px 0 0", fontSize: "11px" }}>
+          Database archives and encryption keys require the dedicated authenticated backup workflow;
+          they are intentionally excluded from browser exports.
+        </p>
+      </div>
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {error === null ? null : <p className="banner error">{error}</p>}
+    </section>
   );
 }
 

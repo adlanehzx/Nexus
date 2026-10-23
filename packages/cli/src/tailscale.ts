@@ -23,9 +23,24 @@ const defaultExecutor: CommandExecutor = async (cmd, args) => {
     const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: 3_000 });
     return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 };
   } catch (err: unknown) {
-    const code = typeof err === "object" && err !== null && "code" in err ? Number((err as { code?: unknown }).code) || 1 : 1;
-    const stdout = typeof err === "object" && err !== null && "stdout" in err ? String((err as { stdout?: unknown }).stdout ?? "") : "";
-    const stderr = typeof err === "object" && err !== null && "stderr" in err ? String((err as { stderr?: unknown }).stderr ?? "") : "";
+    const code =
+      typeof err === "object" && err !== null && "code" in err
+        ? Number((err as { code?: unknown }).code) || 1
+        : 1;
+    const stdout =
+      typeof err === "object" &&
+      err !== null &&
+      "stdout" in err &&
+      typeof (err as { stdout?: unknown }).stdout === "string"
+        ? (err as { stdout: string }).stdout
+        : "";
+    const stderr =
+      typeof err === "object" &&
+      err !== null &&
+      "stderr" in err &&
+      typeof (err as { stderr?: unknown }).stderr === "string"
+        ? (err as { stderr: string }).stderr
+        : "";
     return { stdout, stderr, exitCode: code };
   }
 };

@@ -156,11 +156,16 @@ export function planSetup(options: SetupOptions): SetupPlan {
 
   // ── Master key (AES-256 for vault/credential encryption) ──────────────────
   const existingMasterKey = env.MASTER_KEY;
-  const hasMasterKey = typeof existingMasterKey === "string" && existingMasterKey.trim().length >= 32;
+  const hasMasterKey =
+    typeof existingMasterKey === "string" && existingMasterKey.trim().length >= 32;
   actions.push({
-    label: hasMasterKey ? "persistent master encryption key" : "generate a persistent master encryption key",
+    label: hasMasterKey
+      ? "persistent master encryption key"
+      : "generate a persistent master encryption key",
     needed: !hasMasterKey,
-    detail: hasMasterKey ? "already present" : "AES-256 key for vault secrets, written to .env with mode 0600",
+    detail: hasMasterKey
+      ? "already present"
+      : "AES-256 key for vault secrets, written to .env with mode 0600",
     apply: () => {
       const generated = randomBytes(32).toString("hex");
       const updated = upsertEnvValue(
@@ -174,7 +179,8 @@ export function planSetup(options: SetupOptions): SetupPlan {
 
   // ── SearXNG secret (for local web search) ─────────────────────────────────
   const existingSearxngSecret = env.SEARXNG_SECRET;
-  const hasSearxngSecret = typeof existingSearxngSecret === "string" && existingSearxngSecret.trim().length >= 16;
+  const hasSearxngSecret =
+    typeof existingSearxngSecret === "string" && existingSearxngSecret.trim().length >= 16;
   if (!hasSearxngSecret) {
     actions.push({
       label: "generate SearXNG secret",
@@ -243,7 +249,11 @@ export function planSetup(options: SetupOptions): SetupPlan {
 
   // ── Public API URL (Tailscale / Custom URL) ───────────────────────────────
   const targetApiUrl = options.apiUrl ?? options.tailscaleUrl;
-  if (targetApiUrl !== undefined && targetApiUrl.length > 0 && env.PUBLIC_API_URL !== targetApiUrl) {
+  if (
+    targetApiUrl !== undefined &&
+    targetApiUrl.length > 0 &&
+    env.PUBLIC_API_URL !== targetApiUrl
+  ) {
     actions.push({
       label: "configure public API URL",
       needed: true,
@@ -282,7 +292,8 @@ export function planSetup(options: SetupOptions): SetupPlan {
 
   const selectedMode = options.mode ?? "docker";
   const finalApiUrl = targetApiUrl ?? env.PUBLIC_API_URL ?? "http://localhost:3000";
-  const dashboardUrl = selectedMode === "docker" ? "http://localhost:8080" : "http://localhost:5173";
+  const dashboardUrl =
+    selectedMode === "docker" ? "http://localhost:8080" : "http://localhost:5173";
 
   const nextSteps =
     selectedMode === "docker"

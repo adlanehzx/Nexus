@@ -10,7 +10,7 @@ pkgrel=1
 pkgdesc="NEXUS local personal assistant desktop shell"
 arch=('x86_64')
 url="https://github.com/adlanehzx/Nexus"
-license=('UNLICENSED')
+license=('AGPL-3.0-or-later')
 
 # Declare actual runtime dependencies so the installed application can start.
 depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3' 'librsvg')

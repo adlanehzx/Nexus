@@ -37,6 +37,7 @@ pnpm nexus setup --mode docker
 ```
 
 ### What `nexus setup` does:
+
 1. **Validates prerequisites**: Checks Node version, Docker daemon availability, and port conflicts (3000, 8080, 15432, 6379).
 2. **Generates persistent secrets**: Creates `AUTH_SIGNING_KEY` (Ed25519), `MASTER_KEY` (AES-256 vault key), `SEARXNG_SECRET`, and a random `DATABASE_URL` password in `.env` with strict `0600` permissions. Secrets are never printed to the screen.
 3. **Discovers Tailscale (optional)**: If Tailscale is active on your host, `nexus setup` detects your tailnet IP and suggests configuring `PUBLIC_API_URL` for secure mobile and remote worker access without port forwarding.
@@ -54,6 +55,7 @@ pnpm docker:platform
 ```
 
 Once started:
+
 - **Dashboard**: `http://localhost:8080`
 - **Core API**: `http://localhost:3000`
 - **Readiness check**: `curl http://localhost:3000/api/v1/health`
@@ -91,6 +93,7 @@ pnpm nexus doctor
 ```
 
 The doctor validates:
+
 - Configuration and persistent keys (signing key, AES-256 master key);
 - Database and cache connectivity;
 - Agent tools (Codex, Claude, Antigravity CLI detection);

@@ -23,14 +23,12 @@ import {
 } from "@nexus/client-core";
 import { Platform } from "react-native";
 import {
-  ExpoTextToSpeech,
   FetchHttpClient,
   KeychainStorage,
   LocalSpeechToText,
   NativeSocket,
   OptimisticNetworkMonitor,
   PiperTextToSpeech,
-  UnavailableSpeechToText,
 } from "./platform.js";
 
 /**

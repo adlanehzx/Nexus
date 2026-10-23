@@ -3,11 +3,12 @@ import { detectTailscale, type CommandExecutor } from "../src/tailscale.js";
 
 describe("detectTailscale", () => {
   it("reports uninstalled when tailscale CLI is missing", async () => {
-    const mockExec: CommandExecutor = async () => ({
-      stdout: "",
-      stderr: "command not found: tailscale",
-      exitCode: 127,
-    });
+    const mockExec: CommandExecutor = () =>
+      Promise.resolve({
+        stdout: "",
+        stderr: "command not found: tailscale",
+        exitCode: 127,
+      });
 
     const info = await detectTailscale(mockExec, 3000);
     expect(info.installed).toBe(false);
@@ -17,11 +18,11 @@ describe("detectTailscale", () => {
   });
 
   it("reports stopped when tailscale is installed but daemon is offline", async () => {
-    const mockExec: CommandExecutor = async (cmd, args) => {
+    const mockExec: CommandExecutor = (_cmd, args) => {
       if (args[0] === "version") {
-        return { stdout: "1.74.0", stderr: "", exitCode: 0 };
+        return Promise.resolve({ stdout: "1.74.0", stderr: "", exitCode: 0 });
       }
-      return { stdout: "", stderr: "Tailscale is stopped", exitCode: 1 };
+      return Promise.resolve({ stdout: "", stderr: "Tailscale is stopped", exitCode: 1 });
     };
 
     const info = await detectTailscale(mockExec, 3000);
@@ -31,12 +32,12 @@ describe("detectTailscale", () => {
   });
 
   it("detects running tailnet node and formats suggested PUBLIC_API_URL", async () => {
-    const mockExec: CommandExecutor = async (cmd, args) => {
+    const mockExec: CommandExecutor = (_cmd, args) => {
       if (args[0] === "version") {
-        return { stdout: "1.74.0", stderr: "", exitCode: 0 };
+        return Promise.resolve({ stdout: "1.74.0", stderr: "", exitCode: 0 });
       }
       if (args[0] === "status") {
-        return {
+        return Promise.resolve({
           stdout: JSON.stringify({
             Self: {
               HostName: "test-node",
@@ -47,9 +48,9 @@ describe("detectTailscale", () => {
           }),
           stderr: "",
           exitCode: 0,
-        };
+        });
       }
-      return { stdout: "", stderr: "", exitCode: 1 };
+      return Promise.resolve({ stdout: "", stderr: "", exitCode: 1 });
     };
 
     const info = await detectTailscale(mockExec, 3000);
@@ -62,17 +63,17 @@ describe("detectTailscale", () => {
   });
 
   it("falls back to tailscale ip -4 if json parse fails", async () => {
-    const mockExec: CommandExecutor = async (cmd, args) => {
+    const mockExec: CommandExecutor = (_cmd, args) => {
       if (args[0] === "version") {
-        return { stdout: "1.74.0", stderr: "", exitCode: 0 };
+        return Promise.resolve({ stdout: "1.74.0", stderr: "", exitCode: 0 });
       }
       if (args[0] === "status") {
-        return { stdout: "not valid json", stderr: "", exitCode: 0 };
+        return Promise.resolve({ stdout: "not valid json", stderr: "", exitCode: 0 });
       }
       if (args[0] === "ip") {
-        return { stdout: "100.77.88.99\n", stderr: "", exitCode: 0 };
+        return Promise.resolve({ stdout: "100.77.88.99\n", stderr: "", exitCode: 0 });
       }
-      return { stdout: "", stderr: "", exitCode: 1 };
+      return Promise.resolve({ stdout: "", stderr: "", exitCode: 1 });
     };
 
     const info = await detectTailscale(mockExec, 3000);

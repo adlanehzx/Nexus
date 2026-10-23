@@ -38,7 +38,9 @@ export function generateChecksums(dir = join(root, "release")) {
     writeFileSync(sha256Path, sha256Lines.join("\n") + "\n", "utf8");
     writeFileSync(sha512Path, sha512Lines.join("\n") + "\n", "utf8");
 
-    console.log(`Generated SHA256SUMS and SHA512SUMS for ${files.length} release artifact(s) in: ${dir}`);
+    console.log(
+      `Generated SHA256SUMS and SHA512SUMS for ${files.length} release artifact(s) in: ${dir}`,
+    );
   } else {
     console.log(`No files found to checksum in: ${dir}`);
   }

@@ -152,6 +152,7 @@ agent exceptions.
 The push-to-talk dictation pipeline, local transcription (`whisper.cpp`), local synthesis (`Piper`), ephemeral audio scratch isolation, and verified unlinking are fully implemented, audited, and covered by test suites.
 
 **Experimental status of continuous conversation & barge-in:**
+
 - **Continuous Hands-Free Mode (v2)**: The state machine, ceiling timeouts, turn transitions, and error recovery handlers are fully unit-tested in `@nexus/client-core`. However, fully hands-free multi-turn interaction in noisy environments depends on calibrated Voice Activity Detection (VAD) thresholds. It is considered **experimental** until hardware-specific echo cancellation is validated across target mobile devices.
 - **Barge-in**: The dual-process teardown (`stop()` killing both synthesis and player) is verified. On mobile devices without hardware-assisted Acoustic Echo Cancellation (AEC), the device microphone may pick up speaker output, triggering false barge-in. Users are advised to use headphones or push-to-talk in standard environments.
 

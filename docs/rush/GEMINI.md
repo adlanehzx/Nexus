@@ -29,14 +29,14 @@ mission scheduling, context compression or routing decisions.
 
 ## Progress summary
 
-| ID  | Deliverable                                   | Status      | Commit  | Evidence                                                                    |
-| --- | --------------------------------------------- | ----------- | ------- | --------------------------------------------------------------------------- |
-| G0  | UX inventory and executable onboarding states | DONE        | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes  |
-| G1  | First-run setup wizard                        | DONE        | f0e5ef5 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
-| G2  | Dashboard configuration and connection UX     | DONE        | 980ac28 | 37 dashboard tests passed; provider account mutations, notification config  |
-| G3  | Device discovery, pairing and worker install  | IN_PROGRESS |         |                                                                             |
-| G4  | Desktop, mobile and voice completion          | TODO        |         |                                                                             |
-| G5  | Reproducible packaging and public user docs   | TODO        |         |                                                                             |
+| ID  | Deliverable                                   | Status | Commit  | Evidence                                                                    |
+| --- | --------------------------------------------- | ------ | ------- | --------------------------------------------------------------------------- |
+| G0  | UX inventory and executable onboarding states | DONE   | acd608f | 165 client-core unit tests passed; UX state taxonomy mapped to real routes  |
+| G1  | First-run setup wizard                        | DONE   | 9abb0f9 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
+| G2  | Dashboard configuration and connection UX     | DONE   | 4821891 | 37 dashboard tests passed; provider account mutations, notification config  |
+| G3  | Device discovery, pairing and worker install  | DONE   | 627e81e | Pairing, capability, offline and installer tests passed                     |
+| G4  | Desktop, mobile and voice completion          | DONE   | 9ecaa21 | Desktop, voice, Android and client outbox checks passed                     |
+| G5  | Reproducible packaging and public user docs   | DONE   | 94c6b79 | Compose, blank-install and release gates passed after integration           |
 
 ## G0 — UX inventory and executable onboarding states
 
@@ -92,7 +92,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:17:30+02:00
 - Completed at: 2026-10-22T22:18:45+02:00
-- Commit: d147a69
+- Commit: acd608f
 - Commands and results:
   - `pnpm --filter @nexus/client-core test`: 9 test files passed, 165 tests passed
   - `pnpm --filter @nexus/client-core build`: exit 0
@@ -121,7 +121,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:19:30+02:00
 - Completed at: 2026-10-22T22:25:50+02:00
-- Commit: 45e46d9
+- Commit: 9abb0f9
 - Commands and results:
   - `pnpm --filter @nexus/dashboard test`: 4 test files passed, 35 tests passed
   - `pnpm --filter @nexus/dashboard build`: exit 0 (built in 218ms)
@@ -153,7 +153,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:26:40+02:00
 - Completed at: 2026-10-22T22:31:35+02:00
-- Commit: 075ccde
+- Commit: 4821891
 - Commands and results:
   - `pnpm --filter @nexus/dashboard test`: 5 test files passed, 37 tests passed
   - `pnpm --filter @nexus/dashboard build`: exit 0 (built in 208ms)
@@ -184,7 +184,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:32:40+02:00
 - Completed at: 2026-10-22T22:45:30+02:00
-- Commit: 480e832
+- Commit: 627e81e
 - Commands and results:
   - `pnpm --filter @nexus/client-core test`: 172 tests passed
   - `pnpm --filter @nexus/dashboard test`: 6 test files, 41 tests passed
@@ -217,7 +217,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:47:00+02:00
 - Completed at: 2026-10-22T22:52:15+02:00
-- Commit: 4d09477
+- Commit: 9ecaa21
 - Commands and results:
   - `pnpm --filter @nexus/desktop test`: 5 test files, 45 tests passed
   - `pnpm --filter @nexus/desktop build`: exit 0 (built in 195ms)
@@ -250,7 +250,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-22T22:52:45+02:00
 - Completed at: 2026-10-22T22:57:40+02:00
-- Commit: 7e12be3
+- Commit: 94c6b79
 - Commands and results:
   - `pnpm verify`: exit 0 (54 turbo tasks successful across all 34 monorepo packages)
   - `pnpm release:check`: exit 0 (937 tracked files verified)
@@ -268,26 +268,27 @@ Add a row after every numbered task, even when the result is `None found`.
 
 | ID     | Task | Severity | Status   | Description                                                                  | Reproduction or evidence                                                 | Fix commit |
 | ------ | ---- | -------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------- |
-| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration    | packages/client-core/test/session.test.ts                                | d147a69    |
-| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states       | apps/dashboard/test/format.test.ts                                       | 45e46d9    |
-| F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing         | apps/dashboard/test/dashboard-config.test.ts                             | 075ccde    |
-| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 480e832    |
-| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 4d09477    |
-| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 7e12be3    |
+| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration    | packages/client-core/test/session.test.ts                                | acd608f    |
+| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states       | apps/dashboard/test/format.test.ts                                       | 9abb0f9    |
+| F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing         | apps/dashboard/test/dashboard-config.test.ts                             | 4821891    |
+| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 627e81e    |
+| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
+| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
 
 ## Improvements for the adjustment phase
 
-| ID  | Source task | Priority | Improvement | Why deferred | Suggested next action |
-| --- | ----------- | -------- | ----------- | ------------ | --------------------- |
-|     |             |          |             |              |                       |
+| ID    | Source task | Priority | Improvement                                                                                          | Why deferred                                                           | Suggested next action                                          |
+| ----- | ----------- | -------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| G3-I1 | G3          | Low      | Replace free-form device permission entry with a checkbox selector backed by `/api/v1/capabilities`. | The typed editor is functional; this is a usability refinement.        | Add a capability catalog picker during the adjustment phase.   |
+| G3-I2 | G3          | Low      | Visualize heartbeat network latency in the device fleet table.                                       | Current health and prolonged-offline states satisfy the rush criteria. | Add a small bounded history chart during the adjustment phase. |
 
 ## Cross-agent handoffs
 
-| ID     | From/to          | Contract or dependency                                                                                                    | Status  | Evidence or target commit        |
-| ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------- |
-| H-G0-1 | Gemini -> Codex  | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | PENDING | Target: Codex integration        |
-| H-G0-2 | Gemini -> Claude | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                          | PENDING | Target: Claude CL1/CL2           |
-| H-G5-1 | Gemini -> Codex  | `.venv/bin/python` environment expectation in `scripts/blank-machine-restore.sh` line 105 for engine seed                 | PENDING | scripts/blank-machine-restore.sh |
+| ID     | From/to          | Contract or dependency                                                                                                    | Status   | Evidence or target commit |
+| ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------- |
+| H-G0-1 | Gemini -> Codex  | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | RESOLVED | `f7dc88e`                 |
+| H-G0-2 | Gemini -> Claude | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                          | RESOLVED | `31e4df8`                 |
+| H-G5-1 | Gemini -> Codex  | `.venv/bin/python` environment expectation in `scripts/blank-machine-restore.sh` line 105 for engine seed                 | RESOLVED | `f7dc88e`                 |
 
 ## Shared-file changes required at integration
 
@@ -297,14 +298,14 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Final verification
 
-| Gate                  | Exact command                                                                       | Result  | Evidence/date                           |
-| --------------------- | ----------------------------------------------------------------------------------- | ------- | --------------------------------------- |
-| Dashboard format/lint | `pnpm --filter @nexus/dashboard lint`                                               | PASS    | 0 errors, 2026-10-22                    |
-| Dashboard typecheck   | `pnpm --filter @nexus/dashboard typecheck`                                          | PASS    | `tsc -p tsconfig.json --noEmit`, exit 0 |
-| Dashboard tests       | `pnpm --filter @nexus/dashboard test`                                               | PASS    | 6 test files, 41 tests passed           |
-| Desktop compile       | `pnpm --filter @nexus/desktop build && pnpm --filter @nexus/desktop test`           | PASS    | Built in 179ms, 5 files, 45 tests       |
-| Mobile/Android checks | `pnpm --filter @nexus/mobile typecheck && pnpm --filter @nexus/android-worker test` | PASS    | 0 TS errors, 9 files, 191 tests passed  |
-| Packaging smoke tests | `docker compose -f infrastructure/docker/docker-compose.yml config`                 | PASS    | Valid config with health checks, exit 0 |
-| Blank install         | `bash scripts/blank-machine-restore.sh`                                             | BLOCKED | DB created & seeded, halted at `.venv`  |
-| Release hygiene       | `pnpm release:check`                                                                | PASS    | 939 tracked files verified, exit 0      |
-| Translation gate      | `pnpm translation:check`                                                            | PASS    | 0 untranslated strings, exit 0          |
+| Gate                  | Exact command                                                                       | Result | Evidence/date                           |
+| --------------------- | ----------------------------------------------------------------------------------- | ------ | --------------------------------------- |
+| Dashboard format/lint | `pnpm --filter @nexus/dashboard lint`                                               | PASS   | 0 errors, 2026-10-22                    |
+| Dashboard typecheck   | `pnpm --filter @nexus/dashboard typecheck`                                          | PASS   | `tsc -p tsconfig.json --noEmit`, exit 0 |
+| Dashboard tests       | `pnpm --filter @nexus/dashboard test`                                               | PASS   | 6 test files, 41 tests passed           |
+| Desktop compile       | `pnpm --filter @nexus/desktop build && pnpm --filter @nexus/desktop test`           | PASS   | Built in 179ms, 5 files, 45 tests       |
+| Mobile/Android checks | `pnpm --filter @nexus/mobile typecheck && pnpm --filter @nexus/android-worker test` | PASS   | 0 TS errors, 9 files, 191 tests passed  |
+| Packaging smoke tests | `docker compose -f infrastructure/docker/docker-compose.yml config`                 | PASS   | Valid config with health checks, exit 0 |
+| Blank install         | `DATABASE_PASSWORD=nexus_dev_password bash scripts/blank-machine-restore.sh`        | PASS   | 24 steps, 0 failures after `f7dc88e`    |
+| Release hygiene       | `pnpm release:check`                                                                | PASS   | 939 tracked files verified, exit 0      |
+| Translation gate      | `pnpm translation:check`                                                            | PASS   | 0 untranslated strings, exit 0          |
