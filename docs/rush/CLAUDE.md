@@ -33,7 +33,7 @@ release packaging. Document required shared manifest, schema or lockfile changes
 | CL1 | Truthful CLI, adapter and session detection      | DONE | 31e4df8 | 218 tests passing in @nexus/connections including adapter and authGuide tests |
 | CL2 | Secure ACP connector and multi-account contracts | DONE   | 84d115d | 146 connector tests passing + 9 provider-accounts tests passing               |
 | CL3 | MCP catalog, OAuth and per-server isolation      | DONE   | 4dbfd5c | 62 tests passing in @nexus/mcp across 7 test files                            |
-| CL4 | Browser sessions, permissions and audit          | TODO   |         |                                                                               |
+| CL4 | Browser sessions, permissions and audit          | DONE   | 5f34cbe | 31 browser-client tests + 76 browser-worker pytest + 51 host tests passing    |
 | CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
 
 ## CL0 — Baseline connection and threat-model fixtures
@@ -178,12 +178,22 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T16:19:00+02:00
+- Completed at: 2026-10-23T16:26:00+02:00
+- Commit: 5f34cbe
 - Commands and results:
+  - `pnpm --filter @nexus/browser-client build`: success.
+  - `pnpm --filter @nexus/browser-client typecheck`: success.
+  - `pnpm --filter @nexus/browser-client lint`: success.
+  - `pnpm --filter @nexus/browser-client test`: 2 passed, 1 skipped (31 tests passed).
+  - `uv run --project services/browser-worker --extra dev pytest services/browser-worker/tests`: 76 passed.
+  - `pnpm --filter @nexus/browser-worker-host test`: 3 passed, 1 skipped (51 tests passed).
 - Notes:
+  - Added explicit session ownership (`ownerId`), lifetime checks, and cancellation (`cancelSession`) in `BrowserSessionManager`, preventing cross-user session leakage.
+  - Hardened SSRF defense in `BrowserSecurityPolicy`: rejects loopback, RFC 1918, link-local metadata (169.254.169.254, metadata.google.internal), carrier-grade NAT, IPv6 link-local/multicast/mapped, and decimal/hex/octal IP formats.
+  - Added asynchronous DNS resolution check (`assertSafeNavigation`) against DNS rebinding.
+  - Added scoped permissions assertion (`assertScopedPermission`) for download, upload, clipboard, credentials (`browser.login`), and persistent profile.
 
 ## CL5 — Contract tests and integration handoff
 
@@ -217,6 +227,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | CL1-1 | CL1  | Low      | RESOLVED | Version manager shims (mise) stalled detection under strict minimal env allowlist.              | Detection probes timed out in 10s for shims requiring ambient mise variables.          | 77841a8                   |
 | CL2-1 | CL2  | Medium   | RESOLVED | Insecure umask during Unix socket creation and unproven promotion in probeAuth.                 | Socket created before chmod with ambient umask; probeAuth promoted unknown accounts.   | 84d115d                   |
 | CL3-1 | CL3  | Medium   | RESOLVED | Missing SSRF check on remote MCP URLs and unbounded tool output length.                         | Remote URLs previously connected without IP checks; tool output wasn't bounded.        | 4dbfd5c                   |
+| CL4-1 | CL4  | Medium   | RESOLVED | Missing IPv6 mapped loopback and session ownership checks in browser client.                    | `[::ffff:127.0.0.1]` and sessions without owner validation allowed potential pivot.   | 5f34cbe                   |
 
 ## Improvements for the adjustment phase
 
