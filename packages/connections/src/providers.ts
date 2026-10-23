@@ -95,6 +95,12 @@ export const CODEX_PROVIDER: ProviderDefinition = {
   },
   actions: ["detect", "test", "open_docs"],
   docsUrl: "https://developers.openai.com/codex/cli",
+  authGuide: {
+    kind: "cli_command",
+    command: "codex login",
+    instructions: "Run 'codex login' in your terminal to sign in to OpenAI.",
+    url: "https://developers.openai.com/codex/cli",
+  },
 };
 
 export const CLAUDE_PROVIDER: ProviderDefinition = {
@@ -121,6 +127,12 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
   },
   actions: ["detect", "test", "open_docs"],
   docsUrl: "https://docs.claude.com/en/docs/claude-code",
+  authGuide: {
+    kind: "cli_command",
+    command: "claude login",
+    instructions: "Run 'claude login' in your terminal to authenticate with Anthropic.",
+    url: "https://docs.claude.com/en/docs/claude-code",
+  },
 };
 
 export const ANTIGRAVITY_PROVIDER: ProviderDefinition = {
@@ -153,6 +165,12 @@ export const ANTIGRAVITY_PROVIDER: ProviderDefinition = {
     interpret: parseVersionLine,
   },
   actions: ["detect", "test", "open_docs"],
+  authGuide: {
+    kind: "cli_command",
+    command: "agy login",
+    instructions: "Run 'agy login' in your terminal to authenticate with Google.",
+    url: null,
+  },
 };
 
 export const BUILT_IN_PROVIDERS: readonly ProviderDefinition[] = [

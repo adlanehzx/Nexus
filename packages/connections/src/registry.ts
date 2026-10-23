@@ -2,6 +2,7 @@ import { AppError } from "@nexus/shared";
 import type {
   AdapterProvenance,
   ConnectionAction,
+  ConnectionAuthGuide,
   ConnectionKind,
   ConnectionPlatform,
 } from "./model.js";
@@ -161,6 +162,8 @@ export interface ProviderDefinition {
   actions: readonly ConnectionAction[];
   /** Where a human goes to fix things. Never a URL built from input. */
   docsUrl?: string;
+  /** Secret-free guidance for authenticating this provider when human action is needed. */
+  authGuide?: ConnectionAuthGuide;
 }
 
 export class UnknownProviderError extends AppError {

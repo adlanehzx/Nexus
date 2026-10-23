@@ -104,6 +104,20 @@ posixOnly("connection detection", () => {
     expect(connection.requiresHumanAction).toBe(false);
   });
 
+  it("carries structured authGuide from provider definition without secrets", async () => {
+    const bin = await createFakeBinDir();
+    const guide = {
+      kind: "cli_command" as const,
+      command: "fixture login",
+      instructions: "Run fixture login",
+      url: "https://fixture.example.com",
+    };
+    const { detector } = detectorFor(bin.dir, fixtureProvider({ authGuide: guide }));
+
+    const connection = await detector.detect("fixture");
+    expect(connection.authGuide).toEqual(guide);
+  });
+
   it("does not call a tool connected just because its binary exists", async () => {
     const bin = await createFakeBinDir();
     await bin.write("fixture", 'echo "fixture 2.3.4"');

@@ -548,6 +548,7 @@ export class ConnectionDetector {
         provenance: definition.adapter.provenance,
         provenanceEvidence: definition.adapter.provenanceEvidence,
       },
+      authGuide: definition.authGuide ?? null,
     };
 
     const parsed = connectionSchema.safeParse(candidate);
@@ -592,6 +593,7 @@ export class ConnectionDetector {
         provenance: definition.adapter.provenance,
         provenanceEvidence: definition.adapter.provenanceEvidence,
       },
+      authGuide: definition.authGuide ?? null,
     });
   }
 }

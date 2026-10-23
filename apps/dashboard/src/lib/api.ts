@@ -71,6 +71,12 @@ export interface ConnectionObservation {
     provenance: "official" | "community" | "unknown";
     provenanceEvidence: string;
   } | null;
+  authGuide?: {
+    kind: "cli_command" | "browser_url" | "manual";
+    command: string | null;
+    instructions: string;
+    url: string | null;
+  } | null;
 }
 
 export interface ConnectionCatalogEntry {

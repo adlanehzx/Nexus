@@ -182,6 +182,19 @@ export type ConnectionAuthStatus = z.infer<typeof connectionAuthStatusSchema>;
 export const adapterAvailabilitySchema = z.enum(["available", "missing", "unknown"]);
 export type AdapterAvailability = z.infer<typeof adapterAvailabilitySchema>;
 
+/**
+ * Secret-free guidance for authenticating a provider when human action is needed.
+ */
+export const connectionAuthGuideSchema = z
+  .object({
+    kind: z.enum(["cli_command", "browser_url", "manual"]),
+    command: z.string().max(128).nullable(),
+    instructions: z.string().max(400),
+    url: z.string().max(512).nullable(),
+  })
+  .strict();
+export type ConnectionAuthGuide = z.infer<typeof connectionAuthGuideSchema>;
+
 export const connectionSchema = z
   .object({
     /** Stable across restarts and across detections. `kind:providerId[:instance]`. */
@@ -275,6 +288,11 @@ export const connectionSchema = z
       })
       .strict()
       .nullable(),
+
+    /**
+     * Secret-free guidance for a human to authenticate this provider.
+     */
+    authGuide: connectionAuthGuideSchema.nullable().optional(),
   })
   // `strict`: a provider that returns extra keys cannot widen the model. This
   // is the line that makes "no secret in a Connection" enforceable rather than

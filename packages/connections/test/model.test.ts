@@ -37,6 +37,33 @@ describe("connection model", () => {
     expect(() => connectionSchema.parse(validConnection())).not.toThrow();
   });
 
+  it("accepts a connection with structured, secret-free authGuide", () => {
+    const withAuth = {
+      ...validConnection(),
+      authGuide: {
+        kind: "cli_command" as const,
+        command: "codex login",
+        instructions: "Run codex login to authenticate",
+        url: "https://example.com/docs",
+      },
+    };
+    expect(() => connectionSchema.parse(withAuth)).not.toThrow();
+  });
+
+  it("refuses secrets or extra fields smuggled in authGuide", () => {
+    const withSecret = {
+      ...validConnection(),
+      authGuide: {
+        kind: "cli_command" as const,
+        command: "codex login",
+        instructions: "Run login",
+        url: null,
+        token: "secret-token",
+      },
+    };
+    expect(() => connectionSchema.parse(withSecret)).toThrow();
+  });
+
   it.each(FORBIDDEN_CONNECTION_FIELDS)("refuses a connection carrying %s", (field) => {
     // The list comes from the module, not from this test: one copy of a
     // security rule cannot drift away from the other.
