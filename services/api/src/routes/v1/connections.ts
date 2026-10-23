@@ -79,5 +79,49 @@ export const connectionRoutes: FastifyPluginCallback = (fastify, _options, done)
       ok(await app.services.connections.test(request.params.providerId), request.id),
   );
 
+  app.post(
+    "/connections/:providerId/connect",
+    {
+      preHandler: app.requireAdmin,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["connections"],
+        summary: "Initiate or refresh connection to one provider",
+        params: z.object({
+          providerId: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-z][a-z0-9_-]*$/),
+        }),
+        response: { 200: okSchema(catalogEntrySchema) },
+      },
+    },
+    async (request) =>
+      ok(await app.services.connections.connect(request.params.providerId), request.id),
+  );
+
+  app.post(
+    "/connections/:providerId/disconnect",
+    {
+      preHandler: app.requireAdmin,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["connections"],
+        summary: "Disconnect and clear live observation for one provider",
+        params: z.object({
+          providerId: z
+            .string()
+            .min(1)
+            .max(64)
+            .regex(/^[a-z][a-z0-9_-]*$/),
+        }),
+        response: { 200: okSchema(catalogEntrySchema) },
+      },
+    },
+    async (request) =>
+      ok(await app.services.connections.disconnect(request.params.providerId), request.id),
+  );
+
   done();
 };

@@ -317,7 +317,7 @@ export class ProviderAccountService {
       name: input.name ?? existing.name,
       profileKey: input.profileKey ?? existing.profileKey,
       priority: input.priority ?? existing.priority,
-      enabled: input.enabled !== undefined ? input.enabled : existing.enabled,
+      enabled: input.enabled ?? existing.enabled,
       env: input.env !== undefined ? { ...existing.env, ...input.env } : existing.env,
       metadata:
         input.metadata !== undefined

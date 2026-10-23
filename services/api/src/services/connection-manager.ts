@@ -33,6 +33,8 @@ export interface ConnectionCatalogService {
   list(): ConnectionCatalogEntry[];
   detectAll(): Promise<ConnectionCatalogEntry[]>;
   test(providerId: string): Promise<ConnectionCatalogEntry>;
+  connect(providerId: string): Promise<ConnectionCatalogEntry>;
+  disconnect(providerId: string): Promise<ConnectionCatalogEntry>;
 }
 
 /**
@@ -125,6 +127,33 @@ export class LocalConnectionManager implements ConnectionCatalogService {
       const entry = this.list().find((candidate) => candidate.providerId === providerId);
       if (entry === undefined) throw new Error("Connection disappeared from its registry.");
       return entry;
+    });
+  }
+
+  connect(providerId: string): Promise<ConnectionCatalogEntry> {
+    return this.#serial(async () => {
+      const definition = this.#registry.get(providerId);
+      if (definition === undefined) {
+        throw new Error(`Unknown provider "${providerId}".`);
+      }
+      const observation = await this.#detector.detect(providerId, this.#observed.get(providerId));
+      this.#observed.set(providerId, observation);
+      const entry = this.list().find((candidate) => candidate.providerId === providerId);
+      if (entry === undefined) throw new Error("Connection disappeared from its registry.");
+      return entry;
+    });
+  }
+
+  disconnect(providerId: string): Promise<ConnectionCatalogEntry> {
+    return this.#serial(() => {
+      const definition = this.#registry.get(providerId);
+      if (definition === undefined) {
+        throw new Error(`Unknown provider "${providerId}".`);
+      }
+      this.#observed.delete(providerId);
+      const entry = this.list().find((candidate) => candidate.providerId === providerId);
+      if (entry === undefined) throw new Error("Connection disappeared from its registry.");
+      return Promise.resolve(entry);
     });
   }
 

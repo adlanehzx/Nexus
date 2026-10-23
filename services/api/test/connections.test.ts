@@ -43,10 +43,13 @@ const detectedCodex: ConnectionCatalogEntry = {
 };
 
 const catalog = [detectedCodex];
+const disconnectedCodex = { ...detectedCodex, observation: null };
 const fakeConnections = {
   list: vi.fn(() => catalog),
   detectAll: vi.fn(() => Promise.resolve(catalog)),
   test: vi.fn(() => Promise.resolve(detectedCodex)),
+  connect: vi.fn(() => Promise.resolve(detectedCodex)),
+  disconnect: vi.fn(() => Promise.resolve(disconnectedCodex)),
 } satisfies ConnectionCatalogService;
 
 let harness: ApiHarness;
@@ -99,6 +102,22 @@ describe("connection routes", () => {
     });
     expect(test.statusCode).toBe(200);
     expect(fakeConnections.test).toHaveBeenCalledWith("codex");
+
+    const connect = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/connections/codex/connect",
+      headers: admin.authorization,
+    });
+    expect(connect.statusCode).toBe(200);
+    expect(fakeConnections.connect).toHaveBeenCalledWith("codex");
+
+    const disconnect = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/connections/codex/disconnect",
+      headers: admin.authorization,
+    });
+    expect(disconnect.statusCode).toBe(200);
+    expect(fakeConnections.disconnect).toHaveBeenCalledWith("codex");
   });
 
   it("rejects command-shaped provider identifiers before reaching the service", async () => {
