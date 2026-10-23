@@ -7,8 +7,6 @@
         "-y",
         "--prefer-offline",
         "google-antigravity-acp@2.0.1",
-        "--binary-path",
-        "agy",
         "--no-skip-permissions"
       ]
     },
