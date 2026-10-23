@@ -29,9 +29,9 @@ release packaging. Document required shared manifest, schema or lockfile changes
 
 | ID  | Deliverable                                      | Status | Commit  | Evidence                                                                      |
 | --- | ------------------------------------------------ | ------ | ------- | ----------------------------------------------------------------------------- |
-| CL0 | Baseline connection and threat-model fixtures    | DONE   | acc5968 | 290 focused tests passing across connections and connector packages           |
-| CL1 | Truthful CLI, adapter and session detection      | TODO   |         |                                                                               |
-| CL2 | Secure ACP connector and multi-account contracts | TODO   |         |                                                                               |
+| CL0 | Baseline connection and threat-model fixtures    | DONE | acc5968 | 290 focused tests passing across connections and connector packages           |
+| CL1 | Truthful CLI, adapter and session detection      | DONE | 31e4df8 | 218 tests passing in @nexus/connections including adapter and authGuide tests |
+| CL2 | Secure ACP connector and multi-account contracts | TODO |         |                                                                               |
 | CL3 | MCP catalog, OAuth and per-server isolation      | TODO   |         |                                                                               |
 | CL4 | Browser sessions, permissions and audit          | TODO   |         |                                                                               |
 | CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
@@ -78,12 +78,22 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T15:42:00+02:00
+- Completed at: 2026-10-23T15:46:00+02:00
+- Commit: 31e4df89745582f059296e832d208761fa0e5270
 - Commands and results:
+  - `pnpm --filter @nexus/connections build`: succeeded.
+  - `pnpm --filter @nexus/connections test`: 8 test files (7 passed, 1 skipped real-agents smoke test), 218 passed.
+  - `pnpm --filter @nexus/connections format:check && pnpm --filter @nexus/connections lint`: succeeded.
+  - `pnpm --filter @nexus/api test test/connections.test.ts`: 3 tests passed.
+  - `pnpm --filter @nexus/dashboard build`: succeeded.
 - Notes:
+  - CLI, adapter and session authentication states strictly segregated into distinct fields.
+  - Package adapter detection implemented independently from CLI executable presence using `PackageResolverPort` and `NodePackageResolver`.
+  - Added secret-free structured `authGuide` metadata to `Connection` and `ConnectionObservation` for Gemini dashboard handoff (`C5-H3` / `H-G0-2`).
+  - Added host environment variable allowlist extension (`NEXUS_PROBE_ENV_ALLOWLIST`) for version managers (mise/asdf) while strictly stripping secrets.
+  - Real agents smoke suite added behind double opt-in (`NEXUS_REAL_AGENT_SMOKE` and `NEXUS_REAL_AGENT_CONVERSATION`).
 
 ## CL2 — Secure ACP connector and multi-account contracts
 
@@ -184,7 +194,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID    | Task | Severity | Status   | Description                                                                                     | Reproduction or evidence                                                               | Fix commit                |
 | ----- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------- |
 | CL0-1 | CL0  | Info     | RESOLVED | Worktree package dist artifacts missing on initial checkout, requiring initial workspace build. | Vitest failed resolving `@nexus/shared` until `pnpm build` was run across dependencies. | Resolved by initial build |
-
+| CL1-1 | CL1  | Low      | RESOLVED | Version manager shims (mise) stalled detection under strict minimal env allowlist.              | Detection probes timed out in 10s for shims requiring ambient mise variables.          | 77841a8                   |
 
 ## Improvements for the adjustment phase
 
@@ -194,9 +204,9 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Cross-agent handoffs
 
-| ID  | From/to | Contract or dependency | Status | Evidence or target commit |
-| --- | ------- | ---------------------- | ------ | ------------------------- |
-|     |         |                        |        |                           |
+| ID    | From/to          | Contract or dependency                                                                     | Status   | Evidence or target commit |
+| ----- | ---------------- | ------------------------------------------------------------------------------------------ | -------- | ------------------------- |
+| C5-H3 | Gemini to Claude | Add structured, secret-free `authGuide` metadata to connection observations (also H-G0-2). | RESOLVED | 31e4df8                   |
 
 ## Shared-file changes required at integration
 
