@@ -1,9 +1,5 @@
 import type { McpServerConfig } from "./config.js";
-import {
-  type McpManifest,
-  compileManifestToServerConfig,
-  validateManifest,
-} from "./manifest.js";
+import { type McpManifest, compileManifestToServerConfig, validateManifest } from "./manifest.js";
 import { McpSecurityError } from "./errors.js";
 
 /**
@@ -28,12 +24,42 @@ export const MCP_CATALOG: readonly McpManifest[] = [
     defaultPermissions: ["github.read"],
     defaultRisk: "MEDIUM",
     declaredTools: [
-      { name: "search_repositories", risk: "SAFE", permissions: ["github.read"], requiresConfirmation: false },
-      { name: "get_file_contents", risk: "SAFE", permissions: ["github.read"], requiresConfirmation: false },
-      { name: "list_issues", risk: "SAFE", permissions: ["github.read"], requiresConfirmation: false },
-      { name: "get_issue", risk: "SAFE", permissions: ["github.read"], requiresConfirmation: false },
-      { name: "create_issue", risk: "MEDIUM", permissions: ["github.write"], requiresConfirmation: true },
-      { name: "create_pull_request", risk: "HIGH", permissions: ["github.write"], requiresConfirmation: true },
+      {
+        name: "search_repositories",
+        risk: "SAFE",
+        permissions: ["github.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "get_file_contents",
+        risk: "SAFE",
+        permissions: ["github.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "list_issues",
+        risk: "SAFE",
+        permissions: ["github.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "get_issue",
+        risk: "SAFE",
+        permissions: ["github.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "create_issue",
+        risk: "MEDIUM",
+        permissions: ["github.write"],
+        requiresConfirmation: true,
+      },
+      {
+        name: "create_pull_request",
+        risk: "HIGH",
+        permissions: ["github.write"],
+        requiresConfirmation: true,
+      },
     ],
     secretRefs: {
       GITHUB_PERSONAL_ACCESS_TOKEN: "vault:mcp:github:token",
@@ -56,10 +82,30 @@ export const MCP_CATALOG: readonly McpManifest[] = [
     defaultPermissions: ["filesystem.read"],
     defaultRisk: "MEDIUM",
     declaredTools: [
-      { name: "read_file", risk: "SAFE", permissions: ["filesystem.read"], requiresConfirmation: false },
-      { name: "list_directory", risk: "SAFE", permissions: ["filesystem.read"], requiresConfirmation: false },
-      { name: "write_file", risk: "MEDIUM", permissions: ["filesystem.write"], requiresConfirmation: true },
-      { name: "edit_file", risk: "MEDIUM", permissions: ["filesystem.write"], requiresConfirmation: true },
+      {
+        name: "read_file",
+        risk: "SAFE",
+        permissions: ["filesystem.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "list_directory",
+        risk: "SAFE",
+        permissions: ["filesystem.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "write_file",
+        risk: "MEDIUM",
+        permissions: ["filesystem.write"],
+        requiresConfirmation: true,
+      },
+      {
+        name: "edit_file",
+        risk: "MEDIUM",
+        permissions: ["filesystem.write"],
+        requiresConfirmation: true,
+      },
     ],
     secretRefs: {},
   }),
@@ -80,9 +126,24 @@ export const MCP_CATALOG: readonly McpManifest[] = [
     defaultPermissions: ["memory.read"],
     defaultRisk: "LOW",
     declaredTools: [
-      { name: "create_entities", risk: "LOW", permissions: ["memory.write"], requiresConfirmation: false },
-      { name: "read_graph", risk: "SAFE", permissions: ["memory.read"], requiresConfirmation: false },
-      { name: "search_nodes", risk: "SAFE", permissions: ["memory.read"], requiresConfirmation: false },
+      {
+        name: "create_entities",
+        risk: "LOW",
+        permissions: ["memory.write"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "read_graph",
+        risk: "SAFE",
+        permissions: ["memory.read"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "search_nodes",
+        risk: "SAFE",
+        permissions: ["memory.read"],
+        requiresConfirmation: false,
+      },
     ],
     secretRefs: {},
   }),
@@ -103,8 +164,18 @@ export const MCP_CATALOG: readonly McpManifest[] = [
     defaultPermissions: ["search.web"],
     defaultRisk: "LOW",
     declaredTools: [
-      { name: "brave_web_search", risk: "SAFE", permissions: ["search.web"], requiresConfirmation: false },
-      { name: "brave_local_search", risk: "SAFE", permissions: ["search.web"], requiresConfirmation: false },
+      {
+        name: "brave_web_search",
+        risk: "SAFE",
+        permissions: ["search.web"],
+        requiresConfirmation: false,
+      },
+      {
+        name: "brave_local_search",
+        risk: "SAFE",
+        permissions: ["search.web"],
+        requiresConfirmation: false,
+      },
     ],
     secretRefs: {
       BRAVE_API_KEY: "vault:mcp:brave-search:key",
@@ -151,9 +222,7 @@ export function installCatalogServer(
   };
 
   return compileManifestToServerConfig(mergedManifest, {
-    ...(options?.allowedBinaries !== undefined
-      ? { allowedBinaries: options.allowedBinaries }
-      : {}),
+    ...(options?.allowedBinaries !== undefined ? { allowedBinaries: options.allowedBinaries } : {}),
   });
 }
 

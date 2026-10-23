@@ -34,14 +34,16 @@ describe("BrowserSecurityPolicy", () => {
     expect(() => policy.assertUrlSafe("http://169.254.169.254/latest/meta-data")).toThrowError(
       BrowserSecurityError,
     );
-    expect(() => policy.assertUrlSafe("http://metadata.google.internal/computeMetadata/v1")).toThrowError(
-      BrowserSecurityError,
-    );
+    expect(() =>
+      policy.assertUrlSafe("http://metadata.google.internal/computeMetadata/v1"),
+    ).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://192.168.1.50")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://10.0.0.1")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://[::1]:8080")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://[fe80::1]:8080")).toThrowError(BrowserSecurityError);
-    expect(() => policy.assertUrlSafe("http://[::ffff:127.0.0.1]")).toThrowError(BrowserSecurityError);
+    expect(() => policy.assertUrlSafe("http://[::ffff:127.0.0.1]")).toThrowError(
+      BrowserSecurityError,
+    );
     expect(() => policy.assertUrlSafe("http://2130706433")).toThrowError(BrowserSecurityError); // Decimal IP
     expect(() => policy.assertUrlSafe("http://0x7f000001")).toThrowError(BrowserSecurityError); // Hex IP
   });
@@ -205,7 +207,9 @@ describe("BrowserSessionManager & Quotas", () => {
     expect(session.ownerId).toBe("user-alice");
 
     // Same owner can access
-    const reaccessed = await manager.getOrCreateSession("session-user-1", { ownerId: "user-alice" });
+    const reaccessed = await manager.getOrCreateSession("session-user-1", {
+      ownerId: "user-alice",
+    });
     expect(reaccessed.targetId).toBe(session.targetId);
 
     // Another owner cannot access user-alice's session

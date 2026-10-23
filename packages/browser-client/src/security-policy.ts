@@ -93,7 +93,13 @@ export function isPrivateIp(ip: string): boolean {
       if (rest) {
         if (rest.includes(".")) {
           const b0 = Number(rest.split(".")[0]);
-          return b0 === 127 || b0 === 10 || b0 === 0 || b0 === 169 || (b0 === 192 && rest.startsWith("192.168."));
+          return (
+            b0 === 127 ||
+            b0 === 10 ||
+            b0 === 0 ||
+            b0 === 169 ||
+            (b0 === 192 && rest.startsWith("192.168."))
+          );
         }
         const [h0] = rest.split(":");
         if (h0) {
@@ -141,13 +147,7 @@ const CAPTCHA_OR_MFA_KEYWORDS = [
  * Security policy for native web browsing in NEXUS.
  */
 export type ScopedBrowserAction =
-  | "navigate"
-  | "interact"
-  | "download"
-  | "upload"
-  | "clipboard"
-  | "credentials"
-  | "profile";
+  "navigate" | "interact" | "download" | "upload" | "clipboard" | "credentials" | "profile";
 
 export class BrowserSecurityPolicy {
   readonly #allowLocalhost: boolean;
@@ -315,7 +315,8 @@ export class BrowserSecurityPolicy {
    * Enforces scoped permissions for downloads, uploads, clipboard, credentials, and profiles.
    */
   assertScopedPermission(
-    action: "navigate" | "interact" | "download" | "upload" | "clipboard" | "credentials" | "profile",
+    action:
+      "navigate" | "interact" | "download" | "upload" | "clipboard" | "credentials" | "profile",
     grantedPermissions: readonly string[],
   ): void {
     const required: Record<ScopedBrowserAction, string> = {

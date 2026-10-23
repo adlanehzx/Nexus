@@ -331,10 +331,7 @@ export class ProviderAccountService {
     return updated;
   }
 
-  async setAccountEnabled(
-    id: string,
-    enabled: boolean,
-  ): Promise<ProviderAccount | undefined> {
+  async setAccountEnabled(id: string, enabled: boolean): Promise<ProviderAccount | undefined> {
     return this.updateAccount(id, { enabled });
   }
 

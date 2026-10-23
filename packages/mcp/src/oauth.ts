@@ -41,7 +41,12 @@ export class SingleUseOAuthStateStore {
   /**
    * Registers a single-use OAuth state record.
    */
-  createState(metadata: { serverName: string; codeVerifier: string; redirectUri: string; ttlMs?: number }): string {
+  createState(metadata: {
+    serverName: string;
+    codeVerifier: string;
+    redirectUri: string;
+    ttlMs?: number;
+  }): string {
     this.#cleanupExpired();
     const state = randomBytes(24).toString("base64url");
     const now = this.#now();
