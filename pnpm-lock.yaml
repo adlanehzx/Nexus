@@ -141,8 +141,8 @@ importers:
         specifier: ~57.0.3
         version: 57.0.3(expo@57.0.20)
       expo-speech:
-        specifier: ~57.0.2
-        version: 57.0.2(expo@57.0.20)
+        specifier: ~58.0.3
+        version: 58.0.3(expo@57.0.20)
       expo-splash-screen:
         specifier: ~57.0.8
         version: 57.0.8(expo@57.0.20)(supports-color@8.1.1)(typescript@6.0.3)
@@ -4505,8 +4505,8 @@ packages:
     resolution: {integrity: sha512-aK+LdKzauHSGmsOStZtyxdzv0zWssCkxTw3m4QuOhfDSJsZaMRTd9O41d8ixU/QfELTbaJ0oRNcF7JFV/7O9YQ==}
     engines: {node: '>=20.16.0'}
 
-  expo-speech@57.0.2:
-    resolution: {integrity: sha512-ngh/MwA9Yw7s7VuhekFnluz6JdxX59daJsr+WWgQf+Js2eHUSFoOhSoCWOVpw6YYcmrCkXMse91Hm6wxRNWpIA==}
+  expo-speech@58.0.3:
+    resolution: {integrity: sha512-jdMTqWL6ciDM8aVJe2/l2g6GTVaK7i/zBOVUhTq+l0Y+DOCz3Nh4HqNrMwmIKzXrlsxRv3ejmjSQPlX1lfOTOA==}
     peerDependencies:
       expo: '*'
 
@@ -11047,7 +11047,7 @@ snapshots:
 
   expo-server@57.0.3: {}
 
-  expo-speech@57.0.2(expo@57.0.20):
+  expo-speech@58.0.3(expo@57.0.20):
     dependencies:
       expo: 57.0.20(e5247686cbca4ac0eca157e63553c817)
 
