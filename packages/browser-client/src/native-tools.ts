@@ -55,10 +55,10 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     summarize: (input) => `Navigate to ${input.url}`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
-      policy.assertUrlSafe(input.url);
+      await policy.assertSafeNavigation(input.url);
 
       context.onProgress({ pct: 10, label: `Opening session for ${input.url}` });
-      await sessionManager.getOrCreateSession(sessionId);
+      await sessionManager.getOrCreateSession(sessionId, { ownerId: context.userId });
       sessionManager.recordAction(sessionId);
 
       context.onProgress({ pct: 40, label: `Loading ${input.url}` });
@@ -140,7 +140,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     summarize: (input) => `Extract content (${input.format ?? "markdown"})`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
-      await sessionManager.getOrCreateSession(sessionId);
+      await sessionManager.getOrCreateSession(sessionId, { ownerId: context.userId });
       sessionManager.recordAction(sessionId);
 
       context.onProgress({ pct: 50, label: "Extracting page content" });
@@ -208,7 +208,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
         : `Click at coordinates (${input.target.x}, ${input.target.y})`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
-      await sessionManager.getOrCreateSession(sessionId);
+      await sessionManager.getOrCreateSession(sessionId, { ownerId: context.userId });
       sessionManager.recordAction(sessionId);
 
       context.onProgress({ pct: 30, label: "Executing click" });
@@ -279,7 +279,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     summarize: (input) => `Type ${input.text.length} characters into '${input.target}'`,
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
-      await sessionManager.getOrCreateSession(sessionId);
+      await sessionManager.getOrCreateSession(sessionId, { ownerId: context.userId });
       sessionManager.recordAction(sessionId);
 
       context.onProgress({ pct: 40, label: `Typing text into ${input.target}` });
@@ -321,7 +321,7 @@ export function createNativeBrowserTools(options: NativeBrowserToolsOptions): An
     summarize: () => "Page screenshot",
     execute: async (input, context) => {
       const sessionId = resolveSessionId(input.sessionId, context);
-      await sessionManager.getOrCreateSession(sessionId);
+      await sessionManager.getOrCreateSession(sessionId, { ownerId: context.userId });
       sessionManager.recordAction(sessionId);
 
       context.onProgress({ pct: 30, label: "Capturing Chromium page" });

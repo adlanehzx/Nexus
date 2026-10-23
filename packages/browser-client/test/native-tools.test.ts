@@ -34,8 +34,41 @@ describe("BrowserSecurityPolicy", () => {
     expect(() => policy.assertUrlSafe("http://169.254.169.254/latest/meta-data")).toThrowError(
       BrowserSecurityError,
     );
+    expect(() => policy.assertUrlSafe("http://metadata.google.internal/computeMetadata/v1")).toThrowError(
+      BrowserSecurityError,
+    );
     expect(() => policy.assertUrlSafe("http://192.168.1.50")).toThrowError(BrowserSecurityError);
     expect(() => policy.assertUrlSafe("http://10.0.0.1")).toThrowError(BrowserSecurityError);
+    expect(() => policy.assertUrlSafe("http://[::1]:8080")).toThrowError(BrowserSecurityError);
+    expect(() => policy.assertUrlSafe("http://[fe80::1]:8080")).toThrowError(BrowserSecurityError);
+    expect(() => policy.assertUrlSafe("http://[::ffff:127.0.0.1]")).toThrowError(BrowserSecurityError);
+    expect(() => policy.assertUrlSafe("http://2130706433")).toThrowError(BrowserSecurityError); // Decimal IP
+    expect(() => policy.assertUrlSafe("http://0x7f000001")).toThrowError(BrowserSecurityError); // Hex IP
+  });
+
+  it("enforces scoped permissions for downloads, uploads, clipboard, credentials and profile", () => {
+    const policy = new BrowserSecurityPolicy();
+
+    // Granted permissions covering specific actions
+    expect(() => policy.assertScopedPermission("navigate", ["browser.navigate"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("interact", ["browser.interact"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("download", ["browser.interact"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("download", ["browser.download"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("upload", ["browser.upload"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("clipboard", ["browser.clipboard"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("credentials", ["browser.login"])).not.toThrow();
+    expect(() => policy.assertScopedPermission("profile", ["browser.profile"])).not.toThrow();
+
+    // Denials when permission is missing
+    expect(() => policy.assertScopedPermission("upload", ["browser.navigate"])).toThrowError(
+      BrowserSecurityError,
+    );
+    expect(() => policy.assertScopedPermission("credentials", ["browser.interact"])).toThrowError(
+      BrowserSecurityError,
+    );
+    expect(() => policy.assertScopedPermission("profile", ["browser.navigate"])).toThrowError(
+      BrowserSecurityError,
+    );
   });
 
   it("allows localhost when local/test mode is explicitly enabled", () => {
@@ -164,6 +197,31 @@ describe("BrowserSessionManager & Quotas", () => {
 
     manager.resumeAfterHumanIntervention("mission-2");
     expect(manager.getSession("mission-2")?.waitingForHuman).toBeUndefined();
+  });
+
+  it("enforces explicit session ownership and blocks unauthorized access", async () => {
+    const manager = new BrowserSessionManager({ driver: mockDriver });
+    const session = await manager.getOrCreateSession("session-user-1", { ownerId: "user-alice" });
+    expect(session.ownerId).toBe("user-alice");
+
+    // Same owner can access
+    const reaccessed = await manager.getOrCreateSession("session-user-1", { ownerId: "user-alice" });
+    expect(reaccessed.targetId).toBe(session.targetId);
+
+    // Another owner cannot access user-alice's session
+    await expect(
+      manager.getOrCreateSession("session-user-1", { ownerId: "user-mallory" }),
+    ).rejects.toThrowError(BrowserSecurityError);
+  });
+
+  it("handles explicit session cancellation and prevents subsequent operations", async () => {
+    const manager = new BrowserSessionManager({ driver: mockDriver });
+    await manager.getOrCreateSession("session-cancel");
+
+    await manager.cancelSession("session-cancel", "Mission aborted by operator");
+    await expect(manager.getOrCreateSession("session-cancel")).rejects.toThrowError(
+      BrowserSecurityError,
+    );
   });
 });
 

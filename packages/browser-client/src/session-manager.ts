@@ -2,11 +2,16 @@ import { copyFile, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { uuidv7 } from "@nexus/shared";
 import type { BrowserHarnessDriver, PageInfo } from "./harness-driver.js";
-import { BrowserSecurityPolicy, type BrowserSecurityOptions } from "./security-policy.js";
+import {
+  BrowserSecurityPolicy,
+  BrowserSecurityError,
+  type BrowserSecurityOptions,
+} from "./security-policy.js";
 
 export interface NativeBrowserSession {
   sessionId: string;
   targetId: string;
+  ownerId?: string;
   actionCount: number;
   maxActions: number;
   createdAt: number;
@@ -14,6 +19,8 @@ export interface NativeBrowserSession {
   maxDurationMs: number;
   currentUrl?: string;
   title?: string;
+  cancelled?: boolean;
+  cancelReason?: string;
   waitingForHuman?: {
     reason: string;
     pageUrl: string;
@@ -85,11 +92,31 @@ export class BrowserSessionManager {
   /**
    * Retrieves or allocates a dedicated Chromium tab for a given session.
    */
-  async getOrCreateSession(sessionId: string): Promise<NativeBrowserSession> {
+  async getOrCreateSession(
+    sessionId: string,
+    options?: { ownerId?: string },
+  ): Promise<NativeBrowserSession> {
     const existing = this.#sessions.get(sessionId);
     if (existing) {
+      if (existing.cancelled) {
+        throw new BrowserSecurityError(
+          `Browser session "${sessionId}" has been cancelled: ${existing.cancelReason ?? "user cancelled"}.`,
+          "SESSION_CANCELLED",
+        );
+      }
+      if (
+        options?.ownerId !== undefined &&
+        existing.ownerId !== undefined &&
+        options.ownerId !== existing.ownerId
+      ) {
+        throw new BrowserSecurityError(
+          `Access denied: browser session belongs to owner "${existing.ownerId}", not "${options.ownerId}".`,
+          "SESSION_OWNER_MISMATCH",
+        );
+      }
       const now = Date.now();
       if (now - existing.createdAt > existing.maxDurationMs) {
+        await this.closeSession(sessionId);
         throw new QuotaExceededError(
           `Maximum browser session duration exceeded (${Math.round(existing.maxDurationMs / 1000)}s).`,
         );
@@ -97,6 +124,9 @@ export class BrowserSessionManager {
       try {
         await this.#driver.switchTab(existing.targetId);
         existing.lastActiveAt = now;
+        if (options?.ownerId && !existing.ownerId) {
+          existing.ownerId = options.ownerId;
+        }
         return existing;
       } catch {
         this.#sessions.delete(sessionId);
@@ -107,6 +137,7 @@ export class BrowserSessionManager {
     const session: NativeBrowserSession = {
       sessionId,
       targetId,
+      ...(options?.ownerId !== undefined ? { ownerId: options.ownerId } : {}),
       actionCount: 0,
       maxActions: this.#defaultMaxActions,
       createdAt: Date.now(),
@@ -118,11 +149,33 @@ export class BrowserSessionManager {
   }
 
   /**
+   * Cancels an active session and frees its resources.
+   */
+  async cancelSession(sessionId: string, reason = "Session cancelled"): Promise<void> {
+    const session = this.#sessions.get(sessionId);
+    if (!session) return;
+    session.cancelled = true;
+    session.cancelReason = reason;
+    try {
+      await this.#driver.closeTab(session.targetId);
+    } catch {
+      // Ignored if tab already closed
+    }
+  }
+
+  /**
    * Records an action on the session and checks quotas.
    */
   recordAction(sessionId: string): void {
     const session = this.#sessions.get(sessionId);
     if (!session) return;
+
+    if (session.cancelled) {
+      throw new BrowserSecurityError(
+        `Browser session "${sessionId}" has been cancelled: ${session.cancelReason ?? "cancelled"}.`,
+        "SESSION_CANCELLED",
+      );
+    }
 
     session.actionCount += 1;
     session.lastActiveAt = Date.now();
