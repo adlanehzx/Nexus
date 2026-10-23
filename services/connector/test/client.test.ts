@@ -108,10 +108,12 @@ posixOnly("ConnectorHttpClient over Unix domain socket", () => {
 
     const caps = await client.capabilities();
     expect(caps.ok).toBe(true);
+    if (!caps.ok) throw new Error("Expected ok");
     expect(caps.result).toHaveProperty("methods");
 
     const list = await client.list();
     expect(list.ok).toBe(true);
+    if (!list.ok) throw new Error("Expected ok");
     expect(list.result).toHaveProperty("connections");
   });
 
