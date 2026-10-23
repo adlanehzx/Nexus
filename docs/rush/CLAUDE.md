@@ -31,7 +31,7 @@ release packaging. Document required shared manifest, schema or lockfile changes
 | --- | ------------------------------------------------ | ------ | ------- | ----------------------------------------------------------------------------- |
 | CL0 | Baseline connection and threat-model fixtures    | DONE | acc5968 | 290 focused tests passing across connections and connector packages           |
 | CL1 | Truthful CLI, adapter and session detection      | DONE | 31e4df8 | 218 tests passing in @nexus/connections including adapter and authGuide tests |
-| CL2 | Secure ACP connector and multi-account contracts | TODO |         |                                                                               |
+| CL2 | Secure ACP connector and multi-account contracts | DONE   | 84d115d | 146 connector tests passing + 9 provider-accounts tests passing               |
 | CL3 | MCP catalog, OAuth and per-server isolation      | TODO   |         |                                                                               |
 | CL4 | Browser sessions, permissions and audit          | TODO   |         |                                                                               |
 | CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
@@ -111,12 +111,22 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T15:47:00+02:00
+- Completed at: 2026-10-23T16:01:00+02:00
+- Commit: 84d115db011ca14838fa61a2938e55e003468593
 - Commands and results:
+  - `pnpm --filter @nexus/connector build`: succeeded.
+  - `pnpm --filter @nexus/connector test`: 9 test files, 146 passed.
+  - `pnpm --filter @nexus/connector format:check && pnpm --filter @nexus/connector lint`: succeeded.
+  - `pnpm --filter @nexus/api test test/provider-accounts.test.ts`: 9 passed.
 - Notes:
+  - Implemented real CLI daemon entrypoint (`nexus-connector`) with state directory (mode 0700) and durable nonce logging via `FileNoncePersistence`.
+  - Added signed `ConnectorHttpClient` communicating over Unix domain sockets or loopback TCP with request canonicalization and Ed25519 signatures.
+  - Hardened Unix socket creation with restrictive umask (0o077) and owner-only 0600 chmod to eliminate access race conditions.
+  - Windows explicitly rejected for Unix socket transport and CLI daemon until a safe transport without shell invocation is verified.
+  - Enforced key rotation and revocation primitives in `admin.ts`.
+  - Updated `provider-accounts.ts` with typed disabling (`enabled: boolean`), filtering disabled identities from `selectAccount`, and ensuring `probeAuth` never promotes an unproven account without evidence.
 
 ## CL3 — MCP catalog, OAuth and per-server isolation
 
@@ -195,6 +205,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ----- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------- |
 | CL0-1 | CL0  | Info     | RESOLVED | Worktree package dist artifacts missing on initial checkout, requiring initial workspace build. | Vitest failed resolving `@nexus/shared` until `pnpm build` was run across dependencies. | Resolved by initial build |
 | CL1-1 | CL1  | Low      | RESOLVED | Version manager shims (mise) stalled detection under strict minimal env allowlist.              | Detection probes timed out in 10s for shims requiring ambient mise variables.          | 77841a8                   |
+| CL2-1 | CL2  | Medium   | RESOLVED | Insecure umask during Unix socket creation and unproven promotion in probeAuth.                 | Socket created before chmod with ambient umask; probeAuth promoted unknown accounts.   | 84d115d                   |
 
 ## Improvements for the adjustment phase
 
