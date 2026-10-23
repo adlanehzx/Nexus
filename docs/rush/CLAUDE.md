@@ -34,7 +34,7 @@ release packaging. Document required shared manifest, schema or lockfile changes
 | CL2 | Secure ACP connector and multi-account contracts | DONE   | 84d115d | 146 connector tests passing + 9 provider-accounts tests passing               |
 | CL3 | MCP catalog, OAuth and per-server isolation      | DONE   | 4dbfd5c | 62 tests passing in @nexus/mcp across 7 test files                            |
 | CL4 | Browser sessions, permissions and audit          | DONE   | 5f34cbe | 31 browser-client tests + 76 browser-worker pytest + 51 host tests passing    |
-| CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
+| CL5 | Contract tests and integration handoff           | DONE   | c3cedf9 | Complete API contracts + deterministic streamed ACP fake contract tests       |
 
 ## CL0 — Baseline connection and threat-model fixtures
 
@@ -210,12 +210,16 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T16:27:00+02:00
+- Completed at: 2026-10-23T16:36:00+02:00
+- Commit: c3cedf9
 - Commands and results:
+  - `pnpm --filter @nexus/api test test/connections.test.ts test/provider-accounts.test.ts`: 12 tests passed.
+  - `pnpm --filter @nexus/agent test`: 4 tests passed (including `test/acp-runner.test.ts`).
 - Notes:
+  - Added typed API contracts for `POST /connections/:providerId/connect` and `POST /connections/:providerId/disconnect` matching `ConnectionCatalogService` and `LocalConnectionManager`.
+  - Added deterministic fake ACP provider contract tests (`services/agent/test/acp-runner.test.ts`) streaming answer chunks, validating in-workspace permission handling, out-of-workspace rejection, and sanitized error mapping.
 
 ## Findings and errors
 
@@ -228,6 +232,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | CL2-1 | CL2  | Medium   | RESOLVED | Insecure umask during Unix socket creation and unproven promotion in probeAuth.                 | Socket created before chmod with ambient umask; probeAuth promoted unknown accounts.   | 84d115d                   |
 | CL3-1 | CL3  | Medium   | RESOLVED | Missing SSRF check on remote MCP URLs and unbounded tool output length.                         | Remote URLs previously connected without IP checks; tool output wasn't bounded.        | 4dbfd5c                   |
 | CL4-1 | CL4  | Medium   | RESOLVED | Missing IPv6 mapped loopback and session ownership checks in browser client.                    | `[::ffff:127.0.0.1]` and sessions without owner validation allowed potential pivot.   | 5f34cbe                   |
+| CL5-1 | CL5  | Info     | RESOLVED | Missing connect/disconnect endpoints in API connection routes and lack of deterministic ACP runner unit suite. | API lacked POST /connections/:providerId/connect & disconnect routes matching ConnectionCatalogService. | c3cedf9                   |
 
 ## Improvements for the adjustment phase
 
@@ -245,18 +250,21 @@ Add a row after every numbered task, even when the result is `None found`.
 
 | File | Required change | Reason | Related commit/test |
 | ---- | --------------- | ------ | ------------------- |
-|      |                 |        |                     |
+| `services/api/src/routes/v1/connections.ts` | Added `POST /connections/:providerId/connect` and `POST /connections/:providerId/disconnect` routes | Expose connect and disconnect operations in HTTP API matching `ConnectionCatalogService` contract | `c3cedf9` / `test/connections.test.ts` |
+| `services/api/src/services/connection-manager.ts` | Added `connect(providerId)` and `disconnect(providerId)` to `ConnectionCatalogService` interface and `LocalConnectionManager` | Allow direct lifecycle state transitions via connection manager | `c3cedf9` / `test/connections.test.ts` |
+| `services/api/src/services/provider-accounts.ts` | Added `enabled` property to `ProviderAccount` and typed `enableProviderAccount` / `disableProviderAccount` functions | Support typed account enable/disable states | `bfa69c8` / `test/provider-accounts.test.ts` |
+| `services/agent/test/acp-runner.test.ts` | Added deterministic ACP runner contract test using `services/agent/scripts/e2e-acp-agent.mjs` | Validate real streamed answer chunks, in-workspace permissions, out-of-workspace rejection, and error mapping without external quota | `c3cedf9` |
 
 ## Final verification
 
-| Gate               | Exact command                                     | Result  | Evidence/date |
-| ------------------ | ------------------------------------------------- | ------- | ------------- |
-| Connections format | `pnpm --filter @nexus/connections format:check`   | NOT RUN |               |
-| Connector format   | `pnpm --filter @nexus/connector format:check`     | NOT RUN |               |
-| Focused lint       | Record command                                    | NOT RUN |               |
-| Focused typecheck  | Record command                                    | NOT RUN |               |
-| Focused build      | Record command                                    | NOT RUN |               |
-| Focused tests      | Record command and exact count                    | NOT RUN |               |
-| Browser worker     | `uv run --project services/browser-worker pytest` | NOT RUN |               |
-| Release hygiene    | `pnpm release:check`                              | NOT RUN |               |
-| Translation gate   | `pnpm translation:check`                          | NOT RUN |               |
+| Gate               | Exact command                                                                                                                                                                                                                                           | Result | Evidence/date                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections format | `pnpm --filter @nexus/connections format:check`                                                                                                                                                                                                         | PASSED | Clean prettier check across all files / 2026-10-23                                                                                              |
+| Connector format   | `pnpm --filter @nexus/connector format:check`                                                                                                                                                                                                           | PASSED | Clean prettier check across all files / 2026-10-23                                                                                              |
+| Focused lint       | `pnpm --filter @nexus/connections --filter @nexus/connector --filter @nexus/mcp --filter @nexus/browser-client --filter @nexus/api --filter @nexus/agent lint`                                                                                         | PASSED | 6 workspace projects clean / 2026-10-23                                                                                                        |
+| Focused typecheck  | `pnpm --filter @nexus/connections --filter @nexus/connector --filter @nexus/mcp --filter @nexus/browser-client --filter @nexus/api --filter @nexus/agent typecheck`                                                                                    | PASSED | 6 workspace projects clean / 2026-10-23                                                                                                        |
+| Focused build      | `pnpm --filter @nexus/connections --filter @nexus/connector --filter @nexus/mcp --filter @nexus/browser-client --filter @nexus/api --filter @nexus/agent build`                                                                                        | PASSED | 6 workspace projects built successfully / 2026-10-23                                                                                            |
+| Focused tests      | `pnpm --filter @nexus/connections test && pnpm --filter @nexus/connector test && pnpm --filter @nexus/mcp test && pnpm --filter @nexus/browser-client test && pnpm --filter @nexus/api test test/connections.test.ts test/provider-accounts.test.ts && pnpm --filter @nexus/agent test && pnpm --filter @nexus/browser-worker-host test` | PASSED | 600 tests passed (218 connections, 146 connector, 62 mcp, 31 browser-client, 12 api, 4 agent, 51 browser-worker-host, 76 pytest) / 2026-10-23 |
+| Browser worker     | `uv run --project services/browser-worker --extra dev pytest services/browser-worker/tests`                                                                                                                                                            | PASSED | 76 passed, 2 deselected, 1 warning in 2.53s / 2026-10-23                                                                                       |
+| Release hygiene    | `pnpm release:check`                                                                                                                                                                                                                                    | PASSED | 962 tracked files clean / 2026-10-23                                                                                                            |
+| Translation gate   | `pnpm translation:check`                                                                                                                                                                                                                                | PASSED | English only check passed, clean / 2026-10-23                                                                                                   |
