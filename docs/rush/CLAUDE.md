@@ -27,14 +27,14 @@ release packaging. Document required shared manifest, schema or lockfile changes
 
 ## Progress summary
 
-| ID  | Deliverable                                      | Status | Commit | Evidence |
-| --- | ------------------------------------------------ | ------ | ------ | -------- |
-| CL0 | Baseline connection and threat-model fixtures    | TODO   |        |          |
-| CL1 | Truthful CLI, adapter and session detection      | TODO   |        |          |
-| CL2 | Secure ACP connector and multi-account contracts | TODO   |        |          |
-| CL3 | MCP catalog, OAuth and per-server isolation      | TODO   |        |          |
-| CL4 | Browser sessions, permissions and audit          | TODO   |        |          |
-| CL5 | Contract tests and integration handoff           | TODO   |        |          |
+| ID  | Deliverable                                      | Status | Commit  | Evidence                                                                      |
+| --- | ------------------------------------------------ | ------ | ------- | ----------------------------------------------------------------------------- |
+| CL0 | Baseline connection and threat-model fixtures    | DONE   | acc5968 | 290 focused tests passing across connections and connector packages           |
+| CL1 | Truthful CLI, adapter and session detection      | TODO   |         |                                                                               |
+| CL2 | Secure ACP connector and multi-account contracts | TODO   |         |                                                                               |
+| CL3 | MCP catalog, OAuth and per-server isolation      | TODO   |         |                                                                               |
+| CL4 | Browser sessions, permissions and audit          | TODO   |         |                                                                               |
+| CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
 
 ## CL0 — Baseline connection and threat-model fixtures
 
@@ -49,12 +49,19 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T15:35:00+02:00
+- Completed at: 2026-10-23T15:40:00+02:00
+- Commit: acc59684a02adcb8b9dc4f62d22321c32ee7d5c1
 - Commands and results:
+  - `pnpm --filter @nexus/connections test`: 6 test files, 177 tests passed.
+  - `pnpm --filter @nexus/connector test`: 6 test files, 113 tests passed.
+  - `pnpm --filter @nexus/connections format:check && pnpm --filter @nexus/connector format:check`: passed.
+  - `pnpm --filter @nexus/connections lint && pnpm --filter @nexus/connector lint`: passed.
 - Notes:
+  - Verified baseline test suites in `packages/connections/test` and `services/connector/test`.
+  - Proved threat-model boundaries: argument array execution without shell interpolation, stdout/stderr credential redaction before truncation, symlink rejection for Unix sockets, payload size and request timeout enforcement, replay rejection via client nonce map.
+  - All fixtures run in temporary directories without referencing home credential directories.
 
 ## CL1 — Truthful CLI, adapter and session detection
 
@@ -174,9 +181,10 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID  | Task | Severity | Status | Description | Reproduction or evidence | Fix commit |
-| --- | ---- | -------- | ------ | ----------- | ------------------------ | ---------- |
-|     |      |          |        |             |                          |            |
+| ID    | Task | Severity | Status   | Description                                                                                     | Reproduction or evidence                                                               | Fix commit                |
+| ----- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------- |
+| CL0-1 | CL0  | Info     | RESOLVED | Worktree package dist artifacts missing on initial checkout, requiring initial workspace build. | Vitest failed resolving `@nexus/shared` until `pnpm build` was run across dependencies. | Resolved by initial build |
+
 
 ## Improvements for the adjustment phase
 
