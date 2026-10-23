@@ -28,15 +28,15 @@ installers or device pairing here.
 
 ## Progress summary
 
-| ID  | Deliverable                                    | Status | Commit    | Evidence                                              |
-| --- | ---------------------------------------------- | ------ | --------- | ----------------------------------------------------- |
-| C0  | Baseline and executable acceptance scenarios   | DONE   | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
-| C1  | Durable mission lifecycle and restart recovery | DONE   | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
-| C2  | Context, memory and token-budget management    | DONE   | `f535de8` | 43 Agent Core and 109 Memory tests passed             |
-| C3  | Health, quota-aware routing and agent fallback | DONE   | `09f79b0` | 18 routing repository and 123 engine tests passed     |
-| C4  | Human confirmation and safe retry semantics    | DONE   | `bba856d` | 36 bridge, 43 Agent Core and 128 engine tests passed  |
-| C5  | Cross-agent integration and full product E2E   | TODO   |           |                                                       |
-| C6  | Rush closure report and adjustment backlog     | TODO   |           |                                                       |
+| ID  | Deliverable                                    | Status      | Commit    | Evidence                                              |
+| --- | ---------------------------------------------- | ----------- | --------- | ----------------------------------------------------- |
+| C0  | Baseline and executable acceptance scenarios   | DONE        | `c7d013a` | 113 Python, 42 Agent Core and 109 Memory tests passed |
+| C1  | Durable mission lifecycle and restart recovery | DONE        | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
+| C2  | Context, memory and token-budget management    | DONE        | `f535de8` | 43 Agent Core and 109 Memory tests passed             |
+| C3  | Health, quota-aware routing and agent fallback | DONE        | `09f79b0` | 18 routing repository and 123 engine tests passed     |
+| C4  | Human confirmation and safe retry semantics    | DONE        | `bba856d` | 36 bridge, 43 Agent Core and 128 engine tests passed  |
+| C5  | Cross-agent integration and full product E2E   | IN_PROGRESS |           |                                                       |
+| C6  | Rush closure report and adjustment backlog     | TODO        |           |                                                       |
 
 ## C0 — Baseline and executable acceptance scenarios
 
@@ -221,8 +221,8 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-23T15:14:44+02:00
 - Completed at:
 - Commit:
 - Commands and results:
