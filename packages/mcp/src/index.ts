@@ -7,3 +7,7 @@ export * from "./resource-adapter.js";
 export * from "./manager.js";
 export * from "./presets.js";
 export * from "./sandbox.js";
+export * from "./ssrf.js";
+export * from "./manifest.js";
+export * from "./catalog.js";
+export * from "./oauth.js";

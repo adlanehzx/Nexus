@@ -9,6 +9,14 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isStdioConfig, type McpServerConfig } from "./config.js";
 import { McpConnectionError, McpTimeoutError } from "./errors.js";
 import { McpSandboxManager } from "./sandbox.js";
+import { assertSafeRemoteUrl } from "./ssrf.js";
+
+export const MAX_TOOL_OUTPUT_CHARS = 65_536;
+
+export function boundOutputText(text: string, maxChars = MAX_TOOL_OUTPUT_CHARS): string {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + "\n... [truncated by NEXUS: output exceeds max length]";
+}
 
 /**
  * MCP client.
@@ -194,7 +202,7 @@ export class McpClient {
       )
       .join("\n");
 
-    return { text, structured: result.contents, isError: false };
+    return { text: boundOutputText(text), structured: result.contents, isError: false };
   }
 
   async callTool(
@@ -223,7 +231,7 @@ export class McpClient {
       .join("\n");
 
     return {
-      text,
+      text: boundOutputText(text),
       structured: result.structuredContent ?? null,
       isError: result.isError === true,
     };
@@ -284,6 +292,7 @@ export class McpClient {
     }
 
     const headers = await this.#resolveEnv(config.headers, config.headerRefs);
+    await assertSafeRemoteUrl(config.url, { serverName: config.name });
     const url = new URL(config.url);
 
     return (config.transport === "sse"

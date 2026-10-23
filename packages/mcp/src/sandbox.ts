@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
@@ -102,6 +103,46 @@ export interface PreparedStdioExecution {
   env: Record<string, string>;
 }
 
+export interface HostSandboxCapabilities {
+  bwrap: boolean;
+  systemdUserScope: boolean;
+  docker: boolean;
+}
+
+/**
+ * Probes actual host capabilities for process, namespace and cgroup isolation.
+ */
+export function probeHostSandboxCapabilities(): HostSandboxCapabilities {
+  const bwrapProbe = spawnSync("bwrap", ["--ro-bind", "/", "/", "--", "true"], {
+    stdio: "ignore",
+    timeout: 3_000,
+  });
+  const bwrap = bwrapProbe.status === 0;
+
+  const systemdProbe = spawnSync("systemd-run", ["--user", "--scope", "--quiet", "true"], {
+    stdio: "ignore",
+    timeout: 3_000,
+  });
+  const systemdUserScope = systemdProbe.status === 0;
+
+  const dockerProbe = spawnSync("docker", ["info"], {
+    stdio: "ignore",
+    timeout: 3_000,
+  });
+  const docker = dockerProbe.status === 0;
+
+  return { bwrap, systemdUserScope, docker };
+}
+
+export interface StdioPrepareOptions {
+  bwrapPath?: string;
+  dockerPath?: string;
+  systemdRunPath?: string;
+  useSystemdScope?: boolean;
+  requireResourceLimits?: boolean;
+  capabilities?: HostSandboxCapabilities;
+}
+
 /**
  * Container sandbox manager (Bubblewrap / Docker / None) for stdio MCP servers.
  */
@@ -112,7 +153,7 @@ export class McpSandboxManager {
   static async prepareStdio(
     config: McpStdioConfig,
     env: Record<string, string>,
-    options?: { bwrapPath?: string; dockerPath?: string },
+    options?: StdioPrepareOptions,
   ): Promise<PreparedStdioExecution> {
     const sandbox = config.sandbox;
 
@@ -199,6 +240,38 @@ export class McpSandboxManager {
 
       // End of bwrap options delimiter
       bwrapArgs.push("--", config.command, ...config.args);
+
+      const wantSystemd = options?.useSystemdScope ?? sandbox.useSystemdScope ?? false;
+      if (wantSystemd) {
+        const caps = options?.capabilities ?? probeHostSandboxCapabilities();
+        if (!caps.systemdUserScope && options?.systemdRunPath === undefined) {
+          if (options?.requireResourceLimits) {
+            throw new McpSecurityError(
+              config.name,
+              "Host cannot guarantee resource limits: systemd/cgroup isolation is unavailable.",
+            );
+          }
+        } else {
+          const systemdCmd = options?.systemdRunPath ?? "systemd-run";
+          const limits = sandbox.resourceLimits;
+          const systemdArgs: string[] = ["--user", "--scope", "--quiet"];
+          if (limits) {
+            if (limits.maxMemoryMb) systemdArgs.push(`-pMemoryMax=${limits.maxMemoryMb}M`);
+            if (limits.maxPids) systemdArgs.push(`-pTasksMax=${limits.maxPids}`);
+            if (limits.cpuShares) {
+              const cpuQuota = Math.max(10, Math.round(limits.cpuShares / 10.24));
+              systemdArgs.push(`-pCPUQuota=${cpuQuota}%`);
+            }
+          }
+          systemdArgs.push("--", bwrapCmd, ...bwrapArgs);
+
+          return {
+            command: systemdCmd,
+            args: systemdArgs,
+            env: {},
+          };
+        }
+      }
 
       return {
         command: bwrapCmd,

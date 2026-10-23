@@ -7,6 +7,7 @@ import { McpSecurityError } from "../src/errors.js";
 import {
   McpSandboxManager,
   generateSbom,
+  probeHostSandboxCapabilities,
   validateBinary,
   verifyPackageChecksum,
 } from "../src/sandbox.js";
@@ -197,4 +198,77 @@ describe("MCP Isolation and Security", () => {
       expect(stdout.trim()).toBe("NEXUS_SANDBOX_OK");
     },
   );
+
+  it("probes host sandbox capabilities realistically", () => {
+    const caps = probeHostSandboxCapabilities();
+    expect(typeof caps.bwrap).toBe("boolean");
+    expect(typeof caps.systemdUserScope).toBe("boolean");
+    expect(typeof caps.docker).toBe("boolean");
+  });
+
+  it("generates systemd-run user scope when cgroup limits are requested", async () => {
+    const config = parseMcpServerConfig({
+      name: "systemd-scoped-mcp",
+      transport: "stdio",
+      command: "node",
+      args: ["server.js"],
+      sandbox: {
+        enabled: true,
+        engine: "bwrap",
+        useSystemdScope: true,
+        resourceLimits: {
+          maxMemoryMb: 512,
+          maxPids: 32,
+          cpuShares: 1024,
+          timeoutMs: 30000,
+        },
+      },
+    });
+
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
+
+    const prepared = await McpSandboxManager.prepareStdio(
+      config,
+      { SECRET_VAR: "secret-val" },
+      { systemdRunPath: "systemd-run" },
+    );
+
+    expect(prepared.command).toBe("systemd-run");
+    expect(prepared.args).toContain("--user");
+    expect(prepared.args).toContain("--scope");
+    expect(prepared.args).toContain("-pMemoryMax=512M");
+    expect(prepared.args).toContain("-pTasksMax=32");
+    expect(prepared.args).toContain("-pCPUQuota=100%");
+    expect(prepared.args).toContain("bwrap");
+    expect(prepared.args).toContain("--clearenv");
+    expect(prepared.args).toContain("SECRET_VAR");
+  });
+
+  it("fails closed when resource limits cannot be guaranteed", async () => {
+    const config = parseMcpServerConfig({
+      name: "strict-mcp",
+      transport: "stdio",
+      command: "node",
+      args: ["server.js"],
+      sandbox: {
+        enabled: true,
+        engine: "bwrap",
+        useSystemdScope: true,
+      },
+    });
+
+    if (config.transport !== "stdio") throw new Error("Must be stdio");
+
+    await expect(
+      McpSandboxManager.prepareStdio(
+        config,
+        {},
+        {
+          useSystemdScope: true,
+          requireResourceLimits: true,
+          capabilities: { bwrap: true, systemdUserScope: false, docker: false },
+        },
+      ),
+    ).rejects.toThrow();
+  });
 });
