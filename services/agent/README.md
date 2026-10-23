@@ -1,19 +1,39 @@
-# Agent Runtime — BullMQ
+# NEXUS ACP agent runtime
 
-> **Not implemented — planned for Phase 2.** This folder reserves its spot in the project structure;
-> it contains no mock implementations.
+This service runs a declared ACP profile in a bounded workspace. It initializes
+the ACP session, applies supported model and reasoning options, streams the
+response and grants tool permissions only for locations inside the configured
+workspace roots.
 
-## Purpose
+Profiles are structured JSON records. Commands and arguments come from the
+registry rather than user input, and provider sessions remain owned by the
+provider CLI. NEXUS does not copy provider tokens.
 
-Executes `AgentRun` workflows: observe → reason → plan → act → observe loop, token/execution budgets,
-cancellation, resumption after human confirmation, context compaction.
+## Deterministic tests
 
-## Note
+The default suite uses a fake ACP provider and never consumes an external
+allowance:
 
-Separated from the API service because an agent run typically takes 5 to 120 seconds: mixing runs into
-the HTTP service would make every deployment destructive and obscure API p99 latency metrics (ADR-003).
+```bash
+pnpm --filter @nexus/agent test
+```
 
-## Reference
+## Real provider smoke test
 
-Architecture: [`docs/architecture/03-agent.md`](../../docs/architecture/03-agent.md)
-Roadmap: [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
+A real conversation is available behind explicit opt-in. Run it only after the
+account owner approves quota use:
+
+```bash
+NEXUS_REAL_AGENT_CONVERSATION=1 \
+NEXUS_REAL_AGENT_PROFILE=codex \
+NEXUS_REAL_AGENT_REGISTRY=services/agent/config/profiles.example.json \
+pnpm --filter @nexus/agent exec vitest run test/real-agent.smoke.test.ts
+```
+
+The test records only pass/fail evidence. It does not print the model response
+or provider credentials.
+
+## References
+
+- [Agent architecture](../../docs/architecture/03-agent.md)
+- [ACP profile example](config/profiles.example.json)
