@@ -34,7 +34,7 @@ installers or device pairing here.
 | C1  | Durable mission lifecycle and restart recovery | DONE   | `f3c0213` | 9 lifecycle scenarios and 122 engine tests passed     |
 | C2  | Context, memory and token-budget management    | DONE   | `f535de8` | 43 Agent Core and 109 Memory tests passed             |
 | C3  | Health, quota-aware routing and agent fallback | DONE   | `09f79b0` | 18 routing repository and 123 engine tests passed     |
-| C4  | Human confirmation and safe retry semantics    | IN_PROGRESS |           |                                                       |
+| C4  | Human confirmation and safe retry semantics    | DONE   | `bba856d` | 36 bridge, 43 Agent Core and 128 engine tests passed  |
 | C5  | Cross-agent integration and full product E2E   | TODO   |           |                                                       |
 | C6  | Rush closure report and adjustment backlog     | TODO   |           |                                                       |
 
@@ -190,12 +190,20 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-22T22:22:03+02:00
-- Completed at:
-- Commit:
+- Completed at: 2026-10-22T22:22:58+02:00
+- Commit: `bba856d4264761e6930ad693ea5c58ea417ab56f`
 - Commands and results:
-- Notes:
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests/test_agent_core.py` — passed: 36 tests.
+  - `uv run --project services/mission-engine pytest services/mission-engine/tests` — passed: 128 tests, 1 deprecation warning.
+  - `pnpm --filter @nexus/agent-core test` — passed: 3 files, 43 tests.
+  - `git diff --check` — passed.
+- Notes: Risky actions remain durably suspended without a lease or extra attempt. Restart polling uses
+  the same run and attempt. Approval still requires the original payload hash, while rejection,
+  expiration and cancellation now retain distinct categories and terminal records. Cancellation maps
+  task, attempt, mission and outbox events to `cancelled`; rejection and expiration fail without retry.
+  Existing Agent Core tests prove approval, refusal, expiry, cancellation and payload mismatch behavior.
 
 ## C5 — Cross-agent integration and full product E2E
 
@@ -254,6 +262,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | C2-1 | C2   | High     | RESOLVED | Agent Core persisted messages but discarded assembled context during confirmation suspension, so resumed calls lost decisions, constraints and citations. | A regression test suspends, reloads stored state, resumes, and observes the same citation in the second model system prompt.                  | `f535de8`  |
 | C2-2 | C2   | Low      | RESOLVED | Direct Agent Core typecheck read the previous Memory build output after the cross-package type changed.                                                   | Rebuilding Memory followed by both package typechecks passes.                                                                                 | `f535de8`  |
 | C3-1 | C3   | High     | RESOLVED | Routing selected healthy or fallback profiles but did not persist candidates, observations or the audit reason.                                           | Mission snapshots now contain routing decisions; tests prove quota-exhausted fallback and explicit unknown quota.                             | `09f79b0`  |
+| C4-1 | C4   | High     | RESOLVED | Mission Engine collapsed rejection and expiry into one category and treated cancellation as a generic empty response.                                     | Bridge and repository tests prove distinct rejection, expiry and cancellation states with zero retry.                                         | `bba856d`  |
 
 ## Improvements for the adjustment phase
 
