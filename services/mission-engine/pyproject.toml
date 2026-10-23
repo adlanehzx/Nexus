@@ -13,7 +13,7 @@ dependencies = [
   "uvicorn>=0.34,<1",
   # Verify API-issued Ed25519 service tokens with a proven implementation.
   # The engine holds only the public key and never issues tokens.
-  "cryptography>=44,<47",
+  "cryptography>=44,<51",
 ]
 
 [project.optional-dependencies]
