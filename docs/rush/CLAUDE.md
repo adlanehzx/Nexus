@@ -32,7 +32,7 @@ release packaging. Document required shared manifest, schema or lockfile changes
 | CL0 | Baseline connection and threat-model fixtures    | DONE | acc5968 | 290 focused tests passing across connections and connector packages           |
 | CL1 | Truthful CLI, adapter and session detection      | DONE | 31e4df8 | 218 tests passing in @nexus/connections including adapter and authGuide tests |
 | CL2 | Secure ACP connector and multi-account contracts | DONE   | 84d115d | 146 connector tests passing + 9 provider-accounts tests passing               |
-| CL3 | MCP catalog, OAuth and per-server isolation      | TODO   |         |                                                                               |
+| CL3 | MCP catalog, OAuth and per-server isolation      | DONE   | 4dbfd5c | 62 tests passing in @nexus/mcp across 7 test files                            |
 | CL4 | Browser sessions, permissions and audit          | TODO   |         |                                                                               |
 | CL5 | Contract tests and integration handoff           | TODO   |         |                                                                               |
 
@@ -146,12 +146,22 @@ Acceptance criteria:
 
 Implementation record:
 
-- Status: `TODO`
-- Started at:
-- Completed at:
-- Commit:
+- Status: `DONE`
+- Started at: 2026-10-23T16:02:00+02:00
+- Completed at: 2026-10-23T16:18:00+02:00
+- Commit: 4dbfd5c
 - Commands and results:
+  - `pnpm --filter @nexus/mcp build`: success.
+  - `pnpm --filter @nexus/mcp typecheck`: success.
+  - `pnpm --filter @nexus/mcp lint`: success.
+  - `pnpm --filter @nexus/mcp test`: 7 test files, 62 tests passed.
 - Notes:
+  - Defined strict third-party MCP manifest schema (`mcpManifestSchema`) with runtimes limited to `npm` and `remote`.
+  - Added curated verified catalog (`MCP_CATALOG`) and structured installation compiler (`compileManifestToServerConfig`).
+  - Added OAuth 2.0 PKCE with S256 challenge, anti-replay single-use state store, and vault token storage.
+  - Hardened remote MCP client transport with SSRF validation (`assertSafeRemoteUrl`) blocking loopback, RFC 1918, link-local metadata (169.254.169.254), IPv6 private/multicast, and DNS rebinding.
+  - Implemented real host sandbox capabilities probing (`probeHostSandboxCapabilities`) and systemd cgroups v2 resource limit scoping (`systemd-run --user --scope -pMemoryMax=... -pTasksMax=... -pCPUQuota=...`) with fail-closed guarantee when strict limits are demanded.
+  - Bounded tool output length (`boundOutputText`) and guaranteed secrets are injected only into target process environment, never into command args, URLs or logs.
 
 ## CL4 — Browser sessions, permissions and audit
 
@@ -206,6 +216,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | CL0-1 | CL0  | Info     | RESOLVED | Worktree package dist artifacts missing on initial checkout, requiring initial workspace build. | Vitest failed resolving `@nexus/shared` until `pnpm build` was run across dependencies. | Resolved by initial build |
 | CL1-1 | CL1  | Low      | RESOLVED | Version manager shims (mise) stalled detection under strict minimal env allowlist.              | Detection probes timed out in 10s for shims requiring ambient mise variables.          | 77841a8                   |
 | CL2-1 | CL2  | Medium   | RESOLVED | Insecure umask during Unix socket creation and unproven promotion in probeAuth.                 | Socket created before chmod with ambient umask; probeAuth promoted unknown accounts.   | 84d115d                   |
+| CL3-1 | CL3  | Medium   | RESOLVED | Missing SSRF check on remote MCP URLs and unbounded tool output length.                         | Remote URLs previously connected without IP checks; tool output wasn't bounded.        | 4dbfd5c                   |
 
 ## Improvements for the adjustment phase
 
