@@ -226,6 +226,12 @@ Implementation record:
 - Completed at:
 - Commit:
 - Commands and results:
+- `pnpm build` — passed: 32 of 32 package build tasks.
+- `pnpm --filter @nexus/api exec vitest run test/setup-status.test.ts` — passed: 1 file, 1 test.
+- `pnpm --filter @nexus/dashboard test` — passed: 6 files, 41 tests.
+- `pnpm --filter @nexus/dashboard build` — passed: production Vite build, 144 modules transformed.
+- `bash -n scripts/blank-machine-restore.sh` — passed.
+- `pnpm --filter @nexus/client-core test` — passed: 10 files, 172 tests.
 - Notes:
 
 ## C6 — Rush closure report and adjustment backlog

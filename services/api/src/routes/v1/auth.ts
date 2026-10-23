@@ -42,6 +42,19 @@ const LOGIN_RATE_LIMIT = { max: 5, timeWindow: "1 minute" } as const;
 export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
+  app.get(
+    "/auth/setup-status",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "Reports whether first-run account setup is complete",
+        response: { 200: okSchema(z.object({ initialized: z.boolean() })) },
+      },
+    },
+    async (request) =>
+      ok({ initialized: (await app.services.users.count()) > 0 }, request.id),
+  );
+
   app.post(
     "/auth/register",
     {

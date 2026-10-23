@@ -101,8 +101,8 @@ step "✓ migrations applied" "source"
 psql "$SOURCE_URL" -q -f "$REPO/scripts/blank-machine-seed.sql" >/dev/null
 step "✓ account, conversation, and messages seeded" "2 messages"
 
-( cd "$REPO/services/mission-engine" \
-  && .venv/bin/python "$REPO/scripts/blank-machine-seed.py" \
+( cd "$REPO" \
+  && uv run --project services/mission-engine python scripts/blank-machine-seed.py \
     "$SOURCE/services/mission-engine/var/nexus-engine-production.db" >/dev/null )
 step "✓ mission seeded in engine" "1 mission"
 
