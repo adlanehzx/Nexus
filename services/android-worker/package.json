@@ -31,9 +31,9 @@
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
     "@nexus/worker-core": "workspace:*",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "zod": "4.5.4"
+    "react": "19.3.1",
+    "react-native": "0.88.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@babel/plugin-transform-export-namespace-from": "7.27.1",
@@ -43,9 +43,9 @@
     "@react-native/gradle-plugin": "0.81.5",
     "@react-native/metro-config": "0.81.5",
     "@types/node": "24.13.3",
-    "@types/react": "~19.1.0",
-    "@types/ws": "8.18.1",
+    "@types/react": "~19.3.0",
+    "@types/ws": "8.18.2",
     "vitest": "4.1.11",
-    "ws": "8.21.3"
+    "ws": "8.22.0"
   }
 }
