@@ -34,6 +34,8 @@ const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 const CANONICAL_MODULES = [
   "admin.ts",
   "auth.ts",
+  "cli.ts",
+  "client.ts",
   "config.ts",
   "http.ts",
   "index.ts",

@@ -165,17 +165,71 @@ describe("Provider multi-account management", () => {
     expect(cleared.data.cooldown.reason).toBeNull();
   });
 
-  it("tests and probes authentication status", async () => {
-    const probeRes = await harness.app.inject({
+  it("never promotes unproven authentication without proof during probe", async () => {
+    // 1. Without session dir or proven runs, probeAuth keeps authStatus unknown
+    const probeRes1 = await harness.app.inject({
       method: "POST",
       url: "/api/v1/orchestrator/accounts/claude-principal/test",
       headers: admin.authorization,
     });
 
-    expect(probeRes.statusCode).toBe(200);
-    const probed = probeRes.json<{ data: ProviderAccount }>();
-    expect(probed.data.authStatus).toBe("authenticated");
-    expect(probed.data.lastCheckedAt).not.toBeNull();
+    expect(probeRes1.statusCode).toBe(200);
+    const probed1 = probeRes1.json<{ data: ProviderAccount }>();
+    expect(probed1.data.authStatus).toBe("unknown");
+    expect(probed1.data.lastCheckedAt).not.toBeNull();
+
+    // 2. Once a successful run provides proof, probeAuth reflects authenticated
+    const service = harness.services.providerAccounts;
+    await service?.recordOutcome("claude-principal", { success: true });
+
+    const probeRes2 = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/accounts/claude-principal/test",
+      headers: admin.authorization,
+    });
+    expect(probeRes2.statusCode).toBe(200);
+    const probed2 = probeRes2.json<{ data: ProviderAccount }>();
+    expect(probed2.data.authStatus).toBe("authenticated");
+  });
+
+  it("supports typed disabling and enabling of accounts", async () => {
+    const service = harness.services.providerAccounts;
+    expect(service).toBeDefined();
+    if (!service) return;
+
+    // Create secondary identity
+    await service.createAccount({
+      id: "antigravity-secondaire",
+      provider: "antigravity",
+      name: "Antigravity Backup",
+      profileKey: "antigravity",
+      priority: 2,
+    });
+
+    // Disable primary account via typed endpoint
+    const disableRes = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/accounts/antigravity-personnel/disable",
+      headers: admin.authorization,
+    });
+    expect(disableRes.statusCode).toBe(200);
+    expect(disableRes.json<{ data: ProviderAccount }>().data.enabled).toBe(false);
+
+    // selectAccount skips disabled account
+    const selected = await service.selectAccount("antigravity");
+    expect(selected?.id).toBe("antigravity-secondaire");
+
+    // Re-enable primary account
+    const enableRes = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/accounts/antigravity-personnel/enable",
+      headers: admin.authorization,
+    });
+    expect(enableRes.statusCode).toBe(200);
+    expect(enableRes.json<{ data: ProviderAccount }>().data.enabled).toBe(true);
+
+    const reselected = await service.selectAccount("antigravity");
+    expect(reselected?.id).toBe("antigravity-personnel");
   });
 
   it("records successes and failures with reliability score calculation and auto-cooldown", async () => {

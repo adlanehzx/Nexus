@@ -550,6 +550,7 @@ export interface ProviderAccountDto {
   provider: string;
   name: string;
   profileKey: string;
+  enabled?: boolean;
   sessionDir: string;
   env: Record<string, string>;
   authStatus: "authenticated" | "unauthenticated" | "expired" | "unknown";

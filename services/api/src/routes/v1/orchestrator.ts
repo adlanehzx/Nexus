@@ -494,6 +494,46 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
   );
 
+  app.post(
+    "/orchestrator/accounts/:id/enable",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Provider accounts manager is not configured.");
+      }
+      const updated = await providerAccounts.setAccountEnabled(request.params.id, true);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/accounts/:id/disable",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+        response: { 200: okSchema(providerAccountSchema) },
+      },
+    },
+    async (request) => {
+      if (providerAccounts === undefined) {
+        throw new Error("Provider accounts manager is not configured.");
+      }
+      const updated = await providerAccounts.setAccountEnabled(request.params.id, false);
+      if (updated === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
+      return ok(updated, request.id);
+    },
+  );
+
   app.get(
     "/orchestrator/routing/matrix",
     {

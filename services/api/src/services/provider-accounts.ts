@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -65,6 +66,7 @@ export const providerAccountSchema = z.object({
     lastErrorAt: null,
   }),
   metadata: z.record(z.string(), z.unknown()).default({}),
+  enabled: z.boolean().default(true),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -78,6 +80,7 @@ export const createProviderAccountSchema = z.object({
   sessionDir: z.string().optional(),
   env: z.record(z.string(), z.string()).optional(),
   priority: z.number().int().min(1).max(100).optional(),
+  enabled: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type CreateProviderAccountInput = z.infer<typeof createProviderAccountSchema>;
@@ -86,6 +89,7 @@ export const updateProviderAccountSchema = z.object({
   name: z.string().min(1).max(128).optional(),
   profileKey: z.string().min(1).max(64).optional(),
   priority: z.number().int().min(1).max(100).optional(),
+  enabled: z.boolean().optional(),
   env: z.record(z.string(), z.string()).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
@@ -138,6 +142,7 @@ export class ProviderAccountService {
           lastErrorAt: null,
         },
         metadata: { tier: "pro" },
+        enabled: true,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -169,6 +174,7 @@ export class ProviderAccountService {
           lastErrorAt: null,
         },
         metadata: { tier: "claude-pro" },
+        enabled: true,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -200,6 +206,7 @@ export class ProviderAccountService {
           lastErrorAt: null,
         },
         metadata: { tier: "chatgpt-plus" },
+        enabled: true,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -264,6 +271,7 @@ export class ProviderAccountService {
       env: validated.env ?? {},
       authStatus: "unknown",
       lastCheckedAt: null,
+      enabled: validated.enabled ?? true,
       quotas: {
         remaining5hPercent: null,
         remainingWeekPercent: null,
@@ -309,6 +317,7 @@ export class ProviderAccountService {
       name: input.name ?? existing.name,
       profileKey: input.profileKey ?? existing.profileKey,
       priority: input.priority ?? existing.priority,
+      enabled: input.enabled !== undefined ? input.enabled : existing.enabled,
       env: input.env !== undefined ? { ...existing.env, ...input.env } : existing.env,
       metadata:
         input.metadata !== undefined
@@ -320,6 +329,13 @@ export class ProviderAccountService {
     accounts[index] = updated;
     await this.#config.saveProviderAccounts(accounts);
     return updated;
+  }
+
+  async setAccountEnabled(
+    id: string,
+    enabled: boolean,
+  ): Promise<ProviderAccount | undefined> {
+    return this.updateAccount(id, { enabled });
   }
 
   async deleteAccount(id: string): Promise<boolean> {
@@ -472,7 +488,7 @@ export class ProviderAccountService {
     const existing = accounts[index];
     if (existing === undefined) return undefined;
 
-    // Heuristic probe based on session state and history
+    // probeAuth must never promote an authentication status without evidence.
     const nowIso = this.#now().toISOString();
     let authStatus: AuthStatus = existing.authStatus;
 
@@ -483,8 +499,10 @@ export class ProviderAccountService {
       existing.reliability.consecutiveFailures === 0
     ) {
       authStatus = "authenticated";
-    } else if (authStatus === "unknown") {
+    } else if (existsSync(existing.sessionDir)) {
       authStatus = "authenticated";
+    } else if (authStatus === "unknown") {
+      authStatus = "unknown";
     }
 
     const updated: ProviderAccount = {
@@ -501,7 +519,7 @@ export class ProviderAccountService {
 
   /**
    * Selects the best available identity for a given provider.
-   * Filters out identities in cooldown, quota exhausted, or auth expired,
+   * Filters out disabled identities, those in cooldown, quota exhausted, or auth expired,
    * then sorts by priority (1 before 2), reliability score, and consecutive failures.
    */
   async selectAccount(
@@ -513,6 +531,7 @@ export class ProviderAccountService {
 
     const candidates = matching.filter(
       (acc) =>
+        acc.enabled !== false &&
         !acc.cooldown.active &&
         !acc.quotas.exhausted &&
         acc.authStatus !== "expired" &&

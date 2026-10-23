@@ -49,6 +49,42 @@ export async function createFakeBinDir(): Promise<FakeBinDir> {
 }
 
 /**
+ * Writes a fake official provider CLI (e.g. codex, claude, agy) simulating official responses.
+ */
+export async function writeFakeProviderCli(
+  bin: FakeBinDir,
+  name: string,
+  options: {
+    version?: string;
+    authState?: "authenticated" | "unauthenticated" | "expired";
+  } = {},
+): Promise<string> {
+  const version = options.version ?? "1.5.0";
+  const auth = options.authState ?? "authenticated";
+  const body = `
+if [ "$1" = "--version" ] || [ "$1" = "-v" ]; then
+  echo "${name}-cli v${version}"
+  exit 0
+fi
+if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
+  if [ "${auth}" = "authenticated" ]; then
+    echo "Logged in as user@example.com (active session)"
+    exit 0
+  elif [ "${auth}" = "expired" ]; then
+    echo "Session expired. Please run '${name} login' to refresh." >&2
+    exit 1
+  else
+    echo "Not logged in. No credentials found." >&2
+    exit 1
+  fi
+fi
+echo "${name}: unknown command $1" >&2
+exit 1
+`;
+  return bin.write(name, body);
+}
+
+/**
  * A credential-shaped string, built at runtime.
  *
  * Never a literal. A literal `sk-…` in a test file is a secret as far as every

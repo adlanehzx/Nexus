@@ -6,6 +6,9 @@
   "description": "Local connector service: authenticated loopback protocol for connection discovery and diagnostics",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "nexus-connector": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

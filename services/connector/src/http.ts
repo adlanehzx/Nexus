@@ -5,7 +5,7 @@ import {
   type ConnectorErrorCode,
   type ConnectorResponse,
 } from "./protocol.js";
-import { prepareSocketPath, removeStaleSocket } from "./socket.js";
+import { ConnectorSocketError, prepareSocketPath, removeStaleSocket } from "./socket.js";
 
 /**
  * The transport, and nothing else.
@@ -285,15 +285,30 @@ export async function startConnector(options: ConnectorHttpOptions): Promise<Run
   const server = createConnectorHttpServer(options);
 
   if (options.listen.kind === "unix") {
+    if (process.platform === "win32") {
+      throw new ConnectorSocketError(
+        "Unix domain sockets are not supported on Windows until a safe no-shell transport exists",
+      );
+    }
     const path = options.listen.path;
     // Checks the parent directory and removes a leftover socket — only an
     // actual socket. Anything else at this path, including a symbolic link,
     // makes the connector refuse to start rather than delete it. See socket.ts.
     await prepareSocketPath(path);
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen({ path }, resolve);
-    });
+
+    // Apply restrictive umask during socket creation so no world-accessible window exists
+    const oldUmask = process.umask ? process.umask(0o077) : undefined;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen({ path }, resolve);
+      });
+    } finally {
+      if (oldUmask !== undefined && process.umask) {
+        process.umask(oldUmask);
+      }
+    }
+
     // Owner only. Without this the socket inherits the umask, and a
     // world-writable socket makes the loopback argument moot.
     await chmod(path, 0o600);
