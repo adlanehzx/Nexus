@@ -160,7 +160,13 @@ export class ContextAssembler {
       text,
       chars: text.length,
       tokens: this.#tokens.count(text, input.model),
-      tokenBudget: Object.values(this.#tokenBudget).reduce((total, value) => total + value, 0),
+      tokenBudget:
+        this.#tokenBudget.preferences +
+        this.#tokenBudget.shortTerm +
+        this.#tokenBudget.longTerm +
+        this.#tokenBudget.devices +
+        this.#tokenBudget.tasks +
+        this.#tokenBudget.conversation,
     };
   }
 

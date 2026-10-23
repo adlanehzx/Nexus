@@ -122,8 +122,12 @@ export function Devices({ api }: { api: DashboardApi }) {
   const [pairing, setPairing] = useState<PairingTicket | null>(null);
   const [pairingLabel, setPairingLabel] = useState("");
   const [pairingBusy, setPairingBusy] = useState(false);
-  const [editingCapabilitiesDeviceId, setEditingCapabilitiesDeviceId] = useState<string | null>(null);
-  const [editingCapabilities, setEditingCapabilities] = useState<{ name: string; enabled: boolean }[]>([]);
+  const [editingCapabilitiesDeviceId, setEditingCapabilitiesDeviceId] = useState<string | null>(
+    null,
+  );
+  const [editingCapabilities, setEditingCapabilities] = useState<
+    { name: string; enabled: boolean }[]
+  >([]);
 
   useEffect(() => {
     if (pairing === null) return;
@@ -241,11 +245,10 @@ export function Devices({ api }: { api: DashboardApi }) {
                   marginBottom: "16px",
                 }}
               >
-                <div
-                  aria-label="Pairing QR Code"
-                  dangerouslySetInnerHTML={{ __html: qrSvg }}
-                />
-                <span style={{ fontSize: "0.8rem", color: "#111", marginTop: "8px", fontWeight: 500 }}>
+                <div aria-label="Pairing QR Code" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+                <span
+                  style={{ fontSize: "0.8rem", color: "#111", marginTop: "8px", fontWeight: 500 }}
+                >
                   Scan with NEXUS mobile app
                 </span>
               </div>
@@ -280,8 +283,15 @@ export function Devices({ api }: { api: DashboardApi }) {
                 Hide code
               </button>
             </div>
-            <div className="callout info" style={{ marginTop: "12px", fontSize: "0.85rem", opacity: 0.9 }}>
-              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its Tailscale IP or MagicDNS hostname (e.g. <code>http://nexus-core.example-tailnet.ts.net:3000</code>). Do not expose private tailnet keys or credentials.
+            <div
+              className="callout info"
+              style={{ marginTop: "12px", fontSize: "0.85rem", opacity: 0.9 }}
+            >
+              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a
+              remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its
+              Tailscale IP or MagicDNS hostname (e.g.{" "}
+              <code>http://nexus-core.example-tailnet.ts.net:3000</code>). Do not expose private
+              tailnet keys or credentials.
             </div>
             <small style={{ display: "block", marginTop: "8px" }}>
               Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}. Single-use ticket.
@@ -360,7 +370,15 @@ export function Devices({ api }: { api: DashboardApi }) {
                       {isEditingCapabilities ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           {editingCapabilities.map((cap, idx) => (
-                            <label key={cap.name} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem" }}>
+                            <label
+                              key={cap.name}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                fontSize: "0.85rem",
+                              }}
+                            >
                               <input
                                 type="checkbox"
                                 checked={cap.enabled}
@@ -378,7 +396,9 @@ export function Devices({ api }: { api: DashboardApi }) {
                               className="button"
                               type="button"
                               onClick={() => {
-                                setEditingCapabilities(editingCapabilities.map((c) => ({ ...c, enabled: false })));
+                                setEditingCapabilities(
+                                  editingCapabilities.map((c) => ({ ...c, enabled: false })),
+                                );
                               }}
                             >
                               Pause all
@@ -388,7 +408,10 @@ export function Devices({ api }: { api: DashboardApi }) {
                               type="button"
                               onClick={() => {
                                 act(async () => {
-                                  await api.updateDeviceCapabilities(device.id, editingCapabilities);
+                                  await api.updateDeviceCapabilities(
+                                    device.id,
+                                    editingCapabilities,
+                                  );
                                   setEditingCapabilitiesDeviceId(null);
                                 });
                               }}
@@ -2182,7 +2205,10 @@ export function Notifications({ api }: { api: DashboardApi }) {
       .notificationConfig()
       .then(setConfig)
       .catch((cause: unknown) => {
-        console.warn("Notification config load skipped:", cause instanceof Error ? cause.message : cause);
+        console.warn(
+          "Notification config load skipped:",
+          cause instanceof Error ? cause.message : cause,
+        );
       });
   }, [api]);
 
@@ -2390,11 +2416,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
             </div>
 
             <div>
-              <button
-                type="submit"
-                className="button primary"
-                disabled={configSaving}
-              >
+              <button type="submit" className="button primary" disabled={configSaving}>
                 {configSaving ? "Saving..." : "Save notification settings"}
               </button>
             </div>

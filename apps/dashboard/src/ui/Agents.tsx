@@ -668,7 +668,13 @@ export function Agents({ api }: { api: DashboardApi }) {
       <div className="settings-panel" style={{ marginTop: "28px" }}>
         <div
           className="settings-panel-heading"
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
         >
           <div>
             <h3>Provider Accounts & Isolated Identities</h3>
@@ -726,7 +732,14 @@ export function Agents({ api }: { api: DashboardApi }) {
               return (
                 <article className="agent-card" key={acc.id}>
                   {editingAccId === acc.id ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                        width: "100%",
+                      }}
+                    >
                       <h4 style={{ margin: "0 0 4px 0" }}>Edit {acc.id}</h4>
                       <label style={{ fontSize: "12px" }}>
                         Account Name / Label
@@ -776,7 +789,9 @@ export function Agents({ api }: { api: DashboardApi }) {
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <h3>{acc.name}</h3>
                             {acc.priority === 1 ? (
-                              <span className="state-pill good" style={{ fontSize: "10px" }}>★ Primary</span>
+                              <span className="state-pill good" style={{ fontSize: "10px" }}>
+                                ★ Primary
+                              </span>
                             ) : null}
                           </div>
                           <div className="muted">

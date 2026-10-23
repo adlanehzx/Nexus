@@ -370,7 +370,8 @@ function NavIcon({ name }: { name: string }) {
     chat: "M4 5h16v11H8l-4 4V5Z",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
-    setup: "M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83",
+    setup:
+      "M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
     overview: "M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
@@ -479,11 +480,7 @@ function Login({
         </form>
 
         <div style={{ marginTop: "16px", textAlign: "center" }}>
-          <button
-            type="button"
-            className="button compact"
-            onClick={onSwitchToSetup}
-          >
+          <button type="button" className="button compact" onClick={onSwitchToSetup}>
             First time? Run setup wizard
           </button>
         </div>

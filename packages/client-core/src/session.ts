@@ -107,10 +107,12 @@ export interface ServerReadiness {
   status: "ok" | "degraded" | "down";
   version?: string | undefined;
   uptimeSeconds?: number | undefined;
-  dependencies?: {
-    database?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
-    redis?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
-  } | undefined;
+  dependencies?:
+    | {
+        database?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
+        redis?: { status: "up" | "down"; latencyMs?: number | undefined } | undefined;
+      }
+    | undefined;
   diagnostic?: string | undefined;
 }
 
@@ -207,11 +209,7 @@ export class SessionManager {
     if (accountChanged) await this.#storage.remove(DEVICE_KEY);
   }
 
-  async register(input: {
-    email: string;
-    displayName: string;
-    password: string;
-  }): Promise<void> {
+  async register(input: { email: string; displayName: string; password: string }): Promise<void> {
     const response = await this.#http.request({
       method: "POST",
       path: "/api/v1/auth/register",

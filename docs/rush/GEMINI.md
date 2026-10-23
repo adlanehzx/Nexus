@@ -31,12 +31,12 @@ mission scheduling, context compression or routing decisions.
 
 | ID  | Deliverable                                   | Status      | Commit  | Evidence                                                                    |
 | --- | --------------------------------------------- | ----------- | ------- | --------------------------------------------------------------------------- |
-| G0  | UX inventory and executable onboarding states | DONE        | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes |
+| G0  | UX inventory and executable onboarding states | DONE        | f20e6d9 | 165 client-core unit tests passed; UX state taxonomy mapped to real routes  |
 | G1  | First-run setup wizard                        | DONE        | f0e5ef5 | 35 dashboard tests passed; 5-step resumable SetupWizard with real API calls |
 | G2  | Dashboard configuration and connection UX     | DONE        | 980ac28 | 37 dashboard tests passed; provider account mutations, notification config  |
 | G3  | Device discovery, pairing and worker install  | IN_PROGRESS |         |                                                                             |
-| G4  | Desktop, mobile and voice completion          | TODO   |        |          |
-| G5  | Reproducible packaging and public user docs   | TODO   |        |          |
+| G4  | Desktop, mobile and voice completion          | TODO        |         |                                                                             |
+| G5  | Reproducible packaging and public user docs   | TODO        |         |                                                                             |
 
 ## G0 — UX inventory and executable onboarding states
 
@@ -51,6 +51,7 @@ Acceptance criteria:
 - Missing backend contracts are recorded under `Cross-agent handoffs` before UI implementation.
 
 State inventory and backend contract map:
+
 1. **Core Service & Database Readiness**:
    - Contract: `GET /api/v1/health` (Readiness) + `GET /health` (Liveness).
    - States:
@@ -265,14 +266,14 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID     | Task | Severity | Status   | Description                                                               | Reproduction or evidence                  | Fix commit |
-| ------ | ---- | -------- | -------- | ------------------------------------------------------------------------- | ----------------------------------------- | ---------- |
-| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration | packages/client-core/test/session.test.ts | d147a69    |
-| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states    | apps/dashboard/test/format.test.ts        | 45e46d9    |
-| F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing       | apps/dashboard/test/dashboard-config.test.ts | 075ccde |
-| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps | apps/dashboard/test/device-pairing.test.ts | 480e832 |
-| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git | services/android-worker/android/app/src/main/assets/index.android.bundle | 4d09477 |
-| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml | 7e12be3 |
+| ID     | Task | Severity | Status   | Description                                                                  | Reproduction or evidence                                                 | Fix commit |
+| ------ | ---- | -------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------- |
+| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration    | packages/client-core/test/session.test.ts                                | d147a69    |
+| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states       | apps/dashboard/test/format.test.ts                                       | 45e46d9    |
+| F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing         | apps/dashboard/test/dashboard-config.test.ts                             | 075ccde    |
+| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 480e832    |
+| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 4d09477    |
+| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 7e12be3    |
 
 ## Improvements for the adjustment phase
 
@@ -282,11 +283,11 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Cross-agent handoffs
 
-| ID     | From/to               | Contract or dependency                                                                                              | Status  | Evidence or target commit |
-| ------ | --------------------- | ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------- |
-| H-G0-1 | Gemini -> Codex       | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | PENDING | Target: Codex integration |
-| H-G0-2 | Gemini -> Claude      | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                     | PENDING | Target: Claude CL1/CL2    |
-| H-G5-1 | Gemini -> Codex       | `.venv/bin/python` environment expectation in `scripts/blank-machine-restore.sh` line 105 for engine seed            | PENDING | scripts/blank-machine-restore.sh |
+| ID     | From/to          | Contract or dependency                                                                                                    | Status  | Evidence or target commit        |
+| ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------- |
+| H-G0-1 | Gemini -> Codex  | `GET /api/v1/auth/setup-status` returning `{ initialized: boolean }` to unambiguously signal when first-run admin is open | PENDING | Target: Codex integration        |
+| H-G0-2 | Gemini -> Claude | Structured `authGuide` metadata in `ConnectionObservation` for providers requiring human sign-in                          | PENDING | Target: Claude CL1/CL2           |
+| H-G5-1 | Gemini -> Codex  | `.venv/bin/python` environment expectation in `scripts/blank-machine-restore.sh` line 105 for engine seed                 | PENDING | scripts/blank-machine-restore.sh |
 
 ## Shared-file changes required at integration
 
@@ -296,14 +297,14 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Final verification
 
-| Gate                  | Exact command                                                              | Result | Evidence/date                           |
-| --------------------- | -------------------------------------------------------------------------- | ------ | --------------------------------------- |
-| Dashboard format/lint | `pnpm --filter @nexus/dashboard lint`                                      | PASS   | 0 errors, 2026-10-22                    |
-| Dashboard typecheck   | `pnpm --filter @nexus/dashboard typecheck`                                 | PASS   | `tsc -p tsconfig.json --noEmit`, exit 0 |
-| Dashboard tests       | `pnpm --filter @nexus/dashboard test`                                      | PASS   | 6 test files, 41 tests passed           |
-| Desktop compile       | `pnpm --filter @nexus/desktop build && pnpm --filter @nexus/desktop test`  | PASS   | Built in 179ms, 5 files, 45 tests       |
-| Mobile/Android checks | `pnpm --filter @nexus/mobile typecheck && pnpm --filter @nexus/android-worker test` | PASS | 0 TS errors, 9 files, 191 tests passed |
-| Packaging smoke tests | `docker compose -f infrastructure/docker/docker-compose.yml config`        | PASS   | Valid config with health checks, exit 0 |
-| Blank install         | `bash scripts/blank-machine-restore.sh`                                    | BLOCKED | DB created & seeded, halted at `.venv`  |
-| Release hygiene       | `pnpm release:check`                                                       | PASS   | 939 tracked files verified, exit 0      |
-| Translation gate      | `pnpm translation:check`                                                   | PASS   | 0 untranslated strings, exit 0          |
+| Gate                  | Exact command                                                                       | Result  | Evidence/date                           |
+| --------------------- | ----------------------------------------------------------------------------------- | ------- | --------------------------------------- |
+| Dashboard format/lint | `pnpm --filter @nexus/dashboard lint`                                               | PASS    | 0 errors, 2026-10-22                    |
+| Dashboard typecheck   | `pnpm --filter @nexus/dashboard typecheck`                                          | PASS    | `tsc -p tsconfig.json --noEmit`, exit 0 |
+| Dashboard tests       | `pnpm --filter @nexus/dashboard test`                                               | PASS    | 6 test files, 41 tests passed           |
+| Desktop compile       | `pnpm --filter @nexus/desktop build && pnpm --filter @nexus/desktop test`           | PASS    | Built in 179ms, 5 files, 45 tests       |
+| Mobile/Android checks | `pnpm --filter @nexus/mobile typecheck && pnpm --filter @nexus/android-worker test` | PASS    | 0 TS errors, 9 files, 191 tests passed  |
+| Packaging smoke tests | `docker compose -f infrastructure/docker/docker-compose.yml config`                 | PASS    | Valid config with health checks, exit 0 |
+| Blank install         | `bash scripts/blank-machine-restore.sh`                                             | BLOCKED | DB created & seeded, halted at `.venv`  |
+| Release hygiene       | `pnpm release:check`                                                                | PASS    | 939 tracked files verified, exit 0      |
+| Translation gate      | `pnpm translation:check`                                                            | PASS    | 0 untranslated strings, exit 0          |

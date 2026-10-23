@@ -64,16 +64,106 @@ interface VersionInfo {
 }
 
 const VERSIONS: VersionInfo[] = [
-  { version: 1, dataBytesL: 19, ecBytesL: 7, numBlocksL: 1, dataBytesM: 16, ecBytesM: 10, numBlocksM: 1, alignment: [] },
-  { version: 2, dataBytesL: 34, ecBytesL: 10, numBlocksL: 1, dataBytesM: 28, ecBytesM: 16, numBlocksM: 1, alignment: [6, 18] },
-  { version: 3, dataBytesL: 55, ecBytesL: 15, numBlocksL: 1, dataBytesM: 44, ecBytesM: 26, numBlocksM: 1, alignment: [6, 22] },
-  { version: 4, dataBytesL: 80, ecBytesL: 20, numBlocksL: 1, dataBytesM: 64, ecBytesM: 18, numBlocksM: 2, alignment: [6, 26] },
-  { version: 5, dataBytesL: 108, ecBytesL: 26, numBlocksL: 1, dataBytesM: 86, ecBytesM: 24, numBlocksM: 2, alignment: [6, 30] },
-  { version: 6, dataBytesL: 136, ecBytesL: 18, numBlocksL: 2, dataBytesM: 108, ecBytesM: 16, numBlocksM: 4, alignment: [6, 34] },
-  { version: 7, dataBytesL: 156, ecBytesL: 20, numBlocksL: 2, dataBytesM: 124, ecBytesM: 18, numBlocksM: 4, alignment: [6, 22, 38] },
-  { version: 8, dataBytesL: 194, ecBytesL: 24, numBlocksL: 2, dataBytesM: 154, ecBytesM: 22, numBlocksM: 4, alignment: [6, 24, 42] },
-  { version: 9, dataBytesL: 232, ecBytesL: 30, numBlocksL: 2, dataBytesM: 182, ecBytesM: 22, numBlocksM: 4, alignment: [6, 26, 46] },
-  { version: 10, dataBytesL: 274, ecBytesL: 18, numBlocksL: 4, dataBytesM: 216, ecBytesM: 26, numBlocksM: 5, alignment: [6, 28, 50] },
+  {
+    version: 1,
+    dataBytesL: 19,
+    ecBytesL: 7,
+    numBlocksL: 1,
+    dataBytesM: 16,
+    ecBytesM: 10,
+    numBlocksM: 1,
+    alignment: [],
+  },
+  {
+    version: 2,
+    dataBytesL: 34,
+    ecBytesL: 10,
+    numBlocksL: 1,
+    dataBytesM: 28,
+    ecBytesM: 16,
+    numBlocksM: 1,
+    alignment: [6, 18],
+  },
+  {
+    version: 3,
+    dataBytesL: 55,
+    ecBytesL: 15,
+    numBlocksL: 1,
+    dataBytesM: 44,
+    ecBytesM: 26,
+    numBlocksM: 1,
+    alignment: [6, 22],
+  },
+  {
+    version: 4,
+    dataBytesL: 80,
+    ecBytesL: 20,
+    numBlocksL: 1,
+    dataBytesM: 64,
+    ecBytesM: 18,
+    numBlocksM: 2,
+    alignment: [6, 26],
+  },
+  {
+    version: 5,
+    dataBytesL: 108,
+    ecBytesL: 26,
+    numBlocksL: 1,
+    dataBytesM: 86,
+    ecBytesM: 24,
+    numBlocksM: 2,
+    alignment: [6, 30],
+  },
+  {
+    version: 6,
+    dataBytesL: 136,
+    ecBytesL: 18,
+    numBlocksL: 2,
+    dataBytesM: 108,
+    ecBytesM: 16,
+    numBlocksM: 4,
+    alignment: [6, 34],
+  },
+  {
+    version: 7,
+    dataBytesL: 156,
+    ecBytesL: 20,
+    numBlocksL: 2,
+    dataBytesM: 124,
+    ecBytesM: 18,
+    numBlocksM: 4,
+    alignment: [6, 22, 38],
+  },
+  {
+    version: 8,
+    dataBytesL: 194,
+    ecBytesL: 24,
+    numBlocksL: 2,
+    dataBytesM: 154,
+    ecBytesM: 22,
+    numBlocksM: 4,
+    alignment: [6, 24, 42],
+  },
+  {
+    version: 9,
+    dataBytesL: 232,
+    ecBytesL: 30,
+    numBlocksL: 2,
+    dataBytesM: 182,
+    ecBytesM: 22,
+    numBlocksM: 4,
+    alignment: [6, 26, 46],
+  },
+  {
+    version: 10,
+    dataBytesL: 274,
+    ecBytesL: 18,
+    numBlocksL: 4,
+    dataBytesM: 216,
+    ecBytesM: 26,
+    numBlocksM: 5,
+    alignment: [6, 28, 50],
+  },
 ];
 
 export interface QrOptions {
@@ -186,7 +276,8 @@ export function generateQrMatrix(text: string, ecc: "L" | "M" = "L"): boolean[][
         const col = c + x;
         if (row >= 0 && row < size && col >= 0 && col < size) {
           if (y >= 0 && y <= 6 && x >= 0 && x <= 6) {
-            const isDark = y === 0 || y === 6 || x === 0 || x === 6 || (y >= 2 && y <= 4 && x >= 2 && x <= 4);
+            const isDark =
+              y === 0 || y === 6 || x === 0 || x === 6 || (y >= 2 && y <= 4 && x >= 2 && x <= 4);
             matrix[row]![col] = isDark;
           } else {
             matrix[row]![col] = false;
@@ -277,8 +368,21 @@ export function generateQrMatrix(text: string, ecc: "L" | "M" = "L"): boolean[][
 
   // Place format information
   const formatCoordsTopLeft: [number, number][] = [
-    [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
-    [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+    [8, 0],
+    [8, 1],
+    [8, 2],
+    [8, 3],
+    [8, 4],
+    [8, 5],
+    [8, 7],
+    [8, 8],
+    [7, 8],
+    [5, 8],
+    [4, 8],
+    [3, 8],
+    [2, 8],
+    [1, 8],
+    [0, 8],
   ];
   for (let i = 0; i < 15; i++) {
     const [r, c] = formatCoordsTopLeft[i]!;
@@ -286,8 +390,21 @@ export function generateQrMatrix(text: string, ecc: "L" | "M" = "L"): boolean[][
   }
 
   const formatCoordsSplit: [number, number][] = [
-    [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8], [size - 5, 8], [size - 6, 8], [size - 7, 8],
-    [8, size - 8], [8, size - 7], [8, size - 6], [8, size - 5], [8, size - 4], [8, size - 3], [8, size - 2], [8, size - 1],
+    [size - 1, 8],
+    [size - 2, 8],
+    [size - 3, 8],
+    [size - 4, 8],
+    [size - 5, 8],
+    [size - 6, 8],
+    [size - 7, 8],
+    [8, size - 8],
+    [8, size - 7],
+    [8, size - 6],
+    [8, size - 5],
+    [8, size - 4],
+    [8, size - 3],
+    [8, size - 2],
+    [8, size - 1],
   ];
   for (let i = 0; i < 15; i++) {
     const [r, c] = formatCoordsSplit[i]!;

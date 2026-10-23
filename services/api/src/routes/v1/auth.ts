@@ -51,8 +51,7 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         response: { 200: okSchema(z.object({ initialized: z.boolean() })) },
       },
     },
-    async (request) =>
-      ok({ initialized: (await app.services.users.count()) > 0 }, request.id),
+    async (request) => ok({ initialized: (await app.services.users.count()) > 0 }, request.id),
   );
 
   app.post(

@@ -1046,11 +1046,7 @@ export class DashboardApi {
       metadata?: Record<string, unknown>;
     },
   ): Promise<ProviderAccountDto> {
-    return this.#request(
-      "PATCH",
-      `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`,
-      input,
-    );
+    return this.#request("PATCH", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`, input);
   }
 
   routingMatrix(): Promise<{ matrix: AgentRoutingEntry[] }> {

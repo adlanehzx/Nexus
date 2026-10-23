@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type {
-  ConnectionCatalogEntry,
-  DashboardApi,
-  PairingTicket,
-} from "../lib/api.js";
+import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 
@@ -16,13 +12,7 @@ interface SetupWizardProps {
   onSwitchToLogin: () => void;
 }
 
-const STEP_ORDER: WizardStep[] = [
-  "prerequisites",
-  "admin",
-  "agents",
-  "capabilities",
-  "complete",
-];
+const STEP_ORDER: WizardStep[] = ["prerequisites", "admin", "agents", "capabilities", "complete"];
 
 const STEP_TITLES: Record<WizardStep, string> = {
   prerequisites: "1. System Readiness",
@@ -64,7 +54,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
   // Step 4: Optional capabilities
-  const [browserMode, setBrowserMode] = useState<"disabled" | "local-harness" | "remote-worker">("disabled");
+  const [browserMode, setBrowserMode] = useState<"disabled" | "local-harness" | "remote-worker">(
+    "disabled",
+  );
   const [cdpUrl, setCdpUrl] = useState("http://127.0.0.1:9222");
   const [remoteWorkerUrl, setRemoteWorkerUrl] = useState("http://127.0.0.1:8000");
   const [workerPairingTicket, setWorkerPairingTicket] = useState<PairingTicket | null>(null);
@@ -238,9 +230,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     setError(null);
     try {
       const updated = await api.testConnection(providerId);
-      setConnections((current) =>
-        current.map((c) => (c.providerId === providerId ? updated : c)),
-      );
+      setConnections((current) => current.map((c) => (c.providerId === providerId ? updated : c)));
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : `Test for ${providerId} failed.`;
       setError(msg);
@@ -299,7 +289,11 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     setBrowserSuccessMsg(null);
     try {
       if (browserMode === "disabled") {
-        await api.configureBrowser({ enabled: false, mode: "local-harness", cdpUrl: "http://127.0.0.1:9222" });
+        await api.configureBrowser({
+          enabled: false,
+          mode: "local-harness",
+          cdpUrl: "http://127.0.0.1:9222",
+        });
         setBrowserSuccessMsg("Browser automation disabled.");
       } else if (browserMode === "local-harness") {
         await api.configureBrowser({ enabled: true, mode: "local-harness", cdpUrl });
@@ -417,7 +411,11 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 onClick={() => goToStep(item)}
                 style={{
                   background: isCurrent ? "var(--soft-accent)" : "transparent",
-                  color: isCurrent ? "var(--bright-accent)" : isPassed ? "var(--text)" : "var(--muted-text)",
+                  color: isCurrent
+                    ? "var(--bright-accent)"
+                    : isPassed
+                      ? "var(--text)"
+                      : "var(--muted-text)",
                   border: isCurrent ? "1px solid var(--accent)" : "1px solid transparent",
                   fontSize: "12px",
                 }}
@@ -457,12 +455,20 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               <p>Checking database, caching, and core service connectivity.</p>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px", margin: "16px 0" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px", margin: "16px 0" }}
+            >
               <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <strong>PostgreSQL Database</strong>
-                  <span className={`state-pill ${readiness?.dependencies?.database?.status === "up" ? "good" : "danger"}`}>
-                    {readiness?.dependencies?.database?.status === "up" ? "Connected" : "Disconnected"}
+                  <span
+                    className={`state-pill ${readiness?.dependencies?.database?.status === "up" ? "good" : "danger"}`}
+                  >
+                    {readiness?.dependencies?.database?.status === "up"
+                      ? "Connected"
+                      : "Disconnected"}
                   </span>
                 </div>
                 <small className="muted">
@@ -471,9 +477,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </div>
 
               <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <strong>Redis Cache & Broker</strong>
-                  <span className={`state-pill ${readiness?.dependencies?.redis?.status === "up" ? "good" : "danger"}`}>
+                  <span
+                    className={`state-pill ${readiness?.dependencies?.redis?.status === "up" ? "good" : "danger"}`}
+                  >
                     {readiness?.dependencies?.redis?.status === "up" ? "Connected" : "Disconnected"}
                   </span>
                 </div>
@@ -483,9 +493,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </div>
 
               <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <strong>NEXUS Core API</strong>
-                  <span className={`state-pill ${readiness?.status === "ok" ? "good" : readiness?.status === "degraded" ? "warning" : "danger"}`}>
+                  <span
+                    className={`state-pill ${readiness?.status === "ok" ? "good" : readiness?.status === "degraded" ? "warning" : "danger"}`}
+                  >
                     {readiness?.status ?? "Checking…"}
                   </span>
                 </div>
@@ -527,7 +541,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
           <div>
             <div className="login-intro">
               <h1>Create Administrator Account</h1>
-              <p>The first registered user is automatically granted root administrative authority.</p>
+              <p>
+                The first registered user is automatically granted root administrative authority.
+              </p>
             </div>
 
             <form className="login-form" onSubmit={(e) => void handleRegisterAdmin(e)}>
@@ -600,11 +616,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </div>
 
               <div style={{ marginTop: "12px", textAlign: "center" }}>
-                <button
-                  type="button"
-                  className="button compact"
-                  onClick={onSwitchToLogin}
-                >
+                <button type="button" className="button compact" onClick={onSwitchToLogin}>
                   Instance already initialized? Sign in directly
                 </button>
               </div>
@@ -618,11 +630,19 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             <div className="login-intro">
               <h1>Discover & Connect AI Agents</h1>
               <p>
-                NEXUS probes declared local CLI tools. No credentials or OAuth tokens ever pass through the browser.
+                NEXUS probes declared local CLI tools. No credentials or OAuth tokens ever pass
+                through the browser.
               </p>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "12px",
+              }}
+            >
               <span>Detected {connections.length} supported providers</span>
               <button
                 type="button"
@@ -648,13 +668,21 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       background: "var(--surface)",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                      }}
+                    >
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <strong>{entry.displayName}</strong>
                           <span className={`state-pill ${status.tone}`}>{status.label}</span>
                         </div>
-                        <p style={{ margin: "4px 0", fontSize: "12px", color: "var(--muted-text)" }}>
+                        <p
+                          style={{ margin: "4px 0", fontSize: "12px", color: "var(--muted-text)" }}
+                        >
                           {status.description}
                         </p>
                       </div>
@@ -694,9 +722,17 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                           Official Sign-in Command
                         </div>
                         <p style={{ margin: "0 0 6px 0", fontSize: "12px" }}>
-                          Run this official CLI command in your host terminal to open the provider's official browser login:
+                          Run this official CLI command in your host terminal to open the provider's
+                          official browser login:
                         </p>
-                        <code style={{ background: "#000", padding: "4px 8px", borderRadius: "4px", display: "inline-block" }}>
+                        <code
+                          style={{
+                            background: "#000",
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            display: "inline-block",
+                          }}
+                        >
                           {entry.providerId === "anthropic" || entry.providerId === "claude"
                             ? "claude login"
                             : entry.providerId === "codex" || entry.providerId === "openai"
@@ -725,11 +761,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => goToStep("admin")}
-              >
+              <button type="button" className="button secondary" onClick={() => goToStep("admin")}>
                 Back
               </button>
               <button
@@ -748,18 +780,26 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
           <div>
             <div className="login-intro">
               <h1>Configure Optional Capabilities</h1>
-              <p>Configure browser automation, MCP tools, and external worker pairing. All are optional.</p>
+              <p>
+                Configure browser automation, MCP tools, and external worker pairing. All are
+                optional.
+              </p>
             </div>
 
             {/* Browser Section */}
-            <div className="card" style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}>
+            <div
+              className="card"
+              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
+            >
               <h3>Browser Execution</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
                 Enable autonomous web browsing via CDP or dedicated container worker.
               </p>
 
               <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                >
                   <input
                     type="radio"
                     name="browserMode"
@@ -769,7 +809,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   />
                   Disabled
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                >
                   <input
                     type="radio"
                     name="browserMode"
@@ -779,7 +821,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   />
                   Local Chromium (CDP)
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                >
                   <input
                     type="radio"
                     name="browserMode"
@@ -831,12 +875,22 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             </div>
 
             {/* MCP Section */}
-            <div className="card" style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}>
+            <div
+              className="card"
+              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
+            >
               <h3>Model Context Protocol (MCP)</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
                 Add local stdio tools. Sensitive variables must use vault references.
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                  marginBottom: "10px",
+                }}
+              >
                 <input
                   className="field"
                   placeholder="Server ID (e.g. filesystem)"
@@ -873,10 +927,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             </div>
 
             {/* Worker Pairing Section */}
-            <div className="card" style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}>
+            <div
+              className="card"
+              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
+            >
               <h3>Pair a Device or Worker</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
-                Generate a single-use pairing ticket to attach a Windows, Linux, or Android worker without passing secrets on command lines.
+                Generate a single-use pairing ticket to attach a Windows, Linux, or Android worker
+                without passing secrets on command lines.
               </p>
 
               {workerPairingTicket === null ? (
@@ -889,20 +947,48 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   Generate Worker Ticket
                 </button>
               ) : (
-                <div style={{ background: "var(--surface-2)", padding: "12px", borderRadius: "6px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ background: "var(--surface-2)", padding: "12px", borderRadius: "6px" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <strong>Pairing Ticket Generated</strong>
-                    <small className="muted">Expires: {new Date(workerPairingTicket.expiresAt).toLocaleTimeString()}</small>
+                    <small className="muted">
+                      Expires: {new Date(workerPairingTicket.expiresAt).toLocaleTimeString()}
+                    </small>
                   </div>
                   <div style={{ margin: "8px 0" }}>
-                    <span className="muted" style={{ fontSize: "11px" }}>One-time Token:</span>
-                    <code style={{ background: "#000", padding: "4px 8px", borderRadius: "4px", display: "block", wordBreak: "break-all" }}>
+                    <span className="muted" style={{ fontSize: "11px" }}>
+                      One-time Token:
+                    </span>
+                    <code
+                      style={{
+                        background: "#000",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        display: "block",
+                        wordBreak: "break-all",
+                      }}
+                    >
                       {workerPairingTicket.token}
                     </code>
                   </div>
                   <div style={{ fontSize: "12px", marginTop: "8px" }}>
                     To pair an external worker, run:
-                    <code style={{ background: "#000", padding: "4px 8px", borderRadius: "4px", display: "block", marginTop: "4px" }}>
+                    <code
+                      style={{
+                        background: "#000",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        display: "block",
+                        marginTop: "4px",
+                      }}
+                    >
                       nexus-worker --ticket {workerPairingTicket.token}
                     </code>
                   </div>
@@ -911,18 +997,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => goToStep("agents")}
-              >
+              <button type="button" className="button secondary" onClick={() => goToStep("agents")}>
                 Back
               </button>
-              <button
-                type="button"
-                className="button primary"
-                onClick={() => goToStep("complete")}
-              >
+              <button type="button" className="button primary" onClick={() => goToStep("complete")}>
                 Review & Finish
               </button>
             </div>
@@ -934,11 +1012,25 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
           <div>
             <div className="login-intro">
               <h1>Setup Complete!</h1>
-              <p>Your local NEXUS assistant is configured and ready for autonomous mission execution.</p>
+              <p>
+                Your local NEXUS assistant is configured and ready for autonomous mission execution.
+              </p>
             </div>
 
-            <div className="card" style={{ padding: "16px", margin: "16px 0", border: "1px solid var(--border)" }}>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div
+              className="card"
+              style={{ padding: "16px", margin: "16px 0", border: "1px solid var(--border)" }}
+            >
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
                   <span>Core services and database healthy</span>
