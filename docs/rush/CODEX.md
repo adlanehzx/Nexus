@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status | Commit               | Evidence                                                                           |
-| --- | ----------------------------------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | DONE   | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
-| A2  | Controlled advanced agent collaboration   | DONE   | `aa1a932`            | 390 API tests; durable replay and adversarial budget checks pass                   |
-| A3  | Cloud and multi-user foundation           | TODO   |                      |                                                                                    |
-| A4  | Advanced memory lifecycle                 | TODO   |                      |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO   |                      |                                                                                    |
-| A6  | Financial simulation completion           | TODO   |                      |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO   |                      |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO   |                      |                                                                                    |
+| ID  | Deliverable                               | Status      | Commit               | Evidence                                                                           |
+| --- | ----------------------------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | DONE        | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
+| A2  | Controlled advanced agent collaboration   | DONE        | `aa1a932`            | 390 API tests; durable replay and adversarial budget checks pass                   |
+| A3  | Cloud and multi-user foundation           | IN_PROGRESS |                      | Tenant persistence and identity contracts recorded                                 |
+| A4  | Advanced memory lifecycle                 | TODO        |                      |                                                                                    |
+| A5  | Advanced observability and evaluation     | TODO        |                      |                                                                                    |
+| A6  | Financial simulation completion           | TODO        |                      |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO        |                      |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO        |                      |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -466,6 +466,12 @@ revision, and arbitration is attributable and replayable.
 
 ## A3 — Cloud and multi-user foundation
 
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-24T14:18:30+02:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+
 - [ ] Hosted deployment profile.
 - [ ] Tenant isolation in every database and artifact query.
 - [ ] Organizations and teams.
@@ -539,12 +545,13 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 
 ## Phase 2 cross-agent handoffs
 
-| ID    | From/to                               | Contract or dependency                                                                                                                                                                                                                                                                                                    | Status   | Evidence or target commit |
-| ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------- |
-| A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.                                                                        | RESOLVED | `b34bc9a`, `116900a`      |
-| A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.                                                                          | RESOLVED | 467-line validated render |
-| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                | RESOLVED | `7027b4e`, `c95a4b7`      |
-| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible. | RESOLVED | `aa1a932`                 |
+| ID    | From/to                               | Contract or dependency                                                                                                                                                                                                                                                                                                                                                         | Status   | Evidence or target commit     |
+| ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------- |
+| A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.                                                                                                                             | RESOLVED | `b34bc9a`, `116900a`          |
+| A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.                                                                                                                               | RESOLVED | 467-line validated render     |
+| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                                                                     | RESOLVED | `7027b4e`, `c95a4b7`          |
+| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                     |
+| A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | OPEN     | A3 schema and service commits |
 
 ## Phase 2 findings and errors
 
