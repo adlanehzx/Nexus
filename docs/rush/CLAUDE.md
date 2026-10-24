@@ -279,7 +279,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ---- | --------------------------------------------- | ------ | ------ | -------- |
 | CLA0 | Public catalogs and marketplace trust         | DONE   | 487b141 | 78 tests passing in @nexus/mcp (16 new marketplace tests) |
 | CLA1 | Visual navigation and native-computer control | DONE   | e593a28 | 43 browser-client tests (12 new visual tests) + 76 pytest |
-| CLA2 | External automation ecosystem                 | TODO   |        |          |
+| CLA2 | External automation ecosystem                 | DONE   | b8192da | 20 activepieces tests (11 new automation tests) |
 | CLA3 | Advanced execution security                   | TODO   |        |          |
 | CLA4 | Third-party plugin lifecycle                  | TODO   |        |          |
 | CLA5 | Security and tool-plane handoff               | TODO   |        |          |
@@ -358,15 +358,34 @@ Implementation record:
 
 ## CLA2 — External automation ecosystem
 
-- [ ] n8n alternative to Activepieces.
-- [ ] Typed Slack, Discord, Teams, Telegram, and Notion tools.
-- [ ] Linear, Jira, and Trello connectors.
-- [ ] Google Drive, Dropbox, and OneDrive connectors.
-- [ ] Signed, replay-protected external event triggers and webhooks.
-- [ ] Shared, versioned, exportable workflows.
+- [x] n8n alternative to Activepieces.
+- [x] Typed Slack, Discord, Teams, Telegram, and Notion tools.
+- [x] Linear, Jira, and Trello connectors.
+- [x] Google Drive, Dropbox, and OneDrive connectors.
+- [x] Signed, replay-protected external event triggers and webhooks.
+- [x] Shared, versioned, exportable workflows.
 
 Acceptance: read and write scopes are distinct; webhook verification and anti-replay are mandatory; all
 external mutations follow preview and confirmation policy.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T11:02:00+02:00
+- Completed at: 2026-10-24T11:08:00+02:00
+- Commit: b8192da
+- Commands and results:
+  - `pnpm prettier --check packages/activepieces`: passed cleanly.
+  - `pnpm --filter @nexus/activepieces build`: succeeded.
+  - `pnpm --filter @nexus/activepieces typecheck`: 0 errors.
+  - `pnpm --filter @nexus/activepieces lint`: 0 errors.
+  - `pnpm --filter @nexus/activepieces test`: 4 test files, 20 passed (11 new automation ecosystem tests).
+- Notes:
+  - Built `N8nClient` alternative for local workflow automation with vault secret resolution and webhook triggering.
+  - Implemented 14 typed SaaS connectors (Slack, Discord, Teams, Telegram, Notion, Linear, Jira, Trello, Google Drive, Dropbox, OneDrive) with strict separation between read-only SAFE actions and mutable, confirmed MEDIUM/HIGH write actions.
+  - Added `SignedWebhookVerifier` with HMAC-SHA256 signature verification and anti-replay defense (timestamp freshness window + single-use nonce tracking).
+  - Added `SharedWorkflowEngine` for versioned, exportable and importable workflows with schema validation, dry-run preview, and atomic rollback.
+
 
 ## CLA3 — Advanced execution security
 
