@@ -276,7 +276,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
 | F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
-| F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | pending    |
+| F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | 7b11a41    |
 
 ## Improvements for the adjustment phase
 
@@ -323,7 +323,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
 | GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
-| GA2 | Advanced voice experience                          | DONE    | pending | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
+| GA2 | Advanced voice experience                          | DONE    | 7b11a41 | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
 | GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
 
@@ -409,7 +409,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T11:07:00+02:00
 - Completed at: 2026-10-24T11:11:00+02:00
-- Commit: pending
+- Commit: 7b11a41
 - Commands and results:
   - `pnpm --filter @nexus/voice test`: 8 test files, 56 tests passed
   - `pnpm --filter @nexus/voice build`: exit 0
