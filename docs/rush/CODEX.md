@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status      | Commit               | Evidence                                                                           |
-| --- | ----------------------------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | IN_PROGRESS |                      | Backend and routing inventory in progress                                          |
-| A2  | Controlled advanced agent collaboration   | TODO        |                      |                                                                                    |
-| A3  | Cloud and multi-user foundation           | TODO        |                      |                                                                                    |
-| A4  | Advanced memory lifecycle                 | TODO        |                      |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO        |                      |                                                                                    |
-| A6  | Financial simulation completion           | TODO        |                      |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO        |                      |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO        |                      |                                                                                    |
+| ID  | Deliverable                               | Status | Commit               | Evidence                                                                           |
+| --- | ----------------------------------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | DONE   | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
+| A2  | Controlled advanced agent collaboration   | TODO   |                      |                                                                                    |
+| A3  | Cloud and multi-user foundation           | TODO   |                      |                                                                                    |
+| A4  | Advanced memory lifecycle                 | TODO   |                      |                                                                                    |
+| A5  | Advanced observability and evaluation     | TODO   |                      |                                                                                    |
+| A6  | Financial simulation completion           | TODO   |                      |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO   |                      |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO   |                      |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -411,18 +411,28 @@ effects. Personal single-node mode remains supported and simpler.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-24T11:02:44+02:00
+- Completed at: 2026-10-24T11:11:55+02:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commits: `7027b4e`, `c95a4b7`
+- Commands and results:
+  - `pnpm --filter @nexus/llm lint && pnpm --filter @nexus/llm typecheck && pnpm --filter @nexus/llm test && pnpm --filter @nexus/llm build` — passed: four files and 12 tests, including one identical conformance matrix over Antigravity, DeepSeek, FreeLLM, Ollama, llama.cpp, and vLLM.
+  - `pnpm build` — passed: 32 workspace builds after the A1 contract change.
+  - `pnpm --filter @nexus/api typecheck && pnpm --filter @nexus/api lint && pnpm --filter @nexus/api exec vitest run test/agent-router.test.ts test/orchestrator.test.ts` — passed: two files and 15 integration tests.
+  - `NEXUS_TEST_POSTGRES_URL=postgresql://... uv run --project services/mission-engine pytest services/mission-engine/tests -o addopts=''` — passed against a disposable PostgreSQL 16 instance: 135 tests, including four real PostgreSQL tests; one pre-existing Starlette deprecation warning.
+  - `agy --version` — passed against the installed native CLI: `1.4.6`. No external provider account, undocumented quota endpoint, or hosted-provider availability is claimed.
+- Migration: additive nullable provider-health columns for quality, latency, cost, context, and privacy. Existing rows remain valid and `NULL` quota/cost observations remain unknown. The migration was exercised by reopening both populated SQLite and PostgreSQL repositories; no destructive rewrite occurred, so no backup was required.
+- Notes: cloud-compatible adapters were exercised through real loopback HTTP transport and the Antigravity adapter through a real subprocess fixture. This proves the common wire contracts without claiming live paid-provider service. Routing decisions are deterministic, persist the complete observation set at task boundaries, and use neutral scoring for unknown quota rather than treating it as unlimited. Personal mode has no mandatory provider and retains local Ollama fallback.
 
-- [ ] Native Google/Antigravity harness distinct from the community ACP adapter.
-- [ ] DeepSeek harness.
-- [ ] FreeLLM backend.
-- [ ] Complete Ollama, llama.cpp, and vLLM adapters.
-- [ ] One routing contract spanning local, cloud, and ACP backends.
-- [ ] Reproducible automatic model benchmarks.
-- [ ] Routing by quality, latency, quota, cost, context, and privacy.
-- [ ] Safe engine migration/fallback at persisted task boundaries.
+- [x] Native Google/Antigravity harness distinct from the community ACP adapter.
+- [x] DeepSeek harness.
+- [x] FreeLLM backend.
+- [x] Complete Ollama, llama.cpp, and vLLM adapters.
+- [x] One routing contract spanning local, cloud, and ACP backends.
+- [x] Reproducible automatic model benchmarks.
+- [x] Routing by quality, latency, quota, cost, context, and privacy.
+- [x] Safe engine migration/fallback at persisted task boundaries.
 
 Acceptance: all backends pass one conformance suite; missing quota remains unknown, never unlimited, and
 NEXUS has no mandatory provider.
@@ -519,12 +529,15 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | ----- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------- |
 | A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.         | RESOLVED | `b34bc9a`, `116900a`      |
 | A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.           | RESOLVED | 467-line validated render |
-| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries. | OPEN     | A1 contract commit        |
+| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries. | RESOLVED | `7027b4e`, `c95a4b7`      |
 
 ## Phase 2 findings and errors
 
-| ID   | Task | Severity | Status   | Description                                                                                                               | Reproduction or evidence                                                                                                                                    | Fix commit |
-| ---- | ---- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state. | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`  |
-| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.              | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`  |
-| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A        |
+| ID   | Task | Severity | Status   | Description                                                                                                                    | Reproduction or evidence                                                                                                                                    | Fix commit           |
+| ---- | ---- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.      | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
+| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                   | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
+| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                     | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
+| A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract. | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
+| A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.           | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
+| A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                        | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
