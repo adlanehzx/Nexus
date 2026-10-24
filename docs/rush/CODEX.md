@@ -491,3 +491,16 @@ deployment, or real-money control is permitted.
 Integrate the two Phase 2 handoffs, reconcile migrations and manifests once, rerun every Phase 1 gate,
 then add multi-node, multi-user, engine, memory, simulation, device, voice, security, and clean-install
 evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and reported as successful.
+
+## Phase 2 cross-agent handoffs
+
+| ID    | From/to                               | Contract or dependency                                                                                                                                                                                                                             | Status | Evidence or target commit |
+| ----- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------- |
+| A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint. | OPEN   | A0 implementation commit  |
+| A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.   | OPEN   | A0 Kubernetes render      |
+
+## Phase 2 findings and errors
+
+| ID   | Task | Severity | Status | Description                                                                                                               | Reproduction or evidence                                                                                     | Fix commit |
+| ---- | ---- | -------- | ------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------- |
+| A0-1 | A0   | Critical | OPEN   | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state. | Two repositories on different hosts necessarily opened different files; no PostgreSQL configuration existed. | Pending    |
