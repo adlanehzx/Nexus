@@ -274,7 +274,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 627e81e    |
 | F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
 | F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
-| F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | pending    |
+| F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
 
 ## Improvements for the adjustment phase
 
@@ -319,7 +319,7 @@ Add a row after every numbered task, even when the result is `None found`.
 
 | ID  | Deliverable                                        | Status  | Commit | Evidence                                                                 |
 | --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
-| GA0 | Mobile store distribution and companion completion | BLOCKED |        | Local pipeline, watch companion, vehicle mode verified; certs missing    |
+| GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
 | GA1 | Hardware workers and one-click deployment          | TODO    |        |                                                                          |
 | GA2 | Advanced voice experience                          | TODO    |        |                                                                          |
 | GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
@@ -343,7 +343,7 @@ Implementation record:
 - Status: `BLOCKED` (Local pipelines & companions DONE; store distribution BLOCKED by credentials)
 - Started at: 2026-10-24T10:53:00+02:00
 - Completed at: 2026-10-24T10:58:00+02:00
-- Commit: pending
+- Commit: d710822
 - Commands and results:
   - `pnpm --filter @nexus/client-core test test/companion-watch.test.ts`: 6 tests passed
   - `pnpm --filter @nexus/client-core build`: exit 0
