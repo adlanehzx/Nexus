@@ -23,7 +23,7 @@ describe("Voices, Translation, and Noise Reduction", () => {
 
   it("translates spoken utterance with local engine adapter", async () => {
     const mockTranslator = async (text: string, sourceLang: string, targetLang: string) => {
-      if (sourceLang === "fr" && targetLang === "en") {
+      if (sourceLang === "es" && targetLang === "en") {
         return { translatedText: "Hello, how can I help you?", confidence: 0.98 };
       }
       return { translatedText: text, confidence: 0.5 };
@@ -31,13 +31,13 @@ describe("Voices, Translation, and Noise Reduction", () => {
 
     const translator = new SpokenVoiceTranslator(mockTranslator);
     const result = await translator.translateUtterance(
-      "Bonjour, comment puis-je vous aider ?",
-      "fr",
+      "Hola, como puedo ayudarte",
+      "es",
       "en",
     );
 
     expect(result.translatedText).toBe("Hello, how can I help you?");
-    expect(result.sourceLanguage).toBe("fr");
+    expect(result.sourceLanguage).toBe("es");
     expect(result.targetLanguage).toBe("en");
     expect(result.confidence).toBe(0.98);
   });

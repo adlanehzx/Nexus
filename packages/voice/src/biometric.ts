@@ -144,7 +144,7 @@ export class VoiceBiometricGuard {
     }
 
     // 3. Medium impact actions: Rule 11 strictly applies:
-    // "La voix biométrique ne doit jamais devenir l'unique facteur autorisant une action sensible."
+    // "Biometric voice must never become the sole factor authorizing a sensitive action."
     if (!params.secondFactor) {
       this.#recordAudit(
         params.action,
