@@ -45,8 +45,190 @@ model User {
   notifications  Notification[]
   agentRuns      AgentRunSnapshot[]
   scheduleGrants ScheduleGrant[]
+  organizationMemberships OrganizationMembership[]
+  teamMemberships         TeamMembership[]
 
   @@map("users")
+}
+
+/// Tenant root. Personal mode creates one implicit LOCAL organization on demand.
+model Organization {
+  id        String   @id @db.Uuid
+  slug      String   @unique
+  name      String
+  mode      String   @default("HOSTED")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships       OrganizationMembership[]
+  teams             Team[]
+  identityProviders OrganizationIdentityProvider[]
+  quotas            OrganizationQuota[]
+  missionGrants     MissionAccessGrant[]
+  usageRecords      BillingUsageRecord[]
+  fleet             FleetInstallation[]
+  collaboration     OrganizationCollaborationEvent[]
+  artifacts         OrganizationArtifact[]
+
+  @@map("organizations")
+}
+
+model OrganizationMembership {
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  role           String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId, organizationId])
+  @@map("organization_memberships")
+}
+
+model Team {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships TeamMembership[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@map("teams")
+}
+
+model TeamMembership {
+  organizationId String   @db.Uuid
+  teamId         String   @db.Uuid
+  userId         String   @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  team Team @relation(fields: [organizationId, teamId], references: [organizationId, id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, teamId, userId])
+  @@index([organizationId, userId])
+  @@map("team_memberships")
+}
+
+model OrganizationIdentityProvider {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  protocol       String
+  issuer         String
+  clientId       String
+  metadata       Json     @default("{}")
+  enabled        Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, protocol, issuer])
+  @@index([organizationId, id])
+  @@map("organization_identity_providers")
+}
+
+model OrganizationQuota {
+  organizationId String   @db.Uuid
+  key            String
+  limit          BigInt
+  used           BigInt   @default(0)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, key])
+  @@map("organization_quotas")
+}
+
+model MissionAccessGrant {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  missionId      String
+  principalType  String
+  principalId    String
+  permission     String
+  createdBy      String   @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, missionId, principalType, principalId, permission])
+  @@index([organizationId, missionId])
+  @@map("mission_access_grants")
+}
+
+model BillingUsageRecord {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  provider       String
+  metric         String
+  quantity       BigInt
+  costMicrounits BigInt?
+  official       Boolean
+  occurredAt     DateTime @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, occurredAt])
+  @@map("billing_usage_records")
+}
+
+model FleetInstallation {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  installationId String
+  displayName    String
+  status         String
+  capabilities   String[] @default([])
+  lastSeenAt     DateTime @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, installationId])
+  @@index([organizationId, status])
+  @@map("fleet_installations")
+}
+
+model OrganizationCollaborationEvent {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  channelId      String
+  actorUserId    String   @db.Uuid
+  sequence       Int
+  kind           String
+  payload        Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, channelId, sequence])
+  @@index([organizationId, channelId, createdAt])
+  @@map("organization_collaboration_events")
+}
+
+model OrganizationArtifact {
+  id             String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  missionId      String
+  artifactKey    String
+  uri            String
+  sha256         String
+  createdBy      String   @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, missionId, artifactKey])
+  @@index([organizationId, missionId])
+  @@map("organization_artifacts")
 }
 
 /// Decoupled from User so fetching user data never fetches password hashes.
