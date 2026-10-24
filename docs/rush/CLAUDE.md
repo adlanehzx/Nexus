@@ -281,7 +281,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | CLA1 | Visual navigation and native-computer control | DONE   | e593a28 | 43 browser-client tests (12 new visual tests) + 76 pytest |
 | CLA2 | External automation ecosystem                 | DONE   | b8192da | 20 activepieces tests (11 new automation tests) |
 | CLA3 | Advanced execution security                   | DONE   | f077b35 | 164 connector tests (18 new advanced security tests) |
-| CLA4 | Third-party plugin lifecycle                  | TODO   |        |          |
+| CLA4 | Third-party plugin lifecycle                  | IN_PROGRESS |        | Base: b02a130 |
 | CLA5 | Security and tool-plane handoff               | TODO   |        |          |
 
 ## CLA0 — Public catalogs and marketplace trust
@@ -305,7 +305,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T10:51:00+02:00
 - Completed at: 2026-10-24T10:56:00+02:00
-- Commit: 487b141
+- Commit: 646d884
 - Commands and results:
   - `pnpm prettier --check packages/mcp`: passed cleanly.
   - `pnpm --filter @nexus/mcp lint`: 0 errors.
@@ -340,7 +340,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T10:57:00+02:00
 - Completed at: 2026-10-24T11:01:00+02:00
-- Commit: e593a28
+- Commit: 610d26a
 - Commands and results:
   - `pnpm prettier --check packages/browser-client`: passed cleanly.
   - `pnpm --filter @nexus/browser-client build`: succeeded.
@@ -373,7 +373,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T11:02:00+02:00
 - Completed at: 2026-10-24T11:08:00+02:00
-- Commit: b8192da
+- Commit: ff336fe
 - Commands and results:
   - `pnpm prettier --check packages/activepieces`: passed cleanly.
   - `pnpm --filter @nexus/activepieces build`: succeeded.
@@ -409,7 +409,7 @@ Implementation record:
 - Status: `DONE` (sub-item external audit engagement BLOCKED with evidence)
 - Started at: 2026-10-24T11:08:00+02:00
 - Completed at: 2026-10-24T11:15:00+02:00
-- Commit: f077b35
+- Commit: b02a130
 - Commands and results:
   - `pnpm prettier --check services/connector`: clean.
   - `pnpm --filter @nexus/connector build`: succeeded.
@@ -430,12 +430,32 @@ Implementation record:
 
 ## CLA4 — Third-party plugin lifecycle
 
-- [ ] Plugin API without arbitrary host-code execution.
-- [ ] Permission, provenance, update, rollback, disable, and revoke lifecycle.
-- [ ] Advisory public reputation that can never override local security policy.
+- [x] Plugin API without arbitrary host-code execution.
+- [x] Permission, provenance, update, rollback, disable, and revoke lifecycle.
+- [x] Advisory public reputation that can never override local security policy.
 
 Acceptance: malicious fixtures cannot access host credentials, unrelated files, metadata endpoints, other
 tenants, other plugin secrets, or undeclared tools.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T11:15:00+02:00
+- Completed at: 2026-10-24T11:21:00+02:00
+- Commit: pending
+- Commands and results:
+  - `pnpm prettier --check packages/tools`: passed cleanly.
+  - `pnpm --filter @nexus/tools build`: succeeded.
+  - `pnpm --filter @nexus/tools typecheck`: 0 errors.
+  - `pnpm --filter @nexus/tools lint`: 0 errors.
+  - `pnpm --filter @nexus/tools test`: 3 test files, 48 passed (11 new plugin lifecycle and sandbox isolation tests).
+- Notes:
+  - Implemented `PluginSandbox` using isolated Node VM context completely stripping `process`, `require`, `fs`, `child_process`, `net`, `eval`, `Function`, and `globalThis`.
+  - Enforced Rule 6: plugins are installed in `INSTALLED_DISABLED` state and strictly refuse execution until policy is approved.
+  - Implemented `PluginPolicyGuard` asserting local security policies (publisher blocklists, permitted capabilities), guaranteeing that advisory public reputation (even 5.0 score) can NEVER override local security policy.
+  - Implemented complete lifecycle in `PluginLifecycleManager`: install (disabled), policy validation, enable, disable, update (resets to disabled with rollback preserved), and permanent revocation.
+  - Enforced tenant boundary isolation (Tenant B cannot execute Tenant A's plugin) and secret scoping (plugins only receive their own declared secrets from the vault).
+  - Malicious fixture test suite confirms rejection of host escapes, cloud metadata endpoints (169.254.169.254), filesystem access, and undeclared tools.
 
 ## CLA5 — Security and tool-plane handoff
 

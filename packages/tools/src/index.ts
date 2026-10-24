@@ -6,3 +6,4 @@ export * from "./registry.js";
 export * from "./permission-service.js";
 export * from "./confirmation-service.js";
 export * from "./executor.js";
+export * from "./plugins/index.js";
