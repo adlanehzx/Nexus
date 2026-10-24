@@ -277,7 +277,7 @@ Add a row after every numbered task, even when the result is `None found`.
 
 | ID   | Deliverable                                   | Status | Commit | Evidence |
 | ---- | --------------------------------------------- | ------ | ------ | -------- |
-| CLA0 | Public catalogs and marketplace trust         | TODO   |        |          |
+| CLA0 | Public catalogs and marketplace trust         | DONE   | 487b141 | 78 tests passing in @nexus/mcp (16 new marketplace tests) |
 | CLA1 | Visual navigation and native-computer control | TODO   |        |          |
 | CLA2 | External automation ecosystem                 | TODO   |        |          |
 | CLA3 | Advanced execution security                   | TODO   |        |          |
@@ -286,19 +286,40 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## CLA0 — Public catalogs and marketplace trust
 
-- [ ] Public ACP-agent marketplace.
-- [ ] Public MCP-server marketplace.
-- [ ] Worker catalog.
-- [ ] Versioned workflow catalog.
-- [ ] Ratings, reviews, and abuse-resistant reputation.
-- [ ] Publisher verification.
-- [ ] Automated static and behavioral package analysis.
-- [ ] Mandatory package signatures and provenance attestations.
-- [ ] One-click community installation with permission preview.
-- [ ] Compromise advisories, revocation, quarantine, and rollback.
+- [x] Public ACP-agent marketplace.
+- [x] Public MCP-server marketplace.
+- [x] Worker catalog.
+- [x] Versioned workflow catalog.
+- [x] Ratings, reviews, and abuse-resistant reputation.
+- [x] Publisher verification.
+- [x] Automated static and behavioral package analysis.
+- [x] Mandatory package signatures and provenance attestations.
+- [x] One-click community installation with permission preview.
+- [x] Compromise advisories, revocation, quarantine, and rollback.
 
 Acceptance: untrusted components cannot bypass provenance, sandboxing, permissions, resource ceilings,
 secret scoping, or revocation. The curated local catalog remains available offline.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T10:51:00+02:00
+- Completed at: 2026-10-24T10:56:00+02:00
+- Commit: 487b141
+- Commands and results:
+  - `pnpm prettier --check packages/mcp`: passed cleanly.
+  - `pnpm --filter @nexus/mcp lint`: 0 errors.
+  - `pnpm --filter @nexus/mcp typecheck`: 0 errors.
+  - `pnpm --filter @nexus/mcp build`: succeeded.
+  - `pnpm --filter @nexus/mcp test`: 8 test files, 78 passed.
+- Notes:
+  - Built marketplace subsystem in `@nexus/mcp/marketplace` supporting MCP servers, ACP agents, workers, and workflows.
+  - Implemented Ed25519 digital signatures and SHA-256 canonical JSON attestation hashing in `signatures.ts`.
+  - Added automated static and behavioral package analyzer (`analysis.ts`) detecting shell injection risks, sensitive path traversals, loopback/metadata SSRF egress, dynamic eval/Function, and unconfirmed critical tools.
+  - Implemented Bayesian weighted reputation with Sybil resistance (requiring verified installation proof) and auto-quarantine upon abuse report threshold in `reputation.ts`.
+  - Added compromise advisories, quarantine, version-specific revocation CRL, and atomic version rollback in `advisories.ts`.
+  - Ensured curated local catalog (`MCP_CATALOG`) remains immediately available offline.
+
 
 ## CLA1 — Visual navigation and native-computer control
 
