@@ -14,6 +14,9 @@ dependencies = [
   # Verify API-issued Ed25519 service tokens with a proven implementation.
   # The engine holds only the public key and never issues tokens.
   "cryptography>=44,<47",
+  # PostgreSQL is optional at runtime but installed so the same image supports
+  # the HA profile without changing the personal SQLite default.
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

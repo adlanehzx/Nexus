@@ -312,6 +312,21 @@ CREATE INDEX IF NOT EXISTS idx_paper_quotes_market_time ON paper_quotes(market_i
 CREATE INDEX IF NOT EXISTS idx_paper_orders_account_state ON paper_orders(account_id, state);
 CREATE INDEX IF NOT EXISTS idx_risk_decisions_account_time ON risk_decisions(account_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_research_runs_state ON research_runs(state, updated_at);
+
+CREATE TABLE IF NOT EXISTS mission_artifacts (
+    id TEXT PRIMARY KEY,
+    mission_id TEXT NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    content_base64 TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes>=0),
+    sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (mission_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mission_artifacts_mission
+    ON mission_artifacts(mission_id, created_at);
 """
 
 

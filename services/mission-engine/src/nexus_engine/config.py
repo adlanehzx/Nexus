@@ -30,12 +30,15 @@ class Settings:
     #: Durable scheduler dispatcher independent of ACP workers.
     scheduler_enabled: bool = True
     scheduler_poll_seconds: float = 1.0
+    #: Shared PostgreSQL URL for multi-node mode. SQLite remains the personal default.
+    database_url: str | None = None
 
     @classmethod
     def from_environment(cls) -> "Settings":
         runner = os.getenv("NEXUS_ENGINE_ACP_RUNNER")
         registry = os.getenv("NEXUS_ENGINE_ACP_REGISTRY")
         return cls(
+            database_url=os.getenv("NEXUS_ENGINE_DATABASE_URL") or None,
             api_base_url=os.getenv("NEXUS_ENGINE_API_URL") or None,
             api_public_key_pem=_read_api_public_key(),
             api_timeout_seconds=max(

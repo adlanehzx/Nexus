@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from nexus_engine.acp import AcpError, AcpGateway
 from nexus_engine.agent_core import AgentCoreGateway, ScheduleGrantGateway, validated_base_url
 from nexus_engine.config import Settings
 from nexus_engine.database import Database
+from nexus_engine.postgres_database import PostgresDatabase
 from nexus_engine.errors import ConflictError, NotFoundError, ValidationError
 from nexus_engine.paper import PaperTradingRepository, RiskPolicy
 from nexus_engine.repository import MissionRepository
@@ -29,6 +31,13 @@ from nexus_engine.service_auth import (
     bearer_token,
 )
 from nexus_engine.worker import Worker
+
+
+class FailClosedAcpGateway:
+    """Rejects ACP work in control-plane-only deployments."""
+
+    def execute(self, **_values: Any) -> str:
+        raise AcpError("ACP runtime is not configured on this node", category="config")
 
 
 class MissionOwnerRequest(BaseModel):
@@ -184,7 +193,12 @@ class RuntimeSettingsRequest(BaseModel):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     configured = settings or Settings.from_environment()
-    repository = MissionRepository(Database(configured.database_path))
+    database = (
+        PostgresDatabase(configured.database_url)
+        if configured.database_url is not None
+        else Database(configured.database_path)
+    )
+    repository = MissionRepository(database)
     paper = PaperTradingRepository(repository.db)
     research_runs = ResearchRunRepository(repository.db, paper)
     api_base_url = validated_base_url(configured.api_base_url)
@@ -227,16 +241,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        if configured.worker_enabled and profile_gateway is None:
-            raise RuntimeError("worker enabled without the NEXUS ACP runtime")
         stop = asyncio.Event()
 
         async def worker_loop(index: int) -> None:
-            assert profile_gateway is not None
             worker = Worker(
                 worker_id=f"local-{index}",
                 repository=repository,
-                gateway=profile_gateway,
+                gateway=profile_gateway or FailClosedAcpGateway(),  # type: ignore[arg-type]
                 agent_core=agent_core_gateway,
             )
             while not stop.is_set():
@@ -771,4 +782,8 @@ app = create_app()
 
 
 def main() -> None:
-    uvicorn.run("nexus_engine.api:app", host="127.0.0.1", port=18100)
+    uvicorn.run(
+        "nexus_engine.api:app",
+        host=os.getenv("NEXUS_ENGINE_HOST", "127.0.0.1"),
+        port=int(os.getenv("NEXUS_ENGINE_PORT", "18100")),
+    )
