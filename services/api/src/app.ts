@@ -46,6 +46,7 @@ import { missionControlRoutes } from "./routes/v1/mission-control.js";
 import { orchestratorRoutes } from "./routes/v1/orchestrator.js";
 import { agentCoreRoutes } from "./routes/v1/agent-core.js";
 import { connectionRoutes } from "./routes/v1/connections.js";
+import { organizationRoutes } from "./routes/v1/organizations.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
 declare module "fastify" {
@@ -270,6 +271,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(orchestratorRoutes);
       await v1.register(agentCoreRoutes);
       await v1.register(connectionRoutes);
+      await v1.register(organizationRoutes);
     },
     { prefix: "/api/v1" },
   );

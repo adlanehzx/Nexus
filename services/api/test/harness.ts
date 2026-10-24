@@ -8,6 +8,8 @@ import { generateSigningKeyPair, SCRYPT_FAST } from "@nexus/auth";
 import { InMemoryCredentialProvider, type Device, type DeviceRole } from "@nexus/devices";
 import { buildApp, type NexusApp } from "../src/app.js";
 import { ServiceContainer } from "../src/services/container.js";
+import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.js";
+import { PrismaSessionStore } from "../src/services/persistence/prisma-session-store.js";
 import type { ClientSocket } from "../src/ws/client-channel.js";
 import type { WorkerSocket } from "../src/ws/worker-channel.js";
 
@@ -70,12 +72,21 @@ export async function makeApi(
     connectionManager?: ConnectionCatalogService;
     publicApiUrl?: string;
     expectedWorkerVersion?: string;
+    /** Real PostgreSQL opt-in for integration suites. */
+    prisma?: PrismaClient;
   } = {},
 ): Promise<ApiHarness> {
   const credentials = new InMemoryCredentialProvider();
   const services = new ServiceContainer({
     tokenPrivateKeyPem: signingKeys.privateKeyPem,
     credentials,
+    ...(options.prisma === undefined
+      ? {}
+      : {
+          prisma: options.prisma,
+          users: new PrismaUserStore(options.prisma),
+          sessions: new PrismaSessionStore(options.prisma),
+        }),
     ...(options.confirmationThreshold === undefined
       ? {}
       : { confirmationThreshold: options.confirmationThreshold }),
@@ -100,7 +111,7 @@ export async function makeApi(
   const app = await buildApp({
     config,
     logger,
-    prisma: fakePrisma(),
+    prisma: options.prisma ?? fakePrisma(),
     redis: fakeRedis(),
     // Local in-memory counter: tests do not depend on a reachable Redis.
     rateLimitStore: "memory",

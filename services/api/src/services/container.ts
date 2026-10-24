@@ -87,6 +87,7 @@ import { SharedArtifactStore } from "./shared-artifacts.js";
 import { AgentCollaborationService } from "./agent-collaboration.js";
 import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 import { LocalConnectionManager, type ConnectionCatalogService } from "./connection-manager.js";
+import { TenantPlatformService, TenantRealtimeHub } from "./tenant-platform.js";
 
 /**
  * Assembly of API services.
@@ -286,6 +287,9 @@ export class ServiceContainer {
   readonly llmProvider: LLMProvider | undefined;
   /** Secret-free local connection catalogue and safe diagnostic probes. */
   readonly connections: ConnectionCatalogService;
+  /** Hosted organization services. Undefined keeps personal mode dependency-free. */
+  readonly tenantPlatform: TenantPlatformService | undefined;
+  readonly tenantRealtime: TenantRealtimeHub;
 
   readonly #now: () => Date;
   readonly #browserToolNames = new Set<string>();
@@ -293,6 +297,9 @@ export class ServiceContainer {
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
     this.connections = options.connectionManager ?? new LocalConnectionManager();
+    this.tenantPlatform =
+      options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);
+    this.tenantRealtime = new TenantRealtimeHub();
     const now = options.now ?? (() => new Date());
     this.#now = now;
 
