@@ -138,6 +138,16 @@ class PostgresDatabase:
             for statement in postgres_schema().split(";"):
                 if statement.strip():
                     connection.execute(statement)
+            for column, definition in {
+                "quality_score": "INTEGER",
+                "latency_ms": "INTEGER",
+                "cost_per_million_microunits": "INTEGER",
+                "max_context_tokens": "INTEGER",
+                "privacy_level": "TEXT",
+            }.items():
+                connection.execute(
+                    f"ALTER TABLE profile_health ADD COLUMN IF NOT EXISTS {column} {definition}"
+                )
             connection.execute(
                 """
                 INSERT INTO profiles(profile_key, agent_profile_id, enabled, agent_kind)

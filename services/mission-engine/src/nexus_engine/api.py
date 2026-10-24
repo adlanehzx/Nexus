@@ -176,6 +176,13 @@ class AgentHealthRequest(BaseModel):
     resets_5h_at: datetime | None = None
     resets_week_at: datetime | None = None
     usage_source: str = Field(default="manual", max_length=64)
+    quality_score: int | None = Field(default=None, ge=0, le=100)
+    latency_ms: int | None = Field(default=None, ge=0)
+    cost_per_million_microunits: int | None = Field(default=None, ge=0)
+    max_context_tokens: int | None = Field(default=None, ge=1)
+    privacy_level: str | None = Field(
+        default=None, pattern=r"^(local_only|private_cloud|external_cloud)$"
+    )
 
 
 class RuntimeSettingsRequest(BaseModel):
@@ -448,6 +455,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     else None
                 ),
                 usage_source=request.usage_source,
+                quality_score=request.quality_score,
+                latency_ms=request.latency_ms,
+                cost_per_million_microunits=request.cost_per_million_microunits,
+                max_context_tokens=request.max_context_tokens,
+                privacy_level=request.privacy_level,
                 reset_failures=request.status == "available",
             )
         except NotFoundError as exc:

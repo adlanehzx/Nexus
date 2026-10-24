@@ -233,6 +233,41 @@ def test_unknown_quota_is_preserved_and_does_not_mean_unlimited(
     ]
 
 
+def test_router_scores_quality_latency_cost_context_privacy_and_unknown_quota(
+    repository: MissionRepository,
+) -> None:
+    repository.update_profile_health(
+        "codex",
+        status="available",
+        quality_score=95,
+        latency_ms=5_000,
+        cost_per_million_microunits=40_000_000,
+        max_context_tokens=128_000,
+        privacy_level="external_cloud",
+    )
+    repository.update_profile_health(
+        "claude",
+        status="available",
+        quality_score=82,
+        latency_ms=100,
+        cost_per_million_microunits=0,
+        max_context_tokens=32_000,
+        privacy_level="local_only",
+    )
+    plan = spec()
+    plan["tasks"][0]["fallback_profiles"] = ["claude"]
+    repository.submit(plan, "multi-factor-routing")
+
+    lease = repository.acquire("worker-a")
+    assert lease is not None and lease.profile_key == "claude"
+    decision = repository.mission(lease.mission_id)["tasks"][0]["routing_decisions"][0]
+    assert decision["reason"] == "selected_fallback"
+    observations = json.loads(decision["observations_json"])
+    assert observations[0]["quota"] == "unknown"
+    assert observations[1]["quota"] == "unknown"
+    assert observations[1]["score"] > observations[0]["score"]
+
+
 def test_dependency_context_is_compacted_to_task_budget(repository: MissionRepository) -> None:
     plan = spec()
     plan["tasks"][1]["context_budget_chars"] = 4_000

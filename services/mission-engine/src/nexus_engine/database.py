@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS profile_health (
     resets_5h_at TEXT,
     resets_week_at TEXT,
     usage_source TEXT NOT NULL DEFAULT 'unknown',
+    quality_score INTEGER CHECK (quality_score IS NULL OR quality_score BETWEEN 0 AND 100),
+    latency_ms INTEGER CHECK (latency_ms IS NULL OR latency_ms>=0),
+    cost_per_million_microunits INTEGER CHECK (
+        cost_per_million_microunits IS NULL OR cost_per_million_microunits>=0
+    ),
+    max_context_tokens INTEGER CHECK (max_context_tokens IS NULL OR max_context_tokens>0),
+    privacy_level TEXT CHECK (
+        privacy_level IS NULL OR privacy_level IN ('local_only','private_cloud','external_cloud')
+    ),
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
     last_error_category TEXT,
     updated_at TEXT NOT NULL
@@ -453,6 +462,21 @@ class Database:
                 connection.execute(
                     "ALTER TABLE profiles ADD COLUMN agent_kind TEXT NOT NULL DEFAULT 'acp'"
                 )
+            health_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(profile_health)")
+            }
+            for column, definition in {
+                "quality_score": "INTEGER",
+                "latency_ms": "INTEGER",
+                "cost_per_million_microunits": "INTEGER",
+                "max_context_tokens": "INTEGER",
+                "privacy_level": "TEXT",
+            }.items():
+                if column not in health_columns:
+                    connection.execute(
+                        f"ALTER TABLE profile_health ADD COLUMN {column} {definition}"
+                    )
             mission_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(missions)")
             }

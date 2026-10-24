@@ -190,7 +190,9 @@ class MissionRepository:
                 SELECT p.profile_key,p.agent_profile_id,p.enabled,
                        h.status,h.cooldown_until,h.remaining_5h_percent,
                        h.remaining_week_percent,h.resets_5h_at,h.resets_week_at,
-                       h.usage_source,h.consecutive_failures,h.last_error_category,
+                       h.usage_source,h.quality_score,h.latency_ms,
+                       h.cost_per_million_microunits,h.max_context_tokens,h.privacy_level,
+                       h.consecutive_failures,h.last_error_category,
                        SUM(CASE WHEN t.state='running' THEN 1 ELSE 0 END) AS running_tasks,
                        SUM(CASE WHEN t.state IN ('ready','blocked','retry_wait') THEN 1 ELSE 0 END) AS queued_tasks,
                        (
@@ -224,6 +226,13 @@ class MissionRepository:
                     "resets_5h_at": row["resets_5h_at"],
                     "resets_week_at": row["resets_week_at"],
                     "usage_source": str(row["usage_source"] or "unknown"),
+                    "quality_score": row["quality_score"],
+                    "latency_ms": row["latency_ms"],
+                    "cost_per_million_microunits": row[
+                        "cost_per_million_microunits"
+                    ],
+                    "max_context_tokens": row["max_context_tokens"],
+                    "privacy_level": row["privacy_level"],
                     "consecutive_failures": int(row["consecutive_failures"] or 0),
                     "last_error_category": row["last_error_category"],
                 }
@@ -241,6 +250,11 @@ class MissionRepository:
         resets_5h_at: str | None = None,
         resets_week_at: str | None = None,
         usage_source: str = "observed",
+        quality_score: int | None = None,
+        latency_ms: int | None = None,
+        cost_per_million_microunits: int | None = None,
+        max_context_tokens: int | None = None,
+        privacy_level: str | None = None,
         last_error_category: str | None = None,
         reset_failures: bool = False,
     ) -> None:
@@ -257,6 +271,14 @@ class MissionRepository:
         for value in (remaining_5h_percent, remaining_week_percent):
             if value is not None and not 0 <= value <= 100:
                 raise ValueError("remaining percentage must be between 0 and 100")
+        if quality_score is not None and not 0 <= quality_score <= 100:
+            raise ValueError("quality score must be between 0 and 100")
+        if any(value is not None and value < 0 for value in (latency_ms, cost_per_million_microunits)):
+            raise ValueError("latency and cost cannot be negative")
+        if max_context_tokens is not None and max_context_tokens < 1:
+            raise ValueError("maximum context tokens must be positive")
+        if privacy_level not in {None, "local_only", "private_cloud", "external_cloud"}:
+            raise ValueError("invalid privacy level")
         with self.db.transaction(immediate=True) as connection:
             exists = connection.execute(
                 "SELECT 1 FROM profiles WHERE profile_key=? AND enabled=1", (profile_key,)
@@ -268,8 +290,10 @@ class MissionRepository:
                 INSERT INTO profile_health(
                     profile_key,status,cooldown_until,remaining_5h_percent,
                     remaining_week_percent,resets_5h_at,resets_week_at,usage_source,
+                    quality_score,latency_ms,cost_per_million_microunits,
+                    max_context_tokens,privacy_level,
                     consecutive_failures,last_error_category,updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(profile_key) DO UPDATE SET
                     status=excluded.status,
                     cooldown_until=excluded.cooldown_until,
@@ -278,6 +302,16 @@ class MissionRepository:
                     resets_5h_at=excluded.resets_5h_at,
                     resets_week_at=excluded.resets_week_at,
                     usage_source=excluded.usage_source,
+                    quality_score=COALESCE(excluded.quality_score,profile_health.quality_score),
+                    latency_ms=COALESCE(excluded.latency_ms,profile_health.latency_ms),
+                    cost_per_million_microunits=COALESCE(
+                        excluded.cost_per_million_microunits,
+                        profile_health.cost_per_million_microunits
+                    ),
+                    max_context_tokens=COALESCE(
+                        excluded.max_context_tokens,profile_health.max_context_tokens
+                    ),
+                    privacy_level=COALESCE(excluded.privacy_level,profile_health.privacy_level),
                     consecutive_failures=CASE WHEN ? THEN 0 ELSE profile_health.consecutive_failures END,
                     last_error_category=excluded.last_error_category,
                     updated_at=excluded.updated_at
@@ -291,6 +325,11 @@ class MissionRepository:
                     resets_5h_at,
                     resets_week_at,
                     usage_source,
+                    quality_score,
+                    latency_ms,
+                    cost_per_million_microunits,
+                    max_context_tokens,
+                    privacy_level,
                     0,
                     last_error_category,
                     timestamp(),
@@ -673,11 +712,17 @@ class MissionRepository:
         selected: str | None = None
         unavailable_until: list[str] = []
         observations: list[dict[str, Any]] = []
-        for profile_key in candidates:
+        ranked: list[tuple[float, int, str]] = []
+        required_context_tokens = max(1, int(row["context_budget_chars"]) // 4)
+        privacy_scores = {"local_only": 60, "private_cloud": 40, "external_cloud": 20}
+        for candidate_index, profile_key in enumerate(candidates):
             health = connection.execute(
                 """
                 SELECT p.agent_profile_id,COALESCE(h.status,'unknown') AS status,
-                       h.cooldown_until,h.resets_5h_at,h.resets_week_at
+                       h.cooldown_until,h.resets_5h_at,h.resets_week_at,
+                       h.remaining_5h_percent,h.remaining_week_percent,
+                       h.quality_score,h.latency_ms,h.cost_per_million_microunits,
+                       h.max_context_tokens,h.privacy_level
                 FROM profiles p LEFT JOIN profile_health h ON h.profile_key=p.profile_key
                 WHERE p.profile_key=? AND p.enabled=1
                 """,
@@ -697,11 +742,55 @@ class MissionRepository:
                     (current_text, profile_key),
                 )
                 status = "available"
+            observation: dict[str, Any] = {"profile": profile_key, "status": status}
+            metrics = {
+                "quality_score": health["quality_score"],
+                "latency_ms": health["latency_ms"],
+                "cost_per_million_microunits": health[
+                    "cost_per_million_microunits"
+                ],
+                "max_context_tokens": health["max_context_tokens"],
+                "privacy_level": health["privacy_level"],
+            }
+            if any(value is not None for value in metrics.values()):
+                observation.update(metrics)
             if status in {"available", "degraded", "unknown"}:
-                observations.append({"profile": profile_key, "status": status})
-                selected = profile_key
-                break
-            observations.append({"profile": profile_key, "status": status})
+                maximum_context = health["max_context_tokens"]
+                if maximum_context is not None and int(maximum_context) < required_context_tokens:
+                    observation["status"] = "context_too_small"
+                    observations.append(observation)
+                    continue
+                known_quotas = [
+                    int(value)
+                    for value in (
+                        health["remaining_5h_percent"],
+                        health["remaining_week_percent"],
+                    )
+                    if value is not None
+                ]
+                quota_score = min(known_quotas) if known_quotas else 50
+                quality = int(health["quality_score"] or 50)
+                latency = int(health["latency_ms"] or 1000)
+                latency_score = max(0.0, 100 - latency / 20)
+                cost = health["cost_per_million_microunits"]
+                cost_score = 50.0 if cost is None else max(0.0, 100 - int(cost) / 500_000)
+                privacy_score = privacy_scores.get(
+                    str(health["privacy_level"] or "external_cloud"), 20
+                )
+                score = (
+                    quality * 0.4
+                    + latency_score * 0.15
+                    + cost_score * 0.15
+                    + quota_score * 0.15
+                    + privacy_score * 0.15
+                )
+                if any(value is not None for value in metrics.values()):
+                    observation["quota"] = min(known_quotas) if known_quotas else "unknown"
+                    observation["score"] = round(score, 4)
+                ranked.append((score, -candidate_index, profile_key))
+                observations.append(observation)
+                continue
+            observations.append(observation)
             for value in (
                 health["cooldown_until"],
                 health["resets_5h_at"],
@@ -709,6 +798,8 @@ class MissionRepository:
             ):
                 if value and str(value) > current_text:
                     unavailable_until.append(str(value))
+        if ranked:
+            selected = max(ranked)[2]
         if selected is None:
             MissionRepository._record_routing_decision(
                 connection,
