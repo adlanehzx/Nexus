@@ -278,7 +278,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID   | Deliverable                                   | Status | Commit | Evidence |
 | ---- | --------------------------------------------- | ------ | ------ | -------- |
 | CLA0 | Public catalogs and marketplace trust         | DONE   | 487b141 | 78 tests passing in @nexus/mcp (16 new marketplace tests) |
-| CLA1 | Visual navigation and native-computer control | TODO   |        |          |
+| CLA1 | Visual navigation and native-computer control | DONE   | e593a28 | 43 browser-client tests (12 new visual tests) + 76 pytest |
 | CLA2 | External automation ecosystem                 | TODO   |        |          |
 | CLA3 | Advanced execution security                   | TODO   |        |          |
 | CLA4 | Third-party plugin lifecycle                  | TODO   |        |          |
@@ -323,17 +323,38 @@ Implementation record:
 
 ## CLA1 — Visual navigation and native-computer control
 
-- [ ] Optional OmniParser behind a model-independent visual parser port.
-- [ ] Screenshot-grounded navigation with bounded image retention.
-- [ ] Expanded native-application control through device workers.
-- [ ] Secure owned and expiring remote-desktop sessions.
-- [ ] General UI recognition with confidence reporting.
-- [ ] Multi-screen targeting and audit.
-- [ ] Secret-safe recording and replay of user demonstrations.
-- [ ] Convert demonstrations into reviewable permission-scoped plans, never opaque code.
+- [x] Optional OmniParser behind a model-independent visual parser port.
+- [x] Screenshot-grounded navigation with bounded image retention.
+- [x] Expanded native-application control through device workers.
+- [x] Secure owned and expiring remote-desktop sessions.
+- [x] General UI recognition with confidence reporting.
+- [x] Multi-screen targeting and audit.
+- [x] Secret-safe recording and replay of user demonstrations.
+- [x] Convert demonstrations into reviewable permission-scoped plans, never opaque code.
 
 Acceptance: tests cover prompt injection, malicious pixels, stale screenshots, coordinate drift, and
 cross-session ownership. Destructive native actions require confirmation.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T10:57:00+02:00
+- Completed at: 2026-10-24T11:01:00+02:00
+- Commit: e593a28
+- Commands and results:
+  - `pnpm prettier --check packages/browser-client`: passed cleanly.
+  - `pnpm --filter @nexus/browser-client build`: succeeded.
+  - `pnpm --filter @nexus/browser-client typecheck`: 0 errors.
+  - `pnpm --filter @nexus/browser-client lint`: 0 errors.
+  - `pnpm --filter @nexus/browser-client test`: 4 test files, 43 passed (12 new visual computer control tests).
+  - `uv run --project services/browser-worker --extra dev pytest services/browser-worker/tests`: 76 passed.
+- Notes:
+  - Designed `VisualParserPort` with interchangeable `OmniParserEngine` (optional, fails closed if unconfigured) and built-in offline `HeuristicVisualParserEngine`.
+  - Added `RemoteDesktopSessionManager` with strict ownership binding (`ownerId`), expiring bearer tokens, immediate revocation, and immutable audit logging.
+  - Added `MultiScreenManager` for targeting displays with bounds verification and DPI scale factor normalization against coordinate drift.
+  - Added `VisualSecurityGuard` protecting against OCR prompt injection, stale screenshot replay via SHA-256 fingerprinting and TTL, and enforced human confirmation for destructive native actions.
+  - Added `DemonstrationPlanCompiler` recording user demonstrations with secret/password redaction, compiling into human-reviewable, permissioned Markdown execution plans rather than opaque code.
+
 
 ## CLA2 — External automation ecosystem
 
