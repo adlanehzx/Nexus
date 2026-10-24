@@ -33,6 +33,22 @@ export const CAPABILITIES = {
   // Client display/audio capabilities
   notificationPush: "notification.push",
   voicePlayback: "voice.playback",
+
+  // GPU compute & inference
+  gpuCompute: "gpu.compute",
+  gpuInference: "gpu.inference",
+
+  // Camera & sensors
+  cameraCapture: "camera.capture",
+  cameraStream: "camera.stream",
+  sensorTemperature: "sensor.temperature",
+  sensorAmbientLight: "sensor.ambient_light",
+  sensorPresence: "sensor.presence",
+  sensorHumidity: "sensor.humidity",
+
+  // Home Assistant automation
+  homeassistantRead: "homeassistant.read",
+  homeassistantWrite: "homeassistant.write",
 } as const;
 
 export type KnownCapability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];

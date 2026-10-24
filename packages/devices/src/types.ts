@@ -69,6 +69,17 @@ export type DeviceStatus = z.infer<typeof deviceStatusSchema>;
 export const trustStateSchema = z.enum(["PENDING", "TRUSTED", "REVOKED"]);
 export type TrustState = z.infer<typeof trustStateSchema>;
 
+export const gpuResourceInfoSchema = z.object({
+  vendor: z.enum(["nvidia", "amd", "apple", "intel", "unknown"]),
+  model: z.string(),
+  totalVramMb: z.number().nonnegative(),
+  freeVramMb: z.number().nonnegative(),
+  computeUtilizationPercent: z.number().min(0).max(100),
+  temperatureCelsius: z.number().optional(),
+  driverVersion: z.string().optional(),
+});
+export type GpuResourceInfo = z.infer<typeof gpuResourceInfoSchema>;
+
 export const deviceHealthSchema = z.object({
   /** CPU load average from 0 to 1. */
   cpuLoad: z.number().min(0).max(1).optional(),
@@ -83,6 +94,8 @@ export const deviceHealthSchema = z.object({
   activeTasks: z.number().int().nonnegative().default(0),
   /** Maximum task concurrency limit. */
   maxConcurrentTasks: z.number().int().positive().default(1),
+  /** GPU accelerators reported on worker. */
+  gpuResources: z.array(gpuResourceInfoSchema).optional(),
   reportedAt: z.string().optional(),
 });
 export type DeviceHealth = z.infer<typeof deviceHealthSchema>;

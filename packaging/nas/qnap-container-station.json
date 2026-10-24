@@ -1,0 +1,59 @@
+{
+  "name": "nexus-qnap-stack",
+  "version": "1.0.0",
+  "description": "NEXUS Personal Intelligence OS for QNAP Container Station",
+  "type": "compose",
+  "variables": {
+    "DB_PASSWORD": {
+      "type": "password",
+      "label": "PostgreSQL Database Password",
+      "required": true
+    },
+    "JWT_SECRET": {
+      "type": "password",
+      "label": "Master JWT Token Secret",
+      "required": true
+    },
+    "SHARE_PATH": {
+      "type": "string",
+      "label": "Storage Share Path",
+      "default": "/share/Container/nexus"
+    }
+  },
+  "services": {
+    "nexus-api": {
+      "image": "ghcr.io/nexus-assistant/nexus-api:1.0.0",
+      "restart": "unless-stopped",
+      "ports": ["3000:3000"],
+      "environment": [
+        "NODE_ENV=production",
+        "PORT=3000",
+        "DATABASE_URL=postgresql://nexus:${DB_PASSWORD}@nexus-postgres:5432/nexus",
+        "REDIS_URL=redis://nexus-redis:6379",
+        "JWT_SECRET=${JWT_SECRET}"
+      ],
+      "volumes": ["${SHARE_PATH}/data:/app/data", "${SHARE_PATH}/uploads:/app/uploads"]
+    },
+    "nexus-dashboard": {
+      "image": "ghcr.io/nexus-assistant/nexus-dashboard:1.0.0",
+      "restart": "unless-stopped",
+      "ports": ["8080:80"],
+      "environment": ["VITE_API_URL=http://localhost:3000"]
+    },
+    "nexus-postgres": {
+      "image": "pgvector/pgvector:pg16",
+      "restart": "unless-stopped",
+      "environment": [
+        "POSTGRES_USER=nexus",
+        "POSTGRES_PASSWORD=${DB_PASSWORD}",
+        "POSTGRES_DB=nexus"
+      ],
+      "volumes": ["${SHARE_PATH}/postgres_data:/var/lib/postgresql/data"]
+    },
+    "nexus-redis": {
+      "image": "redis:7-alpine",
+      "restart": "unless-stopped",
+      "volumes": ["${SHARE_PATH}/redis_data:/data"]
+    }
+  }
+}

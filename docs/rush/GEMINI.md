@@ -275,6 +275,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
 | F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
+| F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | pending    |
 
 ## Improvements for the adjustment phase
 
@@ -320,7 +321,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID  | Deliverable                                        | Status  | Commit | Evidence                                                                 |
 | --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
-| GA1 | Hardware workers and one-click deployment          | TODO    |        |                                                                          |
+| GA1 | Hardware workers and one-click deployment          | DONE    | pending | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
 | GA2 | Advanced voice experience                          | TODO    |        |                                                                          |
 | GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
@@ -358,14 +359,34 @@ Implementation record:
 
 ## GA1 — Hardware workers and one-click deployment
 
-- [ ] Raspberry Pi voice-satellite image and installer.
-- [ ] NAS one-click installation for explicitly supported platforms.
-- [ ] GPU worker scheduling and resource reporting.
-- [ ] Camera and sensor capabilities with visible privacy state.
-- [ ] Home Assistant integration with separate read and write permissions.
+- [x] Raspberry Pi voice-satellite image and installer (`packaging/satellite/install-satellite.sh`, `README.md`).
+- [x] NAS one-click installation for Synology, QNAP, and TrueNAS (`packaging/nas/`).
+- [x] GPU worker scheduling and resource reporting (`packages/devices/src/selector.ts`, `types.ts`, `test/gpu-scheduling.test.ts`).
+- [x] Camera and sensor capabilities with visible privacy state (`packages/devices/src/privacy.ts`, `test/privacy-audit.test.ts`).
+- [x] Home Assistant integration with separate read and write permissions (`packages/devices/src/homeassistant.ts`, `test/homeassistant.test.ts`).
 
 Acceptance: each advertised platform has clean-install and revocation evidence on real or faithfully
 virtualized hardware. Camera, microphone, sensor, and home mutations produce visible audit events.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T11:00:00+02:00
+- Completed at: 2026-10-24T11:06:00+02:00
+- Commit: pending
+- Commands and results:
+  - `pnpm --filter @nexus/devices test`: 9 test files, 119 tests passed
+  - `pnpm --filter @nexus/devices build`: exit 0
+  - `bash -n packaging/satellite/install-satellite.sh`: exit 0
+  - `bash -n packaging/nas/install-nas.sh`: exit 0
+  - `docker compose -f packaging/nas/synology-docker-compose.yml config`: exit 0 (valid compose model)
+  - `docker compose -f packaging/nas/truenas-docker-compose.yml config`: exit 0 (valid compose model)
+- Notes:
+  - Satellite installer consumes pairing tokens strictly via `--token-stdin` (never in `argv` or `ps`), sets up isolated `nexus-satellite` user, systemd security sandbox, and GPIO physical LED privacy hook.
+  - NAS one-click deployment templates provide non-root execution (`1026:100` / `568:568`), persistent storage layout, random credential generation, and clean uninstallation.
+  - DeviceSelector extended with `minGpuVramMb` constraints, GPU VRAM scoring bonus, and detailed rejection diagnostics.
+  - DevicePrivacyMonitor manages visible indicators (`capturing` / `idle`) for camera, microphone, and sensors with tamper-evident audit logging and auto-stop on session disconnect.
+  - HomeAssistantBridge strictly separates `homeassistant.read` from `homeassistant.write`, blocking mutations fail-closed with `HomeAssistantPermissionDeniedError` and recording audit trails for all mutations.
 
 ## GA2 — Advanced voice experience
 

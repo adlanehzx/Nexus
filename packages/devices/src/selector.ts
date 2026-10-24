@@ -29,6 +29,8 @@ export interface SelectionRequest {
     platforms?: readonly Device["platform"][] | undefined;
     /** Reject workers running on battery power for intensive tasks. */
     requireMainsPower?: boolean | undefined;
+    /** Minimum free GPU VRAM required in MB for GPU-bound tasks. */
+    minGpuVramMb?: number | undefined;
   };
 }
 
@@ -182,6 +184,15 @@ export class DeviceSelector {
     if (constraints?.requireMainsPower === true && device.health.onBattery === true) {
       return "on battery while the task requires mains power";
     }
+    if (constraints?.minGpuVramMb !== undefined) {
+      const gpus = device.health.gpuResources ?? [];
+      const hasSufficientVram = gpus.some(
+        (gpu) => gpu.freeVramMb >= (constraints.minGpuVramMb ?? 0),
+      );
+      if (!hasSufficientVram) {
+        return `insufficient GPU VRAM (required: ${constraints.minGpuVramMb}MB)`;
+      }
+    }
 
     return undefined;
   }
@@ -216,6 +227,15 @@ export class DeviceSelector {
 
     const extra = device.capabilities.length - request.requiredCapabilities.length;
     score += Math.max(0, 1 - extra / 20) * weights.specialization;
+
+    const gpus = device.health.gpuResources ?? [];
+    if (gpus.length > 0) {
+      const maxFreeVramMb = Math.max(...gpus.map((g) => g.freeVramMb));
+      score += Math.min(250, (maxFreeVramMb / 1024) * 10);
+      if (maxFreeVramMb >= 8192) {
+        reasons.push(`high GPU VRAM (${Math.round(maxFreeVramMb / 1024)}GB free)`);
+      }
+    }
 
     return { device, score: Math.round(score), reasons };
   }

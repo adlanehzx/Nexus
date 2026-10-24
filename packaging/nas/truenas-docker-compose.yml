@@ -1,0 +1,74 @@
+# NEXUS TrueNAS SCALE Compose Template
+services:
+  nexus-api:
+    image: ghcr.io/nexus-assistant/nexus-api:1.0.0
+    container_name: nexus-api
+    restart: unless-stopped
+    user: "568:568" # TrueNAS apps default UID:GID
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://nexus:${DB_PASSWORD}@nexus-postgres:5432/nexus
+      - REDIS_URL=redis://nexus-redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "3000:3000"
+    volumes:
+      - /mnt/tank/apps/nexus/data:/app/data
+      - /mnt/tank/apps/nexus/uploads:/app/uploads
+    depends_on:
+      nexus-postgres:
+        condition: service_healthy
+      nexus-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  nexus-dashboard:
+    image: ghcr.io/nexus-assistant/nexus-dashboard:1.0.0
+    container_name: nexus-dashboard
+    restart: unless-stopped
+    user: "568:568"
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on:
+      - nexus-api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  nexus-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: nexus-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=nexus
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=nexus
+    volumes:
+      - /mnt/tank/apps/nexus/postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nexus-redis:
+    image: redis:7-alpine
+    container_name: nexus-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - /mnt/tank/apps/nexus/redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

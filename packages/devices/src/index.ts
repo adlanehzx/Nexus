@@ -11,3 +11,5 @@ export * from "./sessions.js";
 export * from "./coordinator.js";
 export * from "./gateway.js";
 export * from "./tools.js";
+export * from "./privacy.js";
+export * from "./homeassistant.js";
