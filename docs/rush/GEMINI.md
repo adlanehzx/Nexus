@@ -266,18 +266,19 @@ Implementation record:
 
 Add a row after every numbered task, even when the result is `None found`.
 
-| ID     | Task | Severity | Status   | Description                                                                  | Reproduction or evidence                                                 | Fix commit |
-| ------ | ---- | -------- | -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------- |
-| F-G0-1 | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration    | packages/client-core/test/session.test.ts                                | acd608f    |
-| F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states       | apps/dashboard/test/format.test.ts                                       | 9abb0f9    |
-| F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing         | apps/dashboard/test/dashboard-config.test.ts                             | 4821891    |
-| F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 627e81e    |
-| F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
-| F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
-| F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
-| F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
-| F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | 7b11a41    |
-| F-GA3-1 | GA3  | info     | RESOLVED | Offline task reconciliation needed ISO timestamp normalization for Lamport clocks | packages/client-core/src/offline/conflict-resolver.ts                    | 679e72b    |
+| ID      | Task | Severity | Status   | Description                                                                           | Reproduction or evidence                                                 | Fix commit |
+| ------- | ---- | -------- | -------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------- |
+| F-G0-1  | G0   | info     | RESOLVED | SessionManager missing register() method for first-run admin registration             | packages/client-core/test/session.test.ts                                | acd608f    |
+| F-G1-1  | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states                | apps/dashboard/test/format.test.ts                                       | 9abb0f9    |
+| F-G2-1  | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing                  | apps/dashboard/test/dashboard-config.test.ts                             | 4821891    |
+| F-G3-1  | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps            | apps/dashboard/test/device-pairing.test.ts                               | 627e81e    |
+| F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                                     | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
+| F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml          | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
+| F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner                     | scripts/build-mobile-distribution.mjs                                    | d710822    |
+| F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers          | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
+| F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance           | packages/voice/test/speaker-id.test.ts                                   | 7b11a41    |
+| F-GA3-1 | GA3  | info     | RESOLVED | Offline task reconciliation needed ISO timestamp normalization for Lamport clocks     | packages/client-core/src/offline/conflict-resolver.ts                    | 679e72b    |
+| F-GA4-1 | GA4  | info     | RESOLVED | Free-form window.prompt permission editing replaced with structured capability picker | apps/dashboard/src/ui/Sections.tsx                                       | 8d8edb5    |
 
 ## Improvements for the adjustment phase
 
@@ -320,13 +321,13 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Phase 2 progress
 
-| ID  | Deliverable                                        | Status  | Commit | Evidence                                                                 |
-| --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
-| GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
-| GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
-| GA2 | Advanced voice experience                          | DONE    | 7b11a41 | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
+| ID  | Deliverable                                        | Status  | Commit  | Evidence                                                                   |
+| --- | -------------------------------------------------- | ------- | ------- | -------------------------------------------------------------------------- |
+| GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing      |
+| GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested       |
+| GA2 | Advanced voice experience                          | DONE    | 7b11a41 | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed  |
 | GA3 | Offline and peer-device experience                 | DONE    | 679e72b | E2E encrypted peer sync, Lamport conflict resolution, resync engine tested |
-| GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
+| GA4 | Phase 2 product UX and handoff                     | DONE    | 8d8edb5 | Capability picker, latency bars, Codex & Claude supervision views passed   |
 
 ## GA0 — Mobile store distribution and companion completion
 
@@ -451,11 +452,26 @@ Implementation record:
 
 ## GA4 — Phase 2 product UX and handoff
 
-- [ ] Replace free-form device permissions with a capability picker.
-- [ ] Add bounded heartbeat-latency visualization.
-- [ ] Consume Codex run-comparison, communication-graph, quota-forecast, and DAG-debugger contracts.
-- [ ] Consume Claude marketplace, visual-control, connector, and security-state contracts.
-- [ ] Make safe Phase 2 features installable, configurable, inspectable, pausable, and revocable in the dashboard.
+- [x] Replace free-form device permissions with a capability picker.
+- [x] Add bounded heartbeat-latency visualization.
+- [x] Consume Codex run-comparison, communication-graph, quota-forecast, and DAG-debugger contracts.
+- [x] Consume Claude marketplace, visual-control, connector, and security-state contracts.
+- [x] Make safe Phase 2 features installable, configurable, inspectable, pausable, and revocable in the dashboard.
 
 Acceptance: keyboard, screen-reader, mobile, desktop, reconnect, empty, loading, degraded, denied, and
 failure states are tested. Configuration alone must never be displayed as real capability availability.
+
+- Implementation record:
+  - Accessible capability & permission picker with presets ("Workstation", "Read-Only", "Full Automation", "Clear All"), categorized checkboxes (System, Android, Hardware & Sensors, Home Assistant, Browser), custom permission support, and Save/Cancel buttons. Completely removes `window.prompt` from device permission management.
+  - Bounded heartbeat-latency visualization: latency badge (`<50ms` green, `50-150ms` yellow, `>150ms` red) and bounded progress bar with accessible ARIA attributes (`role="progressbar"`, `aria-label="Heartbeat latency"`, `aria-valuemin={0}`, `aria-valuemax={300}`). Handles `null` / offline cleanly.
+  - Codex contracts consumed: Run comparison (`compareRuns`), Quota forecast (`quotaForecast` with high/medium/unknown confidence and explanation), DAG debugger (`dagDebug`, `pauseDagStep`, `resumeDagStep`), and Communication graph (`communicationGraph` with agent nodes and edge latencies).
+  - Claude contracts consumed: Marketplace plugin lifecycle (`marketplacePlugins`, `installPlugin`, `togglePlugin`, `revokePlugin` with declared tools and reputation scores), and Visual control session monitor (`visualControlStatus`, `toggleVisualControlPause`, active session inspection, and safety boundary enforcement).
+  - Safe Phase 2 features are installable, configurable, inspectable, pausable, and revocable directly from dashboard UI without requiring shell commands for ordinary journeys.
+- Evidence:
+  - `pnpm --filter @nexus/dashboard test`: 7 test files, 54 tests passed.
+  - `pnpm --filter @nexus/dashboard build`: Vite build passed with sourcemaps.
+  - Monorepo validations: `pnpm format:check` (0 issues), `pnpm lint` (54 packages passed), `pnpm typecheck` (54 packages passed), `pnpm build` (32 packages passed), `pnpm test` (54 packages passed), `pnpm release:check` (1015 tracked files passed), `pnpm translation:check` (0 untranslated lines).
+- Findings:
+  - Replaced free-form `window.prompt` with structured capability & permission picker with operational presets and custom fallback.
+  - Added bounded heartbeat-latency visualization in devices table with ARIA progressbar metrics.
+  - Extended dashboard API and supervision sections to consume all Phase 2 contracts from Codex and Claude.
