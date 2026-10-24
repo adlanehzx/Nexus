@@ -5,9 +5,10 @@ resources:
   - namespace.yaml
   - config.yaml
   - storage.yaml
-  - data-services.yaml
   - platform.yaml
   - network-policy.yaml
+  - ha/data-ha.yaml
+  - ha/mission-engine.yaml
 images:
   - name: nexus-api
     newName: ghcr.io/adlanehzx/nexus/api
@@ -17,4 +18,7 @@ images:
     newTag: v1.0.0
   - name: nexus-migrate
     newName: ghcr.io/adlanehzx/nexus/migrate
+    newTag: v1.0.0
+  - name: nexus-mission-engine
+    newName: ghcr.io/adlanehzx/nexus/mission-engine
     newTag: v1.0.0

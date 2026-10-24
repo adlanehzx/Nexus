@@ -1,45 +1,22 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-data
-  namespace: nexus
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: redis-data
-  namespace: nexus
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
   name: model-cache
   namespace: nexus
 spec:
-  accessModes: [ReadWriteOnce]
+  accessModes: [ReadWriteMany]
   resources:
     requests:
       storage: 4Gi
 ---
-# Dashboard settings, artifacts, and logs are process-local. Keep one API replica
-# until this state moves to PostgreSQL or transactional RWX storage.
+# Runtime configuration and caches use operator-provided shared storage in HA mode.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: api-state
   namespace: nexus
 spec:
-  accessModes: [ReadWriteOnce]
+  accessModes: [ReadWriteMany]
   resources:
     requests:
       storage: 5Gi

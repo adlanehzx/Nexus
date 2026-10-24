@@ -36,9 +36,10 @@
     "docker:browser": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile browser up -d browser-worker",
     "docker:research": "docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile research up -d searxng",
     "docker:observability": "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile observability up -d",
-    "k8s:images": "docker build -f infrastructure/docker/api.Dockerfile -t nexus-api:local . && docker build -f infrastructure/docker/dashboard.Dockerfile -t nexus-dashboard:local . && docker build -f infrastructure/docker/migrate.Dockerfile -t nexus-migrate:local .",
+    "k8s:images": "docker build -f infrastructure/docker/api.Dockerfile -t nexus-api:local . && docker build -f infrastructure/docker/dashboard.Dockerfile -t nexus-dashboard:local . && docker build -f infrastructure/docker/migrate.Dockerfile -t nexus-migrate:local . && docker build -f infrastructure/docker/mission-engine.Dockerfile -t nexus-mission-engine:local .",
     "worker:image": "docker build -f infrastructure/docker/worker.Dockerfile -t nexus-worker:local .",
     "k8s:render": "kubectl kustomize infrastructure/kubernetes",
+    "test:ha": "bash scripts/test-ha-replication.sh",
     "translation:status": "bash scripts/translation-status.sh",
     "translation:check": "bash scripts/translation-status.sh --check all"
   },

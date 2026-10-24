@@ -14,7 +14,7 @@ data:
   CORS_ORIGINS: https://nexus.example.invalid
   # HTTPS address reachable by workers; required to issue pairing tickets.
   PUBLIC_API_URL: https://nexus.example.invalid
-  REDIS_URL: redis://nexus-redis:6379
+  REDIS_URL: redis://rfr-nexus-redis:6379
   MEMORY_EMBEDDING_BACKEND: neural
   MEMORY_EMBEDDING_CACHE_DIR: /var/lib/nexus/models
   MEMORY_EMBEDDING_LOCAL_ONLY: "false"

@@ -1,0 +1,89 @@
+name: nexus-ha-test
+
+services:
+  postgres-primary:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${NEXUS_HA_TEST_PASSWORD:-nexus_ha_test_only}
+      POSTGRES_DB: nexus
+      POSTGRES_REPLICATION_PASSWORD: ${NEXUS_HA_REPLICATION_PASSWORD:-nexus_replication_test_only}
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "hot_standby=on"]
+    volumes:
+      - postgres-primary:/var/lib/postgresql/data
+      - ./ha/postgres-primary-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [ha]
+
+  postgres-replica:
+    image: pgvector/pgvector:pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
+    depends_on:
+      postgres-primary: { condition: service_healthy }
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_DB: nexus
+      POSTGRES_REPLICATION_PASSWORD: ${NEXUS_HA_REPLICATION_PASSWORD:-nexus_replication_test_only}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    entrypoint: ["/bin/sh", "/opt/nexus/postgres-replica.sh"]
+    volumes:
+      - postgres-replica:/var/lib/postgresql/data
+      - ./ha/postgres-replica.sh:/opt/nexus/postgres-replica.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [ha]
+
+  redis-primary:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis-primary:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      ha: { ipv4_address: 172.31.239.10 }
+
+  redis-replica:
+    image: redis:7-alpine
+    depends_on:
+      redis-primary: { condition: service_healthy }
+    command: ["redis-server", "--replicaof", "172.31.239.10", "6379", "--appendonly", "yes"]
+    volumes: [redis-replica:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      ha: { ipv4_address: 172.31.239.11 }
+
+  redis-sentinel-1: &sentinel
+    image: redis:7-alpine
+    depends_on:
+      redis-primary: { condition: service_healthy }
+      redis-replica: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "/opt/nexus/redis-sentinel.sh"]
+    volumes: [./ha/redis-sentinel.sh:/opt/nexus/redis-sentinel.sh:ro]
+    networks: [ha]
+
+  redis-sentinel-2: *sentinel
+  redis-sentinel-3: *sentinel
+
+volumes:
+  postgres-primary:
+  postgres-replica:
+  redis-primary:
+  redis-replica:
+
+networks:
+  ha:
+    ipam:
+      config: [{ subnet: 172.31.239.0/24 }]

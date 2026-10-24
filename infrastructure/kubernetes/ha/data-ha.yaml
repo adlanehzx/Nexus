@@ -1,0 +1,58 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: nexus-postgres-ha
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: nexus
+      owner: nexus
+      secret: { name: nexus-secrets }
+  storage: { size: 20Gi }
+  postgresql:
+    parameters:
+      synchronous_commit: "on"
+      wal_level: replica
+      max_wal_senders: "10"
+  affinity:
+    topologyKey: kubernetes.io/hostname
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+---
+apiVersion: databases.spotahome.com/v1
+kind: RedisFailover
+metadata:
+  name: nexus-redis
+spec:
+  sentinel: { replicas: 3 }
+  redis:
+    replicas: 3
+    storage:
+      keepAfterDeletion: true
+      persistentVolumeClaim:
+        metadata: { name: nexus-redis-data }
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests: { storage: 2Gi }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexus-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: nexus-api }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexus-mission-engine
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: nexus-mission-engine }
