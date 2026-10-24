@@ -277,7 +277,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
 | F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
 | F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | 7b11a41    |
-| F-GA3-1 | GA3  | info     | RESOLVED | Offline task reconciliation needed ISO timestamp normalization for Lamport clocks | packages/client-core/src/offline/conflict-resolver.ts                    | pending    |
+| F-GA3-1 | GA3  | info     | RESOLVED | Offline task reconciliation needed ISO timestamp normalization for Lamport clocks | packages/client-core/src/offline/conflict-resolver.ts                    | 679e72b    |
 
 ## Improvements for the adjustment phase
 
@@ -325,7 +325,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
 | GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
 | GA2 | Advanced voice experience                          | DONE    | 7b11a41 | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
-| GA3 | Offline and peer-device experience                 | DONE    | pending | E2E encrypted peer sync, Lamport conflict resolution, resync engine tested |
+| GA3 | Offline and peer-device experience                 | DONE    | 679e72b | E2E encrypted peer sync, Lamport conflict resolution, resync engine tested |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
 
 ## GA0 — Mobile store distribution and companion completion
@@ -437,7 +437,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T11:12:00+02:00
 - Completed at: 2026-10-24T11:17:00+02:00
-- Commit: pending
+- Commit: 679e72b
 - Commands and results:
   - `pnpm --filter @nexus/client-core test`: 14 test files, 188 tests passed
   - `pnpm --filter @nexus/client-core build`: exit 0
