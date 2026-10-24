@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status | Commit               | Evidence                                                                           |
-| --- | ----------------------------------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | TODO   |                      |                                                                                    |
-| A2  | Controlled advanced agent collaboration   | TODO   |                      |                                                                                    |
-| A3  | Cloud and multi-user foundation           | TODO   |                      |                                                                                    |
-| A4  | Advanced memory lifecycle                 | TODO   |                      |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO   |                      |                                                                                    |
-| A6  | Financial simulation completion           | TODO   |                      |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO   |                      |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO   |                      |                                                                                    |
+| ID  | Deliverable                               | Status      | Commit               | Evidence                                                                           |
+| --- | ----------------------------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | IN_PROGRESS |                      | Backend and routing inventory in progress                                          |
+| A2  | Controlled advanced agent collaboration   | TODO        |                      |                                                                                    |
+| A3  | Cloud and multi-user foundation           | TODO        |                      |                                                                                    |
+| A4  | Advanced memory lifecycle                 | TODO        |                      |                                                                                    |
+| A5  | Advanced observability and evaluation     | TODO        |                      |                                                                                    |
+| A6  | Financial simulation completion           | TODO        |                      |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO        |                      |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO        |                      |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -408,6 +408,12 @@ Acceptance: killing one application node during a mission resumes work elsewhere
 effects. Personal single-node mode remains supported and simpler.
 
 ## A1 — Interchangeable engines and model routing
+
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-24T11:02:44+02:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
 
 - [ ] Native Google/Antigravity harness distinct from the community ACP adapter.
 - [ ] DeepSeek harness.
