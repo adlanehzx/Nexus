@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status      | Commit               | Evidence                                                                           |
-| --- | ----------------------------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | DONE        | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
-| A2  | Controlled advanced agent collaboration   | IN_PROGRESS |                      | Persistent bounded-collaboration contract recorded                                 |
-| A3  | Cloud and multi-user foundation           | TODO        |                      |                                                                                    |
-| A4  | Advanced memory lifecycle                 | TODO        |                      |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO        |                      |                                                                                    |
-| A6  | Financial simulation completion           | TODO        |                      |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO        |                      |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO        |                      |                                                                                    |
+| ID  | Deliverable                               | Status | Commit               | Evidence                                                                           |
+| --- | ----------------------------------------- | ------ | -------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | DONE   | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
+| A2  | Controlled advanced agent collaboration   | DONE   | `aa1a932`            | 390 API tests; durable replay and adversarial budget checks pass                   |
+| A3  | Cloud and multi-user foundation           | TODO   |                      |                                                                                    |
+| A4  | Advanced memory lifecycle                 | TODO   |                      |                                                                                    |
+| A5  | Advanced observability and evaluation     | TODO   |                      |                                                                                    |
+| A6  | Financial simulation completion           | TODO   |                      |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO   |                      |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO   |                      |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -441,17 +441,25 @@ NEXUS has no mandatory provider.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-24T11:12:00+02:00
+- Completed at: 2026-10-24T14:18:18+02:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commit: `aa1a932`
+- Commands and results:
+  - `pnpm --filter @nexus/api typecheck && pnpm --filter @nexus/api lint && pnpm --filter @nexus/api build` — passed.
+  - `pnpm --filter @nexus/api exec vitest run test/advanced-collaboration.test.ts test/collaboration-endpoints.test.ts test/agent-collaboration.test.ts` — passed: three files and 13 tests.
+  - `pnpm --filter @nexus/api test` — passed: 36 files and 390 tests.
+- Migration: none. The append-only ledger is created per mission with private directory/file modes and is accessed behind a replaceable port. Restart recovery is proven by constructing a new coordinator and replaying the on-disk journal.
+- Notes: authenticated mission routes create sessions, append typed actions, and replay attributable events. Immutable session limits cover hops, tokens, wall time, recursion, consensus, independent review, capabilities, and permissions. The action union is strict; monetary amount and currency fields are rejected at the HTTP boundary, leaving only bounded virtual scores.
 
-- [ ] Bounded direct agent conversations with hop, token, time, and recursion ceilings.
-- [ ] Structured debates.
-- [ ] Typed voting and consensus.
-- [ ] Configurable mandatory cross-review.
-- [ ] Dynamic roles constrained by capabilities and permissions.
-- [ ] Runtime plan revision with persisted history.
-- [ ] Virtual-score task bidding with no money or provider credits.
+- [x] Bounded direct agent conversations with hop, token, time, and recursion ceilings.
+- [x] Structured debates.
+- [x] Typed voting and consensus.
+- [x] Configurable mandatory cross-review.
+- [x] Dynamic roles constrained by capabilities and permissions.
+- [x] Runtime plan revision with persisted history.
+- [x] Virtual-score task bidding with no money or provider credits.
 
 Acceptance: adversarial tests prove cycle termination and budget enforcement; every message, vote,
 revision, and arbitration is attributable and replayable.
@@ -536,15 +544,17 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.                                                                        | RESOLVED | `b34bc9a`, `116900a`      |
 | A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.                                                                          | RESOLVED | 467-line validated render |
 | A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                | RESOLVED | `7027b4e`, `c95a4b7`      |
-| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible. | OPEN     | A2 contract commit        |
+| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible. | RESOLVED | `aa1a932`                 |
 
 ## Phase 2 findings and errors
 
-| ID   | Task | Severity | Status   | Description                                                                                                                    | Reproduction or evidence                                                                                                                                    | Fix commit           |
-| ---- | ---- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.      | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
-| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                   | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
-| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                     | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
-| A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract. | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
-| A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.           | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
-| A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                        | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
+| ID   | Task | Severity | Status   | Description                                                                                                                                        | Reproduction or evidence                                                                                                                                    | Fix commit           |
+| ---- | ---- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.                          | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
+| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                                       | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
+| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                                         | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
+| A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract.                     | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
+| A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.                               | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
+| A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                                            | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
+| A2-1 | A2   | Critical | RESOLVED | Existing collaboration could add subtasks and arbitration prompts but had no bounded direct-conversation protocol or durable attributable history. | Adversarial tests prove cycle, hop, token, recursion, and time termination; restart replay preserves ordered actor IDs and every accepted action.           | `aa1a932`            |
+| A2-2 | A2   | High     | RESOLVED | Existing dynamic collaboration had no structural barrier between task suitability scores and monetary bids.                                        | The strict HTTP action union accepts only `virtualScore` from 0 to 100 and rejects currency or amount fields with HTTP 400.                                 | `aa1a932`            |
