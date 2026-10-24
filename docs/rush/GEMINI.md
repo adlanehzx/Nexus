@@ -275,7 +275,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
 | F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
-| F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | pending    |
+| F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
 
 ## Improvements for the adjustment phase
 
@@ -321,7 +321,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | ID  | Deliverable                                        | Status  | Commit | Evidence                                                                 |
 | --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
-| GA1 | Hardware workers and one-click deployment          | DONE    | pending | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
+| GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
 | GA2 | Advanced voice experience                          | TODO    |        |                                                                          |
 | GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
@@ -373,7 +373,7 @@ Implementation record:
 - Status: `DONE`
 - Started at: 2026-10-24T11:00:00+02:00
 - Completed at: 2026-10-24T11:06:00+02:00
-- Commit: pending
+- Commit: b83e6d5
 - Commands and results:
   - `pnpm --filter @nexus/devices test`: 9 test files, 119 tests passed
   - `pnpm --filter @nexus/devices build`: exit 0
