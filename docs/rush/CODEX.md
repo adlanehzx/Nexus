@@ -349,21 +349,35 @@ Record improvements that are useful but not required for the rush acceptance cri
 
 # Adjustment Rush — Codex
 
+Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+
+Branch: `codex/rush-phase2-platform`
+
+Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/codex/rush-phase2-platform`
+
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status | Commit | Evidence |
-| --- | ----------------------------------------- | ------ | ------ | -------- |
-| A0  | Scale and disaster recovery               | TODO   |        |          |
-| A1  | Interchangeable engines and model routing | TODO   |        |          |
-| A2  | Controlled advanced agent collaboration   | TODO   |        |          |
-| A3  | Cloud and multi-user foundation           | TODO   |        |          |
-| A4  | Advanced memory lifecycle                 | TODO   |        |          |
-| A5  | Advanced observability and evaluation     | TODO   |        |          |
-| A6  | Financial simulation completion           | TODO   |        |          |
-| A7  | Autonomy and federation safety boundaries | TODO   |        |          |
-| A8  | Phase 2 integration and full E2E          | TODO   |        |          |
+| ID  | Deliverable                               | Status      | Commit | Evidence                                           |
+| --- | ----------------------------------------- | ----------- | ------ | -------------------------------------------------- |
+| A0  | Scale and disaster recovery               | IN_PROGRESS |        | Baseline and target-platform inventory in progress |
+| A1  | Interchangeable engines and model routing | TODO        |        |                                                    |
+| A2  | Controlled advanced agent collaboration   | TODO        |        |                                                    |
+| A3  | Cloud and multi-user foundation           | TODO        |        |                                                    |
+| A4  | Advanced memory lifecycle                 | TODO        |        |                                                    |
+| A5  | Advanced observability and evaluation     | TODO        |        |                                                    |
+| A6  | Financial simulation completion           | TODO        |        |                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO        |        |                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO        |        |                                                    |
 
 ## A0 — Scale and disaster recovery
+
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-24T10:49:32+02:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Branch: `codex/rush-phase2-platform`
+- Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/codex/rush-phase2-platform`
 
 - [ ] Multi-server high availability.
 - [ ] PostgreSQL and Redis replication.
