@@ -7,3 +7,4 @@ export * from "./socket.js";
 export * from "./nonce-log.js";
 export * from "./admin.js";
 export * from "./client.js";
+export * from "./security.js";

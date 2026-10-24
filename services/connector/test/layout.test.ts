@@ -41,6 +41,7 @@ const CANONICAL_MODULES = [
   "index.ts",
   "nonce-log.ts",
   "protocol.ts",
+  "security.ts",
   "server.ts",
   "socket.ts",
 ];

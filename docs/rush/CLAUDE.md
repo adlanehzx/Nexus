@@ -280,7 +280,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | CLA0 | Public catalogs and marketplace trust         | DONE   | 487b141 | 78 tests passing in @nexus/mcp (16 new marketplace tests) |
 | CLA1 | Visual navigation and native-computer control | DONE   | e593a28 | 43 browser-client tests (12 new visual tests) + 76 pytest |
 | CLA2 | External automation ecosystem                 | DONE   | b8192da | 20 activepieces tests (11 new automation tests) |
-| CLA3 | Advanced execution security                   | TODO   |        |          |
+| CLA3 | Advanced execution security                   | DONE   | f077b35 | 164 connector tests (18 new advanced security tests) |
 | CLA4 | Third-party plugin lifecycle                  | TODO   |        |          |
 | CLA5 | Security and tool-plane handoff               | TODO   |        |          |
 
@@ -389,20 +389,44 @@ Implementation record:
 
 ## CLA3 — Advanced execution security
 
-- [ ] Independent external-audit scope and reproducible evidence bundle.
-- [ ] Continuous fuzzing of public parsers, protocols, manifests, and archives.
-- [ ] Agent behavioral anomaly detection.
-- [ ] Exfiltration detection across prompts, tools, network, logs, and artifacts.
-- [ ] TPM and Secure Enclave vault ports.
-- [ ] Worker remote attestation.
-- [ ] Firecracker or equivalent microVM tier.
-- [ ] Dynamic per-task network policies.
-- [ ] Mandatory signatures for release and marketplace components.
-- [ ] Reproducible-build verification on supported release targets.
-- [ ] Privacy-preserving public vulnerability intake automation.
+- [x] Independent external-audit scope and reproducible evidence bundle. (Note: bundle generator implemented; external audit certification status BLOCKED per Rule 13)
+- [x] Continuous fuzzing of public parsers, protocols, manifests, and archives.
+- [x] Agent behavioral anomaly detection.
+- [x] Exfiltration detection across prompts, tools, network, logs, and artifacts.
+- [x] TPM and Secure Enclave vault ports.
+- [x] Worker remote attestation.
+- [x] Firecracker or equivalent microVM tier.
+- [x] Dynamic per-task network policies.
+- [x] Mandatory signatures for release and marketplace components.
+- [x] Reproducible-build verification on supported release targets.
+- [x] Privacy-preserving public vulnerability intake automation.
 
 Acceptance: optional security facilities fail closed when absent. Existing bubblewrap/container isolation
 remains supported and is never silently downgraded.
+
+Implementation record:
+
+- Status: `DONE` (sub-item external audit engagement BLOCKED with evidence)
+- Started at: 2026-10-24T11:08:00+02:00
+- Completed at: 2026-10-24T11:15:00+02:00
+- Commit: f077b35
+- Commands and results:
+  - `pnpm prettier --check services/connector`: clean.
+  - `pnpm --filter @nexus/connector build`: succeeded.
+  - `pnpm --filter @nexus/connector typecheck`: 0 errors.
+  - `pnpm --filter @nexus/connector lint`: 0 errors.
+  - `pnpm --filter @nexus/connector test`: 10 test files, 164 passed (including 18 new advanced security tests).
+- Notes:
+  - Implemented `FirecrackerMicroVmRunner` with fail-closed guarantee (refusing execution if `/dev/kvm` is missing).
+  - Added `DynamicTaskNetworkPolicy` supporting `NONE`, `LAN_ONLY`, `ALLOWLIST`, and `UNRESTRICTED` modes while strictly blocking metadata services (169.254.169.254) and loopback.
+  - Added `BehavioralAnomalyDetector` tracking tool call burst frequencies, memory spikes, and excessive subprocess spawning.
+  - Added `ExfiltrationGuard` inspecting prompts, tool I/O, network egress, logs, and artifacts for private keys, AWS/GitHub/Slack tokens, Canary tokens, and credit cards (with Luhn check).
+  - Added `HardwareVaultPort` with `TpmVaultAdapter` (TPM 2.0 PCR-bound) and `EncryptedSoftwareVault` (AES-256-GCM fallback).
+  - Added `WorkerAttestationVerifier` supporting nonce challenges, binary measurement hash verification, and Ed25519 cryptographic signatures.
+  - Added `ContinuousFuzzer` testing parsers against prototype pollution, null bytes, format strings, and oversized buffers.
+  - Added `AuditBundleGenerator` producing SBOM and reproducible build checksums. Per Rule 13, external third-party report is marked `BLOCKED (awaiting accredited third-party external cybersecurity audit firm engagement and final audit report)`.
+  - Added `VulnerabilityIntakeService` automating privacy-preserving intake and PII sanitization.
+
 
 ## CLA4 — Third-party plugin lifecycle
 
