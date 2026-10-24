@@ -1,0 +1,26 @@
+{
+  "bundleId": "fr.nexus.client",
+  "appName": "NEXUS Mobile Companion",
+  "subtitle": "Personal Intelligence OS Companion",
+  "primaryCategory": "PRODUCTIVITY",
+  "secondaryCategory": "DEVELOPER_TOOLS",
+  "contentRating": "4+",
+  "privacyPolicyUrl": "https://nexus-assistant.local/privacy",
+  "supportUrl": "https://nexus-assistant.local/support",
+  "marketingUrl": "https://nexus-assistant.local",
+  "description": "NEXUS Mobile Companion connects your mobile device and smartwatch to your self-hosted NEXUS assistant. Monitor active missions, approve sensitive actions with tactile security, dictate prompts, and control connected devices in your private workspace.",
+  "keywords": [
+    "ai",
+    "assistant",
+    "self-hosted",
+    "orchestration",
+    "companion",
+    "productivity",
+    "privacy"
+  ],
+  "reviewNotes": {
+    "demoAccountRequired": false,
+    "demoInstructions": "NEXUS connects to a local self-hosted server via QR code pairing or manual server URL entry. It does not require a proprietary central account.",
+    "privacyCompliance": "Zero tracking, zero third-party telemetry, all credentials stored exclusively in iOS Keychain."
+  }
+}

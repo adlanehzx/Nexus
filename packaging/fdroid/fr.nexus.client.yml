@@ -1,0 +1,40 @@
+Categories:
+  - Office
+  - Security
+License: AGPL-3.0-or-later
+AuthorName: NEXUS Team
+SourceCode: https://github.com/nexus-assistant/nexus
+IssueTracker: https://github.com/nexus-assistant/nexus/issues
+Summary: Privacy-first companion client for NEXUS personal intelligence OS
+Description: |-
+  NEXUS Mobile Companion allows you to monitor, supervise, and interact with
+  your self-hosted NEXUS assistant instance from Android devices and Wear OS smartwatches.
+
+  Features:
+  - Real-time task progress and status monitoring
+  - Hardware-isolated tactile approval for sensitive actions
+  - Minimal-distraction vehicle mode for safe hands-free interaction
+  - Local voice dictation and speech synthesis
+  - Single-use QR pairing without leaking tokens
+  - Complete privacy: zero third-party telemetry, all keys stored in Android Keystore.
+
+RepoType: git
+Repo: https://github.com/nexus-assistant/nexus.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 100
+    commit: 190f85af97d1c46399b9cce64819095ec4951bf6
+    subdir: apps/mobile
+    gradle:
+      - assembleRelease
+    prebuild:
+      - sed -i 's/newArchEnabled=true/newArchEnabled=true/g' app.json
+    scanignore:
+      - assets/*.png
+    output: android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 100

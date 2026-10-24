@@ -1,0 +1,18 @@
+{
+  "packageName": "fr.nexus.client",
+  "title": "NEXUS Companion",
+  "shortDescription": "Companion client for your self-hosted NEXUS personal intelligence OS.",
+  "fullDescription": "NEXUS Mobile Companion allows you to monitor, supervise, and interact with your self-hosted NEXUS assistant instance from Android devices and Wear OS smartwatches.\n\nFeatures:\n- Real-time task progress and status monitoring\n- Hardware-isolated tactile approval for sensitive actions\n- Minimal-distraction vehicle mode for safe hands-free interaction\n- Local voice dictation and speech synthesis\n- Single-use QR pairing without leaking tokens\n- Complete privacy: zero third-party telemetry, all keys stored in Android Keystore.",
+  "category": "PRODUCTIVITY",
+  "containsAds": false,
+  "privacyPolicyUrl": "https://nexus-assistant.local/privacy",
+  "dataSafety": {
+    "dataShared": "None",
+    "dataCollected": "None",
+    "securityPractices": [
+      "Data is encrypted in transit using TLS",
+      "Secrets stored in Android Keystore",
+      "User can request account/device deletion anytime"
+    ]
+  }
+}

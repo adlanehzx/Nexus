@@ -272,8 +272,9 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G1-1 | G1   | info     | RESOLVED | Dashboard needed unified classification across all 7 connection states       | apps/dashboard/test/format.test.ts                                       | 9abb0f9    |
 | F-G2-1 | G2   | info     | RESOLVED | Provider account renaming and notification channel config UI missing         | apps/dashboard/test/dashboard-config.test.ts                             | 4821891    |
 | F-G3-1 | G3   | high     | RESOLVED | Installers previously accepted secrets on command line exposing them in ps   | apps/dashboard/test/device-pairing.test.ts                               | 627e81e    |
-| F-G4-1 | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
-| F-G5-1 | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
+| F-G4-1  | G4   | low      | RESOLVED | Stale generated Android bundle was tracked in git                            | services/android-worker/android/app/src/main/assets/index.android.bundle | 9ecaa21    |
+| F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
+| F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | pending    |
 
 ## Improvements for the adjustment phase
 
@@ -316,23 +317,44 @@ Add a row after every numbered task, even when the result is `None found`.
 
 ## Phase 2 progress
 
-| ID  | Deliverable                                        | Status | Commit | Evidence |
-| --- | -------------------------------------------------- | ------ | ------ | -------- |
-| GA0 | Mobile store distribution and companion completion | TODO   |        |          |
-| GA1 | Hardware workers and one-click deployment          | TODO   |        |          |
-| GA2 | Advanced voice experience                          | TODO   |        |          |
-| GA3 | Offline and peer-device experience                 | TODO   |        |          |
-| GA4 | Phase 2 product UX and handoff                     | TODO   |        |          |
+| ID  | Deliverable                                        | Status  | Commit | Evidence                                                                 |
+| --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
+| GA0 | Mobile store distribution and companion completion | BLOCKED |        | Local pipeline, watch companion, vehicle mode verified; certs missing    |
+| GA1 | Hardware workers and one-click deployment          | TODO    |        |                                                                          |
+| GA2 | Advanced voice experience                          | TODO    |        |                                                                          |
+| GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
+| GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
 
 ## GA0 — Mobile store distribution and companion completion
 
-- [ ] Signed iOS application distributed through TestFlight and prepared for App Store review.
-- [ ] Signed Android application distributed through Play Store and/or F-Droid.
-- [ ] Apple Watch and Wear OS companion feasibility and bounded implementation.
-- [ ] Safe minimal-distraction vehicle mode.
+- [x] Apple Watch and Wear OS companion feasibility study (`docs/mobile/COMPANION_FEASIBILITY.md`) and bounded implementation (`packages/client-core/src/companion/watch.ts`).
+- [x] Safe minimal-distraction vehicle mode (`apps/mobile/app/vehicle.tsx`, `apps/mobile/lib/vehicle.ts`, and test suite).
+- [x] iOS distribution assets: Apple Privacy Manifest (`PrivacyInfo.xcprivacy`), export options, and App Store metadata (`ios-metadata.json`).
+- [x] Android distribution assets: Google Play metadata (`android-listing.json`) and F-Droid recipe (`packaging/fdroid/fr.nexus.client.yml`).
+- [x] Distribution pipeline validator script (`scripts/build-mobile-distribution.mjs`).
+- [ ] Signed iOS application distributed through TestFlight (BLOCKED: missing Apple Developer signing certificate).
+- [ ] Signed Android application distributed through Play Store and/or F-Droid (BLOCKED: missing release keystore).
 
 Acceptance: real signed artifacts install on physical target devices; pairing and revocation work; secrets
 remain in platform secure storage. Missing signing or publisher access means `BLOCKED`, not `DONE`.
+
+Implementation record:
+
+- Status: `BLOCKED` (Local pipelines & companions DONE; store distribution BLOCKED by credentials)
+- Started at: 2026-10-24T10:53:00+02:00
+- Completed at: 2026-10-24T10:58:00+02:00
+- Commit: pending
+- Commands and results:
+  - `pnpm --filter @nexus/client-core test test/companion-watch.test.ts`: 6 tests passed
+  - `pnpm --filter @nexus/client-core build`: exit 0
+  - `pnpm --filter @nexus/mobile test`: 2 test files, 7 tests passed
+  - `pnpm --filter @nexus/mobile typecheck`: exit 0
+  - `node scripts/build-mobile-distribution.mjs`: verified 5 metadata/config assets; reported signing credentials missing
+- Notes:
+  - Apple Watch / Wear OS companion bounded interface implemented with scoped tokens, low/medium severity approval limits, high/critical action blocking, and tamper-evident audit logging.
+  - Safe minimal-distraction vehicle mode prevents keyboard typing (fail-closed), enforces min 84dp hit targets, provides TTS audio feedback, and shows prominent microphone privacy indicators.
+  - Secrets strictly preserved in Keychain / Keystore via `expo-secure-store` with `WHEN_UNLOCKED_THIS_DEVICE_ONLY`.
+  - In strict compliance with Rules 4, 5, and 6: public store release is marked BLOCKED due to absent Apple Developer credentials and Android release keystore. Unsigned builds are not distributed.
 
 ## GA1 — Hardware workers and one-click deployment
 
