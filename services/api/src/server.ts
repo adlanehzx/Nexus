@@ -41,10 +41,10 @@ const telemetryRuntime = initializeTelemetry(config);
  * without anything actually failing.
  */
 import {
-  FallbackProvider,
+  AntigravityCliProvider,
   ClaudeCliProvider,
-  GeminiCliProvider,
-  LocalLLMProvider,
+  FallbackProvider,
+  OllamaProvider,
 } from "@nexus/llm";
 import { createDatabaseClient } from "@nexus/database";
 import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
@@ -185,9 +185,9 @@ const services = new ServiceContainer({
   ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
   ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
   llmProvider: new FallbackProvider([
+    new AntigravityCliProvider(),
     new ClaudeCliProvider(),
-    new GeminiCliProvider(),
-    new LocalLLMProvider(),
+    new OllamaProvider(),
   ]),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
   ...(config.EXPECTED_WORKER_VERSION === undefined

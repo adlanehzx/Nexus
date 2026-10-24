@@ -111,7 +111,6 @@ export class CliProvider implements LLMProvider {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.command, args, { signal });
       let stdout = "";
-      let stderr = "";
 
       let timeoutId: NodeJS.Timeout | undefined;
       if (this.timeoutMs > 0) {
@@ -130,9 +129,9 @@ export class CliProvider implements LLMProvider {
         stdout += chunk.toString();
       });
 
-      proc.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
+      // Drain stderr but never retain provider output: it can contain credentials
+      // or private transcript fragments.
+      proc.stderr.on("data", () => undefined);
 
       proc.on("error", (err: Error & { code?: string }) => {
         if (timeoutId) clearTimeout(timeoutId);
@@ -168,7 +167,7 @@ export class CliProvider implements LLMProvider {
         if (code !== 0) {
           reject(
             new LLMProviderError(this.id, {
-              message: "CLI execution failed (code " + code + "): " + stderr,
+              message: "CLI execution failed with a non-zero status",
               retryable: true,
             }),
           );
