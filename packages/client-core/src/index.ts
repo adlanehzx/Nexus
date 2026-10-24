@@ -12,3 +12,6 @@ export * from "./updater.js";
 export * from "./crash.js";
 export * from "./qr.js";
 export * from "./companion/watch.js";
+export * from "./offline/peer-sync.js";
+export * from "./offline/conflict-resolver.js";
+export * from "./offline/resync-engine.js";

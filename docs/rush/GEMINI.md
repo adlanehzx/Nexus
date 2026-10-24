@@ -277,6 +277,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
 | F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
 | F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | 7b11a41    |
+| F-GA3-1 | GA3  | info     | RESOLVED | Offline task reconciliation needed ISO timestamp normalization for Lamport clocks | packages/client-core/src/offline/conflict-resolver.ts                    | pending    |
 
 ## Improvements for the adjustment phase
 
@@ -324,7 +325,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
 | GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
 | GA2 | Advanced voice experience                          | DONE    | 7b11a41 | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
-| GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
+| GA3 | Offline and peer-device experience                 | DONE    | pending | E2E encrypted peer sync, Lamport conflict resolution, resync engine tested |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
 
 ## GA0 — Mobile store distribution and companion completion
@@ -424,12 +425,29 @@ Implementation record:
 
 ## GA3 — Offline and peer-device experience
 
-- [ ] Bounded offline capabilities beyond the current outbox.
-- [ ] End-to-end encrypted peer synchronization between approved devices.
-- [ ] Conflict resolution, revocation, resynchronization, and prolonged-disconnection handling.
+- [x] Bounded offline capabilities beyond the current outbox (`packages/client-core/src/offline/peer-sync.ts`).
+- [x] End-to-end encrypted peer synchronization between approved devices using AES-256-GCM (`test/peer-sync.test.ts`).
+- [x] Conflict resolution, deduplication, revocation, resynchronization, and prolonged-disconnection handling (`packages/client-core/src/offline/conflict-resolver.ts`, `resync-engine.ts`).
 
 Acceptance: offline actions cannot bypass ownership, expiry, confirmation, or server policy. Revoked
 devices cannot decrypt newly synchronized state.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T11:12:00+02:00
+- Completed at: 2026-10-24T11:17:00+02:00
+- Commit: pending
+- Commands and results:
+  - `pnpm --filter @nexus/client-core test`: 14 test files, 188 tests passed
+  - `pnpm --filter @nexus/client-core build`: exit 0
+- Notes:
+  - Cryptographic device identities with Ed25519/X25519 and epoch-based group key management.
+  - Revocation advances sync epoch, excluding revoked devices; verified that revoked devices cannot decrypt newly synchronized packets (`RevokedDeviceDecryptionError`).
+  - Strict deduplication using idempotency keys prevents replay attacks.
+  - Conflict resolution follows deterministic Lamport clock LWW with device-id tie-breaking; server authoritative status overrides local offline mutations.
+  - Offline mutations exceeding TTL (7 days) fail closed with `MutationExpiredError` to prevent executing obsolete operations.
+  - OfflineResyncEngine coordinates outbox flushing, task state reconciliation, and triggers local credential wiping when device revocation is detected.
 
 ## GA4 — Phase 2 product UX and handoff
 
