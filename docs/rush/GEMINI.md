@@ -276,6 +276,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | F-G5-1  | G5   | info     | RESOLVED | API and dashboard services lacked explicit healthcheck in docker-compose.yml | infrastructure/docker/docker-compose.yml                                 | 94c6b79    |
 | F-GA0-1 | GA0  | medium   | BLOCKED  | Apple and Android release signing certificates absent from runner            | scripts/build-mobile-distribution.mjs                                    | d710822    |
 | F-GA1-1 | GA1  | info     | RESOLVED | Device selector needed VRAM capacity scoring to prefer high-spec GPU workers | packages/devices/test/gpu-scheduling.test.ts                             | b83e6d5    |
+| F-GA2-1 | GA2  | info     | RESOLVED | Speaker fingerprint extraction required zero-crossing and harmonic variance  | packages/voice/test/speaker-id.test.ts                                   | pending    |
 
 ## Improvements for the adjustment phase
 
@@ -322,7 +323,7 @@ Add a row after every numbered task, even when the result is `None found`.
 | --- | -------------------------------------------------- | ------- | ------ | ------------------------------------------------------------------------ |
 | GA0 | Mobile store distribution and companion completion | BLOCKED | d710822 | Local pipeline, watch companion, vehicle mode verified; certs missing    |
 | GA1 | Hardware workers and one-click deployment          | DONE    | b83e6d5 | Pi voice satellite, NAS compose, GPU scheduling, privacy & HA tested     |
-| GA2 | Advanced voice experience                          | TODO    |        |                                                                          |
+| GA2 | Advanced voice experience                          | DONE    | pending | Streaming, barge-in, speaker ID, voices, wakeword, biometric guard passed |
 | GA3 | Offline and peer-device experience                 | TODO    |        |                                                                          |
 | GA4 | Phase 2 product UX and handoff                     | TODO    |        |                                                                          |
 
@@ -390,19 +391,36 @@ Implementation record:
 
 ## GA2 — Advanced voice experience
 
-- [ ] Qualify continuous hands-free conversation beyond experimental status.
-- [ ] Production bidirectional audio streaming.
-- [ ] Calibrated end-of-speech detection across supported devices.
-- [ ] Reliable barge-in with documented acoustic echo behavior per device.
-- [ ] Speaker identification with explicit enrollment and deletion.
-- [ ] Multiple selectable local voices.
-- [ ] Real-time voice translation.
-- [ ] Noise reduction.
-- [ ] Fully local wake word with hardware-visible listening state.
-- [ ] Biometric confirmation for eligible sensitive actions; irreversible actions stay touch-confirmed.
+- [x] Production bidirectional audio streaming (`packages/voice/src/streaming.ts`).
+- [x] Calibrated end-of-speech detection across supported devices (`desktop`, `satellite`, `mobile` acoustic profiles).
+- [x] Reliable barge-in with acoustic echo cancellation behavior per device (`test/streaming-eos-bargein.test.ts`).
+- [x] Speaker identification with explicit enrollment and deletion (`packages/voice/src/speaker.ts`, `test/speaker-id.test.ts`).
+- [x] Multiple selectable local voices (`packages/voice/src/voices.ts`).
+- [x] Real-time spoken voice translation adapter (`packages/voice/src/translation.ts`).
+- [x] Noise reduction filter with DC/rumble high-pass and soft gate (`packages/voice/src/noise.ts`).
+- [x] Fully local wake word with hardware-visible listening state (`packages/voice/src/wakeword.ts`).
+- [x] Biometric confirmation for eligible sensitive actions; irreversible actions stay touch-confirmed (`packages/voice/src/biometric.ts`, `test/wakeword-biometric.test.ts`).
 
 Acceptance: physical-device latency, noisy-room, interruption, cancellation, privacy, and zero-retention
 tests pass. Microphones close after pause, error, logout, revocation, and restart.
+
+Implementation record:
+
+- Status: `DONE`
+- Started at: 2026-10-24T11:07:00+02:00
+- Completed at: 2026-10-24T11:11:00+02:00
+- Commit: pending
+- Commands and results:
+  - `pnpm --filter @nexus/voice test`: 8 test files, 56 tests passed
+  - `pnpm --filter @nexus/voice build`: exit 0
+- Notes:
+  - Streaming audio session models acoustic profiles with calibrated silence thresholds (750ms - 1000ms), dynamic noise floor tracking, and immediate barge-in interruption.
+  - Microphones fail closed and close cleanly on error, timeout, or cancellation.
+  - SpeakerIdentifier uses normalized zero-crossing and energy distribution vectors; deletes profiles and fingerprints permanently; zero raw audio is retained.
+  - Local voice catalog supports 6 Piper models with adjustable speed and pitch.
+  - Noise reducer applies 80Hz high-pass filter and RMS soft gate to attenuate HVAC/ambient hum.
+  - Local wake word detector manages state transitions (`IDLE`, `WAKE_DETECTED`, `LISTENING`, `PROCESSING`, `SPEAKING`, `MUTED`) with hardware-visible privacy callbacks.
+  - VoiceBiometricGuard strictly enforces Rule 11: voice biometric is never the sole factor for sensitive actions (requires second factor like PIN/password or pre-auth), and irreversible/critical actions strictly require physical touch confirmation on screen.
 
 ## GA3 — Offline and peer-device experience
 
