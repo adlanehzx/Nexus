@@ -10,6 +10,20 @@ import {
   providerAccountSchema,
   updateProviderAccountSchema,
 } from "../../services/provider-accounts.js";
+import {
+  collaborationActionSchema,
+  startCollaborationSessionSchema,
+} from "../../services/advanced-collaboration.js";
+
+const collaborationEventSchema = z.object({
+  id: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  sequence: z.number().int().positive(),
+  actorId: z.string(),
+  occurredAt: z.iso.datetime({ offset: true }),
+  type: z.string(),
+  data: z.record(z.string(), z.unknown()),
+});
 
 const missionViewSchema = z.object({
   missionId: z.string().uuid(),
@@ -815,6 +829,78 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
       const view = await orchestrator.getCollaborationView(request.params.missionId);
       return ok(view, request.id);
+    },
+  );
+
+  app.post(
+    "/orchestrator/missions/:missionId/collaboration/advanced/sessions",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        body: startCollaborationSessionSchema,
+        response: { 201: okSchema(z.object({ event: collaborationEventSchema })) },
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      const { userId } = currentUser(request);
+      const event = await orchestrator.startAdvancedCollaboration(
+        userId,
+        request.params.missionId,
+        request.body,
+      );
+      if (event === undefined) throw new NotFoundError("Mission", request.params.missionId);
+      return reply.code(201).send(ok({ event }, request.id));
+    },
+  );
+
+  app.post(
+    "/orchestrator/missions/:missionId/collaboration/advanced/sessions/:sessionId/actions",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid(), sessionId: z.string().uuid() }),
+        body: collaborationActionSchema,
+        response: { 201: okSchema(z.object({ event: collaborationEventSchema })) },
+      },
+    },
+    async (request, reply) => {
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      const { userId } = currentUser(request);
+      const event = await orchestrator.applyAdvancedCollaborationAction(
+        userId,
+        request.params.missionId,
+        request.params.sessionId,
+        request.body,
+      );
+      if (event === undefined) throw new NotFoundError("Mission", request.params.missionId);
+      return reply.code(201).send(ok({ event }, request.id));
+    },
+  );
+
+  app.get(
+    "/orchestrator/missions/:missionId/collaboration/advanced/sessions/:sessionId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid(), sessionId: z.string().uuid() }),
+        response: { 200: okSchema(z.object({ events: z.array(collaborationEventSchema) })) },
+      },
+    },
+    async (request) => {
+      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      const { userId } = currentUser(request);
+      const events = await orchestrator.replayAdvancedCollaboration(
+        userId,
+        request.params.missionId,
+        request.params.sessionId,
+      );
+      if (events === undefined) throw new NotFoundError("Mission", request.params.missionId);
+      return ok({ events }, request.id);
     },
   );
 

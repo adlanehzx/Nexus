@@ -19,6 +19,14 @@ import {
   type ProposedSubtask,
   type StructuredTaskOutput,
 } from "./agent-collaboration.js";
+import {
+  AdvancedCollaborationCoordinator,
+  FileCollaborationLedger,
+  type CollaborationAction,
+  type CollaborationAgent,
+  type CollaborationEvent,
+  type CollaborationLimits,
+} from "./advanced-collaboration.js";
 
 const plannedTaskSchema = z.object({
   key: z
@@ -230,6 +238,34 @@ export class AcpOrchestrator {
     };
   }
 
+  async startAdvancedCollaboration(
+    userId: string,
+    missionId: string,
+    input: { actorId: string; agents: CollaborationAgent[]; limits: CollaborationLimits },
+  ): Promise<CollaborationEvent | undefined> {
+    const coordinator = await this.#advancedCoordinator(userId, missionId);
+    return coordinator?.start(input);
+  }
+
+  async applyAdvancedCollaborationAction(
+    userId: string,
+    missionId: string,
+    sessionId: string,
+    action: CollaborationAction,
+  ): Promise<CollaborationEvent | undefined> {
+    const coordinator = await this.#advancedCoordinator(userId, missionId);
+    return coordinator?.execute(sessionId, action);
+  }
+
+  async replayAdvancedCollaboration(
+    userId: string,
+    missionId: string,
+    sessionId: string,
+  ): Promise<CollaborationEvent[] | undefined> {
+    const coordinator = await this.#advancedCoordinator(userId, missionId);
+    return coordinator?.replay(sessionId);
+  }
+
   async submit(userId: string, objective: string, timezone = "UTC"): Promise<OrchestratedMission> {
     const [health, settings] = await Promise.all([
       this.#missionControl.health(),
@@ -340,6 +376,19 @@ export class AcpOrchestrator {
     const mission = await this.#missionControl.getMission(missionId);
     if (!mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) return undefined;
     return presentMission(mission);
+  }
+
+  async #advancedCoordinator(
+    userId: string,
+    missionId: string,
+  ): Promise<AdvancedCollaborationCoordinator | undefined> {
+    const mission = await this.#missionControl.getMission(missionId);
+    if (!mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) return undefined;
+    return new AdvancedCollaborationCoordinator(
+      new FileCollaborationLedger(
+        resolve(mission.workspace, ".nexus-collaboration", "events.jsonl"),
+      ),
+    );
   }
 
   async #plan(
