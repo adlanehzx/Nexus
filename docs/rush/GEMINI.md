@@ -309,3 +309,74 @@ Add a row after every numbered task, even when the result is `None found`.
 | Blank install         | `DATABASE_PASSWORD=nexus_dev_password bash scripts/blank-machine-restore.sh`        | PASS   | 24 steps, 0 failures after `f7dc88e`    |
 | Release hygiene       | `pnpm release:check`                                                                | PASS   | 939 tracked files verified, exit 0      |
 | Translation gate      | `pnpm translation:check`                                                            | PASS   | 0 untranslated strings, exit 0          |
+
+---
+
+# Adjustment Rush — Gemini
+
+## Phase 2 progress
+
+| ID  | Deliverable                                        | Status | Commit | Evidence |
+| --- | -------------------------------------------------- | ------ | ------ | -------- |
+| GA0 | Mobile store distribution and companion completion | TODO   |        |          |
+| GA1 | Hardware workers and one-click deployment          | TODO   |        |          |
+| GA2 | Advanced voice experience                          | TODO   |        |          |
+| GA3 | Offline and peer-device experience                 | TODO   |        |          |
+| GA4 | Phase 2 product UX and handoff                     | TODO   |        |          |
+
+## GA0 — Mobile store distribution and companion completion
+
+- [ ] Signed iOS application distributed through TestFlight and prepared for App Store review.
+- [ ] Signed Android application distributed through Play Store and/or F-Droid.
+- [ ] Apple Watch and Wear OS companion feasibility and bounded implementation.
+- [ ] Safe minimal-distraction vehicle mode.
+
+Acceptance: real signed artifacts install on physical target devices; pairing and revocation work; secrets
+remain in platform secure storage. Missing signing or publisher access means `BLOCKED`, not `DONE`.
+
+## GA1 — Hardware workers and one-click deployment
+
+- [ ] Raspberry Pi voice-satellite image and installer.
+- [ ] NAS one-click installation for explicitly supported platforms.
+- [ ] GPU worker scheduling and resource reporting.
+- [ ] Camera and sensor capabilities with visible privacy state.
+- [ ] Home Assistant integration with separate read and write permissions.
+
+Acceptance: each advertised platform has clean-install and revocation evidence on real or faithfully
+virtualized hardware. Camera, microphone, sensor, and home mutations produce visible audit events.
+
+## GA2 — Advanced voice experience
+
+- [ ] Qualify continuous hands-free conversation beyond experimental status.
+- [ ] Production bidirectional audio streaming.
+- [ ] Calibrated end-of-speech detection across supported devices.
+- [ ] Reliable barge-in with documented acoustic echo behavior per device.
+- [ ] Speaker identification with explicit enrollment and deletion.
+- [ ] Multiple selectable local voices.
+- [ ] Real-time voice translation.
+- [ ] Noise reduction.
+- [ ] Fully local wake word with hardware-visible listening state.
+- [ ] Biometric confirmation for eligible sensitive actions; irreversible actions stay touch-confirmed.
+
+Acceptance: physical-device latency, noisy-room, interruption, cancellation, privacy, and zero-retention
+tests pass. Microphones close after pause, error, logout, revocation, and restart.
+
+## GA3 — Offline and peer-device experience
+
+- [ ] Bounded offline capabilities beyond the current outbox.
+- [ ] End-to-end encrypted peer synchronization between approved devices.
+- [ ] Conflict resolution, revocation, resynchronization, and prolonged-disconnection handling.
+
+Acceptance: offline actions cannot bypass ownership, expiry, confirmation, or server policy. Revoked
+devices cannot decrypt newly synchronized state.
+
+## GA4 — Phase 2 product UX and handoff
+
+- [ ] Replace free-form device permissions with a capability picker.
+- [ ] Add bounded heartbeat-latency visualization.
+- [ ] Consume Codex run-comparison, communication-graph, quota-forecast, and DAG-debugger contracts.
+- [ ] Consume Claude marketplace, visual-control, connector, and security-state contracts.
+- [ ] Make safe Phase 2 features installable, configurable, inspectable, pausable, and revocable in the dashboard.
+
+Acceptance: keyboard, screen-reader, mobile, desktop, reconnect, empty, loading, degraded, denied, and
+failure states are tested. Configuration alone must never be displayed as real capability availability.

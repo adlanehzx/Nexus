@@ -344,3 +344,136 @@ Record improvements that are useful but not required for the rush acceptance cri
 | Release hygiene      | `pnpm release:check`                                                                                                                    | PASS   | 974 tracked files, 2026-10-23                                                                      |
 | Translation gate     | `pnpm translation:check`                                                                                                                | PASS   | English-only check clean, 2026-10-23                                                               |
 | Full E2E             | Dedicated PostgreSQL database with `pnpm --filter @nexus/api e2e:chain`, `e2e:confirmation`, plus the opt-in Antigravity ACP smoke test | PASS   | 27 chain steps + 14 confirmation steps + effective real model response in 8.45 seconds, 2026-10-23 |
+
+---
+
+# Adjustment Rush — Codex
+
+## Phase 2 progress
+
+| ID  | Deliverable                               | Status | Commit | Evidence |
+| --- | ----------------------------------------- | ------ | ------ | -------- |
+| A0  | Scale and disaster recovery               | TODO   |        |          |
+| A1  | Interchangeable engines and model routing | TODO   |        |          |
+| A2  | Controlled advanced agent collaboration   | TODO   |        |          |
+| A3  | Cloud and multi-user foundation           | TODO   |        |          |
+| A4  | Advanced memory lifecycle                 | TODO   |        |          |
+| A5  | Advanced observability and evaluation     | TODO   |        |          |
+| A6  | Financial simulation completion           | TODO   |        |          |
+| A7  | Autonomy and federation safety boundaries | TODO   |        |          |
+| A8  | Phase 2 integration and full E2E          | TODO   |        |          |
+
+## A0 — Scale and disaster recovery
+
+- [ ] Multi-server high availability.
+- [ ] PostgreSQL and Redis replication.
+- [ ] Multiple fenced Mission Engine instances.
+- [ ] Distributed artifact storage behind a typed port.
+- [ ] Production Kubernetes beyond alpha single-replica mode.
+- [ ] Multi-region deployment and tested failure semantics.
+- [ ] Automatic recovery after total loss of one server.
+- [ ] Evaluate Temporal behind the Mission Engine port; adopt only with migration and parity evidence.
+- [ ] Evaluate OPA behind the policy port; retain the current fail-closed engine until parity passes.
+
+Acceptance: killing one application node during a mission resumes work elsewhere without duplicate side
+effects. Personal single-node mode remains supported and simpler.
+
+## A1 — Interchangeable engines and model routing
+
+- [ ] Native Google/Antigravity harness distinct from the community ACP adapter.
+- [ ] DeepSeek harness.
+- [ ] FreeLLM backend.
+- [ ] Complete Ollama, llama.cpp, and vLLM adapters.
+- [ ] One routing contract spanning local, cloud, and ACP backends.
+- [ ] Reproducible automatic model benchmarks.
+- [ ] Routing by quality, latency, quota, cost, context, and privacy.
+- [ ] Safe engine migration/fallback at persisted task boundaries.
+
+Acceptance: all backends pass one conformance suite; missing quota remains unknown, never unlimited, and
+NEXUS has no mandatory provider.
+
+## A2 — Controlled advanced agent collaboration
+
+- [ ] Bounded direct agent conversations with hop, token, time, and recursion ceilings.
+- [ ] Structured debates.
+- [ ] Typed voting and consensus.
+- [ ] Configurable mandatory cross-review.
+- [ ] Dynamic roles constrained by capabilities and permissions.
+- [ ] Runtime plan revision with persisted history.
+- [ ] Virtual-score task bidding with no money or provider credits.
+
+Acceptance: adversarial tests prove cycle termination and budget enforcement; every message, vote,
+revision, and arbitration is attributable and replayable.
+
+## A3 — Cloud and multi-user foundation
+
+- [ ] Hosted deployment profile.
+- [ ] Tenant isolation in every database and artifact query.
+- [ ] Organizations and teams.
+- [ ] Advanced RBAC beyond `ADMIN` and `USER`.
+- [ ] OIDC SSO, with SAML behind the same identity port.
+- [ ] Provider-neutral billing abstraction.
+- [ ] Organization quota administration.
+- [ ] Mission sharing with explicit ACLs.
+- [ ] Real-time multi-user collaboration.
+- [ ] Central fleet administration across installations.
+
+Acceptance: PostgreSQL integration tests attempt cross-tenant access through every public route and prove
+denial. Personal single-user mode remains the default.
+
+## A4 — Advanced memory lifecycle
+
+- [ ] Hierarchical working and archival memory without a hard Letta dependency.
+- [ ] Opt-in scheduled consolidation with review and rollback.
+- [ ] Contradiction detection between temporal facts.
+- [ ] Native knowledge-graph projection with provenance.
+- [ ] Selective memory sharing between agents.
+- [ ] First-class project-scoped memory.
+- [ ] Configurable automatic forgetting and retention.
+- [ ] Large personal-archive import with progress, cancellation, and deduplication.
+- [ ] End-to-end encrypted synchronization between installations.
+
+Acceptance: forbidden secrets cannot enter memory or synchronization; deletion propagates and is proven
+at storage level while temporal history remains queryable.
+
+## A5 — Advanced observability and evaluation
+
+- [ ] Exact official provider consumption separated from API-equivalent estimates.
+- [ ] Quota-exhaustion forecasting with confidence and explicit unknown state.
+- [ ] Intelligent alert suppression and escalation.
+- [ ] Deterministic replay where possible, with honest nondeterminism markers elsewhere.
+- [ ] Side-by-side run comparison.
+- [ ] Automatic regression detection.
+- [ ] Scheduled nightly evaluations.
+- [ ] Inter-agent communication graph.
+- [ ] Real-time DAG debugger with safe pause, inspect, and resume.
+
+Acceptance: dashboards use persisted facts and never scrape private provider pages; traces exclude prompts,
+credentials, and private transcripts by default.
+
+## A6 — Financial simulation completion
+
+- [ ] Polymarket-compatible paper-data adapter with no order-submission capability.
+- [ ] Historical backtesting with immutable datasets and reproducible strategies.
+- [ ] Keep real trading impossible at schema, API, tool, and network boundaries.
+
+Acceptance: negative tests prove no configuration can enable live trading. Simulations preserve risk
+limits, provenance, decision journals, and tamper-evident audit chains.
+
+## A7 — Autonomy and federation safety boundaries
+
+- [ ] Supervised self-improvement proposals without self-modifying execution.
+- [ ] Confirmation-gated deployment, never autonomous by default.
+- [ ] Keep purchasing and money management unavailable outside simulation.
+- [ ] Authenticated private federation before any public federation.
+- [ ] Abuse controls before any decentralized agent network.
+- [ ] Pause, budget, supervision, and emergency-stop contracts before permanent agents.
+
+Acceptance: only safe proposal and approval workflows may ship. No unattended code mutation, purchase,
+deployment, or real-money control is permitted.
+
+## A8 — Phase 2 integration and full E2E
+
+Integrate the two Phase 2 handoffs, reconcile migrations and manifests once, rerun every Phase 1 gate,
+then add multi-node, multi-user, engine, memory, simulation, device, voice, security, and clean-install
+evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and reported as successful.

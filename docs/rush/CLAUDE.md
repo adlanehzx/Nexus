@@ -268,3 +268,91 @@ Add a row after every numbered task, even when the result is `None found`.
 | Browser worker     | `uv run --project services/browser-worker --extra dev pytest services/browser-worker/tests`                                                                                                                                                                                                                                              | PASSED | 76 passed, 2 deselected, 1 warning in 2.53s / 2026-10-23                                                                                      |
 | Release hygiene    | `pnpm release:check`                                                                                                                                                                                                                                                                                                                     | PASSED | 962 tracked files clean / 2026-10-23                                                                                                          |
 | Translation gate   | `pnpm translation:check`                                                                                                                                                                                                                                                                                                                 | PASSED | English only check passed, clean / 2026-10-23                                                                                                 |
+
+---
+
+# Adjustment Rush — Claude/Antigravity
+
+## Phase 2 progress
+
+| ID   | Deliverable                                   | Status | Commit | Evidence |
+| ---- | --------------------------------------------- | ------ | ------ | -------- |
+| CLA0 | Public catalogs and marketplace trust         | TODO   |        |          |
+| CLA1 | Visual navigation and native-computer control | TODO   |        |          |
+| CLA2 | External automation ecosystem                 | TODO   |        |          |
+| CLA3 | Advanced execution security                   | TODO   |        |          |
+| CLA4 | Third-party plugin lifecycle                  | TODO   |        |          |
+| CLA5 | Security and tool-plane handoff               | TODO   |        |          |
+
+## CLA0 — Public catalogs and marketplace trust
+
+- [ ] Public ACP-agent marketplace.
+- [ ] Public MCP-server marketplace.
+- [ ] Worker catalog.
+- [ ] Versioned workflow catalog.
+- [ ] Ratings, reviews, and abuse-resistant reputation.
+- [ ] Publisher verification.
+- [ ] Automated static and behavioral package analysis.
+- [ ] Mandatory package signatures and provenance attestations.
+- [ ] One-click community installation with permission preview.
+- [ ] Compromise advisories, revocation, quarantine, and rollback.
+
+Acceptance: untrusted components cannot bypass provenance, sandboxing, permissions, resource ceilings,
+secret scoping, or revocation. The curated local catalog remains available offline.
+
+## CLA1 — Visual navigation and native-computer control
+
+- [ ] Optional OmniParser behind a model-independent visual parser port.
+- [ ] Screenshot-grounded navigation with bounded image retention.
+- [ ] Expanded native-application control through device workers.
+- [ ] Secure owned and expiring remote-desktop sessions.
+- [ ] General UI recognition with confidence reporting.
+- [ ] Multi-screen targeting and audit.
+- [ ] Secret-safe recording and replay of user demonstrations.
+- [ ] Convert demonstrations into reviewable permission-scoped plans, never opaque code.
+
+Acceptance: tests cover prompt injection, malicious pixels, stale screenshots, coordinate drift, and
+cross-session ownership. Destructive native actions require confirmation.
+
+## CLA2 — External automation ecosystem
+
+- [ ] n8n alternative to Activepieces.
+- [ ] Typed Slack, Discord, Teams, Telegram, and Notion tools.
+- [ ] Linear, Jira, and Trello connectors.
+- [ ] Google Drive, Dropbox, and OneDrive connectors.
+- [ ] Signed, replay-protected external event triggers and webhooks.
+- [ ] Shared, versioned, exportable workflows.
+
+Acceptance: read and write scopes are distinct; webhook verification and anti-replay are mandatory; all
+external mutations follow preview and confirmation policy.
+
+## CLA3 — Advanced execution security
+
+- [ ] Independent external-audit scope and reproducible evidence bundle.
+- [ ] Continuous fuzzing of public parsers, protocols, manifests, and archives.
+- [ ] Agent behavioral anomaly detection.
+- [ ] Exfiltration detection across prompts, tools, network, logs, and artifacts.
+- [ ] TPM and Secure Enclave vault ports.
+- [ ] Worker remote attestation.
+- [ ] Firecracker or equivalent microVM tier.
+- [ ] Dynamic per-task network policies.
+- [ ] Mandatory signatures for release and marketplace components.
+- [ ] Reproducible-build verification on supported release targets.
+- [ ] Privacy-preserving public vulnerability intake automation.
+
+Acceptance: optional security facilities fail closed when absent. Existing bubblewrap/container isolation
+remains supported and is never silently downgraded.
+
+## CLA4 — Third-party plugin lifecycle
+
+- [ ] Plugin API without arbitrary host-code execution.
+- [ ] Permission, provenance, update, rollback, disable, and revoke lifecycle.
+- [ ] Advisory public reputation that can never override local security policy.
+
+Acceptance: malicious fixtures cannot access host credentials, unrelated files, metadata endpoints, other
+tenants, other plugin secrets, or undeclared tools.
+
+## CLA5 — Security and tool-plane handoff
+
+Run focused and repository-wide gates, then provide Codex and Gemini with typed contracts, migrations,
+threat models, SBOM, signature, revocation, and rollback evidence. Platform limitations remain `BLOCKED`.

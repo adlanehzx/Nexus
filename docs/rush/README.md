@@ -101,3 +101,25 @@ The rush is complete only when all three work files are `DONE` and Codex records
 
 The post-rush adjustment phase starts only after this integration gate. Its input is the unresolved
 findings and improvements preserved in the three agent files.
+
+## Adjustment Rush — Phase 2
+
+Phase 1 is complete. Phase 2 contains only partial or missing capabilities, assigned in the appended
+sections of `CODEX.md`, `CLAUDE.md`, and `GEMINI.md`.
+
+| Agent              | Exclusive Phase 2 responsibility                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| Codex              | Scale, engines, collaboration, cloud/multi-user, memory, observability, simulation, and final integration |
+| Claude/Antigravity | Marketplaces, visual computer control, external automations, plugins, and advanced security               |
+| Gemini             | Mobile distribution, hardware workers, voice, offline device experience, and Phase 2 dashboard UX         |
+
+Phase 2 rules:
+
+1. Start from the same `master` commit, record it, and use an isolated worktree.
+2. Follow task order. Interfaces, documentation, mocks, and untested platform claims are not `DONE`.
+3. Every completed item requires an executable regression test on its target platform.
+4. Record cross-owner contracts before touching shared files; Codex reconciles shared migrations and manifests once.
+5. Preserve fail-closed behavior. Phase 2 must not enable real-money trading, autonomous purchasing,
+   public arbitrary-code execution, self-modifying execution, or unsupervised deployment.
+6. Preserve Phase 1 evidence and append every new finding, correction, limitation, and deferred improvement.
+7. Codex integrates only after the other work files provide clean, signed handoff commits.
