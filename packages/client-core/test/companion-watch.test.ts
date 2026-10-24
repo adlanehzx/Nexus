@@ -88,8 +88,8 @@ describe("WatchCompanionManager", () => {
 
     const audit = manager.getAuditLog();
     expect(audit.length).toBe(1);
-    expect(audit[0].allowed).toBe(true);
-    expect(audit[0].actionType).toBe("APPROVE_STEP");
+    expect(audit[0]?.allowed).toBe(true);
+    expect(audit[0]?.actionType).toBe("APPROVE_STEP");
   });
 
   it("rejects high and critical severity approvals on watch", async () => {
@@ -128,7 +128,7 @@ describe("WatchCompanionManager", () => {
 
     const audit = manager.getAuditLog();
     expect(audit.length).toBe(1);
-    expect(audit[0].allowed).toBe(false);
+    expect(audit[0]?.allowed).toBe(false);
   });
 
   it("allows emergency abort and reject actions anytime", async () => {

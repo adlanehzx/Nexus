@@ -182,7 +182,7 @@ export interface RegisterDeviceInput {
   capabilities?: DeviceCapability[];
   grantedPermissions?: string[];
   metadata?: Record<string, string>;
-  agentVersion?: string;
+  agentVersion?: string | null;
   trust?: TrustState;
 }
 

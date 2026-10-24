@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  KNOWN_PERMISSIONS,
+  PERMISSION_PRESETS,
   classifyConnection,
   failedSteps,
   formatAge,
   formatCount,
   formatDuration,
+  formatLatency,
   overallHealth,
   selectedWorkers,
   sortActivity,
@@ -314,5 +317,59 @@ describe("classifyConnection distinguishes all 7 mandatory states", () => {
     });
     expect(failed.key).toBe("failed");
     expect(failed.label).toBe("Failed");
+  });
+});
+
+describe("Heartbeat latency formatting (GA4)", () => {
+  it("formats null or negative latency as unknown with 0 percent", () => {
+    expect(formatLatency(null)).toEqual({ text: "—", tone: "unknown", percent: 0 });
+    expect(formatLatency(Number.NaN)).toEqual({ text: "—", tone: "unknown", percent: 0 });
+    expect(formatLatency(-10)).toEqual({ text: "—", tone: "unknown", percent: 0 });
+  });
+
+  it("formats optimal latency (< 50ms) as ok with bounded percentage", () => {
+    const visual = formatLatency(24);
+    expect(visual.text).toBe("24 ms");
+    expect(visual.tone).toBe("ok");
+    expect(visual.percent).toBe(8); // 24 / 300 * 100 = 8%
+  });
+
+  it("formats acceptable latency (50-150ms) as degraded", () => {
+    const visual = formatLatency(120);
+    expect(visual.text).toBe("120 ms");
+    expect(visual.tone).toBe("degraded");
+    expect(visual.percent).toBe(40);
+  });
+
+  it("formats high latency (> 150ms) as down and bounds percentage to 100", () => {
+    const visual = formatLatency(240);
+    expect(visual.text).toBe("240 ms");
+    expect(visual.tone).toBe("down");
+    expect(visual.percent).toBe(80);
+
+    const extreme = formatLatency(650);
+    expect(extreme.text).toBe("650 ms");
+    expect(extreme.tone).toBe("down");
+    expect(extreme.percent).toBe(100);
+  });
+});
+
+describe("Capability & Permission Catalog (GA4)", () => {
+  it("defines standard categories covering System, Android, Hardware, HA, and Browser", () => {
+    const categories = new Set(KNOWN_PERMISSIONS.map((p) => p.category));
+    expect(categories.has("System")).toBe(true);
+    expect(categories.has("Android")).toBe(true);
+    expect(categories.has("Hardware & Sensors")).toBe(true);
+    expect(categories.has("Home Assistant")).toBe(true);
+    expect(categories.has("Browser")).toBe(true);
+  });
+
+  it("includes presets for common operational profiles", () => {
+    expect(PERMISSION_PRESETS.Workstation).toContain("terminal.execute");
+    expect(PERMISSION_PRESETS.Workstation).toContain("docker.execute");
+    expect(PERMISSION_PRESETS["Read-Only"]).toContain("filesystem.read");
+    expect(PERMISSION_PRESETS["Read-Only"]).toContain("homeassistant.read");
+    expect(PERMISSION_PRESETS["Clear All"]).toHaveLength(0);
+    expect(PERMISSION_PRESETS["Full Automation"]).toContain("gpu.compute");
   });
 });

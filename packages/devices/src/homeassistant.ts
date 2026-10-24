@@ -129,9 +129,9 @@ export class HomeAssistantBridge {
     initiator: string,
     call: HomeAssistantServiceCall,
     success: boolean,
-    previousState?: string | undefined,
-    newState?: string | undefined,
-    error?: string | undefined,
+    previousState?: string,
+    newState?: string,
+    error?: string,
   ): void {
     this.#auditLog.push({
       id: `haaudit_${Math.random().toString(36).slice(2, 10)}`,

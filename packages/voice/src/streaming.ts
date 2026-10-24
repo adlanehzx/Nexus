@@ -172,8 +172,7 @@ export class AudioStreamingSession {
   #calculateRms(samples: Float32Array): number {
     if (samples.length === 0) return 0;
     let sumSquares = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const s = samples[i] ?? 0;
+    for (const s of samples) {
       sumSquares += s * s;
     }
     return Math.sqrt(sumSquares / samples.length);

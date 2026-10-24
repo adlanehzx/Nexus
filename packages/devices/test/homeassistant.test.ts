@@ -8,14 +8,16 @@ import {
 
 describe("Home Assistant Integration with Separate Read and Write Permissions", () => {
   it("allows reading state with homeassistant.read permission", async () => {
+    const getState = vi.fn().mockResolvedValue({
+      entityId: "light.living_room",
+      state: "on",
+      attributes: { brightness: 255 },
+      lastChanged: "2026-10-24T10:00:00Z",
+    });
+    const callService = vi.fn();
     const mockAdapter: HomeAssistantClientAdapter = {
-      getState: vi.fn().mockResolvedValue({
-        entityId: "light.living_room",
-        state: "on",
-        attributes: { brightness: 255 },
-        lastChanged: "2026-10-24T10:00:00Z",
-      }),
-      callService: vi.fn(),
+      getState,
+      callService,
     };
 
     const bridge = new HomeAssistantBridge(mockAdapter);
@@ -23,7 +25,7 @@ describe("Home Assistant Integration with Separate Read and Write Permissions", 
     // With read permission
     const state = await bridge.readEntity("light.living_room", ["homeassistant.read"]);
     expect(state?.state).toBe("on");
-    expect(mockAdapter.getState).toHaveBeenCalledWith("light.living_room");
+    expect(getState).toHaveBeenCalledWith("light.living_room");
 
     // Without read permission -> fails closed
     await expect(bridge.readEntity("light.living_room", ["terminal.execute"])).rejects.toThrowError(

@@ -703,6 +703,98 @@ export interface LogSection {
   }[];
 }
 
+export interface RunComparisonDto {
+  runA: {
+    id: string;
+    agentKey: string;
+    durationMs: number;
+    tokenCount: number;
+    costEstimateUsd: number;
+    stepCount: number;
+    status: string;
+  };
+  runB: {
+    id: string;
+    agentKey: string;
+    durationMs: number;
+    tokenCount: number;
+    costEstimateUsd: number;
+    stepCount: number;
+    status: string;
+  };
+  diffSummary: {
+    durationDeltaMs: number;
+    tokenDelta: number;
+    fasterRunId: string;
+    cheaperRunId: string;
+  };
+}
+
+export interface QuotaForecastDto {
+  providerId: string;
+  accountLabel: string;
+  currentUsage: number;
+  hardLimit: number | null;
+  estimatedDepletionDate: string | null;
+  confidence: "high" | "medium" | "low" | "unknown";
+  unknownReason?: string;
+}
+
+export interface DagNodeDto {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "paused" | "completed" | "failed";
+  dependencies: string[];
+  assignedDevice?: string;
+  output?: unknown;
+  error?: string;
+}
+
+export interface DagDebugDto {
+  taskId: string;
+  isPaused: boolean;
+  nodes: DagNodeDto[];
+}
+
+export interface AgentGraphNode {
+  id: string;
+  name: string;
+  role: string;
+  messageCount: number;
+}
+
+export interface AgentGraphEdge {
+  source: string;
+  target: string;
+  messageCount: number;
+  avgLatencyMs: number;
+}
+
+export interface CommunicationGraphDto {
+  nodes: AgentGraphNode[];
+  edges: AgentGraphEdge[];
+}
+
+export interface MarketplacePluginDto {
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  description: string;
+  status: "uninstalled" | "installed" | "paused" | "revoked";
+  declaredTools: string[];
+  reputationScore?: number;
+}
+
+export interface VisualControlStatusDto {
+  active: boolean;
+  paused: boolean;
+  activeSessionId?: string;
+  lastScreenshotUrl?: string;
+  bounds: { width: number; height: number };
+  safetyBoundaryEnforced: boolean;
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -1121,6 +1213,74 @@ export class DashboardApi {
       params.set("search", filter.search);
 
     return this.#get(`/api/v1/dashboard/logs?${params.toString()}`);
+  }
+
+  compareRuns(runIdA: string, runIdB: string): Promise<RunComparisonDto> {
+    return this.#get(
+      `/api/v1/dashboard/runs/compare?a=${encodeURIComponent(runIdA)}&b=${encodeURIComponent(runIdB)}`,
+    );
+  }
+
+  quotaForecast(): Promise<{ forecasts: QuotaForecastDto[] }> {
+    return this.#get("/api/v1/dashboard/quota/forecast");
+  }
+
+  dagDebug(taskId: string): Promise<DagDebugDto> {
+    return this.#get(`/api/v1/dashboard/dag/${encodeURIComponent(taskId)}`);
+  }
+
+  pauseDagStep(taskId: string, stepId: string): Promise<{ paused: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/dag/${encodeURIComponent(taskId)}/steps/${encodeURIComponent(stepId)}/pause`,
+    );
+  }
+
+  resumeDagStep(taskId: string, stepId: string): Promise<{ resumed: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/dag/${encodeURIComponent(taskId)}/steps/${encodeURIComponent(stepId)}/resume`,
+    );
+  }
+
+  communicationGraph(timeRange = "24h"): Promise<CommunicationGraphDto> {
+    return this.#get(
+      `/api/v1/dashboard/agents/communication-graph?range=${encodeURIComponent(timeRange)}`,
+    );
+  }
+
+  marketplacePlugins(): Promise<{ plugins: MarketplacePluginDto[] }> {
+    return this.#get("/api/v1/dashboard/marketplace/plugins");
+  }
+
+  installPlugin(id: string): Promise<{ success: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/marketplace/plugins/${encodeURIComponent(id)}/install`,
+    );
+  }
+
+  togglePlugin(id: string, paused: boolean): Promise<{ paused: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/marketplace/plugins/${encodeURIComponent(id)}/toggle`,
+      { paused },
+    );
+  }
+
+  revokePlugin(id: string): Promise<{ revoked: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/marketplace/plugins/${encodeURIComponent(id)}/revoke`,
+    );
+  }
+
+  visualControlStatus(): Promise<VisualControlStatusDto> {
+    return this.#get("/api/v1/dashboard/visual-control/status");
+  }
+
+  toggleVisualControlPause(paused: boolean): Promise<{ paused: boolean }> {
+    return this.#request("POST", "/api/v1/dashboard/visual-control/pause", { paused });
   }
 
   async #get<T>(path: string): Promise<T> {

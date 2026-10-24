@@ -190,6 +190,7 @@ export class WatchCompanionManager {
       now?: number;
     },
   ): Promise<{ success: boolean; result?: string; error?: string }> {
+    await Promise.resolve();
     const now = options?.now ?? Date.now();
 
     if (!this.validateSession(session, now)) {
@@ -241,7 +242,7 @@ export class WatchCompanionManager {
     session: WatchSession,
     action: WatchAction,
     allowed: boolean,
-    reason?: string | undefined,
+    reason?: string,
   ): void {
     this.#auditLog.push({
       id: `waudit_${Math.random().toString(36).slice(2, 10)}`,

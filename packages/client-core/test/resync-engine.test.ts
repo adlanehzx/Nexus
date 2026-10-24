@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "../src/api.js";
 import { InMemoryOutboxStore } from "../src/outbox.js";
 import { OfflineResyncEngine } from "../src/offline/resync-engine.js";
-import type { ClientAction, ClientState } from "../src/store.js";
+import { initialState, type ClientAction, type ClientState } from "../src/store.js";
 
 describe("Offline Resync Engine", () => {
   it("flushes outbox, drops expired entries, and reconciles task states", async () => {
@@ -64,22 +64,23 @@ describe("Offline Resync Engine", () => {
     });
 
     const state: ClientState = {
-      user: { id: "u1", email: "user@test.local", displayName: "User", role: "ADMIN" },
-      session: { state: "authenticated", authenticated: true, activeToken: "tok" },
+      ...initialState,
       tasks: [
         {
           id: "task_active_1",
           title: "Database Backup",
           status: "running", // Client still thought it was running
+          percent: 50,
+          label: "In progress",
+          workerDeviceId: "worker_1",
+          originClientDeviceId: "client_1",
           stepCount: 1,
           startedAt: new Date(now - 4000).toISOString(),
           completedAt: null,
+          durationMs: 4000,
           error: null,
         },
       ],
-      notifications: [],
-      devices: [],
-      errorBanner: null,
     };
 
     const outcome = await engine.executeFullResync(state);
@@ -115,22 +116,23 @@ describe("Offline Resync Engine", () => {
     });
 
     const state: ClientState = {
-      user: { id: "u1", email: "user@test.local", displayName: "User", role: "ADMIN" },
-      session: { state: "authenticated", authenticated: true, activeToken: "tok" },
+      ...initialState,
       tasks: [
         {
           id: "task_1",
           title: "Pending Task",
           status: "pending",
+          percent: 0,
+          label: null,
+          workerDeviceId: null,
+          originClientDeviceId: null,
           stepCount: 0,
           startedAt: null,
           completedAt: null,
+          durationMs: null,
           error: null,
         },
       ],
-      notifications: [],
-      devices: [],
-      errorBanner: null,
     };
 
     const outcome = await engine.executeFullResync(state);

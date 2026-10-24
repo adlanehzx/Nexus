@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AudioNoiseReducer } from "../src/noise.js";
-import { SpokenVoiceTranslator } from "../src/translation.js";
+import { SpokenVoiceTranslator, type TranslatorFn } from "../src/translation.js";
 import { VoiceManager } from "../src/voices.js";
 
 describe("Voices, Translation, and Noise Reduction", () => {
@@ -22,19 +22,15 @@ describe("Voices, Translation, and Noise Reduction", () => {
   });
 
   it("translates spoken utterance with local engine adapter", async () => {
-    const mockTranslator = async (text: string, sourceLang: string, targetLang: string) => {
+    const mockTranslator: TranslatorFn = (text: string, sourceLang: string, targetLang: string) => {
       if (sourceLang === "es" && targetLang === "en") {
-        return { translatedText: "Hello, how can I help you?", confidence: 0.98 };
+        return Promise.resolve({ translatedText: "Hello, how can I help you?", confidence: 0.98 });
       }
-      return { translatedText: text, confidence: 0.5 };
+      return Promise.resolve({ translatedText: text, confidence: 0.5 });
     };
 
     const translator = new SpokenVoiceTranslator(mockTranslator);
-    const result = await translator.translateUtterance(
-      "Hola, como puedo ayudarte",
-      "es",
-      "en",
-    );
+    const result = await translator.translateUtterance("Hola, como puedo ayudarte", "es", "en");
 
     expect(result.translatedText).toBe("Hello, how can I help you?");
     expect(result.sourceLanguage).toBe("es");

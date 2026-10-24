@@ -11,11 +11,14 @@ import type {
 } from "../lib/api.js";
 import {
   HEALTH_LABELS,
+  KNOWN_PERMISSIONS,
+  PERMISSION_PRESETS,
   WORKER_LABELS,
   failedSteps,
   formatAge,
   formatCount,
   formatDuration,
+  formatLatency,
   overallHealth,
   selectedWorkers,
   sortActivity,
@@ -128,6 +131,9 @@ export function Devices({ api }: { api: DashboardApi }) {
   const [editingCapabilities, setEditingCapabilities] = useState<
     { name: string; enabled: boolean }[]
   >([]);
+  const [editingPermissionsDeviceId, setEditingPermissionsDeviceId] = useState<string | null>(null);
+  const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
+  const [customPermission, setCustomPermission] = useState("");
 
   useEffect(() => {
     if (pairing === null) return;
@@ -324,6 +330,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                   (device.lastHeartbeatAt === null ||
                     Date.now() - new Date(device.lastHeartbeatAt).getTime() > 3_600_000);
                 const isEditingCapabilities = editingCapabilitiesDeviceId === device.id;
+                const isEditingPermissions = editingPermissionsDeviceId === device.id;
                 return (
                   <tr key={device.id}>
                     <td>
@@ -438,7 +445,53 @@ export function Devices({ api }: { api: DashboardApi }) {
                         </div>
                       )}
                     </td>
-                    <td className="muted">{formatAge(device.lastHeartbeatAt)}</td>
+                    <td className="muted">
+                      <div>{formatAge(device.lastHeartbeatAt)}</div>
+                      {(() => {
+                        const latency = formatLatency(device.health.latencyMs);
+                        return (
+                          <div
+                            className="latency-indicator"
+                            title={`Heartbeat latency: ${latency.text}`}
+                            style={{ marginTop: "4px" }}
+                          >
+                            <State tone={latency.tone} label={`Latency: ${latency.text}`} />
+                            {device.health.latencyMs !== null ? (
+                              <div
+                                className="mini-latency-bar"
+                                role="progressbar"
+                                aria-label="Heartbeat latency"
+                                aria-valuemin={0}
+                                aria-valuemax={300}
+                                aria-valuenow={Math.round(device.health.latencyMs)}
+                                style={{
+                                  width: "72px",
+                                  height: "4px",
+                                  background: "rgba(255, 255, 255, 0.15)",
+                                  borderRadius: "2px",
+                                  overflow: "hidden",
+                                  marginTop: "3px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: `${String(latency.percent)}%`,
+                                    height: "100%",
+                                    background:
+                                      latency.tone === "ok"
+                                        ? "#22c55e"
+                                        : latency.tone === "degraded"
+                                          ? "#eab308"
+                                          : "#ef4444",
+                                    transition: "width 0.2s ease",
+                                  }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="muted">
                       {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
                       {device.health.cpuLoad === null
@@ -449,9 +502,150 @@ export function Devices({ api }: { api: DashboardApi }) {
                         : ` · battery ${String(device.health.batteryPercent)} %`}
                     </td>
                     <td className="mono muted">
-                      {device.grantedPermissions.length === 0
-                        ? "—"
-                        : device.grantedPermissions.join(", ")}
+                      {isEditingPermissions ? (
+                        <div
+                          className="permission-picker"
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                            padding: "8px",
+                            background: "rgba(255, 255, 255, 0.04)",
+                            borderRadius: "6px",
+                            minWidth: "260px",
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                            <strong style={{ fontSize: "0.75rem", width: "100%" }}>Presets:</strong>
+                            {Object.entries(PERMISSION_PRESETS).map(([presetName, presetPerms]) => (
+                              <button
+                                key={presetName}
+                                className="button compact"
+                                type="button"
+                                style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                                onClick={() => setEditingPermissions([...presetPerms])}
+                              >
+                                {presetName}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div
+                            style={{
+                              maxHeight: "160px",
+                              overflowY: "auto",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "4px",
+                            }}
+                          >
+                            {KNOWN_PERMISSIONS.map((perm) => (
+                              <label
+                                key={perm.id}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  gap: "6px",
+                                  fontSize: "0.8rem",
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editingPermissions.includes(perm.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setEditingPermissions((prev) => [...prev, perm.id]);
+                                    } else {
+                                      setEditingPermissions((prev) =>
+                                        prev.filter((p) => p !== perm.id),
+                                      );
+                                    }
+                                  }}
+                                />
+                                <span>
+                                  <strong>{perm.label}</strong>{" "}
+                                  <span className="muted mono">({perm.id})</span>
+                                </span>
+                              </label>
+                            ))}
+                            {editingPermissions
+                              .filter((p) => !KNOWN_PERMISSIONS.some((k) => k.id === p))
+                              .map((custom) => (
+                                <label
+                                  key={custom}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    fontSize: "0.8rem",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked
+                                    onChange={() =>
+                                      setEditingPermissions((prev) =>
+                                        prev.filter((p) => p !== custom),
+                                      )
+                                    }
+                                  />
+                                  <span className="mono">{custom} (custom)</span>
+                                </label>
+                              ))}
+                          </div>
+
+                          <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                            <input
+                              className="field"
+                              placeholder="Custom (e.g. sensor.custom)"
+                              value={customPermission}
+                              onChange={(e) => setCustomPermission(e.target.value)}
+                              style={{ fontSize: "0.75rem", padding: "2px 6px" }}
+                            />
+                            <button
+                              className="button compact"
+                              type="button"
+                              onClick={() => {
+                                const trimmed = customPermission.trim();
+                                if (trimmed && !editingPermissions.includes(trimmed)) {
+                                  setEditingPermissions((prev) => [...prev, trimmed]);
+                                  setCustomPermission("");
+                                }
+                              }}
+                            >
+                              Add
+                            </button>
+                          </div>
+
+                          <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                            <button
+                              className="button primary compact"
+                              type="button"
+                              onClick={() => {
+                                act(async () => {
+                                  await api.updateDevicePermissions(device.id, editingPermissions);
+                                  setEditingPermissionsDeviceId(null);
+                                });
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="button compact"
+                              type="button"
+                              onClick={() => setEditingPermissionsDeviceId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {device.grantedPermissions.length === 0
+                            ? "—"
+                            : device.grantedPermissions.join(", ")}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div className="table-actions">
@@ -484,23 +678,16 @@ export function Devices({ api }: { api: DashboardApi }) {
                               className="button"
                               type="button"
                               onClick={() => {
-                                const value = window.prompt(
-                                  "Comma-separated permissions",
-                                  device.grantedPermissions.join(", "),
-                                );
-                                if (value !== null)
-                                  act(() =>
-                                    api.updateDevicePermissions(
-                                      device.id,
-                                      value
-                                        .split(",")
-                                        .map((item) => item.trim())
-                                        .filter(Boolean),
-                                    ),
-                                  );
+                                if (isEditingPermissions) {
+                                  setEditingPermissionsDeviceId(null);
+                                } else {
+                                  setEditingPermissionsDeviceId(device.id);
+                                  setEditingPermissions([...device.grantedPermissions]);
+                                  setCustomPermission("");
+                                }
                               }}
                             >
-                              Permissions
+                              {isEditingPermissions ? "Close" : "Permissions"}
                             </button>
                             {device.status === "ONLINE" ? (
                               <button
@@ -2619,6 +2806,743 @@ export function Logs({ api }: { api: DashboardApi }) {
             </Table>
           )
         }
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. Phase 2: Marketplace (Claude Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function Marketplace({ api }: { api: DashboardApi }) {
+  const state = useSection(() => api.marketplacePlugins());
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const act = (op: () => Promise<unknown>) => {
+    setActionError(null);
+    void op()
+      .then(() => state.reload())
+      .catch((err: unknown) =>
+        setActionError(err instanceof Error ? err.message : "Action failed."),
+      );
+  };
+
+  return (
+    <div className="content">
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
+      <div
+        className="filter-bar"
+        style={{ marginBottom: "16px", display: "flex", gap: "12px", alignItems: "center" }}
+      >
+        <input
+          className="field"
+          type="search"
+          placeholder="Filter plugins or declared tools…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: "320px" }}
+        />
+      </div>
+      <Section state={state}>
+        {(data) => {
+          const filtered = data.plugins.filter((p) => {
+            if (!search) return true;
+            const q = search.toLowerCase();
+            return (
+              p.name.toLowerCase().includes(q) ||
+              p.description.toLowerCase().includes(q) ||
+              p.declaredTools.some((t) => t.toLowerCase().includes(q))
+            );
+          });
+
+          if (filtered.length === 0) {
+            return <Empty>No marketplace plugins found.</Empty>;
+          }
+
+          return (
+            <Table
+              head={[
+                "Plugin",
+                "Publisher",
+                "Version",
+                "Status",
+                "Declared Tools",
+                "Reputation",
+                "Actions",
+              ]}
+            >
+              {filtered.map((plugin) => (
+                <tr key={plugin.id}>
+                  <td>
+                    <strong>{plugin.name}</strong>
+                    <div className="muted">{plugin.description}</div>
+                  </td>
+                  <td>{plugin.publisher}</td>
+                  <td className="mono muted">{plugin.version}</td>
+                  <td>
+                    <State
+                      tone={
+                        plugin.status === "installed"
+                          ? "ok"
+                          : plugin.status === "paused"
+                            ? "degraded"
+                            : plugin.status === "revoked"
+                              ? "revoked"
+                              : "muted"
+                      }
+                      label={plugin.status.toUpperCase()}
+                    />
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                      {plugin.declaredTools.map((t) => (
+                        <span
+                          key={t}
+                          className="badge mono"
+                          style={{
+                            fontSize: "0.75rem",
+                            background: "rgba(255, 255, 255, 0.08)",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td>
+                    {plugin.reputationScore !== undefined
+                      ? `${String(plugin.reputationScore)} / 100`
+                      : "—"}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      {plugin.status === "uninstalled" ? (
+                        <button
+                          className="button primary compact"
+                          type="button"
+                          onClick={() => act(() => api.installPlugin(plugin.id))}
+                        >
+                          Install
+                        </button>
+                      ) : null}
+                      {plugin.status === "installed" ? (
+                        <button
+                          className="button compact"
+                          type="button"
+                          onClick={() => act(() => api.togglePlugin(plugin.id, true))}
+                        >
+                          Pause
+                        </button>
+                      ) : null}
+                      {plugin.status === "paused" ? (
+                        <button
+                          className="button compact"
+                          type="button"
+                          onClick={() => act(() => api.togglePlugin(plugin.id, false))}
+                        >
+                          Resume
+                        </button>
+                      ) : null}
+                      {plugin.status === "installed" || plugin.status === "paused" ? (
+                        <button
+                          className="button danger compact"
+                          type="button"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Revoke plugin "${plugin.name}"? This permanently uninstalls and disables all declared tools.`,
+                              )
+                            ) {
+                              act(() => api.revokePlugin(plugin.id));
+                            }
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          );
+        }}
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15. Phase 2: DAG Debugger (Codex Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function DagDebugger({ api }: { api: DashboardApi }) {
+  const [taskId, setTaskId] = useState("task-current");
+  const [queriedTaskId, setQueriedTaskId] = useState("task-current");
+  const state = useSection(() => api.dagDebug(queriedTaskId));
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (op: () => Promise<unknown>) => {
+    setActionError(null);
+    void op()
+      .then(() => state.reload())
+      .catch((err: unknown) =>
+        setActionError(err instanceof Error ? err.message : "Action failed."),
+      );
+  };
+
+  return (
+    <div className="content">
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
+      <section className="card" style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+          <div>
+            <label
+              htmlFor="dag-task-id"
+              style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
+            >
+              Task ID to debug
+            </label>
+            <input
+              id="dag-task-id"
+              className="field"
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
+              placeholder="e.g. task-123"
+            />
+          </div>
+          <button className="button primary" type="button" onClick={() => setQueriedTaskId(taskId)}>
+            Inspect DAG
+          </button>
+        </div>
+      </section>
+
+      <Section state={state}>
+        {(dag) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="metrics">
+              <Metric value={dag.taskId} label="active task" />
+              <Metric value={String(dag.nodes.length)} label="total DAG steps" />
+              <Metric
+                value={dag.isPaused ? "PAUSED" : "RUNNING"}
+                label="pipeline state"
+                alert={dag.isPaused}
+              />
+            </div>
+
+            {dag.nodes.length === 0 ? (
+              <Empty>No execution nodes found in this DAG.</Empty>
+            ) : (
+              <Table
+                head={[
+                  "Step ID",
+                  "Label",
+                  "Status",
+                  "Dependencies",
+                  "Assigned Worker",
+                  "Result / Error",
+                  "Actions",
+                ]}
+              >
+                {dag.nodes.map((node) => (
+                  <tr key={node.id}>
+                    <td className="mono">{node.id}</td>
+                    <td>{node.label}</td>
+                    <td>
+                      <State
+                        tone={
+                          node.status === "completed"
+                            ? "ok"
+                            : node.status === "running"
+                              ? "good"
+                              : node.status === "paused"
+                                ? "degraded"
+                                : node.status === "failed"
+                                  ? "down"
+                                  : "muted"
+                        }
+                        label={node.status.toUpperCase()}
+                      />
+                    </td>
+                    <td className="mono muted">
+                      {node.dependencies.length === 0 ? "—" : node.dependencies.join(", ")}
+                    </td>
+                    <td>{node.assignedDevice ?? "—"}</td>
+                    <td>
+                      {node.error ? (
+                        <span style={{ color: "#ef4444" }}>{node.error}</span>
+                      ) : node.output !== undefined ? (
+                        <span className="mono muted">
+                          {JSON.stringify(node.output).slice(0, 40)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        {node.status === "running" || node.status === "pending" ? (
+                          <button
+                            className="button compact"
+                            type="button"
+                            onClick={() => act(() => api.pauseDagStep(dag.taskId, node.id))}
+                          >
+                            Pause step
+                          </button>
+                        ) : null}
+                        {node.status === "paused" ? (
+                          <button
+                            className="button compact primary"
+                            type="button"
+                            onClick={() => act(() => api.resumeDagStep(dag.taskId, node.id))}
+                          >
+                            Resume step
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 16. Phase 2: Quota Forecast (Codex Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function QuotaForecast({ api }: { api: DashboardApi }) {
+  const state = useSection(() => api.quotaForecast());
+
+  return (
+    <div className="content">
+      <Section state={state}>
+        {(data) =>
+          data.forecasts.length === 0 ? (
+            <Empty>No quota forecasts available.</Empty>
+          ) : (
+            <Table
+              head={[
+                "Provider",
+                "Account",
+                "Current Usage",
+                "Hard Limit",
+                "Burn Gauge",
+                "Projected Depletion",
+                "Confidence",
+              ]}
+            >
+              {data.forecasts.map((f) => {
+                const percent =
+                  f.hardLimit && f.hardLimit > 0 ? (f.currentUsage / f.hardLimit) * 100 : 0;
+                return (
+                  <tr key={`${f.providerId}-${f.accountLabel}`}>
+                    <td>
+                      <strong>{f.providerId}</strong>
+                    </td>
+                    <td>{f.accountLabel}</td>
+                    <td className="mono">{f.currentUsage.toLocaleString()}</td>
+                    <td className="mono">
+                      {f.hardLimit ? f.hardLimit.toLocaleString() : "Uncapped"}
+                    </td>
+                    <td>
+                      {f.hardLimit ? <Bar percent={percent} /> : <span className="muted">—</span>}
+                    </td>
+                    <td className="muted">
+                      {f.estimatedDepletionDate
+                        ? new Date(f.estimatedDepletionDate).toLocaleDateString()
+                        : "No exhaustion detected"}
+                    </td>
+                    <td>
+                      <State
+                        tone={
+                          f.confidence === "high"
+                            ? "ok"
+                            : f.confidence === "medium"
+                              ? "degraded"
+                              : f.confidence === "low"
+                                ? "down"
+                                : "muted"
+                        }
+                        label={f.confidence.toUpperCase()}
+                      />
+                      {f.confidence === "unknown" && f.unknownReason ? (
+                        <div className="muted" style={{ fontSize: "0.75rem", marginTop: "2px" }}>
+                          {f.unknownReason}
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </Table>
+          )
+        }
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 17. Phase 2: Run Comparison (Codex Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function RunComparison({ api }: { api: DashboardApi }) {
+  const [runA, setRunA] = useState("run-1");
+  const [runB, setRunB] = useState("run-2");
+  const [queryRuns, setQueryRuns] = useState<{ a: string; b: string }>({ a: "run-1", b: "run-2" });
+  const state = useSection(() => api.compareRuns(queryRuns.a, queryRuns.b));
+
+  return (
+    <div className="content">
+      <section className="card" style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
+          <div>
+            <label
+              htmlFor="run-a-input"
+              style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
+            >
+              Baseline Run (A)
+            </label>
+            <input
+              id="run-a-input"
+              className="field"
+              value={runA}
+              onChange={(e) => setRunA(e.target.value)}
+              placeholder="e.g. run-1"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="run-b-input"
+              style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
+            >
+              Comparison Run (B)
+            </label>
+            <input
+              id="run-b-input"
+              className="field"
+              value={runB}
+              onChange={(e) => setRunB(e.target.value)}
+              placeholder="e.g. run-2"
+            />
+          </div>
+          <button
+            className="button primary"
+            type="button"
+            onClick={() => setQueryRuns({ a: runA, b: runB })}
+          >
+            Compare Runs
+          </button>
+        </div>
+      </section>
+
+      <Section state={state}>
+        {(comparison) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="metrics">
+              <Metric
+                value={`${formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}`}
+                label={`duration delta (${comparison.diffSummary.fasterRunId} faster)`}
+              />
+              <Metric
+                value={`${comparison.diffSummary.tokenDelta > 0 ? "+" : ""}${String(comparison.diffSummary.tokenDelta)}`}
+                label="token delta (B - A)"
+              />
+              <Metric value={comparison.diffSummary.cheaperRunId} label="cheaper run" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <section className="card">
+                <h3>Run A ({comparison.runA.id})</h3>
+                <div
+                  style={{
+                    marginTop: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div>
+                    <strong>Agent:</strong> {comparison.runA.agentKey}
+                  </div>
+                  <div>
+                    <strong>Status:</strong> {comparison.runA.status}
+                  </div>
+                  <div>
+                    <strong>Duration:</strong> {formatDuration(comparison.runA.durationMs)}
+                  </div>
+                  <div>
+                    <strong>Tokens:</strong> {comparison.runA.tokenCount.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Cost:</strong> ${comparison.runA.costEstimateUsd.toFixed(4)}
+                  </div>
+                  <div>
+                    <strong>Steps:</strong> {String(comparison.runA.stepCount)}
+                  </div>
+                </div>
+              </section>
+
+              <section className="card">
+                <h3>Run B ({comparison.runB.id})</h3>
+                <div
+                  style={{
+                    marginTop: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div>
+                    <strong>Agent:</strong> {comparison.runB.agentKey}
+                  </div>
+                  <div>
+                    <strong>Status:</strong> {comparison.runB.status}
+                  </div>
+                  <div>
+                    <strong>Duration:</strong> {formatDuration(comparison.runB.durationMs)}
+                  </div>
+                  <div>
+                    <strong>Tokens:</strong> {comparison.runB.tokenCount.toLocaleString()}
+                  </div>
+                  <div>
+                    <strong>Cost:</strong> ${comparison.runB.costEstimateUsd.toFixed(4)}
+                  </div>
+                  <div>
+                    <strong>Steps:</strong> {String(comparison.runB.stepCount)}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18. Phase 2: Communication Graph (Codex Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function CommunicationGraph({ api }: { api: DashboardApi }) {
+  const [range, setRange] = useState("24h");
+  const state = useSection(() => api.communicationGraph(range));
+
+  return (
+    <div className="content">
+      <div
+        className="filter-bar"
+        style={{ marginBottom: "16px", display: "flex", gap: "12px", alignItems: "center" }}
+      >
+        <label htmlFor="comm-range" style={{ fontSize: "0.85rem" }}>
+          Time window:
+        </label>
+        <select
+          id="comm-range"
+          className="field"
+          value={range}
+          onChange={(e) => {
+            setRange(e.target.value);
+            state.reload();
+          }}
+          style={{ maxWidth: "160px" }}
+        >
+          <option value="1h">Last 1 hour</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+        </select>
+      </div>
+
+      <Section state={state}>
+        {(graph) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="metrics">
+              <Metric value={String(graph.nodes.length)} label="active agents" />
+              <Metric
+                value={String(graph.edges.length)}
+                label="inter-agent communication channels"
+              />
+              <Metric
+                value={String(graph.edges.reduce((sum, e) => sum + e.messageCount, 0))}
+                label="total messages exchanged"
+              />
+            </div>
+
+            <section className="card">
+              <h3>Participating Agents</h3>
+              <div style={{ marginTop: "12px" }}>
+                {graph.nodes.length === 0 ? (
+                  <Empty>No agents active in this time window.</Empty>
+                ) : (
+                  <Table head={["Agent Name", "Role", "Message Activity"]}>
+                    {graph.nodes.map((node) => (
+                      <tr key={node.id}>
+                        <td>
+                          <strong>{node.name}</strong>{" "}
+                          <span className="muted mono">({node.id})</span>
+                        </td>
+                        <td>{node.role}</td>
+                        <td className="mono">{String(node.messageCount)} msg</td>
+                      </tr>
+                    ))}
+                  </Table>
+                )}
+              </div>
+            </section>
+
+            <section className="card">
+              <h3>Inter-Agent Channels & Latencies</h3>
+              <div style={{ marginTop: "12px" }}>
+                {graph.edges.length === 0 ? (
+                  <Empty>No message channels detected in this window.</Empty>
+                ) : (
+                  <Table
+                    head={[
+                      "Sender (Source)",
+                      "Receiver (Target)",
+                      "Messages Sent",
+                      "Avg Round-trip Latency",
+                    ]}
+                  >
+                    {graph.edges.map((edge) => (
+                      <tr key={`${edge.source}->${edge.target}`}>
+                        <td className="mono">{edge.source}</td>
+                        <td className="mono">{edge.target}</td>
+                        <td className="mono">{String(edge.messageCount)}</td>
+                        <td>
+                          <State
+                            tone={
+                              edge.avgLatencyMs < 100
+                                ? "ok"
+                                : edge.avgLatencyMs < 300
+                                  ? "degraded"
+                                  : "down"
+                            }
+                            label={`${String(Math.round(edge.avgLatencyMs))} ms`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 19. Phase 2: Visual Control (Claude Contract)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function VisualControl({ api }: { api: DashboardApi }) {
+  const state = useSection(() => api.visualControlStatus());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const act = (op: () => Promise<unknown>) => {
+    setActionError(null);
+    void op()
+      .then(() => state.reload())
+      .catch((err: unknown) =>
+        setActionError(err instanceof Error ? err.message : "Action failed."),
+      );
+  };
+
+  return (
+    <div className="content">
+      {actionError === null ? null : <p className="banner error">{actionError}</p>}
+      <Section state={state}>
+        {(vc) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div className="metrics">
+              <Metric
+                value={vc.active ? "ACTIVE" : "IDLE"}
+                label="automation session"
+                alert={vc.active && vc.paused}
+              />
+              <Metric
+                value={vc.paused ? "PAUSED" : "RUNNING"}
+                label="execution state"
+                alert={vc.paused}
+              />
+              <Metric
+                value={`${String(vc.bounds.width)} × ${String(vc.bounds.height)}`}
+                label="viewport resolution"
+              />
+            </div>
+
+            <section className="card">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <h3>Remote Viewport & Safety Monitor</h3>
+                  <p className="muted">
+                    Active Session: <span className="mono">{vc.activeSessionId ?? "None"}</span>
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <State
+                    tone={vc.safetyBoundaryEnforced ? "ok" : "down"}
+                    label={vc.safetyBoundaryEnforced ? "SAFETY BOUNDARY ENFORCED" : "UNRESTRICTED"}
+                  />
+                  <button
+                    className={`button ${vc.paused ? "primary" : "danger"}`}
+                    type="button"
+                    onClick={() => act(() => api.toggleVisualControlPause(!vc.paused))}
+                  >
+                    {vc.paused ? "Resume Session" : "Pause Session (Emergency Stop)"}
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "16px",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  minHeight: "240px",
+                  background: "rgba(0, 0, 0, 0.4)",
+                  borderRadius: "8px",
+                  border: "1px dashed rgba(255, 255, 255, 0.2)",
+                }}
+              >
+                {vc.lastScreenshotUrl ? (
+                  <img
+                    src={vc.lastScreenshotUrl}
+                    alt="Live visual control preview"
+                    style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "4px" }}
+                  />
+                ) : (
+                  <div className="muted" style={{ textAlign: "center" }}>
+                    <span>
+                      No active frame capture. Remote viewport is waiting for agent interactions.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </Section>
     </div>
   );

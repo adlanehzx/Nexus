@@ -120,7 +120,7 @@ export class SpeakerIdentifier {
   #extractVoiceprint(samples: Float32Array): number[] {
     const bands = 16;
     const bandSize = Math.floor(samples.length / (bands / 2));
-    const vector: number[] = new Array(bands).fill(0);
+    const vector: number[] = Array.from<number>({ length: bands }).fill(0);
 
     // First 8 bands: energy envelope and variance
     for (let b = 0; b < 8; b++) {

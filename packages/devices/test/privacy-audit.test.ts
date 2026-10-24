@@ -68,9 +68,9 @@ describe("Camera and Sensor Capabilities with Visible Privacy State", () => {
 
     const auditTrail = monitor.getAuditTrail();
     expect(auditTrail.length).toBe(1);
-    expect(auditTrail[0].action).toBe("denied");
-    expect(auditTrail[0].capability).toBe("camera.capture");
-    expect(auditTrail[0].details).toContain("User policy prohibits");
+    expect(auditTrail[0]?.action).toBe("denied");
+    expect(auditTrail[0]?.capability).toBe("camera.capture");
+    expect(auditTrail[0]?.details).toContain("User policy prohibits");
   });
 
   it("closes all capture streams on session disconnect or logout", () => {

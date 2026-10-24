@@ -22,23 +22,24 @@ export default function VehicleModeScreen() {
     () =>
       new VehicleModeController({
         speakText: async (text: string) => {
+          await Promise.resolve();
           Speech.speak(text);
         },
       }),
   );
 
-  const [active, setActive] = useState(false);
+  const [_active, setActive] = useState(false);
   const [micActive, setMicActive] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Vehicle Mode Ready");
 
   useEffect(() => {
-    controller.enter(20).then(() => {
+    void controller.enter(20).then(() => {
       setActive(true);
       setStatusMessage("Vehicle Mode Active — Voice & Tactile Only");
     });
 
     return () => {
-      controller.exit();
+      void controller.exit();
     };
   }, [controller]);
 
@@ -97,7 +98,7 @@ export default function VehicleModeScreen() {
             pressed && styles.pressed,
             micActive && styles.micButtonActive,
           ]}
-          onPress={toggleMic}
+          onPress={() => void toggleMic()}
           accessibilityLabel="Toggle voice microphone"
           accessibilityRole="button"
         >
@@ -110,7 +111,7 @@ export default function VehicleModeScreen() {
             styles.approveButton,
             pressed && styles.pressed,
           ]}
-          onPress={handleApprove}
+          onPress={() => void handleApprove()}
           accessibilityLabel="Confirm active action"
           accessibilityRole="button"
         >
@@ -123,7 +124,7 @@ export default function VehicleModeScreen() {
             styles.abortButton,
             pressed && styles.pressed,
           ]}
-          onPress={handleAbort}
+          onPress={() => void handleAbort()}
           accessibilityLabel="Abort active action"
           accessibilityRole="button"
         >

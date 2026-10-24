@@ -281,3 +281,223 @@ export function formatCount(value: number): string {
 export function sortActivity(entries: readonly ActivityEntry[]): ActivityEntry[] {
   return [...entries].sort((left, right) => (left.at < right.at ? 1 : -1));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Latency Visualization & Capability Presets (GA4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LatencyVisual {
+  text: string;
+  tone: "ok" | "degraded" | "down" | "unknown";
+  percent: number;
+}
+
+/**
+ * Formats heartbeat latency into bounded visual metrics.
+ *
+ * Latency buckets:
+ * - < 50ms: optimal ("ok")
+ * - 50ms - 150ms: acceptable ("degraded")
+ * - > 150ms: high latency ("down")
+ * - null: unknown / offline ("unknown")
+ *
+ * Visual percent is bounded between 0% and 100% against a 300ms ceiling.
+ */
+export function formatLatency(latencyMs: number | null): LatencyVisual {
+  if (latencyMs === null || Number.isNaN(latencyMs) || latencyMs < 0) {
+    return { text: "—", tone: "unknown", percent: 0 };
+  }
+
+  const rounded = Math.round(latencyMs);
+  const text = `${String(rounded)} ms`;
+  const percent = Math.min(100, Math.max(0, Math.round((rounded / 300) * 100)));
+
+  if (rounded < 50) {
+    return { text, tone: "ok", percent };
+  }
+  if (rounded <= 150) {
+    return { text, tone: "degraded", percent };
+  }
+  return { text, tone: "down", percent };
+}
+
+export interface PermissionOption {
+  id: string;
+  label: string;
+  category: "System" | "Android" | "Hardware & Sensors" | "Home Assistant" | "Browser";
+  description: string;
+}
+
+export const KNOWN_PERMISSIONS: readonly PermissionOption[] = [
+  // System
+  {
+    id: "terminal.execute",
+    label: "Terminal execution",
+    category: "System",
+    description: "Execute shell commands on host",
+  },
+  {
+    id: "filesystem.read",
+    label: "Filesystem read",
+    category: "System",
+    description: "Read files from workspace",
+  },
+  {
+    id: "filesystem.write",
+    label: "Filesystem write",
+    category: "System",
+    description: "Modify files in workspace",
+  },
+  {
+    id: "docker.execute",
+    label: "Docker execution",
+    category: "System",
+    description: "Run and manage Docker containers",
+  },
+  {
+    id: "git.execute",
+    label: "Git execution",
+    category: "System",
+    description: "Execute Git operations",
+  },
+  {
+    id: "process.start",
+    label: "Process start",
+    category: "System",
+    description: "Launch background processes",
+  },
+  {
+    id: "process.stop",
+    label: "Process stop",
+    category: "System",
+    description: "Terminate background processes",
+  },
+
+  // Android
+  {
+    id: "android.app.open",
+    label: "Android launch app",
+    category: "Android",
+    description: "Open Android applications",
+  },
+  {
+    id: "android.ui.click",
+    label: "Android UI click",
+    category: "Android",
+    description: "Tap and click screen elements",
+  },
+  {
+    id: "android.ui.input",
+    label: "Android UI input",
+    category: "Android",
+    description: "Type text into inputs",
+  },
+  {
+    id: "android.ui.screenshot",
+    label: "Android screenshot",
+    category: "Android",
+    description: "Capture screen frame",
+  },
+  {
+    id: "android.notification",
+    label: "Android notification",
+    category: "Android",
+    description: "Post device notifications",
+  },
+
+  // Hardware & Sensors
+  {
+    id: "gpu.compute",
+    label: "GPU compute",
+    category: "Hardware & Sensors",
+    description: "Execute heavy GPU compute jobs",
+  },
+  {
+    id: "gpu.inference",
+    label: "GPU inference",
+    category: "Hardware & Sensors",
+    description: "Run local model inference on VRAM",
+  },
+  {
+    id: "camera.capture",
+    label: "Camera capture",
+    category: "Hardware & Sensors",
+    description: "Capture still camera frames",
+  },
+  {
+    id: "camera.stream",
+    label: "Camera stream",
+    category: "Hardware & Sensors",
+    description: "Stream live camera video",
+  },
+  {
+    id: "sensor.temperature",
+    label: "Temperature sensor",
+    category: "Hardware & Sensors",
+    description: "Read ambient thermal sensors",
+  },
+  {
+    id: "sensor.presence",
+    label: "Presence sensor",
+    category: "Hardware & Sensors",
+    description: "Detect physical room presence",
+  },
+
+  // Home Assistant
+  {
+    id: "homeassistant.read",
+    label: "Home Assistant read",
+    category: "Home Assistant",
+    description: "Read entity states and history",
+  },
+  {
+    id: "homeassistant.write",
+    label: "Home Assistant write",
+    category: "Home Assistant",
+    description: "Trigger service calls and state mutations",
+  },
+
+  // Browser
+  {
+    id: "browser.open",
+    label: "Browser open",
+    category: "Browser",
+    description: "Open browser tabs",
+  },
+  {
+    id: "browser.navigate",
+    label: "Browser navigate",
+    category: "Browser",
+    description: "Navigate to external URLs",
+  },
+  {
+    id: "browser.interact",
+    label: "Browser interact",
+    category: "Browser",
+    description: "Click and input in browser pages",
+  },
+];
+
+export const PERMISSION_PRESETS: Record<string, string[]> = {
+  Workstation: [
+    "terminal.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "docker.execute",
+    "git.execute",
+  ],
+  "Read-Only": ["filesystem.read", "sensor.temperature", "sensor.presence", "homeassistant.read"],
+  "Full Automation": [
+    "terminal.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "docker.execute",
+    "git.execute",
+    "gpu.compute",
+    "gpu.inference",
+    "camera.capture",
+    "homeassistant.read",
+    "homeassistant.write",
+  ],
+  "Clear All": [],
+};

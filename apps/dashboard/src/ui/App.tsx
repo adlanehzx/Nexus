@@ -7,17 +7,23 @@ import { NexusChat } from "./NexusChat.js";
 import { SetupWizard } from "./SetupWizard.js";
 import {
   Browser,
+  CommunicationGraph,
+  DagDebugger,
   Devices,
   Logs,
+  Marketplace,
   Mcp,
   Memory,
   MissionControl,
   Notifications,
   Overview,
+  QuotaForecast,
+  RunComparison,
   Runs,
   Security,
   Tasks,
   Tools,
+  VisualControl,
   Workers,
 } from "./Sections.js";
 import { Settings } from "./Settings.js";
@@ -37,6 +43,8 @@ const SUPERVISION_SECTIONS = [
       ["tasks", "Tasks", "tasks"],
       ["runs", "Agent runs", "runs"],
       ["mission-control", "ACP missions", "missions"],
+      ["dag-debugger", "DAG debugger", "tasks"],
+      ["run-comparison", "Run comparison", "runs"],
     ],
   },
   {
@@ -47,6 +55,8 @@ const SUPERVISION_SECTIONS = [
       ["tools", "Tools", "tools"],
       ["mcp", "MCP", "mcp"],
       ["browser", "Browser", "browser"],
+      ["marketplace", "Marketplace", "tools"],
+      ["visual-control", "Visual control", "browser"],
     ],
   },
   {
@@ -56,6 +66,8 @@ const SUPERVISION_SECTIONS = [
       ["notifications", "Notifications", "notifications"],
       ["security", "Security", "security"],
       ["logs", "Logs", "logs"],
+      ["communication-graph", "Agent comms", "agents"],
+      ["quota-forecast", "Quota forecast", "overview"],
     ],
   },
 ] as const;
@@ -100,6 +112,30 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   notifications: { title: "Notifications", description: "Events requiring your attention." },
   security: { title: "Security", description: "Audit logs, secrets, and guardrails." },
   logs: { title: "Logs", description: "Correlated platform-wide diagnostic logs." },
+  "dag-debugger": {
+    title: "DAG debugger",
+    description: "Inspect multi-step task execution graphs, pause and resume steps.",
+  },
+  "run-comparison": {
+    title: "Run comparison",
+    description: "Compare execution time, token consumption, and cost across runs.",
+  },
+  marketplace: {
+    title: "Marketplace",
+    description: "Browse, install, pause, and revoke third-party plugins and tools.",
+  },
+  "visual-control": {
+    title: "Visual control",
+    description: "Real-time GUI automation preview, session boundaries, and safety pauses.",
+  },
+  "communication-graph": {
+    title: "Agent communication graph",
+    description: "Inter-agent message topologies, communication volume, and latency.",
+  },
+  "quota-forecast": {
+    title: "Quota forecast",
+    description: "Provider usage projections, estimated depletion dates, and confidence.",
+  },
 };
 
 export function App() {
@@ -336,6 +372,18 @@ function renderSection(
       return <Security api={api} />;
     case "logs":
       return <Logs api={api} />;
+    case "dag-debugger":
+      return <DagDebugger api={api} />;
+    case "run-comparison":
+      return <RunComparison api={api} />;
+    case "marketplace":
+      return <Marketplace api={api} />;
+    case "visual-control":
+      return <VisualControl api={api} />;
+    case "communication-graph":
+      return <CommunicationGraph api={api} />;
+    case "quota-forecast":
+      return <QuotaForecast api={api} />;
   }
 }
 

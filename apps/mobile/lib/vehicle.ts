@@ -132,6 +132,7 @@ export class VehicleModeController {
 
   /** Starts voice input capture with visible microphone indicator. */
   async startVoiceCapture(): Promise<void> {
+    await Promise.resolve();
     if (!this.#state.active) return;
     this.#state = {
       ...this.#state,

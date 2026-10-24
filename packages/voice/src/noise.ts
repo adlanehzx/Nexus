@@ -41,8 +41,7 @@ export class AudioNoiseReducer {
 
     // 1. Calculate frame RMS energy to decide gate state
     let sumSquares = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const s = samples[i] ?? 0;
+    for (const s of samples) {
       sumSquares += s * s;
     }
     const rms = Math.sqrt(sumSquares / samples.length);
