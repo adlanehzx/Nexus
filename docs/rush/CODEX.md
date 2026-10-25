@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status      | Commit               | Evidence                                                                           |
-| --- | ----------------------------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a` | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | DONE        | `7027b4e`, `c95a4b7` | Six-backend conformance, persisted routing, 135 engine tests                       |
-| A2  | Controlled advanced agent collaboration   | DONE        | `aa1a932`            | 390 API tests; durable replay and adversarial budget checks pass                   |
-| A3  | Cloud and multi-user foundation           | IN_PROGRESS |                      | Tenant persistence and identity contracts recorded                                 |
-| A4  | Advanced memory lifecycle                 | TODO        |                      |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO        |                      |                                                                                    |
-| A6  | Financial simulation completion           | TODO        |                      |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO        |                      |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO        |                      |                                                                                    |
+| ID  | Deliverable                               | Status | Commit                          | Evidence                                                                           |
+| --- | ----------------------------------------- | ------ | ------------------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a`            | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | DONE   | `7027b4e`, `c95a4b7`            | Six-backend conformance, persisted routing, 135 engine tests                       |
+| A2  | Controlled advanced agent collaboration   | DONE   | `aa1a932`                       | 390 API tests; durable replay and adversarial budget checks pass                   |
+| A3  | Cloud and multi-user foundation           | DONE   | `1d207c1`, `fc93c3c`, `62e94fb` | Real PostgreSQL tenant isolation and hosted render pass                            |
+| A4  | Advanced memory lifecycle                 | TODO   |                                 |                                                                                    |
+| A5  | Advanced observability and evaluation     | TODO   |                                 |                                                                                    |
+| A6  | Financial simulation completion           | TODO   |                                 |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO   |                                 |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO   |                                 |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -468,20 +468,29 @@ revision, and arbitration is attributable and replayable.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-24T14:18:30+02:00
+- Completed at: 2026-10-25T07:53:45+01:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commits: `1d207c1`, `fc93c3c`, `62e94fb`
+- Commands and results:
+  - `DATABASE_URL=postgresql://... prisma migrate deploy` — passed on a clean real PostgreSQL 17 plus pgvector instance: all 16 migrations applied, including `20261024131117_phase2_multi_tenant`.
+  - `DATABASE_URL=postgresql://... vitest run --config vitest.pg.config.ts test/tenant-platform.pg.test.ts` — passed: seven real PostgreSQL tests. One matrix attempts cross-tenant access through all 17 organization route variants and receives deny-by-default 404 responses.
+  - `pnpm --filter @nexus/api typecheck && pnpm --filter @nexus/api lint && pnpm --filter @nexus/api test` — passed: 36 files and 390 tests.
+  - Hosted Kustomize render with `kubectl:v1.34.1` — passed: 507 lines. Kubeconform 0.7.0 parsed 16 resources: 14 valid, 0 invalid, 0 errors, two operator CRDs skipped.
+- Migration: additive organization, membership, team, identity, quota, ACL, usage, fleet, collaboration-event, and artifact tables. The migration was replayed from an empty database; no existing row or table is rewritten, so no backup was required.
+- Notes: personal mode lazily creates an implicit local organization and requires no identity or billing provider. Hosted APIs scope every query by organization, use explicit RBAC, store no identity secrets, expose OIDC/SAML behind one verified port, and keep absent quotas `null`/unknown. Server-sent collaboration streams are authorized before subscription and partitioned by organization plus channel.
 
-- [ ] Hosted deployment profile.
-- [ ] Tenant isolation in every database and artifact query.
-- [ ] Organizations and teams.
-- [ ] Advanced RBAC beyond `ADMIN` and `USER`.
-- [ ] OIDC SSO, with SAML behind the same identity port.
-- [ ] Provider-neutral billing abstraction.
-- [ ] Organization quota administration.
-- [ ] Mission sharing with explicit ACLs.
-- [ ] Real-time multi-user collaboration.
-- [ ] Central fleet administration across installations.
+- [x] Hosted deployment profile.
+- [x] Tenant isolation in every database and artifact query.
+- [x] Organizations and teams.
+- [x] Advanced RBAC beyond `ADMIN` and `USER`.
+- [x] OIDC SSO, with SAML behind the same identity port.
+- [x] Provider-neutral billing abstraction.
+- [x] Organization quota administration.
+- [x] Mission sharing with explicit ACLs.
+- [x] Real-time multi-user collaboration.
+- [x] Central fleet administration across installations.
 
 Acceptance: PostgreSQL integration tests attempt cross-tenant access through every public route and prove
 denial. Personal single-user mode remains the default.
@@ -545,23 +554,25 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 
 ## Phase 2 cross-agent handoffs
 
-| ID    | From/to                               | Contract or dependency                                                                                                                                                                                                                                                                                                                                                         | Status   | Evidence or target commit     |
-| ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ----------------------------- |
-| A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.                                                                                                                             | RESOLVED | `b34bc9a`, `116900a`          |
-| A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.                                                                                                                               | RESOLVED | 467-line validated render     |
-| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                                                                     | RESOLVED | `7027b4e`, `c95a4b7`          |
-| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                     |
-| A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | OPEN     | A3 schema and service commits |
+| ID    | From/to                               | Contract or dependency                                                                                                                                                                                                                                                                                                                                                         | Status   | Evidence or target commit       |
+| ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------------------------------- |
+| A0-H1 | Codex to Antigravity and Gemini       | The production control plane uses `NEXUS_ENGINE_DATABASE_URL` for shared PostgreSQL state. Mission Engine replicas retain lease-token fencing; consumers must never bypass `dedupe_key`. Redis is reached through its replicated service endpoint.                                                                                                                             | RESOLVED | `b34bc9a`, `116900a`            |
+| A0-H2 | Codex to Phase 2 deployment consumers | Kubernetes workloads must remain private, use topology spread and disruption budgets, and obtain database credentials from `nexus-secrets`. Personal Compose continues to use SQLite for the Mission Engine unless the HA URL is explicitly set.                                                                                                                               | RESOLVED | 467-line validated render       |
+| A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                                                                     | RESOLVED | `7027b4e`, `c95a4b7`            |
+| A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                       |
+| A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
 
 ## Phase 2 findings and errors
 
-| ID   | Task | Severity | Status   | Description                                                                                                                                        | Reproduction or evidence                                                                                                                                    | Fix commit           |
-| ---- | ---- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.                          | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
-| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                                       | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
-| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                                         | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
-| A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract.                     | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
-| A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.                               | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
-| A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                                            | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
-| A2-1 | A2   | Critical | RESOLVED | Existing collaboration could add subtasks and arbitration prompts but had no bounded direct-conversation protocol or durable attributable history. | Adversarial tests prove cycle, hop, token, recursion, and time termination; restart replay preserves ordered actor IDs and every accepted action.           | `aa1a932`            |
-| A2-2 | A2   | High     | RESOLVED | Existing dynamic collaboration had no structural barrier between task suitability scores and monetary bids.                                        | The strict HTTP action union accepts only `virtualScore` from 0 to 100 and rejects currency or amount fields with HTTP 400.                                 | `aa1a932`            |
+| ID   | Task | Severity | Status   | Description                                                                                                                                                       | Reproduction or evidence                                                                                                                                    | Fix commit           |
+| ---- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.                                         | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
+| A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                                                      | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
+| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                                                        | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
+| A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract.                                    | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
+| A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.                                              | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
+| A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                                                           | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
+| A2-1 | A2   | Critical | RESOLVED | Existing collaboration could add subtasks and arbitration prompts but had no bounded direct-conversation protocol or durable attributable history.                | Adversarial tests prove cycle, hop, token, recursion, and time termination; restart replay preserves ordered actor IDs and every accepted action.           | `aa1a932`            |
+| A2-2 | A2   | High     | RESOLVED | Existing dynamic collaboration had no structural barrier between task suitability scores and monetary bids.                                                       | The strict HTTP action union accepts only `virtualScore` from 0 to 100 and rejects currency or amount fields with HTTP 400.                                 | `aa1a932`            |
+| A3-1 | A3   | High     | RESOLVED | The initial migration generation attempted to drop the existing pgvector HNSW index and rename unrelated indexes because Prisma cannot model the extension index. | Unrelated destructive and rename statements were removed; clean replay preserves the vector index and applies only additive tenant tables.                  | `1d207c1`            |
+| A3-2 | A3   | Medium   | RESOLVED | Kustomize rejects an overlay nested below the directory it imports as a cycle.                                                                                    | The hosted overlay was moved to sibling `infrastructure/kubernetes-hosted`; the 507-line render and schema validation pass.                                 | `62e94fb`            |
