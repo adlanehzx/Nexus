@@ -528,19 +528,26 @@ at storage level while temporal history remains queryable.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-25T08:00:00+01:00
+- Completed at: 2026-10-25T08:02:00+01:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commit: `d05cb71`
+- Commands and results:
+  - `pnpm --filter @nexus/api typecheck && pnpm --filter @nexus/api lint && pnpm --filter @nexus/api build` — passed.
+  - `pnpm --filter @nexus/api exec vitest run test/advanced-observability.test.ts` — passed: one file and seven tests, including restart recovery, unknown quota, suppression/escalation, nondeterministic comparison, nightly evaluation, content-free graph, and DAG pause/resume.
+- Migration: none. Bounded observability facts are written atomically to a private local state file behind a dedicated store; restart recovery is exercised by a new service/store instance.
+- Notes: strict fact schemas have no prompt, transcript, reasoning, provider block, or credential field. Official observations and estimates retain distinct source types; forecasts based on absent or insufficient official quota observations return explicit `unknown` with no exhaustion timestamp or confidence.
 
-- [ ] Exact official provider consumption separated from API-equivalent estimates.
-- [ ] Quota-exhaustion forecasting with confidence and explicit unknown state.
-- [ ] Intelligent alert suppression and escalation.
-- [ ] Deterministic replay where possible, with honest nondeterminism markers elsewhere.
-- [ ] Side-by-side run comparison.
-- [ ] Automatic regression detection.
-- [ ] Scheduled nightly evaluations.
-- [ ] Inter-agent communication graph.
-- [ ] Real-time DAG debugger with safe pause, inspect, and resume.
+- [x] Exact official provider consumption separated from API-equivalent estimates.
+- [x] Quota-exhaustion forecasting with confidence and explicit unknown state.
+- [x] Intelligent alert suppression and escalation.
+- [x] Deterministic replay where possible, with honest nondeterminism markers elsewhere.
+- [x] Side-by-side run comparison.
+- [x] Automatic regression detection.
+- [x] Scheduled nightly evaluations.
+- [x] Inter-agent communication graph.
+- [x] Real-time DAG debugger with safe pause, inspect, and resume.
 
 Acceptance: dashboards use persisted facts and never scrape private provider pages; traces exclude prompts,
 credentials, and private transcripts by default.
@@ -582,7 +589,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                       |
 | A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
 | A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | RESOLVED | `b838c59`                       |
-| A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.            | OPEN     | A5 observability commit         |
+| A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.            | RESOLVED | `d05cb71`                       |
 
 ## Phase 2 findings and errors
 
