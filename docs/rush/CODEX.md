@@ -554,6 +554,12 @@ credentials, and private transcripts by default.
 
 ## A6 — Financial simulation completion
 
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-25T08:03:00+01:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+
 - [ ] Polymarket-compatible paper-data adapter with no order-submission capability.
 - [ ] Historical backtesting with immutable datasets and reproducible strategies.
 - [ ] Keep real trading impossible at schema, API, tool, and network boundaries.
@@ -590,6 +596,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
 | A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | RESOLVED | `b838c59`                       |
 | A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.            | RESOLVED | `d05cb71`                       |
+| A6-H1 | Codex to simulation consumers         | External prediction-market compatibility is read-only market/price ingestion. The adapter exposes only GET transport and normalized immutable observations. Historical execution consumes content-addressed datasets and produces a hash-chained paper journal; no schema, API, tool, or transport may contain credentials or an order-submission path.                        | OPEN     | A6 simulation commit            |
 
 ## Phase 2 findings and errors
 
