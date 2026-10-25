@@ -13,3 +13,4 @@ export * from "./extraction.js";
 export * from "./consolidation.js";
 export * from "./tokens.js";
 export * from "./artifacts.js";
+export * from "./lifecycle.js";

@@ -230,5 +230,10 @@ function tokenize(text: string): string[] {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((term) => term.length >= 3);
+    .filter((term) => term.length >= 3)
+    .map(normalizePlural);
+}
+
+function normalizePlural(term: string): string {
+  return term.length > 3 && term.endsWith("s") ? term.slice(0, -1) : term;
 }
