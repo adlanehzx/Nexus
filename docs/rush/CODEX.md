@@ -578,16 +578,23 @@ limits, provenance, decision journals, and tamper-evident audit chains.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-25T08:06:00+01:00
+- Completed at: 2026-10-25T08:08:00+01:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commit: `caf1908`
+- Commands and results:
+  - `pnpm --filter @nexus/api typecheck && pnpm --filter @nexus/api lint && pnpm --filter @nexus/api build` — passed.
+  - `pnpm --filter @nexus/api exec vitest run test/autonomy-safety.test.ts` — passed: one file and five adversarial workflow tests covering restart, independent confirmation, strict schema rejection, federation authentication/replay/rate limits, budget pause, supervision, and emergency stop.
+- Migration: none. Proposals, permanent-agent safety state, and accepted federation nonces use a private atomic local state file behind a dedicated store. Restart recovery and one-way confirmation-token hashing are tested.
+- Notes: this controller intentionally exposes no deploy, execute, apply, purchase, payment, or money-management method. An approval is an attributable authorization record only; a separately supervised operator remains necessary to perform any deployment.
 
-- [ ] Supervised self-improvement proposals without self-modifying execution.
-- [ ] Confirmation-gated deployment, never autonomous by default.
-- [ ] Keep purchasing and money management unavailable outside simulation.
-- [ ] Authenticated private federation before any public federation.
-- [ ] Abuse controls before any decentralized agent network.
-- [ ] Pause, budget, supervision, and emergency-stop contracts before permanent agents.
+- [x] Supervised self-improvement proposals without self-modifying execution.
+- [x] Confirmation-gated deployment, never autonomous by default.
+- [x] Keep purchasing and money management unavailable outside simulation.
+- [x] Authenticated private federation before any public federation.
+- [x] Abuse controls before any decentralized agent network.
+- [x] Pause, budget, supervision, and emergency-stop contracts before permanent agents.
 
 Acceptance: only safe proposal and approval workflows may ship. No unattended code mutation, purchase,
 deployment, or real-money control is permitted.
@@ -610,7 +617,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                            | RESOLVED | `b838c59`                       |
 | A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.                  | RESOLVED | `d05cb71`                       |
 | A6-H1 | Codex to simulation consumers         | External prediction-market compatibility is read-only market/price ingestion. The adapter exposes only GET transport and normalized immutable observations. Historical execution consumes content-addressed datasets and produces a hash-chained paper journal; no schema, API, tool, or transport may contain credentials or an order-submission path.                              | RESOLVED | `33b2a9a`                       |
-| A7-H1 | Codex to autonomy consumers           | Autonomous outputs are immutable proposals only. Human approval may authorize a separately operated deployment request but this subsystem has no deploy, execute, purchase, payment, or code-mutation port. Federation is private, allowlisted, signed, replay-protected, and rate-limited. Permanent agents require persisted budget, pause, supervision, and emergency-stop state. | OPEN     | A7 safety commit                |
+| A7-H1 | Codex to autonomy consumers           | Autonomous outputs are immutable proposals only. Human approval may authorize a separately operated deployment request but this subsystem has no deploy, execute, purchase, payment, or code-mutation port. Federation is private, allowlisted, signed, replay-protected, and rate-limited. Permanent agents require persisted budget, pause, supervision, and emergency-stop state. | RESOLVED | `caf1908`                       |
 
 ## Phase 2 findings and errors
 
