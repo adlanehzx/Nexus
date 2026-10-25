@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -65,5 +65,19 @@ describe("NEXUS manageable configuration", () => {
     await writeFile(join(directory, "browser.json"), JSON.stringify(current));
 
     expect(await store.loadBrowser()).toMatchObject({ mode: "remote-worker", enabled: false });
+  });
+
+  it("keeps concurrent atomic writes independent", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-concurrent-"));
+    const store = new RuntimeConfigurationStore(directory);
+
+    await Promise.all(
+      Array.from({ length: 16 }, (_, index) =>
+        store.saveSecretNames([`concurrent-secret-${String(index)}`]),
+      ),
+    );
+
+    expect(await store.listSecretNames()).toHaveLength(1);
+    expect((await readdir(directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 });

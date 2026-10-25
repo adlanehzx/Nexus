@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -138,7 +139,12 @@ export class RuntimeConfigurationStore {
   async #write(name: string, value: unknown): Promise<void> {
     await mkdir(this.#directory, { recursive: true, mode: 0o700 });
     const path = join(this.#directory, name);
-    const temporary = join(this.#directory, `.${name}.${process.pid}.tmp`);
+    // A PID only identifies the process, not an individual write. Dashboard
+    // startup issues several reads concurrently and some of them initialise the
+    // same configuration file. Reusing one temporary path lets the first rename
+    // remove the file underneath the other writer. A per-write nonce preserves
+    // atomic rename semantics without serialising unrelated configuration files.
+    const temporary = join(this.#directory, `.${name}.${process.pid}.${randomUUID()}.tmp`);
     try {
       await copyFile(path, `${path}.bak-${new Date().toISOString().replaceAll(/[:.]/g, "")}`);
     } catch (error) {
