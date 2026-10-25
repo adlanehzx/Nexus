@@ -601,6 +601,16 @@ deployment, or real-money control is permitted.
 
 ## A8 — Phase 2 integration and full E2E
 
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-25T08:09:00+01:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Incoming handoffs:
+  - Antigravity branch `antigravity/rush-phase2-tools-security`, terminal commit `bb6b2add0a429f363bb53931736be1d6d3283757` (CLA0–CLA5 complete).
+  - Gemini branch `gemini/rush-phase2-devices-voice`, terminal commit `cd087c38a5785be3658b229920c82af7765d26c0` (GA1–GA4 complete; GA0 store submission remains externally blocked by unavailable signing credentials).
+- Integration method: cherry-pick the immutable handoff commits in original order. This preserves authorship while honoring the prohibition on merge and rebase.
+
 Integrate the two Phase 2 handoffs, reconcile migrations and manifests once, rerun every Phase 1 gate,
 then add multi-node, multi-user, engine, memory, simulation, device, voice, security, and clean-install
 evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and reported as successful.
