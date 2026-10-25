@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nexus
+resources:
+  - ../kubernetes
+  - ingress.yaml
+patches:
+  - path: hosted-config.yaml
