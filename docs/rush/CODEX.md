@@ -526,6 +526,12 @@ at storage level while temporal history remains queryable.
 
 ## A5 — Advanced observability and evaluation
 
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-25T08:00:00+01:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+
 - [ ] Exact official provider consumption separated from API-equivalent estimates.
 - [ ] Quota-exhaustion forecasting with confidence and explicit unknown state.
 - [ ] Intelligent alert suppression and escalation.
@@ -576,6 +582,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                       |
 | A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
 | A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | RESOLVED | `b838c59`                       |
+| A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.            | OPEN     | A5 observability commit         |
 
 ## Phase 2 findings and errors
 
