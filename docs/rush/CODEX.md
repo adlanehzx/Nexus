@@ -603,17 +603,44 @@ deployment, or real-money control is permitted.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-25T08:09:00+01:00
+- Completed at: 2026-10-25T08:14:00+01:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
 - Incoming handoffs:
   - Antigravity branch `antigravity/rush-phase2-tools-security`, terminal commit `bb6b2add0a429f363bb53931736be1d6d3283757` (CLA0–CLA5 complete).
   - Gemini branch `gemini/rush-phase2-devices-voice`, terminal commit `cd087c38a5785be3658b229920c82af7765d26c0` (GA1–GA4 complete; GA0 store submission remains externally blocked by unavailable signing credentials).
 - Integration method: cherry-pick the immutable handoff commits in original order. This preserves authorship while honoring the prohibition on merge and rebase.
+- Integrated commits:
+  - Antigravity originals `646d884`, `610d26a`, `ff336fe`, `b02a130`, `5ecd1f3`, `bb6b2ad`; local cherry-picks `dce88e0`, `ab51207`, `ba17274`, `21fdac2`, `98c40b8`, `b674208`.
+  - Gemini originals `d710822`, `fe7b9da`, `b83e6d5`, `36b02fc`, `7b11a41`, `9aa8167`, `827e591`, `679e72b`, `a20692b`, `8d8edb5`, `cd087c3`; local cherry-picks `22c3a17`, `168e883`, `e080cf5`, `e9b0ab5`, `b3131b6`, `a1c1618`, `c649f77`, `c0c5f94`, `2d54c92`, `0e1ec1f`, `149168b`.
+  - Integration fixes: `85ebf86`.
+- Commands and results:
+  - `pnpm format:check` — passed after formatting the HA Compose command array.
+  - `pnpm lint` — passed: 54 tasks. `pnpm typecheck` — passed: 54 tasks. `pnpm build` — passed: 32 tasks.
+  - `pnpm exec turbo run test --force` — passed without cache reuse: 54 tasks. Representative totals include API 402, connector 164, client-core 188, devices 119, voice 56, dashboard 54, tools 48, MCP 78, Android 191, and Windows 233 tests.
+  - `pnpm release:check` — passed: 1,088 tracked files. `pnpm translation:check` — passed: zero untranslated lines and zero untranslated test names.
+  - `NEXUS_TEST_POSTGRES_URL=postgresql://... uv run --project services/mission-engine pytest services/mission-engine/tests -o addopts=''` — passed: 139 tests, including four real PostgreSQL restart, fencing, recovery, and artifact tests; one upstream Starlette/httpx deprecation warning.
+  - `uv run --project services/browser-worker --extra dev pytest services/browser-worker/tests` — passed: 76 tests, two real-browser tests deselected by the declared marker; one upstream Starlette/httpx warning. `ruff check` passed.
+  - Real PostgreSQL/pgvector: clean deploy of all 16 migrations passed; API PostgreSQL suite passed 32 tests; memory suite passed all 124 tests with seven PostgreSQL cases enabled.
+  - `pnpm test:ha` — passed: PostgreSQL streaming replication, backup plus isolated restore, and Redis replication plus Sentinel failover. The isolated stack and volumes were removed by the script.
+  - Four Docker Compose renders passed: personal, HA test, Synology, and TrueNAS. Missing deployment secrets produced expected render-time warnings only; no value was committed.
+  - Kubernetes base render plus kubeconform passed: 15 resources, 13 valid, two operator CRDs skipped, zero invalid/errors. Hosted render passed: 16 resources, 14 valid, two CRDs skipped, zero invalid/errors.
+  - Focused cross-plane E2E/security suites passed: API 49 tests, encrypted peer sync/conflict/resync 10 tests, and advanced connector security 18 tests.
+- Migration and backup record: no new integration migration was required. The only Phase 2 database migration remains the additive A3 migration, replayed with all 16 migrations from an empty PostgreSQL database. Therefore no non-additive migration or user-data backup was required; the A0 backup/restore acceptance remains independently executable and passed.
+- Terminal limitations:
+  - Gemini GA0 store distribution is `BLOCKED` by absent Apple Developer signing certificates and Android release keystore. Local unsigned build metadata and companion behavior are tested; no store release is claimed.
+  - The independent external cybersecurity audit is `BLOCKED` pending an accredited third-party report. Reproducible audit evidence exists, but it is not represented as external certification.
+  - Firecracker hardware isolation is `BLOCKED` on this host because `/dev/kvm` is unavailable; the runtime detects this and fails closed. The tested lower isolation tiers remain available.
+  - Kubernetes server-side apply is `BLOCKED` on this host because no live Kubernetes API or installed operator CRDs are available. Client rendering and strict native-schema validation passed; no live-cluster claim is made.
 
 Integrate the two Phase 2 handoffs, reconcile migrations and manifests once, rerun every Phase 1 gate,
 then add multi-node, multi-user, engine, memory, simulation, device, voice, security, and clean-install
 evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and reported as successful.
+
+Acceptance: `DONE`. Antigravity and Gemini handoffs are integrated, all local and faithfully virtualized
+gates pass, and each genuinely unavailable external platform or certification remains explicitly
+`BLOCKED` with its exact external dependency.
 
 ## Phase 2 cross-agent handoffs
 
@@ -628,6 +655,8 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A5-H1 | Codex to telemetry consumers          | Persist only bounded structural facts: identifiers, timestamps, counters, statuses, provider/model IDs, and explicit determinism markers. Prompts, credentials, reasoning blocks, and private transcripts are not fields in the contract. Official provider observations and API-equivalent estimates remain distinct, and absent quota/forecast data is `unknown`.                  | RESOLVED | `d05cb71`                       |
 | A6-H1 | Codex to simulation consumers         | External prediction-market compatibility is read-only market/price ingestion. The adapter exposes only GET transport and normalized immutable observations. Historical execution consumes content-addressed datasets and produces a hash-chained paper journal; no schema, API, tool, or transport may contain credentials or an order-submission path.                              | RESOLVED | `33b2a9a`                       |
 | A7-H1 | Codex to autonomy consumers           | Autonomous outputs are immutable proposals only. Human approval may authorize a separately operated deployment request but this subsystem has no deploy, execute, purchase, payment, or code-mutation port. Federation is private, allowlisted, signed, replay-protected, and rate-limited. Permanent agents require persisted budget, pause, supervision, and emergency-stop state. | RESOLVED | `caf1908`                       |
+| A8-H1 | Antigravity to Codex integration      | Integrate CLA0–CLA5 from the immutable terminal branch without rewriting its commits; preserve its honest external-audit and KVM limitations.                                                                                                                                                                                                                                        | RESOLVED | original `bb6b2ad`; `b674208`   |
+| A8-H2 | Gemini to Codex integration           | Integrate GA0–GA4 from the immutable terminal branch without inventing signing credentials. Preserve GA0 as BLOCKED while integrating and testing the local device, voice, peer-sync, and supervision deliverables.                                                                                                                                                                  | RESOLVED | original `cd087c3`; `149168b`   |
 
 ## Phase 2 findings and errors
 
@@ -635,7 +664,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | ---- | ---- | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | A0-1 | A0   | Critical | RESOLVED | Mission Engine accepted only a local SQLite path, so separate application nodes could not share or recover mission state.                                         | A killed process is recovered through shared PostgreSQL with the same attempt and one final effect.                                                         | `b34bc9a`            |
 | A0-2 | A0   | High     | RESOLVED | Redis Sentinel using a disappearing Docker DNS hostname intermittently stalled promotion after primary loss.                                                      | A repeated run entered Sentinel tilt; fixed-address isolated test networking now passes deterministically.                                                  | `116900a`            |
-| A0-3 | A0   | Low      | OPEN     | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                                                        | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
+| A0-3 | A0   | Low      | BLOCKED  | This host has no Kubernetes API server or installed operator CRDs for server-side dry-run.                                                                        | Client apply could not reach localhost:8080; kustomize and native schema validation pass, and operator installation is an explicit deployment prerequisite. | N/A                  |
 | A1-1 | A1   | High     | RESOLVED | The previous local adapter implemented only Ollama generation and did not share a complete multi-backend conformance contract.                                    | Six providers now pass the same generation, streaming, structured-output, token-count, and normalized-failure matrix.                                       | `7027b4e`            |
 | A1-2 | A1   | High     | RESOLVED | CLI provider failures retained and embedded stderr, which could contain credentials or private transcript fragments.                                              | Stderr is drained without retention and errors expose only a normalized status; an adversarial fixture verifies the secret is absent.                       | `7027b4e`            |
 | A1-3 | A1   | Medium   | RESOLVED | A missing quota observation could be accidentally interpreted as unrestricted capacity.                                                                           | Both routing implementations serialize the state as `unknown` and apply a neutral score; tests reject zero quota separately.                                | `7027b4e`, `c95a4b7` |
@@ -644,3 +673,8 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A3-1 | A3   | High     | RESOLVED | The initial migration generation attempted to drop the existing pgvector HNSW index and rename unrelated indexes because Prisma cannot model the extension index. | Unrelated destructive and rename statements were removed; clean replay preserves the vector index and applies only additive tenant tables.                  | `1d207c1`            |
 | A3-2 | A3   | Medium   | RESOLVED | Kustomize rejects an overlay nested below the directory it imports as a cycle.                                                                                    | The hosted overlay was moved to sibling `infrastructure/kubernetes-hosted`; the 507-line render and schema validation pass.                                 | `62e94fb`            |
 | A4-1 | A4   | Medium   | RESOLVED | PostgreSQL lexical retrieval did not match a singular query term against a plural stored term, causing a real-provider conformance failure.                       | Both local and PostgreSQL tokenizers now apply the same conservative plural normalization; all 124 tests pass with PostgreSQL enabled.                      | `b838c59`            |
+| A8-1 | A8   | Low      | RESOLVED | The HA Compose command array was the sole file failing the repository-wide Prettier gate.                                                                         | The array is formatted canonically and the complete `pnpm format:check` now passes.                                                                         | `85ebf86`            |
+| A8-2 | A8   | Low      | RESOLVED | Browser Worker passed its tests but exposed five Ruff violations: long safety text and missing explicit exception chaining.                                       | Ruff passes after line wrapping and explicit `from None`; all 76 non-browser tests still pass.                                                              | `85ebf86`            |
+| A8-3 | A8   | Low      | RESOLVED | The incoming CLAUDE evidence retained one French quotation, failing the required English-only release gate.                                                       | The exact rule was translated without changing its meaning; `translation:check` reports zero remaining lines.                                               | `85ebf86`            |
+| A8-4 | A8   | High     | BLOCKED  | Mobile store signing and distribution cannot run without external Apple and Android signing credentials.                                                          | Gemini GA0 records absent Apple certificates and Android release keystore; no unsigned artifact is represented as a store release.                          | external dependency  |
+| A8-5 | A8   | Medium   | BLOCKED  | Independent external audit certification cannot be produced locally, and hardware microVM execution cannot be tested without `/dev/kvm`.                          | CLA3 generates the evidence bundle and fails closed when KVM is unavailable; both limitations remain explicitly blocked.                                    | external dependency  |
