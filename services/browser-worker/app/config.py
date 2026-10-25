@@ -1,7 +1,8 @@
 """Worker configuration.
 
 Validated at startup: missing required settings prevent boot rather than causing
-runtime errors on requests. Sensitive values are never logged — ``describe()`` returns only safe metadata.
+runtime errors on requests. Sensitive values are never logged — ``describe()``
+returns only safe metadata.
 """
 
 from __future__ import annotations

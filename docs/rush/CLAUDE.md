@@ -514,7 +514,7 @@ Implementation record:
 
 1. **Independent External Cybersecurity Audit Report**:
    - Status: `BLOCKED (awaiting accredited third-party external cybersecurity audit firm engagement and final audit report per Rule 13)`.
-   - Evidence: `AuditBundleGenerator` in `services/connector/src/security.ts` generates complete reproducible evidence bundles, SBOM manifests, checksums, and configuration attestations. However, per Rule 13 ("N'annonce pas un audit externe comme réalisé sans rapport externe réel"), formal audit sign-off is honestly tracked as BLOCKED pending external engagement.
+   - Evidence: `AuditBundleGenerator` in `services/connector/src/security.ts` generates complete reproducible evidence bundles, SBOM manifests, checksums, and configuration attestations. However, per Rule 13 ("Do not claim an external audit was completed without a real external report"), formal audit sign-off is honestly tracked as BLOCKED pending external engagement.
 2. **Hardware Virtualization (KVM / Firecracker) on Non-KVM Hosts**:
    - Status: `BLOCKED on unprivileged containers / hosts lacking /dev/kvm`.
    - Evidence: `FirecrackerMicroVmRunner` checks `/dev/kvm` and fails closed (`isAvailable() === false`, throws `SecurityIsolationError("Firecracker microVM requires /dev/kvm hardware virtualization", "KVM_UNAVAILABLE")`).

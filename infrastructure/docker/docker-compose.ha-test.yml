@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: ${NEXUS_HA_TEST_PASSWORD:-nexus_ha_test_only}
       POSTGRES_DB: nexus
       POSTGRES_REPLICATION_PASSWORD: ${NEXUS_HA_REPLICATION_PASSWORD:-nexus_replication_test_only}
-    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "hot_standby=on"]
+    command:
+      ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=10", "-c", "hot_standby=on"]
     volumes:
       - postgres-primary:/var/lib/postgresql/data
       - ./ha/postgres-primary-init.sh:/docker-entrypoint-initdb.d/10-replication.sh:ro

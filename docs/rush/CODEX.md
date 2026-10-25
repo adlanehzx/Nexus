@@ -353,7 +353,7 @@ Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
 
 Branch: `codex/rush-phase2-platform`
 
-Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/codex/rush-phase2-platform`
+Worktree: `<workspace>/codex/rush-phase2-platform`
 
 ## Phase 2 progress
 
@@ -378,7 +378,7 @@ Implementation record:
 - Completed at: 2026-10-24T11:01:52+02:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
 - Branch: `codex/rush-phase2-platform`
-- Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/work/codex/rush-phase2-platform`
+- Worktree: `<workspace>/codex/rush-phase2-platform`
 - Commits: `b34bc9a`, `116900a`
 - Commands and results:
   - `NEXUS_TEST_POSTGRES_URL=postgresql://... uv run --project services/mission-engine pytest services/mission-engine/tests -o addopts=''` — passed: 134 tests, including four real PostgreSQL HA tests; one pre-existing Starlette deprecation warning.
