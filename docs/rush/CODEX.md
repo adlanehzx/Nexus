@@ -357,17 +357,17 @@ Worktree: `/home/adlane/Documents/Codex/2026-10-11/tu-es-un-ing-nieur-senior/wor
 
 ## Phase 2 progress
 
-| ID  | Deliverable                               | Status | Commit                          | Evidence                                                                           |
-| --- | ----------------------------------------- | ------ | ------------------------------- | ---------------------------------------------------------------------------------- |
-| A0  | Scale and disaster recovery               | DONE   | `b34bc9a`, `116900a`            | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
-| A1  | Interchangeable engines and model routing | DONE   | `7027b4e`, `c95a4b7`            | Six-backend conformance, persisted routing, 135 engine tests                       |
-| A2  | Controlled advanced agent collaboration   | DONE   | `aa1a932`                       | 390 API tests; durable replay and adversarial budget checks pass                   |
-| A3  | Cloud and multi-user foundation           | DONE   | `1d207c1`, `fc93c3c`, `62e94fb` | Real PostgreSQL tenant isolation and hosted render pass                            |
-| A4  | Advanced memory lifecycle                 | TODO   |                                 |                                                                                    |
-| A5  | Advanced observability and evaluation     | TODO   |                                 |                                                                                    |
-| A6  | Financial simulation completion           | TODO   |                                 |                                                                                    |
-| A7  | Autonomy and federation safety boundaries | TODO   |                                 |                                                                                    |
-| A8  | Phase 2 integration and full E2E          | TODO   |                                 |                                                                                    |
+| ID  | Deliverable                               | Status      | Commit                          | Evidence                                                                           |
+| --- | ----------------------------------------- | ----------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| A0  | Scale and disaster recovery               | DONE        | `b34bc9a`, `116900a`            | 134 engine tests; real PostgreSQL/Redis replication and process-kill recovery pass |
+| A1  | Interchangeable engines and model routing | DONE        | `7027b4e`, `c95a4b7`            | Six-backend conformance, persisted routing, 135 engine tests                       |
+| A2  | Controlled advanced agent collaboration   | DONE        | `aa1a932`                       | 390 API tests; durable replay and adversarial budget checks pass                   |
+| A3  | Cloud and multi-user foundation           | DONE        | `1d207c1`, `fc93c3c`, `62e94fb` | Real PostgreSQL tenant isolation and hosted render pass                            |
+| A4  | Advanced memory lifecycle                 | IN_PROGRESS |                                 | Lifecycle and encrypted synchronization contract recorded                          |
+| A5  | Advanced observability and evaluation     | TODO        |                                 |                                                                                    |
+| A6  | Financial simulation completion           | TODO        |                                 |                                                                                    |
+| A7  | Autonomy and federation safety boundaries | TODO        |                                 |                                                                                    |
+| A8  | Phase 2 integration and full E2E          | TODO        |                                 |                                                                                    |
 
 ## A0 — Scale and disaster recovery
 
@@ -497,6 +497,12 @@ denial. Personal single-user mode remains the default.
 
 ## A4 — Advanced memory lifecycle
 
+Implementation record:
+
+- Status: `IN_PROGRESS`
+- Started at: 2026-10-25T07:54:00+01:00
+- Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+
 - [ ] Hierarchical working and archival memory without a hard Letta dependency.
 - [ ] Opt-in scheduled consolidation with review and rollback.
 - [ ] Contradiction detection between temporal facts.
@@ -561,6 +567,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                                                                     | RESOLVED | `7027b4e`, `c95a4b7`            |
 | A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                       |
 | A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
+| A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | OPEN     | A4 lifecycle commit             |
 
 ## Phase 2 findings and errors
 
