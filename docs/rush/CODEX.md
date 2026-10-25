@@ -499,19 +499,27 @@ denial. Personal single-user mode remains the default.
 
 Implementation record:
 
-- Status: `IN_PROGRESS`
+- Status: `DONE`
 - Started at: 2026-10-25T07:54:00+01:00
+- Completed at: 2026-10-25T07:59:00+01:00
 - Base commit: `190f85af97d1c46399b9cce64819095ec4951bf6`
+- Commit: `b838c59`
+- Commands and results:
+  - `pnpm --filter @nexus/memory typecheck && pnpm --filter @nexus/memory lint && pnpm --filter @nexus/memory test && pnpm --filter @nexus/memory build` — passed: eight files and 124 tests, including the advanced lifecycle tests.
+  - `DATABASE_URL=postgresql://... pnpm --filter @nexus/database migrate:deploy` — passed against a clean real PostgreSQL 17 plus pgvector database: all 16 migrations applied.
+  - `DATABASE_URL=postgresql://... pnpm --filter @nexus/memory test -- test/postgres.test.ts` — passed: eight files and 124 tests with all seven real PostgreSQL tests enabled, including restart persistence and storage-level deletion.
+- Migration: none. Lifecycle workflow state uses an atomic private local file behind a replaceable port; memory data continues to use the provider-neutral in-memory/PostgreSQL contract. Restart recovery is tested with a fresh state-store instance.
+- Notes: all imports and synchronized upserts pass through `MemoryService`, so forbidden secrets remain rejected. Synchronization uses authenticated AES-256-GCM envelopes, binds the source installation as additional authenticated data, rejects tampering/wrong keys, and propagates scoped deletions.
 
-- [ ] Hierarchical working and archival memory without a hard Letta dependency.
-- [ ] Opt-in scheduled consolidation with review and rollback.
-- [ ] Contradiction detection between temporal facts.
-- [ ] Native knowledge-graph projection with provenance.
-- [ ] Selective memory sharing between agents.
-- [ ] First-class project-scoped memory.
-- [ ] Configurable automatic forgetting and retention.
-- [ ] Large personal-archive import with progress, cancellation, and deduplication.
-- [ ] End-to-end encrypted synchronization between installations.
+- [x] Hierarchical working and archival memory without a hard Letta dependency.
+- [x] Opt-in scheduled consolidation with review and rollback.
+- [x] Contradiction detection between temporal facts.
+- [x] Native knowledge-graph projection with provenance.
+- [x] Selective memory sharing between agents.
+- [x] First-class project-scoped memory.
+- [x] Configurable automatic forgetting and retention.
+- [x] Large personal-archive import with progress, cancellation, and deduplication.
+- [x] End-to-end encrypted synchronization between installations.
 
 Acceptance: forbidden secrets cannot enter memory or synchronization; deletion propagates and is proven
 at storage level while temporal history remains queryable.
@@ -567,7 +575,7 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A1-H1 | Codex to engine consumers             | Engine descriptors expose stable IDs, local/cloud/ACP transport, context capacity, privacy class, latency, quality, cost, and nullable quota. `null` means unknown, never unlimited. Selection and fallback records are persisted only at task boundaries.                                                                                                                     | RESOLVED | `7027b4e`, `c95a4b7`            |
 | A2-H1 | Codex to collaboration consumers      | Advanced collaboration is an attributable append-only event stream. Every session declares immutable hop, token, wall-time, recursion, review, capability, and permission bounds. Votes, plan revisions, virtual-score bids, reviews, and arbitration must pass this contract; monetary bids are structurally impossible.                                                      | RESOLVED | `aa1a932`                       |
 | A3-H1 | Codex to cloud and tenant consumers   | Every hosted resource is addressed by `organizationId` plus its resource ID; stores must include both in reads, writes, updates, and deletes. Identity providers use one OIDC/SAML port, roles are explicit grants, mission ACLs are deny-by-default, billing is provider-neutral, and personal mode maps to an implicit local organization without requiring hosted services. | RESOLVED | `1d207c1`, `fc93c3c`, `62e94fb` |
-| A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | OPEN     | A4 lifecycle commit             |
+| A4-H1 | Codex to memory consumers             | Project scope and selective sharing are metadata overlays on provider-neutral memory records. Consolidation is opt-in and review-gated; rollback and deletion synchronization use attributable lifecycle events. Sync payloads are AES-256-GCM encrypted before leaving an installation, and all imports pass through `MemoryService` sensitivity policy.                      | RESOLVED | `b838c59`                       |
 
 ## Phase 2 findings and errors
 
@@ -583,3 +591,4 @@ evidence. Unsupported platforms remain `BLOCKED`; they are never skipped and rep
 | A2-2 | A2   | High     | RESOLVED | Existing dynamic collaboration had no structural barrier between task suitability scores and monetary bids.                                                       | The strict HTTP action union accepts only `virtualScore` from 0 to 100 and rejects currency or amount fields with HTTP 400.                                 | `aa1a932`            |
 | A3-1 | A3   | High     | RESOLVED | The initial migration generation attempted to drop the existing pgvector HNSW index and rename unrelated indexes because Prisma cannot model the extension index. | Unrelated destructive and rename statements were removed; clean replay preserves the vector index and applies only additive tenant tables.                  | `1d207c1`            |
 | A3-2 | A3   | Medium   | RESOLVED | Kustomize rejects an overlay nested below the directory it imports as a cycle.                                                                                    | The hosted overlay was moved to sibling `infrastructure/kubernetes-hosted`; the 507-line render and schema validation pass.                                 | `62e94fb`            |
+| A4-1 | A4   | Medium   | RESOLVED | PostgreSQL lexical retrieval did not match a singular query term against a plural stored term, causing a real-provider conformance failure.                       | Both local and PostgreSQL tokenizers now apply the same conservative plural normalization; all 124 tests pass with PostgreSQL enabled.                      | `b838c59`            |
