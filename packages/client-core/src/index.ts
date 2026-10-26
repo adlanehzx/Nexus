@@ -15,3 +15,4 @@ export * from "./companion/watch.js";
 export * from "./offline/peer-sync.js";
 export * from "./offline/conflict-resolver.js";
 export * from "./offline/resync-engine.js";
+export * from "./career-education/index.js";
