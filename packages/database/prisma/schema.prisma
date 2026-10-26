@@ -37,16 +37,31 @@ model User {
   createdAt   DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
 
-  authCredential AuthCredential?
-  sessions       Session[]
-  devices        Device[]
-  conversations  Conversation[]
-  memories       Memory[]
-  notifications  Notification[]
-  agentRuns      AgentRunSnapshot[]
-  scheduleGrants ScheduleGrant[]
+  authCredential          AuthCredential?
+  sessions                Session[]
+  devices                 Device[]
+  conversations           Conversation[]
+  memories                Memory[]
+  notifications           Notification[]
+  agentRuns               AgentRunSnapshot[]
+  scheduleGrants          ScheduleGrant[]
   organizationMemberships OrganizationMembership[]
   teamMemberships         TeamMembership[]
+
+  /// Career and education. Every row cascades on account deletion: this is the
+  /// owner's own job search, and retention follows the account, not the table.
+  careerProfile            CareerProfile?
+  careerOpportunities      CareerOpportunity[]
+  careerApplications       CareerApplication[]
+  careerDocumentVariants   CareerDocumentVariant[]
+  careerContacts           CareerContact[]
+  careerDeadlines          CareerDeadline[]
+  careerInterviews         CareerInterview[]
+  careerOutcomes           CareerOutcome[]
+  careerFollowUps          CareerFollowUp[]
+  careerSubmissionAttempts CareerSubmissionAttempt[]
+  careerConfirmations      CareerConfirmation[]
+  careerApplicationEvents  CareerApplicationEvent[]
 
   @@map("users")
 }
@@ -93,8 +108,8 @@ model Team {
   name           String
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
 
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberships TeamMembership[]
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  TeamMembership[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, id])
@@ -747,4 +762,431 @@ model AgentRunSnapshot {
   @@index([status])
   @@index([missionExternalKey])
   @@map("agent_run_snapshots")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Career and education
+// Full reference: docs/architecture/career-education.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Enum members below are spelled exactly as the domain vocabulary in
+// `@nexus/career` — lowercase, snake_case — rather than upper-cased in the
+// repository's older style. The vocabulary is the public API contract: a
+// dashboard receives `awaiting_confirmation` and the database stores
+// `awaiting_confirmation`, so there is no translation table to keep in step and
+// no chance of the two drifting. The cost is a visual break with the enums
+// above; the benefit is that a state read from psql is the state a client saw.
+
+enum CareerOpportunityKind {
+  phd
+  permanent_job
+  freelance
+}
+
+enum CareerSourceKind {
+  official_site
+  institutional_registry
+  aggregator
+  referral
+  manual_entry
+  unverified
+}
+
+enum CareerApplicationState {
+  discovered
+  shortlisted
+  drafting
+  awaiting_confirmation
+  approved
+  submitted
+  interview
+  offer
+  rejected
+  withdrawn
+  expired
+}
+
+enum CareerDocumentKind {
+  cv
+  cover_letter
+  research_statement
+  portfolio_note
+  reference_list
+}
+
+enum CareerDeadlineKind {
+  application_deadline
+  document_due
+  interview
+  decision_expected
+  follow_up
+}
+
+enum CareerDeadlineState {
+  pending
+  reminded
+  met
+  missed
+  cancelled
+}
+
+enum CareerInterviewMode {
+  onsite
+  video
+  phone
+  written
+}
+
+enum CareerInterviewState {
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
+enum CareerOutcomeResult {
+  offer
+  rejection
+  no_response
+  withdrawn
+  expired
+}
+
+enum CareerFollowUpChannel {
+  email_draft
+  letter_draft
+  manual_note
+}
+
+enum CareerFollowUpState {
+  planned
+  drafted
+  done
+  cancelled
+}
+
+enum CareerSubmissionState {
+  pending
+  succeeded
+  failed
+  refused
+}
+
+enum CareerConfirmationState {
+  pending
+  approved
+  rejected
+  expired
+  consumed
+}
+
+enum CareerConfirmationPurpose {
+  submit_application
+}
+
+/// What the owner is looking for, and what they bring. One row per account.
+model CareerProfile {
+  id              String   @id @db.Uuid
+  userId          String   @unique @db.Uuid
+  headline        String   @db.VarChar(160)
+  summary         String   @db.VarChar(2000)
+  yearsExperience Int
+  highestDegree   String   @db.VarChar(16)
+  skills          String[]
+  /// Array of `{ code, level }`, validated by `languageSkillSchema`.
+  languages       Json
+  publications    Int      @default(0)
+  /// Validated by `careerPreferencesInputSchema` before every write.
+  preferences     Json
+  /// Incremented on every accepted write; stamped on each document variant.
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("career_profiles")
+}
+
+/// One position, deduplicated per owner.
+model CareerOpportunity {
+  id           String                @id @db.Uuid
+  userId       String                @db.Uuid
+  kind         CareerOpportunityKind
+  title        String                @db.VarChar(200)
+  organization String                @db.VarChar(160)
+  location     String                @db.VarChar(120)
+  remote       Boolean               @default(false)
+  description  String                @db.VarChar(8200)
+  requirements String[]
+  compensation Json?
+  postedAt     DateTime?             @db.Timestamptz(3)
+  closesAt     DateTime?             @db.Timestamptz(3)
+  externalRef  String?               @db.VarChar(128)
+  /// Tracking parameters and fragment removed. Second deduplication key.
+  canonicalUrl String?               @db.VarChar(2048)
+  /// SHA-256 of the normalised kind, title, organisation, location and
+  /// external reference. Primary deduplication key.
+  fingerprint  String                @db.Char(64)
+  /// Every observation, oldest first. A second sighting appends here.
+  provenance   Json
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @updatedAt @db.Timestamptz(3)
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications CareerApplication[]
+  contacts     CareerContact[]
+
+  /// Deduplication, enforced by the database rather than by a prior read.
+  /// Scoped by owner: the same posting found by two accounts is two rows.
+  @@unique([userId, fingerprint])
+  @@unique([userId, canonicalUrl])
+  @@index([userId, closesAt])
+  @@index([userId, kind, createdAt(sort: Desc)])
+  @@map("career_opportunities")
+}
+
+/// The owner's pursuit of one opportunity.
+model CareerApplication {
+  id             String                 @id @db.Uuid
+  userId         String                 @db.Uuid
+  opportunityId  String                 @db.Uuid
+  state          CareerApplicationState @default(discovered)
+  stateChangedAt DateTime               @default(now()) @db.Timestamptz(3)
+  /// Ranking frozen at shortlisting. A later profile edit must not rewrite
+  /// the reason a decision was made.
+  matchScore     Int?
+  notes          String                 @db.VarChar(2000)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity CareerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  documentVariants   CareerDocumentVariant[]
+  contacts           CareerContact[]
+  deadlines          CareerDeadline[]
+  interviews         CareerInterview[]
+  outcome            CareerOutcome?
+  followUps          CareerFollowUp[]
+  submissionAttempts CareerSubmissionAttempt[]
+  confirmations      CareerConfirmation[]
+  events             CareerApplicationEvent[]
+
+  /// At most one application per opportunity per owner: the structural
+  /// defence against applying twice to the same position.
+  @@unique([userId, opportunityId])
+  @@index([userId, state, updatedAt(sort: Desc)])
+  @@map("career_applications")
+}
+
+/// A tailored document, with its lineage.
+model CareerDocumentVariant {
+  id              String             @id @db.Uuid
+  userId          String             @db.Uuid
+  applicationId   String             @db.Uuid
+  kind            CareerDocumentKind
+  revision        Int
+  parentVariantId String?            @db.Uuid
+  /// Profile version the body was generated from; identifies a stale draft.
+  profileVersion  Int
+  contentHash     String             @db.Char(64)
+  body            String             @db.VarChar(40200)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  parent      CareerDocumentVariant?  @relation("CareerDocumentLineage", fields: [parentVariantId], references: [id], onDelete: SetNull)
+  revisions   CareerDocumentVariant[] @relation("CareerDocumentLineage")
+
+  @@unique([applicationId, kind, revision])
+  @@index([userId, applicationId])
+  @@map("career_document_variants")
+}
+
+/// A person at the other end. The only table holding a third party's address.
+model CareerContact {
+  id            String           @id @db.Uuid
+  userId        String           @db.Uuid
+  applicationId String?          @db.Uuid
+  opportunityId String?          @db.Uuid
+  displayName   String           @db.VarChar(120)
+  role          String           @db.VarChar(120)
+  organization  String           @db.VarChar(160)
+  /// Personal data. Never copied into an event, a notification or a log:
+  /// those surfaces receive `maskEmail` output or a one-way hash.
+  email         String?          @db.VarChar(254)
+  notes         String           @db.VarChar(2000)
+  source        CareerSourceKind @default(manual_entry)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  opportunity CareerOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, applicationId])
+  @@map("career_contacts")
+}
+
+/// A dated commitment, with the reminders already sent.
+model CareerDeadline {
+  id                     String              @id @db.Uuid
+  userId                 String              @db.Uuid
+  applicationId          String              @db.Uuid
+  kind                   CareerDeadlineKind
+  dueAt                  DateTime            @db.Timestamptz(3)
+  state                  CareerDeadlineState @default(pending)
+  label                  String              @db.VarChar(200)
+  reminderOffsetsMinutes Int[]
+  /// Append-only. A restart cannot re-notify an offset recorded here.
+  remindedOffsetsMinutes Int[]
+  createdAt              DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime            @updatedAt @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, state, dueAt])
+  @@index([applicationId])
+  @@map("career_deadlines")
+}
+
+model CareerInterview {
+  id              String               @id @db.Uuid
+  userId          String               @db.Uuid
+  applicationId   String               @db.Uuid
+  mode            CareerInterviewMode
+  stage           String               @db.VarChar(120)
+  scheduledAt     DateTime             @db.Timestamptz(3)
+  durationMinutes Int                  @default(60)
+  state           CareerInterviewState @default(scheduled)
+  notes           String               @db.VarChar(2000)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scheduledAt])
+  @@index([applicationId])
+  @@map("career_interviews")
+}
+
+/// How it ended. One row per application, written once.
+model CareerOutcome {
+  id            String              @id @db.Uuid
+  userId        String              @db.Uuid
+  applicationId String              @unique @db.Uuid
+  result        CareerOutcomeResult
+  decidedAt     DateTime            @db.Timestamptz(3)
+  notes         String              @db.VarChar(2000)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, decidedAt(sort: Desc)])
+  @@map("career_outcomes")
+}
+
+/// Text prepared for the owner to send. NEXUS never sends it.
+model CareerFollowUp {
+  id            String                @id @db.Uuid
+  userId        String                @db.Uuid
+  applicationId String                @db.Uuid
+  channel       CareerFollowUpChannel
+  dueAt         DateTime              @db.Timestamptz(3)
+  state         CareerFollowUpState   @default(planned)
+  draft         String                @db.VarChar(2200)
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, state, dueAt])
+  @@index([applicationId])
+  @@map("career_follow_ups")
+}
+
+/// One attempt to hand a payload to a submission adapter.
+model CareerSubmissionAttempt {
+  id             String                @id @db.Uuid
+  userId         String                @db.Uuid
+  applicationId  String                @db.Uuid
+  /// Derived from application, payload and approval. The unique index below is
+  /// what makes submission exactly-once: a retry after a crash reproduces this
+  /// key and collides with the row the crashed attempt already wrote.
+  idempotencyKey String                @db.Char(64)
+  confirmationId String                @db.Uuid
+  payloadHash    String                @db.Char(64)
+  adapter        String                @db.VarChar(64)
+  state          CareerSubmissionState @default(pending)
+  /// Opaque adapter receipt. Carries no address and no credential.
+  receipt        String?               @db.VarChar(200)
+  /// Already-redacted sentence, set only on failure.
+  failureReason  String?               @db.VarChar(400)
+  startedAt      DateTime              @default(now()) @db.Timestamptz(3)
+  finishedAt     DateTime?             @db.Timestamptz(3)
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application  CareerApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  confirmation CareerConfirmation @relation(fields: [confirmationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([applicationId, startedAt(sort: Desc)])
+  @@map("career_submission_attempts")
+}
+
+/// A human decision, stored so it survives a restart.
+model CareerConfirmation {
+  id            String                    @id @db.Uuid
+  userId        String                    @db.Uuid
+  applicationId String                    @db.Uuid
+  purpose       CareerConfirmationPurpose
+  /// Binds the decision to exactly what was approved. Edit a document and the
+  /// hash changes, so the approval no longer authorises anything.
+  payloadHash   String                    @db.Char(64)
+  state         CareerConfirmationState   @default(pending)
+  summary       String                    @db.VarChar(400)
+  requestedAt   DateTime                  @default(now()) @db.Timestamptz(3)
+  expiresAt     DateTime                  @db.Timestamptz(3)
+  decidedAt     DateTime?                 @db.Timestamptz(3)
+  consumedAt    DateTime?                 @db.Timestamptz(3)
+
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  attempts    CareerSubmissionAttempt[]
+
+  /// Re-requesting approval for an unchanged payload is idempotent: it finds
+  /// the row it already created instead of queueing a second question.
+  @@unique([userId, applicationId, purpose, payloadHash])
+  @@index([userId, state, expiresAt])
+  @@map("career_confirmations")
+}
+
+/// Immutable history. Append-only: the store exposes no update and no delete.
+model CareerApplicationEvent {
+  id            String                  @id @db.Uuid
+  userId        String                  @db.Uuid
+  applicationId String                  @db.Uuid
+  /// Unique per application, so a gap or a repeat is detectable.
+  sequence      Int
+  kind          String                  @db.VarChar(64)
+  fromState     CareerApplicationState?
+  toState       CareerApplicationState?
+  summary       String                  @db.VarChar(400)
+  /// Redacted by `redactForAudit` before the write: named personal fields
+  /// dropped, secret-shaped values masked, every string bounded.
+  context       Json
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application CareerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, sequence])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("career_application_events")
 }
