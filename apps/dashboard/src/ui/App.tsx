@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SessionManager } from "@nexus/client-core";
 import { DashboardApi, createSession } from "../lib/api.js";
+import { careerEducationClient } from "../lib/career-education.js";
 import { Agents } from "./Agents.js";
+import { CareerEducation } from "./CareerEducation/index.js";
 import { Connections } from "./Connections.js";
 import { NexusChat } from "./NexusChat.js";
 import { SetupWizard } from "./SetupWizard.js";
@@ -73,10 +75,21 @@ const SUPERVISION_SECTIONS = [
 ] as const;
 
 type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
-type SectionId = SupervisionId | "chat" | "agents" | "connections" | "settings" | "setup";
+type SectionId =
+  | SupervisionId
+  | "chat"
+  | "career-education"
+  | "agents"
+  | "connections"
+  | "settings"
+  | "setup";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
+  "career-education": {
+    title: "Career & Education",
+    description: "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
+  },
   setup: { title: "Setup wizard", description: "Guided installation and onboarding assistant." },
   agents: {
     title: "Agents",
@@ -224,6 +237,13 @@ export function App() {
           <div className="nav-group nav-primary">
             <NavItem id="chat" label="Chat" icon="chat" current={section} onSelect={navigate} />
             <NavItem
+              id="career-education"
+              label="Career & Edu"
+              icon="career"
+              current={section}
+              onSelect={navigate}
+            />
+            <NavItem
               id="agents"
               label="Agents"
               icon="agents"
@@ -340,6 +360,8 @@ function renderSection(
       );
     case "chat":
       return <NexusChat api={api} />;
+    case "career-education":
+      return <CareerEducation client={careerEducationClient} />;
     case "agents":
       return <Agents api={api} />;
     case "connections":
@@ -416,6 +438,7 @@ function NavItem({
 function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     chat: "M4 5h16v11H8l-4 4V5Z",
+    career: "M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
     setup:

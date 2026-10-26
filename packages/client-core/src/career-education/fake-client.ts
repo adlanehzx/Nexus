@@ -1239,7 +1239,9 @@ export class FakeCareerEducationClient implements CareerEducationClient {
               return [o.id, `€${o.phdDetails.monthlyStipend}/mo (${o.phdDetails.fundingType})`];
             }
             if (o.cdiDetails?.salaryMin) {
-              return [o.id, `€${o.cdiDetails.salaryMin}k - €${o.cdiDetails.salaryMax}k CDI`];
+              const minK = Math.round(o.cdiDetails.salaryMin / 1000);
+              const maxK = Math.round((o.cdiDetails.salaryMax ?? o.cdiDetails.salaryMin) / 1000);
+              return [o.id, `€${minK}k - €${maxK}k CDI`];
             }
             if (o.freelanceDetails?.dailyRateMin) {
               return [o.id, `€${o.freelanceDetails.dailyRateMin} - €${o.freelanceDetails.dailyRateMax}/day TJM`];
