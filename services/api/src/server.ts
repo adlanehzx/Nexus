@@ -60,6 +60,7 @@ import { PrismaScheduleGrantRegistry } from "./services/persistence/prisma-sched
 import { PrismaNotificationStore } from "./services/persistence/prisma-notification-store.js";
 import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
+import { PrismaCareerStore } from "./services/persistence/prisma-career-store.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
@@ -172,6 +173,7 @@ const services = new ServiceContainer({
   scheduleGrantRegistry: new PrismaScheduleGrantRegistry(prisma),
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
+  careerStore: new PrismaCareerStore(prisma),
   telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
   embeddings,
   observabilityDirectory:

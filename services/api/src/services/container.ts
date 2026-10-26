@@ -89,6 +89,10 @@ import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 import { LocalConnectionManager, type ConnectionCatalogService } from "./connection-manager.js";
 import { TenantPlatformService, TenantRealtimeHub } from "./tenant-platform.js";
 import { TailscaleDiscoveryService } from "./tailscale-discovery.js";
+import { CareerService } from "./career/career-service.js";
+import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
+import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
+import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 
 /**
  * Assembly of API services.
@@ -217,6 +221,9 @@ export interface ServiceContainerOptions {
   connectionManager?: ConnectionCatalogService;
   /** Read-only Tailscale inventory. Injectable so tests never execute host commands. */
   tailscale?: TailscaleDiscoveryService;
+  careerStore?: CareerStore;
+  careerService?: CareerService;
+  careerAdapter?: SubmissionAdapter;
 }
 
 export class ServiceContainer {
@@ -252,6 +259,8 @@ export class ServiceContainer {
   readonly confirmationBroker: ConfirmationBroker;
   readonly notifications: NotificationService;
   readonly supervisor: TaskSupervisor;
+  readonly careerStore: CareerStore;
+  readonly career: CareerService;
 
   // ── Observability ─────────────────────────────────────────────────────
   //
@@ -588,6 +597,23 @@ export class ServiceContainer {
     this.vault = options.vault;
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
+
+    this.careerStore =
+      options.careerStore ??
+      (options.prisma === undefined
+        ? new InMemoryCareerStore()
+        : new PrismaCareerStore(options.prisma));
+
+    this.career =
+      options.careerService ??
+      new CareerService({
+        store: this.careerStore,
+        adapter: options.careerAdapter ?? new RecordingSubmissionAdapter(),
+        notifications: this.notifications,
+        securityLog: this.securityLog,
+        now,
+        ...(options.publicApiUrl !== undefined ? { dashboardBaseUrl: options.publicApiUrl } : {}),
+      });
 
     this.dashboard = new DashboardService({
       services: this,
