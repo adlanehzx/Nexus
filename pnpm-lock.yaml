@@ -792,6 +792,9 @@ importers:
       '@nexus/browser-client':
         specifier: workspace:*
         version: link:../../packages/browser-client
+      '@nexus/career':
+        specifier: workspace:*
+        version: link:../../packages/career
       '@nexus/config':
         specifier: workspace:*
         version: link:../../packages/config

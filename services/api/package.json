@@ -28,6 +28,7 @@
     "@nexus/agent-core": "workspace:*",
     "@nexus/auth": "workspace:*",
     "@nexus/browser-client": "workspace:*",
+    "@nexus/career": "workspace:*",
     "@nexus/config": "workspace:*",
     "@nexus/connections": "workspace:*",
     "@nexus/database": "workspace:*",

@@ -190,7 +190,15 @@ export type SecurityEventKind =
   | "confirmation.requested"
   | "confirmation.answered"
   | "memory.refused"
-  | "memory.consent_required";
+  | "memory.consent_required"
+  /** A submission was refused because the application was not approved. */
+  | "career.submission_refused"
+  /** A submission was attempted with no durable approval at all. */
+  | "career.submission_unapproved"
+  /** A submission was attempted for a payload the approval does not cover. */
+  | "career.submission_payload_changed"
+  /** The generic transition endpoint was used to reach a guarded state. */
+  | "career.transition_guarded";
 
 export interface SecurityEvent {
   at: string;
