@@ -1,26 +1,26 @@
 @import "./career-education.css";
 
 :root {
-  --background: #0d0f12;
-  --elevated-background: #111318;
-  --surface: #16191f;
-  --surface-2: #1d2027;
-  --surface-3: #242832;
-  --border: #282c34;
-  --light-border: #363b46;
-  --text: #f4f5f7;
-  --muted-text: #9298a3;
-  --accent: #8b93ff;
-  --bright-accent: #a4aaff;
-  --soft-accent: rgb(139 147 255 / 11%);
+  --background: #090b10;
+  --elevated-background: #0d1118;
+  --surface: #111722;
+  --surface-2: #161e2b;
+  --surface-3: #1b2636;
+  --border: rgb(147 169 201 / 13%);
+  --light-border: rgb(156 178 211 / 22%);
+  --text: #f5f7fb;
+  --muted-text: #8d99aa;
+  --accent: #83a8ff;
+  --bright-accent: #a9c1ff;
+  --soft-accent: rgb(104 145 255 / 12%);
   --ok: #5fd39a;
   --gradient: #e9ad5b;
   --down: #f27676;
   --unknown: #747b88;
-  --radius: 8px;
-  --large-radius: 12px;
-  --bar: 240px;
-  --shadow: 0 16px 40px rgb(0 0 0 / 22%);
+  --radius: 10px;
+  --large-radius: 16px;
+  --bar: 256px;
+  --shadow: 0 18px 60px rgb(0 0 0 / 30%);
   color-scheme: dark;
 }
 
@@ -34,7 +34,8 @@ body,
   margin: 0;
 }
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at 78% -10%, rgb(72 101 167 / 13%), transparent 34rem), var(--background);
   color: var(--text);
   font:
     13px/1.5 Inter,
@@ -92,9 +93,9 @@ button:disabled {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 16px 10px 12px;
+  padding: 20px 12px 14px;
   overflow-y: auto;
-  background: #111318;
+  background: linear-gradient(180deg, rgb(15 20 29 / 98%), rgb(10 13 19 / 98%));
   border-right: 1px solid var(--border);
 }
 .nexus-home {
@@ -132,7 +133,7 @@ button:disabled {
   place-items: center;
   border: 1px solid var(--light-border);
   border-radius: 9px;
-  background: var(--surface-2);
+  background: linear-gradient(145deg, #202c42, #131a27);
   color: var(--bright-accent);
   font-weight: 800;
 }
@@ -179,8 +180,8 @@ button:disabled {
   color: var(--text);
 }
 .nav-item[aria-current="page"] {
-  border-color: var(--border);
-  background: var(--surface-2);
+  border-color: rgb(126 164 255 / 20%);
+  background: linear-gradient(90deg, rgb(91 128 218 / 16%), rgb(91 128 218 / 5%));
   color: var(--text);
 }
 .nav-item[aria-current="page"] .nav-icon {
@@ -229,7 +230,8 @@ button:disabled {
   gap: 24px;
   padding: 15px clamp(18px, 3vw, 36px);
   border-bottom: 1px solid var(--border);
-  background: var(--background);
+  background: rgb(9 11 16 / 82%);
+  backdrop-filter: blur(18px);
 }
 .header h1 {
   margin: 2px 0 0;
@@ -253,6 +255,193 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   padding: 24px clamp(18px, 3vw, 32px) 48px;
+}
+
+/* Domain workspaces share a calm, evidence-first visual language. */
+.domain-workspace {
+  display: grid;
+  gap: 18px;
+  padding: 24px clamp(18px, 3vw, 36px) 56px;
+}
+.domain-hero {
+  position: relative;
+  display: flex;
+  min-height: 190px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding: clamp(24px, 4vw, 42px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: linear-gradient(135deg, #121c2b 0%, #111722 52%, #10151e 100%);
+  box-shadow: var(--shadow);
+}
+.domain-hero::after {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border: 1px solid rgb(111 218 193 / 12%);
+  border-radius: 50%;
+  content: "";
+  inset: -105px -65px auto auto;
+  box-shadow: 0 0 80px rgb(75 207 177 / 8%);
+}
+.domain-hero h2 {
+  max-width: 720px;
+  margin: 10px 0 8px;
+  font-size: clamp(26px, 4vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+.domain-hero p {
+  max-width: 680px;
+  margin: 0;
+  color: #aab6c8;
+  font-size: 14px;
+}
+.domain-kicker {
+  color: #70dbc1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+.domain-hero-stat {
+  display: grid;
+  min-width: 150px;
+  gap: 3px;
+  padding: 15px 18px;
+  border: 1px solid rgb(112 219 193 / 18%);
+  border-radius: 14px;
+  background: rgb(8 20 21 / 52%);
+}
+.domain-hero-stat strong {
+  color: #8ce7d0;
+}
+.domain-hero-stat span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.osint-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.78fr) minmax(420px, 1.22fr);
+  gap: 18px;
+}
+.domain-panel {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--large-radius);
+  background: linear-gradient(180deg, rgb(18 24 35 / 94%), rgb(14 19 28 / 94%));
+}
+.section-heading h3,
+.domain-panel h3 {
+  margin: 5px 0 14px;
+  font-size: 16px;
+}
+.template-grid {
+  display: grid;
+  gap: 9px;
+}
+.template-card {
+  display: grid;
+  grid-template-columns: 5px 1fr;
+  gap: 3px 13px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 1.5%);
+  color: var(--text);
+  text-align: left;
+}
+.template-card:hover {
+  border-color: var(--light-border);
+  background: rgb(255 255 255 / 3%);
+}
+.template-card.active {
+  border-color: rgb(105 220 193 / 35%);
+  background: rgb(76 199 170 / 8%);
+}
+.template-marker {
+  grid-row: 1 / 3;
+  width: 4px;
+  border-radius: 4px;
+  background: #3a4657;
+}
+.template-card.active .template-marker {
+  background: #70dbc1;
+  box-shadow: 0 0 12px rgb(112 219 193 / 50%);
+}
+.template-card small {
+  color: var(--muted-text);
+  line-height: 1.45;
+}
+.consent-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  color: #b5c0cf;
+  font-size: 12px;
+}
+.consent-row input {
+  accent-color: #70dbc1;
+}
+.domain-cta {
+  min-width: 190px;
+  background: linear-gradient(135deg, #557ce3, #4465c2);
+}
+.evidence-contract {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+.evidence-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.evidence-grid span {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #aab6c8;
+  font-size: 11px;
+}
+.mission-launched {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mission-launched p {
+  margin: 4px 0 0;
+}
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 12px rgb(95 211 154 / 60%);
+}
+
+@media (max-width: 900px) {
+  .osint-layout {
+    grid-template-columns: 1fr;
+  }
+  .domain-hero,
+  .evidence-contract,
+  .mission-launched {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .domain-hero-stat {
+    min-width: 0;
+  }
+  .evidence-grid {
+    justify-content: flex-start;
+  }
 }
 .logout-button {
   flex: none;

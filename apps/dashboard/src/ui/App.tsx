@@ -6,6 +6,7 @@ import { Agents } from "./Agents.js";
 import { CareerEducation } from "./CareerEducation/index.js";
 import { Connections } from "./Connections.js";
 import { NexusChat } from "./NexusChat.js";
+import { OsintWorkspace } from "./OsintWorkspace.js";
 import { SetupWizard } from "./SetupWizard.js";
 import {
   Browser,
@@ -76,7 +77,14 @@ const SUPERVISION_SECTIONS = [
 
 type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
 type SectionId =
-  SupervisionId | "chat" | "career-education" | "agents" | "connections" | "settings" | "setup";
+  | SupervisionId
+  | "chat"
+  | "career-education"
+  | "osint"
+  | "agents"
+  | "connections"
+  | "settings"
+  | "setup";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
@@ -84,6 +92,10 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     title: "Career & Education",
     description:
       "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
+  },
+  osint: {
+    title: "OSINT Workspace",
+    description: "Evidence-led investigations across lawfully accessible public sources.",
   },
   setup: { title: "Setup wizard", description: "Guided installation and onboarding assistant." },
   agents: {
@@ -232,13 +244,6 @@ export function App() {
           <div className="nav-group nav-primary">
             <NavItem id="chat" label="Chat" icon="chat" current={section} onSelect={navigate} />
             <NavItem
-              id="career-education"
-              label="Career & Edu"
-              icon="career"
-              current={section}
-              onSelect={navigate}
-            />
-            <NavItem
               id="agents"
               label="Agents"
               icon="agents"
@@ -252,6 +257,27 @@ export function App() {
               current={section}
               onSelect={navigate}
             />
+          </div>
+          <div className="nav-group nav-domains">
+            <div className="nav-label">Workspaces</div>
+            <NavItem
+              id="career-education"
+              label="Career"
+              icon="career"
+              current={section}
+              onSelect={navigate}
+            />
+            <NavItem
+              id="mission-control"
+              label="Trading Lab"
+              icon="trading"
+              current={section}
+              onSelect={navigate}
+            />
+            <NavItem id="osint" label="OSINT" icon="osint" current={section} onSelect={navigate} />
+          </div>
+          <div className="nav-group nav-account">
+            <div className="nav-label">System</div>
             <NavItem
               id="settings"
               label="Settings"
@@ -296,7 +322,10 @@ export function App() {
         <header className="header">
           <div>
             <div className="eyebrow">
-              NEXUS / {section === "chat" ? "WORKSPACE" : "SUPERVISION"}
+              NEXUS /{" "}
+              {section === "chat" || section === "career-education" || section === "osint"
+                ? "WORKSPACE"
+                : "SUPERVISION"}
             </div>
             <h1>{meta.title}</h1>
             <p>{meta.description}</p>
@@ -357,6 +386,8 @@ function renderSection(
       return <NexusChat api={api} />;
     case "career-education":
       return <CareerEducation client={careerEducationClient} />;
+    case "osint":
+      return <OsintWorkspace api={api} onOpenMissions={() => navigate("mission-control")} />;
     case "agents":
       return <Agents api={api} />;
     case "connections":
@@ -434,6 +465,8 @@ function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     chat: "M4 5h16v11H8l-4 4V5Z",
     career: "M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5",
+    trading: "M4 18 9 13l3 3 7-9m-5 0h5v5",
+    osint: "M11 4a7 7 0 1 0 5 12l4 4m-9-12v6m-3-3h6",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
     setup:
