@@ -51,6 +51,7 @@ These describe what exists, with the gaps named rather than hidden.
 | 28  | [Enhanced inter-agent collaboration](architecture/28-enhanced-agent-collaboration.md)  |
 | 29  | [MCP container isolation and SBOM](architecture/29-mcp-container-isolation-sbom.md)    |
 | 30  | [Google Workspace integration](architecture/30-google-workspace-integration.md)        |
+| 32  | [Official LinkedIn integration](architecture/32-linkedin-official-integration.md)      |
 | 31  | [Advanced document processing](architecture/31-advanced-document-processing-memory.md) |
 | 32  | [Local Activepieces automation](architecture/32-activepieces-local-saas-bridge.md)     |
 | 33  | [Unified external notifications](architecture/33-external-notifications.md)            |

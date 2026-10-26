@@ -26,6 +26,8 @@ export const PERMISSIONS = {
   githubWrite: "github.write",
   memoryRead: "memory.read",
   memoryWrite: "memory.write",
+  linkedInProfileRead: "linkedin.profile.read",
+  linkedInSocialWrite: "linkedin.social.write",
 } as const satisfies Record<string, Permission>;
 
 export type KnownPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

@@ -93,6 +93,7 @@ import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
 import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
+import type { LinkedInIntegrationService } from "./linkedin-integration.js";
 
 /**
  * Assembly of API services.
@@ -224,6 +225,7 @@ export interface ServiceContainerOptions {
   careerStore?: CareerStore;
   careerService?: CareerService;
   careerAdapter?: SubmissionAdapter;
+  linkedin?: LinkedInIntegrationService;
 }
 
 export class ServiceContainer {
@@ -294,6 +296,7 @@ export class ServiceContainer {
   readonly sharedArtifacts: SharedArtifactStore;
   readonly agentCollaboration: AgentCollaborationService;
   readonly vault: KeyringVault | undefined;
+  readonly linkedin: LinkedInIntegrationService | undefined;
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
@@ -595,6 +598,7 @@ export class ServiceContainer {
     this.sharedArtifacts = new SharedArtifactStore();
     this.agentCollaboration = new AgentCollaborationService();
     this.vault = options.vault;
+    this.linkedin = options.linkedin;
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
 

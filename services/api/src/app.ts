@@ -48,6 +48,7 @@ import { agentCoreRoutes } from "./routes/v1/agent-core.js";
 import { connectionRoutes } from "./routes/v1/connections.js";
 import { organizationRoutes } from "./routes/v1/organizations.js";
 import { careerRoutes } from "./routes/v1/career.js";
+import { linkedInRoutes } from "./routes/v1/linkedin.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
 declare module "fastify" {
@@ -274,6 +275,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(connectionRoutes);
       await v1.register(organizationRoutes);
       await v1.register(careerRoutes);
+      await v1.register(linkedInRoutes);
     },
     { prefix: "/api/v1" },
   );

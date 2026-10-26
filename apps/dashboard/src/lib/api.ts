@@ -817,6 +817,12 @@ export interface VisualControlStatusDto {
   safetyBoundaryEnforced: boolean;
 }
 
+export interface LinkedInStatus {
+  configured: boolean;
+  connected: boolean;
+  tools: string[];
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -960,6 +966,23 @@ export class DashboardApi {
 
   removeSecret(name: string): Promise<unknown> {
     return this.#request("DELETE", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`);
+  }
+
+  linkedInStatus(): Promise<LinkedInStatus> {
+    return this.#get("/api/v1/linkedin/status");
+  }
+
+  startLinkedInOAuth(input: {
+    clientId: string;
+    clientSecretRef: string;
+    tokenRef: string;
+    redirectUri: string;
+  }): Promise<{ authorizationUrl: string }> {
+    return this.#request("POST", "/api/v1/linkedin/oauth/start", input);
+  }
+
+  disconnectLinkedIn(): Promise<LinkedInStatus> {
+    return this.#request("POST", "/api/v1/linkedin/disconnect");
   }
 
   missionControl(): Promise<MissionControlSection> {

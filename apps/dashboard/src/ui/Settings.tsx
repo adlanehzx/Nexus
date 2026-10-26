@@ -10,6 +10,7 @@ import { Section, useSection } from "./parts.js";
 export function Settings({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.runtimeSettings());
   const secrets = useSection(() => api.secrets());
+  const linkedin = useSection(() => api.linkedInStatus());
 
   return (
     <div className="content settings-page">
@@ -28,6 +29,9 @@ export function Settings({ api }: { api: DashboardApi }) {
       <Section state={secrets}>
         {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
       </Section>
+      <Section state={linkedin}>
+        {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
+      </Section>
       <BackupRestorePanel
         api={api}
         onReloadAll={() => {
@@ -36,6 +40,115 @@ export function Settings({ api }: { api: DashboardApi }) {
         }}
       />
     </div>
+  );
+}
+
+function LinkedInForm({
+  api,
+  status,
+  reload,
+}: {
+  api: DashboardApi;
+  status: { configured: boolean; connected: boolean; tools: string[] };
+  reload: () => void;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const redirectUri = `${window.location.origin}/api/v1/linkedin/oauth/callback`;
+
+  return (
+    <section className="settings-panel">
+      <h3>LinkedIn · Official API</h3>
+      <p className="muted">
+        Connect through LinkedIn OAuth. NEXUS can publish and comment only after your explicit
+        confirmation. It never scrapes or automates the LinkedIn interface.
+      </p>
+      <p className={status.connected ? "banner success" : "banner"}>
+        {status.connected
+          ? `Connected · ${status.tools.length} official tools active`
+          : status.configured
+            ? "Configured, authorization required"
+            : "Not configured"}
+      </p>
+      {!status.connected ? (
+        <>
+          <div className="settings-grid">
+            <label>
+              LinkedIn application Client ID
+              <input
+                className="field mono"
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+              />
+            </label>
+            <label>
+              LinkedIn application Client Secret
+              <input
+                className="field mono"
+                type="password"
+                autoComplete="new-password"
+                value={clientSecret}
+                onChange={(event) => setClientSecret(event.target.value)}
+              />
+            </label>
+            <label className="settings-wide">
+              Authorized redirect URL
+              <input className="field mono" readOnly value={redirectUri} />
+            </label>
+          </div>
+          <div className="settings-actions">
+            <button
+              className="button primary"
+              type="button"
+              disabled={busy || clientId.trim() === "" || clientSecret.length < 4}
+              onClick={() => {
+                setBusy(true);
+                setError(null);
+                void api
+                  .saveSecret("linkedin-client-secret", clientSecret)
+                  .then(() =>
+                    api.startLinkedInOAuth({
+                      clientId: clientId.trim(),
+                      clientSecretRef: "vault://nexus/linkedin-client-secret",
+                      tokenRef: "vault://nexus/linkedin-token",
+                      redirectUri,
+                    }),
+                  )
+                  .then(({ authorizationUrl }) => {
+                    window.location.assign(authorizationUrl);
+                  })
+                  .catch((cause: unknown) => {
+                    setBusy(false);
+                    setError(
+                      cause instanceof Error ? cause.message : "LinkedIn connection failed.",
+                    );
+                  });
+              }}
+            >
+              {busy ? "Opening LinkedIn…" : "Connect LinkedIn"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          className="button danger"
+          type="button"
+          onClick={() =>
+            void api
+              .disconnectLinkedIn()
+              .then(reload)
+              .catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Disconnect failed."),
+              )
+          }
+        >
+          Disconnect LinkedIn
+        </button>
+      )}
+      {error === null ? null : <p className="banner error">{error}</p>}
+    </section>
   );
 }
 

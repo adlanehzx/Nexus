@@ -54,6 +54,23 @@ const persistedBrowserConfigSchema = z.union([
 
 export type BrowserRuntimeConfig = z.infer<typeof browserConfigSchema>;
 
+export const linkedInRuntimeConfigSchema = z.object({
+  clientId: z.string().min(1).max(256),
+  clientSecretRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
+  tokenRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
+  redirectUri: z
+    .string()
+    .url()
+    .refine(
+      (value) =>
+        new URL(value).protocol === "https:" ||
+        ["localhost", "127.0.0.1", "::1"].includes(new URL(value).hostname),
+      "OAuth redirect must use HTTPS or loopback",
+    ),
+});
+
+export type LinkedInRuntimeConfig = z.infer<typeof linkedInRuntimeConfigSchema>;
+
 export class RuntimeConfigurationStore {
   readonly #directory: string;
 
@@ -86,6 +103,15 @@ export class RuntimeConfigurationStore {
 
   async saveNotifications(config: NotificationsConfig): Promise<void> {
     await this.#write("notifications.json", notificationsConfigSchema.parse(config));
+  }
+
+  async loadLinkedIn(): Promise<LinkedInRuntimeConfig | null> {
+    const raw = await this.#read("linkedin.json", null);
+    return raw === null ? null : linkedInRuntimeConfigSchema.parse(raw);
+  }
+
+  async saveLinkedIn(config: LinkedInRuntimeConfig): Promise<void> {
+    await this.#write("linkedin.json", linkedInRuntimeConfigSchema.parse(config));
   }
 
   async loadProviderAccounts(): Promise<ProviderAccount[] | null> {

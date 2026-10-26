@@ -16,6 +16,7 @@ import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-conf
 import { TailscaleDiscoveryService } from "./services/tailscale-discovery.js";
 import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
+import { LinkedInIntegrationService } from "./services/linkedin-integration.js";
 
 /**
  * API service entrypoint.
@@ -72,6 +73,12 @@ const runtimeConfiguration = new RuntimeConfigurationStore(
 );
 const vault = new KeyringVault(runtimeConfiguration);
 const toolRegistry = new ToolRegistry();
+const linkedin = new LinkedInIntegrationService({
+  runtime: runtimeConfiguration,
+  vault,
+  registry: toolRegistry,
+});
+await linkedin.initialize();
 if (config.SEARXNG_URL !== undefined) {
   const webSearch = new SearxngClient({
     baseUrl: config.SEARXNG_URL,
@@ -158,6 +165,7 @@ const embeddings =
     : new LocalHashEmbeddingProvider();
 
 const services = new ServiceContainer({
+  linkedin,
   prisma,
   users: new PrismaUserStore(prisma),
   sessions: new PrismaSessionStore(prisma),
