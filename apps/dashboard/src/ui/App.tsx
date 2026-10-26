@@ -76,19 +76,14 @@ const SUPERVISION_SECTIONS = [
 
 type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
 type SectionId =
-  | SupervisionId
-  | "chat"
-  | "career-education"
-  | "agents"
-  | "connections"
-  | "settings"
-  | "setup";
+  SupervisionId | "chat" | "career-education" | "agents" | "connections" | "settings" | "setup";
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
   "career-education": {
     title: "Career & Education",
-    description: "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
+    description:
+      "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
   },
   setup: { title: "Setup wizard", description: "Guided installation and onboarding assistant." },
   agents: {
