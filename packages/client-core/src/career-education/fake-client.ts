@@ -63,7 +63,7 @@ const DEFAULT_PROFILE: CareerEducationProfile = {
   education: [
     {
       degree: "Master of Science in Computer Science",
-      institution: "Sorbonne Université",
+      institution: "Sorbonne University",
       fieldOfStudy: "Distributed Computing & Algorithms",
       graduationYear: 2018,
       thesisTitle: "Optimizing Byzantine Fault Tolerant Consensus under Asynchronous Networks",
@@ -85,7 +85,7 @@ const DEFAULT_PROFILE: CareerEducationProfile = {
       "Automated Theorem Proving for Storage Engines",
     ],
     preferredSupervisors: ["Dr. H. Vance (Inria)", "Prof. M. Laurent (Sorbonne)"],
-    targetInstitutionsOrLabs: ["Inria Paris", "Sorbonne Université - LIP6", "CNRS"],
+    targetInstitutionsOrLabs: ["Inria Paris", "Sorbonne University - LIP6", "CNRS"],
     fundingModels: ["cifre", "anr", "erc", "doctoral_school"],
     minMonthlyStipend: 2400,
     currency: "EUR",
@@ -151,7 +151,7 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
     id: "opp_phd_sorbonne_01",
     track: "phd",
     title: "PhD in Formal Verification of Distributed Consensus Protocols",
-    organization: "Sorbonne Université / Inria Paris",
+    organization: "Sorbonne University / Inria Paris",
     departmentOrLab: "LIP6 - Formal Methods and Distributed Systems Group",
     location: "Paris, France",
     remotePolicy: "hybrid",
@@ -644,13 +644,13 @@ const SEED_DOCUMENTS: DocumentVariant[] = [
     type: "cv",
     title: "Curriculum Vitae (Doctoral Research Edition)",
     targetRole: "PhD Researcher in Formal Verification",
-    targetOrganization: "Sorbonne Université / Inria Paris",
+    targetOrganization: "Sorbonne University / Inria Paris",
     markdownContent: `# Alex Rivera
 **Research Specialization**: Formal Verification of Distributed Consensus Protocols  
 *Email*: alex.rivera@example.org | *Location*: Paris, France
 
 ## Academic Background
-- **MSc Computer Science**, Sorbonne Université (2018)
+- **MSc Computer Science**, Sorbonne University (2018)
   - Thesis: *Optimizing Byzantine Fault Tolerant Consensus under Asynchronous Networks*
   - Co-advised with LIP6 Distributed Algorithms Group
 
@@ -684,7 +684,7 @@ const SEED_DOCUMENTS: DocumentVariant[] = [
     type: "research_statement",
     title: "Research Statement & Doctoral Proposal Outline",
     targetRole: "PhD Researcher in Formal Verification",
-    targetOrganization: "Sorbonne Université / Inria Paris",
+    targetOrganization: "Sorbonne University / Inria Paris",
     markdownContent: `# Research Proposal Statement
 **Applicant**: Alex Rivera  
 **Prospective Advisors**: Dr. H. Vance, Prof. M. Laurent  
@@ -826,7 +826,7 @@ const SEED_DEADLINES: Deadline[] = [
     id: "deadline_phd_sorbonne",
     opportunityId: "opp_phd_sorbonne_01",
     opportunityTitle: "PhD in Formal Verification of Distributed Consensus Protocols",
-    organization: "Sorbonne Université / Inria Paris",
+    organization: "Sorbonne University / Inria Paris",
     title: "CIFRE Doctoral Application File Cutoff",
     dueDate: new Date(Date.now() + 5 * 86400000).toISOString(),
     category: "application_deadline",
