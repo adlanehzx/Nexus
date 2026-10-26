@@ -16,8 +16,9 @@
 --     the payload and the approval. A retry after a crash reproduces the key
 --     and is refused by the index.
 --   * **One live approval.** A partial unique index allows at most one pending
---     confirmation per (userId, applicationId, purpose), so a second question
---     cannot be queued behind the first and answered by accident.
+--     or approved-unspent confirmation per (userId, applicationId, purpose), so
+--     a stale question cannot be answered later and two approvals of the same
+--     documents cannot each authorise a submission.
 --
 -- Owner isolation is structural: every table carries `userId` with a foreign
 -- key to `users` and `ON DELETE CASCADE`. Deleting an account removes the whole
@@ -66,7 +67,7 @@ CREATE TYPE "CareerFollowUpState" AS ENUM ('planned', 'drafted', 'done', 'cancel
 CREATE TYPE "CareerSubmissionState" AS ENUM ('pending', 'succeeded', 'failed', 'refused');
 
 -- CreateEnum
-CREATE TYPE "CareerConfirmationState" AS ENUM ('pending', 'approved', 'rejected', 'expired', 'consumed');
+CREATE TYPE "CareerConfirmationState" AS ENUM ('pending', 'approved', 'rejected', 'expired', 'cancelled', 'consumed');
 
 -- CreateEnum
 CREATE TYPE "CareerConfirmationPurpose" AS ENUM ('submit_application');
@@ -343,7 +344,7 @@ CREATE UNIQUE INDEX "career_submission_attempts_userId_idempotencyKey_key" ON "c
 CREATE INDEX "career_confirmations_userId_state_expiresAt_idx" ON "career_confirmations"("userId", "state", "expiresAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "career_confirmations_userId_applicationId_purpose_payloadHa_key" ON "career_confirmations"("userId", "applicationId", "purpose", "payloadHash");
+CREATE INDEX "career_confirmations_userId_applicationId_purpose_payloadHa_idx" ON "career_confirmations"("userId", "applicationId", "purpose", "payloadHash");
 
 -- CreateIndex
 CREATE INDEX "career_application_events_userId_createdAt_idx" ON "career_application_events"("userId", "createdAt" DESC);
@@ -448,12 +449,24 @@ ADD CONSTRAINT "career_confirmations_decision_consistency" CHECK (
 ALTER TABLE "career_confirmations"
 ADD CONSTRAINT "career_confirmations_expiry_after_request" CHECK ("expiresAt" > "requestedAt");
 
--- At most one pending approval per application and purpose. Without this, two
--- payload revisions could each hold a live question, and answering the older
--- one would authorise a payload the owner has already moved past.
-CREATE UNIQUE INDEX "career_confirmations_one_pending_per_purpose"
+-- At most one **live** approval per application and purpose, where live means
+-- pending or approved-but-not-yet-spent.
+--
+-- This is the index that makes the approval binding rather than advisory, and
+-- it is partial for a reason. Two payload revisions each holding a live
+-- question would let the owner answer the older one and authorise a payload
+-- they had already moved past. Two *approved* unspent rows would be worse: each
+-- produces a different idempotency key, so the same documents could be
+-- submitted twice, which is precisely the outcome the whole mechanism exists to
+-- prevent.
+--
+-- Decided rows are deliberately left unconstrained: a decision is history, and
+-- an application whose attempt failed must be able to hold a fresh approval for
+-- the same documents — with a human asked again, because a failed attempt
+-- leaves it genuinely unknown whether the submission landed.
+CREATE UNIQUE INDEX "career_confirmations_one_live_per_purpose"
 ON "career_confirmations"("userId", "applicationId", "purpose")
-WHERE "state" = 'pending';
+WHERE "state" IN ('pending', 'approved');
 
 -- A pending attempt has neither an end nor a receipt; a successful one has
 -- both; a failed or refused one has ended and carries no receipt.

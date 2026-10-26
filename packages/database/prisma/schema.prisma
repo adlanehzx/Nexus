@@ -877,6 +877,7 @@ enum CareerConfirmationState {
   approved
   rejected
   expired
+  cancelled
   consumed
 }
 
@@ -1160,9 +1161,12 @@ model CareerConfirmation {
   application CareerApplication         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   attempts    CareerSubmissionAttempt[]
 
-  /// Re-requesting approval for an unchanged payload is idempotent: it finds
-  /// the row it already created instead of queueing a second question.
-  @@unique([userId, applicationId, purpose, payloadHash])
+  /// Lookup path for "is there a live approval for exactly this payload".
+  /// Deliberately **not** unique: a decision is history, and an application
+  /// whose first attempt failed must be able to hold a second approval for the
+  /// same documents. What is unique is the set of *live* rows, enforced by a
+  /// partial index the migration creates and Prisma cannot express.
+  @@index([userId, applicationId, purpose, payloadHash])
   @@index([userId, state, expiresAt])
   @@map("career_confirmations")
 }
