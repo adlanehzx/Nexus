@@ -37,7 +37,7 @@ function sha256(value: string): string {
 /**
  * Folds a human string to its comparison form.
  *
- * Decomposes to NFKD and drops combining marks, so "Université" and
+ * Decomposes to NFKD and drops combining marks, so precomposed and decomposed
  * "Universite" agree; folds case; drops everything that is not a letter,
  * a digit or a space; collapses runs of space. Deliberately not a stemmer and
  * deliberately not language-aware: both would merge listings that differ.
