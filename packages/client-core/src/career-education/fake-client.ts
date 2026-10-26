@@ -654,7 +654,7 @@ const SEED_DOCUMENTS: DocumentVariant[] = [
     targetRole: "PhD Researcher in Formal Verification",
     targetOrganization: "Sorbonne University / Inria Paris",
     markdownContent: `# Alex Rivera
-**Research Specialization**: Formal Verification of Distributed Consensus Protocols  
+**Research Specialization**: Formal Verification of Distributed Consensus Protocols
 *Email*: alex.rivera@example.org | *Location*: Paris, France
 
 ## Academic Background
@@ -694,8 +694,8 @@ const SEED_DOCUMENTS: DocumentVariant[] = [
     targetRole: "PhD Researcher in Formal Verification",
     targetOrganization: "Sorbonne University / Inria Paris",
     markdownContent: `# Research Proposal Statement
-**Applicant**: Alex Rivera  
-**Prospective Advisors**: Dr. H. Vance, Prof. M. Laurent  
+**Applicant**: Alex Rivera
+**Prospective Advisors**: Dr. H. Vance, Prof. M. Laurent
 **Topic**: Automated Invariant Verification in Asynchronous Byzantine Consensus
 
 ### 1. Motivation & State of the Art
@@ -733,7 +733,7 @@ Modern geo-distributed state machine replication protocols often sacrifice safet
     targetRole: "Staff Distributed Systems Engineer",
     targetOrganization: "CloudScale Infrastructure Europe",
     markdownContent: `# Alex Rivera
-**Staff Distributed Systems Engineer**  
+**Staff Distributed Systems Engineer**
 *Email*: alex.rivera@example.org | *Paris / Berlin / Remote*
 
 ## Executive Summary
@@ -774,7 +774,7 @@ I am writing to express my strong enthusiasm for the Staff Distributed Systems E
 
 In my previous projects, I led the implementation of a Raft-based storage engine that withstood hostile network partitions while maintaining bounded tail latency. I look forward to bringing this expertise to your team.
 
-Sincerely,  
+Sincerely,
 Alex Rivera
 `,
     tailoredHighlights: [
@@ -799,8 +799,8 @@ Alex Rivera
     targetRole: "Lead SRE & Resilience Architect",
     targetOrganization: "Fintech Scaling Ltd",
     markdownContent: `# Freelance Consulting Terms & Service Brief
-**Consultant**: Alex Rivera (Independent Systems Architect)  
-**Client**: Fintech Scaling Ltd  
+**Consultant**: Alex Rivera (Independent Systems Architect)
+**Client**: Fintech Scaling Ltd
 **Role**: Lead SRE & Banking Ledger Resilience Architect
 
 ### Commercial Terms
