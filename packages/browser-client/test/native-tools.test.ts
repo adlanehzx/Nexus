@@ -227,6 +227,22 @@ describe("BrowserSessionManager & Quotas", () => {
       BrowserSecurityError,
     );
   });
+
+  it("enforces the administrative visual-control pause", async () => {
+    const manager = new BrowserSessionManager({ driver: mockDriver });
+    await manager.getOrCreateSession("session-active");
+
+    manager.setPaused(true);
+    expect(manager.paused).toBe(true);
+    expect(() => manager.recordAction("session-active")).toThrowError(BrowserSecurityError);
+    await expect(manager.getOrCreateSession("session-new")).rejects.toThrowError(
+      BrowserSecurityError,
+    );
+
+    manager.setPaused(false);
+    expect(manager.paused).toBe(false);
+    manager.recordAction("session-active");
+  });
 });
 
 describe("createNativeBrowserTools", () => {

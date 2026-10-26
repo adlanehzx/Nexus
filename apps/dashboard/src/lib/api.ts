@@ -1294,10 +1294,7 @@ export class DashboardApi {
   ): Promise<T> {
     const response = await this.#session.authorizedRequest({ method, path, body });
 
-    if (response.status === 403 || response.status === 404) {
-      // The server does not distinguish "not admin" from "does not exist" —
-      // deliberately avoiding disclosing the administrative surface. The client
-      // preserves this distinction without leaking details.
+    if (response.status === 403) {
       throw new ForbiddenError("This section is not accessible with this account.");
     }
 

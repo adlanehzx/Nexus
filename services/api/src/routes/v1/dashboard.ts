@@ -6,7 +6,12 @@ import { ok, okSchema } from "../../lib/response.js";
 import { ConflictError, NotFoundError } from "../../services/stores.js";
 import { DependencyError } from "@nexus/shared";
 import { BrowserWorkerClient } from "@nexus/browser-client";
-import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
+import {
+  installCatalogServer,
+  listMcpCatalog,
+  mcpServerConfigSchema,
+  type McpServerConfig,
+} from "@nexus/mcp";
 import { notificationsConfigSchema } from "@nexus/notifications";
 import { BrowserHarnessClient } from "../../services/browser-harness.js";
 
@@ -1171,8 +1176,343 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
+  // ── 13. Phase 2 operational views ────────────────────────────────────
+  //
+  // These routes adapt existing stores and runtimes to the dashboard DTOs.
+  // They deliberately return empty/unknown states when evidence is absent;
+  // no synthetic run, quota, message, or browser session is manufactured.
+
+  app.get(
+    "/dashboard/runs/compare",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        querystring: z.object({ a: z.string().min(1), b: z.string().min(1) }),
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const runs = await app.services.dashboard.listAgentRuns(userId, 500);
+      const left = runs.find((run) => run.runId === request.query.a);
+      const right = runs.find((run) => run.runId === request.query.b);
+      if (left === undefined) throw new NotFoundError("Agent run", request.query.a);
+      if (right === undefined) throw new NotFoundError("Agent run", request.query.b);
+
+      const project = (run: (typeof runs)[number]) => ({
+        id: run.runId,
+        agentKey: run.metrics.model,
+        durationMs: run.durationMs ?? 0,
+        tokenCount: run.metrics.inputTokens + run.metrics.outputTokens,
+        // Subscription-backed ACP runs do not expose a billable API cost.
+        costEstimateUsd: 0,
+        stepCount: run.iterations,
+        status: run.status,
+      });
+      const runA = project(left);
+      const runB = project(right);
+      return ok(
+        {
+          runA,
+          runB,
+          diffSummary: {
+            durationDeltaMs: runB.durationMs - runA.durationMs,
+            tokenDelta: runB.tokenCount - runA.tokenCount,
+            fasterRunId: runA.durationMs <= runB.durationMs ? runA.id : runB.id,
+            cheaperRunId: runA.costEstimateUsd <= runB.costEstimateUsd ? runA.id : runB.id,
+          },
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.get(
+    "/dashboard/quota/forecast",
+    { preHandler: app.requireAdmin, schema: { tags: ["dashboard"] } },
+    async (request) => {
+      const accounts = (await app.services.providerAccounts?.listAccounts()) ?? [];
+      return ok(
+        {
+          forecasts: accounts.map((account) => {
+            const knownRemaining = [
+              account.quotas.remaining5hPercent,
+              account.quotas.remainingWeekPercent,
+            ].filter((value): value is number => value !== null);
+            const remaining = knownRemaining.length === 0 ? null : Math.min(...knownRemaining);
+            return {
+              providerId: account.provider,
+              accountLabel: account.name,
+              currentUsage: remaining === null ? 0 : 100 - remaining,
+              hardLimit: remaining === null ? null : 100,
+              estimatedDepletionDate: null,
+              confidence: remaining === null ? ("unknown" as const) : ("low" as const),
+              ...(remaining === null
+                ? { unknownReason: "The provider CLI has not exposed official quota data." }
+                : {}),
+            };
+          }),
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.get(
+    "/dashboard/dag/:taskId",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ taskId: z.string().min(1) }) },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const resolvedTaskId =
+        request.params.taskId === "task-current"
+          ? (await app.services.dashboard.listTasks(userId, 1))[0]?.id
+          : request.params.taskId;
+      if (resolvedTaskId === undefined) {
+        return ok({ taskId: "task-current", isPaused: false, nodes: [] }, request.id);
+      }
+      const nativePlan = await app.services.taskStore.get(resolvedTaskId);
+      const task = await app.services.dashboard.getTask(userId, resolvedTaskId);
+      if (task === undefined) throw new NotFoundError("Task", resolvedTaskId);
+      const nativeDependencies = new Map(
+        nativePlan?.userId === userId
+          ? nativePlan.steps.map((step) => [step.id, step.dependsOn] as const)
+          : [],
+      );
+      const status = (value: string) => {
+        if (value === "succeeded" || value === "skipped") return "completed" as const;
+        if (value === "failed" || value === "cancelled") return "failed" as const;
+        if (value === "running" || value === "assigned" || value === "ready")
+          return "running" as const;
+        if (value === "waiting_for_confirmation") return "paused" as const;
+        return "pending" as const;
+      };
+      return ok(
+        {
+          taskId: task.id,
+          isPaused: task.status === "waiting_for_confirmation",
+          nodes: task.steps.map((step) => ({
+            id: step.id,
+            label: step.description,
+            status: status(step.status),
+            dependencies: nativeDependencies.get(step.id) ?? [],
+            ...(step.selectedDeviceName === null
+              ? {}
+              : { assignedDevice: step.selectedDeviceName }),
+            ...(step.error === null ? {} : { error: step.error.message }),
+          })),
+        },
+        request.id,
+      );
+    },
+  );
+
+  for (const action of ["pause", "resume"] as const) {
+    app.post(
+      `/dashboard/dag/:taskId/steps/:stepId/${action}`,
+      {
+        preHandler: app.requireAdmin,
+        schema: {
+          tags: ["dashboard"],
+          params: z.object({ taskId: z.string().min(1), stepId: z.string().min(1) }),
+        },
+      },
+      () => {
+        throw new ConflictError(
+          `Per-step ${action} is not supported by TaskCoordinator.`,
+          "This DAG can be inspected, but individual step suspension is not implemented yet.",
+        );
+      },
+    );
+  }
+
+  app.get(
+    "/dashboard/agents/communication-graph",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        querystring: z.object({ range: z.enum(["1h", "24h", "7d"]).default("24h") }),
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const [accounts, runs] = await Promise.all([
+        app.services.providerAccounts?.listAccounts() ?? Promise.resolve([]),
+        app.services.dashboard.listAgentRuns(userId, 500),
+      ]);
+      const rangeMs =
+        request.query.range === "1h"
+          ? 3_600_000
+          : request.query.range === "24h"
+            ? 86_400_000
+            : 604_800_000;
+      const cutoff = Date.now() - rangeMs;
+      const recent = runs.filter((run) => new Date(run.startedAt).getTime() >= cutoff);
+      return ok(
+        {
+          nodes: accounts.map((account) => ({
+            id: account.profileKey,
+            name: account.name,
+            role: account.provider,
+            messageCount: recent.filter((run) => run.metrics.model.includes(account.profileKey))
+              .length,
+          })),
+          // Inter-agent latency is not recorded by the current collaboration store.
+          edges: [],
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.get(
+    "/dashboard/marketplace/plugins",
+    { preHandler: app.requireAdmin, schema: { tags: ["dashboard"] } },
+    async (request) => {
+      const configured = (await app.services.runtimeConfiguration?.loadMcp()) ?? [];
+      const byName = new Map(configured.map((server) => [server.name, server]));
+      return ok(
+        {
+          plugins: listMcpCatalog().map((manifest) => {
+            const server = byName.get(manifest.name);
+            return {
+              id: `mcp-${manifest.name}`,
+              name: manifest.displayName,
+              version: manifest.version,
+              publisher: manifest.provenance.publisher,
+              description: manifest.description,
+              status:
+                server === undefined
+                  ? ("uninstalled" as const)
+                  : server.enabled
+                    ? ("installed" as const)
+                    : ("paused" as const),
+              declaredTools: manifest.declaredTools.map((tool) => tool.name),
+              reputationScore: manifest.provenance.verified ? 100 : 0,
+            };
+          }),
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.post(
+    "/dashboard/marketplace/plugins/:id/install",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ id: z.string().min(1) }) },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const manager = app.services.mcp;
+      if (store === undefined || manager === undefined)
+        throw new ConflictError("MCP runtime is unavailable.", "Configure the MCP runtime first.");
+      const name = marketplaceMcpName(request.params.id);
+      const config = installCatalogServer(name);
+      const next = [...(await store.loadMcp()).filter((item) => item.name !== name), config];
+      await store.saveMcp(next);
+      await manager.addServer(config);
+      return ok({ success: true }, request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/marketplace/plugins/:id/toggle",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        params: z.object({ id: z.string().min(1) }),
+        body: z.object({ paused: z.boolean() }),
+      },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const manager = app.services.mcp;
+      if (store === undefined || manager === undefined)
+        throw new ConflictError("MCP runtime is unavailable.", "Configure the MCP runtime first.");
+      const name = marketplaceMcpName(request.params.id);
+      const current = await store.loadMcp();
+      const found = current.find((item) => item.name === name);
+      if (found === undefined) throw new NotFoundError("Marketplace plugin", request.params.id);
+      const updated = { ...found, enabled: !request.body.paused };
+      await store.saveMcp([...current.filter((item) => item.name !== name), updated]);
+      if (request.body.paused) await manager.removeServer(name);
+      else await manager.addServer(updated);
+      return ok({ paused: request.body.paused }, request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/marketplace/plugins/:id/revoke",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], params: z.object({ id: z.string().min(1) }) },
+    },
+    async (request) => {
+      const store = app.services.runtimeConfiguration;
+      const manager = app.services.mcp;
+      if (store === undefined || manager === undefined)
+        throw new ConflictError("MCP runtime is unavailable.", "Configure the MCP runtime first.");
+      const name = marketplaceMcpName(request.params.id);
+      await manager.removeServer(name);
+      await store.saveMcp((await store.loadMcp()).filter((item) => item.name !== name));
+      return ok({ revoked: true }, request.id);
+    },
+  );
+
+  app.get(
+    "/dashboard/visual-control/status",
+    { preHandler: app.requireAdmin, schema: { tags: ["dashboard"] } },
+    (request) => {
+      const manager = app.services.browserSessionManager;
+      const sessions = manager?.listActiveSessions() ?? [];
+      const active = sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
+      return ok(
+        {
+          active: active !== undefined,
+          paused: manager?.paused ?? false,
+          ...(active === undefined ? {} : { activeSessionId: active.sessionId }),
+          bounds: { width: 0, height: 0 },
+          safetyBoundaryEnforced: manager !== undefined,
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.post(
+    "/dashboard/visual-control/pause",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], body: z.object({ paused: z.boolean() }) },
+    },
+    (request) => {
+      const manager = app.services.browserSessionManager;
+      if (manager === undefined)
+        throw new ConflictError(
+          "Native browser manager is unavailable.",
+          "Visual control is not configured on this installation.",
+        );
+      manager.setPaused(request.body.paused);
+      return ok({ paused: manager.paused }, request.id);
+    },
+  );
+
   done();
 };
+
+function marketplaceMcpName(id: string): string {
+  const name = id.startsWith("mcp-") ? id.slice(4) : id;
+  if (listMcpCatalog().every((manifest) => manifest.name !== name)) {
+    throw new NotFoundError("Marketplace plugin", id);
+  }
+  return name;
+}
 
 function lastUserText(messages: readonly unknown[]): string | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {

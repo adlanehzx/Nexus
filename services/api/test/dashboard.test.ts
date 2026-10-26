@@ -45,6 +45,10 @@ const SECTIONS = [
   "/api/v1/dashboard/notifications",
   "/api/v1/dashboard/security",
   "/api/v1/dashboard/logs",
+  "/api/v1/dashboard/quota/forecast",
+  "/api/v1/dashboard/agents/communication-graph",
+  "/api/v1/dashboard/marketplace/plugins",
+  "/api/v1/dashboard/visual-control/status",
 ] as const;
 
 function get(url: string, account?: Account) {
@@ -509,6 +513,79 @@ describe("infrastructure sections", () => {
     const response = await get("/api/v1/dashboard/tools", admin);
     expect(response.statusCode).toBe(200);
     expect(response.json<{ data: { tools: unknown[] } }>().data.tools).toEqual([]);
+  });
+});
+
+describe("phase 2 dashboard adapters", () => {
+  it("compares two real retained runs", async () => {
+    const left = runWithSecrets(admin.userId);
+    const right = runWithSecrets(admin.userId);
+    right.record.runId = "run-2";
+    right.record.startTime = "2026-09-03T10:01:00.000Z";
+    right.record.endTime = "2026-09-03T10:01:20.000Z";
+    right.record.usage = { inputTokens: 1500, outputTokens: 500, cacheReadTokens: 0 };
+    await harness.services.runStore.save(left as never);
+    await harness.services.runStore.save(right as never);
+
+    const response = await get("/api/v1/dashboard/runs/compare?a=run-1&b=run-2", admin);
+    const data = response.json<{
+      data: {
+        runA: { id: string; tokenCount: number };
+        runB: { id: string; tokenCount: number };
+        diffSummary: { durationDeltaMs: number; tokenDelta: number };
+      };
+    }>().data;
+
+    expect(response.statusCode).toBe(200);
+    expect(data.runA.id).toBe("run-1");
+    expect(data.runB.tokenCount).toBe(2000);
+    expect(data.diffSummary).toMatchObject({ durationDeltaMs: 8000, tokenDelta: 460 });
+  });
+
+  it("projects a real task plan as a DAG without inventing dependencies", async () => {
+    const device = await registerDevice(harness, admin, { name: "Laptop", role: "BOTH" });
+    const plan = createTaskPlan({
+      userId: admin.userId,
+      title: "DAG inspection",
+      originClientDeviceId: device.device.id,
+      correlationId: "corr-dag",
+      steps: [
+        {
+          id: "inspect",
+          description: "Inspect repository",
+          requiredCapabilities: ["filesystem.read"],
+          tool: "filesystem.read",
+        },
+      ],
+    });
+    await harness.services.taskStore.save(plan);
+
+    const response = await get(`/api/v1/dashboard/dag/${plan.id}`, admin);
+    const data = response.json<{
+      data: { taskId: string; nodes: { id: string; label: string; dependencies: string[] }[] };
+    }>().data;
+
+    expect(response.statusCode).toBe(200);
+    expect(data.taskId).toBe(plan.id);
+    expect(data.nodes).toEqual([
+      { id: "inspect", label: "Inspect repository", status: "pending", dependencies: [] },
+    ]);
+  });
+
+  it("exposes the curated MCP catalog and honest idle visual state", async () => {
+    const marketplace = await get("/api/v1/dashboard/marketplace/plugins", admin);
+    const plugins = marketplace.json<{ data: { plugins: { id: string; status: string }[] } }>().data
+      .plugins;
+    expect(plugins.some((plugin) => plugin.id === "mcp-github")).toBe(true);
+    expect(plugins.every((plugin) => plugin.status === "uninstalled")).toBe(true);
+
+    const visual = await get("/api/v1/dashboard/visual-control/status", admin);
+    expect(visual.json().data).toMatchObject({
+      active: false,
+      paused: false,
+      bounds: { width: 0, height: 0 },
+      safetyBoundaryEnforced: false,
+    });
   });
 });
 

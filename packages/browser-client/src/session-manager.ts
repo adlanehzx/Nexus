@@ -67,6 +67,7 @@ export class BrowserSessionManager {
   readonly #defaultMaxDurationMs: number;
   readonly #sessions = new Map<string, NativeBrowserSession>();
   readonly #artifacts = new Map<string, BrowserArtifact>();
+  #paused = false;
 
   constructor(options: SessionManagerOptions) {
     this.#driver = options.driver;
@@ -96,6 +97,12 @@ export class BrowserSessionManager {
     sessionId: string,
     options?: { ownerId?: string },
   ): Promise<NativeBrowserSession> {
+    if (this.#paused) {
+      throw new BrowserSecurityError(
+        "Visual browser control is paused by an administrator.",
+        "VISUAL_CONTROL_PAUSED",
+      );
+    }
     const existing = this.#sessions.get(sessionId);
     if (existing) {
       if (existing.cancelled) {
@@ -167,6 +174,12 @@ export class BrowserSessionManager {
    * Records an action on the session and checks quotas.
    */
   recordAction(sessionId: string): void {
+    if (this.#paused) {
+      throw new BrowserSecurityError(
+        "Visual browser control is paused by an administrator.",
+        "VISUAL_CONTROL_PAUSED",
+      );
+    }
     const session = this.#sessions.get(sessionId);
     if (!session) return;
 
@@ -279,7 +292,15 @@ export class BrowserSessionManager {
   }
 
   listActiveSessions(): NativeBrowserSession[] {
-    return Array.from(this.#sessions.values());
+    return Array.from(this.#sessions.values()).filter((session) => !session.cancelled);
+  }
+
+  get paused(): boolean {
+    return this.#paused;
+  }
+
+  setPaused(paused: boolean): void {
+    this.#paused = paused;
   }
 
   getArtifact(artifactId: string): BrowserArtifact | undefined {

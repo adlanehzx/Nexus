@@ -3197,10 +3197,12 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function RunComparison({ api }: { api: DashboardApi }) {
-  const [runA, setRunA] = useState("run-1");
-  const [runB, setRunB] = useState("run-2");
-  const [queryRuns, setQueryRuns] = useState<{ a: string; b: string }>({ a: "run-1", b: "run-2" });
-  const state = useSection(() => api.compareRuns(queryRuns.a, queryRuns.b));
+  const [runA, setRunA] = useState("");
+  const [runB, setRunB] = useState("");
+  const [queryRuns, setQueryRuns] = useState<{ a: string; b: string } | null>(null);
+  const state = useSection(() =>
+    queryRuns === null ? Promise.resolve(null) : api.compareRuns(queryRuns.a, queryRuns.b),
+  );
 
   return (
     <div className="content">
@@ -3239,6 +3241,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
           <button
             className="button primary"
             type="button"
+            disabled={runA.trim().length === 0 || runB.trim().length === 0}
             onClick={() => setQueryRuns({ a: runA, b: runB })}
           >
             Compare Runs
@@ -3247,85 +3250,89 @@ export function RunComparison({ api }: { api: DashboardApi }) {
       </section>
 
       <Section state={state}>
-        {(comparison) => (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div className="metrics">
-              <Metric
-                value={`${formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}`}
-                label={`duration delta (${comparison.diffSummary.fasterRunId} faster)`}
-              />
-              <Metric
-                value={`${comparison.diffSummary.tokenDelta > 0 ? "+" : ""}${String(comparison.diffSummary.tokenDelta)}`}
-                label="token delta (B - A)"
-              />
-              <Metric value={comparison.diffSummary.cheaperRunId} label="cheaper run" />
-            </div>
+        {(comparison) =>
+          comparison === null ? (
+            <Empty>Enter two run IDs from the Agent runs page to compare them.</Empty>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className="metrics">
+                <Metric
+                  value={`${formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}`}
+                  label={`duration delta (${comparison.diffSummary.fasterRunId} faster)`}
+                />
+                <Metric
+                  value={`${comparison.diffSummary.tokenDelta > 0 ? "+" : ""}${String(comparison.diffSummary.tokenDelta)}`}
+                  label="token delta (B - A)"
+                />
+                <Metric value={comparison.diffSummary.cheaperRunId} label="cheaper run" />
+              </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-              <section className="card">
-                <h3>Run A ({comparison.runA.id})</h3>
-                <div
-                  style={{
-                    marginTop: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div>
-                    <strong>Agent:</strong> {comparison.runA.agentKey}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <section className="card">
+                  <h3>Run A ({comparison.runA.id})</h3>
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div>
+                      <strong>Agent:</strong> {comparison.runA.agentKey}
+                    </div>
+                    <div>
+                      <strong>Status:</strong> {comparison.runA.status}
+                    </div>
+                    <div>
+                      <strong>Duration:</strong> {formatDuration(comparison.runA.durationMs)}
+                    </div>
+                    <div>
+                      <strong>Tokens:</strong> {comparison.runA.tokenCount.toLocaleString()}
+                    </div>
+                    <div>
+                      <strong>Cost:</strong> ${comparison.runA.costEstimateUsd.toFixed(4)}
+                    </div>
+                    <div>
+                      <strong>Steps:</strong> {String(comparison.runA.stepCount)}
+                    </div>
                   </div>
-                  <div>
-                    <strong>Status:</strong> {comparison.runA.status}
-                  </div>
-                  <div>
-                    <strong>Duration:</strong> {formatDuration(comparison.runA.durationMs)}
-                  </div>
-                  <div>
-                    <strong>Tokens:</strong> {comparison.runA.tokenCount.toLocaleString()}
-                  </div>
-                  <div>
-                    <strong>Cost:</strong> ${comparison.runA.costEstimateUsd.toFixed(4)}
-                  </div>
-                  <div>
-                    <strong>Steps:</strong> {String(comparison.runA.stepCount)}
-                  </div>
-                </div>
-              </section>
+                </section>
 
-              <section className="card">
-                <h3>Run B ({comparison.runB.id})</h3>
-                <div
-                  style={{
-                    marginTop: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div>
-                    <strong>Agent:</strong> {comparison.runB.agentKey}
+                <section className="card">
+                  <h3>Run B ({comparison.runB.id})</h3>
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div>
+                      <strong>Agent:</strong> {comparison.runB.agentKey}
+                    </div>
+                    <div>
+                      <strong>Status:</strong> {comparison.runB.status}
+                    </div>
+                    <div>
+                      <strong>Duration:</strong> {formatDuration(comparison.runB.durationMs)}
+                    </div>
+                    <div>
+                      <strong>Tokens:</strong> {comparison.runB.tokenCount.toLocaleString()}
+                    </div>
+                    <div>
+                      <strong>Cost:</strong> ${comparison.runB.costEstimateUsd.toFixed(4)}
+                    </div>
+                    <div>
+                      <strong>Steps:</strong> {String(comparison.runB.stepCount)}
+                    </div>
                   </div>
-                  <div>
-                    <strong>Status:</strong> {comparison.runB.status}
-                  </div>
-                  <div>
-                    <strong>Duration:</strong> {formatDuration(comparison.runB.durationMs)}
-                  </div>
-                  <div>
-                    <strong>Tokens:</strong> {comparison.runB.tokenCount.toLocaleString()}
-                  </div>
-                  <div>
-                    <strong>Cost:</strong> ${comparison.runB.costEstimateUsd.toFixed(4)}
-                  </div>
-                  <div>
-                    <strong>Steps:</strong> {String(comparison.runB.stepCount)}
-                  </div>
-                </div>
-              </section>
+                </section>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
       </Section>
     </div>
   );
