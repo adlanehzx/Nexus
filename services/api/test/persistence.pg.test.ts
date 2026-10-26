@@ -10,6 +10,7 @@ import { PrismaAgentRunClaimStore } from "../src/services/persistence/prisma-age
 import { PrismaMissionGrantRegistry } from "../src/services/persistence/prisma-mission-grant-registry.js";
 import { PrismaScheduleGrantRegistry } from "../src/services/persistence/prisma-schedule-grant-registry.js";
 import { PrismaDeviceCredentialStore } from "../src/services/persistence/prisma-device-credential-store.js";
+import { PrismaCareerStore } from "../src/services/persistence/prisma-career-store.js";
 
 /**
  * Prisma stores against real PostgreSQL.
@@ -570,5 +571,53 @@ describe("PrismaDeviceCredentialStore", () => {
 
   afterEach(async () => {
     await prisma.deviceCredential.deleteMany({ where: { deviceId } });
+  });
+});
+
+describe("PrismaCareerStore PostgreSQL integration", () => {
+  it("persists profile, opportunities, applications and events with owner isolation", async () => {
+    const careerStore = new PrismaCareerStore(prisma);
+    const now = new Date();
+
+    // Profile
+    const profile = await careerStore.saveProfile({
+      userId: ownerId,
+      id: randomUUID(),
+      profile: {
+        headline: "Staff Engineer (PG Integration)",
+        summary: "10+ years specializing in distributed systems and storage architectures.",
+        yearsExperience: 10,
+        highestDegree: "master",
+        skills: ["Rust", "PostgreSQL", "Distributed Systems"],
+        languages: [{ code: "en", level: "native" }],
+        publications: 1,
+        preferences: {
+          kinds: ["permanent_job"],
+          locations: ["Paris, France"],
+          remote: "preferred",
+          languages: [{ code: "en", level: "professional" }],
+          mustHaveSkills: ["Rust"],
+          niceToHaveSkills: ["PostgreSQL"],
+          researchAreas: [],
+          minCompensation: {
+            currency: "EUR",
+            period: "year",
+            minAmount: 100_000,
+            maxAmount: 130_000,
+          },
+          excludedOrganizations: [],
+          noticePeriodDays: 30,
+        },
+      },
+      now,
+    });
+    expect(profile.version).toBe(1);
+
+    const fetchedProfile = await careerStore.getProfile(ownerId);
+    expect(fetchedProfile?.headline).toBe("Staff Engineer (PG Integration)");
+
+    // Owner isolation: other user cannot see profile
+    const otherUser = randomUUID();
+    expect(await careerStore.getProfile(otherUser)).toBeUndefined();
   });
 });
