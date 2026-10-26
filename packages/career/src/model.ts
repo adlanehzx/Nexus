@@ -56,6 +56,20 @@ import {
 const idSchema = z.string().uuid();
 const shortText = (max: number) => z.string().min(1).max(max);
 
+/**
+ * An instant, however it arrived.
+ *
+ * `z.coerce.date()` rather than `z.date()`, so one schema serves both callers:
+ * the HTTP boundary, where every date is an ISO string, and internal code,
+ * where it is already a `Date`. The alternative is a second set of schemas that
+ * differ only in this detail, and the pair drifts — one gains a field, the
+ * other does not, and the route stops validating what the service stores.
+ *
+ * Coercion still validates: an unparseable string fails rather than becoming an
+ * invalid `Date` that propagates as `NaN` into a deadline comparison.
+ */
+const dateLike = z.coerce.date();
+
 /** ISO 4217-ish code. Three letters, uppercased by the schema. */
 const currencySchema = z
   .string()
@@ -105,7 +119,7 @@ export const provenanceSchema = z
     /** Canonical URL, or `null` when the source was not a web page. */
     url: z.string().max(INGEST_LIMITS.url).nullable(),
     evidence: shortText(400),
-    observedAt: z.date(),
+    observedAt: dateLike,
   })
   .strict();
 export type Provenance = z.infer<typeof provenanceSchema>;
@@ -192,9 +206,9 @@ export const opportunityIngestInputSchema = z
       .default([]),
     compensation: compensationSchema.nullable().default(null),
     /** When the listing was published, as the source states it. */
-    postedAt: z.date().nullable().default(null),
+    postedAt: dateLike.nullable().default(null),
     /** Application deadline, as the source states it. */
-    closesAt: z.date().nullable().default(null),
+    closesAt: dateLike.nullable().default(null),
     /** Identifier used by the source. Strengthens deduplication when present. */
     externalRef: z.string().max(128).nullable().default(null),
     source: z
@@ -466,7 +480,7 @@ export type ContactInput = z.infer<typeof contactInputSchema>;
 export const deadlineInputSchema = z
   .object({
     kind: deadlineKindSchema,
-    dueAt: z.date(),
+    dueAt: dateLike,
     label: z.string().max(200).default(""),
     reminderOffsetsMinutes: z
       .array(z.number().int().min(0).max(525_600))
@@ -480,7 +494,7 @@ export const interviewInputSchema = z
   .object({
     mode: interviewModeSchema,
     stage: shortText(120),
-    scheduledAt: z.date(),
+    scheduledAt: dateLike,
     durationMinutes: z.number().int().min(5).max(600).default(60),
     notes: z.string().max(INGEST_LIMITS.note).default(""),
   })
@@ -490,7 +504,7 @@ export type InterviewInput = z.infer<typeof interviewInputSchema>;
 export const outcomeInputSchema = z
   .object({
     result: outcomeResultSchema,
-    decidedAt: z.date(),
+    decidedAt: dateLike,
     notes: z.string().max(INGEST_LIMITS.note).default(""),
   })
   .strict();
@@ -499,7 +513,7 @@ export type OutcomeInput = z.infer<typeof outcomeInputSchema>;
 export const followUpInputSchema = z
   .object({
     channel: followUpChannelSchema,
-    dueAt: z.date(),
+    dueAt: dateLike,
     draft: z.string().max(INGEST_LIMITS.note).default(""),
   })
   .strict();

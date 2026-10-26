@@ -222,6 +222,7 @@ export const confirmationStateSchema = z.enum([
   "approved",
   "rejected",
   "expired",
+  "cancelled",
   "consumed",
 ]);
 export type ConfirmationState = z.infer<typeof confirmationStateSchema>;

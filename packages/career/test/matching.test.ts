@@ -93,9 +93,9 @@ describe("hard exclusions", () => {
   it("matches the exclusion list case- and accent-insensitively", () => {
     const explanation = explainMatch({
       profile: makeProfile({
-        preferences: { ...profile.preferences, excludedOrganizations: ["université example"] },
+        preferences: { ...profile.preferences, excludedOrganizations: ["universit\u00e9 example"] },
       }),
-      opportunity: makeOpportunity({ organization: "Université Example" }),
+      opportunity: makeOpportunity({ organization: "Universit\u00e9 Example" }),
       now: NOW,
     });
     expect(explanation.excluded).toBe(true);

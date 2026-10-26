@@ -11,14 +11,14 @@ import {
 const base = {
   kind: "phd" as const,
   title: "PhD in distributed systems",
-  organization: "Université Example",
+  organization: "Universit\u00e9 Example",
   location: "Lyon",
   externalRef: null,
 };
 
 describe("normalizeForComparison", () => {
   it("folds case, accents, punctuation and whitespace", () => {
-    expect(normalizeForComparison("Université  de  Lyon—1")).toBe("universite de lyon 1");
+    expect(normalizeForComparison("Universit\u00e9  de  Lyon\u20141")).toBe("universite de lyon 1");
   });
 
   it("does not stem, so two different posts stay different", () => {
