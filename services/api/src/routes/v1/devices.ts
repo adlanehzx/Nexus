@@ -100,6 +100,63 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   app.get(
+    "/devices/network-discovery",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Discover the local Tailscale node and visible private-network peers",
+        response: {
+          200: okSchema(
+            z.object({
+              installed: z.boolean(),
+              running: z.boolean(),
+              backendState: z.string(),
+              tailnet: z.string().optional(),
+              suggestedApiUrl: z.string().url().optional(),
+              automaticPairingUrl: z.boolean(),
+              self: z
+                .object({
+                  id: z.string(),
+                  name: z.string(),
+                  dnsName: z.string().optional(),
+                  os: z.string(),
+                  online: z.boolean(),
+                  active: z.boolean(),
+                  ipv4: z.string().optional(),
+                })
+                .optional(),
+              peers: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  dnsName: z.string().optional(),
+                  os: z.string(),
+                  online: z.boolean(),
+                  active: z.boolean(),
+                  ipv4: z.string().optional(),
+                }),
+              ),
+              guidance: z.string(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const discovery = await app.services.tailscale.inspect();
+      return ok(
+        {
+          ...discovery,
+          automaticPairingUrl:
+            app.services.publicApiUrl === undefined && discovery.suggestedApiUrl !== undefined,
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.get(
     "/devices",
     {
       preHandler: app.requireUser,
@@ -249,11 +306,13 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     },
     async (request, reply) => {
       const { userId } = currentUser(request);
-      const apiUrl = app.services.publicApiUrl;
+      const apiUrl = app.services.publicApiUrl ?? (await app.services.tailscale.publicApiUrl());
       if (apiUrl === undefined) {
         // Reject rather than guess: a QR with the wrong address
         // fails on the phone, far from the root cause.
-        throw new Error("QR pairing requires PUBLIC_API_URL: the address your devices can reach.");
+        throw new Error(
+          "QR pairing requires a reachable NEXUS address. Connect Tailscale or configure PUBLIC_API_URL.",
+        );
       }
       const { ticket, code } = await app.services.pairing.issue({
         userId,

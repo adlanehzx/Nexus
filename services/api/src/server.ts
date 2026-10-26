@@ -13,6 +13,7 @@ import {
 } from "@nexus/browser-client";
 import { NotificationDispatcher } from "@nexus/notifications";
 import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
+import { TailscaleDiscoveryService } from "./services/tailscale-discovery.js";
 import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
 
@@ -189,6 +190,7 @@ const services = new ServiceContainer({
     new ClaudeCliProvider(),
     new OllamaProvider(),
   ]),
+  tailscale: new TailscaleDiscoveryService({ apiPort: config.API_PORT }),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
   ...(config.EXPECTED_WORKER_VERSION === undefined
     ? {}

@@ -121,6 +121,7 @@ function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH
 
 export function Devices({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.devices());
+  const network = useSection(() => api.networkDiscovery());
   const [actionError, setActionError] = useState<string | null>(null);
   const [pairing, setPairing] = useState<PairingTicket | null>(null);
   const [pairingLabel, setPairingLabel] = useState("");
@@ -142,12 +143,16 @@ export function Devices({ api }: { api: DashboardApi }) {
     return () => window.clearTimeout(timer);
   }, [pairing]);
 
-  const issuePairing = (): void => {
+  const issuePairing = (suggestedLabel?: string): void => {
+    const label = suggestedLabel ?? pairingLabel;
     setActionError(null);
     setPairingBusy(true);
     void api
-      .createPairingTicket(pairingLabel)
-      .then(setPairing)
+      .createPairingTicket(label)
+      .then((ticket) => {
+        setPairing(ticket);
+        if (suggestedLabel !== undefined) setPairingLabel(suggestedLabel);
+      })
       .catch((cause: unknown) =>
         setActionError(cause instanceof Error ? cause.message : "Pairing failed."),
       )
@@ -188,6 +193,72 @@ export function Devices({ api }: { api: DashboardApi }) {
   return (
     <div className="content">
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
+      <section className="card network-discovery-card" aria-labelledby="private-network-title">
+        <div className="pairing-heading">
+          <div>
+            <span className="eyebrow">PRIVATE NETWORK</span>
+            <h3 id="private-network-title">Automatic device discovery</h3>
+            <p className="muted">
+              NEXUS detects machines visible through Tailscale. Discovery never grants trust:
+              pairing and approval remain explicit security boundaries.
+            </p>
+          </div>
+          <button className="button" type="button" onClick={() => network.reload()}>
+            Refresh network
+          </button>
+        </div>
+        <Section state={network}>
+          {(data) => (
+            <>
+              <div className="network-summary">
+                <State
+                  tone={data.running ? "ok" : data.installed ? "degraded" : "unconfigured"}
+                  label={data.running ? "TAILSCALE CONNECTED" : data.backendState.toUpperCase()}
+                />
+                <div>
+                  <strong>{data.self?.name ?? "NEXUS host"}</strong>
+                  <span className="muted">{data.suggestedApiUrl ?? data.guidance}</span>
+                </div>
+                {data.automaticPairingUrl ? (
+                  <span className="network-auto-badge">Pairing address managed automatically</span>
+                ) : null}
+              </div>
+              {data.peers.length === 0 ? (
+                <Empty>No other Tailscale devices detected.</Empty>
+              ) : (
+                <div className="network-peer-grid">
+                  {data.peers.map((peer) => (
+                    <article className="network-peer" key={peer.id}>
+                      <div>
+                        <strong>{peer.name}</strong>
+                        <span className="muted">
+                          {peer.os} · {peer.online ? "online" : "offline"}
+                        </span>
+                      </div>
+                      <State
+                        tone={peer.online ? "ok" : "unconfigured"}
+                        label={peer.online ? "REACHABLE" : "OFFLINE"}
+                      />
+                      <button
+                        className="button primary"
+                        type="button"
+                        disabled={!peer.online || pairingBusy}
+                        onClick={() => issuePairing(peer.name)}
+                      >
+                        Pair with NEXUS
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+              <p className="muted network-security-note">
+                A discovered device cannot execute tasks or access NEXUS data until its client uses
+                a single-use pairing ticket and you approve it.
+              </p>
+            </>
+          )}
+        </Section>
+      </section>
       <section className="card pairing-card" aria-labelledby="pairing-title">
         <div className="pairing-heading">
           <div>
@@ -211,7 +282,7 @@ export function Devices({ api }: { api: DashboardApi }) {
               className="button primary"
               type="button"
               disabled={pairingBusy}
-              onClick={issuePairing}
+              onClick={() => issuePairing()}
             >
               {pairingBusy ? "Creating…" : "Generate code"}
             </button>
@@ -289,15 +360,10 @@ export function Devices({ api }: { api: DashboardApi }) {
                 Hide code
               </button>
             </div>
-            <div
-              className="callout info"
-              style={{ marginTop: "12px", fontSize: "0.85rem", opacity: 0.9 }}
-            >
-              <strong>Optional Remote Connectivity (Tailscale):</strong> If your workers reside on a
-              remote network or behind NAT, set your NEXUS <code>PUBLIC_API_URL</code> to its
-              Tailscale IP or MagicDNS hostname (e.g.{" "}
-              <code>http://nexus-core.example-tailnet.ts.net:3000</code>). Do not expose private
-              tailnet keys or credentials.
+            <div className="callout info network-managed-note">
+              <strong>Private connectivity:</strong> NEXUS automatically uses the host Tailscale
+              address when no explicit public API address is configured. No tailnet key is read or
+              stored.
             </div>
             <small style={{ display: "block", marginTop: "8px" }}>
               Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}. Single-use ticket.

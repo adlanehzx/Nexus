@@ -126,6 +126,28 @@ export interface DeviceRow {
   agentVersion: string | null;
 }
 
+export interface NetworkPeerDto {
+  id: string;
+  name: string;
+  dnsName?: string;
+  os: string;
+  online: boolean;
+  active: boolean;
+  ipv4?: string;
+}
+
+export interface DeviceNetworkDiscoveryDto {
+  installed: boolean;
+  running: boolean;
+  backendState: string;
+  tailnet?: string;
+  suggestedApiUrl?: string;
+  automaticPairingUrl: boolean;
+  self?: NetworkPeerDto;
+  peers: NetworkPeerDto[];
+  guidance: string;
+}
+
 export interface WorkerRow extends DeviceRow {
   connected: boolean;
   acceptingTasks: boolean;
@@ -812,6 +834,10 @@ export class DashboardApi {
 
   devices(): Promise<{ devices: DeviceRow[] }> {
     return this.#get("/api/v1/dashboard/devices");
+  }
+
+  networkDiscovery(): Promise<DeviceNetworkDiscoveryDto> {
+    return this.#get("/api/v1/devices/network-discovery");
   }
 
   createPairingTicket(label: string): Promise<PairingTicket> {

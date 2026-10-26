@@ -88,6 +88,7 @@ import { AgentCollaborationService } from "./agent-collaboration.js";
 import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 import { LocalConnectionManager, type ConnectionCatalogService } from "./connection-manager.js";
 import { TenantPlatformService, TenantRealtimeHub } from "./tenant-platform.js";
+import { TailscaleDiscoveryService } from "./tailscale-discovery.js";
 
 /**
  * Assembly of API services.
@@ -214,6 +215,8 @@ export interface ServiceContainerOptions {
   llmProvider?: LLMProvider;
   /** Local CLI and ACP adapter discovery. Injectable for API tests. */
   connectionManager?: ConnectionCatalogService;
+  /** Read-only Tailscale inventory. Injectable so tests never execute host commands. */
+  tailscale?: TailscaleDiscoveryService;
 }
 
 export class ServiceContainer {
@@ -235,6 +238,7 @@ export class ServiceContainer {
   readonly deviceCredentials: DeviceCredentialStore;
   readonly pairing: PairingService;
   readonly publicApiUrl: string | undefined;
+  readonly tailscale: TailscaleDiscoveryService;
   readonly expectedWorkerVersion: string | undefined;
   readonly pause: PauseSwitch;
   readonly selector: DeviceSelector;
@@ -339,6 +343,14 @@ export class ServiceContainer {
       now,
     });
     this.publicApiUrl = options.publicApiUrl;
+    // Tests and embedded callers remain hermetic unless they explicitly provide
+    // host discovery. The production assembly injects the real fixed-command
+    // implementation from server.ts.
+    this.tailscale =
+      options.tailscale ??
+      new TailscaleDiscoveryService({
+        run: async () => Promise.reject(new Error("Host discovery is not configured.")),
+      });
     this.expectedWorkerVersion = options.expectedWorkerVersion;
     this.deviceSessions = new DeviceSessionService({
       registry: this.deviceRegistry,

@@ -526,6 +526,71 @@ details.card[open] > summary {
   margin-top: 0;
   margin-bottom: 18px;
 }
+
+.network-discovery-card {
+  display: grid;
+  gap: 18px;
+}
+
+.network-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+}
+
+.network-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.network-auto-badge {
+  color: var(--good);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.network-peer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.network-peer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-1);
+}
+
+.network-peer > div {
+  display: grid;
+  gap: 3px;
+}
+
+.network-peer .button {
+  grid-column: 1 / -1;
+}
+
+.network-security-note,
+.network-managed-note {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .network-summary {
+    grid-template-columns: 1fr;
+  }
+}
 .pairing-heading {
   display: flex;
   align-items: end;
