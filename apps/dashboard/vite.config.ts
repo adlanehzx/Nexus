@@ -12,4 +12,11 @@ export default defineConfig({
   base: "./",
   build: { outDir: "dist", emptyOutDir: true, sourcemap: true },
   server: { port: 5274, strictPort: true },
+  preview: {
+    // Vite rejects unknown Host headers to prevent DNS-rebinding attacks.
+    // `.ts.net` is Tailscale's private MagicDNS namespace; permitting that
+    // suffix keeps remote dashboard access private without accepting arbitrary
+    // internet hostnames or using the unsafe `allowedHosts: true` escape hatch.
+    allowedHosts: ["localhost", "127.0.0.1", ".ts.net"],
+  },
 });
