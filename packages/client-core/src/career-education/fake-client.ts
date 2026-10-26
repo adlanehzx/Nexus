@@ -95,7 +95,8 @@ const DEFAULT_PROFILE: CareerEducationProfile = {
     targetDailyRateTjm: 750,
     currency: "EUR",
     availableDaysPerWeek: 4,
-    earliestStartDate: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0] ?? "2026-11-15",
+    earliestStartDate:
+      new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0] ?? "2026-11-15",
     minDurationMonths: 3,
     preferredIndustries: ["Fintech", "Cloud Infrastructure", "Decentralized Systems"],
     vatRegistered: true,
@@ -169,7 +170,8 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
     citations: [
       {
         id: "cite_phd_01",
-        quote: "Fully funded 36-month CIFRE/ANR grant with competitive gross stipend of €2,600/month.",
+        quote:
+          "Fully funded 36-month CIFRE/ANR grant with competitive gross stipend of €2,600/month.",
         url: "https://doctoral-school.sorbonne-universite.fr/offers/lip6-phd-2026-04",
         title: "Doctoral Contract Notice 2026-04",
         documentSha256: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
@@ -230,7 +232,8 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
     citations: [
       {
         id: "cite_cdi_01",
-        quote: "Permanent CDI contract, base compensation between €105,000 and €120,000 with equity package.",
+        quote:
+          "Permanent CDI contract, base compensation between €105,000 and €120,000 with equity package.",
         url: "https://careers.cloudscale.eu/engineering/staff-systems-engineer",
         title: "Job Specification - CloudScale Staff Engineer",
         documentSha256: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
@@ -352,7 +355,8 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
     citations: [
       {
         id: "cite_dup_01",
-        quote: "Canonical original: https://careers.cloudscale.eu/engineering/staff-systems-engineer",
+        quote:
+          "Canonical original: https://careers.cloudscale.eu/engineering/staff-systems-engineer",
         url: "https://aggregator-tech.example.com/listings/cloudscale-staff-systems",
         title: "Syndicated Aggregator Entry",
         documentSha256: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
@@ -399,7 +403,8 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
     citations: [
       {
         id: "cite_stale_01",
-        quote: "Applications close on August 15, 2026. Submissions after this date are not considered.",
+        quote:
+          "Applications close on August 15, 2026. Submissions after this date are not considered.",
         url: "https://www.tum.de/in/chair/jobs/phd-sharding-2025",
         title: "TUM Job Posting Archive",
         documentSha256: "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
@@ -596,7 +601,10 @@ const SEED_APPLICATIONS: Application[] = [
       { stage: "discovered", transitionedAt: new Date(Date.now() - 10 * 86400000).toISOString() },
       { stage: "shortlisted", transitionedAt: new Date(Date.now() - 9 * 86400000).toISOString() },
       { stage: "preparing", transitionedAt: new Date(Date.now() - 8 * 86400000).toISOString() },
-      { stage: "pending_approval", transitionedAt: new Date(Date.now() - 7 * 86400000).toISOString() },
+      {
+        stage: "pending_approval",
+        transitionedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+      },
       {
         stage: "submitted",
         transitionedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
@@ -1244,7 +1252,10 @@ export class FakeCareerEducationClient implements CareerEducationClient {
               return [o.id, `€${minK}k - €${maxK}k CDI`];
             }
             if (o.freelanceDetails?.dailyRateMin) {
-              return [o.id, `€${o.freelanceDetails.dailyRateMin} - €${o.freelanceDetails.dailyRateMax}/day TJM`];
+              return [
+                o.id,
+                `€${o.freelanceDetails.dailyRateMin} - €${o.freelanceDetails.dailyRateMax}/day TJM`,
+              ];
             }
             return [o.id, "N/A"];
           }),
@@ -1258,9 +1269,7 @@ export class FakeCareerEducationClient implements CareerEducationClient {
       {
         key: "matchScore",
         label: "Explainable Match Score",
-        valuesByOpportunityId: Object.fromEntries(
-          matched.map((o) => [o.id, `${o.match.score}%`]),
-        ),
+        valuesByOpportunityId: Object.fromEntries(matched.map((o) => [o.id, `${o.match.score}%`])),
         winnerOpportunityId: matched.reduce((prev, curr) =>
           curr.match.score > prev.match.score ? curr : prev,
         ).id,
@@ -1682,9 +1691,7 @@ export class FakeCareerEducationClient implements CareerEducationClient {
 
       // If associated with application, advance stage
       if (conf.targetOpportunityId) {
-        const app = this.applications.find(
-          (a) => a.opportunityId === conf.targetOpportunityId,
-        );
+        const app = this.applications.find((a) => a.opportunityId === conf.targetOpportunityId);
         if (app?.stage === "pending_approval") {
           app.stage = "submitted";
           app.stageHistory.push({

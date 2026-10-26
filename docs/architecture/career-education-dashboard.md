@@ -114,9 +114,22 @@ export interface CareerEducationClient {
 
   // Safe Research Operations
   executeSafeSearch(query: string, track?: OpportunityTrack | "all"): Promise<SafeSearchResponse>;
-  prepareDraftApplication(opportunityId: string, formValues: Record<string, string>): Promise<ConfirmationRequest>;
-  prepareDraftEmail(opportunityId: string, to: string, subject: string, body: string): Promise<ConfirmationRequest>;
-  prepareDraftCalendarEvent(opportunityId: string, title: string, start: string, end: string): Promise<ConfirmationRequest>;
+  prepareDraftApplication(
+    opportunityId: string,
+    formValues: Record<string, string>,
+  ): Promise<ConfirmationRequest>;
+  prepareDraftEmail(
+    opportunityId: string,
+    to: string,
+    subject: string,
+    body: string,
+  ): Promise<ConfirmationRequest>;
+  prepareDraftCalendarEvent(
+    opportunityId: string,
+    title: string,
+    start: string,
+    end: string,
+  ): Promise<ConfirmationRequest>;
 }
 ```
 
@@ -127,6 +140,7 @@ export interface CareerEducationClient {
 ### 3.1 SSRF & Network Policy
 
 The safe research plane enforces hermetic network boundaries:
+
 1. **Target Validation**: All URLs undergo DNS resolution and IP verification prior to connection.
 2. **Blocked Destinies**: Private IP ranges (RFC 1918, RFC 3927, loopback `127.0.0.0/8`, IPv6 local `::1`, link-local `fe80::/10`) and cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`) are strictly rejected.
 3. **No Embedded Credentials**: URLs containing basic authentication credentials (`user:pass@host`) trigger immediate rejection.
@@ -135,6 +149,7 @@ The safe research plane enforces hermetic network boundaries:
 ### 3.2 Extractive Public Citations
 
 Opportunities retain evidence traces to guarantee that no position or funding condition is hallucinated:
+
 - Every claim (e.g. stipend level, contract type, required publications) references a verified quote from public listing content.
 - Cryptographic SHA-256 fingerprinting binds quotes to document bodies.
 - Unverified claims are prominently flagged in the UI.
@@ -153,19 +168,20 @@ Opportunities retain evidence traces to guarantee that no position or funding co
 
 The side-by-side comparison matrix evaluates positions across structural metrics:
 
-| Metric | PhD Fellowship | CDI Permanent Job | Freelance Mission |
-|---|---|---|---|
-| **Contract** | 3-Year Doctoral Contract | Indefinite Term (CDI) | Fixed Duration Service Tender (3-12 mos) |
-| **Compensation** | €2,200 - €2,800/mo gross (CIFRE/ANR) | €90,000 - €135,000/yr gross + Equity | €650 - €950/day HT (TJM) |
-| **Intellectual Focus**| Fundamental research, peer-reviewed publications, academic autonomy | Scalability, production reliability, core infrastructure roadmap | Targeted architecture interventions, latency reduction, audit |
-| **Flexibility** | Onsite lab / conference travel | Hybrid / European remote | 100% Remote (typical 4 days/week) |
-| **Risk / Durability** | Guaranteed funding for 36 months | Statutory European labor protections | Contract renewals required periodically |
+| Metric                 | PhD Fellowship                                                      | CDI Permanent Job                                                | Freelance Mission                                             |
+| ---------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Contract**           | 3-Year Doctoral Contract                                            | Indefinite Term (CDI)                                            | Fixed Duration Service Tender (3-12 mos)                      |
+| **Compensation**       | €2,200 - €2,800/mo gross (CIFRE/ANR)                                | €90,000 - €135,000/yr gross + Equity                             | €650 - €950/day HT (TJM)                                      |
+| **Intellectual Focus** | Fundamental research, peer-reviewed publications, academic autonomy | Scalability, production reliability, core infrastructure roadmap | Targeted architecture interventions, latency reduction, audit |
+| **Flexibility**        | Onsite lab / conference travel                                      | Hybrid / European remote                                         | 100% Remote (typical 4 days/week)                             |
+| **Risk / Durability**  | Guaranteed funding for 36 months                                    | Statutory European labor protections                             | Contract renewals required periodically                       |
 
 ---
 
 ## 5. Application Preparation & Tailored Documents
 
 For every shortlisted position, the tailoring engine analyzes profile credentials against job criteria:
+
 - **CV Variants**: Emphasizes relevant competencies (e.g., formal verification with TLA+ for LIP6 PhD, or high-throughput consensus for CloudScale CDI).
 - **Motivation Letters**: Tailors opening thesis statements and technical justifications based on company or lab open-source contributions.
 - **Research Statements**: Outlines 3-year doctoral methodology, state-of-the-art context, and proposed invariant synthesis.
@@ -186,8 +202,8 @@ Consequential actions MUST NEVER execute silently. The confirmation boundary enf
    - **Exact Action**: Clear label and action type icon.
    - **Destination**: Absolute URL, email address, or calendar destination.
    - **Transmitted Data & Attached Documents**: Form fields, email body preview, and document SHA-256 hashes.
-   - **Explicit Risks**: e.g., *"External portal submission is irreversible once transmitted"*, *"Applicant personal data transferred"*.
-   - **Consequences**: e.g., *"Locks candidacy in for 2026 CIFRE cohort"*, *"Initiates official university review"*.
+   - **Explicit Risks**: e.g., _"External portal submission is irreversible once transmitted"_, _"Applicant personal data transferred"_.
+   - **Consequences**: e.g., _"Locks candidacy in for 2026 CIFRE cohort"_, _"Initiates official university review"_.
 3. **Discrete Decision Lifecycle**:
    - `approve`: Human operator explicitly authorizes action with optional rationale.
    - `reject`: Human operator rejects action; external transmission is completely blocked.
@@ -217,18 +233,18 @@ When Claude's team implements the backend domain services, they should adhere to
 
 ### 8.1 Required Endpoints
 
-| Endpoint | Method | Expected Payload / Response |
-|---|---|---|
-| `/api/v1/career/profile` | GET / PUT | `CareerEducationProfile` with automatic completeness scoring |
-| `/api/v1/career/settings` | GET / PUT | `CareerEducationSettings` |
-| `/api/v1/career/opportunities` | GET | Query params: `track`, `minScore`, `onlyFresh`, `includeDuplicates` -> returns `OpportunitySearchResult` |
-| `/api/v1/career/opportunities/:id/shortlist` | POST | `{ shortlisted: boolean }` -> returns updated `Opportunity` |
-| `/api/v1/career/opportunities/compare` | POST | `{ ids: string[] }` -> returns `OpportunityComparisonMatrix` |
-| `/api/v1/career/applications` | GET / POST | `Application` lifecycle operations |
-| `/api/v1/career/applications/:id/stage` | PUT | `{ stage: ApplicationStage, note?: string }` |
-| `/api/v1/career/documents/tailor` | POST | `GenerateDocumentInput` -> returns `DocumentVariant` |
-| `/api/v1/career/confirmations` | GET / POST | Confirmation request queries |
-| `/api/v1/career/confirmations/:id/resolve` | POST | `{ decision: "approve" \| "reject" \| "cancel", reason?: string }` |
+| Endpoint                                     | Method     | Expected Payload / Response                                                                              |
+| -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| `/api/v1/career/profile`                     | GET / PUT  | `CareerEducationProfile` with automatic completeness scoring                                             |
+| `/api/v1/career/settings`                    | GET / PUT  | `CareerEducationSettings`                                                                                |
+| `/api/v1/career/opportunities`               | GET        | Query params: `track`, `minScore`, `onlyFresh`, `includeDuplicates` -> returns `OpportunitySearchResult` |
+| `/api/v1/career/opportunities/:id/shortlist` | POST       | `{ shortlisted: boolean }` -> returns updated `Opportunity`                                              |
+| `/api/v1/career/opportunities/compare`       | POST       | `{ ids: string[] }` -> returns `OpportunityComparisonMatrix`                                             |
+| `/api/v1/career/applications`                | GET / POST | `Application` lifecycle operations                                                                       |
+| `/api/v1/career/applications/:id/stage`      | PUT        | `{ stage: ApplicationStage, note?: string }`                                                             |
+| `/api/v1/career/documents/tailor`            | POST       | `GenerateDocumentInput` -> returns `DocumentVariant`                                                     |
+| `/api/v1/career/confirmations`               | GET / POST | Confirmation request queries                                                                             |
+| `/api/v1/career/confirmations/:id/resolve`   | POST       | `{ decision: "approve" \| "reject" \| "cancel", reason?: string }`                                       |
 
 ### 8.2 Invariants Expected from Backend
 

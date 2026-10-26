@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { CreateDeadlineInput, Deadline, DeadlineCategory, Opportunity } from "@nexus/client-core";
+import type {
+  CreateDeadlineInput,
+  Deadline,
+  DeadlineCategory,
+  Opportunity,
+} from "@nexus/client-core";
 
 interface DeadlinesCalendarProps {
   deadlines: Deadline[];
@@ -52,12 +57,25 @@ export function DeadlinesCalendar({
   };
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Deadlines and Calendar Schedule">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+    <div
+      className="career-edu-container"
+      role="region"
+      aria-label="Deadlines and Calendar Schedule"
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Deadlines & Milestone Schedule</h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Application file closing dates, funding call deadlines, interview milestones, and calendar sync.
+            Application file closing dates, funding call deadlines, interview milestones, and
+            calendar sync.
           </p>
         </div>
 
@@ -106,8 +124,8 @@ export function DeadlinesCalendar({
                     d.priority === "critical"
                       ? "var(--down)"
                       : d.priority === "high"
-                      ? "var(--gradient)"
-                      : "var(--accent)"
+                        ? "var(--gradient)"
+                        : "var(--accent)"
                   }`,
                   opacity: d.completed ? 0.6 : 1,
                 }}
@@ -120,7 +138,12 @@ export function DeadlinesCalendar({
                       onChange={(e) => void onToggleCompleted(d.id, e.target.checked)}
                       aria-label={`Mark ${d.title} as completed`}
                     />
-                    <strong style={{ fontSize: "0.95rem", textDecoration: d.completed ? "line-through" : "none" }}>
+                    <strong
+                      style={{
+                        fontSize: "0.95rem",
+                        textDecoration: d.completed ? "line-through" : "none",
+                      }}
+                    >
                       {d.title}
                     </strong>
                   </div>
@@ -134,8 +157,8 @@ export function DeadlinesCalendar({
                         d.priority === "critical"
                           ? "var(--down)"
                           : d.priority === "high"
-                          ? "var(--gradient)"
-                          : "var(--muted-text)",
+                            ? "var(--gradient)"
+                            : "var(--muted-text)",
                     }}
                   >
                     {d.priority} Priority
@@ -146,15 +169,39 @@ export function DeadlinesCalendar({
                   Target: <strong>{d.organization}</strong> ({d.opportunityTitle})
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem" }}>
-                  <span>Category: <strong>{d.category.replace("_", " ")}</strong></span>
-                  <span style={{ fontWeight: 600, color: daysRemaining <= 3 ? "var(--down)" : "var(--text)" }}>
-                    📅 {due.toLocaleDateString()} ({daysRemaining > 0 ? `${daysRemaining}d remaining` : "Past due"})
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <span>
+                    Category: <strong>{d.category.replace("_", " ")}</strong>
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: daysRemaining <= 3 ? "var(--down)" : "var(--text)",
+                    }}
+                  >
+                    📅 {due.toLocaleDateString()} (
+                    {daysRemaining > 0 ? `${daysRemaining}d remaining` : "Past due"})
                   </span>
                 </div>
 
                 {/* Calendar Sync Action */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: "auto",
+                    paddingTop: "0.5rem",
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
                   <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
                     Calendar Sync: <strong>{d.calendarSyncStatus}</strong>
                   </span>
@@ -164,7 +211,9 @@ export function DeadlinesCalendar({
                       className="button compact"
                       onClick={() =>
                         void onSyncCalendar(d).then(() =>
-                          setNotice(`Sync drafted for Google Calendar. Action paused at Confirmation Card.`),
+                          setNotice(
+                            `Sync drafted for Google Calendar. Action paused at Confirmation Card.`,
+                          ),
                         )
                       }
                       title="Syncs event to Google Calendar draft, requiring explicit confirmation"
@@ -264,7 +313,9 @@ export function DeadlinesCalendar({
                 id="dPriority"
                 className="career-select"
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high" | "critical")}
+                onChange={(e) =>
+                  setPriority(e.target.value as "low" | "medium" | "high" | "critical")
+                }
               >
                 <option value="critical">Critical (Immediate Action Required)</option>
                 <option value="high">High</option>

@@ -31,11 +31,20 @@ export function CareerSettings({
 
   return (
     <div className="career-edu-container" role="region" aria-label="Career & Education Settings">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Career Engine & Source Settings</h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Configure discovery filters, rate expectations, blacklists, quiet hours, data retention, and error degradation simulations.
+            Configure discovery filters, rate expectations, blacklists, quiet hours, data retention,
+            and error degradation simulations.
           </p>
         </div>
 
@@ -66,14 +75,26 @@ export function CareerSettings({
       )}
 
       {/* Safety & Simulation Modes */}
-      <div className="career-card" style={{ borderLeft: "4px solid var(--accent)", gap: "0.75rem" }}>
+      <div
+        className="career-card"
+        style={{ borderLeft: "4px solid var(--accent)", gap: "0.75rem" }}
+      >
         <strong>Simulated State Controls (Honest Error Verification)</strong>
         <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--muted-text)" }}>
-          Test that the UX displays honest unavailable and degraded states rather than fake or silent success.
+          Test that the UX displays honest unavailable and degraded states rather than fake or
+          silent success.
         </p>
 
         <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
             <input
               type="checkbox"
               checked={formData.offlineSimulation}
@@ -84,11 +105,21 @@ export function CareerSettings({
             </span>
           </label>
 
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
             <input
               type="checkbox"
               checked={formData.degradedFeedSimulation}
-              onChange={(e) => setFormData({ ...formData, degradedFeedSimulation: e.target.checked })}
+              onChange={(e) =>
+                setFormData({ ...formData, degradedFeedSimulation: e.target.checked })
+              }
             />
             <span>
               <strong>Simulate Degraded Feeds</strong> (Shows HTTP 429 rate limit backoff alerts)
@@ -108,7 +139,9 @@ export function CareerSettings({
               id="settingsRemote"
               className="career-select"
               value={formData.remotePolicy}
-              onChange={(e) => setFormData({ ...formData, remotePolicy: e.target.value as LocationType })}
+              onChange={(e) =>
+                setFormData({ ...formData, remotePolicy: e.target.value as LocationType })
+              }
             >
               <option value="remote">100% Remote Only</option>
               <option value="hybrid">Hybrid (Periodic Onsite / Coworking)</option>
@@ -256,7 +289,15 @@ export function CareerSettings({
         {/* Quiet Hours & Alerts */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
           <strong>Quiet Hours & Notification Policy</strong>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+            }}
+          >
             <input
               type="checkbox"
               checked={formData.quietHours.enabled}
@@ -334,7 +375,8 @@ export function CareerSettings({
             />
           </div>
           <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--muted-text)" }}>
-            Automatically purges historical drafts, browser screenshots, and temporary traces after the retention window.
+            Automatically purges historical drafts, browser screenshots, and temporary traces after
+            the retention window.
           </p>
         </div>
       </div>

@@ -32,10 +32,7 @@ export type ApplicationStage =
 export type ConfirmationStatus = "pending" | "approved" | "rejected" | "expired" | "cancelled";
 
 export type ConfirmationActionType =
-  | "browser_submit_application"
-  | "gmail_send_draft"
-  | "calendar_create_event"
-  | "document_export";
+  "browser_submit_application" | "gmail_send_draft" | "calendar_create_event" | "document_export";
 
 export type FeedStatus = "active" | "degraded" | "rate_limited" | "offline";
 
@@ -428,11 +425,13 @@ export interface Outcome {
   opportunityId: string;
   decision: OutcomeDecision;
   decidedAt: string;
-  finalOfferDetails?: {
-    compensation?: string | undefined;
-    startDate?: string | undefined;
-    equityOrStipend?: string | undefined;
-  } | undefined;
+  finalOfferDetails?:
+    | {
+        compensation?: string | undefined;
+        startDate?: string | undefined;
+        equityOrStipend?: string | undefined;
+      }
+    | undefined;
   feedbackReceived?: string | undefined;
   retrospectiveNotes: string;
 }
@@ -546,11 +545,13 @@ export interface RecordOutcomeInput {
   applicationId: string;
   opportunityId: string;
   decision: OutcomeDecision;
-  finalOfferDetails?: {
-    compensation?: string | undefined;
-    startDate?: string | undefined;
-    equityOrStipend?: string | undefined;
-  } | undefined;
+  finalOfferDetails?:
+    | {
+        compensation?: string | undefined;
+        startDate?: string | undefined;
+        equityOrStipend?: string | undefined;
+      }
+    | undefined;
   feedbackReceived?: string | undefined;
   retrospectiveNotes: string;
 }

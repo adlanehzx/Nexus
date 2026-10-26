@@ -26,8 +26,8 @@ export function calculateProfileCompleteness(
       label: "Career Tracks & Primary Discipline",
       completed: Boolean(
         profile.preferredTracks &&
-          profile.preferredTracks.length > 0 &&
-          profile.primaryDiscipline?.trim(),
+        profile.preferredTracks.length > 0 &&
+        profile.primaryDiscipline?.trim(),
       ),
       weight: 15,
       hint: "Select at least one track (PhD, CDI, Freelance) and your primary discipline.",
@@ -43,9 +43,7 @@ export function calculateProfileCompleteness(
       id: "location_and_remote",
       label: "Location & Remote Preferences",
       completed: Boolean(
-        profile.remotePreference &&
-          profile.targetLocations &&
-          profile.targetLocations.length > 0,
+        profile.remotePreference && profile.targetLocations && profile.targetLocations.length > 0,
       ),
       weight: 10,
       hint: "Specify your remote work preference and target locations.",
@@ -55,8 +53,8 @@ export function calculateProfileCompleteness(
       label: "Compensation & Rate Expectations",
       completed: Boolean(
         (profile.cdiPreferences?.targetMinAnnualSalary ?? 0) > 0 ||
-          (profile.freelancePreferences?.targetDailyRateTjm ?? 0) > 0 ||
-          (profile.phdPreferences?.minMonthlyStipend ?? 0) > 0,
+        (profile.freelancePreferences?.targetDailyRateTjm ?? 0) > 0 ||
+        (profile.phdPreferences?.minMonthlyStipend ?? 0) > 0,
       ),
       weight: 15,
       hint: "Set minimum compensation criteria (salary for CDI, TJM for freelance, or stipend for PhD).",

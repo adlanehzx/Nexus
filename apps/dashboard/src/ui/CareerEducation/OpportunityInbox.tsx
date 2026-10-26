@@ -129,7 +129,14 @@ export function OpportunityInbox({
 
       {/* Track Tabs & Search Filter Bar */}
       <div className="career-card" style={{ gap: "0.85rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
           {/* Track Filter Buttons */}
           <div style={{ display: "flex", gap: "0.5rem" }} role="group" aria-label="Filter by track">
             <button
@@ -168,7 +175,9 @@ export function OpportunityInbox({
 
           {/* Quick Filters */}
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.82rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}
+            >
               <input
                 type="checkbox"
                 checked={onlyFresh}
@@ -176,7 +185,9 @@ export function OpportunityInbox({
               />
               Only Fresh
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}
+            >
               <input
                 type="checkbox"
                 checked={includeDuplicates}
@@ -251,7 +262,8 @@ export function OpportunityInbox({
           }}
         >
           <span>
-            <strong>{selectedForComparison.length} opportunities</strong> selected for side-by-side comparison.
+            <strong>{selectedForComparison.length} opportunities</strong> selected for side-by-side
+            comparison.
           </span>
           <span style={{ color: "var(--muted-text)", fontSize: "0.82rem" }}>
             Switch to the <em>Comparison Matrix</em> tab to inspect tradeoffs.
@@ -268,13 +280,15 @@ export function OpportunityInbox({
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
           <strong>No opportunities match your current filters</strong>
           <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-            Try clearing the search term, adjusting track filters, or updating your skills in the Profile Wizard.
+            Try clearing the search term, adjusting track filters, or updating your skills in the
+            Profile Wizard.
           </p>
         </div>
       ) : (
         <div className="career-grid-2">
           {filtered.map((opp) => {
-            const isShortlisted = opp.workflowStatus === "shortlisted" || opp.workflowStatus === "applied";
+            const isShortlisted =
+              opp.workflowStatus === "shortlisted" || opp.workflowStatus === "applied";
             const isCompared = selectedForComparison.includes(opp.id);
 
             return (
@@ -288,14 +302,22 @@ export function OpportunityInbox({
                   <div className="duplicate-alert-banner" role="alert">
                     <span aria-hidden="true">⚠️</span>
                     <span>
-                      Duplicate marker detected (reason: {opp.duplicate.reason}). Original post exists in inbox.
+                      Duplicate marker detected (reason: {opp.duplicate.reason}). Original post
+                      exists in inbox.
                     </span>
                   </div>
                 )}
 
                 {/* Card Header */}
                 <div className="career-card-header">
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.4rem",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
                     <span className={`career-track-pill ${opp.track}`}>{opp.track}</span>
                     <span className={`staleness-pill ${opp.staleness}`}>{opp.staleness}</span>
                     <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
@@ -325,50 +347,72 @@ export function OpportunityInbox({
 
                 {/* Title & Organization */}
                 <div>
-                  <h3 id={`opp-title-${opp.id}`} style={{ margin: "0 0 0.35rem", fontSize: "1.05rem" }}>
+                  <h3
+                    id={`opp-title-${opp.id}`}
+                    style={{ margin: "0 0 0.35rem", fontSize: "1.05rem" }}
+                  >
                     {opp.title}
                   </h3>
                   <div style={{ fontSize: "0.85rem", color: "var(--muted-text)" }}>
                     <strong>{opp.organization}</strong>
-                    {opp.departmentOrLab && ` · ${opp.departmentOrLab}`} · {opp.location} ({opp.remotePolicy})
+                    {opp.departmentOrLab && ` · ${opp.departmentOrLab}`} · {opp.location} (
+                    {opp.remotePolicy})
                   </div>
                 </div>
 
                 {/* Track Specific Highlight Details */}
-                <div style={{ fontSize: "0.85rem", background: "var(--surface-2)", padding: "0.5rem 0.75rem", borderRadius: "4px" }}>
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    background: "var(--surface-2)",
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "4px",
+                  }}
+                >
                   {opp.track === "phd" && opp.phdDetails && (
                     <div>
-                      <strong>Grant / Funding:</strong> {opp.phdDetails.fundingType} · €{opp.phdDetails.monthlyStipend}/mo
+                      <strong>Grant / Funding:</strong> {opp.phdDetails.fundingType} · €
+                      {opp.phdDetails.monthlyStipend}/mo
                       <br />
                       <strong>Advisors:</strong> {opp.phdDetails.supervisors.join(", ")}
                     </div>
                   )}
                   {opp.track === "cdi" && opp.cdiDetails && (
                     <div>
-                      <strong>Compensation:</strong> €{opp.cdiDetails.salaryMin?.toLocaleString()} - €{opp.cdiDetails.salaryMax?.toLocaleString()} / year CDI
+                      <strong>Compensation:</strong> €{opp.cdiDetails.salaryMin?.toLocaleString()} -
+                      €{opp.cdiDetails.salaryMax?.toLocaleString()} / year CDI
                       <br />
-                      <strong>Seniority:</strong> {opp.cdiDetails.seniority.toUpperCase()} · Benefits: {opp.cdiDetails.benefits.join(", ")}
+                      <strong>Seniority:</strong> {opp.cdiDetails.seniority.toUpperCase()} ·
+                      Benefits: {opp.cdiDetails.benefits.join(", ")}
                     </div>
                   )}
                   {opp.track === "freelance" && opp.freelanceDetails && (
                     <div>
-                      <strong>Daily Rate:</strong> €{opp.freelanceDetails.dailyRateMin} - €{opp.freelanceDetails.dailyRateMax}/day TJM
+                      <strong>Daily Rate:</strong> €{opp.freelanceDetails.dailyRateMin} - €
+                      {opp.freelanceDetails.dailyRateMax}/day TJM
                       <br />
-                      <strong>Workload:</strong> {opp.freelanceDetails.daysPerWeek} days/week · Duration: {opp.freelanceDetails.durationMonths} months
+                      <strong>Workload:</strong> {opp.freelanceDetails.daysPerWeek} days/week ·
+                      Duration: {opp.freelanceDetails.durationMonths} months
                     </div>
                   )}
                 </div>
 
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)", lineHeight: 1.4 }}>
+                <p
+                  style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)", lineHeight: 1.4 }}
+                >
                   {opp.description}
                 </p>
 
                 {/* Explainable Match Box */}
                 <div className="match-explain-box">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="match-score-badge high">
-                      ★ {opp.match.score}% Match Score
-                    </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span className="match-score-badge high">★ {opp.match.score}% Match Score</span>
                     <button
                       type="button"
                       className="button compact"
@@ -385,30 +429,49 @@ export function OpportunityInbox({
                   </div>
 
                   {expandedMatchId === opp.id && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
                       <div className="match-breakdown-bars">
                         <div className="match-sub-bar">
                           <span>Skills ({opp.match.breakdown.skills}%)</span>
                           <div className="match-bar-track">
-                            <div className="match-bar-fill" style={{ width: `${opp.match.breakdown.skills}%` }} />
+                            <div
+                              className="match-bar-fill"
+                              style={{ width: `${opp.match.breakdown.skills}%` }}
+                            />
                           </div>
                         </div>
                         <div className="match-sub-bar">
                           <span>Rates ({opp.match.breakdown.compensation}%)</span>
                           <div className="match-bar-track">
-                            <div className="match-bar-fill" style={{ width: `${opp.match.breakdown.compensation}%` }} />
+                            <div
+                              className="match-bar-fill"
+                              style={{ width: `${opp.match.breakdown.compensation}%` }}
+                            />
                           </div>
                         </div>
                         <div className="match-sub-bar">
                           <span>Location ({opp.match.breakdown.location}%)</span>
                           <div className="match-bar-track">
-                            <div className="match-bar-fill" style={{ width: `${opp.match.breakdown.location}%` }} />
+                            <div
+                              className="match-bar-fill"
+                              style={{ width: `${opp.match.breakdown.location}%` }}
+                            />
                           </div>
                         </div>
                         <div className="match-sub-bar">
                           <span>Track ({opp.match.breakdown.trackFit}%)</span>
                           <div className="match-bar-track">
-                            <div className="match-bar-fill" style={{ width: `${opp.match.breakdown.trackFit}%` }} />
+                            <div
+                              className="match-bar-fill"
+                              style={{ width: `${opp.match.breakdown.trackFit}%` }}
+                            />
                           </div>
                         </div>
                       </div>
@@ -439,7 +502,9 @@ export function OpportunityInbox({
                         setExpandedCitationId(expandedCitationId === opp.id ? null : opp.id)
                       }
                     >
-                      {expandedCitationId === opp.id ? "Hide Citations" : `Verified Citations (${opp.citations.length})`}
+                      {expandedCitationId === opp.id
+                        ? "Hide Citations"
+                        : `Verified Citations (${opp.citations.length})`}
                     </button>
 
                     {expandedCitationId === opp.id && (
@@ -479,7 +544,9 @@ export function OpportunityInbox({
                     onClick={() =>
                       void handleAction(
                         () => onToggleShortlist(opp.id, !isShortlisted),
-                        isShortlisted ? "Removed from shortlist." : "Added to shortlist & application pipeline.",
+                        isShortlisted
+                          ? "Removed from shortlist."
+                          : "Added to shortlist & application pipeline.",
                       )
                     }
                   >

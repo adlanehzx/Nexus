@@ -50,19 +50,24 @@ export function DocumentVariants({
 
   return (
     <div className="career-edu-container" role="region" aria-label="Tailored Document Variants">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Tailored Document Variants & Previews</h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Role-tailored CVs, motivation letters, research statements, and commercial rate cards with cryptographic digests and diff summaries.
+            Role-tailored CVs, motivation letters, research statements, and commercial rate cards
+            with cryptographic digests and diff summaries.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="button primary"
-          onClick={() => setShowGenerateModal(true)}
-        >
+        <button type="button" className="button primary" onClick={() => setShowGenerateModal(true)}>
           + Generate Tailored Variant
         </button>
       </div>
@@ -112,7 +117,8 @@ export function DocumentVariants({
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
           <strong>No tailored documents found</strong>
           <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-            Click <em>"Generate Tailored Variant"</em> to craft a role-specific CV, cover letter, or statement.
+            Click <em>"Generate Tailored Variant"</em> to craft a role-specific CV, cover letter, or
+            statement.
           </p>
         </div>
       ) : (
@@ -121,7 +127,9 @@ export function DocumentVariants({
             <article key={doc.id} className="career-card">
               <div className="career-card-header">
                 <div>
-                  <span className={`career-track-pill ${doc.type === "rate_card" ? "freelance" : doc.type === "research_statement" ? "phd" : "cdi"}`}>
+                  <span
+                    className={`career-track-pill ${doc.type === "rate_card" ? "freelance" : doc.type === "research_statement" ? "phd" : "cdi"}`}
+                  >
                     {doc.type.replace("_", " ")}
                   </span>
                   <h3 style={{ margin: "0.35rem 0 0", fontSize: "1rem" }}>{doc.title}</h3>
@@ -145,7 +153,14 @@ export function DocumentVariants({
               </div>
 
               {/* Tailored Highlights & Diff Summary */}
-              <div style={{ background: "var(--surface-2)", padding: "0.65rem 0.85rem", borderRadius: "var(--radius)", fontSize: "0.8rem" }}>
+              <div
+                style={{
+                  background: "var(--surface-2)",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "var(--radius)",
+                  fontSize: "0.8rem",
+                }}
+              >
                 <strong style={{ color: "var(--bright-accent)" }}>Tailored Highlights:</strong>
                 <ul style={{ margin: "0.25rem 0 0.5rem", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
                   {doc.tailoredHighlights.map((h, i) => (
@@ -153,9 +168,22 @@ export function DocumentVariants({
                   ))}
                 </ul>
 
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.72rem", color: "var(--muted-text)" }}>
-                  <span>Sections Tailored: <strong>{doc.diffSummary.sectionsTailored.join(", ")}</strong></span>
-                  <span>Skills: <strong>{doc.diffSummary.skillsEmphasized.join(", ")}</strong></span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    fontSize: "0.72rem",
+                    color: "var(--muted-text)",
+                  }}
+                >
+                  <span>
+                    Sections Tailored:{" "}
+                    <strong>{doc.diffSummary.sectionsTailored.join(", ")}</strong>
+                  </span>
+                  <span>
+                    Skills: <strong>{doc.diffSummary.skillsEmphasized.join(", ")}</strong>
+                  </span>
                 </div>
               </div>
 
@@ -179,7 +207,16 @@ export function DocumentVariants({
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: "auto",
+                  paddingTop: "0.5rem",
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
                 <span style={{ fontSize: "0.72rem", color: "var(--muted-text)" }}>
                   Generated {new Date(doc.generatedAt).toLocaleDateString()}
                 </span>
@@ -188,7 +225,9 @@ export function DocumentVariants({
                   className="button compact"
                   onClick={() =>
                     void onExportConfirmation(doc).then(() =>
-                      setNotice(`Export draft initiated for ${doc.title}. Paused at Confirmation Card for safety.`),
+                      setNotice(
+                        `Export draft initiated for ${doc.title}. Paused at Confirmation Card for safety.`,
+                      ),
                     )
                   }
                   title="Requests explicit confirmation before sending or exporting"

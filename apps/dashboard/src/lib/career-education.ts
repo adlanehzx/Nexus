@@ -1,7 +1,4 @@
-import {
-  FakeCareerEducationClient,
-  type CareerEducationClient,
-} from "@nexus/client-core";
+import { FakeCareerEducationClient, type CareerEducationClient } from "@nexus/client-core";
 
 /**
  * Shared singleton instance of the contract-backed CareerEducationClient.

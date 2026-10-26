@@ -44,12 +44,25 @@ export function ApprovalCards({
   const pendingCount = confirmations.filter((c) => c.status === "pending").length;
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Human-in-the-Loop Approval Action Center">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+    <div
+      className="career-edu-container"
+      role="region"
+      aria-label="Human-in-the-Loop Approval Action Center"
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}
+      >
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Consequential Action Approval Center</h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Every external action stops here. Inspect destination, documents, risks, and consequences before granting explicit human approval.
+            Every external action stops here. Inspect destination, documents, risks, and
+            consequences before granting explicit human approval.
           </p>
         </div>
       </div>
@@ -67,8 +80,9 @@ export function ApprovalCards({
           🛡️ Zero Silent Mutations Policy
         </strong>
         <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.4 }}>
-          NEXUS web search, browser automation, and Google Workspace reach <strong>preview/draft states only</strong>.
-          No application form is submitted, no email is transmitted, and no calendar event is written without your durable, explicit confirmation.
+          NEXUS web search, browser automation, and Google Workspace reach{" "}
+          <strong>preview/draft states only</strong>. No application form is submitted, no email is
+          transmitted, and no calendar event is written without your durable, explicit confirmation.
         </p>
       </div>
 
@@ -141,7 +155,8 @@ export function ApprovalCards({
                 <div className="action-type-header">
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span className="action-badge">
-                      {conf.actionType === "browser_submit_application" && "🌐 Browser Form Submission"}
+                      {conf.actionType === "browser_submit_application" &&
+                        "🌐 Browser Form Submission"}
                       {conf.actionType === "gmail_send_draft" && "✉️ Gmail Outreach Email"}
                       {conf.actionType === "calendar_create_event" && "📅 Google Calendar Mutation"}
                       {conf.actionType === "document_export" && "📄 Document Package Export"}
@@ -155,8 +170,8 @@ export function ApprovalCards({
                           conf.status === "approved"
                             ? "var(--ok)"
                             : conf.status === "pending"
-                            ? "var(--gradient)"
-                            : "var(--down)",
+                              ? "var(--gradient)"
+                              : "var(--down)",
                       }}
                     >
                       {conf.status}
@@ -169,7 +184,10 @@ export function ApprovalCards({
                 </div>
 
                 <div>
-                  <h3 id={`conf-title-${conf.id}`} style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}>
+                  <h3
+                    id={`conf-title-${conf.id}`}
+                    style={{ margin: "0 0 0.35rem", fontSize: "1.1rem" }}
+                  >
                     {conf.title}
                   </h3>
                   <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)" }}>
@@ -199,7 +217,14 @@ export function ApprovalCards({
                 {conf.attachedDocuments.length > 0 && (
                   <div style={{ fontSize: "0.82rem" }}>
                     <strong style={{ color: "var(--text)" }}>Attached Documents & Hashes:</strong>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.35rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.3rem",
+                        marginTop: "0.35rem",
+                      }}
+                    >
                       {conf.attachedDocuments.map((doc) => (
                         <div
                           key={doc.documentId}
@@ -212,7 +237,9 @@ export function ApprovalCards({
                             fontSize: "0.78rem",
                           }}
                         >
-                          <span>📄 {doc.title} ({doc.type})</span>
+                          <span>
+                            📄 {doc.title} ({doc.type})
+                          </span>
                           <span style={{ color: "var(--muted-text)", fontFamily: "monospace" }}>
                             SHA: {doc.digest.slice(0, 12)}...
                           </span>
@@ -272,7 +299,8 @@ export function ApprovalCards({
                       borderLeft: `3px solid ${conf.status === "approved" ? "var(--ok)" : "var(--down)"}`,
                     }}
                   >
-                    <strong>Resolution Record:</strong> Marked as <em>{conf.status.toUpperCase()}</em> by{" "}
+                    <strong>Resolution Record:</strong> Marked as{" "}
+                    <em>{conf.status.toUpperCase()}</em> by{" "}
                     <strong>{conf.resolvedBy ?? "User"}</strong> at{" "}
                     {conf.decidedAt ? new Date(conf.decidedAt).toLocaleString() : "—"}.
                     {conf.decisionRationale && (
@@ -290,7 +318,12 @@ export function ApprovalCards({
                       <button
                         type="button"
                         className="button primary"
-                        style={{ background: "var(--ok)", borderColor: "var(--ok)", color: "#000", fontWeight: 700 }}
+                        style={{
+                          background: "var(--ok)",
+                          borderColor: "var(--ok)",
+                          color: "#000",
+                          fontWeight: 700,
+                        }}
                         disabled={isProcessing}
                         onClick={() =>
                           void handleResolve(

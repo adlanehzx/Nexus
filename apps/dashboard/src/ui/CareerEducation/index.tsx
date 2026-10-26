@@ -66,26 +66,15 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
 
   // Selection states
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
-  const [comparisonMatrix, setComparisonMatrix] = useState<OpportunityComparisonMatrix | null>(null);
+  const [comparisonMatrix, setComparisonMatrix] = useState<OpportunityComparisonMatrix | null>(
+    null,
+  );
 
   const reloadAll = useCallback(async () => {
     setLoading(true);
     setOfflineError(null);
     try {
-      const [
-        p,
-        s,
-        oppRes,
-        ss,
-        ms,
-        apps,
-        docs,
-        dls,
-        cnts,
-        ints,
-        anl,
-        confs,
-      ] = await Promise.all([
+      const [p, s, oppRes, ss, ms, apps, docs, dls, cnts, ints, anl, confs] = await Promise.all([
         client.getProfile(),
         client.getSettings(),
         client.searchOpportunities({ track: "all", includeDuplicates: true }),
@@ -215,11 +204,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
       )}
 
       {/* Main Tabs Navigation */}
-      <nav
-        className="career-tabs-bar"
-        role="tablist"
-        aria-label="Career & Education section views"
-      >
+      <nav className="career-tabs-bar" role="tablist" aria-label="Career & Education section views">
         <button
           type="button"
           role="tab"

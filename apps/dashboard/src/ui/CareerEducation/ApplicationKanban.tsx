@@ -47,7 +47,8 @@ export function ApplicationKanban({
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Application Kanban & Pipeline Timeline</h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Track application progression from initial discovery through tailored documents, human confirmation, interviews, and offers.
+            Track application progression from initial discovery through tailored documents, human
+            confirmation, interviews, and offers.
           </p>
         </div>
       </div>
@@ -100,7 +101,13 @@ export function ApplicationKanban({
                       if (e.key === "Enter" || e.key === " ") setSelectedAppId(app.id);
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <span className={`career-track-pill ${app.opportunity.track}`}>
                         {app.opportunity.track}
                       </span>
@@ -120,7 +127,13 @@ export function ApplicationKanban({
                     </div>
 
                     {app.nextDeadlineAt && (
-                      <div style={{ fontSize: "0.72rem", color: "var(--gradient)", marginTop: "0.25rem" }}>
+                      <div
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "var(--gradient)",
+                          marginTop: "0.25rem",
+                        }}
+                      >
                         ⏱ Deadline: {new Date(app.nextDeadlineAt).toLocaleDateString()}
                       </div>
                     )}
@@ -223,7 +236,14 @@ export function ApplicationKanban({
             {/* Stage History Timeline */}
             <div className="career-card" style={{ gap: "0.6rem" }}>
               <strong>Stage Transition History & Audit</strong>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "0.8rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                  fontSize: "0.8rem",
+                }}
+              >
                 {selectedApp.stageHistory.map((h, idx) => (
                   <div
                     key={idx}

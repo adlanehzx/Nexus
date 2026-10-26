@@ -180,7 +180,8 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
           <div className="career-form-group" style={{ gap: "1rem" }}>
             <h3>Preferred Career Tracks</h3>
             <p style={{ color: "var(--muted-text)", fontSize: "0.85rem" }}>
-              NEXUS supports parallel or combined discovery for academic research, permanent employment, and freelance consulting.
+              NEXUS supports parallel or combined discovery for academic research, permanent
+              employment, and freelance consulting.
             </p>
             <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
               {(["phd", "cdi", "freelance"] as OpportunityTrack[]).map((track) => {

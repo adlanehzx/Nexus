@@ -16,8 +16,9 @@ export function ShortlistComparison({
       <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
         <h3>No Opportunities Selected for Comparison</h3>
         <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-          In the <strong>Inbox & Discovery</strong> tab, check the <em>"Compare"</em> checkbox on two or more positions
-          (e.g. a PhD position, a CDI job, and a Freelance mission) to view an objective side-by-side evaluation.
+          In the <strong>Inbox & Discovery</strong> tab, check the <em>"Compare"</em> checkbox on
+          two or more positions (e.g. a PhD position, a CDI job, and a Freelance mission) to view an
+          objective side-by-side evaluation.
         </p>
       </div>
     );
@@ -31,7 +32,8 @@ export function ShortlistComparison({
             Multi-Track Opportunity Comparison ({matrix.opportunities.length} positions)
           </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Side-by-side metrics across doctoral contracts, permanent jobs (CDI), and freelance consulting missions.
+            Side-by-side metrics across doctoral contracts, permanent jobs (CDI), and freelance
+            consulting missions.
           </p>
         </div>
 
@@ -50,7 +52,14 @@ export function ShortlistComparison({
         }}
       >
         <strong style={{ fontSize: "0.95rem" }}>Strategic Tradeoff Analysis</strong>
-        <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.2rem", fontSize: "0.85rem", lineHeight: 1.5 }}>
+        <ul
+          style={{
+            margin: "0.25rem 0 0",
+            paddingLeft: "1.2rem",
+            fontSize: "0.85rem",
+            lineHeight: 1.5,
+          }}
+        >
           {matrix.tradeoffsSummary.map((item, idx) => (
             <li key={idx}>{item}</li>
           ))}
@@ -66,11 +75,16 @@ export function ShortlistComparison({
               {matrix.opportunities.map((opp) => (
                 <th key={opp.id} scope="col">
                   <div>
-                    <span className={`career-track-pill ${opp.track}`} style={{ marginBottom: "0.35rem" }}>
+                    <span
+                      className={`career-track-pill ${opp.track}`}
+                      style={{ marginBottom: "0.35rem" }}
+                    >
                       {opp.track}
                     </span>
                     <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>{opp.title}</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--muted-text)", fontWeight: 400 }}>
+                    <div
+                      style={{ fontSize: "0.8rem", color: "var(--muted-text)", fontWeight: 400 }}
+                    >
                       {opp.organization}
                     </div>
                   </div>
@@ -88,7 +102,9 @@ export function ShortlistComparison({
 
                   return (
                     <td key={opp.id} className={isWinner ? "winner-cell" : ""}>
-                      {isWinner && <span style={{ marginRight: "0.35rem", color: "var(--ok)" }}>★</span>}
+                      {isWinner && (
+                        <span style={{ marginRight: "0.35rem", color: "var(--ok)" }}>★</span>
+                      )}
                       {String(val ?? "—")}
                     </td>
                   );
