@@ -94,6 +94,8 @@ import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
 import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 import type { LinkedInIntegrationService } from "./linkedin-integration.js";
+import { OsintService } from "./osint-service.js";
+import { createOsintTools } from "@nexus/osint";
 
 /**
  * Assembly of API services.
@@ -226,6 +228,7 @@ export interface ServiceContainerOptions {
   careerService?: CareerService;
   careerAdapter?: SubmissionAdapter;
   linkedin?: LinkedInIntegrationService;
+  osint?: OsintService;
 }
 
 export class ServiceContainer {
@@ -297,6 +300,7 @@ export class ServiceContainer {
   readonly agentCollaboration: AgentCollaborationService;
   readonly vault: KeyringVault | undefined;
   readonly linkedin: LinkedInIntegrationService | undefined;
+  readonly osint: OsintService;
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
@@ -599,6 +603,15 @@ export class ServiceContainer {
     this.agentCollaboration = new AgentCollaborationService();
     this.vault = options.vault;
     this.linkedin = options.linkedin;
+    this.osint =
+      options.osint ??
+      new OsintService({
+        ...(options.runtimeConfiguration === undefined
+          ? {}
+          : { runtime: options.runtimeConfiguration }),
+        ...(options.vault === undefined ? {} : { vault: options.vault }),
+      });
+    this.toolRegistry.registerAll(createOsintTools(this.osint));
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
 

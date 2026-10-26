@@ -1667,3 +1667,186 @@ details.card[open] > summary {
     animation-duration: 0.01ms !important;
   }
 }
+
+.osint-case-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.osint-case-list {
+  display: grid;
+  gap: 8px;
+  position: sticky;
+  top: 82px;
+}
+.osint-case-row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.osint-case-row:hover,
+.osint-case-row.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.osint-case-row span,
+.osint-watch small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.osint-case-main {
+  min-height: 580px;
+}
+.osint-tabs {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  margin: 18px 0;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+.osint-tabs button {
+  flex: 1;
+  min-width: max-content;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.osint-tabs button.active {
+  background: var(--surface-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.osint-panel-stack {
+  display: grid;
+  gap: 16px;
+}
+.osint-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.osint-metrics > div {
+  display: grid;
+  gap: 2px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.osint-metrics strong {
+  font-size: 25px;
+}
+.osint-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.osint-evidence-list {
+  display: grid;
+  gap: 9px;
+}
+.osint-evidence-list article,
+.osint-watch,
+.osint-alert {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.osint-evidence-list article p,
+.osint-alert p {
+  margin: 5px 0;
+  color: var(--muted);
+}
+.osint-evidence-list article > span {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  color: var(--accent);
+  font-size: 12px;
+  text-align: right;
+}
+.osint-evidence-list small {
+  color: var(--muted);
+}
+.osint-watch > div {
+  display: grid;
+  gap: 5px;
+  overflow: hidden;
+}
+.osint-watch strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.osint-alert.acknowledged {
+  opacity: 0.6;
+}
+.osint-form {
+  margin: 20px 0;
+}
+.osint-graph {
+  width: 100%;
+  min-height: 340px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--accent) 10%, transparent),
+    transparent 60%
+  );
+}
+.osint-graph line {
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--border));
+  stroke-width: 2;
+}
+.osint-graph circle {
+  fill: var(--surface-strong);
+  stroke: var(--accent);
+  stroke-width: 2;
+  cursor: pointer;
+}
+.osint-graph g.focused circle {
+  fill: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  stroke-width: 4;
+}
+.osint-graph text {
+  fill: var(--text);
+  font-size: 11px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.osint-graph line + text {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+@media (max-width: 840px) {
+  .osint-case-shell {
+    grid-template-columns: 1fr;
+  }
+  .osint-case-list {
+    position: static;
+  }
+  .osint-metrics {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}

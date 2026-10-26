@@ -1,5 +1,14 @@
 import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-core";
 import type { HttpClient, SecureStorage } from "@nexus/client-core";
+import type {
+  ArchivedEvidence,
+  OsintAlert,
+  OsintCaseRecord,
+  OsintEntity,
+  OsintInvestigation,
+  OsintRelation,
+  OsintWatch,
+} from "@nexus/osint";
 
 /**
  * Dashboard API client.
@@ -1031,6 +1040,72 @@ export class DashboardApi {
       message,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     });
+  }
+
+  osintCases(): Promise<{ cases: OsintCaseRecord[] }> {
+    return this.#get("/api/v1/osint/cases");
+  }
+
+  createOsintCase(input: OsintInvestigation): Promise<OsintCaseRecord> {
+    return this.#request("POST", "/api/v1/osint/cases", input);
+  }
+
+  osintCase(caseId: string): Promise<OsintCaseRecord> {
+    return this.#get(`/api/v1/osint/cases/${encodeURIComponent(caseId)}`);
+  }
+
+  importOsintEvidence(caseId: string, dataset: string): Promise<{ evidence: ArchivedEvidence[] }> {
+    return this.#request("POST", `/api/v1/osint/cases/${encodeURIComponent(caseId)}/import`, {
+      dataset,
+    });
+  }
+
+  addOsintEntity(caseId: string, input: Omit<OsintEntity, "id">): Promise<OsintEntity> {
+    return this.#request(
+      "POST",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/entities`,
+      input,
+    );
+  }
+
+  addOsintRelation(caseId: string, input: Omit<OsintRelation, "id">): Promise<OsintRelation> {
+    return this.#request(
+      "POST",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/relations`,
+      input,
+    );
+  }
+
+  addOsintWatch(caseId: string, query: string, intervalMinutes: number): Promise<OsintWatch> {
+    return this.#request("POST", `/api/v1/osint/cases/${encodeURIComponent(caseId)}/watches`, {
+      query,
+      intervalMinutes,
+    });
+  }
+
+  acknowledgeOsintAlert(caseId: string, alertId: string): Promise<OsintAlert> {
+    return this.#request(
+      "POST",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/alerts/${encodeURIComponent(alertId)}/acknowledge`,
+    );
+  }
+
+  enrichOsintCase(
+    caseId: string,
+    input: {
+      provider: "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
+      query: string;
+      secretRef?: string;
+    },
+  ): Promise<ArchivedEvidence> {
+    return this.#request("POST", `/api/v1/osint/cases/${encodeURIComponent(caseId)}/enrich`, input);
+  }
+
+  osintReport(
+    caseId: string,
+    format: "markdown" | "pdf",
+  ): Promise<{ format: "markdown" | "pdf"; content: string }> {
+    return this.#get(`/api/v1/osint/cases/${encodeURIComponent(caseId)}/report?format=${format}`);
   }
 
   nexusMission(missionId: string): Promise<OrchestratedMission> {

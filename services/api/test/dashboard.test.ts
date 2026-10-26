@@ -512,7 +512,15 @@ describe("infrastructure sections", () => {
   it("lists tool catalog with what is authorized", async () => {
     const response = await get("/api/v1/dashboard/tools", admin);
     expect(response.statusCode).toBe(200);
-    expect(response.json<{ data: { tools: unknown[] } }>().data.tools).toEqual([]);
+    const tools = response.json<{ data: { tools: { name: string; allowed: boolean }[] } }>().data
+      .tools;
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "osint.case.inspect",
+      "osint.evidence.archive",
+      "osint.entity.add",
+      "osint.relation.add",
+    ]);
+    expect(tools.every((tool) => tool.allowed)).toBe(true);
   });
 });
 

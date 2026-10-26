@@ -39,6 +39,7 @@
     "@nexus/memory": "workspace:*",
     "@nexus/mission-control-client": "workspace:*",
     "@nexus/notifications": "workspace:*",
+    "@nexus/osint": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",

@@ -8,6 +8,7 @@ import { mcpServerConfigSchema, type McpServerConfig } from "@nexus/mcp";
 import { notificationsConfigSchema, type NotificationsConfig } from "@nexus/notifications";
 import { providerAccountSchema, type ProviderAccount } from "./provider-accounts.js";
 import { agentRoutingStatsSchema, type AgentRoutingStats } from "./agent-router.js";
+import { osintCaseRecordSchema, type OsintCaseRecord } from "@nexus/osint";
 
 const loopbackHttpUrl = z
   .string()
@@ -139,6 +140,17 @@ export class RuntimeConfigurationStore {
 
   async saveRoutingStats(stats: AgentRoutingStats): Promise<void> {
     await this.#write("agent-routing-stats.json", agentRoutingStatsSchema.parse(stats));
+  }
+
+  async loadOsintCases(): Promise<OsintCaseRecord[]> {
+    const raw = await this.#read("osint-cases.json", { cases: [] });
+    return z.object({ cases: z.array(osintCaseRecordSchema) }).parse(raw).cases;
+  }
+
+  async saveOsintCases(cases: OsintCaseRecord[]): Promise<void> {
+    await this.#write("osint-cases.json", {
+      cases: z.array(osintCaseRecordSchema).parse(cases),
+    });
   }
 
   async listSecretNames(): Promise<string[]> {

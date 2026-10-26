@@ -603,6 +603,9 @@ importers:
 
   packages/osint:
     dependencies:
+      '@nexus/tools':
+        specifier: workspace:*
+        version: link:../tools
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -857,6 +860,9 @@ importers:
       '@nexus/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@nexus/osint':
+        specifier: workspace:*
+        version: link:../../packages/osint
       '@nexus/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

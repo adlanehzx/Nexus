@@ -227,6 +227,12 @@ const logger = createLogger(config, [services.logs]);
 
 async function main(): Promise<void> {
   const app = await buildApp({ config, logger, services, prisma });
+  const osintWatchTimer = setInterval(() => {
+    void services.osint.runDueWatches().catch((error: unknown) => {
+      logger.warn({ err: error }, "OSINT watch cycle failed");
+    });
+  }, 60_000);
+  osintWatchTimer.unref();
 
   // Redis uses `lazyConnect`: we force connection now so that an unreachable
   // Redis fails startup loudly.
@@ -268,6 +274,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(osintWatchTimer);
 
     logger.info({ event: "api.shutdown.start", signal }, "Shutdown in progress");
 

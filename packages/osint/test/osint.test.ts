@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assessOsintRequest,
   buildOsintMission,
+  createOsintTools,
   importEvidenceDataset,
   InMemoryOsintCaseStore,
   osintInvestigationSchema,
@@ -89,5 +90,45 @@ describe("OSINT mission policy", () => {
     const complete = store.get("owner-a", record.id)!;
     expect(renderOsintMarkdown(complete)).toContain("SHA-256");
     expect(new TextDecoder().decode(renderOsintPdf(complete)).startsWith("%PDF-1.4")).toBe(true);
+  });
+
+  it("hydrates a durable snapshot without weakening owner isolation", () => {
+    const initial = new InMemoryOsintCaseStore();
+    const record = initial.create("owner-a", request);
+    initial.addWatch("owner-a", record.id, "https://example.org/news", 60);
+    const restored = new InMemoryOsintCaseStore(initial.snapshot());
+    expect(restored.get("owner-a", record.id)?.watches).toHaveLength(1);
+    expect(restored.get("owner-b", record.id)).toBeUndefined();
+  });
+
+  it("exposes owner-scoped native tools for collaborating agents", async () => {
+    const store = new InMemoryOsintCaseStore();
+    const record = store.create("owner-a", request);
+    const tools = createOsintTools({
+      get: (ownerId, caseId) => Promise.resolve(store.get(ownerId, caseId)),
+      addEvidence: (ownerId, caseId, input) =>
+        Promise.resolve(store.addEvidence(ownerId, caseId, input)),
+      addEntity: (ownerId, caseId, input) =>
+        Promise.resolve(store.addEntity(ownerId, caseId, input)),
+      addRelation: (ownerId, caseId, input) =>
+        Promise.resolve(store.addRelation(ownerId, caseId, input)),
+    });
+    const inspect = tools.find((tool) => tool.name === "osint.case.inspect")!;
+    const context = {
+      runId: "run-1",
+      userId: "owner-b",
+      conversationId: "conversation-1",
+      correlationId: "correlation-1",
+      signal: new AbortController().signal,
+      idempotencyKey: "idempotency-1",
+      attempt: 1,
+      onProgress: () => undefined,
+    };
+    await expect(inspect.execute({ caseId: record.id } as never, context)).rejects.toThrow(
+      /not found/i,
+    );
+    await expect(
+      inspect.execute({ caseId: record.id } as never, { ...context, userId: "owner-a" }),
+    ).resolves.toMatchObject({ id: record.id });
   });
 });

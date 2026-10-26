@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "default": "./dist/policy.js"
     }
   },
   "scripts": {
@@ -19,6 +23,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@nexus/tools": "workspace:*",
     "zod": "4.5.4"
   },
   "devDependencies": {
