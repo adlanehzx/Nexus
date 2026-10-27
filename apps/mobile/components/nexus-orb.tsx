@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
-import { theme } from "../theme/index.js";
+import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
 export type OrbState = "idle" | "listening" | "executing" | "waiting" | "error" | "offline";
 
 /** Native equivalent of the desktop Core Orb: one inexpensive transform loop. */
 export function NexusOrb({ state = "idle", size = 112 }: { state?: OrbState; size?: number }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const pulse = useRef(new Animated.Value(0)).current;
   const active = state === "listening" || state === "executing";
   useEffect(() => {
@@ -66,31 +68,32 @@ export function NexusOrb({ state = "idle", size = 112 }: { state?: OrbState; siz
     </View>
   );
 }
-const styles = StyleSheet.create({
-  frame: { alignItems: "center", justifyContent: "center" },
-  halo: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
-    borderRadius: 999,
-    borderWidth: 1,
-    opacity: 0.35,
-  },
-  field: {
-    position: "absolute",
-    width: "72%",
-    height: "72%",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderTopColor: "transparent",
-    opacity: 0.7,
-  },
-  core: {
-    width: "38%",
-    height: "38%",
-    borderRadius: 999,
-    shadowOpacity: 0.8,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-});
+const makeStyles = (_theme: Theme) =>
+  StyleSheet.create({
+    frame: { alignItems: "center", justifyContent: "center" },
+    halo: {
+      position: "absolute",
+      width: "100%",
+      height: "100%",
+      borderRadius: 999,
+      borderWidth: 1,
+      opacity: 0.35,
+    },
+    field: {
+      position: "absolute",
+      width: "72%",
+      height: "72%",
+      borderRadius: 999,
+      borderWidth: 1,
+      borderTopColor: "transparent",
+      opacity: 0.7,
+    },
+    core: {
+      width: "38%",
+      height: "38%",
+      borderRadius: 999,
+      shadowOpacity: 0.8,
+      shadowRadius: 18,
+      elevation: 8,
+    },
+  });

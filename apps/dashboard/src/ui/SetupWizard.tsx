@@ -42,6 +42,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
   // Step 1: Readiness
   const [readiness, setReadiness] = useState<ServerReadiness | null>(null);
+  const [alreadyInitialized, setAlreadyInitialized] = useState(false);
 
   // Step 2: Admin form
   const [adminName, setAdminName] = useState("");
@@ -91,8 +92,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     setError(null);
     setDiagnostic(null);
     try {
-      const result = await session.checkReadiness();
+      const [result, setupStatus] = await Promise.all([
+        session.checkReadiness(),
+        session.checkSetupStatus(),
+      ]);
       setReadiness(result);
+      setAlreadyInitialized(setupStatus.initialized);
       if (result.status === "down") {
         setError("Core server is unreachable. Verify that backend services are running.");
         setDiagnostic(
@@ -455,6 +460,31 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               <p>Checking database, caching, and core service connectivity.</p>
             </div>
 
+            {alreadyInitialized && (
+              <div
+                className="card"
+                style={{
+                  padding: "14px",
+                  border: "1px solid var(--nx-accent)",
+                  background: "var(--nx-accent-muted)",
+                  margin: "16px 0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <strong>Administrator Account Already Created</strong>
+                  <div className="muted" style={{ fontSize: "13px" }}>
+                    NEXUS instance has already been initialized. You can sign in directly.
+                  </div>
+                </div>
+                <button type="button" className="button primary compact" onClick={onSwitchToLogin}>
+                  Sign In
+                </button>
+              </div>
+            )}
+
             <div
               style={{ display: "flex", flexDirection: "column", gap: "12px", margin: "16px 0" }}
             >
@@ -727,7 +757,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                         </p>
                         <code
                           style={{
-                            background: "#000",
+                            background: "var(--nx-canvas-sunken)",
                             padding: "4px 8px",
                             borderRadius: "4px",
                             display: "inline-block",
@@ -968,7 +998,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     </span>
                     <code
                       style={{
-                        background: "#000",
+                        background: "var(--nx-canvas-sunken)",
                         padding: "4px 8px",
                         borderRadius: "4px",
                         display: "block",
@@ -982,7 +1012,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     To pair an external worker, run:
                     <code
                       style={{
-                        background: "#000",
+                        background: "var(--nx-canvas-sunken)",
                         padding: "4px 8px",
                         borderRadius: "4px",
                         display: "block",

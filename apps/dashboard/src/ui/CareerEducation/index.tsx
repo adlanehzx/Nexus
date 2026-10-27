@@ -192,12 +192,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           <div>
             <strong>⚠️ Feeds Unreachable / Offline:</strong> {offlineError}
           </div>
-          <button
-            type="button"
-            className="button compact"
-            onClick={() => void reloadAll()}
-            style={{ background: "var(--down)", color: "#fff", border: "none" }}
-          >
+          <button type="button" className="button compact danger" onClick={() => void reloadAll()}>
             Retry Connection
           </button>
         </div>

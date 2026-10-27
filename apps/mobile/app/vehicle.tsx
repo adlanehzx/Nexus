@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as Speech from "expo-speech";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useThemedStyles } from "../theme/index.js";
 import { VehicleModeController } from "../lib/vehicle.js";
 
 /**
@@ -17,6 +17,7 @@ import { VehicleModeController } from "../lib/vehicle.js";
  * - Quick audible announcements.
  */
 export default function VehicleModeScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { state } = useNexus();
   const [controller] = useState(
     () =>
@@ -145,124 +146,125 @@ export default function VehicleModeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000000", // Pure black for OLED minimal distraction
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 30,
-    justifyContent: "space-between",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modeBadge: {
-    backgroundColor: "#1a2536",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-  modeBadgeText: {
-    color: "#7de8ff",
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  privacyBadge: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-  micOn: {
-    backgroundColor: "#ff4d4d",
-  },
-  micOff: {
-    backgroundColor: "#222222",
-  },
-  privacyBadgeText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-  },
-  statusBox: {
-    backgroundColor: "#111827",
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "#374151",
-    alignItems: "center",
-    marginVertical: 16,
-  },
-  statusTitle: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  statusSubtitle: {
-    color: theme.color.textMuted,
-    fontSize: 16,
-    textAlign: "center",
-  },
-  actionsContainer: {
-    gap: 16,
-  },
-  largeButton: {
-    height: 84, // Target >= 80px for driver safety
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 4,
-  },
-  micButton: {
-    backgroundColor: "#1e3a5f",
-    borderWidth: 2,
-    borderColor: "#3b82f6",
-  },
-  micButtonActive: {
-    backgroundColor: "#ef4444",
-    borderColor: "#f87171",
-  },
-  micButtonText: {
-    color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  approveButton: {
-    backgroundColor: "#166534",
-    borderWidth: 2,
-    borderColor: "#22c55e",
-  },
-  abortButton: {
-    backgroundColor: "#991b1b",
-    borderWidth: 2,
-    borderColor: "#ef4444",
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  pressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
-  exitButton: {
-    height: 48,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  exitButtonText: {
-    color: "#6b7280",
-    fontSize: 14,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "#000000", // Pure black for OLED minimal distraction
+      paddingHorizontal: 20,
+      paddingTop: 50,
+      paddingBottom: 30,
+      justifyContent: "space-between",
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    modeBadge: {
+      backgroundColor: "#1a2536",
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+    },
+    modeBadgeText: {
+      color: "#7de8ff",
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+    },
+    privacyBadge: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+    },
+    micOn: {
+      backgroundColor: "#ff4d4d",
+    },
+    micOff: {
+      backgroundColor: "#222222",
+    },
+    privacyBadgeText: {
+      color: "#ffffff",
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0.8,
+    },
+    statusBox: {
+      backgroundColor: "#111827",
+      padding: 24,
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: "#374151",
+      alignItems: "center",
+      marginVertical: 16,
+    },
+    statusTitle: {
+      color: "#ffffff",
+      fontSize: 22,
+      fontWeight: "700",
+      textAlign: "center",
+      marginBottom: 8,
+    },
+    statusSubtitle: {
+      color: theme.color.textMuted,
+      fontSize: 16,
+      textAlign: "center",
+    },
+    actionsContainer: {
+      gap: 16,
+    },
+    largeButton: {
+      height: 84, // Target >= 80px for driver safety
+      borderRadius: 16,
+      justifyContent: "center",
+      alignItems: "center",
+      elevation: 4,
+    },
+    micButton: {
+      backgroundColor: "#1e3a5f",
+      borderWidth: 2,
+      borderColor: "#3b82f6",
+    },
+    micButtonActive: {
+      backgroundColor: "#ef4444",
+      borderColor: "#f87171",
+    },
+    micButtonText: {
+      color: "#ffffff",
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+    },
+    approveButton: {
+      backgroundColor: "#166534",
+      borderWidth: 2,
+      borderColor: "#22c55e",
+    },
+    abortButton: {
+      backgroundColor: "#991b1b",
+      borderWidth: 2,
+      borderColor: "#ef4444",
+    },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+    },
+    pressed: {
+      opacity: 0.8,
+      transform: [{ scale: 0.98 }],
+    },
+    exitButton: {
+      height: 48,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    exitButtonText: {
+      color: "#6b7280",
+      fontSize: 14,
+      fontWeight: "600",
+      letterSpacing: 1,
+    },
+  });

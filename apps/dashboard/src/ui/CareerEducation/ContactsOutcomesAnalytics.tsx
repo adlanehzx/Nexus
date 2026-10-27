@@ -92,7 +92,7 @@ export function ContactsOutcomesAnalytics({
           style={{
             padding: "0.65rem 1rem",
             borderRadius: "var(--radius)",
-            background: "rgb(95 211 154 / 12%)",
+            background: "var(--nx-ok-bg)",
             color: "var(--ok)",
             fontSize: "0.85rem",
           }}

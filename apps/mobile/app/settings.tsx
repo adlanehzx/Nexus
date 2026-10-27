@@ -2,7 +2,13 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import {
+  type Theme,
+  type ThemePreference,
+  useTheme,
+  useThemePreference,
+  useThemedStyles,
+} from "../theme/index.js";
 
 /**
  * Settings and session management.
@@ -10,6 +16,8 @@ import { theme } from "../theme/index.js";
  * Focuses on security (session, device identity) and accessibility preferences (voice read aloud).
  */
 export default function SettingsScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
   const [speakReplies, setSpeakReplies] = useState(nexus.voice.speakRepliesEnabled);
 
@@ -28,6 +36,15 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.screen}>
+      <Section title="Appearance">
+        <Row
+          label="Theme"
+          hint="Following the system is the default: the phone already knows whether it is night."
+        >
+          <ThemeChoice />
+        </Row>
+      </Section>
+
       <Section title="Voice">
         <Row
           label="Read responses aloud"
@@ -99,7 +116,43 @@ export default function SettingsScreen() {
   );
 }
 
+/** Light / system / dark, the same three positions as the other NEXUS clients. */
+function ThemeChoice() {
+  const styles = useThemedStyles(makeStyles);
+  const { preference, setPreference } = useThemePreference();
+  const options: { id: ThemePreference; label: string }[] = [
+    { id: "light", label: "Light" },
+    { id: "system", label: "Auto" },
+    { id: "dark", label: "Dark" },
+  ];
+
+  return (
+    <View style={styles.segmented}>
+      {options.map((option) => {
+        const selected = preference === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            style={[styles.segment, selected && styles.segmentSelected]}
+            onPress={() => {
+              setPreference(option.id);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${option.label} theme`}
+          >
+            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -117,6 +170,7 @@ function Row({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -128,38 +182,55 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.color.background,
-    padding: theme.space(4),
-    gap: theme.space(6),
-  },
-  section: { gap: theme.space(2) },
-  sectionTitle: {
-    color: theme.color.textFaint,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.space(4),
-  },
-  rowText: { flex: 1, gap: theme.space(1) },
-  label: { color: theme.color.text, fontSize: 15 },
-  value: { color: theme.color.text, fontSize: 14, fontVariant: ["tabular-nums"] },
-  hint: { color: theme.color.textMuted, fontSize: 12, lineHeight: 17 },
-  signOut: {
-    marginTop: "auto",
-    borderWidth: 1,
-    borderColor: theme.color.danger,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.space(4),
-    alignItems: "center",
-  },
-  signOutText: { color: theme.color.danger, fontSize: 15, fontWeight: "600" },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: theme.color.background,
+      padding: theme.space(6),
+      gap: theme.space(8),
+    },
+    section: { gap: theme.space(4) },
+    sectionTitle: {
+      color: theme.color.textFaint,
+      fontSize: 12,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: theme.space(6),
+    },
+    rowText: { flex: 1, gap: theme.space(2) },
+    label: { color: theme.color.text, fontSize: 15 },
+    value: { color: theme.color.text, fontSize: 14, fontVariant: ["tabular-nums"] },
+    hint: { color: theme.color.textMuted, fontSize: 12, lineHeight: 17 },
+    signOut: {
+      marginTop: "auto",
+      borderWidth: 1,
+      borderColor: theme.color.danger,
+      borderRadius: theme.radius.lg,
+      paddingVertical: theme.space(6),
+      alignItems: "center",
+    },
+    signOutText: { color: theme.color.danger, fontSize: 15, fontWeight: "600" },
+    segmented: {
+      flexDirection: "row",
+      padding: 2,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.color.backgroundSunken,
+    },
+    segment: {
+      paddingHorizontal: theme.space(5),
+      paddingVertical: theme.space(3),
+      borderRadius: theme.radius.pill,
+    },
+    segmentSelected: { backgroundColor: theme.color.accentMuted },
+    segmentText: { color: theme.color.textMuted, fontSize: 13, fontWeight: "600" },
+    segmentTextSelected: { color: theme.color.accent },
+  });

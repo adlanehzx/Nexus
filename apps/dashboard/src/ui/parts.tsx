@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Dashboard UI building blocks.
@@ -70,8 +70,22 @@ export function Empty({ children }: { children: React.ReactNode }) {
 
 /**
  * Section loader hook with isolated error and reload states.
+ *
+ * `deps` are the values the request is built from — a task id, a filter, a
+ * selected range. The fetch re-runs when one of them changes, exactly like a
+ * `useEffect` dependency list.
+ *
+ * Passing them matters. The hook deliberately does not depend on the identity
+ * of `load`, which is an inline arrow at every call site and would therefore
+ * refetch on every render; so a section whose request reads a state value and
+ * declares no dependency keeps serving the result of the first query forever,
+ * no matter what the user types. Calling `reload()` by hand in the same event
+ * handler papers over it, but only for the paths someone remembered.
  */
-export function useSection<T>(load: () => Promise<T>): {
+export function useSection<T>(
+  load: () => Promise<T>,
+  deps: readonly unknown[] = [],
+): {
   data: T | undefined;
   error: string | undefined;
   loading: boolean;
@@ -82,11 +96,20 @@ export function useSection<T>(load: () => Promise<T>): {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
+  // Always call the newest closure without making its identity a trigger.
+  // Declared before the fetching effect so it has already run when that one
+  // fires for a dependency change.
+  const latest = useRef(load);
+  useEffect(() => {
+    latest.current = load;
+  });
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
 
-    void load()
+    void latest
+      .current()
       .then((value) => {
         if (cancelled) return;
         setData(value);
@@ -103,7 +126,7 @@ export function useSection<T>(load: () => Promise<T>): {
     return () => {
       cancelled = true;
     };
-  }, [tick]);
+  }, [tick, ...deps]);
 
   const reload = useCallback(() => {
     setTick((value) => value + 1);

@@ -1,618 +1,510 @@
-/* ==========================================================================
-   NEXUS CAREER & EDUCATION DASHBOARD DESIGN SYSTEM
-   High contrast, accessible, responsive styling matching NEXUS dark mode
-   ========================================================================== */
+/*
+ * NEXUS Signal — Career & Education workspace.
+ *
+ * The domain layer on top of theme.css: everything specific to opportunities,
+ * applications, approvals and documents. Shared shapes (tabs, modals, pills,
+ * banners, tables) live in theme.css and are not repeated here.
+ *
+ * Every value comes from @nexus/design. The rule the whole workspace is built
+ * around: a human is about to approve an action that touches a real account,
+ * so anything awaiting a decision must be visibly unfinished, and anything
+ * already decided must be visibly inert.
+ */
 
 .career-edu-container {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 0.5rem 0 2rem;
   width: 100%;
+  flex-direction: column;
+  gap: var(--nx-space-8);
+  padding: var(--nx-space-2) 0 var(--nx-space-10);
 }
 
 .career-offline-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
-  background: rgb(242 118 118 / 12%);
-  border: 1px solid var(--down);
-  border-radius: var(--radius);
-  color: var(--down);
-  font-weight: 500;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5) var(--nx-space-7);
+  border: 1px solid var(--nx-danger-line);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
+  font-weight: var(--nx-weight-medium);
 }
 
-.career-tabs-bar {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.5rem;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.career-tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  color: var(--muted-text);
-  font-size: 0.85rem;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.career-tab-btn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.career-tab-btn[aria-selected="true"] {
-  background: var(--soft-accent);
-  border-color: var(--accent);
-  color: var(--bright-accent);
-  font-weight: 600;
-}
-
-.career-tab-btn .badge-counter {
+/* Count of items waiting on the user, inside a tab label. */
+.badge-counter {
   display: inline-flex;
+  min-width: 18px;
+  height: 18px;
   align-items: center;
   justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 0.35rem;
-  border-radius: 9999px;
-  background: var(--down);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
+  padding: 0 var(--nx-space-3);
+  border: 1px solid var(--nx-danger-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nx-weight-semibold);
 }
 
-/* ==========================================================================
-   CARDS & GRIDS
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Cards and grids
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .career-grid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.25rem;
+  gap: var(--nx-space-6);
 }
-
 .career-grid-3 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: var(--nx-space-6);
 }
 
 .career-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  gap: 0.85rem;
-  position: relative;
-  transition: border-color 0.15s ease;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-7);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
+  transition: border-color var(--nx-fast) var(--nx-ease);
 }
-
 .career-card:hover {
-  border-color: var(--light-border);
+  border-color: var(--nx-line-strong);
 }
-
 .career-card.highlighted {
-  border-color: var(--accent);
+  border-color: var(--nx-accent-line);
 }
-
 .career-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--nx-space-4);
 }
 
+/*
+ * Track pills name the kind of opportunity. They are tinted, not saturated:
+ * three of them sit side by side in a list and must not out-shout the title.
+ */
 .career-track-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: var(--nx-space-2);
+  padding: var(--nx-space-1) var(--nx-space-4);
+  border: 1px solid var(--nx-neutral-line);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-neutral-bg);
+  color: var(--nx-neutral);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: var(--nx-tracking-wide);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-
 .career-track-pill.phd {
-  background: rgb(139 147 255 / 15%);
-  color: var(--bright-accent);
-  border: 1px solid var(--accent);
+  border-color: var(--nx-accent-line);
+  background: var(--nx-accent-muted);
+  color: var(--nx-accent);
 }
-
 .career-track-pill.cdi {
-  background: rgb(95 211 154 / 15%);
-  color: var(--ok);
-  border: 1px solid var(--ok);
+  border-color: var(--nx-ok-line);
+  background: var(--nx-ok-bg);
+  color: var(--nx-ok);
 }
-
 .career-track-pill.freelance {
-  background: rgb(233 173 91 / 15%);
-  color: var(--gradient);
-  border: 1px solid var(--gradient);
-}
-
-.staleness-pill {
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-}
-
-.staleness-pill.fresh {
-  background: rgb(95 211 154 / 10%);
-  color: var(--ok);
-}
-
-.staleness-pill.aging {
-  background: rgb(233 173 91 / 10%);
-  color: var(--gradient);
-}
-
-.staleness-pill.stale {
-  background: rgb(242 118 118 / 10%);
-  color: var(--down);
+  border-color: var(--nx-warn-line);
+  background: var(--nx-warn-bg);
+  color: var(--nx-warn);
 }
 
 .duplicate-alert-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: rgb(233 173 91 / 12%);
-  border: 1px solid var(--gradient);
-  border-radius: 4px;
-  color: var(--gradient);
-  font-size: 0.8rem;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-4) var(--nx-space-5);
+  border: 1px solid var(--nx-warn-line);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-warn-bg);
+  color: var(--nx-warn);
+  font-size: var(--nx-size-xs);
 }
 
-/* ==========================================================================
-   EXPLAINABLE MATCH & CITATIONS
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Explainable match and citations
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .match-explain-box {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  font-size: 0.82rem;
+  gap: var(--nx-space-4);
 }
-
 .match-score-badge {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--ok);
+  gap: var(--nx-space-4);
+  color: var(--nx-ok);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nx-weight-semibold);
 }
-
 .match-score-badge.high {
-  color: var(--ok);
+  color: var(--nx-ok);
 }
-
 .match-score-badge.mid {
-  color: var(--gradient);
+  color: var(--nx-warn);
 }
-
 .match-score-badge.low {
-  color: var(--down);
+  color: var(--nx-danger);
 }
 
+/* Four sub-scores read as one shape: a row of bars the eye compares at a
+   glance, which is the whole point of showing a breakdown. */
 .match-breakdown-bars {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
-  margin-top: 0.35rem;
+  gap: var(--nx-space-4);
+  margin-top: var(--nx-space-2);
 }
-
 .match-sub-bar {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.72rem;
-  color: var(--muted-text);
+  gap: var(--nx-space-1);
+  color: var(--nx-text-faint);
+  font-size: var(--nx-size-3xs);
 }
-
 .match-bar-track {
   height: 4px;
-  background: var(--surface-3);
-  border-radius: 2px;
   overflow: hidden;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-canvas-sunken);
+  box-shadow: inset 0 0 0 1px var(--nx-line);
 }
-
 .match-bar-fill {
   height: 100%;
-  background: var(--accent);
+  border-radius: inherit;
+  background: var(--nx-accent);
+  transition: width var(--nx-normal) var(--nx-ease-out);
 }
 
 .citations-expandable {
-  border-top: 1px solid var(--border);
-  padding-top: 0.65rem;
+  padding-top: var(--nx-space-5);
+  border-top: 1px solid var(--nx-line);
 }
 
+/* A citation is evidence. The left border is the quotation mark. */
 .citation-item {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.5rem;
-  margin-top: 0.4rem;
-  background: var(--surface-2);
-  border-left: 2px solid var(--accent);
-  border-radius: 0 4px 4px 0;
-  font-size: 0.8rem;
+  gap: var(--nx-space-2);
+  margin-top: var(--nx-space-3);
+  padding: var(--nx-space-4) var(--nx-space-5);
+  border-left: var(--nx-rail) solid var(--nx-accent);
+  border-radius: 0 var(--nx-radius-xs) var(--nx-radius-xs) 0;
+  background: var(--nx-canvas-sunken);
+  font-size: var(--nx-size-xs);
 }
-
 .citation-quote {
+  color: var(--nx-text);
   font-style: italic;
-  color: var(--text);
 }
-
 .citation-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--muted-text);
-  font-size: 0.72rem;
+  color: var(--nx-text-faint);
+  font-size: var(--nx-size-3xs);
 }
 
-/* ==========================================================================
-   CONFIRMATION & APPROVAL CARDS
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Confirmation and approval
+   ─────────────────────────────────────────────────────────────────────────── */
 
+/*
+ * An approval card changes the real world when accepted. Pending is the only
+ * state that gets a coloured rail and full opacity; every settled state is
+ * dimmed, so a glance down the column finds what still needs a human.
+ */
 .approval-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  position: relative;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-7);
+  overflow: hidden;
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
 }
-
+.approval-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--nx-rail);
+  background: transparent;
+  content: "";
+}
 .approval-card.pending {
-  border-color: var(--gradient);
-  box-shadow: 0 0 16px rgb(233 173 91 / 8%);
+  border-color: var(--nx-warn-line);
 }
-
+.approval-card.pending::before {
+  background: var(--nx-warn);
+}
 .approval-card.approved {
-  border-color: var(--ok);
+  border-color: var(--nx-ok-line);
 }
-
+.approval-card.approved::before {
+  background: var(--nx-ok);
+}
 .approval-card.rejected {
-  border-color: var(--down);
-  opacity: 0.8;
+  border-color: var(--nx-danger-line);
+  opacity: 0.75;
 }
-
+.approval-card.rejected::before {
+  background: var(--nx-danger);
+}
 .approval-card.cancelled,
 .approval-card.expired {
-  border-color: var(--unknown);
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .action-type-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--nx-space-4);
 }
-
 .action-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  background: var(--surface-2);
-  color: var(--text);
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-4);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-xs);
+  background: var(--nx-canvas-sunken);
+  color: var(--nx-text);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-medium);
 }
 
+/* What the action will break, and what it costs if it is wrong. */
 .risks-box {
-  padding: 0.75rem;
-  background: rgb(242 118 118 / 10%);
-  border: 1px solid rgb(242 118 118 / 30%);
-  border-radius: var(--radius);
-  color: #ff9d9d;
-  font-size: 0.82rem;
+  border-color: var(--nx-danger-line);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
 }
-
 .consequences-box {
-  padding: 0.75rem;
-  background: rgb(233 173 91 / 10%);
-  border: 1px solid rgb(233 173 91 / 30%);
-  border-radius: var(--radius);
-  color: #ffe0a3;
-  font-size: 0.82rem;
+  border-color: var(--nx-warn-line);
+  background: var(--nx-warn-bg);
+  color: var(--nx-warn);
 }
 
 .approval-actions-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
+  padding-top: var(--nx-space-5);
+  border-top: 1px solid var(--nx-line);
 }
 
-/* ==========================================================================
-   KANBAN BOARD
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Pipeline board
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .kanban-board-scroll {
   display: flex;
-  gap: 1rem;
+  gap: var(--nx-space-5);
   overflow-x: auto;
-  padding-bottom: 1rem;
-  scrollbar-width: thin;
+  padding-bottom: var(--nx-space-5);
 }
-
 .kanban-column {
   display: flex;
+  min-width: 272px;
+  max-width: 296px;
   flex-direction: column;
-  min-width: 280px;
-  max-width: 300px;
-  background: var(--elevated-background);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  gap: 0.75rem;
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-5);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-canvas-sunken);
 }
-
 .kanban-col-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text);
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--nx-space-4);
+  border-bottom: 1px solid var(--nx-line);
+  color: var(--nx-text);
+  font-size: var(--nx-size-xs);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: var(--nx-tracking-wide);
+  text-transform: uppercase;
 }
-
 .kanban-col-count {
-  padding: 0.1rem 0.45rem;
-  background: var(--surface-2);
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  color: var(--muted-text);
+  padding: 0 var(--nx-space-4);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-surface-active);
+  color: var(--nx-text-muted);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-variant-numeric: tabular-nums;
 }
-
 .kanban-card {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.85rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-5);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    border-color var(--nx-fast) var(--nx-ease),
+    transform var(--nx-fast) var(--nx-ease-out);
 }
-
 .kanban-card:hover {
-  border-color: var(--accent);
+  border-color: var(--nx-accent-line);
   transform: translateY(-1px);
 }
-
 .kanban-card.pending-approval-card {
-  border-color: var(--gradient);
-  background: rgb(233 173 91 / 5%);
+  border-color: var(--nx-warn-line);
+  background: var(--nx-warn-bg);
 }
 
-/* ==========================================================================
-   SIDE-BY-SIDE COMPARISON MATRIX
-   ========================================================================== */
-
-.comparison-table-wrapper {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
+/* ───────────────────────────────────────────────────────────────────────────
+   Comparison matrix
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .comparison-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--nx-size-xs);
 }
-
 .comparison-table th,
 .comparison-table td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  padding: var(--nx-space-5) var(--nx-space-6);
+  border-right: 1px solid var(--nx-line);
+  border-bottom: 1px solid var(--nx-line);
   text-align: left;
 }
-
+.comparison-table th:last-child,
+.comparison-table td:last-child {
+  border-right: 0;
+}
+/* The criterion column is the axis the reader scans down: it stays put. */
 .comparison-table th:first-child,
 .comparison-table td:first-child {
-  font-weight: 600;
-  background: var(--surface-2);
-  width: 220px;
+  position: sticky;
+  left: 0;
+  width: 210px;
+  background: var(--nx-canvas-sunken);
+  font-weight: var(--nx-weight-medium);
 }
-
 .comparison-table th {
-  background: var(--elevated-background);
-  font-weight: 700;
+  background: var(--nx-canvas-sunken);
 }
-
 .comparison-table td.winner-cell {
-  background: rgb(139 147 255 / 10%);
-  font-weight: 600;
+  background: var(--nx-accent-muted);
+  font-weight: var(--nx-weight-semibold);
 }
 
-/* ==========================================================================
-   PROFILE WIZARD & COMPLETENESS
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Profile completeness
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .completeness-gauge-box {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-7);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
 }
-
-.completeness-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .completeness-bar {
-  height: 8px;
-  background: var(--surface-3);
-  border-radius: 4px;
+  height: 6px;
   overflow: hidden;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-canvas-sunken);
+  box-shadow: inset 0 0 0 1px var(--nx-line);
 }
-
+/* Incomplete reads as warning, complete as nominal: the fill crosses from one
+   to the other rather than being a decorative gradient. */
 .completeness-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--gradient), var(--ok));
-  transition: width 0.3s ease;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--nx-warn), var(--nx-ok));
+  transition: width var(--nx-normal) var(--nx-ease-out);
 }
-
 .checklist-items {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--nx-space-4);
 }
-
 .checklist-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-  color: var(--muted-text);
+  gap: var(--nx-space-4);
+  color: var(--nx-text-faint);
+  font-size: var(--nx-size-xs);
 }
-
 .checklist-item.done {
-  color: var(--text);
+  color: var(--nx-text);
 }
-
 .checklist-item .status-icon {
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
-/* ==========================================================================
-   MODALS, DRAWERS & ACCESSIBLE DIALOGS
-   ========================================================================== */
-
-.career-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 70%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.career-modal-content {
-  background: var(--surface);
-  border: 1px solid var(--light-border);
-  border-radius: var(--large-radius);
-  max-width: 650px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  box-shadow: var(--shadow);
-}
-
-.career-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.career-modal-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.career-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 60%);
-  display: flex;
-  justify-content: flex-end;
-  z-index: 1000;
-}
-
-.career-drawer-content {
-  background: var(--surface);
-  border-left: 1px solid var(--light-border);
-  width: 100%;
-  max-width: 540px;
-  height: 100%;
-  overflow-y: auto;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  box-shadow: var(--shadow);
-}
-
-/* ==========================================================================
-   FORM INPUTS & ACCESSIBILITY
-   ========================================================================== */
+/* ───────────────────────────────────────────────────────────────────────────
+   Forms
+   ─────────────────────────────────────────────────────────────────────────── */
 
 .career-form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--nx-space-3);
 }
-
 .career-form-group label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted-text);
+  color: var(--nx-text-muted);
+  font-size: var(--nx-size-2xs);
+  font-weight: var(--nx-weight-medium);
 }
-
 .career-input,
 .career-select,
 .career-textarea {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
+  width: 100%;
+  min-height: 34px;
+  padding: var(--nx-space-4) var(--nx-space-5);
+  border: 1px solid var(--nx-line-strong);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-canvas-sunken);
+  color: var(--nx-text);
+  font-size: var(--nx-size-sm);
+  outline: none;
+  transition:
+    border-color var(--nx-fast) var(--nx-ease),
+    box-shadow var(--nx-fast) var(--nx-ease);
 }
-
+.career-textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.career-input::placeholder,
+.career-textarea::placeholder {
+  color: var(--nx-text-faint);
+}
 .career-input:focus,
 .career-select:focus,
 .career-textarea:focus {
-  border-color: var(--accent);
-  outline: none;
+  border-color: var(--nx-accent);
+  box-shadow: 0 0 0 3px var(--nx-accent-muted);
 }
 
 .sr-only {
@@ -622,7 +514,7 @@
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border-width: 0;
 }

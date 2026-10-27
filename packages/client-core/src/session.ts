@@ -242,6 +242,37 @@ export class SessionManager {
   }
 
   /**
+   * Reports whether first-run account setup is complete.
+   *
+   * Unauthenticated endpoint: safe to probe during initial bootstrap.
+   */
+  async checkSetupStatus(): Promise<{ initialized: boolean }> {
+    try {
+      const response = await this.#http.request({
+        method: "GET",
+        path: "/api/v1/auth/setup-status",
+      });
+
+      if (
+        response.status === 200 &&
+        response.body !== null &&
+        typeof response.body === "object" &&
+        "data" in response.body &&
+        response.body.data !== null &&
+        typeof response.body.data === "object" &&
+        "initialized" in response.body.data
+      ) {
+        return {
+          initialized: Boolean((response.body.data as { initialized: boolean }).initialized),
+        };
+      }
+    } catch {
+      // Fall back if network or server fails
+    }
+    return { initialized: false };
+  }
+
+  /**
    * Probes the server readiness probe without exposing secrets.
    */
   async checkReadiness(): Promise<ServerReadiness> {

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SessionManager } from "@nexus/client-core";
-import { DashboardApi, createSession } from "../lib/api.js";
-import { careerEducationClient } from "../lib/career-education.js";
+import { DashboardApi, createSession, type SystemPauseState } from "../lib/api.js";
+import { createCareerEducationClient } from "../lib/career-education.js";
 import { Agents } from "./Agents.js";
 import { CareerEducation } from "./CareerEducation/index.js";
 import { Connections } from "./Connections.js";
 import { NexusChat } from "./NexusChat.js";
 import { OsintWorkspace } from "./OsintWorkspace.js";
 import { SetupWizard } from "./SetupWizard.js";
+import { ThemeToggle } from "./ThemeToggle.js";
 import {
   Browser,
   CommunicationGraph,
@@ -165,6 +166,26 @@ export function App() {
   const api = useMemo(() => new DashboardApi(session), [session]);
   const [section, setSection] = useState<SectionId>("chat");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [systemPause, setSystemPause] = useState<SystemPauseState | null>(null);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let cancelled = false;
+    const fetchPause = () => {
+      api
+        .globalPause()
+        .then((state) => {
+          if (!cancelled) setSystemPause(state);
+        })
+        .catch(() => undefined);
+    };
+    fetchPause();
+    const interval = setInterval(fetchPause, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [authenticated, api]);
   const [authMode, setAuthMode] = useState<"login" | "setup">(() => {
     try {
       const active = window.sessionStorage.getItem("nexus.setup.step");
@@ -331,6 +352,18 @@ export function App() {
             <p>{meta.description}</p>
           </div>
           <div className="header-actions">
+            <ThemeToggle />
+            <button
+              type="button"
+              className={`button ${systemPause?.paused ? "ok" : "danger"}`}
+              onClick={() => {
+                const willPause = !systemPause?.paused;
+                const reason = willPause ? "Manual emergency stop from dashboard" : undefined;
+                void api.setGlobalPause(willPause, reason).then((state) => setSystemPause(state));
+              }}
+            >
+              {systemPause?.paused ? "Resume NEXUS" : "Emergency stop"}
+            </button>
             {section === "chat" ? null : (
               <button
                 type="button"
@@ -358,6 +391,26 @@ export function App() {
             </button>
           </div>
         </header>
+        {systemPause?.paused && (
+          <div role="alert" className="emergency-banner">
+            <div>
+              <span aria-hidden="true">🛑</span>
+              <span>
+                EMERGENCY STOP ACTIVE: All NEXUS actions are suspended.
+                {systemPause.reason ? ` Reason: ${systemPause.reason}` : ""}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="button compact"
+              onClick={() => {
+                void api.setGlobalPause(false).then((state) => setSystemPause(state));
+              }}
+            >
+              Resume NEXUS
+            </button>
+          </div>
+        )}
         <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
           {renderSection(section, api, session, navigate)}
         </div>
@@ -385,7 +438,7 @@ function renderSection(
     case "chat":
       return <NexusChat api={api} />;
     case "career-education":
-      return <CareerEducation client={careerEducationClient} />;
+      return <CareerEducation client={createCareerEducationClient(session)} />;
     case "osint":
       return <OsintWorkspace api={api} onOpenMissions={() => navigate("mission-control")} />;
     case "agents":
@@ -522,6 +575,8 @@ function Login({
         <div className="login-brand">
           <span className="brand-mark">N</span>
           <span>NEXUS</span>
+          <span className="login-brand-spacer" />
+          <ThemeToggle />
         </div>
         <div className="login-intro">
           <h1>Welcome back.</h1>

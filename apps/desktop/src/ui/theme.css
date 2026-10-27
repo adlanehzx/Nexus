@@ -1,52 +1,43 @@
-/* NEXUS design tokens: the only raw visual values in the desktop UI. */
-:root {
-  color-scheme: dark;
-  --nexus-bg: #070a10;
-  --nexus-surface: #0d131d;
-  --nexus-surface-raised: #121b28;
-  --nexus-surface-active: #172335;
-  --nexus-line: rgba(173, 203, 231, 0.14);
-  --nexus-line-strong: rgba(173, 203, 231, 0.26);
-  --nexus-text: #edf5ff;
-  --nexus-muted: #91a1b6;
-  --nexus-faint: #64758a;
-  --nexus-accent: #7de8ff;
-  --nexus-accent-deep: #2479b7;
-  --nexus-success: #75e3ad;
-  --nexus-warning: #ffcb6b;
-  --nexus-danger: #ff7f8f;
-  --nexus-radius-sm: 10px;
-  --nexus-radius: 16px;
-  --nexus-radius-lg: 24px;
-  --nexus-fast: 140ms;
-  --nexus-normal: 260ms;
-  --nexus-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --bar: 244px;
-}
+/*
+ * NEXUS Signal — desktop stylesheet.
+ *
+ * The same design language as the dashboard, from the same tokens, tuned for a
+ * different job: the dashboard is read, the desktop app is talked to. Type is
+ * one step larger, density one step lower, and the orb is the only ornament in
+ * the product — it is the app's status light, not decoration.
+ *
+ * Every value comes from @nexus/design. No raw colour belongs in this file.
+ */
+
+@import "@nexus/design/tokens.css";
+
 * {
   box-sizing: border-box;
 }
+
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
 }
+
 body {
-  background: var(--nexus-bg);
-  color: var(--nexus-text);
-  font:
-    14px/1.5 Inter,
-    "Segoe UI Variable Text",
-    "Segoe UI",
-    system-ui,
-    sans-serif;
+  background: var(--nx-canvas);
+  color: var(--nx-text);
+  font-family: var(--nx-font-sans);
+  font-size: var(--nx-size-md);
+  line-height: var(--nx-leading-normal);
+  letter-spacing: var(--nx-tracking-tight);
+  -webkit-font-smoothing: antialiased;
 }
+
 button,
 input,
 textarea,
 select {
   font: inherit;
+  letter-spacing: inherit;
 }
 button {
   color: inherit;
@@ -57,418 +48,581 @@ button:disabled {
   opacity: 0.45;
 }
 :focus-visible {
-  outline: 2px solid var(--nexus-accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--nx-accent);
+  outline-offset: 2px;
+  border-radius: var(--nx-radius-xs);
+}
+::selection {
+  background: var(--nx-accent-muted);
+  color: var(--nx-text);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--nx-line-strong) transparent;
 }
 
+/*
+ * The window ground.
+ *
+ * A single hairline grid, fading out downward. It gives the window a sense of
+ * surface without a gradient, and it is the one place the product is allowed
+ * to decorate — because an empty chat screen with nothing on it reads as a
+ * failed launch.
+ */
 .nexus-background {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(1000px 620px at 74% -8%, rgba(36, 121, 183, 0.17), transparent 62%),
-    radial-gradient(580px 460px at 0% 100%, rgba(77, 110, 176, 0.1), transparent 68%),
-    var(--nexus-bg);
+  height: 100%;
+  background: var(--nx-canvas);
 }
 .nexus-background::before {
-  content: "";
   position: absolute;
-  inset: 0;
   z-index: -1;
-  pointer-events: none;
-  opacity: 0.42;
+  inset: 0;
   background-image:
-    linear-gradient(rgba(180, 220, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(180, 220, 255, 0.025) 1px, transparent 1px);
+    linear-gradient(var(--nx-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--nx-line) 1px, transparent 1px);
   background-size: 48px 48px;
-  mask-image: linear-gradient(to bottom, black, transparent 72%);
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Shell
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .app {
   display: grid;
-  grid-template-columns: var(--bar) minmax(0, 1fr);
+  grid-template-columns: var(--nx-sidebar) minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
 }
+
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 18px 12px 14px;
-  background: rgba(7, 10, 16, 0.72);
-  border-right: 1px solid var(--nexus-line);
-  backdrop-filter: blur(16px);
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-6) var(--nx-space-5) var(--nx-space-5);
+  border-right: 1px solid var(--nx-line);
+  background: var(--nx-surface-raised);
 }
+
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px 24px;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-2) var(--nx-space-4) var(--nx-space-8);
 }
 .brand-lockup h1 {
   margin: 0;
-  font-size: 14px;
-  letter-spacing: 0.2em;
+  font-size: var(--nx-size-md);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: var(--nx-tracking-caps);
 }
 .brand-lockup span {
-  color: var(--nexus-faint);
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  color: var(--nx-text-faint);
+  font-size: var(--nx-size-3xs);
 }
+
 .nav-section-label,
-.eyebrow {
-  color: var(--nexus-faint);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+.eyebrow,
+.field-label {
+  color: var(--nx-text-faint);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-medium);
+  letter-spacing: var(--nx-tracking-caps);
   text-transform: uppercase;
 }
 .nav-section-label {
-  padding: 0 10px 7px;
+  padding: 0 var(--nx-space-4) var(--nx-space-3);
 }
+
+/* The rail, as on the dashboard: one shape for "this is the active thing". */
 .nav-item {
+  position: relative;
   display: grid;
   grid-template-columns: 22px 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid transparent;
-  border-radius: var(--nexus-radius-sm);
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-4) var(--nx-space-5);
+  border: 0;
+  border-radius: var(--nx-radius-sm);
   background: transparent;
+  color: var(--nx-text-muted);
   text-align: left;
   transition:
-    background var(--nexus-fast) var(--nexus-ease),
-    border-color var(--nexus-fast) var(--nexus-ease),
-    transform var(--nexus-fast) var(--nexus-ease);
+    background var(--nx-fast) var(--nx-ease),
+    color var(--nx-fast) var(--nx-ease);
+}
+.nav-item::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--nx-rail);
+  height: 0;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-signal);
+  content: "";
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    height var(--nx-fast) var(--nx-ease-out),
+    opacity var(--nx-fast) var(--nx-ease);
 }
 .nav-item:hover {
-  background: rgba(125, 232, 255, 0.06);
-  border-color: rgba(125, 232, 255, 0.1);
-}
-.nav-item:active {
-  transform: scale(0.98);
+  background: var(--nx-surface-hover);
+  color: var(--nx-text);
 }
 .nav-item[aria-current="page"] {
-  color: var(--nexus-accent);
-  background: linear-gradient(90deg, rgba(125, 232, 255, 0.13), rgba(125, 232, 255, 0.025));
-  border-color: rgba(125, 232, 255, 0.18);
+  background: var(--nx-accent-muted);
+  color: var(--nx-text);
+  font-weight: var(--nx-weight-medium);
+}
+.nav-item[aria-current="page"]::before {
+  height: 58%;
+  opacity: 1;
 }
 .nav-icon {
-  color: var(--nexus-muted);
-  font-size: 17px;
+  color: var(--nx-text-faint);
+  font-size: var(--nx-size-lg);
 }
 .nav-item[aria-current="page"] .nav-icon {
-  color: var(--nexus-accent);
+  color: var(--nx-accent);
 }
+
+/* Unread count. Tinted, not a solid red plate: it appears beside a label the
+   user still has to be able to read. */
 .badge {
-  min-width: 19px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--nexus-danger);
-  color: #18080d;
-  font-size: 11px;
-  font-weight: 800;
+  min-width: 18px;
+  padding: 0 var(--nx-space-3);
+  border: 1px solid var(--nx-danger-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nx-weight-semibold);
   text-align: center;
 }
+
 .sidebar-presence {
   margin-top: auto;
-  padding: 13px 10px;
-  border: 1px solid var(--nexus-line);
-  border-radius: var(--nexus-radius-sm);
-  background: rgba(18, 27, 40, 0.48);
+  padding: var(--nx-space-5);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-canvas-sunken);
 }
 .presence-line,
 .system-state {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--nx-space-4);
 }
 .presence-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: var(--nexus-faint);
-  box-shadow: 0 0 0 3px rgba(145, 161, 182, 0.08);
+  flex: none;
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-neutral);
+  box-shadow: 0 0 0 3px var(--nx-neutral-bg);
 }
 .presence-dot.is-online {
-  background: var(--nexus-success);
-  box-shadow:
-    0 0 0 3px rgba(117, 227, 173, 0.09),
-    0 0 12px rgba(117, 227, 173, 0.5);
+  background: var(--nx-ok);
+  box-shadow: 0 0 0 3px var(--nx-ok-bg);
+  animation: dot-breathe 2.4s var(--nx-ease) infinite;
 }
+@keyframes dot-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .main {
   display: flex;
-  flex-direction: column;
   min-width: 0;
+  flex-direction: column;
   overflow: hidden;
 }
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 17px 28px;
-  border-bottom: 1px solid var(--nexus-line);
-  background: rgba(7, 10, 16, 0.46);
-  backdrop-filter: blur(14px);
+  gap: var(--nx-space-6);
+  padding: var(--nx-space-6) var(--nx-space-9);
+  border-bottom: 1px solid var(--nx-line);
+  background: var(--nx-canvas);
 }
 .header h2 {
-  margin: 1px 0 0;
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  margin: 0;
+  font-size: var(--nx-size-xl);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: -0.02em;
 }
 .system-state {
-  color: var(--nexus-muted);
-  font-size: 12px;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-size-xs);
 }
 .content {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 28px;
+  padding: var(--nx-space-9);
 }
 .content > h3 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--nexus-muted);
-  font-weight: 600;
+  margin: 0 0 var(--nx-space-5);
+  color: var(--nx-text-faint);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-medium);
+  letter-spacing: var(--nx-tracking-caps);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 .content > h3:not(:first-child) {
-  margin-top: 30px;
+  margin-top: var(--nx-space-9);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Primitives
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .card {
   position: relative;
-  margin-bottom: 10px;
-  padding: 16px;
-  border: 1px solid var(--nexus-line);
-  border-radius: var(--nexus-radius);
-  background: linear-gradient(135deg, rgba(18, 27, 40, 0.82), rgba(13, 19, 29, 0.72));
+  margin-bottom: var(--nx-space-4);
+  padding: var(--nx-space-6);
   overflow: hidden;
-  transition:
-    border-color var(--nexus-normal) var(--nexus-ease),
-    transform var(--nexus-normal) var(--nexus-ease),
-    background var(--nexus-normal) var(--nexus-ease);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
+  transition: border-color var(--nx-fast) var(--nx-ease);
 }
 .card:hover {
-  border-color: var(--nexus-line-strong);
-  background: linear-gradient(135deg, rgba(22, 34, 50, 0.92), rgba(13, 19, 29, 0.78));
+  border-color: var(--nx-line-strong);
 }
 .card header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--nx-space-5);
+  margin-bottom: var(--nx-space-4);
 }
 .muted {
-  color: var(--nexus-muted);
-  font-size: 12px;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-size-xs);
 }
 .row {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: var(--nx-space-4);
 }
+
 .tag {
-  padding: 3px 8px;
-  border: 1px solid var(--nexus-line);
-  border-radius: 999px;
-  color: var(--nexus-muted);
-  background: rgba(255, 255, 255, 0.025);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
+  padding: var(--nx-space-1) var(--nx-space-4);
+  border: 1px solid var(--nx-neutral-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-neutral-bg);
+  color: var(--nx-neutral);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-medium);
+  letter-spacing: var(--nx-tracking-wide);
   text-transform: uppercase;
   white-space: nowrap;
 }
 .tag.ok {
-  color: var(--nexus-success);
-  border-color: rgba(117, 227, 173, 0.25);
+  border-color: var(--nx-ok-line);
+  background: var(--nx-ok-bg);
+  color: var(--nx-ok);
 }
 .tag.attention {
-  color: var(--nexus-warning);
-  border-color: rgba(255, 203, 107, 0.25);
+  border-color: var(--nx-warn-line);
+  background: var(--nx-warn-bg);
+  color: var(--nx-warn);
 }
 .tag.ko {
-  color: var(--nexus-danger);
-  border-color: rgba(255, 127, 143, 0.25);
+  border-color: var(--nx-danger-line);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
 }
+
 .gauge {
   height: 4px;
-  margin-top: 10px;
+  margin-top: var(--nx-space-5);
   overflow: hidden;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-canvas-sunken);
+  box-shadow: inset 0 0 0 1px var(--nx-line);
 }
 .gauge > div {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--nexus-accent-deep), var(--nexus-accent));
-  box-shadow: 0 0 12px rgba(125, 232, 255, 0.5);
+  background: var(--nx-accent);
+  transition: width var(--nx-normal) var(--nx-ease-out);
 }
+
 .button {
-  padding: 8px 12px;
-  border: 1px solid var(--nexus-line-strong);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--nexus-text);
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-4) var(--nx-space-6);
+  border: 1px solid var(--nx-line-strong);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font-size: var(--nx-size-sm);
+  font-weight: var(--nx-weight-medium);
   transition:
-    transform var(--nexus-fast) var(--nexus-ease),
-    background var(--nexus-fast) var(--nexus-ease),
-    border-color var(--nexus-fast) var(--nexus-ease);
+    border-color var(--nx-fast) var(--nx-ease),
+    background var(--nx-fast) var(--nx-ease);
 }
 .button:hover:not(:disabled) {
-  background: rgba(125, 232, 255, 0.09);
-  border-color: rgba(125, 232, 255, 0.35);
+  border-color: var(--nx-accent-line);
+  background: var(--nx-surface-hover);
 }
 .button:active:not(:disabled) {
-  transform: scale(0.98);
+  background: var(--nx-surface-active);
 }
 .button.primary {
-  border-color: rgba(125, 232, 255, 0.52);
-  background: linear-gradient(135deg, #318fc8, #76dcf4);
-  color: #05111a;
-  font-weight: 750;
+  border-color: transparent;
+  background: var(--nx-accent);
+  color: var(--nx-text-on-accent);
+  font-weight: var(--nx-weight-semibold);
+}
+.button.primary:hover:not(:disabled) {
+  background: var(--nx-accent-hover);
 }
 .button.danger {
-  color: var(--nexus-danger);
-  border-color: rgba(255, 127, 143, 0.36);
+  border-color: var(--nx-danger-line);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
 }
+
 .field {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--nexus-line-strong);
-  border-radius: 10px;
+  padding: var(--nx-space-4) var(--nx-space-5);
+  border: 1px solid var(--nx-line-strong);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-canvas-sunken);
+  color: var(--nx-text);
   outline: none;
-  background: rgba(2, 6, 12, 0.42);
-  color: var(--nexus-text);
   transition:
-    border-color var(--nexus-fast),
-    box-shadow var(--nexus-fast);
+    border-color var(--nx-fast) var(--nx-ease),
+    box-shadow var(--nx-fast) var(--nx-ease);
+}
+.field::placeholder {
+  color: var(--nx-text-faint);
 }
 .field:focus {
-  border-color: var(--nexus-accent);
-  box-shadow: 0 0 0 3px rgba(125, 232, 255, 0.1);
+  border-color: var(--nx-accent);
+  box-shadow: 0 0 0 3px var(--nx-accent-muted);
 }
+
 .banner {
-  padding: 9px 28px;
-  border-bottom: 1px solid var(--nexus-line);
-  background: rgba(125, 232, 255, 0.055);
-  color: var(--nexus-muted);
-  font-size: 12px;
+  padding: var(--nx-space-4) var(--nx-space-9);
+  border-bottom: 1px solid var(--nx-line);
+  background: var(--nx-info-bg);
+  color: var(--nx-info);
+  font-size: var(--nx-size-xs);
 }
 .banner.error {
-  color: var(--nexus-danger);
-  background: rgba(255, 127, 143, 0.08);
+  border-bottom-color: var(--nx-danger-line);
+  background: var(--nx-danger-bg);
+  color: var(--nx-danger);
 }
 .empty-state {
-  padding: 52px 20px;
-  color: var(--nexus-muted);
+  padding: var(--nx-space-12) var(--nx-space-7);
+  color: var(--nx-text-faint);
   text-align: center;
 }
+
+/* Theme switch, shared shape with the dashboard. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-surface);
+}
+.theme-toggle button {
+  display: grid;
+  width: 28px;
+  height: 26px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--nx-radius-pill);
+  background: transparent;
+  color: var(--nx-text-faint);
+  transition:
+    background var(--nx-fast) var(--nx-ease),
+    color var(--nx-fast) var(--nx-ease);
+}
+.theme-toggle button:hover {
+  color: var(--nx-text);
+}
+.theme-toggle button[aria-pressed="true"] {
+  background: var(--nx-accent-muted);
+  color: var(--nx-accent);
+}
+.theme-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Conversation
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .conversation {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  flex: 1;
   min-height: 0;
+  flex: 1;
+  grid-template-columns: 220px minmax(0, 1fr);
 }
 .conversation-list {
-  padding: 18px 10px;
+  padding: var(--nx-space-6) var(--nx-space-4);
   overflow: auto;
-  border-right: 1px solid var(--nexus-line);
-  background: rgba(6, 9, 15, 0.3);
+  border-right: 1px solid var(--nx-line);
+  background: var(--nx-canvas-sunken);
 }
 .conversation-list > button {
   display: block;
   width: 100%;
-  margin-bottom: 4px;
-  padding: 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--nexus-muted);
-  text-align: left;
+  margin-bottom: var(--nx-space-1);
+  padding: var(--nx-space-4);
   overflow: hidden;
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-size-sm);
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.conversation-list > button:hover,
-.conversation-list > button[aria-current="true"] {
-  background: rgba(125, 232, 255, 0.08);
-  color: var(--nexus-text);
+.conversation-list > button:hover {
+  background: var(--nx-surface-hover);
+  color: var(--nx-text);
 }
+.conversation-list > button[aria-current="true"] {
+  background: var(--nx-accent-muted);
+  color: var(--nx-text);
+}
+
 .feed {
   display: flex;
-  flex-direction: column;
   min-width: 0;
+  flex-direction: column;
 }
 .chat-presence {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 13px 20px;
-  border-bottom: 1px solid var(--nexus-line);
+  gap: var(--nx-space-6);
+  padding: var(--nx-space-5) var(--nx-space-7);
+  border-bottom: 1px solid var(--nx-line);
 }
 .messages {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 22px max(22px, 7vw);
+  padding: var(--nx-space-8) max(var(--nx-space-8), 7vw);
 }
+
+/*
+ * Bubbles. The user's own message is the one with the accent edge; NEXUS
+ * speaks on a plain surface, because its answers are long and a tinted block
+ * of twenty lines is tiring to read.
+ */
 .bubble {
   max-width: 68ch;
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--nexus-line);
-  border-radius: 4px 14px 14px;
-  background: rgba(18, 27, 40, 0.75);
+  margin-bottom: var(--nx-space-5);
+  padding: var(--nx-space-5) var(--nx-space-6);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-xs) var(--nx-radius-lg) var(--nx-radius-lg);
+  background: var(--nx-surface);
+  line-height: var(--nx-leading-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .bubble.user {
   margin-left: auto;
-  border-color: rgba(125, 232, 255, 0.28);
-  border-radius: 14px 4px 14px 14px;
-  background: linear-gradient(135deg, rgba(32, 105, 153, 0.64), rgba(21, 58, 93, 0.74));
+  border-color: var(--nx-accent-line);
+  border-radius: var(--nx-radius-lg) var(--nx-radius-xs) var(--nx-radius-lg) var(--nx-radius-lg);
+  background: var(--nx-accent-muted);
 }
+
 .composer {
   display: flex;
-  gap: 9px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--nexus-line);
-  background: rgba(7, 10, 16, 0.74);
+  gap: var(--nx-space-4);
+  padding: var(--nx-space-5) var(--nx-space-7);
+  border-top: 1px solid var(--nx-line);
+  background: var(--nx-surface-raised);
 }
 .composer textarea {
-  flex: 1;
   min-height: 42px;
   max-height: 130px;
+  flex: 1;
   resize: vertical;
 }
+
+/*
+ * A confirmation card is the moment NEXUS asks permission to touch something
+ * real. It carries a warning rail; the critical variant escalates to danger.
+ */
 .confirmation {
-  border-color: rgba(255, 203, 107, 0.4);
-  background: linear-gradient(135deg, rgba(78, 59, 20, 0.3), rgba(18, 27, 40, 0.9));
+  border-color: var(--nx-warn-line);
+  background: var(--nx-warn-bg);
+}
+.confirmation::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--nx-rail);
+  background: var(--nx-warn);
+  content: "";
 }
 .confirmation.critical {
-  border-color: rgba(255, 127, 143, 0.65);
+  border-color: var(--nx-danger-line);
+  background: var(--nx-danger-bg);
+}
+.confirmation.critical::before {
+  background: var(--nx-danger);
 }
 .confirmation .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--nx-space-4);
+  margin-top: var(--nx-space-5);
 }
 .confirmation .actions .approve {
-  border-color: rgba(117, 227, 173, 0.45);
-  color: var(--nexus-success);
+  border-color: var(--nx-ok-line);
+  background: var(--nx-ok-bg);
+  color: var(--nx-ok);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   The orb
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * NEXUS's status light, and the only ornament in the product.
+ *
+ * It is built from tokens so it survives the light theme: in the old version
+ * the whole thing was a stack of glows, which on paper read as a grey smudge.
+ * Here the shape carries the state — ring, rotating field, core — and colour
+ * only names which state it is.
+ */
 .nexus-orb {
   position: relative;
   width: 150px;
+  margin: var(--nx-space-2) auto var(--nx-space-6);
   aspect-ratio: 1;
-  margin: 4px auto 18px;
-  filter: drop-shadow(0 0 16px rgba(125, 232, 255, 0.22));
 }
 .nexus-orb span {
   position: absolute;
@@ -476,46 +630,34 @@ button:disabled {
 }
 .nexus-orb__halo {
   inset: 0;
-  border: 1px solid rgba(125, 232, 255, 0.22);
-  box-shadow:
-    inset 0 0 32px rgba(125, 232, 255, 0.06),
-    0 0 42px rgba(61, 126, 210, 0.16);
-  animation: orb-breathe 6s var(--nexus-ease) infinite;
+  border: 1px solid var(--nx-accent-line);
+  box-shadow: inset 0 0 32px var(--nx-accent-muted);
+  animation: orb-breathe 6s var(--nx-ease) infinite;
 }
 .nexus-orb__field {
   inset: 14%;
-  border: 1px solid rgba(125, 232, 255, 0.24);
+  border: 1px solid var(--nx-accent-line);
   border-top-color: transparent;
-  border-bottom-color: rgba(117, 227, 173, 0.55);
+  border-bottom-color: var(--nx-signal);
   animation: orb-spin 8s linear infinite;
 }
 .nexus-orb__core {
   inset: 30%;
-  background: radial-gradient(
-    circle at 36% 30%,
-    #f0ffff 0,
-    #9df1ff 16%,
-    #438fd5 42%,
-    #152b5d 73%,
-    #070a10 100%
-  );
-  box-shadow:
-    0 0 22px rgba(125, 232, 255, 0.8),
-    inset -8px -8px 18px rgba(3, 8, 24, 0.7);
+  background: radial-gradient(circle at 36% 30%, var(--nx-signal), var(--nx-accent) 62%);
+  box-shadow: 0 0 22px var(--nx-accent-muted);
 }
 .nexus-orb__spark {
-  width: 6px;
-  height: 6px;
   top: 16%;
   left: 48%;
-  background: #dfffff;
-  box-shadow: 0 0 14px 5px rgba(125, 232, 255, 0.9);
+  width: 6px;
+  height: 6px;
+  background: var(--nx-signal);
+  box-shadow: 0 0 10px 3px var(--nx-signal-muted);
   animation: orb-orbit 4.5s linear infinite;
 }
 .nexus-orb--compact {
   width: 30px;
   margin: 0;
-  filter: drop-shadow(0 0 7px rgba(125, 232, 255, 0.35));
 }
 .nexus-orb--compact .nexus-orb__field,
 .nexus-orb--compact .nexus-orb__spark {
@@ -526,79 +668,93 @@ button:disabled {
   animation-duration: 1.3s;
 }
 .nexus-orb[data-state="waiting"] .nexus-orb__core {
-  background: radial-gradient(circle at 36% 30%, #fff5c1, #ffcb6b 23%, #a35e22 53%, #17100a 100%);
+  background: radial-gradient(circle at 36% 30%, var(--nx-warn), var(--nx-warn) 62%);
+}
+.nexus-orb[data-state="waiting"] .nexus-orb__halo {
+  border-color: var(--nx-warn-line);
 }
 .nexus-orb[data-state="error"] .nexus-orb__core {
-  background: radial-gradient(circle at 36% 30%, #ffe8ec, #ff7f8f 25%, #93263b 57%, #17080d 100%);
+  background: radial-gradient(circle at 36% 30%, var(--nx-danger), var(--nx-danger) 62%);
+}
+.nexus-orb[data-state="error"] .nexus-orb__halo {
+  border-color: var(--nx-danger-line);
 }
 .nexus-orb[data-state="offline"] {
-  opacity: 0.36;
-  filter: saturate(0.2);
+  filter: saturate(0.15);
+  opacity: 0.4;
 }
 .nexus-orb[data-state="offline"] .nexus-orb__halo,
 .nexus-orb[data-state="offline"] .nexus-orb__field {
   animation: none;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Sign in
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .login-shell {
   display: grid;
-  grid-template-columns: minmax(300px, 1.15fr) minmax(360px, 0.85fr);
   min-height: 100%;
+  grid-template-columns: minmax(300px, 1.15fr) minmax(360px, 0.85fr);
   align-items: center;
-  gap: clamp(36px, 8vw, 128px);
-  padding: clamp(32px, 8vw, 120px);
+  gap: clamp(var(--nx-space-10), 8vw, 128px);
+  padding: clamp(var(--nx-space-9), 8vw, 120px);
 }
 .login-intro {
   max-width: 520px;
 }
 .login-intro .nexus-orb {
-  margin: 0 0 26px;
-  width: 190px;
+  width: 180px;
+  margin: 0 0 var(--nx-space-8);
 }
 .login-intro h1 {
-  margin: 10px 0;
-  font-size: clamp(38px, 5vw, 68px);
-  line-height: 0.98;
-  letter-spacing: -0.065em;
+  margin: var(--nx-space-4) 0;
+  font-size: clamp(var(--nx-size-3xl), 5vw, 64px);
+  font-weight: var(--nx-weight-semibold);
+  line-height: 1;
+  letter-spacing: -0.055em;
 }
 .login-intro p {
   max-width: 390px;
-  color: var(--nexus-muted);
-  font-size: 16px;
+  color: var(--nx-text-muted);
+  font-size: var(--nx-size-lg);
+  line-height: var(--nx-leading-relaxed);
 }
 .login-panel {
   max-width: 410px;
-  padding: 30px;
-  border: 1px solid var(--nexus-line-strong);
-  border-radius: var(--nexus-radius-lg);
-  background: linear-gradient(145deg, rgba(21, 32, 48, 0.86), rgba(9, 14, 23, 0.9));
-  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+  padding: var(--nx-space-9);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-lg);
+  background: var(--nx-surface);
+  box-shadow: var(--nx-shadow-overlay);
 }
 .login-panel h2 {
-  margin: 7px 0 2px;
-  font-size: 26px;
-  letter-spacing: -0.04em;
+  margin: var(--nx-space-3) 0 var(--nx-space-1);
+  font-size: var(--nx-size-2xl);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: -0.035em;
 }
 .login-panel form {
   display: grid;
-  gap: 8px;
-  margin-top: 24px;
+  gap: var(--nx-space-4);
+  margin-top: var(--nx-space-8);
 }
 .login-panel .button {
   width: 100%;
-  margin-top: 12px;
-  padding: 11px;
-}
-.field-label {
-  color: var(--nexus-muted);
-  font-size: 12px;
-  font-weight: 650;
+  margin-top: var(--nx-space-5);
+  padding: var(--nx-space-5);
 }
 .login-error {
-  color: var(--nexus-danger);
-  font-size: 12px;
+  color: var(--nx-danger);
+  font-size: var(--nx-size-xs);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Motion and responsive
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .nexus-screen-enter {
-  animation: screen-enter var(--nexus-normal) var(--nexus-ease) both;
+  animation: screen-enter var(--nx-normal) var(--nx-ease) both;
 }
 @keyframes screen-enter {
   from {
@@ -612,8 +768,8 @@ button:disabled {
 }
 @keyframes orb-breathe {
   50% {
-    transform: scale(1.08);
     opacity: 0.85;
+    transform: scale(1.07);
   }
 }
 @keyframes orb-spin {
@@ -627,9 +783,10 @@ button:disabled {
     transform-origin: 50% 310%;
   }
 }
+
 @media (max-width: 780px) {
   .app {
-    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-columns: 68px minmax(0, 1fr);
   }
   .brand-lockup > div,
   .nav-item > span:not(.nav-icon),
@@ -638,22 +795,19 @@ button:disabled {
     display: none;
   }
   .sidebar {
-    padding: 15px 10px;
+    padding: var(--nx-space-5) var(--nx-space-4);
   }
   .brand-lockup {
     justify-content: center;
-    padding: 4px 0 22px;
+    padding: var(--nx-space-2) 0 var(--nx-space-7);
   }
   .nav-item {
     display: block;
-    padding: 10px;
+    padding: var(--nx-space-4);
     text-align: center;
   }
-  .nav-icon {
-    font-size: 18px;
-  }
   .header {
-    padding: 15px 18px;
+    padding: var(--nx-space-5) var(--nx-space-6);
   }
   .conversation {
     grid-template-columns: 1fr;
@@ -662,20 +816,20 @@ button:disabled {
     display: none;
   }
   .messages {
-    padding: 18px;
+    padding: var(--nx-space-6);
   }
   .chat-presence {
-    padding: 11px 18px;
+    padding: var(--nx-space-5) var(--nx-space-6);
   }
   .chat-presence .muted {
     display: none;
   }
   .content {
-    padding: 18px;
+    padding: var(--nx-space-6);
   }
   .login-shell {
     grid-template-columns: 1fr;
-    padding: 30px;
+    padding: var(--nx-space-9);
   }
   .login-intro {
     display: none;
@@ -685,13 +839,14 @@ button:disabled {
     justify-self: center;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 }

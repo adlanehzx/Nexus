@@ -4,6 +4,7 @@ coverage
 node_modules
 pnpm-lock.yaml
 src/generated
+packages/design/tokens.css
 .venv
 .venv-*
 __pycache__
@@ -24,6 +25,7 @@ apps/desktop/src-tauri/gen
 # runtime backups and do not need formatting either.
 services/mission-engine/config/*.json
 services/mission-engine/config/*.bak-*
+services/mission-engine/var
 
 # The ACP registry is changed from the dashboard and serialized by the service.
 # Prettier must not fight this persistent format after each account or agent is

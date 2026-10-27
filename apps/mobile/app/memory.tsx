@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import type { ApiMemory } from "@nexus/client-core";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
 /**
  * Memory inspection and management.
@@ -23,6 +23,8 @@ import { theme } from "../theme/index.js";
 type MemoryTab = "LONG_TERM" | "PREFERENCE";
 
 export default function MemoryScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
 
   const [tab, setTab] = useState<MemoryTab>("LONG_TERM");
@@ -216,6 +218,7 @@ export default function MemoryScreen() {
 }
 
 function Tabs({ active, onChange }: { active: MemoryTab; onChange: (tab: MemoryTab) => void }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <>
       {(
@@ -247,6 +250,7 @@ function MemoryCard({
   memory: ApiMemory;
   onForget: (memory: ApiMemory) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const deduced = memory.origin === "AGENT";
   const sensitive = memory.sensitivity === "PERSONAL";
 
@@ -284,104 +288,105 @@ function MemoryCard({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.background },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.color.background },
 
-  tabs: {
-    flexDirection: "row",
-    gap: theme.space(2),
-    padding: theme.space(4),
-    paddingBottom: theme.space(2),
-  },
-  tab: {
-    paddingVertical: theme.space(2),
-    paddingHorizontal: theme.space(4),
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  tabActive: { backgroundColor: theme.color.accent, borderColor: theme.color.accent },
-  tabText: { color: theme.color.textMuted, fontSize: 14, fontWeight: "600" },
-  tabTextActive: { color: theme.color.background },
+    tabs: {
+      flexDirection: "row",
+      gap: theme.space(4),
+      padding: theme.space(6),
+      paddingBottom: theme.space(4),
+    },
+    tab: {
+      paddingVertical: theme.space(4),
+      paddingHorizontal: theme.space(6),
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.color.surface,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+    },
+    tabActive: { backgroundColor: theme.color.accent, borderColor: theme.color.accent },
+    tabText: { color: theme.color.textMuted, fontSize: 14, fontWeight: "600" },
+    tabTextActive: { color: theme.color.background },
 
-  error: {
-    marginHorizontal: theme.space(4),
-    marginBottom: theme.space(2),
-    padding: theme.space(3),
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surfaceRaised,
-    borderWidth: 1,
-    borderColor: theme.color.danger,
-  },
-  errorText: { color: theme.color.danger, fontSize: 13, lineHeight: 18 },
+    error: {
+      marginHorizontal: theme.space(6),
+      marginBottom: theme.space(4),
+      padding: theme.space(5),
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.color.surfaceRaised,
+      borderWidth: 1,
+      borderColor: theme.color.danger,
+    },
+    errorText: { color: theme.color.danger, fontSize: 13, lineHeight: 18 },
 
-  composer: { paddingHorizontal: theme.space(4), gap: theme.space(2) },
-  input: {
-    minHeight: 44,
-    maxHeight: 120,
-    padding: theme.space(3),
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    color: theme.color.text,
-    fontSize: 15,
-  },
-  button: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.color.accent,
-  },
-  buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: theme.color.background, fontSize: 15, fontWeight: "700" },
+    composer: { paddingHorizontal: theme.space(6), gap: theme.space(4) },
+    input: {
+      minHeight: 44,
+      maxHeight: 120,
+      padding: theme.space(5),
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.color.surface,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      color: theme.color.text,
+      fontSize: 15,
+    },
+    button: {
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 44,
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.color.accent,
+    },
+    buttonDisabled: { opacity: 0.4 },
+    buttonText: { color: theme.color.background, fontSize: 15, fontWeight: "700" },
 
-  loader: { marginTop: theme.space(10) },
-  list: { padding: theme.space(4), gap: theme.space(2), flexGrow: 1 },
+    loader: { marginTop: theme.space(10) },
+    list: { padding: theme.space(6), gap: theme.space(4), flexGrow: 1 },
 
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    padding: theme.space(3.5),
-    gap: theme.space(2),
-  },
-  cardSensitive: { borderColor: theme.color.warning },
-  content: { color: theme.color.text, fontSize: 15, lineHeight: 21 },
+    card: {
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      padding: theme.space(6),
+      gap: theme.space(4),
+    },
+    cardSensitive: { borderColor: theme.color.warning },
+    content: { color: theme.color.text, fontSize: 15, lineHeight: 21 },
 
-  meta: { flexDirection: "row", flexWrap: "wrap", gap: theme.space(1.5) },
-  badge: {
-    color: theme.color.textFaint,
-    fontSize: 11,
-    paddingVertical: 2,
-    paddingHorizontal: theme.space(2),
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.surfaceRaised,
-    overflow: "hidden",
-  },
-  badgeSensitive: { color: theme.color.warning },
+    meta: { flexDirection: "row", flexWrap: "wrap", gap: theme.space(3) },
+    badge: {
+      color: theme.color.textFaint,
+      fontSize: 11,
+      paddingVertical: 2,
+      paddingHorizontal: theme.space(4),
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.color.surfaceRaised,
+      overflow: "hidden",
+    },
+    badgeSensitive: { color: theme.color.warning },
 
-  forget: { alignSelf: "flex-start" },
-  forgetText: { color: theme.color.danger, fontSize: 13, fontWeight: "600" },
+    forget: { alignSelf: "flex-start" },
+    forgetText: { color: theme.color.danger, fontSize: 13, fontWeight: "600" },
 
-  dangerButton: {
-    marginTop: theme.space(6),
-    alignItems: "center",
-    paddingVertical: theme.space(3),
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.danger,
-  },
-  dangerText: { color: theme.color.danger, fontSize: 14, fontWeight: "700" },
+    dangerButton: {
+      marginTop: theme.space(8),
+      alignItems: "center",
+      paddingVertical: theme.space(5),
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.danger,
+    },
+    dangerText: { color: theme.color.danger, fontSize: 14, fontWeight: "700" },
 
-  empty: {
-    color: theme.color.textMuted,
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: theme.space(8),
-    textAlign: "center",
-  },
-});
+    empty: {
+      color: theme.color.textMuted,
+      fontSize: 15,
+      lineHeight: 21,
+      marginTop: theme.space(9),
+      textAlign: "center",
+    },
+  });

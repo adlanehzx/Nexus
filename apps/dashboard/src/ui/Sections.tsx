@@ -316,16 +316,11 @@ export function Devices({ api }: { api: DashboardApi }) {
                   display: "inline-flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  padding: "16px",
-                  background: "#ffffff",
-                  borderRadius: "8px",
                   marginBottom: "16px",
                 }}
               >
                 <div aria-label="Pairing QR Code" dangerouslySetInnerHTML={{ __html: qrSvg }} />
-                <span
-                  style={{ fontSize: "0.8rem", color: "#111", marginTop: "8px", fontWeight: 500 }}
-                >
+                <span style={{ fontSize: "0.8rem", marginTop: "8px", fontWeight: 500 }}>
                   Scan with NEXUS mobile app
                 </span>
               </div>
@@ -533,7 +528,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 style={{
                                   width: "72px",
                                   height: "4px",
-                                  background: "rgba(255, 255, 255, 0.15)",
+                                  background: "var(--nx-surface-active)",
                                   borderRadius: "2px",
                                   overflow: "hidden",
                                   marginTop: "3px",
@@ -548,7 +543,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                         ? "#22c55e"
                                         : latency.tone === "degraded"
                                           ? "#eab308"
-                                          : "#ef4444",
+                                          : "var(--nx-danger)",
                                     transition: "width 0.2s ease",
                                   }}
                                 />
@@ -576,7 +571,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                             flexDirection: "column",
                             gap: "8px",
                             padding: "8px",
-                            background: "rgba(255, 255, 255, 0.04)",
+                            background: "var(--nx-canvas-sunken)",
                             borderRadius: "6px",
                             minWidth: "260px",
                           }}
@@ -962,7 +957,7 @@ function taskTone(status: string): string {
  * Execution plan, steps, assigned workers, progress, execution log, results, and errors.
  */
 function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) {
-  const state = useSection<TaskDetail>(() => api.task(taskId));
+  const state = useSection<TaskDetail>(() => api.task(taskId), [taskId]);
 
   return (
     <Section state={state}>
@@ -2190,9 +2185,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
   };
 
   return (
-    <div
-      style={{ marginTop: "12px", borderTop: "1px dashed var(--border, #444)", paddingTop: "8px" }}
-    >
+    <div style={{ marginTop: "12px", borderTop: "1px dashed var(--nx-line)", paddingTop: "8px" }}>
       <button
         type="button"
         className="button"
@@ -2207,7 +2200,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
           Loading collaboration workspace…
         </p>
       ) : null}
-      {error ? <p style={{ color: "var(--danger, #ff5555)", marginTop: "6px" }}>{error}</p> : null}
+      {error ? <p style={{ color: "var(--nx-danger)", marginTop: "6px" }}>{error}</p> : null}
 
       {open && collab ? (
         <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -2224,8 +2217,8 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                   <div
                     key={art.id}
                     style={{
-                      background: "var(--surface, #222)",
-                      border: "1px solid var(--border, #444)",
+                      background: "var(--nx-surface)",
+                      border: "1px solid var(--nx-line)",
                       borderRadius: "6px",
                       padding: "8px 12px",
                       display: "flex",
@@ -2258,13 +2251,13 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
           {collab.debates.length > 0 ? (
             <div
               style={{
-                background: "rgba(255, 165, 0, 0.1)",
+                background: "var(--nx-warn-bg)",
                 border: "1px solid orange",
                 borderRadius: "6px",
                 padding: "10px",
               }}
             >
-              <h4 style={{ margin: "0 0 6px 0", color: "orange", fontSize: "0.95rem" }}>
+              <h4 style={{ margin: "0 0 6px 0", color: "var(--nx-warn)", fontSize: "0.95rem" }}>
                 Adversarial debate detected
               </h4>
               {collab.debates.map((d) => (
@@ -2289,8 +2282,8 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
                   <div
                     key={st.key}
                     style={{
-                      background: "var(--surface, #222)",
-                      border: "1px solid var(--border, #444)",
+                      background: "var(--nx-surface)",
+                      border: "1px solid var(--nx-line)",
                       borderRadius: "6px",
                       padding: "6px 10px",
                       fontSize: "0.85rem",
@@ -2801,7 +2794,7 @@ export function Logs({ api }: { api: DashboardApi }) {
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState<{ level?: string; search?: string }>({});
 
-  const state = useSection(() => api.logs(applied));
+  const state = useSection(() => api.logs(applied), [applied]);
 
   return (
     <div className="content">
@@ -2837,7 +2830,6 @@ export function Logs({ api }: { api: DashboardApi }) {
               ...(level === "" ? {} : { level }),
               ...(search === "" ? {} : { search }),
             });
-            state.reload();
           }}
         >
           Filter
@@ -2969,7 +2961,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
                           className="badge mono"
                           style={{
                             fontSize: "0.75rem",
-                            background: "rgba(255, 255, 255, 0.08)",
+                            background: "var(--nx-surface-hover)",
                             padding: "2px 6px",
                             borderRadius: "4px",
                           }}
@@ -3049,7 +3041,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
 export function DagDebugger({ api }: { api: DashboardApi }) {
   const [taskId, setTaskId] = useState("task-current");
   const [queriedTaskId, setQueriedTaskId] = useState("task-current");
-  const state = useSection(() => api.dagDebug(queriedTaskId));
+  const state = useSection(() => api.dagDebug(queriedTaskId), [queriedTaskId]);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const act = (op: () => Promise<unknown>) => {
@@ -3140,7 +3132,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
                     <td>{node.assignedDevice ?? "—"}</td>
                     <td>
                       {node.error ? (
-                        <span style={{ color: "#ef4444" }}>{node.error}</span>
+                        <span style={{ color: "var(--nx-danger)" }}>{node.error}</span>
                       ) : node.output !== undefined ? (
                         <span className="mono muted">
                           {JSON.stringify(node.output).slice(0, 40)}
@@ -3266,8 +3258,9 @@ export function RunComparison({ api }: { api: DashboardApi }) {
   const [runA, setRunA] = useState("");
   const [runB, setRunB] = useState("");
   const [queryRuns, setQueryRuns] = useState<{ a: string; b: string } | null>(null);
-  const state = useSection(() =>
-    queryRuns === null ? Promise.resolve(null) : api.compareRuns(queryRuns.a, queryRuns.b),
+  const state = useSection(
+    () => (queryRuns === null ? Promise.resolve(null) : api.compareRuns(queryRuns.a, queryRuns.b)),
+    [queryRuns],
   );
 
   return (
@@ -3410,7 +3403,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
 
 export function CommunicationGraph({ api }: { api: DashboardApi }) {
   const [range, setRange] = useState("24h");
-  const state = useSection(() => api.communicationGraph(range));
+  const state = useSection(() => api.communicationGraph(range), [range]);
 
   return (
     <div className="content">
@@ -3427,7 +3420,6 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
           value={range}
           onChange={(e) => {
             setRange(e.target.value);
-            state.reload();
           }}
           style={{ maxWidth: "160px" }}
         >
@@ -3594,9 +3586,9 @@ export function VisualControl({ api }: { api: DashboardApi }) {
                   justifyContent: "center",
                   alignItems: "center",
                   minHeight: "240px",
-                  background: "rgba(0, 0, 0, 0.4)",
+                  background: "var(--nx-canvas-sunken)",
                   borderRadius: "8px",
-                  border: "1px dashed rgba(255, 255, 255, 0.2)",
+                  border: "1px dashed var(--nx-line-strong)",
                 }}
               >
                 {vc.lastScreenshotUrl ? (

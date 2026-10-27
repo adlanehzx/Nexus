@@ -2,7 +2,7 @@ import { SectionList, StyleSheet, Text, View } from "react-native";
 import { activeTasks, finishedTasks, type TaskView } from "@nexus/client-core";
 import { useNexus } from "../lib/nexus.js";
 import { TaskCard } from "../components/cards.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useThemedStyles } from "../theme/index.js";
 
 /**
  * All tasks, grouped by active and completed status.
@@ -10,6 +10,7 @@ import { theme } from "../theme/index.js";
  * "In progress" first, followed by "Completed" in reverse chronological order.
  */
 export default function TasksScreen() {
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
   const { state } = nexus;
 
@@ -54,17 +55,23 @@ export default function TasksScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.background },
-  list: { padding: theme.space(4), flexGrow: 1 },
-  sectionTitle: {
-    color: theme.color.textFaint,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginTop: theme.space(4),
-    marginBottom: theme.space(1),
-  },
-  empty: { color: theme.color.textMuted, fontSize: 15, lineHeight: 21, marginTop: theme.space(8) },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.color.background },
+    list: { padding: theme.space(6), flexGrow: 1 },
+    sectionTitle: {
+      color: theme.color.textFaint,
+      fontSize: 12,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+      marginTop: theme.space(6),
+      marginBottom: theme.space(2),
+    },
+    empty: {
+      color: theme.color.textMuted,
+      fontSize: 15,
+      lineHeight: 21,
+      marginTop: theme.space(9),
+    },
+  });

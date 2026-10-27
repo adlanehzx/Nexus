@@ -1,6 +1,6 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
 /**
  * Notifications view.
@@ -9,6 +9,7 @@ import { theme } from "../theme/index.js";
  * on mobile updates all attached clients.
  */
 export default function NotificationsScreen() {
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
 
   return (
@@ -42,31 +43,33 @@ export default function NotificationsScreen() {
 }
 
 function severityColor(severity: string): string {
+  const theme = useTheme();
   if (severity === "error") return theme.color.danger;
   if (severity === "warning") return theme.color.warning;
   return theme.color.accent;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.background },
-  list: { padding: theme.space(4), gap: theme.space(2), flexGrow: 1 },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    padding: theme.space(3.5),
-    gap: theme.space(1.5),
-  },
-  unread: { borderColor: theme.color.accent },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: theme.space(2),
-  },
-  title: { color: theme.color.text, fontSize: 15, fontWeight: "600", flex: 1 },
-  dot: { width: 8, height: 8, borderRadius: theme.radius.pill },
-  body: { color: theme.color.textMuted, fontSize: 13, lineHeight: 18 },
-  empty: { color: theme.color.textMuted, fontSize: 15, marginTop: theme.space(8) },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.color.background },
+    list: { padding: theme.space(6), gap: theme.space(4), flexGrow: 1 },
+    card: {
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      padding: theme.space(6),
+      gap: theme.space(3),
+    },
+    unread: { borderColor: theme.color.accent },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: theme.space(4),
+    },
+    title: { color: theme.color.text, fontSize: 15, fontWeight: "600", flex: 1 },
+    dot: { width: 8, height: 8, borderRadius: theme.radius.pill },
+    body: { color: theme.color.textMuted, fontSize: 13, lineHeight: 18 },
+    empty: { color: theme.color.textMuted, fontSize: 15, marginTop: theme.space(9) },
+  });

@@ -71,7 +71,7 @@ export function ApprovalCards({
       <div
         className="career-card"
         style={{
-          background: "rgb(233 173 91 / 8%)",
+          background: "var(--nx-warn-bg)",
           borderLeft: "4px solid var(--gradient)",
           gap: "0.4rem",
         }}
@@ -119,7 +119,7 @@ export function ApprovalCards({
           style={{
             padding: "0.65rem 1rem",
             borderRadius: "var(--radius)",
-            background: "rgb(95 211 154 / 12%)",
+            background: "var(--nx-ok-bg)",
             color: "var(--ok)",
             fontSize: "0.85rem",
           }}
@@ -317,13 +317,7 @@ export function ApprovalCards({
                     <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", flex: 1 }}>
                       <button
                         type="button"
-                        className="button primary"
-                        style={{
-                          background: "var(--ok)",
-                          borderColor: "var(--ok)",
-                          color: "#000",
-                          fontWeight: 700,
-                        }}
+                        className="button ok"
                         disabled={isProcessing}
                         onClick={() =>
                           void handleResolve(

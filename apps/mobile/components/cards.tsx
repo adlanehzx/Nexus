@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConfirmationView, MessageView, TaskView, ToolCallView } from "@nexus/client-core";
-import { riskColor, statusColor, statusLabel, theme } from "../theme/index.js";
+import {
+  type Theme,
+  riskColor,
+  statusColor,
+  statusLabel,
+  useTheme,
+  useThemedStyles,
+} from "../theme/index.js";
 
 /**
  * Conversation cards.
@@ -16,6 +23,7 @@ import { riskColor, statusColor, statusLabel, theme } from "../theme/index.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function MessageBubble({ message }: { message: MessageView }) {
+  const styles = useThemedStyles(makeStyles);
   const mine = message.role === "user";
 
   return (
@@ -43,6 +51,7 @@ export function TaskCard({
   deviceName?: string | undefined;
   onCancel?: ((taskId: string) => void) | undefined;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const running = task.status === "running" || task.status === "pending";
 
   return (
@@ -105,6 +114,8 @@ export function TaskCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ToolCard({ call }: { call: ToolCallView }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={[styles.card, styles.toolCard]}>
       <View style={styles.cardHeader}>
@@ -154,6 +165,7 @@ export function ConfirmationCard({
   confirmation: ConfirmationView;
   onAnswer: (id: string, decision: "approved" | "rejected") => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const [armed, setArmed] = useState(false);
   const highRisk = confirmation.riskLevel === "HIGH" || confirmation.riskLevel === "CRITICAL";
 
@@ -233,6 +245,7 @@ export function ErrorBanner({
   onRetry?: () => void;
   onDismiss: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.banner}>
       <Text style={styles.bannerText} numberOfLines={3}>
@@ -260,6 +273,7 @@ export function ErrorBanner({
 
 /** Connection status banner. Visible only when disconnected or reconnecting. */
 export function ConnectionBanner({ connection, online }: { connection: string; online: boolean }) {
+  const styles = useThemedStyles(makeStyles);
   if (online && connection === "connected") return null;
 
   const message = !online
@@ -292,94 +306,95 @@ function formatDuration(ms: number): string {
   return `${String(Math.round(ms / 60_000))} min`;
 }
 
-const styles = StyleSheet.create({
-  bubbleRow: { flexDirection: "row", marginVertical: theme.space(1) },
-  rowRight: { justifyContent: "flex-end" },
-  rowLeft: { justifyContent: "flex-start" },
-  bubble: {
-    maxWidth: "85%",
-    paddingVertical: theme.space(2.5),
-    paddingHorizontal: theme.space(3.5),
-    borderRadius: theme.radius.lg,
-  },
-  bubbleMine: { backgroundColor: theme.color.accent },
-  bubbleTheirs: { backgroundColor: theme.color.surfaceRaised },
-  bubbleText: { color: theme.color.text, fontSize: 16, lineHeight: 22 },
-  cursor: { color: theme.color.textMuted, fontSize: 14 },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    bubbleRow: { flexDirection: "row", marginVertical: theme.space(2) },
+    rowRight: { justifyContent: "flex-end" },
+    rowLeft: { justifyContent: "flex-start" },
+    bubble: {
+      maxWidth: "85%",
+      paddingVertical: theme.space(5),
+      paddingHorizontal: theme.space(6),
+      borderRadius: theme.radius.xl,
+    },
+    bubbleMine: { backgroundColor: theme.color.accent },
+    bubbleTheirs: { backgroundColor: theme.color.surfaceRaised },
+    bubbleText: { color: theme.color.text, fontSize: 16, lineHeight: 22 },
+    cursor: { color: theme.color.textMuted, fontSize: 14 },
 
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    padding: theme.space(3.5),
-    marginVertical: theme.space(1.5),
-    gap: theme.space(1.5),
-  },
-  toolCard: { backgroundColor: theme.color.surfaceRaised },
-  confirmCard: { borderWidth: 2 },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", gap: theme.space(2) },
-  cardTitle: { color: theme.color.text, fontSize: 15, fontWeight: "600", flex: 1 },
-  cardMeta: { color: theme.color.textMuted, fontSize: 13, lineHeight: 18 },
-  cardFaint: { color: theme.color.textFaint, fontSize: 12 },
-  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  badge: { fontSize: 12, fontWeight: "600" },
-  toolName: {
-    color: theme.color.text,
-    fontSize: 14,
-    fontWeight: "600",
-    fontVariant: ["tabular-nums"],
-  },
-  riskChip: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
-  errorText: { color: theme.color.danger, fontSize: 13, lineHeight: 18 },
+    card: {
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      padding: theme.space(6),
+      marginVertical: theme.space(3),
+      gap: theme.space(3),
+    },
+    toolCard: { backgroundColor: theme.color.surfaceRaised },
+    confirmCard: { borderWidth: 2 },
+    cardHeader: { flexDirection: "row", justifyContent: "space-between", gap: theme.space(4) },
+    cardTitle: { color: theme.color.text, fontSize: 15, fontWeight: "600", flex: 1 },
+    cardMeta: { color: theme.color.textMuted, fontSize: 13, lineHeight: 18 },
+    cardFaint: { color: theme.color.textFaint, fontSize: 12 },
+    cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    badge: { fontSize: 12, fontWeight: "600" },
+    toolName: {
+      color: theme.color.text,
+      fontSize: 14,
+      fontWeight: "600",
+      fontVariant: ["tabular-nums"],
+    },
+    riskChip: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+    errorText: { color: theme.color.danger, fontSize: 13, lineHeight: 18 },
 
-  progressTrack: {
-    height: 4,
-    backgroundColor: theme.color.border,
-    borderRadius: theme.radius.pill,
-    overflow: "hidden",
-  },
-  progressFill: { height: 4, backgroundColor: theme.color.accent },
+    progressTrack: {
+      height: 4,
+      backgroundColor: theme.color.border,
+      borderRadius: theme.radius.pill,
+      overflow: "hidden",
+    },
+    progressFill: { height: 4, backgroundColor: theme.color.accent },
 
-  confirmIntro: { color: theme.color.textMuted, fontSize: 13 },
-  confirmAction: { color: theme.color.text, fontSize: 17, fontWeight: "600", lineHeight: 23 },
-  riskRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  riskValue: { fontSize: 15, fontWeight: "700", letterSpacing: 0.5 },
-  armedNotice: { color: theme.color.warning, fontSize: 13, lineHeight: 18 },
-  confirmActions: { flexDirection: "row", gap: theme.space(3), marginTop: theme.space(1) },
-  button: {
-    flex: 1,
-    paddingVertical: theme.space(3.5),
-    borderRadius: theme.radius.md,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  buttonNeutral: { backgroundColor: theme.color.surfaceRaised, borderColor: theme.color.border },
-  buttonNeutralText: { color: theme.color.text, fontSize: 15, fontWeight: "600" },
-  buttonApprove: { backgroundColor: "transparent" },
-  buttonArmed: { backgroundColor: theme.color.surfaceRaised },
-  buttonApproveText: { color: theme.color.text, fontSize: 15, fontWeight: "700" },
+    confirmIntro: { color: theme.color.textMuted, fontSize: 13 },
+    confirmAction: { color: theme.color.text, fontSize: 17, fontWeight: "600", lineHeight: 23 },
+    riskRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    riskValue: { fontSize: 15, fontWeight: "700", letterSpacing: 0.5 },
+    armedNotice: { color: theme.color.warning, fontSize: 13, lineHeight: 18 },
+    confirmActions: { flexDirection: "row", gap: theme.space(5), marginTop: theme.space(2) },
+    button: {
+      flex: 1,
+      paddingVertical: theme.space(6),
+      borderRadius: theme.radius.lg,
+      alignItems: "center",
+      borderWidth: 1,
+    },
+    buttonNeutral: { backgroundColor: theme.color.surfaceRaised, borderColor: theme.color.border },
+    buttonNeutralText: { color: theme.color.text, fontSize: 15, fontWeight: "600" },
+    buttonApprove: { backgroundColor: "transparent" },
+    buttonArmed: { backgroundColor: theme.color.surfaceRaised },
+    buttonApproveText: { color: theme.color.text, fontSize: 15, fontWeight: "700" },
 
-  banner: {
-    backgroundColor: theme.color.surfaceRaised,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.color.danger,
-    padding: theme.space(3),
-    borderRadius: theme.radius.sm,
-    gap: theme.space(1.5),
-  },
-  bannerText: { color: theme.color.text, fontSize: 14, lineHeight: 19 },
-  bannerDismiss: { color: theme.color.textMuted, fontSize: 13 },
+    banner: {
+      backgroundColor: theme.color.surfaceRaised,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.color.danger,
+      padding: theme.space(5),
+      borderRadius: theme.radius.md,
+      gap: theme.space(3),
+    },
+    bannerText: { color: theme.color.text, fontSize: 14, lineHeight: 19 },
+    bannerDismiss: { color: theme.color.textMuted, fontSize: 13 },
 
-  connectionBanner: {
-    backgroundColor: theme.color.surfaceRaised,
-    paddingVertical: theme.space(2),
-    paddingHorizontal: theme.space(4),
-    alignItems: "center",
-  },
-  connectionText: { color: theme.color.textMuted, fontSize: 13 },
+    connectionBanner: {
+      backgroundColor: theme.color.surfaceRaised,
+      paddingVertical: theme.space(4),
+      paddingHorizontal: theme.space(6),
+      alignItems: "center",
+    },
+    connectionText: { color: theme.color.textMuted, fontSize: 13 },
 
-  linkButton: { paddingVertical: theme.space(1), paddingHorizontal: theme.space(2) },
-  linkText: { color: theme.color.accent, fontSize: 13, fontWeight: "600" },
-  inline: { flexDirection: "row", alignItems: "center", gap: theme.space(2) },
-});
+    linkButton: { paddingVertical: theme.space(2), paddingHorizontal: theme.space(4) },
+    linkText: { color: theme.color.accent, fontSize: 13, fontWeight: "600" },
+    inline: { flexDirection: "row", alignItems: "center", gap: theme.space(4) },
+  });

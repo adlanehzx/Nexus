@@ -95,8 +95,8 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
           <div
             style={{
               padding: "0.65rem 0.85rem",
-              background: "rgb(233 173 91 / 8%)",
-              border: "1px solid rgb(233 173 91 / 25%)",
+              background: "var(--nx-warn-bg)",
+              border: "1px solid var(--nx-warn-line)",
               borderRadius: "var(--radius)",
               fontSize: "0.82rem",
               color: "var(--gradient)",
@@ -527,7 +527,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               padding: "0.5rem 0.75rem",
               borderRadius: "var(--radius)",
               background: saveMessage.includes("success")
-                ? "rgb(95 211 154 / 12%)"
+                ? "var(--nx-ok-bg)"
                 : "rgb(242 118 118 / 12%)",
               color: saveMessage.includes("success") ? "var(--ok)" : "var(--down)",
               fontSize: "0.85rem",

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import type { ApiDevice } from "@nexus/client-core";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
 /**
  * Fleet device management.
@@ -11,6 +11,8 @@ import { theme } from "../theme/index.js";
  * Revocation requires explicit confirmation as it is irreversible.
  */
 export default function DevicesScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
   const [devices, setDevices] = useState<ApiDevice[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -198,54 +200,60 @@ function formatRelative(iso: string): string {
   return `${String(Math.round(minutes / 1_440))}d ago`;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.background },
-  list: { padding: theme.space(4), gap: theme.space(3), flexGrow: 1 },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    padding: theme.space(4),
-    gap: theme.space(2),
-  },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: theme.space(2), flex: 1 },
-  statusDot: { width: 9, height: 9, borderRadius: theme.radius.pill },
-  name: { color: theme.color.text, fontSize: 16, fontWeight: "600" },
-  role: { color: theme.color.textFaint, fontSize: 12 },
-  meta: { color: theme.color.textMuted, fontSize: 13 },
-  faint: { color: theme.color.textFaint, fontSize: 12 },
-  capabilities: { flexDirection: "row", flexWrap: "wrap", gap: theme.space(1.5) },
-  capabilityChip: {
-    color: theme.color.textMuted,
-    fontSize: 11,
-    backgroundColor: theme.color.surfaceRaised,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.space(2),
-    paddingVertical: theme.space(1),
-  },
-  actions: { flexDirection: "row", gap: theme.space(2), marginTop: theme.space(1) },
-  approve: {
-    backgroundColor: theme.color.accent,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.space(4),
-    paddingVertical: theme.space(2.5),
-  },
-  approveText: { color: theme.color.text, fontSize: 13, fontWeight: "600" },
-  revoke: {
-    borderWidth: 1,
-    borderColor: theme.color.danger,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.space(4),
-    paddingVertical: theme.space(2.5),
-  },
-  revokeText: { color: theme.color.danger, fontSize: 13, fontWeight: "600" },
-  error: {
-    color: theme.color.danger,
-    fontSize: 14,
-    paddingHorizontal: theme.space(4),
-    paddingTop: theme.space(3),
-  },
-  empty: { color: theme.color.textMuted, fontSize: 15, lineHeight: 21, marginTop: theme.space(8) },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.color.background },
+    list: { padding: theme.space(6), gap: theme.space(5), flexGrow: 1 },
+    card: {
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      padding: theme.space(6),
+      gap: theme.space(4),
+    },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    nameRow: { flexDirection: "row", alignItems: "center", gap: theme.space(4), flex: 1 },
+    statusDot: { width: 9, height: 9, borderRadius: theme.radius.pill },
+    name: { color: theme.color.text, fontSize: 16, fontWeight: "600" },
+    role: { color: theme.color.textFaint, fontSize: 12 },
+    meta: { color: theme.color.textMuted, fontSize: 13 },
+    faint: { color: theme.color.textFaint, fontSize: 12 },
+    capabilities: { flexDirection: "row", flexWrap: "wrap", gap: theme.space(3) },
+    capabilityChip: {
+      color: theme.color.textMuted,
+      fontSize: 11,
+      backgroundColor: theme.color.surfaceRaised,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: theme.space(4),
+      paddingVertical: theme.space(2),
+    },
+    actions: { flexDirection: "row", gap: theme.space(4), marginTop: theme.space(2) },
+    approve: {
+      backgroundColor: theme.color.accent,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: theme.space(6),
+      paddingVertical: theme.space(5),
+    },
+    approveText: { color: theme.color.text, fontSize: 13, fontWeight: "600" },
+    revoke: {
+      borderWidth: 1,
+      borderColor: theme.color.danger,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: theme.space(6),
+      paddingVertical: theme.space(5),
+    },
+    revokeText: { color: theme.color.danger, fontSize: 13, fontWeight: "600" },
+    error: {
+      color: theme.color.danger,
+      fontSize: 14,
+      paddingHorizontal: theme.space(6),
+      paddingTop: theme.space(5),
+    },
+    empty: {
+      color: theme.color.textMuted,
+      fontSize: 15,
+      lineHeight: 21,
+      marginTop: theme.space(9),
+    },
+  });

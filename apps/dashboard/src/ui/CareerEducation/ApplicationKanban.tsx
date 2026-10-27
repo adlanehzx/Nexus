@@ -70,7 +70,7 @@ export function ApplicationKanban({
                 <div
                   style={{
                     padding: "0.4rem 0.6rem",
-                    background: "rgb(233 173 91 / 12%)",
+                    background: "var(--nx-warn-bg)",
                     border: "1px solid var(--gradient)",
                     borderRadius: "4px",
                     fontSize: "0.75rem",
@@ -196,8 +196,7 @@ export function ApplicationKanban({
               {selectedApp.stage === "pending_approval" && (
                 <button
                   type="button"
-                  className="button compact"
-                  style={{ background: "var(--gradient)", color: "#000", fontWeight: 700 }}
+                  className="button compact warn"
                   onClick={() => {
                     onOpenApprovals();
                     setSelectedAppId(null);

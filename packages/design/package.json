@@ -1,0 +1,32 @@
+{
+  "name": "@nexus/design",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NEXUS Signal design system: the single source of truth for colour, space, type and motion across dashboard, desktop and mobile",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tokens.css": "./tokens.css"
+  },
+  "files": [
+    "dist",
+    "tokens.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/generate-css.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "vitest": "4.1.11"
+  }
+}

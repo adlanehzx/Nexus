@@ -54,6 +54,9 @@ importers:
       '@nexus/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      '@nexus/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@nexus/osint':
         specifier: workspace:*
         version: link:../../packages/osint
@@ -88,6 +91,9 @@ importers:
       '@nexus/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      '@nexus/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@nexus/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -125,6 +131,9 @@ importers:
       '@nexus/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      '@nexus/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@nexus/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -404,6 +413,15 @@ importers:
       prisma:
         specifier: 7.10.0
         version: 7.10.0(@types/react-dom@19.1.11(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3)
+
+  packages/design:
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
   packages/device-policy:
     dependencies:

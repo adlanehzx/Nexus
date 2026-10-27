@@ -20,7 +20,7 @@ import {
   TaskCard,
   ToolCard,
 } from "../components/cards.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useThemedStyles } from "../theme/index.js";
 
 /**
  * Main screen: conversation timeline.
@@ -29,6 +29,7 @@ import { theme } from "../theme/index.js";
  * Confirmations are pinned at the top to prevent losing actionable requests in scroll history.
  */
 export default function ChatScreen() {
+  const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
   const { state } = nexus;
   const listRef = useRef<FlatList<FeedItem>>(null);
@@ -164,6 +165,7 @@ function NavChip({
   badge?: number;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button">
       <Text style={styles.chipText}>{label}</Text>
@@ -176,47 +178,48 @@ function NavChip({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.background },
-  toolbar: {
-    flexDirection: "row",
-    gap: theme.space(2),
-    paddingHorizontal: theme.space(4),
-    paddingVertical: theme.space(2),
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.space(1.5),
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.space(3),
-    paddingVertical: theme.space(2),
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  chipText: { color: theme.color.textMuted, fontSize: 13, fontWeight: "600" },
-  chipBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.color.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: theme.space(1),
-  },
-  chipBadgeText: { color: theme.color.text, fontSize: 11, fontWeight: "700" },
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.color.background },
+    toolbar: {
+      flexDirection: "row",
+      gap: theme.space(4),
+      paddingHorizontal: theme.space(6),
+      paddingVertical: theme.space(4),
+    },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.space(3),
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: theme.space(5),
+      paddingVertical: theme.space(4),
+      borderWidth: 1,
+      borderColor: theme.color.border,
+    },
+    chipText: { color: theme.color.textMuted, fontSize: 13, fontWeight: "600" },
+    chipBadge: {
+      minWidth: 18,
+      height: 18,
+      borderRadius: theme.radius.pill,
+      backgroundColor: theme.color.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.space(2),
+    },
+    chipBadgeText: { color: theme.color.text, fontSize: 11, fontWeight: "700" },
 
-  confirmations: { paddingHorizontal: theme.space(4) },
-  errorHolder: { paddingHorizontal: theme.space(4), paddingVertical: theme.space(1) },
-  feed: { paddingHorizontal: theme.space(4), paddingVertical: theme.space(3), flexGrow: 1 },
+    confirmations: { paddingHorizontal: theme.space(6) },
+    errorHolder: { paddingHorizontal: theme.space(6), paddingVertical: theme.space(2) },
+    feed: { paddingHorizontal: theme.space(6), paddingVertical: theme.space(5), flexGrow: 1 },
 
-  empty: {
-    flex: 1,
-    justifyContent: "center",
-    gap: theme.space(2),
-    paddingHorizontal: theme.space(2),
-  },
-  emptyTitle: { color: theme.color.text, fontSize: 20, fontWeight: "600" },
-  emptyText: { color: theme.color.textMuted, fontSize: 15, lineHeight: 21 },
-});
+    empty: {
+      flex: 1,
+      justifyContent: "center",
+      gap: theme.space(4),
+      paddingHorizontal: theme.space(4),
+    },
+    emptyTitle: { color: theme.color.text, fontSize: 20, fontWeight: "600" },
+    emptyText: { color: theme.color.textMuted, fontSize: 15, lineHeight: 21 },
+  });

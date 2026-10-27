@@ -1,14 +1,27 @@
-import { FakeCareerEducationClient, type CareerEducationClient } from "@nexus/client-core";
+import {
+  FakeCareerEducationClient,
+  HttpCareerEducationClient,
+  type CareerEducationClient,
+  type SessionManager,
+} from "@nexus/client-core";
+
+/**
+ * Creates a CareerEducationClient instance.
+ * When an authenticated SessionManager is provided, it connects directly
+ * to the Fastify API /api/v1/career/* routes.
+ */
+export function createCareerEducationClient(session?: SessionManager): CareerEducationClient {
+  if (session !== undefined) {
+    return new HttpCareerEducationClient(session, { seedDemoData: false });
+  }
+  return new FakeCareerEducationClient({ seedDemoData: false });
+}
 
 /**
  * Shared singleton instance of the contract-backed CareerEducationClient.
  * Serves as the typed boundary between the dashboard presentation layer
- * and the domain engine. This local adapter intentionally starts empty; test
- * suites opt into deterministic demo fixtures explicitly.
+ * and the domain engine.
  */
-// The dashboard starts from a neutral state. Rich deterministic fixtures remain
-// available to tests, but no fictional developer profile may leak into a real
-// user's career workspace.
 export const careerEducationClient: CareerEducationClient = new FakeCareerEducationClient({
   seedDemoData: false,
 });

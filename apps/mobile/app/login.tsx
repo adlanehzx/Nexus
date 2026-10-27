@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useNexus } from "../lib/nexus.js";
-import { theme } from "../theme/index.js";
+import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 import { NexusOrb } from "../components/nexus-orb.js";
 
 /**
@@ -11,6 +11,8 @@ import { NexusOrb } from "../components/nexus-orb.js";
  * Password is exchanged for tokens stored in Keychain via `SessionManager`.
  */
 export default function LoginScreen() {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { signIn } = useNexus();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,36 +85,37 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.color.background,
-    padding: theme.space(6),
-    justifyContent: "center",
-    gap: theme.space(3),
-  },
-  orb: { alignItems: "center", marginBottom: theme.space(2) },
-  eyebrow: { color: theme.color.textFaint, fontSize: 11, letterSpacing: 1.4, fontWeight: "700" },
-  title: { color: theme.color.text, fontSize: 42, fontWeight: "700", letterSpacing: -1.5 },
-  subtitle: { color: theme.color.textMuted, fontSize: 15, marginBottom: theme.space(4) },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    color: theme.color.text,
-    fontSize: 16,
-    paddingHorizontal: theme.space(4),
-    paddingVertical: theme.space(3.5),
-  },
-  button: {
-    backgroundColor: theme.color.accent,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.space(4),
-    alignItems: "center",
-    marginTop: theme.space(2),
-  },
-  buttonBusy: { opacity: 0.7 },
-  buttonText: { color: theme.color.background, fontSize: 16, fontWeight: "700" },
-  error: { color: theme.color.danger, fontSize: 14 },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: theme.color.background,
+      padding: theme.space(8),
+      justifyContent: "center",
+      gap: theme.space(5),
+    },
+    orb: { alignItems: "center", marginBottom: theme.space(4) },
+    eyebrow: { color: theme.color.textFaint, fontSize: 11, letterSpacing: 1.4, fontWeight: "700" },
+    title: { color: theme.color.text, fontSize: 42, fontWeight: "700", letterSpacing: -1.5 },
+    subtitle: { color: theme.color.textMuted, fontSize: 15, marginBottom: theme.space(6) },
+    input: {
+      backgroundColor: theme.color.surface,
+      borderRadius: theme.radius.lg,
+      borderWidth: 1,
+      borderColor: theme.color.border,
+      color: theme.color.text,
+      fontSize: 16,
+      paddingHorizontal: theme.space(6),
+      paddingVertical: theme.space(6),
+    },
+    button: {
+      backgroundColor: theme.color.accent,
+      borderRadius: theme.radius.lg,
+      paddingVertical: theme.space(6),
+      alignItems: "center",
+      marginTop: theme.space(4),
+    },
+    buttonBusy: { opacity: 0.7 },
+    buttonText: { color: theme.color.background, fontSize: 16, fontWeight: "700" },
+    error: { color: theme.color.danger, fontSize: 14 },
+  });

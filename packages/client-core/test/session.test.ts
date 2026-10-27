@@ -386,4 +386,23 @@ describe("readiness check", () => {
     expect(result.status).toBe("down");
     expect(result.diagnostic).toBeDefined();
   });
+
+  it("checks first-run setup status from backend probe", async () => {
+    const { http, session } = makeSession();
+    http.on("GET", "/api/v1/auth/setup-status", {
+      status: 200,
+      body: { data: { initialized: true } },
+    });
+
+    const result = await session.checkSetupStatus();
+    expect(result.initialized).toBe(true);
+
+    http.on("GET", "/api/v1/auth/setup-status", {
+      status: 200,
+      body: { data: { initialized: false } },
+    });
+
+    const notInit = await session.checkSetupStatus();
+    expect(notInit.initialized).toBe(false);
+  });
 });

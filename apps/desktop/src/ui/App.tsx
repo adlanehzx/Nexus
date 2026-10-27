@@ -6,6 +6,7 @@ import { Devices, Memory, Notifications, Settings, Tasks, Worker } from "./Scree
 import { ConnectionBanner, ErrorBanner } from "./cards.js";
 import { Login } from "./Login.js";
 import { NexusOrb } from "./NexusOrb.js";
+import { ThemeToggle } from "./ThemeToggle.js";
 import { nexusVisualState } from "./visual-state.js";
 
 const TITRES: Record<Screen, string> = {
@@ -80,9 +81,12 @@ export function App() {
             <span className="eyebrow">NEXUS / {ecran}</span>
             <h2>{TITRES[ecran]}</h2>
           </div>
-          <div className="system-state" aria-live="polite">
-            <span className={`presence-dot ${nexus.state.online ? "is-online" : ""}`} />
-            {nexus.boundDeviceId === null ? "Device not bound" : nexus.state.connection}
+          <div className="row">
+            <div className="system-state" aria-live="polite">
+              <span className={`presence-dot ${nexus.state.online ? "is-online" : ""}`} />
+              {nexus.boundDeviceId === null ? "Device not bound" : nexus.state.connection}
+            </div>
+            <ThemeToggle />
           </div>
         </header>
         <ConnectionBanner connection={nexus.state.connection} online={nexus.state.online} />

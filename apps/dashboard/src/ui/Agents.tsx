@@ -923,7 +923,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div
           style={{
             marginTop: "40px",
-            borderTop: "1px solid var(--border, #333)",
+            borderTop: "1px solid var(--nx-line)",
             paddingTop: "24px",
           }}
         >
@@ -965,7 +965,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}
             >
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border, #444)" }}>
+                <tr style={{ borderBottom: "1px solid var(--nx-line)" }}>
                   <th style={{ padding: "8px" }}>Profile</th>
                   <th style={{ padding: "8px" }}>Auth</th>
                   <th style={{ padding: "8px" }}>Code</th>
@@ -984,7 +984,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                       style={{
                         padding: "12px",
                         textAlign: "center",
-                        color: "var(--text-muted, #888)",
+                        color: "var(--nx-text-muted)",
                       }}
                     >
                       No routing data available.
@@ -992,11 +992,13 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </tr>
                 ) : (
                   routingMatrix.map((r) => (
-                    <tr key={r.key} style={{ borderBottom: "1px solid var(--border-light, #222)" }}>
+                    <tr key={r.key} style={{ borderBottom: "1px solid var(--nx-line-strong)" }}>
                       <td style={{ padding: "8px", fontWeight: "bold" }}>
                         {r.key}
                         {r.cooldownActive ? (
-                          <span style={{ color: "orange", marginLeft: "6px" }}>(Cooldown)</span>
+                          <span style={{ color: "var(--nx-warn)", marginLeft: "6px" }}>
+                            (Cooldown)
+                          </span>
                         ) : null}
                       </td>
                       <td style={{ padding: "8px" }}>
@@ -1030,7 +1032,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           {/* Simulateur de routage */}
           <div
             className="card"
-            style={{ padding: "16px", background: "var(--surface, #1e1e1e)", borderRadius: "8px" }}
+            style={{ padding: "16px", background: "var(--nx-surface)", borderRadius: "8px" }}
           >
             <h4 style={{ margin: "0 0 10px 0" }}>Routing Evaluation Simulator</h4>
             <p className="muted" style={{ marginBottom: "12px" }}>
@@ -1062,7 +1064,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               <div
                 style={{
                   marginTop: "12px",
-                  borderTop: "1px solid var(--border, #333)",
+                  borderTop: "1px solid var(--nx-line)",
                   paddingTop: "12px",
                 }}
               >
@@ -1095,11 +1097,11 @@ export function Agents({ api }: { api: DashboardApi }) {
                         background:
                           idx === 0 && agent.isAvailable
                             ? "rgba(40, 167, 69, 0.15)"
-                            : "var(--card-bg, #282828)",
+                            : "var(--nx-surface)",
                         border:
                           idx === 0 && agent.isAvailable
                             ? "1px solid #28a745"
-                            : "1px solid var(--border, #444)",
+                            : "1px solid var(--nx-line)",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
@@ -1110,12 +1112,14 @@ export function Agents({ api }: { api: DashboardApi }) {
                           #{idx + 1} {agent.key}
                         </strong>{" "}
                         {idx === 0 && agent.isAvailable ? (
-                          <span style={{ color: "#28a745", fontWeight: "bold", marginLeft: "6px" }}>
+                          <span
+                            style={{ color: "var(--nx-ok)", fontWeight: "bold", marginLeft: "6px" }}
+                          >
                             ★ Recommended
                           </span>
                         ) : null}
                         {!agent.isAvailable ? (
-                          <span style={{ color: "#dc3545", marginLeft: "6px" }}>
+                          <span style={{ color: "var(--nx-danger)", marginLeft: "6px" }}>
                             ({agent.unavailabilityReason})
                           </span>
                         ) : null}

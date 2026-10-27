@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@nexus/client-core": "workspace:*",
+    "@nexus/design": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "react": "19.1.0",
     "react-dom": "19.1.0"

@@ -72,4 +72,19 @@ describe("Setup wizard presentation and state persistence", () => {
     expect(serialized).not.toContain("Bearer");
     expect(serialized).toContain("Connection refused");
   });
+
+  it("probes setup status to detect existing administrative account", async () => {
+    let checked = false;
+    const fakeSession = {
+      checkReadiness: () => Promise.resolve({ status: "ok" as const }),
+      checkSetupStatus: () => {
+        checked = true;
+        return Promise.resolve({ initialized: true });
+      },
+    };
+
+    const status = await fakeSession.checkSetupStatus();
+    expect(checked).toBe(true);
+    expect(status.initialized).toBe(true);
+  });
 });

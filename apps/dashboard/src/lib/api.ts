@@ -23,6 +23,12 @@ import type {
  * blocks appear here; the boundary is enforced on the server.
  */
 
+export interface SystemPauseState {
+  paused: boolean;
+  reason: string | null;
+  since: string | null;
+}
+
 export interface HealthEntry {
   name: string;
   level: "ok" | "degraded" | "down" | "unconfigured";
@@ -1406,6 +1412,17 @@ export class DashboardApi {
 
   toggleVisualControlPause(paused: boolean): Promise<{ paused: boolean }> {
     return this.#request("POST", "/api/v1/dashboard/visual-control/pause", { paused });
+  }
+
+  globalPause(): Promise<SystemPauseState> {
+    return this.#get("/api/v1/pause");
+  }
+
+  setGlobalPause(paused: boolean, reason?: string): Promise<SystemPauseState> {
+    return this.#request("POST", "/api/v1/pause", {
+      paused,
+      ...(reason !== undefined && reason.length > 0 ? { reason } : {}),
+    });
   }
 
   async #get<T>(path: string): Promise<T> {
