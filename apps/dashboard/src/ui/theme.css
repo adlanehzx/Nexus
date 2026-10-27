@@ -242,8 +242,8 @@ samp {
 }
 .nav-group {
   display: grid;
-  gap: 1px;
-  margin-top: var(--nx-space-7);
+  gap: var(--nx-space-1);
+  margin-top: var(--nx-space-3);
 }
 .nav-group.nav-primary {
   margin-top: 0;
@@ -252,6 +252,47 @@ samp {
 }
 .nav-label {
   padding: 0 var(--nx-space-4) var(--nx-space-3);
+}
+
+.nav-group-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--nx-space-3) var(--nx-space-4);
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text-faint);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-medium);
+  letter-spacing: var(--nx-tracking-caps);
+  text-transform: uppercase;
+}
+.nav-group-toggle:hover {
+  background: var(--nx-surface-hover);
+  color: var(--nx-text-muted);
+}
+.nav-group-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--nx-fast) var(--nx-ease);
+}
+.nav-group.expanded > .nav-group-toggle svg {
+  transform: rotate(180deg);
+}
+.nav-group-items {
+  display: none;
+}
+.nav-group.expanded > .nav-group-items {
+  display: grid;
+  gap: 1px;
 }
 
 /*
@@ -411,7 +452,9 @@ samp {
 
 .content {
   flex: 1;
+  width: min(var(--nx-content-max), 100%);
   min-height: 0;
+  margin-inline: auto;
   overflow: auto;
   padding: var(--nx-space-8) clamp(var(--nx-space-6), 3vw, var(--nx-space-9)) var(--nx-space-11);
 }
@@ -949,6 +992,21 @@ details.card[open] > summary {
   color: var(--nx-text-faint);
   text-align: center;
 }
+.empty-state-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin: 0 auto var(--nx-space-2);
+  place-items: center;
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface);
+  color: var(--nx-text-faint);
+}
+.empty-state-icon svg {
+  width: 20px;
+  height: 20px;
+}
 .empty-state strong {
   color: var(--nx-text-muted);
   font-size: var(--nx-size-xs);
@@ -960,6 +1018,14 @@ details.card[open] > summary {
   align-items: center;
   justify-content: space-between;
   gap: var(--nx-space-5);
+}
+.section-error > span {
+  display: grid;
+  gap: var(--nx-space-2);
+}
+.section-error small {
+  color: currentcolor;
+  opacity: 0.86;
 }
 
 /* Skeletons mirror the shape of what is loading: three lines of decreasing
@@ -2179,6 +2245,7 @@ tbody tr:last-child td {
   }
   .nexus-home,
   .nav-label,
+  .nav-group-toggle,
   .sidebar-footer {
     display: none;
   }
@@ -2195,6 +2262,11 @@ tbody tr:last-child td {
     padding: 0 var(--nx-space-4) 0 0;
     border: 0;
     border-right: 1px solid var(--nx-line);
+  }
+  .nav-group-items,
+  .nav-group.collapsed > .nav-group-items,
+  .nav-group.expanded > .nav-group-items {
+    display: flex;
   }
   .nav-group:last-child {
     border-right: 0;
@@ -2221,7 +2293,16 @@ tbody tr:last-child td {
 
   .header {
     min-height: 0;
+    flex-wrap: wrap;
     padding: var(--nx-space-5) var(--nx-space-6);
+  }
+  .header > div:first-child {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
   .header p {
     display: none;
@@ -2235,6 +2316,10 @@ tbody tr:last-child td {
     width: 32px;
     padding: var(--nx-space-3);
     font-size: 0;
+  }
+  .scroll-x table,
+  .comparison-table-wrapper table {
+    min-width: 640px;
   }
   .refresh-button svg {
     width: 15px;

@@ -62,6 +62,11 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
 export function Empty({ children }: { children: React.ReactNode }) {
   return (
     <div className="empty-state">
+      <span className="empty-state-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M5 5h14v14H5zM8 9h8M8 13h5" />
+        </svg>
+      </span>
       <strong>No data</strong>
       <span>{children}</span>
     </div>
@@ -143,7 +148,10 @@ export function Section<T>(props: {
   if (props.state.error !== undefined) {
     return (
       <div className="banner error section-error" role="alert">
-        <span>{props.state.error}</span>
+        <span>
+          <strong>This section could not be loaded.</strong>
+          <small>{props.state.error}</small>
+        </span>
         <button className="button compact" type="button" onClick={props.state.reload}>
           Retry
         </button>

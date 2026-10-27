@@ -1,36 +1,54 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { SessionManager } from "@nexus/client-core";
 import { DashboardApi, createSession, type SystemPauseState } from "../lib/api.js";
 import { createCareerEducationClient } from "../lib/career-education.js";
-import { Agents } from "./Agents.js";
-import { CareerEducation } from "./CareerEducation/index.js";
-import { Connections } from "./Connections.js";
-import { NexusChat } from "./NexusChat.js";
-import { OsintWorkspace } from "./OsintWorkspace.js";
-import { SetupWizard } from "./SetupWizard.js";
 import { ThemeToggle } from "./ThemeToggle.js";
-import {
-  Browser,
-  CommunicationGraph,
-  DagDebugger,
-  Devices,
-  Logs,
-  Marketplace,
-  Mcp,
-  Memory,
-  MissionControl,
-  Notifications,
-  Overview,
-  QuotaForecast,
-  RunComparison,
-  Runs,
-  Security,
-  Tasks,
-  Tools,
-  VisualControl,
-  Workers,
-} from "./Sections.js";
-import { Settings } from "./Settings.js";
+
+const Agents = lazy(() =>
+  import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
+);
+const CareerEducation = lazy(() =>
+  import("./CareerEducation/index.js").then(({ CareerEducation: component }) => ({
+    default: component,
+  })),
+);
+const Connections = lazy(() =>
+  import("./Connections.js").then(({ Connections: component }) => ({ default: component })),
+);
+const NexusChat = lazy(() =>
+  import("./NexusChat.js").then(({ NexusChat: component }) => ({ default: component })),
+);
+const OsintWorkspace = lazy(() =>
+  import("./OsintWorkspace.js").then(({ OsintWorkspace: component }) => ({ default: component })),
+);
+const Settings = lazy(() =>
+  import("./Settings.js").then(({ Settings: component }) => ({ default: component })),
+);
+const SetupWizard = lazy(() =>
+  import("./SetupWizard.js").then(({ SetupWizard: component }) => ({ default: component })),
+);
+const sectionModule = () => import("./Sections.js");
+const lazySection = <K extends keyof Awaited<ReturnType<typeof sectionModule>>>(name: K) =>
+  lazy(() => sectionModule().then((module) => ({ default: module[name] })));
+const Browser = lazySection("Browser");
+const CommunicationGraph = lazySection("CommunicationGraph");
+const DagDebugger = lazySection("DagDebugger");
+const Devices = lazySection("Devices");
+const Logs = lazySection("Logs");
+const Marketplace = lazySection("Marketplace");
+const Mcp = lazySection("Mcp");
+const Memory = lazySection("Memory");
+const MissionControl = lazySection("MissionControl");
+const Notifications = lazySection("Notifications");
+const Overview = lazySection("Overview");
+const QuotaForecast = lazySection("QuotaForecast");
+const RunComparison = lazySection("RunComparison");
+const Runs = lazySection("Runs");
+const Security = lazySection("Security");
+const Tasks = lazySection("Tasks");
+const Tools = lazySection("Tools");
+const VisualControl = lazySection("VisualControl");
+const Workers = lazySection("Workers");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -86,6 +104,22 @@ type SectionId =
   | "connections"
   | "settings"
   | "setup";
+
+const SECTION_IDS = new Set<SectionId>([
+  "chat",
+  "career-education",
+  "osint",
+  "agents",
+  "connections",
+  "settings",
+  "setup",
+  ...SUPERVISION_SECTIONS.flatMap((group) => group.items.map(([id]) => id)),
+]);
+
+function sectionFromHash(): SectionId {
+  const candidate = window.location.hash.replace(/^#\/?/, "") as SectionId;
+  return SECTION_IDS.has(candidate) ? candidate : "chat";
+}
 
 const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
@@ -164,9 +198,46 @@ export function App() {
   const [restoringSession, setRestoringSession] = useState(true);
   const session = useMemo(() => createSession(backendUrl(), () => setAuthenticated(false)), []);
   const api = useMemo(() => new DashboardApi(session), [session]);
-  const [section, setSection] = useState<SectionId>("chat");
+  const [section, setSection] = useState<SectionId>(sectionFromHash);
   const [refreshKey, setRefreshKey] = useState(0);
   const [systemPause, setSystemPause] = useState<SystemPauseState | null>(null);
+  const [expandedNavGroups, setExpandedNavGroups] = useState<ReadonlySet<string>>(
+    () => new Set(["Workspaces"]),
+  );
+
+  const navigate = useCallback((next: SectionId): void => {
+    setSection(next);
+    const nextHash = `#/${next}`;
+    if (window.location.hash !== nextHash) window.history.pushState(null, "", nextHash);
+  }, []);
+
+  useEffect(() => {
+    const syncSection = (): void => setSection(sectionFromHash());
+    window.addEventListener("hashchange", syncSection);
+    window.addEventListener("popstate", syncSection);
+    return () => {
+      window.removeEventListener("hashchange", syncSection);
+      window.removeEventListener("popstate", syncSection);
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeGroup = SUPERVISION_SECTIONS.find((group) =>
+      group.items.some(([id]) => id === section),
+    )?.label;
+    const nextGroup =
+      activeGroup ??
+      (section === "career-education" || section === "osint" || section === "mission-control"
+        ? "Workspaces"
+        : section === "settings" || section === "setup"
+          ? "System"
+          : undefined);
+    if (nextGroup === undefined) return;
+    setExpandedNavGroups((current) => {
+      if (current.has(nextGroup)) return current;
+      return new Set([...current, nextGroup]);
+    });
+  }, [section]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -222,16 +293,18 @@ export function App() {
   if (!authenticated) {
     if (authMode === "setup") {
       return (
-        <SetupWizard
-          session={session}
-          api={api}
-          onComplete={() => {
-            setAuthenticated(true);
-            setAuthMode("login");
-            setSection("chat");
-          }}
-          onSwitchToLogin={() => setAuthMode("login")}
-        />
+        <Suspense fallback={<FullPageLoading />}>
+          <SetupWizard
+            session={session}
+            api={api}
+            onComplete={() => {
+              setAuthenticated(true);
+              setAuthMode("login");
+              navigate("chat");
+            }}
+            onSwitchToLogin={() => setAuthMode("login")}
+          />
+        </Suspense>
       );
     }
 
@@ -247,7 +320,6 @@ export function App() {
   }
 
   const meta = PAGE_META[section];
-  const navigate = (next: SectionId): void => setSection(next);
 
   return (
     <div className="app">
@@ -279,8 +351,13 @@ export function App() {
               onSelect={navigate}
             />
           </div>
-          <div className="nav-group nav-domains">
-            <div className="nav-label">Workspaces</div>
+          <NavGroup
+            label="Workspaces"
+            expanded={expandedNavGroups.has("Workspaces")}
+            onToggle={() =>
+              setExpandedNavGroups((current) => toggleSetValue(current, "Workspaces"))
+            }
+          >
             <NavItem
               id="career-education"
               label="Career"
@@ -296,9 +373,12 @@ export function App() {
               onSelect={navigate}
             />
             <NavItem id="osint" label="OSINT" icon="osint" current={section} onSelect={navigate} />
-          </div>
-          <div className="nav-group nav-account">
-            <div className="nav-label">System</div>
+          </NavGroup>
+          <NavGroup
+            label="System"
+            expanded={expandedNavGroups.has("System")}
+            onToggle={() => setExpandedNavGroups((current) => toggleSetValue(current, "System"))}
+          >
             <NavItem
               id="settings"
               label="Settings"
@@ -313,10 +393,16 @@ export function App() {
               current={section}
               onSelect={navigate}
             />
-          </div>
+          </NavGroup>
           {SUPERVISION_SECTIONS.map((group) => (
-            <div className="nav-group" key={group.label}>
-              <div className="nav-label">{group.label}</div>
+            <NavGroup
+              label={group.label}
+              expanded={expandedNavGroups.has(group.label)}
+              onToggle={() =>
+                setExpandedNavGroups((current) => toggleSetValue(current, group.label))
+              }
+              key={group.label}
+            >
               {group.items.map(([id, label, icon]) => (
                 <NavItem
                   id={id}
@@ -327,7 +413,7 @@ export function App() {
                   key={id}
                 />
               ))}
-            </div>
+            </NavGroup>
           ))}
         </nav>
         <div className="sidebar-footer">
@@ -411,10 +497,74 @@ export function App() {
             </button>
           </div>
         )}
-        <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
-          {renderSection(section, api, session, navigate)}
-        </div>
+        <Suspense fallback={<SectionLoading />}>
+          <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
+            {renderSection(section, api, session, navigate)}
+          </div>
+        </Suspense>
       </main>
+    </div>
+  );
+}
+
+function FullPageLoading() {
+  return (
+    <main className="session-restoring" role="status" aria-label="Loading setup">
+      <span className="brand-mark" aria-hidden="true">
+        N
+      </span>
+    </main>
+  );
+}
+
+function SectionLoading() {
+  return (
+    <div className="content" role="status" aria-label="Loading section">
+      <div className="loading-state">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
+function toggleSetValue(current: ReadonlySet<string>, value: string): ReadonlySet<string> {
+  const next = new Set(current);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function NavGroup({
+  label,
+  expanded,
+  onToggle,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const regionId = `nav-${label.toLowerCase().replaceAll(" ", "-")}`;
+  return (
+    <div className={`nav-group ${expanded ? "expanded" : "collapsed"}`}>
+      <button
+        type="button"
+        className="nav-group-toggle"
+        aria-expanded={expanded}
+        aria-controls={regionId}
+        onClick={onToggle}
+      >
+        <span>{label}</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m5 6 3 3 3-3" />
+        </svg>
+      </button>
+      <div className="nav-group-items" id={regionId}>
+        {children}
+      </div>
     </div>
   );
 }
