@@ -39,6 +39,7 @@ const Marketplace = lazySection("Marketplace");
 const Mcp = lazySection("Mcp");
 const Memory = lazySection("Memory");
 const MissionControl = lazySection("MissionControl");
+const TradingLab = lazySection("TradingLab");
 const Notifications = lazySection("Notifications");
 const Overview = lazySection("Overview");
 const QuotaForecast = lazySection("QuotaForecast");
@@ -99,6 +100,7 @@ type SectionId =
   | SupervisionId
   | "chat"
   | "career-education"
+  | "trading-lab"
   | "osint"
   | "agents"
   | "connections"
@@ -108,6 +110,7 @@ type SectionId =
 const SECTION_IDS = new Set<SectionId>([
   "chat",
   "career-education",
+  "trading-lab",
   "osint",
   "agents",
   "connections",
@@ -127,6 +130,10 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     title: "Career & Education",
     description:
       "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
+  },
+  "trading-lab": {
+    title: "Trading Lab",
+    description: "Paper portfolios, research markets, and risk experiments without real money.",
   },
   osint: {
     title: "OSINT Workspace",
@@ -227,7 +234,7 @@ export function App() {
     )?.label;
     const nextGroup =
       activeGroup ??
-      (section === "career-education" || section === "osint" || section === "mission-control"
+      (section === "career-education" || section === "trading-lab" || section === "osint"
         ? "Workspaces"
         : section === "settings" || section === "setup"
           ? "System"
@@ -366,7 +373,7 @@ export function App() {
               onSelect={navigate}
             />
             <NavItem
-              id="mission-control"
+              id="trading-lab"
               label="Trading Lab"
               icon="trading"
               current={section}
@@ -430,7 +437,10 @@ export function App() {
           <div>
             <div className="eyebrow">
               NEXUS /{" "}
-              {section === "chat" || section === "career-education" || section === "osint"
+              {section === "chat" ||
+              section === "career-education" ||
+              section === "trading-lab" ||
+              section === "osint"
                 ? "WORKSPACE"
                 : "SUPERVISION"}
             </div>
@@ -615,6 +625,8 @@ function renderSection(
       return <Browser api={api} />;
     case "mission-control":
       return <MissionControl api={api} />;
+    case "trading-lab":
+      return <TradingLab api={api} />;
     case "memory":
       return <Memory api={api} />;
     case "notifications":

@@ -1672,7 +1672,16 @@ export function Browser({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function MissionControl({ api }: { api: DashboardApi }) {
+  return <MissionEngineView api={api} view="missions" />;
+}
+
+export function TradingLab({ api }: { api: DashboardApi }) {
+  return <MissionEngineView api={api} view="trading" />;
+}
+
+function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" | "trading" }) {
   const state = useSection(() => api.missionControl());
+  const isTrading = view === "trading";
   const [accountName, setAccountName] = useState("NEXUS Portfolio");
   const [bankroll, setBankroll] = useState("50.00");
   const [marketQuestion, setMarketQuestion] = useState("");
@@ -1725,435 +1734,477 @@ export function MissionControl({ api }: { api: DashboardApi }) {
                   label="ACP engine"
                   alert={data.configured && !data.reachable}
                 />
-                <Metric
-                  value={data.health?.worker_enabled === true ? "active" : "stopped"}
-                  label="workers"
-                  alert={data.configured && data.health?.worker_enabled !== true}
-                />
-                <Metric value={String(data.health?.worker_concurrency ?? 0)} label="concurrency" />
-                <Metric
-                  value={data.audit?.valid === true ? "valid" : "invalid"}
-                  label="audit chain"
-                  alert={data.configured && data.audit?.valid !== true}
-                />
-                <Metric value={formatCount(data.audit?.checked ?? 0)} label="audited events" />
-                <Metric value={`${(cash / 100).toFixed(2)} €`} label="paper cash" />
-                <Metric value={`${(exposure / 100).toFixed(2)} €`} label="paper exposure" />
+                {isTrading ? (
+                  <>
+                    <Metric value={`${(cash / 100).toFixed(2)} €`} label="paper cash" />
+                    <Metric value={`${(exposure / 100).toFixed(2)} €`} label="paper exposure" />
+                  </>
+                ) : (
+                  <>
+                    <Metric
+                      value={data.health?.worker_enabled === true ? "active" : "stopped"}
+                      label="workers"
+                      alert={data.configured && data.health?.worker_enabled !== true}
+                    />
+                    <Metric
+                      value={String(data.health?.worker_concurrency ?? 0)}
+                      label="concurrency"
+                    />
+                    <Metric
+                      value={data.audit?.valid === true ? "valid" : "invalid"}
+                      label="audit chain"
+                      alert={data.configured && data.audit?.valid !== true}
+                    />
+                    <Metric value={formatCount(data.audit?.checked ?? 0)} label="audited events" />
+                  </>
+                )}
                 <Metric value={formatCount(activeRuns)} label="active missions" />
               </div>
 
               <p className="muted">{data.detail}</p>
 
-              <h3>NEXUS · ACP profiles</h3>
-              <p className="mono muted">
-                {data.health === null || data.health.profiles.length === 0
-                  ? "none"
-                  : data.health.profiles.join(", ")}
-              </p>
+              {isTrading ? null : (
+                <>
+                  <h3>NEXUS · ACP profiles</h3>
+                  <p className="mono muted">
+                    {data.health === null || data.health.profiles.length === 0
+                      ? "none"
+                      : data.health.profiles.join(", ")}
+                  </p>
 
-              <h3>Autonomous Schedules</h3>
-              <div className="admin-form-card schedule-form-card">
-                <div className="inline-admin-form schedule-form">
-                  <input
-                    className="field"
-                    value={scheduleName}
-                    onChange={(event) => setScheduleName(event.target.value)}
-                    placeholder="Schedule name"
-                  />
-                  <select
-                    className="field"
-                    value={scheduleKind}
-                    onChange={(event) => setScheduleKind(event.target.value as "one_shot" | "cron")}
-                  >
-                    <option value="cron">Recurring · cron</option>
-                    <option value="one_shot">One-shot</option>
-                  </select>
-                  <select
-                    className="field"
-                    value={scheduleProfile}
-                    onChange={(event) => setScheduleProfile(event.target.value)}
-                  >
-                    <option value="">Automatically select first profile</option>
-                    {(data.health?.profiles ?? []).map((profile) => (
-                      <option value={profile} key={profile}>
-                        {profile}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="field"
-                    value={scheduleTimezone}
-                    onChange={(event) => setScheduleTimezone(event.target.value)}
-                    placeholder="Europe/Paris"
-                  />
-                  {scheduleKind === "cron" ? (
-                    <input
-                      className="field mono"
-                      value={scheduleCron}
-                      onChange={(event) => setScheduleCron(event.target.value)}
-                      placeholder="0 8 * * 1-5"
+                  <h3>Autonomous Schedules</h3>
+                  <div className="admin-form-card schedule-form-card">
+                    <div className="inline-admin-form schedule-form">
+                      <input
+                        className="field"
+                        value={scheduleName}
+                        onChange={(event) => setScheduleName(event.target.value)}
+                        placeholder="Schedule name"
+                      />
+                      <select
+                        className="field"
+                        value={scheduleKind}
+                        onChange={(event) =>
+                          setScheduleKind(event.target.value as "one_shot" | "cron")
+                        }
+                      >
+                        <option value="cron">Recurring · cron</option>
+                        <option value="one_shot">One-shot</option>
+                      </select>
+                      <select
+                        className="field"
+                        value={scheduleProfile}
+                        onChange={(event) => setScheduleProfile(event.target.value)}
+                      >
+                        <option value="">Automatically select first profile</option>
+                        {(data.health?.profiles ?? []).map((profile) => (
+                          <option value={profile} key={profile}>
+                            {profile}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="field"
+                        value={scheduleTimezone}
+                        onChange={(event) => setScheduleTimezone(event.target.value)}
+                        placeholder="Europe/Paris"
+                      />
+                      {scheduleKind === "cron" ? (
+                        <input
+                          className="field mono"
+                          value={scheduleCron}
+                          onChange={(event) => setScheduleCron(event.target.value)}
+                          placeholder="0 8 * * 1-5"
+                        />
+                      ) : (
+                        <input
+                          className="field"
+                          type="datetime-local"
+                          value={scheduleRunAt}
+                          onChange={(event) => setScheduleRunAt(event.target.value)}
+                        />
+                      )}
+                      <select
+                        className="field"
+                        value={scheduleCatchUp}
+                        onChange={(event) =>
+                          setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
+                        }
+                      >
+                        <option value="skip">Skip missed occurrences</option>
+                        <option value="latest">Catch up latest occurrence only</option>
+                        <option value="all">Catch up all missed occurrences</option>
+                      </select>
+                    </div>
+                    <textarea
+                      className="field schedule-instruction"
+                      value={scheduleInstruction}
+                      onChange={(event) => setScheduleInstruction(event.target.value)}
+                      placeholder="Mission to execute automatically"
+                      rows={3}
                     />
+                    <button
+                      className="button"
+                      type="button"
+                      disabled={
+                        data.health?.scheduler_enabled !== true ||
+                        scheduleName.trim().length === 0 ||
+                        scheduleInstruction.trim().length === 0 ||
+                        (data.health?.profiles.length ?? 0) === 0 ||
+                        (scheduleKind === "cron"
+                          ? scheduleCron.trim().length === 0
+                          : scheduleRunAt.length === 0)
+                      }
+                      onClick={() => {
+                        const profile = scheduleProfile || data.health?.profiles[0];
+                        if (profile === undefined) return;
+                        act(() =>
+                          api.createSchedule({
+                            name: scheduleName.trim(),
+                            mission: {
+                              // The server systematically replaces this value
+                              // with a key tied to the authenticated account.
+                              external_key: "dashboard-owned-server-side",
+                              title: scheduleName.trim(),
+                              workspace: "/tmp/nexus-scheduled",
+                              tasks: [
+                                {
+                                  key: "scheduled_task",
+                                  profile,
+                                  instruction: scheduleInstruction.trim(),
+                                  depends_on: [],
+                                },
+                              ],
+                            },
+                            timezone: scheduleTimezone.trim(),
+                            ...(scheduleKind === "cron"
+                              ? { cron_expression: scheduleCron.trim() }
+                              : { run_at: new Date(scheduleRunAt).toISOString() }),
+                            catch_up_policy: scheduleCatchUp,
+                            max_catch_up: 10,
+                            max_concurrency: 1,
+                            misfire_grace_seconds: 300,
+                          }),
+                        );
+                      }}
+                    >
+                      Create schedule
+                    </button>
+                    {data.health?.scheduler_enabled === true ? null : (
+                      <p className="muted">Schedule dispatcher is disabled.</p>
+                    )}
+                  </div>
+
+                  {data.schedules.length === 0 ? (
+                    <Empty>No schedules for this account.</Empty>
                   ) : (
+                    <div className="stack">
+                      {data.schedules.map((schedule) => (
+                        <details className="card" key={schedule.id}>
+                          <summary>
+                            <State
+                              tone={
+                                schedule.state === "active"
+                                  ? "ok"
+                                  : schedule.state === "paused"
+                                    ? "degraded"
+                                    : "info"
+                              }
+                              label={schedule.state}
+                            />{" "}
+                            {schedule.name} ·{" "}
+                            {schedule.schedule_kind === "cron"
+                              ? schedule.cron_expression
+                              : "one-shot"}
+                          </summary>
+                          <div className="schedule-details">
+                            <p className="muted">
+                              Timezone: {schedule.timezone} · Next run:{" "}
+                              {schedule.next_run_at === null
+                                ? "none"
+                                : new Date(schedule.next_run_at).toLocaleString()}
+                            </p>
+                            <p>
+                              {schedule.mission.tasks[0]?.instruction ?? schedule.mission.title}
+                            </p>
+                            <div className="actions-row">
+                              {schedule.state === "active" ? (
+                                <button
+                                  className="button secondaire compact"
+                                  type="button"
+                                  onClick={() => act(() => api.pauseSchedule(schedule.id))}
+                                >
+                                  Pause
+                                </button>
+                              ) : schedule.state === "paused" ? (
+                                <button
+                                  className="button compact"
+                                  type="button"
+                                  onClick={() => act(() => api.resumeSchedule(schedule.id))}
+                                >
+                                  Resume
+                                </button>
+                              ) : null}
+                              <button
+                                className="button secondaire compact"
+                                type="button"
+                                onClick={() => {
+                                  setActionError(null);
+                                  void api
+                                    .scheduleRuns(schedule.id)
+                                    .then(({ runs }) =>
+                                      setScheduleHistory((current) => ({
+                                        ...current,
+                                        [schedule.id]: runs,
+                                      })),
+                                    )
+                                    .catch((cause: unknown) =>
+                                      setActionError(
+                                        cause instanceof Error
+                                          ? cause.message
+                                          : "History unavailable.",
+                                      ),
+                                    );
+                                }}
+                              >
+                                Load history
+                              </button>
+                            </div>
+                            {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
+                                schedule.id
+                              ]?.length === 0 ? (
+                              <p className="muted">No occurrences executed.</p>
+                            ) : (
+                              <Table head={["Scheduled", "State", "Mission", "Error"]}>
+                                {scheduleHistory[schedule.id]?.map((run) => (
+                                  <tr key={run.id}>
+                                    <td>{new Date(run.scheduled_for).toLocaleString()}</td>
+                                    <td>
+                                      <State
+                                        tone={
+                                          run.state === "succeeded"
+                                            ? "ok"
+                                            : run.state === "failed"
+                                              ? "down"
+                                              : run.state === "skipped"
+                                                ? "degraded"
+                                                : "info"
+                                        }
+                                        label={run.state}
+                                      />
+                                    </td>
+                                    <td className="mono muted">
+                                      {run.mission_id?.slice(0, 8) ?? "—"}
+                                    </td>
+                                    <td className="muted">{run.error_code ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </Table>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  )}
+
+                  <h3>Unified Mission Timeline</h3>
+                  {data.missions.length === 0 ? (
+                    <Empty>No NEXUS ACP missions for this account.</Empty>
+                  ) : (
+                    <div className="stack">
+                      {data.missions.map((mission) => (
+                        <details className="card" key={mission.id}>
+                          <summary>
+                            <State
+                              tone={
+                                mission.state === "succeeded"
+                                  ? "ok"
+                                  : mission.state === "failed"
+                                    ? "down"
+                                    : "info"
+                              }
+                              label={mission.state}
+                            />{" "}
+                            {mission.title} · {mission.tasks.length} step(s) ·{" "}
+                            {formatAge(mission.created_at)}
+                          </summary>
+                          <Table
+                            head={[
+                              "Step",
+                              "Agent",
+                              "State",
+                              "Dependencies",
+                              "Attempts",
+                              "Duration",
+                            ]}
+                          >
+                            {mission.tasks.map((task) => {
+                              const first = task.attempts[0];
+                              const last = task.attempts.at(-1);
+                              return (
+                                <tr key={task.id}>
+                                  <td className="mono">{task.task_key}</td>
+                                  <td>{task.profile_key}</td>
+                                  <td>
+                                    <State
+                                      tone={
+                                        task.state === "succeeded"
+                                          ? "ok"
+                                          : task.state === "failed"
+                                            ? "down"
+                                            : task.state === "retry_wait"
+                                              ? "degraded"
+                                              : "info"
+                                      }
+                                      label={task.state}
+                                    />
+                                  </td>
+                                  <td className="muted">
+                                    {task.depends_on.length === 0
+                                      ? "—"
+                                      : task.depends_on.join(", ")}
+                                  </td>
+                                  <td>{task.attempts.length}</td>
+                                  <td className="muted">
+                                    {first === undefined
+                                      ? "—"
+                                      : formatDuration(
+                                          new Date(
+                                            last?.finished_at ??
+                                              last?.updated_at ??
+                                              first.started_at,
+                                          ).getTime() - new Date(first.started_at).getTime(),
+                                        )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </Table>
+                          <MissionCollaborationPanel api={api} missionId={mission.id} />
+                        </details>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {isTrading ? (
+                <>
+                  <h3>Paper Portfolios</h3>
+                  <div className="inline-admin-form">
+                    <input
+                      className="field"
+                      value={accountName}
+                      onChange={(event) => setAccountName(event.target.value)}
+                      placeholder="Portfolio name"
+                    />
+                    <input
+                      className="field"
+                      value={bankroll}
+                      onChange={(event) => setBankroll(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="Capital EUR"
+                    />
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() =>
+                        act(() =>
+                          api.createPaperAccount({
+                            name: accountName.trim(),
+                            bankroll_eur: bankroll,
+                          }),
+                        )
+                      }
+                    >
+                      Create
+                    </button>
+                  </div>
+                  {data.accounts.length === 0 ? (
+                    <Empty>No research portfolios.</Empty>
+                  ) : (
+                    <Table head={["Name", "Cash", "Exposure", "Realized P&L", "Mode"]}>
+                      {data.accounts.map((account) => (
+                        <tr key={account.id}>
+                          <td>{account.name}</td>
+                          <td>{(account.cash_balance_cents / 100).toFixed(2)} €</td>
+                          <td>{(account.open_exposure_cents / 100).toFixed(2)} €</td>
+                          <td>{(account.realized_pnl_cents / 100).toFixed(2)} €</td>
+                          <td>
+                            <State tone="ok" label="paper-only" />
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+
+                  <h3>Recent Missions</h3>
+                  {data.recent_runs.length === 0 ? (
+                    <Empty>No ACP missions executed.</Empty>
+                  ) : (
+                    <Table head={["Created", "State", "Mission", "Error"]}>
+                      {data.recent_runs.map((run) => (
+                        <tr key={run.id}>
+                          <td className="muted">{formatAge(run.created_at)}</td>
+                          <td>
+                            <State
+                              tone={
+                                run.state === "executed"
+                                  ? "ok"
+                                  : run.state === "failed"
+                                    ? "down"
+                                    : run.state === "abstained"
+                                      ? "degraded"
+                                      : "info"
+                              }
+                              label={run.state}
+                            />
+                          </td>
+                          <td className="mono muted">{run.mission_id.slice(0, 8)}</td>
+                          <td className="muted">{run.error_code ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+
+                  <h3>Paper Research Market</h3>
+                  <div className="inline-admin-form market-form">
+                    <input
+                      className="field"
+                      value={marketQuestion}
+                      onChange={(event) => setMarketQuestion(event.target.value)}
+                      placeholder="Market question"
+                    />
                     <input
                       className="field"
                       type="datetime-local"
-                      value={scheduleRunAt}
-                      onChange={(event) => setScheduleRunAt(event.target.value)}
+                      value={marketClose}
+                      onChange={(event) => setMarketClose(event.target.value)}
                     />
-                  )}
-                  <select
-                    className="field"
-                    value={scheduleCatchUp}
-                    onChange={(event) =>
-                      setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
-                    }
-                  >
-                    <option value="skip">Skip missed occurrences</option>
-                    <option value="latest">Catch up latest occurrence only</option>
-                    <option value="all">Catch up all missed occurrences</option>
-                  </select>
-                </div>
-                <textarea
-                  className="field schedule-instruction"
-                  value={scheduleInstruction}
-                  onChange={(event) => setScheduleInstruction(event.target.value)}
-                  placeholder="Mission to execute automatically"
-                  rows={3}
-                />
-                <button
-                  className="button"
-                  type="button"
-                  disabled={
-                    data.health?.scheduler_enabled !== true ||
-                    scheduleName.trim().length === 0 ||
-                    scheduleInstruction.trim().length === 0 ||
-                    (data.health?.profiles.length ?? 0) === 0 ||
-                    (scheduleKind === "cron"
-                      ? scheduleCron.trim().length === 0
-                      : scheduleRunAt.length === 0)
-                  }
-                  onClick={() => {
-                    const profile = scheduleProfile || data.health?.profiles[0];
-                    if (profile === undefined) return;
-                    act(() =>
-                      api.createSchedule({
-                        name: scheduleName.trim(),
-                        mission: {
-                          // The server systematically replaces this value
-                          // with a key tied to the authenticated account.
-                          external_key: "dashboard-owned-server-side",
-                          title: scheduleName.trim(),
-                          workspace: "/tmp/nexus-scheduled",
-                          tasks: [
-                            {
-                              key: "scheduled_task",
-                              profile,
-                              instruction: scheduleInstruction.trim(),
-                              depends_on: [],
-                            },
-                          ],
-                        },
-                        timezone: scheduleTimezone.trim(),
-                        ...(scheduleKind === "cron"
-                          ? { cron_expression: scheduleCron.trim() }
-                          : { run_at: new Date(scheduleRunAt).toISOString() }),
-                        catch_up_policy: scheduleCatchUp,
-                        max_catch_up: 10,
-                        max_concurrency: 1,
-                        misfire_grace_seconds: 300,
-                      }),
-                    );
-                  }}
-                >
-                  Create schedule
-                </button>
-                {data.health?.scheduler_enabled === true ? null : (
-                  <p className="muted">Schedule dispatcher is disabled.</p>
-                )}
-              </div>
+                    <button
+                      className="button"
+                      type="button"
+                      disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
+                      onClick={() => {
+                        act(() =>
+                          api.createPaperMarket({
+                            question: marketQuestion.trim(),
+                            close_at: new Date(marketClose).toISOString(),
+                          }),
+                        );
+                        setMarketQuestion("");
+                      }}
+                    >
+                      Create
+                    </button>
+                  </div>
 
-              {data.schedules.length === 0 ? (
-                <Empty>No schedules for this account.</Empty>
-              ) : (
-                <div className="stack">
-                  {data.schedules.map((schedule) => (
-                    <details className="card" key={schedule.id}>
-                      <summary>
-                        <State
-                          tone={
-                            schedule.state === "active"
-                              ? "ok"
-                              : schedule.state === "paused"
-                                ? "degraded"
-                                : "info"
-                          }
-                          label={schedule.state}
-                        />{" "}
-                        {schedule.name} ·{" "}
-                        {schedule.schedule_kind === "cron" ? schedule.cron_expression : "one-shot"}
-                      </summary>
-                      <div className="schedule-details">
-                        <p className="muted">
-                          Timezone: {schedule.timezone} · Next run:{" "}
-                          {schedule.next_run_at === null
-                            ? "none"
-                            : new Date(schedule.next_run_at).toLocaleString()}
-                        </p>
-                        <p>{schedule.mission.tasks[0]?.instruction ?? schedule.mission.title}</p>
-                        <div className="actions-row">
-                          {schedule.state === "active" ? (
-                            <button
-                              className="button secondaire compact"
-                              type="button"
-                              onClick={() => act(() => api.pauseSchedule(schedule.id))}
-                            >
-                              Pause
-                            </button>
-                          ) : schedule.state === "paused" ? (
-                            <button
-                              className="button compact"
-                              type="button"
-                              onClick={() => act(() => api.resumeSchedule(schedule.id))}
-                            >
-                              Resume
-                            </button>
-                          ) : null}
-                          <button
-                            className="button secondaire compact"
-                            type="button"
-                            onClick={() => {
-                              setActionError(null);
-                              void api
-                                .scheduleRuns(schedule.id)
-                                .then(({ runs }) =>
-                                  setScheduleHistory((current) => ({
-                                    ...current,
-                                    [schedule.id]: runs,
-                                  })),
-                                )
-                                .catch((cause: unknown) =>
-                                  setActionError(
-                                    cause instanceof Error ? cause.message : "History unavailable.",
-                                  ),
-                                );
-                            }}
-                          >
-                            Load history
-                          </button>
-                        </div>
-                        {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
-                            schedule.id
-                          ]?.length === 0 ? (
-                          <p className="muted">No occurrences executed.</p>
-                        ) : (
-                          <Table head={["Scheduled", "State", "Mission", "Error"]}>
-                            {scheduleHistory[schedule.id]?.map((run) => (
-                              <tr key={run.id}>
-                                <td>{new Date(run.scheduled_for).toLocaleString()}</td>
-                                <td>
-                                  <State
-                                    tone={
-                                      run.state === "succeeded"
-                                        ? "ok"
-                                        : run.state === "failed"
-                                          ? "down"
-                                          : run.state === "skipped"
-                                            ? "degraded"
-                                            : "info"
-                                    }
-                                    label={run.state}
-                                  />
-                                </td>
-                                <td className="mono muted">{run.mission_id?.slice(0, 8) ?? "—"}</td>
-                                <td className="muted">{run.error_code ?? "—"}</td>
-                              </tr>
-                            ))}
-                          </Table>
-                        )}
-                      </div>
-                    </details>
-                  ))}
-                </div>
-              )}
-
-              <h3>Unified Mission Timeline</h3>
-              {data.missions.length === 0 ? (
-                <Empty>No NEXUS ACP missions for this account.</Empty>
-              ) : (
-                <div className="stack">
-                  {data.missions.map((mission) => (
-                    <details className="card" key={mission.id}>
-                      <summary>
-                        <State
-                          tone={
-                            mission.state === "succeeded"
-                              ? "ok"
-                              : mission.state === "failed"
-                                ? "down"
-                                : "info"
-                          }
-                          label={mission.state}
-                        />{" "}
-                        {mission.title} · {mission.tasks.length} step(s) ·{" "}
-                        {formatAge(mission.created_at)}
-                      </summary>
-                      <Table
-                        head={["Step", "Agent", "State", "Dependencies", "Attempts", "Duration"]}
-                      >
-                        {mission.tasks.map((task) => {
-                          const first = task.attempts[0];
-                          const last = task.attempts.at(-1);
-                          return (
-                            <tr key={task.id}>
-                              <td className="mono">{task.task_key}</td>
-                              <td>{task.profile_key}</td>
-                              <td>
-                                <State
-                                  tone={
-                                    task.state === "succeeded"
-                                      ? "ok"
-                                      : task.state === "failed"
-                                        ? "down"
-                                        : task.state === "retry_wait"
-                                          ? "degraded"
-                                          : "info"
-                                  }
-                                  label={task.state}
-                                />
-                              </td>
-                              <td className="muted">
-                                {task.depends_on.length === 0 ? "—" : task.depends_on.join(", ")}
-                              </td>
-                              <td>{task.attempts.length}</td>
-                              <td className="muted">
-                                {first === undefined
-                                  ? "—"
-                                  : formatDuration(
-                                      new Date(
-                                        last?.finished_at ?? last?.updated_at ?? first.started_at,
-                                      ).getTime() - new Date(first.started_at).getTime(),
-                                    )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </Table>
-                      <MissionCollaborationPanel api={api} missionId={mission.id} />
-                    </details>
-                  ))}
-                </div>
-              )}
-
-              <h3>Paper Portfolios</h3>
-              <div className="inline-admin-form">
-                <input
-                  className="field"
-                  value={accountName}
-                  onChange={(event) => setAccountName(event.target.value)}
-                  placeholder="Portfolio name"
-                />
-                <input
-                  className="field"
-                  value={bankroll}
-                  onChange={(event) => setBankroll(event.target.value)}
-                  inputMode="decimal"
-                  placeholder="Capital EUR"
-                />
-                <button
-                  className="button"
-                  type="button"
-                  onClick={() =>
-                    act(() =>
-                      api.createPaperAccount({ name: accountName.trim(), bankroll_eur: bankroll }),
-                    )
-                  }
-                >
-                  Create
-                </button>
-              </div>
-              {data.accounts.length === 0 ? (
-                <Empty>No research portfolios.</Empty>
-              ) : (
-                <Table head={["Name", "Cash", "Exposure", "Realized P&L", "Mode"]}>
-                  {data.accounts.map((account) => (
-                    <tr key={account.id}>
-                      <td>{account.name}</td>
-                      <td>{(account.cash_balance_cents / 100).toFixed(2)} €</td>
-                      <td>{(account.open_exposure_cents / 100).toFixed(2)} €</td>
-                      <td>{(account.realized_pnl_cents / 100).toFixed(2)} €</td>
-                      <td>
-                        <State tone="ok" label="paper-only" />
-                      </td>
-                    </tr>
-                  ))}
-                </Table>
-              )}
-
-              <h3>Recent Missions</h3>
-              {data.recent_runs.length === 0 ? (
-                <Empty>No ACP missions executed.</Empty>
-              ) : (
-                <Table head={["Created", "State", "Mission", "Error"]}>
-                  {data.recent_runs.map((run) => (
-                    <tr key={run.id}>
-                      <td className="muted">{formatAge(run.created_at)}</td>
-                      <td>
-                        <State
-                          tone={
-                            run.state === "executed"
-                              ? "ok"
-                              : run.state === "failed"
-                                ? "down"
-                                : run.state === "abstained"
-                                  ? "degraded"
-                                  : "info"
-                          }
-                          label={run.state}
-                        />
-                      </td>
-                      <td className="mono muted">{run.mission_id.slice(0, 8)}</td>
-                      <td className="muted">{run.error_code ?? "—"}</td>
-                    </tr>
-                  ))}
-                </Table>
-              )}
-
-              <h3>Paper Research Market</h3>
-              <div className="inline-admin-form market-form">
-                <input
-                  className="field"
-                  value={marketQuestion}
-                  onChange={(event) => setMarketQuestion(event.target.value)}
-                  placeholder="Market question"
-                />
-                <input
-                  className="field"
-                  type="datetime-local"
-                  value={marketClose}
-                  onChange={(event) => setMarketClose(event.target.value)}
-                />
-                <button
-                  className="button"
-                  type="button"
-                  disabled={marketQuestion.trim().length === 0 || marketClose.length === 0}
-                  onClick={() => {
-                    act(() =>
-                      api.createPaperMarket({
-                        question: marketQuestion.trim(),
-                        close_at: new Date(marketClose).toISOString(),
-                      }),
-                    );
-                    setMarketQuestion("");
-                  }}
-                >
-                  Create
-                </button>
-              </div>
-
-              <p className="muted">
-                Creation of missions and paper portfolios uses the NEXUS administrator API. No live
-                trading paths are exposed.
-              </p>
+                  <p className="muted">
+                    Creation of missions and paper portfolios uses the NEXUS administrator API. No
+                    live trading paths are exposed.
+                  </p>
+                </>
+              ) : null}
             </>
           );
         }}
