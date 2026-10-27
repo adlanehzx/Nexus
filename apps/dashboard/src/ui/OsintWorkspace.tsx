@@ -185,7 +185,7 @@ export function OsintWorkspace({
                       key={item}
                       onClick={() => setTab(item)}
                     >
-                      {item}
+                      {item === "enrichment" ? "tools & enrichment" : item}
                     </button>
                   ),
                 )}
@@ -350,6 +350,11 @@ function NewCaseForm(props: {
             <small>{detail}</small>
           </button>
         ))}
+      </div>
+      <div className="banner info" role="note">
+        <strong>Investigation tools unlock after the case is created.</strong> Select the case, then
+        open <strong>Tools &amp; enrichment</strong> to run Sherlock, DNS, RDAP, TLS, company
+        registry, VirusTotal, or Shodan checks and archive their results.
       </div>
       <div className="settings-grid osint-form">
         <label>
