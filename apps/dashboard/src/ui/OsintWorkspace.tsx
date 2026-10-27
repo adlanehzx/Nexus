@@ -26,7 +26,8 @@ const TEMPLATES = [
   ],
 ] as const;
 type Tab = "evidence" | "graph" | "monitoring" | "enrichment" | "reports";
-type Enrichment = "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
+type Enrichment =
+  "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
 export function OsintWorkspace({
   api,
@@ -572,9 +573,9 @@ function EnrichmentPanel({
   return (
     <div className="osint-panel-stack">
       <p className="muted">
-        DNS, RDAP, TLS certificate and official registry discovery work without a paid key.
-        VirusTotal and Shodan use a vault reference; secrets never reach agent prompts or browser
-        responses.
+        Sherlock username discovery, DNS, RDAP, TLS certificates and official registries work
+        without a paid key. VirusTotal and Shodan use a vault reference; secrets never reach agent
+        prompts or browser responses.
       </p>
       <div className="settings-grid">
         <label>
@@ -584,6 +585,7 @@ function EnrichmentPanel({
             value={enrichment}
             onChange={(event) => setEnrichment(event.target.value as Enrichment)}
           >
+            <option value="sherlock">Sherlock username search</option>
             <option value="dns">DNS</option>
             <option value="rdap">RDAP / WHOIS</option>
             <option value="certificate">TLS certificate</option>
@@ -593,7 +595,7 @@ function EnrichmentPanel({
           </select>
         </label>
         <label>
-          Domain, IP or company
+          {enrichment === "sherlock" ? "Public username" : "Domain, IP or company"}
           <input
             className="field"
             value={query}

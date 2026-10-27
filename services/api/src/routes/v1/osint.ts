@@ -251,6 +251,7 @@ export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         params: caseParams,
         body: z.object({
           provider: z.enum([
+            "sherlock",
             "dns",
             "rdap",
             "certificate",

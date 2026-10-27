@@ -11,6 +11,12 @@ MPL-2.0, EPL-2.0, LGPL-3.0-or-later, and dual-licensed components. These license
 by the NEXUS license. Published container images and release packages include an SPDX SBOM to
 identify each component and its exact version.
 
+The API container includes Sherlock Project `0.16.2` as an isolated Python virtual-environment
+executable for public username discovery. Sherlock is maintained at
+<https://github.com/sherlock-project/sherlock> and distributed under the MIT license. NEXUS invokes
+its unmodified command-line interface with validated arguments; Sherlock remains a separate work and
+retains its own copyright and license.
+
 ## Separate Optional Services
 
 Browser Use, SearXNG, Grafana, Loki, Tempo, Prometheus, PostgreSQL/pgvector, and MCP servers run as

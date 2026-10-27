@@ -49,10 +49,17 @@ RUN pnpm --filter @nexus/api --prod deploy --legacy /out
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION}-alpine AS runtime
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    OSINT_SHERLOCK_PATH=/opt/sherlock/bin/sherlock \
+    OSINT_SHERLOCK_VERSION=0.16.2
 
-# dumb-init forwards SIGTERM to Node for graceful shutdown.
-RUN apk add --no-cache dumb-init
+# dumb-init forwards SIGTERM to Node for graceful shutdown. Sherlock is kept in
+# its own virtual environment and pinned: it is an external MIT-licensed tool,
+# not imported into NEXUS or allowed to execute arbitrary arguments.
+RUN apk add --no-cache dumb-init python3 py3-pip \
+    && python3 -m venv /opt/sherlock \
+    && /opt/sherlock/bin/pip install --no-cache-dir "sherlock-project==0.16.2" \
+    && /opt/sherlock/bin/sherlock --version
 RUN mkdir -p \
       /var/lib/nexus/models \
       /var/lib/nexus/runtime-config \

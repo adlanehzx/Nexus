@@ -1093,7 +1093,8 @@ export class DashboardApi {
   enrichOsintCase(
     caseId: string,
     input: {
-      provider: "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
+      provider:
+        "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
       query: string;
       secretRef?: string;
     },

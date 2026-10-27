@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { resolveAny, lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
@@ -8,6 +9,9 @@ import {
   osintInvestigationSchema,
   queryShodan,
   queryVirusTotal,
+  parseSherlockOutput,
+  sherlockResultSchema,
+  sherlockUsernameSchema,
   renderOsintMarkdown,
   renderOsintPdf,
   type ArchivedEvidence,
@@ -21,7 +25,7 @@ import {
 import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
 
 export type OsintEnrichmentProvider =
-  "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
+  "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
 export class OsintService {
   readonly #runtime: RuntimeConfigurationStore | undefined;
@@ -125,7 +129,10 @@ export class OsintService {
     const normalized = query.trim().toLowerCase();
     let raw: unknown;
     let title: string;
-    if (provider === "dns") {
+    if (provider === "sherlock") {
+      raw = await runSherlock(normalized);
+      title = `Public username search for ${normalized}`;
+    } else if (provider === "dns") {
       await resolvePublicAddress(normalized);
       raw = await resolveAny(normalized);
       title = `DNS records for ${normalized}`;
@@ -170,7 +177,7 @@ export class OsintService {
       reliability:
         provider === "rdap" || provider === "dns" || provider === "certificate"
           ? "primary"
-          : provider === "company_registry"
+          : provider === "company_registry" || provider === "sherlock"
             ? "unverified"
             : "corroborated",
       content,
@@ -348,6 +355,7 @@ function readPinnedPublicPage(url: URL, address: string): Promise<string> {
 }
 
 function enrichmentSourceUrl(provider: OsintEnrichmentProvider, query: string): string {
+  if (provider === "sherlock") return "https://github.com/sherlock-project/sherlock";
   if (provider === "rdap") return `https://rdap.org/domain/${encodeURIComponent(query)}`;
   if (provider === "virustotal")
     return `https://www.virustotal.com/gui/domain/${encodeURIComponent(query)}`;
@@ -355,4 +363,62 @@ function enrichmentSourceUrl(provider: OsintEnrichmentProvider, query: string): 
   if (provider === "company_registry")
     return `https://annuaire-entreprises.data.gouv.fr/rechercher?terme=${encodeURIComponent(query)}`;
   return `https://${query}/`;
+}
+
+function runSherlock(usernameInput: string): Promise<unknown> {
+  const username = sherlockUsernameSchema.parse(usernameInput);
+  const executable = process.env.OSINT_SHERLOCK_PATH ?? "sherlock";
+  if (executable.includes("\0")) throw new Error("Sherlock executable configuration is invalid.");
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, [username, "--print-found", "--no-color", "--timeout", "10"], {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+        HOME: "/tmp",
+        LANG: "C.UTF-8",
+      },
+    });
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+    const timeout = setTimeout(() => child.kill("SIGKILL"), 120_000);
+    const fail = (message: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(new Error(message));
+    };
+    child.stdout.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > 2_000_000) {
+        child.kill("SIGKILL");
+        fail("Sherlock output exceeded the two-megabyte safety limit.");
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    child.stderr.on("data", () => undefined);
+    child.once("error", () => fail("Sherlock is not installed or could not be started."));
+    child.once("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(`Sherlock exited without completing the search (code ${code ?? -1}).`));
+        return;
+      }
+      const findings = parseSherlockOutput(Buffer.concat(chunks).toString("utf8"));
+      resolve(
+        sherlockResultSchema.parse({
+          username,
+          findings,
+          checkedAt: new Date().toISOString(),
+          tool: "sherlock",
+          toolVersion: process.env.OSINT_SHERLOCK_VERSION ?? "unknown",
+          provenance: "https://github.com/sherlock-project/sherlock",
+        }),
+      );
+    });
+  });
 }

@@ -3,6 +3,8 @@ import {
   assessOsintRequest,
   buildOsintMission,
   createOsintTools,
+  parseSherlockOutput,
+  sherlockUsernameSchema,
   importEvidenceDataset,
   InMemoryOsintCaseStore,
   osintInvestigationSchema,
@@ -130,5 +132,24 @@ describe("OSINT mission policy", () => {
     await expect(
       inspect.execute({ caseId: record.id } as never, { ...context, userId: "owner-a" }),
     ).resolves.toMatchObject({ id: record.id });
+  });
+
+  it("validates usernames and parses only positive Sherlock findings", () => {
+    expect(sherlockUsernameSchema.parse("example.user-1")).toBe("example.user-1");
+    expect(() => sherlockUsernameSchema.parse("name; rm -rf /")).toThrow();
+    expect(
+      parseSherlockOutput(
+        [
+          "[*] Checking username example.user-1 on:",
+          "[+] GitHub: https://github.com/example.user-1",
+          "[-] Reddit: Not Found!",
+          "[+] GitHub: https://github.com/example.user-1",
+          "[+] Mastodon: https://mastodon.social/@example.user-1",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      { site: "GitHub", profileUrl: "https://github.com/example.user-1" },
+      { site: "Mastodon", profileUrl: "https://mastodon.social/@example.user-1" },
+    ]);
   });
 });
