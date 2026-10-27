@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   BrowserSection,
   DashboardApi,
+  FreeLlmStatus,
   McpConfiguration,
   RuntimeSettings,
 } from "../lib/api.js";
@@ -11,6 +12,7 @@ export function Settings({ api }: { api: DashboardApi }) {
   const state = useSection(() => api.runtimeSettings());
   const secrets = useSection(() => api.secrets());
   const linkedin = useSection(() => api.linkedInStatus());
+  const freeLlm = useSection(() => api.freeLlmStatus());
 
   return (
     <div className="content settings-page">
@@ -29,6 +31,9 @@ export function Settings({ api }: { api: DashboardApi }) {
       <Section state={secrets}>
         {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
       </Section>
+      <Section state={freeLlm}>
+        {(data) => <FreeLlmForm api={api} status={data} reload={freeLlm.reload} />}
+      </Section>
       <Section state={linkedin}>
         {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
       </Section>
@@ -40,6 +45,172 @@ export function Settings({ api }: { api: DashboardApi }) {
         }}
       />
     </div>
+  );
+}
+
+function FreeLlmForm({
+  api,
+  status,
+  reload,
+}: {
+  api: DashboardApi;
+  status: FreeLlmStatus;
+  reload: () => void;
+}) {
+  const [enabled, setEnabled] = useState(status.enabled);
+  const [model, setModel] = useState(status.model);
+  const [strategy, setStrategy] = useState<FreeLlmStatus["strategy"]>(status.strategy);
+  const [allowKeyless, setAllowKeyless] = useState(status.allowKeyless);
+  const [nvidiaKey, setNvidiaKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEnabled(status.enabled);
+    setModel(status.model);
+    setStrategy(status.strategy);
+    setAllowKeyless(status.allowKeyless);
+  }, [status.allowKeyless, status.enabled, status.model, status.strategy]);
+
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      if (nvidiaKey.trim().length > 0) {
+        await api.saveSecret("nvidia-api-key", nvidiaKey.trim());
+      }
+      await api.configureFreeLlm({
+        enabled,
+        model: model.trim() || "auto",
+        strategy,
+        allowKeyless,
+        nvidiaKeyRef:
+          status.nvidiaConfigured || nvidiaKey.trim().length > 0
+            ? "vault://nexus/nvidia-api-key"
+            : null,
+      });
+      setNvidiaKey("");
+      setMessage("FreeLLM routing saved. Changes apply to the next model request.");
+      reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "FreeLLM configuration failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="settings-panel">
+      <h3>Free models · FreeLLM and NVIDIA NIM</h3>
+      <p className="muted">
+        Adds a free-tier fallback after your subscription-backed agents and local models. NVIDIA NIM
+        access is intended for development, research, and evaluation—not production use.
+      </p>
+      <p className={status.enabled ? "banner success" : "banner"}>
+        {status.enabled
+          ? `Enabled · ${status.activeProviders.join(", ") || "provider required"}`
+          : "Disabled"}
+      </p>
+      <div className="settings-grid">
+        <label>
+          Routing model
+          <select
+            className="field"
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+          >
+            <option value="auto">Auto · best available</option>
+            <option value="chat:fast">Fast chat</option>
+            <option value="chat:large">Large model</option>
+            <option value="chat:tools">Tool calling</option>
+            <option value="reasoning">Reasoning</option>
+          </select>
+        </label>
+        <label>
+          Routing strategy
+          <select
+            className="field"
+            value={strategy}
+            onChange={(event) => setStrategy(event.target.value as FreeLlmStatus["strategy"])}
+          >
+            <option value="quota_aware">Quota aware</option>
+            <option value="smart">Smart latency</option>
+            <option value="priority">Fixed priority</option>
+            <option value="round_robin">Round robin</option>
+            <option value="latency">Lowest latency</option>
+          </select>
+        </label>
+        <label className="settings-wide">
+          NVIDIA API key {status.nvidiaConfigured ? "· stored" : ""}
+          <input
+            className="field mono"
+            type="password"
+            autoComplete="new-password"
+            value={nvidiaKey}
+            placeholder={status.nvidiaConfigured ? "Leave blank to keep the stored key" : "nvapi-…"}
+            onChange={(event) => setNvidiaKey(event.target.value)}
+          />
+        </label>
+        <label className="check-label settings-wide">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          Enable FreeLLM fallback
+        </label>
+        <label className="check-label settings-wide">
+          <input
+            type="checkbox"
+            checked={allowKeyless}
+            onChange={(event) => setAllowKeyless(event.target.checked)}
+          />
+          Allow anonymous Kilo and OVH fallbacks (prompts may be retained by those providers)
+        </label>
+      </div>
+      <div className="settings-actions">
+        <button
+          className="button primary"
+          type="button"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? "Saving…" : "Save free-model routing"}
+        </button>
+        <button
+          className="button"
+          type="button"
+          disabled={busy || !status.enabled}
+          title="Consumes one small request from the configured free quota"
+          onClick={() => {
+            setBusy(true);
+            setMessage(null);
+            setError(null);
+            void api
+              .testFreeLlm()
+              .then((result) => setMessage(`Ready · ${result.model} · ${result.text}`))
+              .catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "FreeLLM test failed."),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Test with one request
+        </button>
+        <a
+          className="button secondaire"
+          href="https://build.nvidia.com/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Get an NVIDIA development key
+        </a>
+      </div>
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {error === null ? null : <p className="banner error">{error}</p>}
+    </section>
   );
 }
 

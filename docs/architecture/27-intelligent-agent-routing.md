@@ -104,3 +104,14 @@ Upon task completion in the Mission Engine:
    - Matrix table showing affinities by task category;
    - Interactive routing evaluation simulator allowing immediate prompt testing;
    - Protected reset action with confirmation prompt.
+
+## 6. Free-tier fallback
+
+FreeLLM is the final optional model fallback after subscription-backed ACP agents and local engines.
+The runtime currently supports NVIDIA NIM through its official OpenAI-compatible endpoint, plus
+explicitly opt-in anonymous Kilo and OVH routes. NVIDIA credentials live only in the encrypted NEXUS
+vault. Runtime JSON stores a `vault://` reference, never the credential.
+
+This route is disabled by default. NVIDIA Developer Program access is suitable for prototyping,
+research, development, and evaluation; NEXUS does not label it as free production capacity. Missing
+or exhausted quotas are treated as unavailable and never as unlimited.

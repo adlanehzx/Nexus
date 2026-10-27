@@ -14,6 +14,7 @@ import {
 } from "@nexus/mcp";
 import { notificationsConfigSchema } from "@nexus/notifications";
 import { BrowserHarnessClient } from "../../services/browser-harness.js";
+import { freeLlmRuntimeConfigSchema } from "../../services/runtime-configuration.js";
 
 const secretNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const vaultReferenceSchema = z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/);
@@ -911,6 +912,61 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       if (app.services.vault === undefined) throw new Error("Local vault unavailable.");
       await app.services.vault.delete(request.params.name);
       return ok({ removed: true }, request.id);
+    },
+  );
+
+  app.get(
+    "/dashboard/llm/free",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], summary: "FreeLLM and NVIDIA NIM status" },
+    },
+    async (request) => {
+      const config = await app.services.runtimeConfiguration?.loadFreeLlm();
+      const status = await app.services.freeLlm?.status();
+      return ok(
+        status ?? {
+          enabled: config?.enabled ?? false,
+          model: config?.model ?? "auto",
+          strategy: config?.strategy ?? "quota_aware",
+          allowKeyless: config?.allowKeyless ?? false,
+          nvidiaConfigured: false,
+          activeProviders: [],
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.put(
+    "/dashboard/llm/free",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        summary: "Configure the free-tier model fallback",
+        body: freeLlmRuntimeConfigSchema,
+      },
+    },
+    async (request) => {
+      if (app.services.runtimeConfiguration === undefined) {
+        throw new Error("Runtime configuration is unavailable.");
+      }
+      await app.services.runtimeConfiguration.saveFreeLlm(request.body);
+      return ok(await app.services.freeLlm?.status(), request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/llm/free/test",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], summary: "Consume one small request to test FreeLLM" },
+    },
+    async (request) => {
+      if (app.services.freeLlm === undefined) throw new Error("FreeLLM is unavailable.");
+      const result = await app.services.freeLlm.test();
+      return ok({ ...result, text: result.text.slice(0, 200) }, request.id);
     },
   );
 

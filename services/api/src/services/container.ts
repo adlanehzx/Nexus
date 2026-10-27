@@ -96,6 +96,7 @@ import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 import type { LinkedInIntegrationService } from "./linkedin-integration.js";
 import { OsintService } from "./osint-service.js";
 import { createOsintTools } from "@nexus/osint";
+import type { FreeLlmRuntimeProvider } from "./freelm-runtime.js";
 
 /**
  * Assembly of API services.
@@ -220,6 +221,8 @@ export interface ServiceContainerOptions {
   observabilityDirectory?: string;
   /** LLM provider for TaskPlanner. */
   llmProvider?: LLMProvider;
+  /** Hot-reloadable free-tier provider exposed to the dashboard. */
+  freeLlmProvider?: FreeLlmRuntimeProvider;
   /** Local CLI and ACP adapter discovery. Injectable for API tests. */
   connectionManager?: ConnectionCatalogService;
   /** Read-only Tailscale inventory. Injectable so tests never execute host commands. */
@@ -305,6 +308,7 @@ export class ServiceContainer {
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
   readonly llmProvider: LLMProvider | undefined;
+  readonly freeLlm: FreeLlmRuntimeProvider | undefined;
   /** Secret-free local connection catalogue and safe diagnostic probes. */
   readonly connections: ConnectionCatalogService;
   /** Hosted organization services. Undefined keeps personal mode dependency-free. */
@@ -316,6 +320,7 @@ export class ServiceContainer {
 
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
+    this.freeLlm = options.freeLlmProvider;
     this.connections = options.connectionManager ?? new LocalConnectionManager();
     this.tenantPlatform =
       options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);

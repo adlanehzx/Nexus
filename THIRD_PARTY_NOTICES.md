@@ -17,6 +17,11 @@ executable for public username discovery. Sherlock is maintained at
 its unmodified command-line interface with validated arguments; Sherlock remains a separate work and
 retains its own copyright and license.
 
+The model-routing package includes FreeLLM `0.5.2`, maintained at
+<https://github.com/shihabshahrier/freelm> and distributed under the MIT license. NEXUS uses it only
+as an optional free-tier router. Upstream providers—including NVIDIA NIM—retain their own terms,
+quotas, privacy policies, and development-versus-production restrictions.
+
 ## Separate Optional Services
 
 Browser Use, SearXNG, Grafana, Loki, Tempo, Prometheus, PostgreSQL/pgvector, and MCP servers run as

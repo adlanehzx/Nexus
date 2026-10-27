@@ -5,6 +5,11 @@ Antigravity CLI, DeepSeek, FreeLLM-compatible endpoints, Ollama, llama.cpp, and 
 adapters execute real requests against their documented local or OpenAI-compatible surfaces; no
 provider is required for personal mode.
 
+FreeLLM `0.5.2` is also integrated natively as an optional final fallback. Its NVIDIA NIM key is
+resolved from the NEXUS vault at request time, never from dashboard-visible configuration. Anonymous
+Kilo and OVH routes remain disabled until the administrator explicitly accepts their weaker prompt
+privacy. The dashboard can change this configuration without restarting NEXUS.
+
 The conformance suite uses a real loopback HTTP server and a real subprocess fixture. It verifies
 generation, streaming, structured output, usage mapping, token counting, normalized failures, and
 that provider stderr is never returned. This is faithful virtualization, not a claim that an external

@@ -8,5 +8,6 @@ export * from "./adapters/cli-provider.js";
 export * from "./adapters/local-provider.js";
 export * from "./adapters/fallback-provider.js";
 export * from "./adapters/openai-compatible.js";
+export * from "./adapters/freelm-native.js";
 export * from "./adapters/ollama.js";
 export * from "./adapters/antigravity.js";

@@ -838,6 +838,15 @@ export interface LinkedInStatus {
   tools: string[];
 }
 
+export interface FreeLlmStatus {
+  enabled: boolean;
+  model: string;
+  strategy: "smart" | "priority" | "round_robin" | "quota_aware" | "latency";
+  allowKeyless: boolean;
+  nvidiaConfigured: boolean;
+  activeProviders: string[];
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -981,6 +990,24 @@ export class DashboardApi {
 
   removeSecret(name: string): Promise<unknown> {
     return this.#request("DELETE", `/api/v1/dashboard/secrets/${encodeURIComponent(name)}`);
+  }
+
+  freeLlmStatus(): Promise<FreeLlmStatus> {
+    return this.#get("/api/v1/dashboard/llm/free");
+  }
+
+  configureFreeLlm(input: {
+    enabled: boolean;
+    model: string;
+    strategy: FreeLlmStatus["strategy"];
+    allowKeyless: boolean;
+    nvidiaKeyRef: string | null;
+  }): Promise<FreeLlmStatus> {
+    return this.#request("PUT", "/api/v1/dashboard/llm/free", input);
+  }
+
+  testFreeLlm(): Promise<{ provider: string; model: string; text: string }> {
+    return this.#request("POST", "/api/v1/dashboard/llm/free/test");
   }
 
   linkedInStatus(): Promise<LinkedInStatus> {

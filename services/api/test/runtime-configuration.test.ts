@@ -70,6 +70,29 @@ describe("NEXUS manageable configuration", () => {
     expect(await store.loadBrowser()).toMatchObject({ mode: "remote-worker", enabled: false });
   });
 
+  it("persists FreeLLM routing by vault reference without embedding an NVIDIA key", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-freelm-"));
+    const store = new RuntimeConfigurationStore(directory);
+
+    await store.saveFreeLlm({
+      enabled: true,
+      model: "chat:tools",
+      strategy: "quota_aware",
+      allowKeyless: false,
+      nvidiaKeyRef: "vault://nexus/nvidia-api-key",
+    });
+
+    expect(await store.loadFreeLlm()).toEqual({
+      enabled: true,
+      model: "chat:tools",
+      strategy: "quota_aware",
+      allowKeyless: false,
+      nvidiaKeyRef: "vault://nexus/nvidia-api-key",
+    });
+    const persisted = await readFile(join(directory, "freelm.json"), "utf8");
+    expect(persisted).not.toContain("nvapi-");
+  });
+
   it("keeps concurrent atomic writes independent", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-concurrent-"));
     const store = new RuntimeConfigurationStore(directory);

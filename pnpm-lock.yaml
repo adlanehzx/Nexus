@@ -529,6 +529,9 @@ importers:
       '@nexus/shared':
         specifier: workspace:*
         version: link:../shared
+      freelm:
+        specifier: 0.5.2
+        version: 0.5.2
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -4796,6 +4799,11 @@ packages:
   forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
     engines: {node: '>= 0.6'}
+
+  freelm@0.5.2:
+    resolution: {integrity: sha512-5PFUT+eAJJdsZR557DfO9m/uhS91o5O4uBZ9MkhdXMxoeP1NE/CGsseIYHQ2GCAxG+9MOtJ/M/xHjvesczJc5w==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
@@ -11412,6 +11420,8 @@ snapshots:
       signal-exit: 4.1.0
 
   forwarded@0.2.0: {}
+
+  freelm@0.5.2: {}
 
   fresh@0.5.2: {}
 

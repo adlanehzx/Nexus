@@ -72,6 +72,22 @@ export const linkedInRuntimeConfigSchema = z.object({
 
 export type LinkedInRuntimeConfig = z.infer<typeof linkedInRuntimeConfigSchema>;
 
+export const freeLlmRuntimeConfigSchema = z.object({
+  enabled: z.boolean(),
+  model: z.string().trim().min(1).max(128).default("auto"),
+  strategy: z
+    .enum(["smart", "priority", "round_robin", "quota_aware", "latency"])
+    .default("quota_aware"),
+  allowKeyless: z.boolean().default(false),
+  nvidiaKeyRef: z
+    .string()
+    .regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/)
+    .nullable()
+    .default(null),
+});
+
+export type FreeLlmRuntimeConfig = z.infer<typeof freeLlmRuntimeConfigSchema>;
+
 const sealedSecretSchema = z.object({
   iv: z.string(),
   ciphertext: z.string(),
@@ -115,6 +131,22 @@ export class RuntimeConfigurationStore {
 
   async saveBrowser(config: BrowserRuntimeConfig): Promise<void> {
     await this.#write("browser.json", browserConfigSchema.parse(config));
+  }
+
+  async loadFreeLlm(): Promise<FreeLlmRuntimeConfig> {
+    return freeLlmRuntimeConfigSchema.parse(
+      await this.#read("freelm.json", {
+        enabled: false,
+        model: "auto",
+        strategy: "quota_aware",
+        allowKeyless: false,
+        nvidiaKeyRef: null,
+      }),
+    );
+  }
+
+  async saveFreeLlm(config: FreeLlmRuntimeConfig): Promise<void> {
+    await this.#write("freelm.json", freeLlmRuntimeConfigSchema.parse(config));
   }
 
   async loadNotifications(): Promise<NotificationsConfig | null> {

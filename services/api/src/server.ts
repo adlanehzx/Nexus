@@ -21,6 +21,7 @@ import { TailscaleDiscoveryService } from "./services/tailscale-discovery.js";
 import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
 import { LinkedInIntegrationService } from "./services/linkedin-integration.js";
+import { FreeLlmRuntimeProvider } from "./services/freelm-runtime.js";
 
 /**
  * API service entrypoint.
@@ -79,6 +80,7 @@ const vault =
   config.MASTER_KEY === undefined
     ? new KeyringVault(runtimeConfiguration)
     : new EncryptedFileVault(runtimeConfiguration, config.MASTER_KEY);
+const freeLlm = new FreeLlmRuntimeProvider({ runtime: runtimeConfiguration, vault });
 const toolRegistry = new ToolRegistry();
 const linkedin = new LinkedInIntegrationService({
   runtime: runtimeConfiguration,
@@ -206,7 +208,9 @@ const services = new ServiceContainer({
     new AntigravityCliProvider(),
     new ClaudeCliProvider(),
     new OllamaProvider(),
+    freeLlm,
   ]),
+  freeLlmProvider: freeLlm,
   tailscale: new TailscaleDiscoveryService({ apiPort: config.API_PORT }),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
   ...(config.EXPECTED_WORKER_VERSION === undefined
