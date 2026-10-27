@@ -91,11 +91,14 @@ services:
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      API_HOST: 0.0.0.0
+      # Host networking is deliberate for the personal/local deployment: ACP
+      # CLIs, Mission Engine and Chromium stay on host loopback and are never
+      # copied into the container. The API itself also binds loopback only.
+      API_HOST: 127.0.0.1
       API_PORT: 3000
       API_VERSION: ${API_VERSION:-1.0.0}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
-      METRICS_HOST: 0.0.0.0
+      METRICS_HOST: 127.0.0.1
       METRICS_PORT: 9464
       OTEL_SERVICE_NAME: nexus-api
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -106,24 +109,25 @@ services:
       MEMORY_EMBEDDING_LOCAL_ONLY: ${MEMORY_EMBEDDING_LOCAL_ONLY:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5274}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?AUTH_SIGNING_KEY is required}
+      MASTER_KEY: ${MASTER_KEY:?MASTER_KEY is required}
+      MISSION_CONTROL_URL: ${MISSION_CONTROL_URL:-http://127.0.0.1:18100}
+      BU_CDP_URL: ${BU_CDP_URL:-http://127.0.0.1:19222}
       NEXUS_RUNTIME_CONFIG_DIR: /var/lib/nexus/runtime-config
       NEXUS_BROWSER_ARTIFACTS_DIR: /var/lib/nexus/artifacts/browser
       NEXUS_OBSERVABILITY_DIR: /var/lib/nexus/observability
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
-      # Docker service hostnames, not localhost: within the bridge network, containers
-      # reach each other by service name.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
-      REDIS_URL: redis://redis:6379
-      BROWSER_WORKER_URL: http://browser-worker:8100
+      # With host networking, local dependencies remain reachable only through
+      # their loopback-published ports.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@127.0.0.1:${POSTGRES_PORT:-15432}/${POSTGRES_DB:-nexus}?schema=public
+      REDIS_URL: redis://127.0.0.1:${REDIS_PORT:-6379}
+      BROWSER_WORKER_URL: http://127.0.0.1:${BROWSER_WORKER_PORT:-18110}
       BROWSER_WORKER_TOKEN: ${BROWSER_WORKER_TOKEN:-}
-      SEARXNG_URL: ${SEARXNG_URL:-}
+      SEARXNG_URL: ${SEARXNG_URL:-http://127.0.0.1:18080}
       SEARXNG_TIMEOUT_MS: ${SEARXNG_TIMEOUT_MS:-15000}
-    ports:
-      # Core API is not exposed to LAN: remote access is reverse-proxied through
-      # Tailscale Serve to this localhost loopback.
-      - "127.0.0.1:${API_PORT:-3000}:3000"
+    network_mode: host
     volumes:
       - nexus-models:/var/lib/nexus/models
       - nexus-runtime-config:/var/lib/nexus/runtime-config
@@ -138,11 +142,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777
+      - /home/node:size=128m,mode=0700,uid=1000,gid=1000
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     # Graceful shutdown includes safety margin beyond timeout.
     stop_grace_period: 15s
-    networks: [nexus]
 
   dashboard:
     build:
@@ -153,10 +157,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${DASHBOARD_PORT:-8080}:8080"
+    # Share the host network so nginx can reach the API that is deliberately
+    # bound to 127.0.0.1. This keeps both surfaces local-only without exposing
+    # the API on a bridge address.
+    network_mode: host
+    environment:
+      DASHBOARD_PORT: ${DASHBOARD_PORT:-8080}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${DASHBOARD_PORT}/ >/dev/null || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -164,11 +172,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
+      - /etc/nginx/conf.d:size=1m,mode=0755,uid=101,gid=101
       - /var/cache/nginx:size=16m,mode=0755
       - /var/run:size=1m,mode=0755
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    networks: [nexus]
 
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.7.3}
@@ -307,6 +315,8 @@ services:
     # It visits untrusted web content and must never be exposed externally.
     expose:
       - "8100"
+    ports:
+      - "127.0.0.1:${BROWSER_WORKER_PORT:-18110}:8100"
     # Chromium requires shared memory; 64MB default causes crashes on complex pages.
     shm_size: 1gb
     mem_limit: 2g

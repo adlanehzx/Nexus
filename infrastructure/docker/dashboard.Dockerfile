@@ -16,7 +16,9 @@ ENV VITE_NEXUS_URL=""
 RUN pnpm --filter @nexus/dashboard... run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
-COPY infrastructure/docker/dashboard.nginx.conf /etc/nginx/conf.d/default.conf
+ENV DASHBOARD_PORT=8080 \
+    NGINX_ENVSUBST_FILTER=DASHBOARD_PORT
+COPY infrastructure/docker/dashboard.nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=builder /repo/apps/dashboard/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \

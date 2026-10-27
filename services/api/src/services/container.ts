@@ -80,7 +80,7 @@ import { TaskSupervisor } from "./task-supervisor.js";
 import { LogBuffer, SecurityLog } from "./observability.js";
 import { DashboardService } from "./dashboard.js";
 import { PauseSwitch } from "./pause.js";
-import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
+import type { RuntimeConfigurationStore, SecretVault } from "./runtime-configuration.js";
 import { ProviderAccountService } from "./provider-accounts.js";
 import { AgentRouter } from "./agent-router.js";
 import { SharedArtifactStore } from "./shared-artifacts.js";
@@ -211,7 +211,7 @@ export interface ServiceContainerOptions {
   /** Runtime configuration store, stored locally without plaintext secrets. */
   runtimeConfiguration?: RuntimeConfigurationStore;
   /** Keyring vault backed by Linux session keyring. */
-  vault?: KeyringVault;
+  vault?: SecretVault;
   /** NEXUS ACP/paper-trading engine client. */
   missionControl?: MissionControlPort;
   /** Version displayed in dashboard. */
@@ -298,7 +298,7 @@ export class ServiceContainer {
   readonly agentRouter: AgentRouter;
   readonly sharedArtifacts: SharedArtifactStore;
   readonly agentCollaboration: AgentCollaborationService;
-  readonly vault: KeyringVault | undefined;
+  readonly vault: SecretVault | undefined;
   readonly linkedin: LinkedInIntegrationService | undefined;
   readonly osint: OsintService;
   /** NEXUS ACP/paper-trading engine, when configured. */

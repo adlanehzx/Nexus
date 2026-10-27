@@ -8,9 +8,9 @@ import {
 } from "@nexus/linkedin";
 import type { ToolRegistry } from "@nexus/tools";
 import type {
-  KeyringVault,
   LinkedInRuntimeConfig,
   RuntimeConfigurationStore,
+  SecretVault,
 } from "./runtime-configuration.js";
 
 const TOOL_NAMES = [
@@ -21,14 +21,14 @@ const TOOL_NAMES = [
 
 export class LinkedInIntegrationService {
   readonly #runtime: RuntimeConfigurationStore;
-  readonly #vault: Pick<KeyringVault, "get" | "set" | "delete">;
+  readonly #vault: Pick<SecretVault, "get" | "set" | "delete">;
   readonly #registry: ToolRegistry;
   readonly #states = new LinkedInOAuthStateStore();
   readonly #fetch: typeof fetch;
 
   constructor(input: {
     runtime: RuntimeConfigurationStore;
-    vault: Pick<KeyringVault, "get" | "set" | "delete">;
+    vault: Pick<SecretVault, "get" | "set" | "delete">;
     registry: ToolRegistry;
     fetchFn?: typeof fetch;
   }) {

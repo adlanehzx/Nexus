@@ -154,6 +154,12 @@ export const configSchema = z
      */
     AUTH_SIGNING_KEY: z.string().min(1).default(ephemeralSigningKey),
 
+    /** Master secret for the encrypted headless/container vault. */
+    MASTER_KEY: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().min(32).optional(),
+    ),
+
     REDIS_URL: z.string().refine(isUrl(["redis:", "rediss:"]), "must be a redis:// URL"),
 
     /**

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -71,6 +71,26 @@ export const linkedInRuntimeConfigSchema = z.object({
 });
 
 export type LinkedInRuntimeConfig = z.infer<typeof linkedInRuntimeConfigSchema>;
+
+const sealedSecretSchema = z.object({
+  iv: z.string(),
+  ciphertext: z.string(),
+  tag: z.string(),
+});
+
+const encryptedSecretsSchema = z.object({
+  version: z.literal(1),
+  secrets: z.record(z.string(), sealedSecretSchema),
+});
+
+type EncryptedSecrets = z.infer<typeof encryptedSecretsSchema>;
+
+export interface SecretVault {
+  list(): Promise<string[]>;
+  set(name: string, value: string): Promise<void>;
+  get(ref: string): Promise<string | undefined>;
+  delete(name: string): Promise<void>;
+}
 
 export class RuntimeConfigurationStore {
   readonly #directory: string;
@@ -165,6 +185,16 @@ export class RuntimeConfigurationStore {
     await this.#write("secret-refs.json", { names: [...new Set(names)].sort() });
   }
 
+  async loadEncryptedSecrets(): Promise<EncryptedSecrets> {
+    return encryptedSecretsSchema.parse(
+      await this.#read("secrets.enc.json", { version: 1, secrets: {} }),
+    );
+  }
+
+  async saveEncryptedSecrets(value: EncryptedSecrets): Promise<void> {
+    await this.#write("secrets.enc.json", encryptedSecretsSchema.parse(value));
+  }
+
   async #read(name: string, fallback: unknown): Promise<unknown> {
     try {
       return JSON.parse(await readFile(join(this.#directory, name), "utf8"));
@@ -199,7 +229,7 @@ export class RuntimeConfigurationStore {
   }
 }
 
-export class KeyringVault {
+export class KeyringVault implements SecretVault {
   readonly #store: RuntimeConfigurationStore;
 
   constructor(store: RuntimeConfigurationStore) {
@@ -212,7 +242,7 @@ export class KeyringVault {
 
   async set(name: string, value: string): Promise<void> {
     const key = secretName(name);
-    if (value.length < 4 || value.length > 16_384) throw new Error("Valeur de secret invalide.");
+    if (value.length < 4 || value.length > 16_384) throw new Error("Invalid secret value.");
     await runSecretTool(["store", `--label=NEXUS · ${key}`, "service", "nexus", "key", key], value);
     await this.#store.saveSecretNames([...(await this.list()), key]);
   }
@@ -227,6 +257,66 @@ export class KeyringVault {
     const key = secretName(name);
     await runSecretTool(["clear", "service", "nexus", "key", key]).catch(() => "");
     await this.#store.saveSecretNames((await this.list()).filter((item) => item !== key));
+  }
+}
+
+/**
+ * Persistent fallback for headless and container installations where no desktop
+ * Secret Service is available. Values are encrypted independently with AES-256-GCM;
+ * only ciphertext, nonces and authentication tags reach the runtime volume.
+ */
+export class EncryptedFileVault implements SecretVault {
+  readonly #store: RuntimeConfigurationStore;
+  readonly #key: Buffer;
+
+  constructor(store: RuntimeConfigurationStore, masterSecret: string) {
+    if (masterSecret.trim().length < 32) {
+      throw new Error("MASTER_KEY must contain at least 32 characters.");
+    }
+    this.#store = store;
+    this.#key = createHash("sha256").update(masterSecret, "utf8").digest();
+  }
+
+  async list(): Promise<string[]> {
+    return Object.keys((await this.#store.loadEncryptedSecrets()).secrets).sort();
+  }
+
+  async set(name: string, value: string): Promise<void> {
+    const key = secretName(name);
+    if (value.length < 4 || value.length > 16_384) throw new Error("Invalid secret value.");
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", this.#key, iv);
+    cipher.setAAD(Buffer.from(key, "utf8"));
+    const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+    const current = await this.#store.loadEncryptedSecrets();
+    current.secrets[key] = {
+      iv: iv.toString("base64"),
+      ciphertext: ciphertext.toString("base64"),
+      tag: cipher.getAuthTag().toString("base64"),
+    };
+    await this.#store.saveEncryptedSecrets(current);
+    await this.#store.saveSecretNames(Object.keys(current.secrets));
+  }
+
+  async get(ref: string): Promise<string | undefined> {
+    const key = referenceName(ref);
+    const sealed = (await this.#store.loadEncryptedSecrets()).secrets[key];
+    if (sealed === undefined) return undefined;
+    const decipher = createDecipheriv("aes-256-gcm", this.#key, Buffer.from(sealed.iv, "base64"));
+    decipher.setAAD(Buffer.from(key, "utf8"));
+    decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(sealed.ciphertext, "base64")),
+      decipher.final(),
+    ]).toString("utf8");
+  }
+
+  async delete(name: string): Promise<void> {
+    const key = secretName(name);
+    const current = await this.#store.loadEncryptedSecrets();
+    delete current.secrets[key];
+    await this.#store.saveEncryptedSecrets(current);
+    await this.#store.saveSecretNames(Object.keys(current.secrets));
   }
 }
 

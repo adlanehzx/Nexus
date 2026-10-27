@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { RuntimeConfigurationStore } from "./runtime-configuration.js";
+import { ConflictError } from "./stores.js";
 
 export const authStatusSchema = z.enum(["authenticated", "unauthenticated", "expired", "unknown"]);
 export type AuthStatus = z.infer<typeof authStatusSchema>;
@@ -255,7 +256,10 @@ export class ProviderAccountService {
     const accounts = await this.listAccounts();
 
     if (accounts.some((acc) => acc.id === validated.id)) {
-      throw new Error(`Provider account "${validated.id}" already exists.`);
+      throw new ConflictError(
+        `Provider account "${validated.id}" already exists.`,
+        "A provider account with this identifier already exists.",
+      );
     }
 
     const nowIso = this.#now().toISOString();

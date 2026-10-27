@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseMcpServerConfig } from "@nexus/mcp";
-import { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
+import {
+  EncryptedFileVault,
+  RuntimeConfigurationStore,
+} from "../src/services/runtime-configuration.js";
 
 describe("NEXUS manageable configuration", () => {
   it("persists MCP, Browser Use, and only secret names", async () => {
@@ -79,5 +82,28 @@ describe("NEXUS manageable configuration", () => {
 
     expect(await store.listSecretNames()).toHaveLength(1);
     expect((await readdir(directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it("persists encrypted secrets without writing their plaintext value", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-vault-"));
+    const store = new RuntimeConfigurationStore(directory);
+    const vault = new EncryptedFileVault(store, "test-master-key-with-at-least-32-characters");
+
+    await vault.set("browser-worker-token", "never-store-this-token-in-plaintext");
+
+    const persisted = await readFile(join(directory, "secrets.enc.json"), "utf8");
+    expect(persisted).not.toContain("never-store-this-token-in-plaintext");
+    expect(await vault.list()).toEqual(["browser-worker-token"]);
+    expect(await vault.get("vault://nexus/browser-worker-token")).toBe(
+      "never-store-this-token-in-plaintext",
+    );
+
+    const reopened = new EncryptedFileVault(
+      new RuntimeConfigurationStore(directory),
+      "test-master-key-with-at-least-32-characters",
+    );
+    expect(await reopened.get("vault://nexus/browser-worker-token")).toBe(
+      "never-store-this-token-in-plaintext",
+    );
   });
 });

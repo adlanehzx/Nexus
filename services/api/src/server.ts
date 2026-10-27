@@ -12,7 +12,11 @@ import {
   BrowserSessionManager,
 } from "@nexus/browser-client";
 import { NotificationDispatcher } from "@nexus/notifications";
-import { KeyringVault, RuntimeConfigurationStore } from "./services/runtime-configuration.js";
+import {
+  EncryptedFileVault,
+  KeyringVault,
+  RuntimeConfigurationStore,
+} from "./services/runtime-configuration.js";
 import { TailscaleDiscoveryService } from "./services/tailscale-discovery.js";
 import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
@@ -71,7 +75,10 @@ const prisma = createDatabaseClient({ url: config.DATABASE_URL });
 const runtimeConfiguration = new RuntimeConfigurationStore(
   config.NEXUS_RUNTIME_CONFIG_DIR ?? resolve(here, "../config"),
 );
-const vault = new KeyringVault(runtimeConfiguration);
+const vault =
+  config.MASTER_KEY === undefined
+    ? new KeyringVault(runtimeConfiguration)
+    : new EncryptedFileVault(runtimeConfiguration, config.MASTER_KEY);
 const toolRegistry = new ToolRegistry();
 const linkedin = new LinkedInIntegrationService({
   runtime: runtimeConfiguration,

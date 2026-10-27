@@ -22,18 +22,18 @@ import {
   type OsintRelation,
   type OsintWatch,
 } from "@nexus/osint";
-import type { KeyringVault, RuntimeConfigurationStore } from "./runtime-configuration.js";
+import type { RuntimeConfigurationStore, SecretVault } from "./runtime-configuration.js";
 
 export type OsintEnrichmentProvider =
   "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
 export class OsintService {
   readonly #runtime: RuntimeConfigurationStore | undefined;
-  readonly #vault: KeyringVault | undefined;
+  readonly #vault: SecretVault | undefined;
   #store: InMemoryOsintCaseStore | undefined;
   #queue: Promise<void> = Promise.resolve();
 
-  constructor(options: { runtime?: RuntimeConfigurationStore; vault?: KeyringVault } = {}) {
+  constructor(options: { runtime?: RuntimeConfigurationStore; vault?: SecretVault } = {}) {
     this.#runtime = options.runtime;
     this.#vault = options.vault;
   }

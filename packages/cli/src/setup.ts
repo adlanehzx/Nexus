@@ -275,7 +275,7 @@ export function planSetup(options: SetupOptions): SetupPlan {
     paths,
     pnpmPath: options.pnpmPath,
     servicePath: options.servicePath ?? process.env.PATH ?? "/usr/local/bin:/usr/bin",
-    apiUrl: options.apiUrl ?? env.MISSION_CONTROL_URL ?? "http://127.0.0.1:3000",
+    apiUrl: options.apiUrl ?? "http://127.0.0.1:3000",
     publicKeyFile: publicKeyPem === undefined ? undefined : paths.publicKeyFile,
   });
   const currentUnit = existsSync(unitPath) ? readFileSync(unitPath, "utf8") : undefined;
