@@ -30,14 +30,14 @@ export function calculateProfileCompleteness(
         profile.primaryDiscipline?.trim(),
       ),
       weight: 15,
-      hint: "Select at least one track (PhD, CDI, Freelance) and your primary discipline.",
+      hint: "Select at least one opportunity track and describe your primary discipline.",
     },
     {
       id: "skills_and_expertise",
       label: "Core Skills & Domain Keywords",
       completed: Boolean(profile.skills && profile.skills.length >= 3),
       weight: 15,
-      hint: "List at least 3 core technical or research skills.",
+      hint: "List at least 3 core professional, academic, creative, or technical skills.",
     },
     {
       id: "location_and_remote",
@@ -57,7 +57,7 @@ export function calculateProfileCompleteness(
         (profile.phdPreferences?.minMonthlyStipend ?? 0) > 0,
       ),
       weight: 15,
-      hint: "Set minimum compensation criteria (salary for CDI, TJM for freelance, or stipend for PhD).",
+      hint: "Set the compensation criteria relevant to your selected opportunity tracks.",
     },
     {
       id: "education_research",

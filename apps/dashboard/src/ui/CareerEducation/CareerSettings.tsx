@@ -207,7 +207,7 @@ export function CareerSettings({
           <strong>Compensation & Rate Thresholds</strong>
           <div className="career-grid-3">
             <div className="career-form-group">
-              <label htmlFor="setMinCdi">Min CDI Salary (€)</label>
+              <label htmlFor="setMinCdi">Minimum Annual Salary (€)</label>
               <input
                 id="setMinCdi"
                 className="career-input"
@@ -219,7 +219,7 @@ export function CareerSettings({
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="setMinTjm">Min TJM (€/day)</label>
+              <label htmlFor="setMinTjm">Minimum Independent Daily Rate (€)</label>
               <input
                 id="setMinTjm"
                 className="career-input"

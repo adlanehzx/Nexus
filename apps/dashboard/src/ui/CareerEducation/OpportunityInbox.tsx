@@ -161,7 +161,7 @@ export function OpportunityInbox({
               aria-pressed={activeTrack === "cdi"}
               onClick={() => setActiveTrack("cdi")}
             >
-              Permanent Jobs / CDI ({opportunities.filter((o) => o.track === "cdi").length})
+              Permanent Employment ({opportunities.filter((o) => o.track === "cdi").length})
             </button>
             <button
               type="button"
@@ -169,7 +169,7 @@ export function OpportunityInbox({
               aria-pressed={activeTrack === "freelance"}
               onClick={() => setActiveTrack("freelance")}
             >
-              Freelance Missions ({opportunities.filter((o) => o.track === "freelance").length})
+              Independent Work ({opportunities.filter((o) => o.track === "freelance").length})
             </button>
           </div>
 
@@ -204,7 +204,7 @@ export function OpportunityInbox({
             type="search"
             className="career-input"
             style={{ flex: 1 }}
-            placeholder="Search positions, technologies (e.g. Rust, Consensus), or institutions..."
+            placeholder="Search roles, skills, disciplines, organizations, or institutions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label="Search opportunities"

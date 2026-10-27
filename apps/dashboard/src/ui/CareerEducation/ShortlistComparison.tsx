@@ -17,8 +17,8 @@ export function ShortlistComparison({
         <h3>No Opportunities Selected for Comparison</h3>
         <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
           In the <strong>Inbox & Discovery</strong> tab, check the <em>"Compare"</em> checkbox on
-          two or more positions (e.g. a PhD position, a CDI job, and a Freelance mission) to view an
-          objective side-by-side evaluation.
+          two or more opportunities (for example a doctoral position, permanent role, or independent
+          engagement) to view an objective side-by-side evaluation.
         </p>
       </div>
     );
@@ -32,7 +32,7 @@ export function ShortlistComparison({
             Multi-Track Opportunity Comparison ({matrix.opportunities.length} positions)
           </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Side-by-side metrics across doctoral contracts, permanent jobs (CDI), and freelance
+            Side-by-side metrics across doctoral programmes, permanent employment, and independent
             consulting missions.
           </p>
         </div>

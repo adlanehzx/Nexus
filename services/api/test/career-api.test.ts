@@ -141,6 +141,64 @@ describe("Career & Education API Routes", () => {
       expect(body.data.preferredLocations).toContain("Paris, France");
       expect(body.data.targetTracks).toContain("permanent_job");
     });
+
+    it("does not invent career goals for a new user", async () => {
+      const res = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/career/settings",
+        headers: userA.authorization,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{
+        data: {
+          disciplinesAndKeywords: string[];
+          seniorityLevels: string[];
+          targetTracks: string[];
+          phdTopics: string[];
+          phdFundingTypes: string[];
+        };
+      }>();
+      expect(body.data).toMatchObject({
+        disciplinesAndKeywords: [],
+        seniorityLevels: [],
+        targetTracks: [],
+        phdTopics: [],
+        phdFundingTypes: [],
+      });
+    });
+
+    it("accepts profession-agnostic preferences", async () => {
+      const profile = sampleProfile();
+      profile.headline = "Registered Nurse seeking a community health role";
+      profile.summary =
+        "Experienced in patient education, preventive care, and multidisciplinary coordination.";
+      profile.skills = ["Patient education", "Preventive care", "Care coordination"];
+      profile.preferences.kinds = ["permanent_job"];
+      profile.preferences.mustHaveSkills = ["Patient education"];
+      profile.preferences.niceToHaveSkills = ["Community health"];
+      profile.preferences.researchAreas = [];
+
+      const putRes = await harness.app.inject({
+        method: "PUT",
+        url: "/api/v1/career/profile",
+        headers: userA.authorization,
+        payload: profile,
+      });
+      expect(putRes.statusCode).toBe(200);
+
+      const settingsRes = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/career/settings",
+        headers: userA.authorization,
+      });
+      const settings = settingsRes.json<{
+        data: { disciplinesAndKeywords: string[]; targetTracks: string[] };
+      }>().data;
+      expect(settings.disciplinesAndKeywords).toEqual(["Patient education"]);
+      expect(settings.targetTracks).toEqual(["permanent_job"]);
+      expect(JSON.stringify(settings).toLowerCase()).not.toContain("developer");
+    });
   });
 
   describe("cross-user isolation", () => {

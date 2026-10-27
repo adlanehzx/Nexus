@@ -6,6 +6,22 @@ import {
 } from "../src/career-education/index.js";
 
 describe("Career & Education Contracts & Fake Client", () => {
+  it("starts with a profession-neutral profile when demo fixtures are disabled", async () => {
+    const client = new FakeCareerEducationClient({ seedDemoData: false });
+    const [profile, settings, opportunities] = await Promise.all([
+      client.getProfile(),
+      client.getSettings(),
+      client.searchOpportunities({ track: "all" }),
+    ]);
+
+    expect(profile.preferredTracks).toEqual([]);
+    expect(profile.primaryDiscipline).toBe("");
+    expect(settings.disciplinesAndKeywords).toEqual([]);
+    expect(settings.targetTracks).toEqual([]);
+    expect(opportunities.items).toEqual([]);
+    expect(JSON.stringify({ profile, settings }).toLowerCase()).not.toContain("developer");
+  });
+
   describe("Completeness Calculator", () => {
     it("computes 0 score for empty profile", () => {
       const result = calculateProfileCompleteness({});

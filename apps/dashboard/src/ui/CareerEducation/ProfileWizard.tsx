@@ -180,8 +180,8 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
           <div className="career-form-group" style={{ gap: "1rem" }}>
             <h3>Preferred Career Tracks</h3>
             <p style={{ color: "var(--muted-text)", fontSize: "0.85rem" }}>
-              NEXUS supports parallel or combined discovery for academic research, permanent
-              employment, and freelance consulting.
+              Choose the opportunity processes that match your plans. Your profession, discipline,
+              seniority, and keywords are personal profile data—not NEXUS defaults.
             </p>
             <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
               {(["phd", "cdi", "freelance"] as OpportunityTrack[]).map((track) => {
@@ -212,8 +212,8 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                     />
                     <strong>
                       {track === "phd" && "PhD / Doctoral Positions"}
-                      {track === "cdi" && "Permanent Employment (CDI)"}
-                      {track === "freelance" && "Freelance & Consulting"}
+                      {track === "cdi" && "Permanent Employment"}
+                      {track === "freelance" && "Independent Work & Consulting"}
                     </strong>
                   </label>
                 );
@@ -300,7 +300,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
             <h3>Compensation & Rate Expectations</h3>
             <div className="career-grid-3">
               <div className="career-form-group">
-                <label htmlFor="minCdi">Min CDI Salary (€/year)</label>
+                <label htmlFor="minCdi">Minimum Annual Salary (€)</label>
                 <input
                   id="minCdi"
                   className="career-input"
@@ -318,7 +318,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                 />
               </div>
               <div className="career-form-group">
-                <label htmlFor="minTjm">Min Freelance Daily Rate TJM (€/day)</label>
+                <label htmlFor="minTjm">Minimum Independent Daily Rate (€/day)</label>
                 <input
                   id="minTjm"
                   className="career-input"

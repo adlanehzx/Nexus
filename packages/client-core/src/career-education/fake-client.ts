@@ -147,6 +147,89 @@ const DEFAULT_SETTINGS: CareerEducationSettings = {
   degradedFeedSimulation: false,
 };
 
+/**
+ * Neutral first-run state used by the product dashboard.
+ *
+ * The rich fixtures above are useful for deterministic tests, but they describe
+ * one fictional software engineer. They must never become another user's
+ * identity, goals, locations, compensation expectations, or academic plans.
+ */
+const EMPTY_PROFILE: CareerEducationProfile = {
+  id: "profile_local_first_run",
+  updatedAt: new Date(0).toISOString(),
+  fullName: "",
+  email: "",
+  headline: "",
+  summary: "",
+  preferredTracks: [],
+  primaryDiscipline: "",
+  skills: [],
+  targetLocations: [],
+  remotePreference: "hybrid",
+  languages: [],
+  visaStatus: "",
+  requiresVisaSponsorship: false,
+  education: [],
+  cdiPreferences: {
+    targetMinAnnualSalary: 0,
+    currency: "EUR",
+    desiredRoles: [],
+    seniority: [],
+    noticePeriodMonths: 0,
+  },
+  phdPreferences: {
+    targetTopics: [],
+    preferredSupervisors: [],
+    targetInstitutionsOrLabs: [],
+    fundingModels: [],
+    currency: "EUR",
+    prerequisitesMet: [],
+  },
+  freelancePreferences: {
+    targetDailyRateTjm: 0,
+    currency: "EUR",
+    availableDaysPerWeek: 0,
+    earliestStartDate: "",
+    minDurationMonths: 0,
+    preferredIndustries: [],
+    vatRegistered: false,
+  },
+  completeness: {
+    score: 0,
+    breakdown: [],
+    missingCrucialFields: [],
+    actionableRecommendations: [],
+  },
+};
+
+EMPTY_PROFILE.completeness = calculateProfileCompleteness(EMPTY_PROFILE);
+
+const EMPTY_SETTINGS: CareerEducationSettings = {
+  preferredLocations: [],
+  remotePolicy: "hybrid",
+  disciplinesAndKeywords: [],
+  seniorityLevels: [],
+  targetTracks: [],
+  currency: "EUR",
+  languages: [],
+  visaRequirement: "",
+  phdTopics: [],
+  phdSupervisors: [],
+  phdFundingTypes: [],
+  freelanceDaysPerWeek: 0,
+  excludedSources: [],
+  excludedOrganizations: [],
+  quietHours: {
+    enabled: false,
+    start: "22:00",
+    end: "08:00",
+    timezone: "UTC",
+  },
+  retentionDays: 180,
+  offlineSimulation: false,
+  degradedFeedSimulation: false,
+};
+
 const SEED_OPPORTUNITIES: Opportunity[] = [
   {
     id: "opp_phd_sorbonne_01",
@@ -1059,19 +1142,35 @@ const SEED_AUDIT_EVENTS: AuditEvent[] = [
  * boundaries, respects SSRF safety rules, and simulates honest degraded/offline states.
  */
 export class FakeCareerEducationClient implements CareerEducationClient {
-  private profile: CareerEducationProfile = structuredClone(DEFAULT_PROFILE);
-  private settings: CareerEducationSettings = structuredClone(DEFAULT_SETTINGS);
-  private opportunities: Opportunity[] = structuredClone(SEED_OPPORTUNITIES);
-  private savedSearches: SavedSearch[] = structuredClone(SEED_SAVED_SEARCHES);
-  private monitoredSources: MonitoredSource[] = structuredClone(SEED_MONITORED_SOURCES);
-  private applications: Application[] = structuredClone(SEED_APPLICATIONS);
-  private documents: DocumentVariant[] = structuredClone(SEED_DOCUMENTS);
-  private deadlines: Deadline[] = structuredClone(SEED_DEADLINES);
-  private contacts: Contact[] = structuredClone(SEED_CONTACTS);
-  private interviews: Interview[] = structuredClone(SEED_INTERVIEWS);
-  private confirmations: ConfirmationRequest[] = structuredClone(SEED_CONFIRMATIONS);
-  private auditEvents: AuditEvent[] = structuredClone(SEED_AUDIT_EVENTS);
+  private profile: CareerEducationProfile;
+  private settings: CareerEducationSettings;
+  private opportunities: Opportunity[];
+  private savedSearches: SavedSearch[];
+  private monitoredSources: MonitoredSource[];
+  private applications: Application[];
+  private documents: DocumentVariant[];
+  private deadlines: Deadline[];
+  private contacts: Contact[];
+  private interviews: Interview[];
+  private confirmations: ConfirmationRequest[];
+  private auditEvents: AuditEvent[];
   private outcomes: Outcome[] = [];
+
+  constructor(options: { seedDemoData?: boolean } = {}) {
+    const seedDemoData = options.seedDemoData ?? true;
+    this.profile = structuredClone(seedDemoData ? DEFAULT_PROFILE : EMPTY_PROFILE);
+    this.settings = structuredClone(seedDemoData ? DEFAULT_SETTINGS : EMPTY_SETTINGS);
+    this.opportunities = seedDemoData ? structuredClone(SEED_OPPORTUNITIES) : [];
+    this.savedSearches = seedDemoData ? structuredClone(SEED_SAVED_SEARCHES) : [];
+    this.monitoredSources = seedDemoData ? structuredClone(SEED_MONITORED_SOURCES) : [];
+    this.applications = seedDemoData ? structuredClone(SEED_APPLICATIONS) : [];
+    this.documents = seedDemoData ? structuredClone(SEED_DOCUMENTS) : [];
+    this.deadlines = seedDemoData ? structuredClone(SEED_DEADLINES) : [];
+    this.contacts = seedDemoData ? structuredClone(SEED_CONTACTS) : [];
+    this.interviews = seedDemoData ? structuredClone(SEED_INTERVIEWS) : [];
+    this.confirmations = seedDemoData ? structuredClone(SEED_CONFIRMATIONS) : [];
+    this.auditEvents = seedDemoData ? structuredClone(SEED_AUDIT_EVENTS) : [];
+  }
 
   private checkOffline(): void {
     if (this.settings.offlineSimulation) {
