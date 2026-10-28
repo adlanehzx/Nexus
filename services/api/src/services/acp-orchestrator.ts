@@ -289,7 +289,14 @@ export class AcpOrchestrator {
               query: objective,
             })
           ).text;
-    const planned = await this.#plan(objective, health.profiles, settings, memoryContext, timezone);
+    const planned = await this.#plan(
+      userId,
+      objective,
+      health.profiles,
+      settings,
+      memoryContext,
+      timezone,
+    );
     const tasks = await ensureFinalSynthesis(
       planned.tasks,
       objective,
@@ -392,6 +399,7 @@ export class AcpOrchestrator {
   }
 
   async #plan(
+    userId: string,
     objective: string,
     profiles: string[],
     settings: RuntimeSettings,
@@ -434,7 +442,7 @@ Absolute rules:
 
     try {
       const planned = await this.#llm.structuredOutput(
-        { system: contextualSystem, messages },
+        { system: contextualSystem, messages, routingContext: { userId } },
         plannedMissionSchema,
       );
       validatePlan(planned.tasks, profiles);

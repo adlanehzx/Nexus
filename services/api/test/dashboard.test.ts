@@ -41,6 +41,7 @@ const SECTIONS = [
   "/api/v1/dashboard/mcp",
   "/api/v1/dashboard/browser",
   "/api/v1/dashboard/llm/free",
+  "/api/v1/dashboard/llm/engines",
   "/api/v1/dashboard/mission-control",
   "/api/v1/dashboard/memory",
   "/api/v1/dashboard/notifications",

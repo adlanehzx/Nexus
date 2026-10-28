@@ -22,6 +22,7 @@ import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
 import { LinkedInIntegrationService } from "./services/linkedin-integration.js";
 import { FreeLlmRuntimeProvider } from "./services/freelm-runtime.js";
+import { UnifiedLlmRuntimeProvider } from "./services/llm-runtime.js";
 
 /**
  * API service entrypoint.
@@ -47,12 +48,7 @@ const telemetryRuntime = initializeTelemetry(config);
  * would leave the buffer empty, and the "Logs" section would display a blank screen
  * without anything actually failing.
  */
-import {
-  AntigravityCliProvider,
-  ClaudeCliProvider,
-  FallbackProvider,
-  OllamaProvider,
-} from "@nexus/llm";
+import { AntigravityCliProvider, ClaudeCliProvider, OllamaProvider } from "@nexus/llm";
 import { createDatabaseClient } from "@nexus/database";
 import { PrismaUserStore } from "./services/persistence/prisma-user-store.js";
 import { PrismaPairingTicketStore } from "./services/persistence/prisma-pairing-ticket-store.js";
@@ -81,6 +77,33 @@ const vault =
     ? new KeyringVault(runtimeConfiguration)
     : new EncryptedFileVault(runtimeConfiguration, config.MASTER_KEY);
 const freeLlm = new FreeLlmRuntimeProvider({ runtime: runtimeConfiguration, vault });
+const deviceRuntime: {
+  current: Pick<ServiceContainer, "selector" | "gateway"> | undefined;
+} = { current: undefined };
+const llmRuntime = new UnifiedLlmRuntimeProvider({
+  runtime: runtimeConfiguration,
+  vault,
+  baseProviders: [new AntigravityCliProvider(), new ClaudeCliProvider(), new OllamaProvider()],
+  finalProviders: [freeLlm],
+  devices: {
+    selector: {
+      select: (request) => {
+        if (deviceRuntime.current === undefined) throw new Error("Device runtime is not ready.");
+        return deviceRuntime.current.selector.select(request);
+      },
+    },
+    transport: {
+      dispatch: (request) => {
+        if (deviceRuntime.current === undefined) throw new Error("Device runtime is not ready.");
+        return deviceRuntime.current.gateway.dispatch(request);
+      },
+      cancel: (deviceId, taskId, stepId) => {
+        if (deviceRuntime.current === undefined) throw new Error("Device runtime is not ready.");
+        return deviceRuntime.current.gateway.cancel(deviceId, taskId, stepId);
+      },
+    },
+  },
+});
 const toolRegistry = new ToolRegistry();
 const linkedin = new LinkedInIntegrationService({
   runtime: runtimeConfiguration,
@@ -204,12 +227,8 @@ const services = new ServiceContainer({
   ...(browser === undefined ? {} : { browser }),
   ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
   ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
-  llmProvider: new FallbackProvider([
-    new AntigravityCliProvider(),
-    new ClaudeCliProvider(),
-    new OllamaProvider(),
-    freeLlm,
-  ]),
+  llmProvider: llmRuntime,
+  llmRuntimeProvider: llmRuntime,
   freeLlmProvider: freeLlm,
   tailscale: new TailscaleDiscoveryService({ apiPort: config.API_PORT }),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
@@ -233,6 +252,7 @@ const services = new ServiceContainer({
         }),
       }),
 });
+deviceRuntime.current = services;
 
 const logger = createLogger(config, [services.logs]);
 

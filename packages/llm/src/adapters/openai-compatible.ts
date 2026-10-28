@@ -9,11 +9,21 @@ export interface OpenAICompatibleProviderOptions {
   baseURL: string;
   apiKey?: string;
   timeoutMs?: number;
+  chatCompletionsPath?: string;
   capabilities?: Partial<ProviderCapabilities>;
 }
 
 interface CompletionPayload {
-  choices?: { message?: { content?: string }; finish_reason?: string }[];
+  choices?: {
+    message?: {
+      content?: string | null;
+      tool_calls?: {
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }[];
+    };
+    finish_reason?: string;
+  }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   model?: string;
 }
@@ -25,6 +35,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   readonly capabilities: ProviderCapabilities;
   readonly #apiKey: string | undefined;
   readonly #timeoutMs: number;
+  readonly #chatCompletionsPath: string;
 
   constructor(options: OpenAICompatibleProviderOptions) {
     this.id = options.id;
@@ -32,6 +43,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.baseURL = options.baseURL.replace(/\/$/, "");
     this.#apiKey = options.apiKey;
     this.#timeoutMs = options.timeoutMs ?? 60_000;
+    this.#chatCompletionsPath = options.chatCompletionsPath ?? "/v1/chat/completions";
     this.capabilities = {
       tools: true,
       vision: false,
@@ -46,7 +58,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     const timeout = setTimeout(() => controller.abort(), this.#timeoutMs);
     const signal = request.signal ?? controller.signal;
     try {
-      const response = await fetch(`${this.baseURL}/v1/chat/completions`, {
+      const response = await fetch(`${this.baseURL}${this.#chatCompletionsPath}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -87,15 +99,46 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }
       const payload = (await response.json()) as CompletionPayload;
       const choice = payload.choices?.[0];
-      if (choice?.message?.content === undefined) {
+      if (choice?.message === undefined) {
         throw new LLMProviderError(this.id, {
           message: "OpenAI-compatible engine returned an invalid response",
           retryable: true,
         });
       }
+      const content: GenerateResponse["content"] = [];
+      if (typeof choice.message.content === "string" && choice.message.content.length > 0) {
+        content.push({ type: "text", text: choice.message.content });
+      }
+      for (const [index, call] of (choice.message.tool_calls ?? []).entries()) {
+        const name = call.function?.name;
+        if (typeof name !== "string" || name.length === 0) continue;
+        let args: unknown = {};
+        try {
+          args = JSON.parse(call.function?.arguments ?? "{}") as unknown;
+        } catch {
+          args = {};
+        }
+        content.push({
+          type: "tool_call",
+          id: call.id ?? `openai-tool-${String(index)}`,
+          name,
+          arguments: args,
+        });
+      }
+      if (content.length === 0) {
+        throw new LLMProviderError(this.id, {
+          message: "OpenAI-compatible engine returned an empty response",
+          retryable: true,
+        });
+      }
       return {
-        content: [{ type: "text", text: choice.message.content }],
-        stopReason: choice.finish_reason === "length" ? "max_tokens" : "end_turn",
+        content,
+        stopReason:
+          (choice.message.tool_calls?.length ?? 0) > 0
+            ? "tool_call"
+            : choice.finish_reason === "length"
+              ? "max_tokens"
+              : "end_turn",
         usage: {
           inputTokens: payload.usage?.prompt_tokens ?? 0,
           outputTokens: payload.usage?.completion_tokens ?? 0,

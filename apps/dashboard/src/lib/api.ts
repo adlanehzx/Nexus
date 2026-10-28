@@ -847,6 +847,73 @@ export interface FreeLlmStatus {
   activeProviders: string[];
 }
 
+export type PaidLlmProvider =
+  | "openai"
+  | "anthropic"
+  | "google-gemini"
+  | "openrouter"
+  | "mistral"
+  | "deepseek"
+  | "openai-compatible";
+
+export type LlmEngineConfig =
+  | {
+      id: string;
+      label: string;
+      kind: "paid-api";
+      enabled: boolean;
+      priority: number;
+      model: string;
+      maxContextTokens: number;
+      provider: PaidLlmProvider;
+      apiKeyRef: string;
+      baseUrl: string | null;
+      inputCostPerMillion: number | null;
+      outputCostPerMillion: number | null;
+    }
+  | {
+      id: string;
+      label: string;
+      kind: "device";
+      enabled: boolean;
+      priority: number;
+      model: string;
+      maxContextTokens: number;
+      runtime: "ollama" | "openai-compatible";
+      preferredDeviceId: string | null;
+      minimumGpuVramMb: number;
+    };
+
+export interface LlmEnginesSection {
+  enabled: boolean;
+  preferLocal: boolean;
+  engines: LlmEngineConfig[];
+  status: {
+    enabled: boolean;
+    preferLocal: boolean;
+    engines: {
+      id: string;
+      label: string;
+      kind: "paid-api" | "device";
+      provider: string;
+      model: string;
+      enabled: boolean;
+      priority: number;
+      credentialConfigured: boolean;
+    }[];
+  } | null;
+  localDevices: {
+    id: string;
+    name: string;
+    status: string;
+    authenticated: boolean;
+    eligible: boolean;
+    gpuResources: { model: string; freeVramMb: number; totalVramMb: number }[];
+    model: string | null;
+    runtime: string | null;
+  }[];
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -1008,6 +1075,25 @@ export class DashboardApi {
 
   testFreeLlm(): Promise<{ provider: string; model: string; text: string }> {
     return this.#request("POST", "/api/v1/dashboard/llm/free/test");
+  }
+
+  llmEngines(): Promise<LlmEnginesSection> {
+    return this.#get("/api/v1/dashboard/llm/engines");
+  }
+
+  configureLlmEngines(input: {
+    enabled: boolean;
+    preferLocal: boolean;
+    engines: LlmEngineConfig[];
+  }): Promise<unknown> {
+    return this.#request("PUT", "/api/v1/dashboard/llm/engines", input);
+  }
+
+  testLlmEngine(engineId: string): Promise<{ provider: string; model: string; text: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/dashboard/llm/engines/${encodeURIComponent(engineId)}/test`,
+    );
   }
 
   linkedInStatus(): Promise<LinkedInStatus> {

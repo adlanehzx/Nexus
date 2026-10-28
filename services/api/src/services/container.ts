@@ -97,6 +97,7 @@ import type { LinkedInIntegrationService } from "./linkedin-integration.js";
 import { OsintService } from "./osint-service.js";
 import { createOsintTools } from "@nexus/osint";
 import type { FreeLlmRuntimeProvider } from "./freelm-runtime.js";
+import type { UnifiedLlmRuntimeProvider } from "./llm-runtime.js";
 
 /**
  * Assembly of API services.
@@ -223,6 +224,8 @@ export interface ServiceContainerOptions {
   llmProvider?: LLMProvider;
   /** Hot-reloadable free-tier provider exposed to the dashboard. */
   freeLlmProvider?: FreeLlmRuntimeProvider;
+  /** Unified paid API and device-hosted model router. */
+  llmRuntimeProvider?: UnifiedLlmRuntimeProvider;
   /** Local CLI and ACP adapter discovery. Injectable for API tests. */
   connectionManager?: ConnectionCatalogService;
   /** Read-only Tailscale inventory. Injectable so tests never execute host commands. */
@@ -309,6 +312,7 @@ export class ServiceContainer {
   /** LLM provider for task planning (optional). */
   readonly llmProvider: LLMProvider | undefined;
   readonly freeLlm: FreeLlmRuntimeProvider | undefined;
+  readonly llmRuntime: UnifiedLlmRuntimeProvider | undefined;
   /** Secret-free local connection catalogue and safe diagnostic probes. */
   readonly connections: ConnectionCatalogService;
   /** Hosted organization services. Undefined keeps personal mode dependency-free. */
@@ -321,6 +325,7 @@ export class ServiceContainer {
   constructor(options: ServiceContainerOptions) {
     this.llmProvider = options.llmProvider;
     this.freeLlm = options.freeLlmProvider;
+    this.llmRuntime = options.llmRuntimeProvider;
     this.connections = options.connectionManager ?? new LocalConnectionManager();
     this.tenantPlatform =
       options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);

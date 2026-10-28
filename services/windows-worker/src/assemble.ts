@@ -16,6 +16,7 @@ import { createDockerCapability } from "./capabilities/docker.js";
 import { createGitCapabilities } from "./capabilities/git.js";
 import { createBrowserOpenCapability } from "./capabilities/browser.js";
 import { createAppOpenCapability } from "./capabilities/app.js";
+import { createLocalLlmCapability } from "./capabilities/llm.js";
 import { DEFAULT_ALLOWED_ENV, ExecPolicy } from "./policy/exec-policy.js";
 import { PathPolicy } from "./policy/path-policy.js";
 import { DockerPolicy } from "./policy/docker-policy.js";
@@ -93,6 +94,7 @@ export function assembleCapabilities(options: AssembleOptions): AssembledWorker 
 
   const capabilities = new LocalCapabilityRegistry(config.declaredCapabilities);
   const execAllowed = policy?.exec.mode !== "disabled";
+  const localLlm = createLocalLlmCapability(config.localLlm);
 
   capabilities.registerAll([
     ...(execAllowed
@@ -131,6 +133,7 @@ export function assembleCapabilities(options: AssembleOptions): AssembledWorker 
       env,
       allowedEnv: config.allowedEnv.length > 0 ? config.allowedEnv : DEFAULT_ALLOWED_ENV,
     }),
+    ...(localLlm === null ? [] : [localLlm]),
   ] as unknown as LocalCapability<never, unknown>[]);
 
   return { capabilities, pathPolicy, execPolicy, dockerPolicy, gitPolicy, ownedProcesses };

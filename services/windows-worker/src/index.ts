@@ -38,6 +38,7 @@ export * from "./capabilities/docker.js";
 export * from "./capabilities/git.js";
 export * from "./capabilities/browser.js";
 export * from "./capabilities/app.js";
+export * from "./capabilities/llm.js";
 
 export * from "./policy/path-policy.js";
 export * from "./policy/exec-policy.js";

@@ -1989,6 +1989,34 @@ tbody tr:last-child td {
   color: var(--nx-text-muted);
   font-size: var(--nx-size-2xs);
 }
+
+.engine-list {
+  display: grid;
+  gap: var(--nx-space-4);
+  margin: var(--nx-space-5) 0 var(--nx-space-6);
+}
+
+.engine-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-raised);
+}
+
+.engine-card p {
+  margin: var(--nx-space-2) 0 0;
+}
+
+@media (max-width: 840px) {
+  .engine-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
 .settings-wide {
   grid-column: 1 / -1;
 }

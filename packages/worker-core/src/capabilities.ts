@@ -33,6 +33,8 @@ export interface LocalCapability<I = unknown, O = unknown> {
   /** JSON Schema representation advertised to LLMs. */
   inputJsonSchema?: Record<string, unknown>;
   riskLevel: RiskLevel;
+  /** Public, non-secret metadata advertised to Core (for example runtime/model). */
+  metadata?: Record<string, string>;
   /** Dynamic machine availability probe. If omitted, considered always available. */
   probe?: () => Promise<boolean>;
   /**
@@ -160,7 +162,7 @@ export class LocalCapabilityRegistry {
           ? {}
           : { inputSchema: capability.inputJsonSchema }),
         enabled: true,
-        metadata: { risk: capability.riskLevel },
+        metadata: { risk: capability.riskLevel, ...(capability.metadata ?? {}) },
       });
     }
 
@@ -179,7 +181,7 @@ export class LocalCapabilityRegistry {
           version: capability.version ?? "1",
           description: capability.description,
           enabled: allowed && present,
-          metadata: { risk: capability.riskLevel },
+          metadata: { risk: capability.riskLevel, ...(capability.metadata ?? {}) },
         },
         available: allowed && present,
         ...(allowed

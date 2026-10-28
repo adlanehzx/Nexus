@@ -190,6 +190,12 @@ export function testConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig 
     dockerAllowed: ["ps", "images", "logs", "inspect"],
     gitAllowWrite: false,
     statePath: "C:\\ProgramData\\NEXUS\\worker\\device.json",
+    localLlm: {
+      runtime: "disabled",
+      baseUrl: "http://127.0.0.1:11434",
+      model: "",
+      apiKey: undefined,
+    },
     logLevel: "debug",
     ...overrides,
   };

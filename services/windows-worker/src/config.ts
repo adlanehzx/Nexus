@@ -70,6 +70,19 @@ export const workerConfigSchema = z.object({
   /** Path where public daemon state is published. */
   WORKER_STATE_PATH: z.string().default(""),
 
+  /** Optional local model served on this worker. Secrets remain on the worker. */
+  WORKER_LLM_RUNTIME: z.enum(["disabled", "ollama", "openai-compatible"]).default("disabled"),
+  WORKER_LLM_URL: z
+    .string()
+    .url()
+    .refine((value) => {
+      const hostname = new URL(value).hostname;
+      return ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    }, "the local model endpoint must use a loopback address")
+    .default("http://127.0.0.1:11434"),
+  WORKER_LLM_MODEL: z.string().trim().max(200).default(""),
+  WORKER_LLM_API_KEY: z.string().default(""),
+
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -95,6 +108,12 @@ export interface WorkerConfig {
   dockerAllowed: string[];
   gitAllowWrite: boolean;
   statePath: string;
+  localLlm: {
+    runtime: "disabled" | "ollama" | "openai-compatible";
+    baseUrl: string;
+    model: string;
+    apiKey: string | undefined;
+  };
   logLevel: "debug" | "info" | "warn" | "error";
 }
 
@@ -145,6 +164,12 @@ export function loadWorkerConfig(env: Record<string, string | undefined>): Worke
     dockerAllowed: raw.WORKER_DOCKER_ALLOWED,
     gitAllowWrite: raw.WORKER_GIT_ALLOW_WRITE,
     statePath: raw.WORKER_STATE_PATH === "" ? defaultStatePath(env) : raw.WORKER_STATE_PATH,
+    localLlm: {
+      runtime: raw.WORKER_LLM_RUNTIME,
+      baseUrl: raw.WORKER_LLM_URL.replace(/\/$/, ""),
+      model: raw.WORKER_LLM_MODEL,
+      apiKey: raw.WORKER_LLM_API_KEY === "" ? undefined : raw.WORKER_LLM_API_KEY,
+    },
     logLevel: raw.LOG_LEVEL,
   };
 }

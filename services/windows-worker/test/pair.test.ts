@@ -77,6 +77,63 @@ describe("guided worker pairing", () => {
     expect(readFileSync(join(root, "worker.env"), "utf8")).toContain("NEXUS_WORKER_PLATFORM=LINUX");
   });
 
+  it("enables a device-local Ollama model without putting a model secret in arguments", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nexus-pair-llm-"));
+    temporary.push(root);
+    await pairWorker({
+      apiUrl: "https://nexus.example.test",
+      token: "single-use-ticket",
+      name: "GPU workstation",
+      keyPath: join(root, "device.key"),
+      envPath: join(root, "worker.env"),
+      allowedPaths: [],
+      platform: "LINUX",
+      localLlm: {
+        runtime: "ollama",
+        baseUrl: "http://127.0.0.1:11434",
+        model: "qwen3:14b",
+      },
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ data: { id: "gpu-worker" } }), {
+            status: 201,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+    });
+
+    const env = readFileSync(join(root, "worker.env"), "utf8");
+    expect(env).toContain("WORKER_CAPABILITIES=");
+    expect(env).toContain("llm.inference");
+    expect(env).toContain("WORKER_LLM_RUNTIME=ollama");
+    expect(env).toContain("WORKER_LLM_MODEL=qwen3:14b");
+    expect(env).toContain("WORKER_LLM_API_KEY=\n");
+  });
+
+  it("refuses a non-loopback model endpoint before consuming the pairing ticket", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nexus-pair-llm-unsafe-"));
+    temporary.push(root);
+    const request = vi.fn();
+
+    await expect(
+      pairWorker({
+        apiUrl: "https://nexus.example.test",
+        token: "single-use-ticket",
+        name: "GPU workstation",
+        keyPath: join(root, "device.key"),
+        envPath: join(root, "worker.env"),
+        allowedPaths: [],
+        localLlm: {
+          runtime: "openai-compatible",
+          baseUrl: "http://192.168.1.40:8000",
+          model: "private-model",
+        },
+        fetchImpl: request,
+      }),
+    ).rejects.toThrow(/loopback/i);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("rejects remote HTTP before generating key", async () => {
     const root = mkdtempSync(join(tmpdir(), "nexus-pair-"));
     temporary.push(root);

@@ -93,6 +93,86 @@ describe("NEXUS manageable configuration", () => {
     expect(persisted).not.toContain("nvapi-");
   });
 
+  it("persists paid and device LLM engines without embedding provider credentials", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-llm-engines-"));
+    const store = new RuntimeConfigurationStore(directory);
+
+    await store.saveLlmRouting({
+      enabled: true,
+      preferLocal: true,
+      engines: [
+        {
+          id: "private-ollama",
+          label: "Private Ollama",
+          enabled: true,
+          priority: 10,
+          model: "qwen3:14b",
+          maxContextTokens: 32_768,
+          kind: "device",
+          runtime: "ollama",
+          preferredDeviceId: "device-gpu",
+          minimumGpuVramMb: 12_000,
+        },
+        {
+          id: "openai-work",
+          label: "OpenAI work account",
+          enabled: true,
+          priority: 20,
+          model: "gpt-5-mini",
+          maxContextTokens: 128_000,
+          kind: "paid-api",
+          provider: "openai",
+          apiKeyRef: "vault://nexus/llm-openai-work",
+          baseUrl: null,
+          inputCostPerMillion: null,
+          outputCostPerMillion: null,
+        },
+      ],
+    });
+
+    expect(await store.loadLlmRouting()).toMatchObject({
+      enabled: true,
+      preferLocal: true,
+      engines: [{ kind: "device" }, { kind: "paid-api", provider: "openai" }],
+    });
+    const persisted = await readFile(join(directory, "llm-engines.json"), "utf8");
+    expect(persisted).toContain("vault://nexus/llm-openai-work");
+    expect(persisted).not.toContain("sk-");
+  });
+
+  it("rejects ambiguous engine identifiers and unsafe custom remote endpoints", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-llm-invalid-"));
+    const store = new RuntimeConfigurationStore(directory);
+    const engine = {
+      id: "custom",
+      label: "Custom",
+      enabled: true,
+      priority: 10,
+      model: "model",
+      maxContextTokens: 8_192,
+      kind: "paid-api" as const,
+      provider: "openai-compatible" as const,
+      apiKeyRef: "vault://nexus/custom-key",
+      baseUrl: "http://models.example.test/v1",
+      inputCostPerMillion: null,
+      outputCostPerMillion: null,
+    };
+
+    await expect(
+      store.saveLlmRouting({ enabled: true, preferLocal: false, engines: [engine] }),
+    ).rejects.toThrow(/https/i);
+    await expect(
+      store.saveLlmRouting({
+        enabled: true,
+        preferLocal: false,
+        engines: [
+          { ...engine, baseUrl: "https://models.example.test/v1" },
+          { ...engine, baseUrl: "https://other.example.test/v1" },
+        ],
+      }),
+    ).rejects.toThrow(/duplicate/i);
+  });
+
   it("keeps concurrent atomic writes independent", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-runtime-concurrent-"));
     const store = new RuntimeConfigurationStore(directory);

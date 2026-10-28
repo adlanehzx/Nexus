@@ -14,7 +14,10 @@ import {
 } from "@nexus/mcp";
 import { notificationsConfigSchema } from "@nexus/notifications";
 import { BrowserHarnessClient } from "../../services/browser-harness.js";
-import { freeLlmRuntimeConfigSchema } from "../../services/runtime-configuration.js";
+import {
+  freeLlmRuntimeConfigSchema,
+  llmRoutingConfigSchema,
+} from "../../services/runtime-configuration.js";
 
 const secretNameSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 const vaultReferenceSchema = z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/);
@@ -966,6 +969,88 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
     async (request) => {
       if (app.services.freeLlm === undefined) throw new Error("FreeLLM is unavailable.");
       const result = await app.services.freeLlm.test();
+      return ok({ ...result, text: result.text.slice(0, 200) }, request.id);
+    },
+  );
+
+  app.get(
+    "/dashboard/llm/engines",
+    {
+      preHandler: app.requireAdmin,
+      schema: { tags: ["dashboard"], summary: "Paid API and device-hosted LLM engines" },
+    },
+    async (request) => {
+      const config = await app.services.runtimeConfiguration?.loadLlmRouting();
+      const status = await app.services.llmRuntime?.status();
+      const { userId } = currentUser(request);
+      const localDevices = (await app.services.deviceRegistry.listDevices(userId))
+        .filter((device) =>
+          device.capabilities.some(
+            (capability) => capability.enabled && capability.name === "llm.inference",
+          ),
+        )
+        .map((device) => ({
+          id: device.id,
+          name: device.name,
+          status: device.status,
+          authenticated: device.authenticated,
+          eligible:
+            device.status === "ONLINE" &&
+            device.authenticated &&
+            device.trust === "TRUSTED" &&
+            device.grantedPermissions.includes("llm.inference"),
+          gpuResources: device.health.gpuResources ?? [],
+          model:
+            device.capabilities.find((capability) => capability.name === "llm.inference")?.metadata
+              .model ?? null,
+          runtime:
+            device.capabilities.find((capability) => capability.name === "llm.inference")?.metadata
+              .runtime ?? null,
+        }));
+      return ok(
+        {
+          ...(config ?? { enabled: true, preferLocal: true, engines: [] }),
+          status,
+          localDevices,
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.put(
+    "/dashboard/llm/engines",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        summary: "Configure paid API and device-hosted LLM engines",
+        body: llmRoutingConfigSchema,
+      },
+    },
+    async (request) => {
+      if (app.services.runtimeConfiguration === undefined) {
+        throw new Error("Runtime configuration is unavailable.");
+      }
+      await app.services.runtimeConfiguration.saveLlmRouting(request.body);
+      return ok(await app.services.llmRuntime?.status(), request.id);
+    },
+  );
+
+  app.post(
+    "/dashboard/llm/engines/:engineId/test",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["dashboard"],
+        summary: "Consume one small request on a selected LLM engine",
+        params: z.object({ engineId: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/) }),
+      },
+    },
+    async (request) => {
+      if (app.services.llmRuntime === undefined) throw new Error("LLM runtime is unavailable.");
+      const { userId } = currentUser(request);
+      const result = await app.services.llmRuntime.testEngine(request.params.engineId, userId);
       return ok({ ...result, text: result.text.slice(0, 200) }, request.id);
     },
   );

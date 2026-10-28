@@ -11,6 +11,11 @@ export interface PairWorkerInput {
   keyPath: string;
   envPath: string;
   allowedPaths: string[];
+  localLlm?: {
+    runtime: "disabled" | "ollama" | "openai-compatible";
+    baseUrl: string;
+    model: string;
+  };
   platform?: "WINDOWS" | "LINUX" | "MACOS";
   fetchImpl?: typeof fetch;
 }
@@ -39,6 +44,15 @@ export async function pairWorker(input: PairWorkerInput): Promise<PairWorkerResu
   const publicKeyPem = pair.publicKey.export({ type: "spki", format: "pem" }).toString();
   const request = input.fetchImpl ?? fetch;
   const platform = input.platform ?? "WINDOWS";
+  const localLlm = input.localLlm ?? {
+    runtime: "disabled" as const,
+    baseUrl: "http://127.0.0.1:11434",
+    model: "",
+  };
+  assertLocalModelEndpoint(localLlm.baseUrl);
+  if (localLlm.runtime !== "disabled" && localLlm.model.trim().length === 0) {
+    throw new Error("a model is required when local inference is enabled");
+  }
 
   const response = await request(`${apiUrl}/api/v1/devices/pair`, {
     method: "POST",
@@ -69,10 +83,14 @@ export async function pairWorker(input: PairWorkerInput): Promise<PairWorkerResu
   chmodSync(keyPath, 0o600);
 
   const allowedPaths = input.allowedPaths.map((path) => path.trim()).filter(Boolean);
-  const capabilities =
+  const platformCapabilities =
     platform === "WINDOWS"
       ? "terminal.execute,filesystem.read,filesystem.write,process.list,git.status,git.diff,git.branch,browser.open"
       : "terminal.execute,filesystem.read,filesystem.write,git.status,git.diff,git.branch";
+  const capabilities =
+    localLlm.runtime === "disabled"
+      ? platformCapabilities
+      : `${platformCapabilities},llm.inference`;
   const env = [
     `NEXUS_BACKEND_URL=${apiUrl}`,
     `NEXUS_WORKER_PLATFORM=${platform}`,
@@ -80,6 +98,10 @@ export async function pairWorker(input: PairWorkerInput): Promise<PairWorkerResu
     `DEVICE_CREDENTIAL_PATH=${keyPath}`,
     `WORKER_ALLOWED_PATHS=${allowedPaths.join(",")}`,
     `WORKER_CAPABILITIES=${capabilities}`,
+    `WORKER_LLM_RUNTIME=${localLlm.runtime}`,
+    `WORKER_LLM_URL=${localLlm.baseUrl}`,
+    `WORKER_LLM_MODEL=${localLlm.model}`,
+    "WORKER_LLM_API_KEY=",
     `WORKER_ALLOWED_EXECUTABLES=${platform === "WINDOWS" ? "git,node,pnpm,python" : "git,node"}`,
     "WORKER_ALLOWED_ENV=PATH,SYSTEMROOT,TEMP,TMP",
     "WORKER_APPS=",
@@ -131,9 +153,18 @@ async function main(args: string[]): Promise<void> {
   const keyPath = valueOf(args, "--key-path");
   const envPath = valueOf(args, "--env-path");
   const allowedPaths = valueOf(args, "--allowed-paths")?.split(",") ?? [];
+  const llmRuntime = valueOf(args, "--llm-runtime") ?? "disabled";
+  const llmUrl = valueOf(args, "--llm-url") ?? "http://127.0.0.1:11434";
+  const llmModel = valueOf(args, "--llm-model") ?? "";
   const requestedPlatform = (valueOf(args, "--platform") ?? "WINDOWS").toUpperCase();
   if (!["WINDOWS", "LINUX", "MACOS"].includes(requestedPlatform)) {
     throw new Error("--platform must be WINDOWS, LINUX, or MACOS");
+  }
+  if (!["disabled", "ollama", "openai-compatible"].includes(llmRuntime)) {
+    throw new Error("--llm-runtime must be disabled, ollama, or openai-compatible");
+  }
+  if (llmRuntime !== "disabled" && llmModel.trim().length === 0) {
+    throw new Error("--llm-model is required when local inference is enabled");
   }
   if (
     apiUrl === undefined ||
@@ -142,7 +173,7 @@ async function main(args: string[]): Promise<void> {
     envPath === undefined
   ) {
     throw new Error(
-      "usage: pair --api-url <url> (--token <ticket>|--token-stdin) --key-path <path> --env-path <path> [--name <name>] [--platform WINDOWS|LINUX|MACOS] [--allowed-paths <paths>]",
+      "usage: pair --api-url <url> (--token <ticket>|--token-stdin) --key-path <path> --env-path <path> [--name <name>] [--platform WINDOWS|LINUX|MACOS] [--allowed-paths <paths>] [--llm-runtime disabled|ollama|openai-compatible --llm-url <loopback-url> --llm-model <model>]",
     );
   }
   const result = await pairWorker({
@@ -153,9 +184,24 @@ async function main(args: string[]): Promise<void> {
     envPath,
     allowedPaths,
     platform: requestedPlatform as "WINDOWS" | "LINUX" | "MACOS",
+    localLlm: {
+      runtime: llmRuntime as "disabled" | "ollama" | "openai-compatible",
+      baseUrl: llmUrl,
+      model: llmModel,
+    },
   });
   process.stdout.write(`Device paired: ${result.deviceId}\n`);
   process.stdout.write("It must now be approved in NEXUS, on the Devices page.\n");
+}
+
+function assertLocalModelEndpoint(raw: string): void {
+  const url = new URL(raw);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("local model address must use http:// or https://");
+  }
+  if (!["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+    throw new Error("local model address must remain on the worker loopback interface");
+  }
 }
 
 async function readStdin(): Promise<string> {

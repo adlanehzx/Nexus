@@ -3,6 +3,9 @@ import type {
   BrowserSection,
   DashboardApi,
   FreeLlmStatus,
+  LlmEngineConfig,
+  LlmEnginesSection,
+  PaidLlmProvider,
   McpConfiguration,
   RuntimeSettings,
 } from "../lib/api.js";
@@ -13,6 +16,7 @@ export function Settings({ api }: { api: DashboardApi }) {
   const secrets = useSection(() => api.secrets());
   const linkedin = useSection(() => api.linkedInStatus());
   const freeLlm = useSection(() => api.freeLlmStatus());
+  const llmEngines = useSection(() => api.llmEngines());
 
   return (
     <div className="content settings-page">
@@ -34,6 +38,9 @@ export function Settings({ api }: { api: DashboardApi }) {
       <Section state={freeLlm}>
         {(data) => <FreeLlmForm api={api} status={data} reload={freeLlm.reload} />}
       </Section>
+      <Section state={llmEngines}>
+        {(data) => <LlmEnginesForm api={api} section={data} reload={llmEngines.reload} />}
+      </Section>
       <Section state={linkedin}>
         {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
       </Section>
@@ -46,6 +53,413 @@ export function Settings({ api }: { api: DashboardApi }) {
       />
     </div>
   );
+}
+
+const PAID_PROVIDERS: { value: PaidLlmProvider; label: string }[] = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "google-gemini", label: "Google Gemini API" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "mistral", label: "Mistral" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "openai-compatible", label: "Custom OpenAI-compatible" },
+];
+
+function LlmEnginesForm({
+  api,
+  section,
+  reload,
+}: {
+  api: DashboardApi;
+  section: LlmEnginesSection;
+  reload: () => void;
+}) {
+  const [enabled, setEnabled] = useState(section.enabled);
+  const [preferLocal, setPreferLocal] = useState(section.preferLocal);
+  const [engines, setEngines] = useState(section.engines);
+  const [kind, setKind] = useState<"paid-api" | "device">("paid-api");
+  const [provider, setProvider] = useState<PaidLlmProvider>("openai");
+  const [label, setLabel] = useState("");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [deviceId, setDeviceId] = useState("");
+  const [priority, setPriority] = useState(500);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEnabled(section.enabled);
+    setPreferLocal(section.preferLocal);
+    setEngines(section.engines);
+  }, [section.enabled, section.engines, section.preferLocal]);
+
+  const persist = async (next: LlmEngineConfig[] = engines): Promise<void> => {
+    await api.configureLlmEngines({ enabled, preferLocal, engines: next });
+    reload();
+  };
+
+  const updateEngines = (next: LlmEngineConfig[], success: string): void => {
+    setBusy(true);
+    setError(null);
+    void persist(next)
+      .then(() => {
+        setEngines(next);
+        setMessage(success);
+      })
+      .catch((cause: unknown) =>
+        setError(cause instanceof Error ? cause.message : "Model routing could not be saved."),
+      )
+      .finally(() => setBusy(false));
+  };
+
+  const add = async (): Promise<void> => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const id = uniqueEngineId(label || (kind === "device" ? "local-device" : provider), engines);
+      let engine: LlmEngineConfig;
+      if (kind === "paid-api") {
+        if (apiKey.trim().length === 0) throw new Error("Enter the provider API key.");
+        if (model.trim().length === 0) throw new Error("Enter an exact provider model ID.");
+        if (provider === "openai-compatible" && baseUrl.trim().length === 0) {
+          throw new Error("Enter the HTTPS base URL of the compatible API.");
+        }
+        const secretName = `llm-${id}`;
+        await api.saveSecret(secretName, apiKey.trim());
+        engine = {
+          id,
+          label: label.trim() || providerLabel(provider),
+          kind: "paid-api",
+          enabled: true,
+          priority,
+          model: model.trim(),
+          maxContextTokens: 128_000,
+          provider,
+          apiKeyRef: `vault://nexus/${secretName}`,
+          baseUrl: provider === "openai-compatible" ? baseUrl.trim() : null,
+          inputCostPerMillion: null,
+          outputCostPerMillion: null,
+        };
+      } else {
+        if (deviceId.length === 0) throw new Error("Select an online model worker.");
+        const device = section.localDevices.find((candidate) => candidate.id === deviceId);
+        if (device === undefined)
+          throw new Error("The selected model worker is no longer available.");
+        const selectedModel = model.trim() || device.model;
+        if (selectedModel === null || selectedModel.length === 0) {
+          throw new Error("Enter the model loaded by the worker.");
+        }
+        engine = {
+          id,
+          label: label.trim() || `Local · ${device.name}`,
+          kind: "device",
+          enabled: true,
+          priority,
+          model: selectedModel,
+          maxContextTokens: 128_000,
+          runtime: device.runtime === "openai-compatible" ? "openai-compatible" : "ollama",
+          preferredDeviceId: device.id,
+          minimumGpuVramMb: 0,
+        };
+      }
+      const next = [...engines, engine];
+      await persist(next);
+      setEngines(next);
+      setApiKey("");
+      setLabel("");
+      setModel("");
+      setMessage(`${engine.label} added to the NEXUS router.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The engine could not be added.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="settings-panel">
+      <div className="settings-panel-heading">
+        <div>
+          <h3>Model engines · paid APIs and private devices</h3>
+          <p className="muted">
+            Keys stay in the encrypted NEXUS vault. Device models execute through an authenticated
+            worker; the model server never needs to be exposed to the internet.
+          </p>
+        </div>
+        <span className="status-pill">{engines.length} configured</span>
+      </div>
+
+      <div className="settings-grid">
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          Enable configured engines
+        </label>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={preferLocal}
+            onChange={(event) => setPreferLocal(event.target.checked)}
+          />
+          Prefer private device models before cloud APIs
+        </label>
+      </div>
+      <div className="settings-actions">
+        <button
+          className="button"
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            void persist()
+              .then(() => setMessage("Model routing preferences saved."))
+              .catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Routing could not be saved."),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          Save routing
+        </button>
+      </div>
+
+      <div className="engine-list">
+        {engines.map((engine) => {
+          const runtime = section.status?.engines.find((item) => item.id === engine.id);
+          return (
+            <article className="engine-card" key={engine.id}>
+              <div>
+                <strong>{engine.label}</strong>
+                <p className="muted mono">
+                  {engine.kind === "device" ? `device · ${engine.runtime}` : engine.provider} ·{" "}
+                  {engine.model}
+                </p>
+              </div>
+              <span className={engine.enabled ? "status-pill success" : "status-pill"}>
+                {engine.enabled
+                  ? engine.kind === "paid-api" && runtime?.credentialConfigured !== true
+                    ? "key missing"
+                    : "enabled"
+                  : "disabled"}
+              </span>
+              <div className="settings-actions">
+                <button
+                  className="button"
+                  type="button"
+                  disabled={busy || !engine.enabled}
+                  onClick={() => {
+                    setBusy(true);
+                    setError(null);
+                    void api
+                      .testLlmEngine(engine.id)
+                      .then((result) => setMessage(`Ready · ${result.model} · ${result.text}`))
+                      .catch((cause: unknown) =>
+                        setError(cause instanceof Error ? cause.message : "Engine test failed."),
+                      )
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Test
+                </button>
+                <button
+                  className="button"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const next = engines.map((candidate) =>
+                      candidate.id === engine.id
+                        ? { ...candidate, enabled: !candidate.enabled }
+                        : candidate,
+                    );
+                    updateEngines(
+                      next,
+                      `${engine.label} ${engine.enabled ? "disabled" : "enabled"}.`,
+                    );
+                  }}
+                >
+                  {engine.enabled ? "Disable" : "Enable"}
+                </button>
+                <button
+                  className="button danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const next = engines.filter((candidate) => candidate.id !== engine.id);
+                    updateEngines(next, `${engine.label} removed from model routing.`);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </article>
+          );
+        })}
+        {engines.length === 0 ? (
+          <p className="empty-state">No paid or device engine configured yet.</p>
+        ) : null}
+      </div>
+
+      <h4>Add a model engine</h4>
+      <div className="settings-grid">
+        <label>
+          Engine location
+          <select
+            className="field"
+            value={kind}
+            onChange={(event) => setKind(event.target.value as typeof kind)}
+          >
+            <option value="paid-api">Paid cloud API</option>
+            <option value="device">Private model on a NEXUS device</option>
+          </select>
+        </label>
+        <label>
+          Display name
+          <input
+            className="field"
+            value={label}
+            placeholder="My primary model"
+            onChange={(event) => setLabel(event.target.value)}
+          />
+        </label>
+        {kind === "paid-api" ? (
+          <>
+            <label>
+              Provider
+              <select
+                className="field"
+                value={provider}
+                onChange={(event) => setProvider(event.target.value as PaidLlmProvider)}
+              >
+                {PAID_PROVIDERS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Exact model ID
+              <input
+                className="field mono"
+                value={model}
+                placeholder="Provider model identifier"
+                onChange={(event) => setModel(event.target.value)}
+              />
+            </label>
+            <label className="settings-wide">
+              API key
+              <input
+                className="field mono"
+                type="password"
+                autoComplete="new-password"
+                value={apiKey}
+                placeholder="Stored once in the encrypted vault"
+                onChange={(event) => setApiKey(event.target.value)}
+              />
+            </label>
+            {provider === "openai-compatible" ? (
+              <label className="settings-wide">
+                HTTPS API base URL
+                <input
+                  className="field mono"
+                  value={baseUrl}
+                  placeholder="https://provider.example/api"
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+              </label>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <label>
+              Model worker
+              <select
+                className="field"
+                value={deviceId}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDeviceId(value);
+                  const device = section.localDevices.find((candidate) => candidate.id === value);
+                  if (device?.model !== null && device?.model !== undefined) setModel(device.model);
+                }}
+              >
+                <option value="">Select an eligible device…</option>
+                {section.localDevices.map((device) => (
+                  <option key={device.id} value={device.id} disabled={!device.eligible}>
+                    {device.name} · {device.model ?? "model not reported"}
+                    {device.eligible ? "" : " · approve, connect and grant llm.inference"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Model
+              <input
+                className="field mono"
+                value={model}
+                placeholder="llama3.3:70b"
+                onChange={(event) => setModel(event.target.value)}
+              />
+            </label>
+          </>
+        )}
+        <label>
+          Priority
+          <input
+            className="field"
+            type="number"
+            min={1}
+            max={1000}
+            value={priority}
+            onChange={(event) => setPriority(Number(event.target.value))}
+          />
+          <span className="field-help">
+            Lower values run first. Device models run first when local preference is enabled.
+          </span>
+        </label>
+      </div>
+      <div className="settings-actions">
+        <button className="button primary" type="button" disabled={busy} onClick={() => void add()}>
+          {busy ? "Saving…" : "Add engine"}
+        </button>
+      </div>
+      {kind === "device" && section.localDevices.length === 0 ? (
+        <p className="banner">
+          No connected worker advertises <code>llm.inference</code>. Configure Ollama or an
+          OpenAI-compatible server on the worker, then restart it.
+        </p>
+      ) : null}
+      {message === null ? null : <p className="banner success">{message}</p>}
+      {error === null ? null : <p className="banner error">{error}</p>}
+    </section>
+  );
+}
+
+function providerLabel(provider: PaidLlmProvider): string {
+  return PAID_PROVIDERS.find((item) => item.value === provider)?.label ?? provider;
+}
+
+function uniqueEngineId(label: string, engines: readonly LlmEngineConfig[]): string {
+  const base =
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "engine";
+  const used = new Set(engines.map((engine) => engine.id));
+  if (!used.has(base)) return base;
+  for (let suffix = 2; suffix < 10_000; suffix += 1) {
+    const candidate = `${base}-${String(suffix)}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${base}-${String(Date.now())}`;
 }
 
 function FreeLlmForm({

@@ -383,6 +383,26 @@ describe("configuration validation", () => {
   it("defaults Git write operations to false", () => {
     expect(loadWorkerConfig(base).gitAllowWrite).toBe(false);
   });
+
+  it("accepts local inference only on the worker loopback interface", () => {
+    expect(
+      loadWorkerConfig({
+        ...base,
+        WORKER_LLM_RUNTIME: "ollama",
+        WORKER_LLM_URL: "http://127.0.0.1:11434",
+        WORKER_LLM_MODEL: "qwen3:14b",
+      }).localLlm,
+    ).toMatchObject({ runtime: "ollama", model: "qwen3:14b" });
+
+    expect(() =>
+      loadWorkerConfig({
+        ...base,
+        WORKER_LLM_RUNTIME: "openai-compatible",
+        WORKER_LLM_URL: "http://192.168.1.40:8000",
+        WORKER_LLM_MODEL: "private-model",
+      }),
+    ).toThrow(expect.objectContaining({ code: "WORKER_CONFIGURATION_INVALID" }));
+  });
 });
 
 describe("no secrets in repository", () => {

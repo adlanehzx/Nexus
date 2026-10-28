@@ -88,6 +88,55 @@ export const freeLlmRuntimeConfigSchema = z.object({
 
 export type FreeLlmRuntimeConfig = z.infer<typeof freeLlmRuntimeConfigSchema>;
 
+const llmEngineBaseSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  label: z.string().trim().min(1).max(80),
+  enabled: z.boolean().default(true),
+  priority: z.number().int().min(1).max(1_000).default(100),
+  model: z.string().trim().min(1).max(200),
+  maxContextTokens: z.number().int().min(1_024).max(10_000_000).default(128_000),
+});
+
+export const paidLlmEngineSchema = llmEngineBaseSchema.extend({
+  kind: z.literal("paid-api"),
+  provider: z.enum([
+    "openai",
+    "anthropic",
+    "google-gemini",
+    "openrouter",
+    "mistral",
+    "deepseek",
+    "openai-compatible",
+  ]),
+  apiKeyRef: z.string().regex(/^vault:\/\/nexus\/[a-z][a-z0-9_-]{0,63}$/),
+  /** Required only for the generic OpenAI-compatible preset. */
+  baseUrl: z.string().url().nullable().default(null),
+  inputCostPerMillion: z.number().nonnegative().nullable().default(null),
+  outputCostPerMillion: z.number().nonnegative().nullable().default(null),
+});
+
+export const deviceLlmEngineSchema = llmEngineBaseSchema.extend({
+  kind: z.literal("device"),
+  runtime: z.enum(["ollama", "openai-compatible"]).default("ollama"),
+  /** Null lets the selector choose the healthiest eligible worker owned by the user. */
+  preferredDeviceId: z.string().min(1).max(200).nullable().default(null),
+  minimumGpuVramMb: z.number().int().nonnegative().max(1_000_000).default(0),
+});
+
+export const llmEngineConfigSchema = z.discriminatedUnion("kind", [
+  paidLlmEngineSchema,
+  deviceLlmEngineSchema,
+]);
+export type LlmEngineConfig = z.infer<typeof llmEngineConfigSchema>;
+
+export const llmRoutingConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** Local-first protects privacy and avoids paid tokens when a worker is available. */
+  preferLocal: z.boolean().default(true),
+  engines: z.array(llmEngineConfigSchema).max(32).default([]),
+});
+export type LlmRoutingConfig = z.infer<typeof llmRoutingConfigSchema>;
+
 const sealedSecretSchema = z.object({
   iv: z.string(),
   ciphertext: z.string(),
@@ -147,6 +196,34 @@ export class RuntimeConfigurationStore {
 
   async saveFreeLlm(config: FreeLlmRuntimeConfig): Promise<void> {
     await this.#write("freelm.json", freeLlmRuntimeConfigSchema.parse(config));
+  }
+
+  async loadLlmRouting(): Promise<LlmRoutingConfig> {
+    return llmRoutingConfigSchema.parse(
+      await this.#read("llm-engines.json", { enabled: true, preferLocal: true, engines: [] }),
+    );
+  }
+
+  async saveLlmRouting(config: LlmRoutingConfig): Promise<void> {
+    const parsed = llmRoutingConfigSchema.parse(config);
+    const ids = new Set<string>();
+    for (const engine of parsed.engines) {
+      if (ids.has(engine.id)) throw new Error(`Duplicate LLM engine ID: ${engine.id}`);
+      ids.add(engine.id);
+      if (engine.kind === "paid-api" && engine.provider === "openai-compatible") {
+        if (engine.baseUrl === null) {
+          throw new Error("A custom OpenAI-compatible engine requires a base URL.");
+        }
+        const url = new URL(engine.baseUrl);
+        if (
+          url.protocol !== "https:" &&
+          !["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+        ) {
+          throw new Error("A custom remote LLM endpoint must use HTTPS.");
+        }
+      }
+    }
+    await this.#write("llm-engines.json", parsed);
   }
 
   async loadNotifications(): Promise<NotificationsConfig | null> {

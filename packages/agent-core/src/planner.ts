@@ -56,12 +56,14 @@ export class Planner {
   async decide(
     context: AgentContext,
     signal: AbortSignal,
+    routingContext?: { userId: string; conversationId?: string; runId?: string },
   ): Promise<{ decision: AgentDecision; response: GenerateResponse }> {
     const response = await this.#llm.generate({
       messages: [...context.messages],
       system: context.systemPrompt,
       tools: Planner.toolSpecs(context.tools),
       ...(this.#maxTokens !== undefined ? { maxTokens: this.#maxTokens } : {}),
+      ...(routingContext === undefined ? {} : { routingContext }),
       signal,
     });
 

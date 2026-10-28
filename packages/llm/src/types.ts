@@ -70,6 +70,15 @@ export interface GenerateRequest {
   maxTokens?: number;
   /** Adapter-specific options. Never inspected by the agent core. */
   providerOptions?: Record<string, unknown>;
+  /**
+   * Trusted NEXUS routing identity. Providers that execute on a paired worker use
+   * it to select only devices owned by the caller; cloud adapters ignore it.
+   */
+  routingContext?: {
+    userId: string;
+    conversationId?: string;
+    runId?: string;
+  };
   signal?: AbortSignal;
 }
 
