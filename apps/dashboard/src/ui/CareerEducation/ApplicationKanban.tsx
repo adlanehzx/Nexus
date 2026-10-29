@@ -33,6 +33,18 @@ export function ApplicationKanban({
 
   const selectedApp = applications.find((a) => a.id === selectedAppId);
 
+  const formatTrack = (track: string) => {
+    if (track === "phd") return tr("PhD", "Doctorat");
+    if (track === "cdi") return tr("CDI", "CDI");
+    if (track === "freelance") return tr("Freelance", "Freelance");
+    return track;
+  };
+
+  const formatStage = (stage: ApplicationStage) => {
+    const found = STAGES.find((s) => s.id === stage);
+    return found ? (locale === "fr" ? found.labelFr : found.labelEn) : stage;
+  };
+
   const handleStageMove = async (appId: string, stage: ApplicationStage) => {
     setUpdating(true);
     try {
@@ -126,7 +138,7 @@ export function ApplicationKanban({
                       }}
                     >
                       <span className={`career-track-pill ${app.opportunity.track}`}>
-                        {app.opportunity.track}
+                        {formatTrack(app.opportunity.track)}
                       </span>
                       {app.tailoredDocumentIds.length > 0 && (
                         <span style={{ fontSize: "0.72rem", color: "var(--accent)" }}>
@@ -195,8 +207,10 @@ export function ApplicationKanban({
 
             <div style={{ fontSize: "0.85rem", color: "var(--muted-text)" }}>
               <strong>{selectedApp.opportunity.organization}</strong> · {tr("Track:", "Filière :")}{" "}
-              {selectedApp.opportunity.track.toUpperCase()} · {tr("Status:", "Statut :")}{" "}
-              <strong style={{ color: "var(--bright-accent)" }}>{selectedApp.stage}</strong>
+              {formatTrack(selectedApp.opportunity.track)} · {tr("Status:", "Statut :")}{" "}
+              <strong style={{ color: "var(--bright-accent)" }}>
+                {formatStage(selectedApp.stage)}
+              </strong>
             </div>
 
             {/* Quick Actions Bar */}
@@ -283,7 +297,7 @@ export function ApplicationKanban({
                   >
                     <span style={{ color: "var(--accent)", fontWeight: 700 }}>●</span>
                     <div style={{ flex: 1 }}>
-                      <strong>{h.stage.toUpperCase()}</strong> —{" "}
+                      <strong>{formatStage(h.stage).toUpperCase()}</strong> —{" "}
                       <span style={{ color: "var(--muted-text)" }}>
                         {new Date(h.transitionedAt).toLocaleString()}
                       </span>

@@ -71,6 +71,51 @@ export function OpportunityInbox({
     }
   };
 
+  const formatDuplicateReason = (reason: string) => {
+    if (reason === "canonical_url") return tr("Canonical URL match", "URL canonique identique");
+    if (reason === "content_hash")
+      return tr("Content hash match", "Empreinte de contenu identique");
+    if (reason === "exact_title_match")
+      return tr("Exact title match", "Titre exactement identique");
+    return reason;
+  };
+
+  const formatTrack = (track: string) => {
+    if (track === "phd") return tr("PhD", "Doctorat");
+    if (track === "cdi") return tr("CDI", "CDI");
+    if (track === "freelance") return tr("Freelance", "Freelance");
+    return track;
+  };
+
+  const formatStaleness = (staleness: string) => {
+    if (staleness === "fresh") return tr("Fresh", "Récent");
+    if (staleness === "stale") return tr("Stale", "Obsolète");
+    if (staleness === "archived") return tr("Archived", "Archivé");
+    return staleness;
+  };
+
+  const formatRemotePolicy = (policy: string) => {
+    if (policy === "remote") return tr("Remote", "Télétravail");
+    if (policy === "hybrid") return tr("Hybrid", "Hybride");
+    if (policy === "onsite") return tr("On-site", "Sur site");
+    return policy;
+  };
+
+  const formatSeniority = (seniority: string) => {
+    if (seniority === "junior") return tr("Junior", "Junior");
+    if (seniority === "mid") return tr("Mid-level", "Confirmé");
+    if (seniority === "senior") return tr("Senior", "Senior");
+    if (seniority === "lead" || seniority === "staff") return tr("Lead / Staff", "Lead / Staff");
+    return seniority.toUpperCase();
+  };
+
+  const formatFunding = (funding: string) => {
+    if (funding === "full") return tr("Full Funding", "Financement complet");
+    if (funding === "partial") return tr("Partial Funding", "Financement partiel");
+    if (funding === "cifre") return tr("CIFRE Industrial", "Contrat CIFRE");
+    return funding;
+  };
+
   return (
     <div className="career-edu-container" role="region" aria-label="Opportunity Inbox">
       {/* Monitored Sources Health Bar */}
@@ -343,7 +388,7 @@ export function OpportunityInbox({
                     <span>
                       {tr(
                         `Duplicate marker detected (reason: ${opp.duplicate.reason}). Original post exists in inbox.`,
-                        `Doublon détecté (raison : ${opp.duplicate.reason}). L'annonce originale est dans la boîte de réception.`,
+                        `Doublon détecté (raison : ${formatDuplicateReason(opp.duplicate.reason)}). L'annonce originale est dans la boîte de réception.`,
                       )}
                     </span>
                   </div>
@@ -359,8 +404,12 @@ export function OpportunityInbox({
                       alignItems: "center",
                     }}
                   >
-                    <span className={`career-track-pill ${opp.track}`}>{opp.track}</span>
-                    <span className={`staleness-pill ${opp.staleness}`}>{opp.staleness}</span>
+                    <span className={`career-track-pill ${opp.track}`}>
+                      {formatTrack(opp.track)}
+                    </span>
+                    <span className={`staleness-pill ${opp.staleness}`}>
+                      {formatStaleness(opp.staleness)}
+                    </span>
                     <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
                       via {opp.sourceFeedName}
                     </span>
@@ -397,7 +446,7 @@ export function OpportunityInbox({
                   <div style={{ fontSize: "0.85rem", color: "var(--muted-text)" }}>
                     <strong>{opp.organization}</strong>
                     {opp.departmentOrLab && ` · ${opp.departmentOrLab}`} · {opp.location} (
-                    {opp.remotePolicy})
+                    {formatRemotePolicy(opp.remotePolicy)})
                   </div>
                 </div>
 
@@ -413,7 +462,8 @@ export function OpportunityInbox({
                   {opp.track === "phd" && opp.phdDetails && (
                     <div>
                       <strong>{tr("Grant / Funding:", "Financement / Bourse :")}</strong>{" "}
-                      {opp.phdDetails.fundingType} · €{opp.phdDetails.monthlyStipend}/mo
+                      {formatFunding(opp.phdDetails.fundingType)} · €{opp.phdDetails.monthlyStipend}
+                      /{tr("mo", "mois")}
                       <br />
                       <strong>{tr("Advisors:", "Directeurs :")}</strong>{" "}
                       {opp.phdDetails.supervisors.join(", ")}
@@ -426,15 +476,15 @@ export function OpportunityInbox({
                       {opp.cdiDetails.salaryMax?.toLocaleString()} / {tr("year CDI", "an CDI")}
                       <br />
                       <strong>{tr("Seniority:", "Séniorité :")}</strong>{" "}
-                      {opp.cdiDetails.seniority.toUpperCase()} · {tr("Benefits:", "Avantages :")}{" "}
+                      {formatSeniority(opp.cdiDetails.seniority)} · {tr("Benefits:", "Avantages :")}{" "}
                       {opp.cdiDetails.benefits.join(", ")}
                     </div>
                   )}
                   {opp.track === "freelance" && opp.freelanceDetails && (
                     <div>
                       <strong>{tr("Daily Rate:", "TJM :")}</strong> €
-                      {opp.freelanceDetails.dailyRateMin} - €{opp.freelanceDetails.dailyRateMax}/day
-                      TJM
+                      {opp.freelanceDetails.dailyRateMin} - €{opp.freelanceDetails.dailyRateMax}/
+                      {tr("day", "jour")} {tr("TJM", "TJM")}
                       <br />
                       <strong>{tr("Workload:", "Charge :")}</strong>{" "}
                       {opp.freelanceDetails.daysPerWeek} {tr("days/week", "jours/semaine")} ·{" "}

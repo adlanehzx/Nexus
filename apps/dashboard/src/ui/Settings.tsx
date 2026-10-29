@@ -80,6 +80,7 @@ function LlmEnginesForm({
   section: LlmEnginesSection;
   reload: () => void;
 }) {
+  const { tr } = useI18n();
   const [enabled, setEnabled] = useState(section.enabled);
   const [preferLocal, setPreferLocal] = useState(section.preferLocal);
   const [engines, setEngines] = useState(section.engines);
@@ -232,7 +233,7 @@ function LlmEnginesForm({
               .finally(() => setBusy(false));
           }}
         >
-          Save routing
+          {busy ? tr("Saving…", "Enregistrement…") : tr("Save routing", "Enregistrer le routage")}
         </button>
       </div>
 
@@ -251,9 +252,9 @@ function LlmEnginesForm({
               <span className={engine.enabled ? "status-pill success" : "status-pill"}>
                 {engine.enabled
                   ? engine.kind === "paid-api" && runtime?.credentialConfigured !== true
-                    ? "key missing"
-                    : "enabled"
-                  : "disabled"}
+                    ? tr("key missing", "clé manquante")
+                    : tr("enabled", "activé")
+                  : tr("disabled", "désactivé")}
               </span>
               <div className="settings-actions">
                 <button
@@ -267,12 +268,16 @@ function LlmEnginesForm({
                       .testLlmEngine(engine.id)
                       .then((result) => setMessage(`Ready · ${result.model} · ${result.text}`))
                       .catch((cause: unknown) =>
-                        setError(cause instanceof Error ? cause.message : "Engine test failed."),
+                        setError(
+                          cause instanceof Error
+                            ? cause.message
+                            : tr("Engine test failed.", "Échec du test du moteur."),
+                        ),
                       )
                       .finally(() => setBusy(false));
                   }}
                 >
-                  Test
+                  {tr("Test", "Tester")}
                 </button>
                 <button
                   className="button"
@@ -286,11 +291,11 @@ function LlmEnginesForm({
                     );
                     updateEngines(
                       next,
-                      `${engine.label} ${engine.enabled ? "disabled" : "enabled"}.`,
+                      `${engine.label} ${engine.enabled ? tr("disabled", "désactivé") : tr("enabled", "activé")}.`,
                     );
                   }}
                 >
-                  {engine.enabled ? "Disable" : "Enable"}
+                  {engine.enabled ? tr("Disable", "Désactiver") : tr("Enable", "Activer")}
                 </button>
                 <button
                   className="button danger"
@@ -298,46 +303,56 @@ function LlmEnginesForm({
                   disabled={busy}
                   onClick={() => {
                     const next = engines.filter((candidate) => candidate.id !== engine.id);
-                    updateEngines(next, `${engine.label} removed from model routing.`);
+                    updateEngines(
+                      next,
+                      `${engine.label} ${tr("removed from model routing.", "retiré du routage des modèles.")}`,
+                    );
                   }}
                 >
-                  Remove
+                  {tr("Remove", "Supprimer")}
                 </button>
               </div>
             </article>
           );
         })}
         {engines.length === 0 ? (
-          <p className="empty-state">No paid or device engine configured yet.</p>
+          <p className="empty-state">
+            {tr(
+              "No paid or device engine configured yet.",
+              "Aucun moteur payant ou local configuré pour le moment.",
+            )}
+          </p>
         ) : null}
       </div>
 
-      <h4>Add a model engine</h4>
+      <h4>{tr("Add a model engine", "Ajouter un moteur de modèle")}</h4>
       <div className="settings-grid">
         <label>
-          Engine location
+          {tr("Engine location", "Emplacement du moteur")}
           <select
             className="field"
             value={kind}
             onChange={(event) => setKind(event.target.value as typeof kind)}
           >
-            <option value="paid-api">Paid cloud API</option>
-            <option value="device">Private model on a NEXUS device</option>
+            <option value="paid-api">{tr("Paid cloud API", "API cloud payante")}</option>
+            <option value="device">
+              {tr("Private model on a NEXUS device", "Modèle privé sur appareil NEXUS")}
+            </option>
           </select>
         </label>
         <label>
-          Display name
+          {tr("Display name", "Nom affiché")}
           <input
             className="field"
             value={label}
-            placeholder="My primary model"
+            placeholder={tr("My primary model", "Mon modèle principal")}
             onChange={(event) => setLabel(event.target.value)}
           />
         </label>
         {kind === "paid-api" ? (
           <>
             <label>
-              Provider
+              {tr("Provider", "Fournisseur")}
               <select
                 className="field"
                 value={provider}
@@ -351,28 +366,31 @@ function LlmEnginesForm({
               </select>
             </label>
             <label>
-              Exact model ID
+              {tr("Exact model ID", "ID exact du modèle")}
               <input
                 className="field mono"
                 value={model}
-                placeholder="Provider model identifier"
+                placeholder={tr("Provider model identifier", "Identifiant du modèle fournisseur")}
                 onChange={(event) => setModel(event.target.value)}
               />
             </label>
             <label className="settings-wide">
-              API key
+              {tr("API key", "Clé API")}
               <input
                 className="field mono"
                 type="password"
                 autoComplete="new-password"
                 value={apiKey}
-                placeholder="Stored once in the encrypted vault"
+                placeholder={tr(
+                  "Stored once in the encrypted vault",
+                  "Stockée dans le coffre chiffré",
+                )}
                 onChange={(event) => setApiKey(event.target.value)}
               />
             </label>
             {provider === "openai-compatible" ? (
               <label className="settings-wide">
-                HTTPS API base URL
+                {tr("HTTPS API base URL", "URL de base de l'API HTTPS")}
                 <input
                   className="field mono"
                   value={baseUrl}
@@ -385,7 +403,7 @@ function LlmEnginesForm({
         ) : (
           <>
             <label>
-              Model worker
+              {tr("Model worker", "Agent de modèle")}
               <select
                 className="field"
                 value={deviceId}
@@ -396,17 +414,22 @@ function LlmEnginesForm({
                   if (device?.model !== null && device?.model !== undefined) setModel(device.model);
                 }}
               >
-                <option value="">Select an eligible device…</option>
+                <option value="">
+                  {tr("Select an eligible device…", "Sélectionner un appareil éligible…")}
+                </option>
                 {section.localDevices.map((device) => (
                   <option key={device.id} value={device.id} disabled={!device.eligible}>
-                    {device.name} · {device.model ?? "model not reported"}
-                    {device.eligible ? "" : " · approve, connect and grant llm.inference"}
+                    {device.name} ·{" "}
+                    {device.model ?? tr("model not reported", "modèle non rapporté")}
+                    {device.eligible
+                      ? ""
+                      : ` · ${tr("approve, connect and grant llm.inference", "approuver, connecter et accorder llm.inference")}`}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              Model
+              {tr("Model", "Modèle")}
               <input
                 className="field mono"
                 value={model}
@@ -417,7 +440,7 @@ function LlmEnginesForm({
           </>
         )}
         <label>
-          Priority
+          {tr("Priority", "Priorité")}
           <input
             className="field"
             type="number"
@@ -427,13 +450,16 @@ function LlmEnginesForm({
             onChange={(event) => setPriority(Number(event.target.value))}
           />
           <span className="field-help">
-            Lower values run first. Device models run first when local preference is enabled.
+            {tr(
+              "Lower values run first. Device models run first when local preference is enabled.",
+              "Les valeurs plus faibles s'exécutent en premier. Les modèles locaux sont prioritaires quand la préférence locale est active.",
+            )}
           </span>
         </label>
       </div>
       <div className="settings-actions">
         <button className="button primary" type="button" disabled={busy} onClick={() => void add()}>
-          {busy ? "Saving…" : "Add engine"}
+          {busy ? tr("Saving…", "Enregistrement…") : tr("Add engine", "Ajouter le moteur")}
         </button>
       </div>
       {kind === "device" && section.localDevices.length === 0 ? (
@@ -477,6 +503,7 @@ function FreeLlmForm({
   status: FreeLlmStatus;
   reload: () => void;
 }) {
+  const { tr } = useI18n();
   const [enabled, setEnabled] = useState(status.enabled);
   const [model, setModel] = useState(status.model);
   const [strategy, setStrategy] = useState<FreeLlmStatus["strategy"]>(status.strategy);
@@ -512,10 +539,19 @@ function FreeLlmForm({
             : null,
       });
       setNvidiaKey("");
-      setMessage("FreeLLM routing saved. Changes apply to the next model request.");
+      setMessage(
+        tr(
+          "FreeLLM routing saved. Changes apply to the next model request.",
+          "Routage FreeLLM enregistré. Les modifications s'appliquent à la prochaine requête.",
+        ),
+      );
       reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "FreeLLM configuration failed.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : tr("FreeLLM configuration failed.", "Échec de configuration FreeLLM."),
+      );
     } finally {
       setBusy(false);
     }
@@ -523,53 +559,67 @@ function FreeLlmForm({
 
   return (
     <section className="settings-panel">
-      <h3>Free models · FreeLLM and NVIDIA NIM</h3>
+      <h3>
+        {tr("Free models · FreeLLM and NVIDIA NIM", "Modèles gratuits · FreeLLM et NVIDIA NIM")}
+      </h3>
       <p className="muted">
-        Adds a free-tier fallback after your subscription-backed agents and local models. NVIDIA NIM
-        access is intended for development, research, and evaluation—not production use.
+        {tr(
+          "Adds a free-tier fallback after your subscription-backed agents and local models. NVIDIA NIM access is intended for development, research, and evaluation—not production use.",
+          "Ajoute un repli gratuit après vos agents sur abonnement et modèles locaux. L'accès NVIDIA NIM est dédié au développement, à la recherche et à l'évaluation.",
+        )}
       </p>
       <p className={status.enabled ? "banner success" : "banner"}>
         {status.enabled
-          ? `Enabled · ${status.activeProviders.join(", ") || "provider required"}`
-          : "Disabled"}
+          ? `${tr("Enabled", "Activé")} · ${status.activeProviders.join(", ") || tr("provider required", "fournisseur requis")}`
+          : tr("Disabled", "Désactivé")}
       </p>
       <div className="settings-grid">
         <label>
-          Routing model
+          {tr("Routing model", "Modèle de routage")}
           <select
             className="field"
             value={model}
             onChange={(event) => setModel(event.target.value)}
           >
-            <option value="auto">Auto · best available</option>
-            <option value="chat:fast">Fast chat</option>
-            <option value="chat:large">Large model</option>
-            <option value="chat:tools">Tool calling</option>
-            <option value="reasoning">Reasoning</option>
+            <option value="auto">
+              {tr("Auto · best available", "Auto · meilleur disponible")}
+            </option>
+            <option value="chat:fast">{tr("Fast chat", "Chat rapide")}</option>
+            <option value="chat:large">{tr("Large model", "Grand modèle")}</option>
+            <option value="chat:tools">{tr("Tool calling", "Appel d'outils")}</option>
+            <option value="reasoning">{tr("Reasoning", "Raisonnement")}</option>
           </select>
         </label>
         <label>
-          Routing strategy
+          {tr("Routing strategy", "Stratégie de routage")}
           <select
             className="field"
             value={strategy}
             onChange={(event) => setStrategy(event.target.value as FreeLlmStatus["strategy"])}
           >
-            <option value="quota_aware">Quota aware</option>
-            <option value="smart">Smart latency</option>
-            <option value="priority">Fixed priority</option>
-            <option value="round_robin">Round robin</option>
-            <option value="latency">Lowest latency</option>
+            <option value="quota_aware">{tr("Quota aware", "Prise en compte des quotas")}</option>
+            <option value="smart">{tr("Smart latency", "Latence intelligente")}</option>
+            <option value="priority">{tr("Fixed priority", "Priorité fixe")}</option>
+            <option value="round_robin">{tr("Round robin", "Tour de rôle (Round Robin)")}</option>
+            <option value="latency">{tr("Lowest latency", "Latence minimale")}</option>
           </select>
         </label>
         <label className="settings-wide">
-          NVIDIA API key {status.nvidiaConfigured ? "· stored" : ""}
+          {tr("NVIDIA API key", "Clé API NVIDIA")}{" "}
+          {status.nvidiaConfigured ? `· ${tr("stored", "enregistrée")}` : ""}
           <input
             className="field mono"
             type="password"
             autoComplete="new-password"
             value={nvidiaKey}
-            placeholder={status.nvidiaConfigured ? "Leave blank to keep the stored key" : "nvapi-…"}
+            placeholder={
+              status.nvidiaConfigured
+                ? tr(
+                    "Leave blank to keep the stored key",
+                    "Laisser vide pour conserver la clé stockée",
+                  )
+                : "nvapi-…"
+            }
             onChange={(event) => setNvidiaKey(event.target.value)}
           />
         </label>
@@ -579,7 +629,7 @@ function FreeLlmForm({
             checked={enabled}
             onChange={(event) => setEnabled(event.target.checked)}
           />
-          Enable FreeLLM fallback
+          {tr("Enable FreeLLM fallback", "Activer le secours FreeLLM")}
         </label>
         <label className="check-label settings-wide">
           <input
@@ -587,7 +637,10 @@ function FreeLlmForm({
             checked={allowKeyless}
             onChange={(event) => setAllowKeyless(event.target.checked)}
           />
-          Allow anonymous Kilo and OVH fallbacks (prompts may be retained by those providers)
+          {tr(
+            "Allow anonymous Kilo and OVH fallbacks (prompts may be retained by those providers)",
+            "Autoriser les replis anonymes Kilo et OVH (les requêtes peuvent être conservées par ces fournisseurs)",
+          )}
         </label>
       </div>
       <div className="settings-actions">
@@ -597,13 +650,18 @@ function FreeLlmForm({
           disabled={busy}
           onClick={() => void save()}
         >
-          {busy ? "Saving…" : "Save free-model routing"}
+          {busy
+            ? tr("Saving…", "Enregistrement…")
+            : tr("Save free-model routing", "Enregistrer le routage gratuit")}
         </button>
         <button
           className="button"
           type="button"
           disabled={busy || !status.enabled}
-          title="Consumes one small request from the configured free quota"
+          title={tr(
+            "Consumes one small request from the configured free quota",
+            "Consomme une petite requête sur le quota gratuit configuré",
+          )}
           onClick={() => {
             setBusy(true);
             setMessage(null);
@@ -612,12 +670,16 @@ function FreeLlmForm({
               .testFreeLlm()
               .then((result) => setMessage(`Ready · ${result.model} · ${result.text}`))
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "FreeLLM test failed."),
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : tr("FreeLLM test failed.", "Échec du test FreeLLM."),
+                ),
               )
               .finally(() => setBusy(false));
           }}
         >
-          Test with one request
+          {tr("Test with one request", "Tester avec une requête")}
         </button>
         <a
           className="button secondaire"
@@ -625,7 +687,7 @@ function FreeLlmForm({
           target="_blank"
           rel="noreferrer"
         >
-          Get an NVIDIA development key
+          {tr("Get an NVIDIA development key", "Obtenir une clé NVIDIA")}
         </a>
       </div>
       {message === null ? null : <p className="banner success">{message}</p>}
@@ -643,6 +705,7 @@ function LinkedInForm({
   status: { configured: boolean; connected: boolean; tools: string[] };
   reload: () => void;
 }) {
+  const { tr } = useI18n();
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -651,23 +714,25 @@ function LinkedInForm({
 
   return (
     <section className="settings-panel">
-      <h3>LinkedIn · Official API</h3>
+      <h3>{tr("LinkedIn · Official API", "LinkedIn · API officielle")}</h3>
       <p className="muted">
-        Connect through LinkedIn OAuth. NEXUS can publish and comment only after your explicit
-        confirmation. It never scrapes or automates the LinkedIn interface.
+        {tr(
+          "Connect through LinkedIn OAuth. NEXUS can publish and comment only after your explicit confirmation. It never scrapes or automates the LinkedIn interface.",
+          "Connexion via OAuth LinkedIn. NEXUS publie et commente uniquement après confirmation explicite. Aucun scraping ni automatisation d'interface.",
+        )}
       </p>
       <p className={status.connected ? "banner success" : "banner"}>
         {status.connected
-          ? `Connected · ${status.tools.length} official tools active`
+          ? `${tr("Connected", "Connecté")} · ${status.tools.length} ${tr("official tools active", "outils officiels actifs")}`
           : status.configured
-            ? "Configured, authorization required"
-            : "Not configured"}
+            ? tr("Configured, authorization required", "Configuré, autorisation requise")
+            : tr("Not configured", "Non configuré")}
       </p>
       {!status.connected ? (
         <>
           <div className="settings-grid">
             <label>
-              LinkedIn application Client ID
+              {tr("LinkedIn application Client ID", "ID client de l'application LinkedIn")}
               <input
                 className="field mono"
                 value={clientId}
@@ -675,7 +740,7 @@ function LinkedInForm({
               />
             </label>
             <label>
-              LinkedIn application Client Secret
+              {tr("LinkedIn application Client Secret", "Secret client de l'application LinkedIn")}
               <input
                 className="field mono"
                 type="password"
@@ -685,7 +750,7 @@ function LinkedInForm({
               />
             </label>
             <label className="settings-wide">
-              Authorized redirect URL
+              {tr("Authorized redirect URL", "URL de redirection autorisée")}
               <input className="field mono" readOnly value={redirectUri} />
             </label>
           </div>
@@ -713,12 +778,16 @@ function LinkedInForm({
                   .catch((cause: unknown) => {
                     setBusy(false);
                     setError(
-                      cause instanceof Error ? cause.message : "LinkedIn connection failed.",
+                      cause instanceof Error
+                        ? cause.message
+                        : tr("LinkedIn connection failed.", "Échec de la connexion LinkedIn."),
                     );
                   });
               }}
             >
-              {busy ? "Opening LinkedIn…" : "Connect LinkedIn"}
+              {busy
+                ? tr("Opening LinkedIn…", "Ouverture de LinkedIn…")
+                : tr("Connect LinkedIn", "Connecter LinkedIn")}
             </button>
           </div>
         </>
@@ -731,11 +800,15 @@ function LinkedInForm({
               .disconnectLinkedIn()
               .then(reload)
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Disconnect failed."),
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : tr("Disconnect failed.", "Échec de la déconnexion."),
+                ),
               )
           }
         >
-          Disconnect LinkedIn
+          {tr("Disconnect LinkedIn", "Déconnecter LinkedIn")}
         </button>
       )}
       {error === null ? null : <p className="banner error">{error}</p>}
@@ -744,6 +817,7 @@ function LinkedInForm({
 }
 
 function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadAll: () => void }) {
+  const { tr } = useI18n();
   const [busy, setBusy] = useState(false);
   const [restoreJson, setRestoreJson] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -775,9 +849,18 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
       anchor.download = `nexus-configuration-backup-${new Date().toISOString().slice(0, 10)}.json`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage("Configuration backup file downloaded successfully.");
+      setMessage(
+        tr(
+          "Configuration backup file downloaded successfully.",
+          "Fichier de sauvegarde de configuration téléchargé avec succès.",
+        ),
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Backup export failed.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : tr("Backup export failed.", "Échec de l'export de sauvegarde."),
+      );
     } finally {
       setBusy(false);
     }
@@ -791,7 +874,12 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
     try {
       const parsed: unknown = JSON.parse(restoreJson);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        throw new Error("Invalid backup format: root must be an object.");
+        throw new Error(
+          tr(
+            "Invalid backup format: root must be an object.",
+            "Format de sauvegarde invalide : la racine doit être un objet.",
+          ),
+        );
       }
       const backup = parsed as Record<string, unknown>;
       if (typeof backup.settings === "object" && backup.settings !== null) {
@@ -810,10 +898,19 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
         );
       }
       setRestoreJson("");
-      setMessage("Configuration restored successfully and applied to active services.");
+      setMessage(
+        tr(
+          "Configuration restored successfully and applied to active services.",
+          "Configuration restaurée avec succès et appliquée aux services actifs.",
+        ),
+      );
       onReloadAll();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Configuration restore failed.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : tr("Configuration restore failed.", "Échec de restauration de la configuration."),
+      );
     } finally {
       setBusy(false);
     }
@@ -823,10 +920,12 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
     <section className="settings-panel">
       <div className="settings-panel-heading">
         <div>
-          <h3>Backup &amp; Restore Assistant</h3>
+          <h3>{tr("Backup & Restore Assistant", "Assistant Sauvegarde & Restauration")}</h3>
           <p className="muted">
-            Export or restore platform configuration. Secrets remain in the vault and are never
-            exported.
+            {tr(
+              "Export or restore platform configuration. Secrets remain in the vault and are never exported.",
+              "Exportez ou restaurez la configuration de la plateforme. Les secrets restent chiffrés et ne sont jamais exportés.",
+            )}
           </p>
         </div>
       </div>
@@ -837,18 +936,23 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
           disabled={busy}
           onClick={() => void handleExport()}
         >
-          {busy ? "Exporting…" : "Export configuration backup"}
+          {busy
+            ? tr("Exporting…", "Exportation…")
+            : tr("Export configuration backup", "Exporter la sauvegarde de configuration")}
         </button>
       </div>
       <div className="settings-grid">
         <label className="settings-wide">
-          Restore configuration from JSON
+          {tr("Restore configuration from JSON", "Restaurer la configuration depuis un JSON")}
           <textarea
             className="field mono"
             rows={6}
             value={restoreJson}
             onChange={(event) => setRestoreJson(event.target.value)}
-            placeholder="Paste an exported NEXUS configuration backup here."
+            placeholder={tr(
+              "Paste an exported NEXUS configuration backup here.",
+              "Collez une sauvegarde de configuration NEXUS exportée ici.",
+            )}
           />
         </label>
       </div>
@@ -859,14 +963,16 @@ function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadA
           disabled={busy || restoreJson.trim() === ""}
           onClick={() => void handleRestore()}
         >
-          Restore and apply
+          {tr("Restore and apply", "Restaurer et appliquer")}
         </button>
       </div>
       <div className="policy-box" style={{ marginTop: "16px" }}>
-        <strong>Complete system backups</strong>
+        <strong>{tr("Complete system backups", "Sauvegardes système complètes")}</strong>
         <p className="muted" style={{ margin: "4px 0 0", fontSize: "11px" }}>
-          Database archives and encryption keys require the dedicated authenticated backup workflow;
-          they are intentionally excluded from browser exports.
+          {tr(
+            "Database archives and encryption keys require the dedicated authenticated backup workflow; they are intentionally excluded from browser exports.",
+            "Les archives de base de données et clés de chiffrement requièrent le flux dédié et authentifié ; elles sont volontairement exclues des exports navigateur.",
+          )}
         </p>
       </div>
       {message === null ? null : <p className="banner success">{message}</p>}
@@ -884,23 +990,26 @@ function SecretsForm({
   names: string[];
   reload: () => void;
 }) {
+  const { tr } = useI18n();
   const [name, setName] = useState("");
   const [secret, setSecret] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fail = (cause: unknown): void =>
-    setError(cause instanceof Error ? cause.message : "Action failed.");
+    setError(cause instanceof Error ? cause.message : tr("Action failed.", "Échec de l'action."));
   return (
     <section className="settings-panel">
-      <h3>Local secret vault</h3>
+      <h3>{tr("Local secret vault", "Coffre-fort de secrets local")}</h3>
       <p className="muted">
-        Values are written to the Linux keyring and are never read back by the browser. Only secret
-        names appear here.
+        {tr(
+          "Values are written to the Linux keyring and are never read back by the browser. Only secret names appear here.",
+          "Les valeurs sont écrites dans le trousseau Linux et ne sont jamais renvoyées au navigateur. Seuls les noms des secrets apparaissent ici.",
+        )}
       </p>
       <div className="settings-grid">
         <label>
-          Name
+          {tr("Name", "Nom")}
           <input
             className="field mono"
             value={name}
@@ -909,7 +1018,7 @@ function SecretsForm({
           />
         </label>
         <label>
-          Secret value
+          {tr("Secret value", "Valeur du secret")}
           <input
             className="field mono"
             type="password"
@@ -930,17 +1039,17 @@ function SecretsForm({
               .saveSecret(name, secret)
               .then(() => {
                 setSecret("");
-                setMessage(`Secret ${name} saved.`);
+                setMessage(tr(`Secret ${name} saved.`, `Secret ${name} enregistré avec succès.`));
                 reload();
               })
               .catch(fail);
           }}
         >
-          Save
+          {tr("Save", "Enregistrer")}
         </button>
       </div>
       {names.length === 0 ? (
-        <p className="empty-state">No secrets stored.</p>
+        <p className="empty-state">{tr("No secrets stored.", "Aucun secret stocké.")}</p>
       ) : (
         <ul>
           {names.map((item) => (
@@ -950,17 +1059,17 @@ function SecretsForm({
                 className="button danger"
                 type="button"
                 onClick={() => {
-                  if (window.confirm(`Delete secret ${item}?`))
+                  if (window.confirm(tr(`Delete secret ${item}?`, `Supprimer le secret ${item} ?`)))
                     void api
                       .removeSecret(item)
                       .then(() => {
-                        setMessage(`Secret ${item} deleted.`);
+                        setMessage(tr(`Secret ${item} deleted.`, `Secret ${item} supprimé.`));
                         reload();
                       })
                       .catch(fail);
                 }}
               >
-                Delete
+                {tr("Delete", "Supprimer")}
               </button>
             </li>
           ))}
@@ -981,6 +1090,7 @@ function SettingsForm({
   initial: RuntimeSettings;
   reload: () => void;
 }) {
+  const { tr } = useI18n();
   const [value, setValue] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -1015,7 +1125,7 @@ function SettingsForm({
     <section className="settings-panel" style={{ marginTop: 0 }}>
       <div className="settings-grid">
         <label>
-          Max task timeout · seconds
+          {tr("Max task timeout · seconds", "Délai max d'une tâche · secondes")}
           <input
             className="field"
             type="number"
@@ -1026,7 +1136,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Max attempts
+          {tr("Max attempts", "Nombre max de tentatives")}
           <input
             className="field"
             type="number"
@@ -1037,7 +1147,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Retry delay · seconds
+          {tr("Retry delay · seconds", "Délai de réessai · secondes")}
           <input
             className="field"
             type="number"
@@ -1048,7 +1158,7 @@ function SettingsForm({
           />
         </label>
         <label>
-          Context budget · characters
+          {tr("Context budget · characters", "Budget de contexte · caractères")}
           <input
             className="field"
             type="number"
@@ -1066,10 +1176,16 @@ function SettingsForm({
               setValue((current) => ({ ...current, quality_review: event.target.checked }))
             }
           />
-          Add an independent quality review before final synthesis
+          {tr(
+            "Add an independent quality review before final synthesis",
+            "Ajouter une revue qualité indépendante avant la synthèse finale",
+          )}
         </label>
         <label className="settings-wide">
-          Research priority · comma-separated profiles
+          {tr(
+            "Research priority · comma-separated profiles",
+            "Priorité de recherche · profils séparés par virgules",
+          )}
           <input
             className="field mono"
             value={value.research_priority.join(", ")}
@@ -1077,7 +1193,7 @@ function SettingsForm({
           />
         </label>
         <label className="settings-wide">
-          Critical review priority
+          {tr("Critical review priority", "Priorité de revue critique")}
           <input
             className="field mono"
             value={value.review_priority.join(", ")}
@@ -1085,7 +1201,7 @@ function SettingsForm({
           />
         </label>
         <label className="settings-wide">
-          Final synthesis priority
+          {tr("Final synthesis priority", "Priorité de synthèse finale")}
           <input
             className="field mono"
             value={value.synthesis_priority.join(", ")}
@@ -1093,10 +1209,12 @@ function SettingsForm({
           />
         </label>
         <div className="settings-wide policy-box">
-          <strong>Non-disableable guardrails</strong>
+          <strong>{tr("Non-disableable guardrails", "Garde-fous non désactivables")}</strong>
           <span className="muted">
-            ACP execution restricted to workspace, pathless deletion rejected, secrets excluded from
-            API responses, live trading disabled, and administrator authentication mandatory.
+            {tr(
+              "ACP execution restricted to workspace, pathless deletion rejected, secrets excluded from API responses, live trading disabled, and administrator authentication mandatory.",
+              "Exécution ACP restreinte à l'espace de travail, suppressions relatives rejetées, secrets exclus des réponses API, trading réel désactivé et authentification administrateur obligatoire.",
+            )}
           </span>
         </div>
       </div>
@@ -1113,16 +1231,25 @@ function SettingsForm({
               .updateRuntimeSettings(value)
               .then((saved) => {
                 setValue(saved);
-                setMessage("Settings saved and applied to upcoming missions.");
+                setMessage(
+                  tr(
+                    "Settings saved and applied to upcoming missions.",
+                    "Paramètres enregistrés et appliqués aux prochaines missions.",
+                  ),
+                );
                 reload();
               })
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Unable to save settings."),
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : tr("Unable to save settings.", "Impossible d'enregistrer les paramètres."),
+                ),
               )
               .finally(() => setBusy(false));
           }}
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? tr("Saving…", "Enregistrement…") : tr("Save", "Enregistrer")}
         </button>
       </div>
       {message === null ? null : <p className="banner success">{message}</p>}

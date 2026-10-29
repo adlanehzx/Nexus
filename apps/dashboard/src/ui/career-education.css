@@ -1,510 +1,829 @@
 /*
- * NEXUS Signal — Career & Education workspace.
- *
- * The domain layer on top of theme.css: everything specific to opportunities,
- * applications, approvals and documents. Shared shapes (tabs, modals, pills,
- * banners, tables) live in theme.css and are not repeated here.
- *
- * Every value comes from @nexus/design. The rule the whole workspace is built
- * around: a human is about to approve an action that touches a real account,
- * so anything awaiting a decision must be visibly unfinished, and anything
- * already decided must be visibly inert.
+ * NEXUS Signal — Futuristic Cyber Cockpit Career & Education workspace.
  */
 
 .career-edu-container {
   display: flex;
   width: 100%;
   flex-direction: column;
-  gap: var(--nx-space-8);
-  padding: var(--nx-space-2) 0 var(--nx-space-10);
+  gap: 1.5rem;
+  padding: 0.5rem 0 3rem;
+  position: relative;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Career Hero & 3D Holographic Singularity Core Banner
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.career-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1.75rem;
+  background: linear-gradient(135deg, rgba(8, 16, 32, 0.85) 0%, rgba(13, 24, 48, 0.75) 100%);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: var(--radius, 12px);
+  overflow: hidden;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    inset 0 0 40px rgba(0, 240, 255, 0.05);
+  backdrop-filter: blur(16px);
+  gap: 1.25rem;
+}
+
+.career-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  border-top: 2px solid var(--accent, #00f0ff);
+  border-left: 2px solid var(--accent, #00f0ff);
+  pointer-events: none;
+}
+
+.career-hero::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-bottom: 2px solid var(--accent, #00f0ff);
+  border-right: 2px solid var(--accent, #00f0ff);
+  pointer-events: none;
+}
+
+.career-hero-top {
+  display: flex;
+  justifycontent: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  position: relative;
+  z-index: 2;
+}
+
+.career-hero-title-group h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 30%, #00f0ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.career-hero-title-group p {
+  margin: 0.35rem 0 0;
+  color: var(--muted-text, #8b949e);
+  font-size: 0.88rem;
+  max-width: 680px;
+  line-height: 1.45;
+}
+
+.career-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--nx-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent, #00f0ff);
+  margin-bottom: 0.25rem;
+}
+
+.career-hero-canvas-box {
+  width: 120px;
+  height: 90px;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
+}
+
+.career-hud-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  position: relative;
+  z-index: 2;
+}
+
+.career-hud-stat-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0.65rem 0.9rem;
+  background: rgba(13, 21, 39, 0.75);
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.career-hud-stat-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  background: rgba(13, 21, 39, 0.95);
+  transform: translateY(-1px);
+}
+
+.career-hud-stat-label {
+  font-size: 0.7rem;
+  color: var(--muted-text, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.career-hud-stat-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-family: var(--nx-font-mono, monospace);
+  color: #fff;
+  margin-top: 0.15rem;
+}
+
+.career-hud-stat-sub {
+  font-size: 0.68rem;
+  color: var(--accent, #00f0ff);
+  margin-top: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Cyber Navigation Tabs Bar
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.career-tabs-bar {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.35rem;
+  background: rgba(10, 16, 30, 0.75);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  scrollbar-width: thin;
+}
+
+.career-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted-text, #8b949e);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.career-tab-btn:hover {
+  color: #fff;
+  background: rgba(0, 240, 255, 0.08);
+  border-color: rgba(0, 240, 255, 0.2);
+}
+
+.career-tab-btn[aria-selected="true"],
+.career-tab-btn.active {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow:
+    0 0 15px rgba(0, 240, 255, 0.25),
+    inset 0 0 10px rgba(0, 240, 255, 0.1);
+  font-weight: 700;
 }
 
 .career-offline-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--nx-space-5);
-  padding: var(--nx-space-5) var(--nx-space-7);
-  border: 1px solid var(--nx-danger-line);
-  border-radius: var(--nx-radius-sm);
-  background: var(--nx-danger-bg);
-  color: var(--nx-danger);
-  font-weight: var(--nx-weight-medium);
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid rgba(255, 51, 102, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 51, 102, 0.12);
+  color: #ff3366;
+  font-weight: 600;
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.2);
 }
 
-/* Count of items waiting on the user, inside a tab label. */
 .badge-counter {
   display: inline-flex;
   min-width: 18px;
   height: 18px;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--nx-space-3);
-  border: 1px solid var(--nx-danger-line);
-  border-radius: var(--nx-radius-pill);
-  background: var(--nx-danger-bg);
-  color: var(--nx-danger);
-  font-family: var(--nx-font-mono);
-  font-size: var(--nx-size-3xs);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--nx-weight-semibold);
+  padding: 0 5px;
+  border: 1px solid rgba(255, 51, 102, 0.6);
+  border-radius: 999px;
+  background: rgba(255, 51, 102, 0.25);
+  color: #ff5577;
+  font-family: var(--nx-font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 800;
+  box-shadow: 0 0 8px rgba(255, 51, 102, 0.4);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Cards and grids
+   Futuristic Cyber Cards & Grids
    ─────────────────────────────────────────────────────────────────────────── */
 
 .career-grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--nx-space-6);
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem;
 }
+
 .career-grid-3 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  gap: var(--nx-space-6);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
 }
 
 .career-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-5);
-  padding: var(--nx-space-7);
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface);
-  transition: border-color var(--nx-fast) var(--nx-ease);
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(13, 21, 39, 0.8) 0%, rgba(9, 15, 28, 0.88) 100%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.career-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-top: 1.5px solid rgba(0, 240, 255, 0.5);
+  border-left: 1.5px solid rgba(0, 240, 255, 0.5);
+  pointer-events: none;
+}
+
+.career-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-bottom: 1.5px solid rgba(0, 240, 255, 0.5);
+  border-right: 1.5px solid rgba(0, 240, 255, 0.5);
+  pointer-events: none;
+}
+
 .career-card:hover {
-  border-color: var(--nx-line-strong);
+  border-color: rgba(0, 240, 255, 0.45);
+  box-shadow:
+    0 8px 30px rgba(0, 240, 255, 0.12),
+    0 0 1px rgba(0, 240, 255, 0.5);
+  transform: translateY(-2px);
 }
+
 .career-card.highlighted {
-  border-color: var(--nx-accent-line);
+  border-color: rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.18);
 }
+
 .career-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--nx-space-4);
+  gap: 0.75rem;
 }
 
-/*
- * Track pills name the kind of opportunity. They are tinted, not saturated:
- * three of them sit side by side in a list and must not out-shout the title.
- */
+/* Track Pills */
 .career-track-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--nx-space-2);
-  padding: var(--nx-space-1) var(--nx-space-4);
-  border: 1px solid var(--nx-neutral-line);
-  border-radius: var(--nx-radius-xs);
-  background: var(--nx-neutral-bg);
-  color: var(--nx-neutral);
-  font-size: var(--nx-size-3xs);
-  font-weight: var(--nx-weight-semibold);
-  letter-spacing: var(--nx-tracking-wide);
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.1);
+  color: #00f0ff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--nx-font-mono, monospace);
+}
+
+.career-track-pill.phd {
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.career-track-pill.cdi {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.career-track-pill.freelance {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.staleness-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-family: var(--nx-font-mono, monospace);
   text-transform: uppercase;
 }
-.career-track-pill.phd {
-  border-color: var(--nx-accent-line);
-  background: var(--nx-accent-muted);
-  color: var(--nx-accent);
+
+.staleness-pill.fresh {
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  color: #00ff88;
 }
-.career-track-pill.cdi {
-  border-color: var(--nx-ok-line);
-  background: var(--nx-ok-bg);
-  color: var(--nx-ok);
-}
-.career-track-pill.freelance {
-  border-color: var(--nx-warn-line);
-  background: var(--nx-warn-bg);
-  color: var(--nx-warn);
+
+.staleness-pill.stale {
+  background: rgba(255, 170, 0, 0.15);
+  border: 1px solid rgba(255, 170, 0, 0.4);
+  color: #ffaa00;
 }
 
 .duplicate-alert-banner {
   display: flex;
   align-items: center;
-  gap: var(--nx-space-4);
-  padding: var(--nx-space-4) var(--nx-space-5);
-  border: 1px solid var(--nx-warn-line);
-  border-radius: var(--nx-radius-xs);
-  background: var(--nx-warn-bg);
-  color: var(--nx-warn);
-  font-size: var(--nx-size-xs);
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  font-size: 0.78rem;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Explainable match and citations
+   Match Breakdown & Radar Diagnostics
    ─────────────────────────────────────────────────────────────────────────── */
 
 .match-explain-box {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
-}
-.match-score-badge {
-  display: flex;
-  align-items: center;
-  gap: var(--nx-space-4);
-  color: var(--nx-ok);
-  font-family: var(--nx-font-mono);
-  font-size: var(--nx-size-md);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--nx-weight-semibold);
-}
-.match-score-badge.high {
-  color: var(--nx-ok);
-}
-.match-score-badge.mid {
-  color: var(--nx-warn);
-}
-.match-score-badge.low {
-  color: var(--nx-danger);
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(0, 240, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(8, 14, 28, 0.6);
 }
 
-/* Four sub-scores read as one shape: a row of bars the eye compares at a
-   glance, which is the whole point of showing a breakdown. */
+.match-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--nx-font-mono, monospace);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #00ff88;
+}
+
+.match-score-badge.high {
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+}
+
+.match-score-badge.mid {
+  color: #ffaa00;
+}
+
+.match-score-badge.low {
+  color: #ff3366;
+}
+
 .match-breakdown-bars {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--nx-space-4);
-  margin-top: var(--nx-space-2);
+  gap: 0.6rem;
+  margin-top: 0.35rem;
 }
+
 .match-sub-bar {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-1);
-  color: var(--nx-text-faint);
-  font-size: var(--nx-size-3xs);
+  gap: 0.2rem;
+  color: var(--muted-text, #8b949e);
+  font-size: 0.7rem;
 }
+
 .match-bar-track {
-  height: 4px;
+  height: 6px;
   overflow: hidden;
-  border-radius: var(--nx-radius-pill);
-  background: var(--nx-canvas-sunken);
-  box-shadow: inset 0 0 0 1px var(--nx-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.5);
 }
+
 .match-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: var(--nx-accent);
-  transition: width var(--nx-normal) var(--nx-ease-out);
+  background: linear-gradient(90deg, #00f0ff, #7928ca);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  transition: width 0.4s ease-out;
 }
 
 .citations-expandable {
-  padding-top: var(--nx-space-5);
-  border-top: 1px solid var(--nx-line);
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(0, 240, 255, 0.1);
 }
 
-/* A citation is evidence. The left border is the quotation mark. */
 .citation-item {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-2);
-  margin-top: var(--nx-space-3);
-  padding: var(--nx-space-4) var(--nx-space-5);
-  border-left: var(--nx-rail) solid var(--nx-accent);
-  border-radius: 0 var(--nx-radius-xs) var(--nx-radius-xs) 0;
-  background: var(--nx-canvas-sunken);
-  font-size: var(--nx-size-xs);
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid #00f0ff;
+  border-radius: 0 6px 6px 0;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.8rem;
 }
+
 .citation-quote {
-  color: var(--nx-text);
+  color: #e2e8f0;
   font-style: italic;
+  line-height: 1.4;
 }
+
 .citation-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--nx-text-faint);
-  font-size: var(--nx-size-3xs);
+  color: var(--muted-text, #8b949e);
+  font-size: 0.7rem;
+  font-family: var(--nx-font-mono, monospace);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Confirmation and approval
+   Security Approvals & Containment Cards
    ─────────────────────────────────────────────────────────────────────────── */
 
-/*
- * An approval card changes the real world when accepted. Pending is the only
- * state that gets a coloured rail and full opacity; every settled state is
- * dimmed, so a glance down the column finds what still needs a human.
- */
 .approval-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-5);
-  padding: var(--nx-space-7);
+  gap: 0.9rem;
+  padding: 1.35rem;
   overflow: hidden;
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(13, 21, 39, 0.9) 0%, rgba(9, 15, 28, 0.95) 100%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
-.approval-card::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: var(--nx-rail);
-  background: transparent;
-  content: "";
-}
+
 .approval-card.pending {
-  border-color: var(--nx-warn-line);
+  border-color: rgba(255, 170, 0, 0.6);
+  box-shadow:
+    0 0 25px rgba(255, 170, 0, 0.15),
+    inset 0 0 15px rgba(255, 170, 0, 0.05);
+  animation: pendingPulse 3s infinite ease-in-out;
 }
-.approval-card.pending::before {
-  background: var(--nx-warn);
+
+@keyframes pendingPulse {
+  0%,
+  100% {
+    border-color: rgba(255, 170, 0, 0.5);
+  }
+  50% {
+    border-color: rgba(255, 170, 0, 0.85);
+  }
 }
+
 .approval-card.approved {
-  border-color: var(--nx-ok-line);
+  border-color: rgba(0, 255, 136, 0.4);
 }
-.approval-card.approved::before {
-  background: var(--nx-ok);
-}
+
 .approval-card.rejected {
-  border-color: var(--nx-danger-line);
-  opacity: 0.75;
+  border-color: rgba(255, 51, 102, 0.4);
+  opacity: 0.8;
 }
-.approval-card.rejected::before {
-  background: var(--nx-danger);
-}
+
 .approval-card.cancelled,
 .approval-card.expired {
-  opacity: 0.6;
+  opacity: 0.65;
 }
 
 .action-type-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--nx-space-4);
+  gap: 0.75rem;
 }
+
 .action-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--nx-space-3);
-  padding: var(--nx-space-2) var(--nx-space-4);
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-xs);
-  background: var(--nx-canvas-sunken);
-  color: var(--nx-text);
-  font-family: var(--nx-font-mono);
-  font-size: var(--nx-size-3xs);
-  font-weight: var(--nx-weight-medium);
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.08);
+  color: #fff;
+  font-family: var(--nx-font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
-/* What the action will break, and what it costs if it is wrong. */
 .risks-box {
-  border-color: var(--nx-danger-line);
-  background: var(--nx-danger-bg);
-  color: var(--nx-danger);
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 51, 102, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 51, 102, 0.1);
+  color: #ff5577;
+  font-size: 0.82rem;
 }
+
 .consequences-box {
-  border-color: var(--nx-warn-line);
-  background: var(--nx-warn-bg);
-  color: var(--nx-warn);
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 170, 0, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 170, 0, 0.1);
+  color: #ffaa00;
+  font-size: 0.82rem;
 }
 
 .approval-actions-bar {
-  padding-top: var(--nx-space-5);
-  border-top: 1px solid var(--nx-line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(0, 240, 255, 0.15);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Pipeline board
+   Application Kanban Lanes
    ─────────────────────────────────────────────────────────────────────────── */
 
 .kanban-board-scroll {
   display: flex;
-  gap: var(--nx-space-5);
+  gap: 1rem;
   overflow-x: auto;
-  padding-bottom: var(--nx-space-5);
+  padding-bottom: 1rem;
+  scrollbar-width: thin;
 }
+
 .kanban-column {
   display: flex;
-  min-width: 272px;
-  max-width: 296px;
+  min-width: 290px;
+  max-width: 320px;
   flex-direction: column;
-  gap: var(--nx-space-4);
-  padding: var(--nx-space-5);
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-canvas-sunken);
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(10, 16, 32, 0.8);
+  backdrop-filter: blur(12px);
 }
+
 .kanban-col-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: var(--nx-space-4);
-  border-bottom: 1px solid var(--nx-line);
-  color: var(--nx-text);
-  font-size: var(--nx-size-xs);
-  font-weight: var(--nx-weight-semibold);
-  letter-spacing: var(--nx-tracking-wide);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.18);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+
 .kanban-col-count {
-  padding: 0 var(--nx-space-4);
-  border-radius: var(--nx-radius-pill);
-  background: var(--nx-surface-active);
-  color: var(--nx-text-muted);
-  font-family: var(--nx-font-mono);
-  font-size: var(--nx-size-3xs);
-  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+  font-family: var(--nx-font-mono, monospace);
+  font-size: 0.72rem;
 }
+
 .kanban-card {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-4);
-  padding: var(--nx-space-5);
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-sm);
-  background: var(--nx-surface);
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(16, 26, 48, 0.85);
   cursor: pointer;
-  transition:
-    border-color var(--nx-fast) var(--nx-ease),
-    transform var(--nx-fast) var(--nx-ease-out);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .kanban-card:hover {
-  border-color: var(--nx-accent-line);
-  transform: translateY(-1px);
+  border-color: rgba(0, 240, 255, 0.6);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0, 240, 255, 0.18);
 }
+
 .kanban-card.pending-approval-card {
-  border-color: var(--nx-warn-line);
-  background: var(--nx-warn-bg);
+  border-color: rgba(255, 170, 0, 0.6);
+  background: rgba(255, 170, 0, 0.1);
+  box-shadow: 0 0 15px rgba(255, 170, 0, 0.15);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Comparison matrix
+   Comparison Matrix HUD
    ─────────────────────────────────────────────────────────────────────────── */
+
+.comparison-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(8, 14, 28, 0.85);
+  backdrop-filter: blur(14px);
+}
 
 .comparison-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--nx-size-xs);
+  font-size: 0.82rem;
 }
+
 .comparison-table th,
 .comparison-table td {
-  padding: var(--nx-space-5) var(--nx-space-6);
-  border-right: 1px solid var(--nx-line);
-  border-bottom: 1px solid var(--nx-line);
+  padding: 0.85rem 1rem;
+  border-right: 1px solid rgba(0, 240, 255, 0.12);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.12);
   text-align: left;
 }
+
 .comparison-table th:last-child,
 .comparison-table td:last-child {
   border-right: 0;
 }
-/* The criterion column is the axis the reader scans down: it stays put. */
+
 .comparison-table th:first-child,
 .comparison-table td:first-child {
   position: sticky;
   left: 0;
-  width: 210px;
-  background: var(--nx-canvas-sunken);
-  font-weight: var(--nx-weight-medium);
+  width: 220px;
+  background: rgba(10, 18, 36, 0.95);
+  font-weight: 600;
+  z-index: 2;
 }
+
 .comparison-table th {
-  background: var(--nx-canvas-sunken);
+  background: rgba(13, 24, 48, 0.9);
+  color: #fff;
+  font-weight: 700;
 }
+
 .comparison-table td.winner-cell {
-  background: var(--nx-accent-muted);
-  font-weight: var(--nx-weight-semibold);
+  background: rgba(0, 255, 136, 0.12);
+  font-weight: 700;
+  color: #00ff88;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Profile completeness
+   Profile Completeness Biometric Console
    ─────────────────────────────────────────────────────────────────────────── */
 
 .completeness-gauge-box {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-5);
-  padding: var(--nx-space-7);
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface);
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(13, 21, 39, 0.85) 0%, rgba(8, 14, 28, 0.92) 100%);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
+
+.completeness-header {
+  display: flex;
+  justifycontent: space-between;
+  align-items: center;
+}
+
 .completeness-bar {
-  height: 6px;
+  height: 8px;
   overflow: hidden;
-  border-radius: var(--nx-radius-pill);
-  background: var(--nx-canvas-sunken);
-  box-shadow: inset 0 0 0 1px var(--nx-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
 }
-/* Incomplete reads as warning, complete as nominal: the fill crosses from one
-   to the other rather than being a decorative gradient. */
+
 .completeness-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--nx-warn), var(--nx-ok));
-  transition: width var(--nx-normal) var(--nx-ease-out);
+  background: linear-gradient(90deg, #ffaa00, #00f0ff, #00ff88);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 .checklist-items {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--nx-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
 }
+
 .checklist-item {
   display: flex;
   align-items: flex-start;
-  gap: var(--nx-space-4);
-  color: var(--nx-text-faint);
-  font-size: var(--nx-size-xs);
+  gap: 0.6rem;
+  color: var(--muted-text, #8b949e);
+  font-size: 0.82rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 .checklist-item.done {
-  color: var(--nx-text);
+  color: #fff;
+  border-color: rgba(0, 255, 136, 0.25);
+  background: rgba(0, 255, 136, 0.05);
 }
+
 .checklist-item .status-icon {
   flex-shrink: 0;
   margin-top: 1px;
+  font-weight: 800;
+  color: #00ff88;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Forms
+   Inputs & Controls
    ─────────────────────────────────────────────────────────────────────────── */
 
 .career-form-group {
   display: flex;
   flex-direction: column;
-  gap: var(--nx-space-3);
+  gap: 0.4rem;
 }
+
 .career-form-group label {
-  color: var(--nx-text-muted);
-  font-size: var(--nx-size-2xs);
-  font-weight: var(--nx-weight-medium);
+  color: var(--muted-text, #8b949e);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+
 .career-input,
 .career-select,
 .career-textarea {
   width: 100%;
-  min-height: 34px;
-  padding: var(--nx-space-4) var(--nx-space-5);
-  border: 1px solid var(--nx-line-strong);
-  border-radius: var(--nx-radius-sm);
-  background: var(--nx-canvas-sunken);
-  color: var(--nx-text);
-  font-size: var(--nx-size-sm);
+  min-height: 38px;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(6, 12, 24, 0.85);
+  color: #fff;
+  font-size: 0.88rem;
   outline: none;
-  transition:
-    border-color var(--nx-fast) var(--nx-ease),
-    box-shadow var(--nx-fast) var(--nx-ease);
+  transition: all 0.2s ease;
 }
+
 .career-textarea {
   min-height: 110px;
   resize: vertical;
 }
+
 .career-input::placeholder,
 .career-textarea::placeholder {
-  color: var(--nx-text-faint);
+  color: rgba(255, 255, 255, 0.3);
 }
+
 .career-input:focus,
 .career-select:focus,
 .career-textarea:focus {
-  border-color: var(--nx-accent);
-  box-shadow: 0 0 0 3px var(--nx-accent-muted);
+  border-color: #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+  background: rgba(8, 16, 32, 0.95);
 }
 
 .sr-only {

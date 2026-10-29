@@ -9,7 +9,7 @@ import type {
 import { useI18n } from "./i18n/index.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
-  const { locale, t } = useI18n();
+  const { locale, t, tr } = useI18n();
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [accounts, setAccounts] = useState<ProviderAccountDto[]>([]);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
@@ -107,14 +107,26 @@ export function Agents({ api }: { api: DashboardApi }) {
   };
 
   const handleResetRouting = async (): Promise<void> => {
-    if (!window.confirm("Reset routing learning history?")) return;
+    if (
+      !window.confirm(
+        tr(
+          "Reset routing learning history?",
+          "Réinitialiser l'historique d'apprentissage du routage ?",
+        ),
+      )
+    )
+      return;
     try {
       await api.resetRoutingStats();
-      setRoutingResetMsg("History reset.");
+      setRoutingResetMsg(tr("History reset.", "Historique réinitialisé."));
       refreshRouting();
       setTimeout(() => setRoutingResetMsg(null), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error during reset.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : tr("Error during reset.", "Erreur lors de la réinitialisation."),
+      );
     }
   };
 
@@ -123,10 +135,17 @@ export function Agents({ api }: { api: DashboardApi }) {
     setAccountFeedback(null);
     try {
       const res = await api.testProviderAccount(id);
-      setAccountFeedback(`Identity "${res.id}" tested: status "${res.authStatus}"`);
+      setAccountFeedback(
+        tr(
+          `Identity "${res.id}" tested: status "${res.authStatus}"`,
+          `Identité "${res.id}" testée : statut "${res.authStatus}"`,
+        ),
+      );
       refreshAccounts();
     } catch (err) {
-      setAccountFeedback(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+      setAccountFeedback(
+        `${tr("Test failed:", "Échec du test :")} ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setAccActionLoading(false);
     }
@@ -138,7 +157,9 @@ export function Agents({ api }: { api: DashboardApi }) {
     try {
       await api.toggleProviderAccountCooldown(id, !currentlyActive, 300, "Manual pause");
       setAccountFeedback(
-        !currentlyActive ? `Cooldown enabled on "${id}" (5 min)` : `Cooldown lifted on "${id}"`,
+        !currentlyActive
+          ? tr(`Cooldown enabled on "${id}" (5 min)`, `Refroidissement activé sur "${id}" (5 min)`)
+          : tr(`Cooldown lifted on "${id}"`, `Refroidissement levé sur "${id}"`),
       );
       refreshAccounts();
     } catch (err) {
@@ -397,24 +418,27 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </div>
                 </div>
                 <span className={`agent-status ${state}`}>
-                  {state === "active" ? "On mission" : healthLabel(agent.status)}
+                  {state === "active"
+                    ? tr("On mission", "En mission")
+                    : healthLabel(agent.status, tr)}
                 </span>
               </div>
               <div className="agent-stats">
                 <span>
-                  <strong>{agent.running_tasks}</strong> active
+                  <strong>{agent.running_tasks}</strong> {tr("active", "actives")}
                 </span>
                 <span>
-                  <strong>{agent.queued_tasks}</strong> queued
+                  <strong>{agent.queued_tasks}</strong> {tr("queued", "en attente")}
                 </span>
                 <span>
-                  <strong>{agent.last_task_state ?? "—"}</strong> last state
+                  <strong>{agent.last_task_state ?? "—"}</strong> {tr("last state", "dernier état")}
                 </span>
                 <span>
-                  <strong>{percent(agent.remaining_5h_percent)}</strong> 5h window
+                  <strong>{percent(agent.remaining_5h_percent)}</strong>{" "}
+                  {tr("5h window", "fenêtre 5h")}
                 </span>
                 <span>
-                  <strong>{percent(agent.remaining_week_percent)}</strong> week
+                  <strong>{percent(agent.remaining_week_percent)}</strong> {tr("week", "semaine")}
                 </span>
               </div>
               <div className="agent-card-actions">
@@ -423,7 +447,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   type="button"
                   onClick={() => edit(agent.agent_profile_id)}
                 >
-                  Configure
+                  {tr("Configure", "Configurer")}
                 </button>
                 <button
                   className="button danger"
@@ -431,7 +455,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   disabled={busy || agent.running_tasks > 0}
                   onClick={() => disable(agent.key)}
                 >
-                  Disable
+                  {tr("Disable", "Désactiver")}
                 </button>
               </div>
             </article>
@@ -724,14 +748,14 @@ export function Agents({ api }: { api: DashboardApi }) {
                     ? "active"
                     : "idle";
               const statusLabel = isCooldown
-                ? "Cooling down"
+                ? tr("Cooling down", "En refroidissement")
                 : isExhausted
-                  ? "Quota exhausted"
+                  ? tr("Quota exhausted", "Quota épuisé")
                   : isAuthOk
-                    ? "Authenticated"
+                    ? tr("Authenticated", "Authentifié")
                     : acc.authStatus === "expired"
-                      ? "Expired"
-                      : "Unverified";
+                      ? tr("Expired", "Expiré")
+                      : tr("Unverified", "Non vérifié");
 
               return (
                 <article className="agent-card" key={acc.id}>
@@ -744,9 +768,11 @@ export function Agents({ api }: { api: DashboardApi }) {
                         width: "100%",
                       }}
                     >
-                      <h4 style={{ margin: "0 0 4px 0" }}>Edit {acc.id}</h4>
+                      <h4 style={{ margin: "0 0 4px 0" }}>
+                        {tr("Edit", "Modifier")} {acc.id}
+                      </h4>
                       <label style={{ fontSize: "12px" }}>
-                        Account Name / Label
+                        {tr("Account Name / Label", "Nom du compte / Libellé")}
                         <input
                           className="field"
                           value={editingAccName}
@@ -754,7 +780,10 @@ export function Agents({ api }: { api: DashboardApi }) {
                         />
                       </label>
                       <label style={{ fontSize: "12px" }}>
-                        Routing Priority (1 = highest)
+                        {tr(
+                          "Routing Priority (1 = highest)",
+                          "Priorité de routage (1 = plus haute)",
+                        )}
                         <input
                           className="field"
                           type="number"
@@ -771,7 +800,9 @@ export function Agents({ api }: { api: DashboardApi }) {
                           disabled={accActionLoading || !editingAccName.trim()}
                           onClick={() => void handleSaveAccount(acc.id)}
                         >
-                          {accActionLoading ? "Saving…" : "Save"}
+                          {accActionLoading
+                            ? tr("Saving…", "Enregistrement…")
+                            : tr("Save", "Enregistrer")}
                         </button>
                         <button
                           className="button compact"
@@ -779,7 +810,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                           disabled={accActionLoading}
                           onClick={() => setEditingAccId(null)}
                         >
-                          Cancel
+                          {tr("Cancel", "Annuler")}
                         </button>
                       </div>
                     </div>
@@ -794,12 +825,12 @@ export function Agents({ api }: { api: DashboardApi }) {
                             <h3>{acc.name}</h3>
                             {acc.priority === 1 ? (
                               <span className="state-pill good" style={{ fontSize: "10px" }}>
-                                ★ Primary
+                                ★ {tr("Primary", "Principal")}
                               </span>
                             ) : null}
                           </div>
                           <div className="muted">
-                            {acc.id} · {acc.provider} · Priority P{acc.priority}
+                            {acc.id} · {acc.provider} · {tr("Priority", "Priorité")} P{acc.priority}
                           </div>
                         </div>
                         <span className={`agent-status ${statusClass}`}>{statusLabel}</span>
@@ -807,14 +838,19 @@ export function Agents({ api }: { api: DashboardApi }) {
 
                       <div className="agent-stats">
                         <span>
-                          <strong>{Math.round(acc.reliability.score * 100)} %</strong> reliability (
-                          {acc.reliability.successCount}/{acc.reliability.totalRuns})
+                          <strong>{Math.round(acc.reliability.score * 100)} %</strong>{" "}
+                          {tr("reliability", "fiabilité")} ({acc.reliability.successCount}/
+                          {acc.reliability.totalRuns})
                         </span>
                         <span>
-                          <strong>{acc.reliability.consecutiveFailures}</strong> consec. errors
+                          <strong>{acc.reliability.consecutiveFailures}</strong>{" "}
+                          {tr("consec. errors", "erreurs conséc.")}
                         </span>
                         <span>
-                          <strong>{acc.cooldown.active ? "Active" : "No"}</strong> cooldown
+                          <strong>
+                            {acc.cooldown.active ? tr("Active", "Actif") : tr("No", "Aucun")}
+                          </strong>{" "}
+                          {tr("cooldown", "refroidissement")}
                         </span>
                       </div>
 
@@ -823,7 +859,8 @@ export function Agents({ api }: { api: DashboardApi }) {
                           className="muted"
                           style={{ marginTop: "8px", fontSize: "11px", color: "var(--gradient)" }}
                         >
-                          Cooldown reason: {acc.cooldown.reason}
+                          {tr("Cooldown reason:", "Motif de refroidissement :")}{" "}
+                          {acc.cooldown.reason}
                         </div>
                       ) : null}
 
@@ -838,7 +875,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                             setEditingAccPriority(acc.priority);
                           }}
                         >
-                          Edit
+                          {tr("Edit", "Modifier")}
                         </button>
                         <button
                           className="button"
@@ -846,7 +883,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                           disabled={accActionLoading}
                           onClick={() => void handleTestAccount(acc.id)}
                         >
-                          Test
+                          {tr("Test", "Tester")}
                         </button>
                         <button
                           className="button"
@@ -854,7 +891,9 @@ export function Agents({ api }: { api: DashboardApi }) {
                           disabled={accActionLoading}
                           onClick={() => void handleToggleCooldown(acc.id, acc.cooldown.active)}
                         >
-                          {acc.cooldown.active ? "Resume" : "Pause"}
+                          {acc.cooldown.active
+                            ? tr("Resume", "Reprendre")
+                            : tr("Pause", "Mettre en pause")}
                         </button>
                         <button
                           className="button danger"
@@ -862,7 +901,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                           disabled={accActionLoading}
                           onClick={() => void handleDeleteAccount(acc.id)}
                         >
-                          Revoke
+                          {tr("Revoke", "Révoquer")}
                         </button>
                       </div>
                     </>
@@ -874,8 +913,13 @@ export function Agents({ api }: { api: DashboardApi }) {
 
         <div className="agent-add" style={{ marginTop: "16px" }}>
           <div>
-            <h3>Add provider identity</h3>
-            <p className="muted">e.g. antigravity-secondary, claude-backup, codex-dev.</p>
+            <h3>{tr("Add provider identity", "Ajouter une identité de fournisseur")}</h3>
+            <p className="muted">
+              {tr(
+                "e.g. antigravity-secondary, claude-backup, codex-dev.",
+                "ex. antigravity-secondaire, claude-backup, codex-dev.",
+              )}
+            </p>
           </div>
           <div className="agent-add-form">
             <select
@@ -893,13 +937,13 @@ export function Agents({ api }: { api: DashboardApi }) {
             <input
               className="field"
               value={newAccId}
-              placeholder="unique-identifier"
+              placeholder={tr("unique-identifier", "identifiant-unique")}
               onChange={(e) => setNewAccId(normalizeKey(e.target.value))}
             />
             <input
               className="field"
               value={newAccName}
-              placeholder="Full name (e.g. Claude Backup)"
+              placeholder={tr("Full name (e.g. Claude Backup)", "Nom complet (ex. Claude Backup)")}
               onChange={(e) => setNewAccName(e.target.value)}
             />
             <input
@@ -909,7 +953,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               max={10}
               value={newAccPriority}
               style={{ width: "80px" }}
-              title="Priority (1 = high priority)"
+              title={tr("Priority (1 = high priority)", "Priorité (1 = haute priorité)")}
               onChange={(e) => setNewAccPriority(Number(e.target.value) || 1)}
             />
             <button
@@ -918,7 +962,9 @@ export function Agents({ api }: { api: DashboardApi }) {
               disabled={accActionLoading || !newAccId.trim() || !newAccName.trim()}
               onClick={() => void handleCreateAccount()}
             >
-              {accActionLoading ? "Creating…" : "Create identity"}
+              {accActionLoading
+                ? tr("Creating…", "Création…")
+                : tr("Create identity", "Créer l'identité")}
             </button>
           </div>
         </div>
@@ -940,19 +986,29 @@ export function Agents({ api }: { api: DashboardApi }) {
             }}
           >
             <div>
-              <h3>Smart Routing & Feedback Learning</h3>
+              <h3>
+                {tr(
+                  "Smart Routing & Feedback Learning",
+                  "Routage Intelligent & Apprentissage par Feedback",
+                )}
+              </h3>
               <p className="muted">
-                Dynamic multi-criteria scoring (affinities, auth, 5h/weekly quotas, cooldowns,
-                latency, history) replacing static priorities.
+                {tr(
+                  "Dynamic multi-criteria scoring (affinities, auth, 5h/weekly quotas, cooldowns, latency, history) replacing static priorities.",
+                  "Scoring multicritère dynamique (affinités, authentification, quotas 5h/hebdo, refroidissements, latence, historique) remplaçant les priorités statiques.",
+                )}
               </p>
             </div>
             <button
               className="button"
               type="button"
               onClick={() => void handleResetRouting()}
-              title="Resets success metrics and learned scores"
+              title={tr(
+                "Resets success metrics and learned scores",
+                "Réinitialise les métriques de succès et scores appris",
+              )}
             >
-              Reset learning
+              {tr("Reset learning", "Réinitialiser l'apprentissage")}
             </button>
           </div>
 
@@ -970,14 +1026,14 @@ export function Agents({ api }: { api: DashboardApi }) {
             >
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--nx-line)" }}>
-                  <th style={{ padding: "8px" }}>Profile</th>
-                  <th style={{ padding: "8px" }}>Auth</th>
-                  <th style={{ padding: "8px" }}>Code</th>
-                  <th style={{ padding: "8px" }}>Research</th>
-                  <th style={{ padding: "8px" }}>Review</th>
-                  <th style={{ padding: "8px" }}>Browser</th>
-                  <th style={{ padding: "8px" }}>Synthesis</th>
-                  <th style={{ padding: "8px" }}>Runs / Success</th>
+                  <th style={{ padding: "8px" }}>{tr("Profile", "Profil")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Auth", "Auth")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Code", "Code")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Research", "Recherche")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Review", "Revue")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Browser", "Navigateur")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Synthesis", "Synthèse")}</th>
+                  <th style={{ padding: "8px" }}>{tr("Runs / Success", "Exécutions / Succès")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -991,7 +1047,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                         color: "var(--nx-text-muted)",
                       }}
                     >
-                      No routing data available.
+                      {tr("No routing data available.", "Aucune donnée de routage disponible.")}
                     </td>
                   </tr>
                 ) : (
@@ -1001,7 +1057,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                         {r.key}
                         {r.cooldownActive ? (
                           <span style={{ color: "var(--nx-warn)", marginLeft: "6px" }}>
-                            (Cooldown)
+                            ({tr("Cooldown", "Refroidissement")})
                           </span>
                         ) : null}
                       </td>
@@ -1009,7 +1065,9 @@ export function Agents({ api }: { api: DashboardApi }) {
                         <span
                           className={`badge ${r.authStatus === "authenticated" ? "success" : "attention"}`}
                         >
-                          {r.authStatus}
+                          {r.authStatus === "authenticated"
+                            ? tr("authenticated", "authentifié")
+                            : r.authStatus}
                         </span>
                       </td>
                       <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.code ?? 0)}</td>
@@ -1024,7 +1082,8 @@ export function Agents({ api }: { api: DashboardApi }) {
                         {Math.round(r.categoryScores.synthesis ?? 0)}
                       </td>
                       <td style={{ padding: "8px" }}>
-                        {r.totalRuns} runs ({Math.round(r.overallSuccessRate * 100)} %)
+                        {r.totalRuns} {tr("runs", "exécutions")} (
+                        {Math.round(r.overallSuccessRate * 100)} %)
                       </td>
                     </tr>
                   ))
@@ -1038,15 +1097,23 @@ export function Agents({ api }: { api: DashboardApi }) {
             className="card"
             style={{ padding: "16px", background: "var(--nx-surface)", borderRadius: "8px" }}
           >
-            <h4 style={{ margin: "0 0 10px 0" }}>Routing Evaluation Simulator</h4>
+            <h4 style={{ margin: "0 0 10px 0" }}>
+              {tr("Routing Evaluation Simulator", "Simulateur d'Évaluation de Routage")}
+            </h4>
             <p className="muted" style={{ marginBottom: "12px" }}>
-              Test which route and agent the orchestrator selects for a given instruction.
+              {tr(
+                "Test which route and agent the orchestrator selects for a given instruction.",
+                "Testez quelle route et quel agent l'orchestrateur sélectionne pour une instruction donnée.",
+              )}
             </p>
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
               <input
                 className="field"
                 type="text"
-                placeholder="e.g. Fix the bug in services/api/src/auth.ts and add a vitest test"
+                placeholder={tr(
+                  "e.g. Fix the bug in services/api/src/auth.ts and add a vitest test",
+                  "ex. Corriger le bug dans services/api/src/auth.ts et ajouter un test vitest",
+                )}
                 value={testRoutingInstruction}
                 onChange={(e) => setTestRoutingInstruction(e.target.value)}
                 onKeyDown={(e) => {
@@ -1060,7 +1127,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                 disabled={routingLoading || !testRoutingInstruction.trim()}
                 onClick={() => void handleEvaluateRouting()}
               >
-                {routingLoading ? "Evaluating…" : "Evaluate"}
+                {routingLoading ? tr("Evaluating…", "Évaluation…") : tr("Evaluate", "Évaluer")}
               </button>
             </div>
 
@@ -1076,18 +1143,20 @@ export function Agents({ api }: { api: DashboardApi }) {
                   style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}
                 >
                   <div>
-                    <strong>Category:</strong>{" "}
+                    <strong>{tr("Category:", "Catégorie :")}</strong>{" "}
                     <span className="badge">
                       {routingEvaluation.classification.primaryCategory}
                     </span>
                   </div>
                   <div>
-                    <strong>Complexity:</strong>{" "}
+                    <strong>{tr("Complexity:", "Complexité :")}</strong>{" "}
                     {routingEvaluation.classification.estimatedComplexity}
                   </div>
                   <div>
-                    <strong>Browser required:</strong>{" "}
-                    {routingEvaluation.classification.requiresBrowser ? "Yes" : "No"}
+                    <strong>{tr("Browser required:", "Navigateur requis :")}</strong>{" "}
+                    {routingEvaluation.classification.requiresBrowser
+                      ? tr("Yes", "Oui")
+                      : tr("No", "Non")}
                   </div>
                 </div>
 
@@ -1119,7 +1188,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                           <span
                             style={{ color: "var(--nx-ok)", fontWeight: "bold", marginLeft: "6px" }}
                           >
-                            ★ Recommended
+                            ★ {tr("Recommended", "Recommandé")}
                           </span>
                         ) : null}
                         {!agent.isAvailable ? (
@@ -1129,8 +1198,8 @@ export function Agents({ api }: { api: DashboardApi }) {
                         ) : null}
                         <div className="muted" style={{ fontSize: "0.8rem", marginTop: "4px" }}>
                           Compat: {agent.breakdown.compatibility} · Auth:{" "}
-                          {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·
-                          Reliability: {agent.breakdown.health} · Perf:{" "}
+                          {agent.breakdown.authentication} · Quota: {agent.breakdown.quota} ·{" "}
+                          {tr("Reliability:", "Fiabilité :")} {agent.breakdown.health} · Perf:{" "}
                           {agent.breakdown.performance}
                         </div>
                       </div>
@@ -1170,19 +1239,22 @@ function percent(value: number | null): string {
   return value === null ? "unknown" : `${value} %`;
 }
 
-function healthLabel(status: AgentRegistry["configured"][number]["status"]): string {
+function healthLabel(
+  status: AgentRegistry["configured"][number]["status"],
+  tr: (en: string, fr: string) => string,
+): string {
   switch (status) {
     case "available":
-      return "Available";
+      return tr("Available", "Disponible");
     case "degraded":
-      return "Degraded";
+      return tr("Degraded", "Dégradé");
     case "cooldown":
-      return "Cooling down";
+      return tr("Cooling down", "En refroidissement");
     case "quota_exhausted":
-      return "Quota exhausted";
+      return tr("Quota exhausted", "Quota épuisé");
     case "auth_required":
-      return "Authentication required";
+      return tr("Authentication required", "Authentification requise");
     default:
-      return "Unmeasured";
+      return tr("Unmeasured", "Non mesuré");
   }
 }

@@ -14,6 +14,23 @@ export function ShortlistComparison({
 }: ShortlistComparisonProps) {
   const { tr } = useI18n();
 
+  const formatTrack = (track: string) => {
+    if (track === "phd") return tr("PhD", "Doctorat");
+    if (track === "cdi") return tr("CDI", "CDI");
+    if (track === "freelance") return tr("Freelance", "Freelance");
+    return track;
+  };
+
+  const formatMetricLabel = (key: string, defaultLabel: string) => {
+    if (key === "compensation") return tr("Compensation / Rate", "Rémunération / TJM");
+    if (key === "location") return tr("Location & Flexibility", "Localisation & Flexibilité");
+    if (key === "track") return tr("Track Fit", "Adéquation Filière");
+    if (key === "matchScore") return tr("Match Score", "Score de compatibilité");
+    if (key === "researchAutonomy") return tr("Research Autonomy", "Autonomie Scientifique");
+    if (key === "careerAdvancement") return tr("Career Advancement", "Progression de Carrière");
+    return defaultLabel;
+  };
+
   if (!matrix || matrix.opportunities.length === 0) {
     return (
       <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
@@ -98,7 +115,7 @@ export function ShortlistComparison({
                       className={`career-track-pill ${opp.track}`}
                       style={{ marginBottom: "0.35rem" }}
                     >
-                      {opp.track}
+                      {formatTrack(opp.track)}
                     </span>
                     <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>{opp.title}</div>
                     <div
@@ -114,7 +131,7 @@ export function ShortlistComparison({
           <tbody>
             {matrix.metrics.map((metric) => (
               <tr key={metric.key}>
-                <th scope="row">{metric.label}</th>
+                <th scope="row">{formatMetricLabel(metric.key, metric.label)}</th>
                 {matrix.opportunities.map((opp) => {
                   const val = metric.valuesByOpportunityId[opp.id];
                   const isWinner = metric.winnerOpportunityId === opp.id;

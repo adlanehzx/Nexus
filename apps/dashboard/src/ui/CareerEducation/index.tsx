@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n/index.js";
+import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";
 import type {
   Application,
   CareerAnalytics,
@@ -47,7 +48,7 @@ interface CareerEducationProps {
 }
 
 export function CareerEducation({ client, initialTab = "inbox" }: CareerEducationProps) {
-  const { locale } = useI18n();
+  const { tr } = useI18n();
   const [activeTab, setActiveTab] = useState<CareerEducationTabId>(initialTab);
   const [loading, setLoading] = useState(true);
   const [offlineError, setOfflineError] = useState<string | null>(null);
@@ -188,19 +189,106 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
 
   return (
     <div className="career-edu-container" role="main" aria-label="NEXUS Career & Education Area">
+      {/* 3D Holographic AI Core & Real-time HUD */}
+      <div className="career-hero">
+        <div className="career-hero-top">
+          <div className="career-hero-title-group">
+            <div className="career-kicker">
+              <span className="radar-pulse-ring" style={{ width: 8, height: 8 }} />
+              {tr("Autonomous Career & Research Engine", "Moteur de Carrière & Recherche Autonome")}
+            </div>
+            <h2>{tr("NEXUS Strategic Career Matrix", "Matrice de Carrière Stratégique NEXUS")}</h2>
+            <p>
+              {tr(
+                "Orchestrates PhD opportunities, permanent CDI positions, and high-impact freelance missions with explainable multi-factor scoring, audited safe drafts, and human-in-the-loop validation.",
+                "Orchestre opportunités de thèses/doctorats, contrats CDI et missions freelance avec scoring multi-critères explicable, brouillons sécurisés et validation humaine systématique.",
+              )}
+            </p>
+          </div>
+          <div
+            className="career-hero-canvas-box"
+            title={tr(
+              "Holographic Opportunity Singularity Core",
+              "Noyau Holographique d'Opportunités",
+            )}
+          >
+            <Futuristic3DCanvas />
+          </div>
+        </div>
+
+        <div className="career-hud-stats-grid">
+          <div className="career-hud-stat-card">
+            <span className="career-hud-stat-label">
+              {tr("Profile Readiness", "Complétude Profil")}
+            </span>
+            <span className="career-hud-stat-val" style={{ color: "var(--ok, #00ff88)" }}>
+              {profile ? `${profile.completeness.score}%` : "0%"}
+            </span>
+            <span className="career-hud-stat-sub">
+              {profile && profile.completeness.missingCrucialFields.length > 0
+                ? `${profile.completeness.missingCrucialFields.length} ${tr("crucial fields to complete", "champs essentiels à renseigner")}`
+                : tr("Optimized for matching", "Optimisé pour le matching")}
+            </span>
+          </div>
+
+          <div className="career-hud-stat-card">
+            <span className="career-hud-stat-label">
+              {tr("Active Pipeline", "Candidatures en cours")}
+            </span>
+            <span className="career-hud-stat-val" style={{ color: "var(--accent, #00f0ff)" }}>
+              {applications.length}
+            </span>
+            <span className="career-hud-stat-sub">
+              {applications.filter((a) => a.stage === "interviewing" || a.stage === "offer").length}{" "}
+              {tr("in interview/offer", "en entretien/offre")}
+            </span>
+          </div>
+
+          <div className="career-hud-stat-card">
+            <span className="career-hud-stat-label">
+              {tr("Pending Approvals", "Approbations en attente")}
+            </span>
+            <span
+              className="career-hud-stat-val"
+              style={{
+                color: pendingApprovalsCount > 0 ? "var(--warn, #ffaa00)" : "var(--ok, #00ff88)",
+              }}
+            >
+              {pendingApprovalsCount}
+            </span>
+            <span className="career-hud-stat-sub">
+              {pendingApprovalsCount > 0
+                ? tr("Human gate required", "Validation requise")
+                : tr("Safe research plane clear", "Plan sécurisé dégagé")}
+            </span>
+          </div>
+
+          <div className="career-hud-stat-card">
+            <span className="career-hud-stat-label">{tr("Live Feeds", "Flux Actifs")}</span>
+            <span className="career-hud-stat-val">
+              {monitoredSources.filter((s) => s.status === "active").length} /{" "}
+              {monitoredSources.length}
+            </span>
+            <span className="career-hud-stat-sub">
+              {monitoredSources.filter((s) => s.status === "degraded").length > 0
+                ? tr("Degraded rate limits detected", "Limites de débit ralenties")
+                : tr("All streams nominal", "Tous flux nominaux")}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Offline / Degraded Notice Banner */}
       {offlineError && (
         <div className="career-offline-banner" role="alert">
           <div>
             <strong>
-              {locale === "fr"
-                ? "⚠️ Flux inaccessibles / Hors ligne :"
-                : "⚠️ Feeds Unreachable / Offline:"}
+              {tr("⚠️ Feeds Unreachable / Offline:", "⚠️ Flux inaccessibles / Hors ligne :")}
             </strong>{" "}
             {offlineError}
           </div>
           <button type="button" className="button compact danger" onClick={() => void reloadAll()}>
-            {locale === "fr" ? "Réessayer la connexion" : "Retry Connection"}
+            {tr("Retry Connection", "Réessayer la connexion")}
           </button>
         </div>
       )}
@@ -214,7 +302,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("inbox")}
         >
-          <span>📥</span> {locale === "fr" ? "Découverte & Flux" : "Discovery & Inbox"}
+          <span>📥</span> {tr("Discovery & Inbox", "Découverte & Flux")}
         </button>
 
         <button
@@ -224,7 +312,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("comparison")}
         >
-          <span>⚖️</span> {locale === "fr" ? "Matrice de comparaison" : "Comparison Matrix"}
+          <span>⚖️</span> {tr("Comparison Matrix", "Matrice de comparaison")}
           {selectedForComparison.length > 0 && (
             <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
               ({selectedForComparison.length})
@@ -239,8 +327,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("pipeline")}
         >
-          <span>📊</span> {locale === "fr" ? "Kanban Candidatures" : "Application Kanban"} (
-          {applications.length})
+          <span>📊</span> {tr("Application Kanban", "Kanban Candidatures")} ({applications.length})
         </button>
 
         <button
@@ -250,8 +337,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("documents")}
         >
-          <span>📄</span> {locale === "fr" ? "Documents sur mesure" : "Tailored Documents"} (
-          {documents.length})
+          <span>📄</span> {tr("Tailored Documents", "Documents sur mesure")} ({documents.length})
         </button>
 
         <button
@@ -261,7 +347,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("deadlines")}
         >
-          <span>📅</span> {locale === "fr" ? "Échéances & Planning" : "Deadlines & Schedule"} (
+          <span>📅</span> {tr("Deadlines & Schedule", "Échéances & Planning")} (
           {deadlines.filter((d) => !d.completed).length})
         </button>
 
@@ -272,7 +358,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("analytics")}
         >
-          <span>📈</span> {locale === "fr" ? "Contacts & Statistiques" : "Contacts & Analytics"}
+          <span>📈</span> {tr("Contacts & Analytics", "Contacts & Statistiques")}
         </button>
 
         <button
@@ -282,7 +368,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("approvals")}
         >
-          <span>🛡️</span> {locale === "fr" ? "Approbations & Sécurité" : "Approvals & Safety"}
+          <span>🛡️</span> {tr("Approvals & Safety", "Approbations & Sécurité")}
           {pendingApprovalsCount > 0 && (
             <span className="badge-counter">{pendingApprovalsCount}</span>
           )}
@@ -295,7 +381,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("profile")}
         >
-          <span>🎯</span> {locale === "fr" ? "Objectifs & Profil" : "Goals & Profile Wizard"}
+          <span>🎯</span> {tr("Goals & Profile Wizard", "Objectifs & Profil")}
           {profile && (
             <span style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700 }}>
               {profile.completeness.score}%
@@ -310,7 +396,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("settings")}
         >
-          <span>⚙️</span> {locale === "fr" ? "Paramètres & Sources" : "Settings & Feeds"}
+          <span>⚙️</span> {tr("Settings & Feeds", "Paramètres & Sources")}
         </button>
       </nav>
 

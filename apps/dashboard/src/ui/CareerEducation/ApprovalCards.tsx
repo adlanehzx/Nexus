@@ -49,6 +49,15 @@ export function ApprovalCards({
 
   const pendingCount = confirmations.filter((c) => c.status === "pending").length;
 
+  const formatStatus = (status: ConfirmationStatus) => {
+    if (status === "pending") return tr("Pending", "En attente");
+    if (status === "approved") return tr("Approved", "Approuvée");
+    if (status === "rejected") return tr("Rejected", "Refusée");
+    if (status === "cancelled") return tr("Cancelled", "Annulée");
+    if (status === "expired") return tr("Expired", "Expirée");
+    return status;
+  };
+
   return (
     <div
       className="career-edu-container"
@@ -199,7 +208,7 @@ export function ApprovalCards({
                               : "var(--down)",
                       }}
                     >
-                      {conf.status}
+                      {formatStatus(conf.status)}
                     </span>
                   </div>
 

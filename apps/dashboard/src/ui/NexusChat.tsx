@@ -10,7 +10,7 @@ interface ChatMessage {
 }
 
 export function NexusChat({ api }: { api: DashboardApi }) {
-  const { t, locale } = useI18n();
+  const { t, locale, tr } = useI18n();
   const restoredMission = readMissionFromUrl();
   const [messages, setMessages] = useState<ChatMessage[]>(
     restoredMission === null
@@ -54,12 +54,16 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           }
         })
         .catch((cause: unknown) => {
-          setError(cause instanceof Error ? cause.message : "Suivi de mission impossible.");
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : tr("Mission tracking unavailable.", "Suivi de mission impossible."),
+          );
           setActiveMission(null);
         });
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [activeMission, api]);
+  }, [activeMission, api, tr]);
 
   const submit = (): void => {
     const text = draft.trim();
@@ -81,16 +85,79 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         setActiveMission(mission.missionId);
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "NEXUS could not start the mission.");
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : tr("NEXUS could not start the mission.", "NEXUS n'a pas pu démarrer la mission."),
+        );
       });
   };
 
   return (
     <section className="nexus-chat">
+      {/* Top Futuristic Cockpit Telemetry Strip */}
+      <div
+        className="chat-cockpit-strip"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0.5rem 0.25rem 0.75rem",
+          borderBottom: "1px solid rgba(0, 240, 255, 0.15)",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <span className="radar-pulse-ring" />
+          <span
+            style={{
+              fontFamily: "var(--nx-font-mono, monospace)",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--accent, #00f0ff)",
+            }}
+          >
+            {tr(
+              "NEXUS NEURAL LINK // COGNITIVE DISPATCHER",
+              "LIAISON NEURALE NEXUS // RÉPARTITEUR COGNITIF",
+            )}
+          </span>
+        </div>
+        <div>
+          {activeMission !== null ? (
+            <span className="hud-telemetry-badge" style={{ borderColor: "var(--accent, #00f0ff)" }}>
+              <span className="hud-audio-bars">
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+              </span>
+              <strong>{tr("ORCHESTRATING", "ORCHESTRATION EN COURS")}</strong>
+            </span>
+          ) : (
+            <span className="hud-telemetry-badge">
+              <span className="system-dot" />
+              <span>{tr("ONLINE // STANDBY", "EN LIGNE // EN ATTENTE")}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="chat-feed" aria-live="polite">
         {messages.length === 0 ? (
           <div className="chat-welcome">
-            <div className="nexus-mark">N</div>
+            <div
+              className="nexus-mark"
+              style={{
+                boxShadow: "0 0 25px rgba(0, 240, 255, 0.4)",
+                border: "1px solid #00f0ff",
+              }}
+            >
+              N
+            </div>
             <h2>
               {locale === "fr"
                 ? "Que souhaitez-vous accomplir ?"
@@ -101,6 +168,78 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                 ? "Échangez avec NEXUS. Il sélectionne les agents, répartit les tâches, compare leurs résultats et fournit une synthèse unifiée."
                 : "Talk to NEXUS. It selects agents, distributes work, compares their answers, and delivers a single outcome."}
             </p>
+
+            {/* Quick Dispatch Prompt Buttons */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.6rem",
+                justifyContent: "center",
+                marginTop: "1.75rem",
+              }}
+            >
+              <button
+                type="button"
+                className="button compact"
+                style={{
+                  background: "rgba(13, 21, 39, 0.8)",
+                  borderColor: "rgba(0, 240, 255, 0.25)",
+                  fontSize: "0.82rem",
+                  padding: "0.45rem 0.85rem",
+                }}
+                onClick={() =>
+                  setDraft(
+                    tr(
+                      "Run full security and governance audit across all workers",
+                      "Lancer un audit complet de sécurité et gouvernance sur tous les agents",
+                    ),
+                  )
+                }
+              >
+                <span>🛡️</span> {tr("Audit security & workers", "Auditer sécurité & agents")}
+              </button>
+              <button
+                type="button"
+                className="button compact"
+                style={{
+                  background: "rgba(13, 21, 39, 0.8)",
+                  borderColor: "rgba(0, 240, 255, 0.25)",
+                  fontSize: "0.82rem",
+                  padding: "0.45rem 0.85rem",
+                }}
+                onClick={() =>
+                  setDraft(
+                    tr(
+                      "Scan career opportunities and summarize top research positions",
+                      "Scanner les opportunités de carrière et résumer les meilleures thèses",
+                    ),
+                  )
+                }
+              >
+                <span>🎯</span> {tr("Scan career opportunities", "Scanner les opportunités")}
+              </button>
+              <button
+                type="button"
+                className="button compact"
+                style={{
+                  background: "rgba(13, 21, 39, 0.8)",
+                  borderColor: "rgba(0, 240, 255, 0.25)",
+                  fontSize: "0.82rem",
+                  padding: "0.45rem 0.85rem",
+                }}
+                onClick={() =>
+                  setDraft(
+                    tr(
+                      "Inspect task work queue and optimize routing affinities",
+                      "Inspecter la file de travail et optimiser les affinités de routage",
+                    ),
+                  )
+                }
+              >
+                <span>⚡</span> {tr("Optimize routing matrix", "Optimiser le routage")}
+              </button>
+            </div>
           </div>
         ) : null}
         {messages.map((message) => (
@@ -123,27 +262,49 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           submit();
         }}
       >
-        <textarea
-          aria-label="Mission for NEXUS"
-          value={draft}
-          disabled={activeMission !== null}
-          placeholder={
-            activeMission === null
-              ? t("chat.inputPlaceholder")
-              : locale === "fr"
-                ? "Les agents travaillent…"
-                : "Agents are working…"
-          }
-          rows={3}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <textarea
+            aria-label="Mission for NEXUS"
+            value={draft}
+            disabled={activeMission !== null}
+            placeholder={
+              activeMission === null
+                ? t("chat.inputPlaceholder")
+                : locale === "fr"
+                  ? "Les agents travaillent…"
+                  : "Agents are working…"
             }
-          }}
-        />
-        <button type="submit" disabled={activeMission !== null || draft.trim().length === 0}>
+            rows={3}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "0.72rem",
+              color: "var(--muted-text, #8b949e)",
+              padding: "0 0.25rem",
+            }}
+          >
+            <span>
+              {tr(
+                "Shift+Enter for newline · Enter to send",
+                "Maj+Entrée pour nouvelle ligne · Entrée pour envoyer",
+              )}
+            </span>
+          </div>
+        </div>
+        <button
+          type="submit"
+          className="button primary"
+          disabled={activeMission !== null || draft.trim().length === 0}
+        >
           {t("chat.send")}
         </button>
       </form>
@@ -170,12 +331,12 @@ function pendingMission(missionId: string): OrchestratedMission {
 }
 
 function MissionReply({ mission }: { mission: OrchestratedMission }) {
-  const { locale } = useI18n();
+  const { tr } = useI18n();
   if (mission.response !== null) return <div className="chat-text">{mission.response}</div>;
   if (mission.error !== null || mission.state === "failed") {
     return (
       <div className="chat-error">
-        {mission.error ?? (locale === "fr" ? "Échec de la mission." : "Mission failed.")}
+        {mission.error ?? tr("Mission failed.", "Échec de la mission.")}
       </div>
     );
   }
@@ -196,12 +357,36 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
         aria-valuemax={100}
         aria-valuenow={percent}
       >
-        <div style={{ width: `${String(percent)}%` }} />
+        <div
+          style={{
+            width: `${String(percent)}%`,
+            background: "linear-gradient(90deg, #00f0ff, #00ff88)",
+            boxShadow: "0 0 10px rgba(0, 240, 255, 0.6)",
+          }}
+        />
       </div>
-      <div className="muted">
-        {locale === "fr"
-          ? `NEXUS orchestre la mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tâches accomplies`
-          : `NEXUS orchestrating mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tasks completed`}
+      <div
+        className="muted"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          marginTop: "0.4rem",
+        }}
+      >
+        <span className="hud-audio-bars">
+          <span className="hud-audio-bar" />
+          <span className="hud-audio-bar" />
+          <span className="hud-audio-bar" />
+          <span className="hud-audio-bar" />
+          <span className="hud-audio-bar" />
+        </span>
+        <span>
+          {tr(
+            `NEXUS orchestrating mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tasks completed (${percent}%)`,
+            `NEXUS orchestre la mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tâches accomplies (${percent}%)`,
+          )}
+        </span>
       </div>
     </div>
   );
