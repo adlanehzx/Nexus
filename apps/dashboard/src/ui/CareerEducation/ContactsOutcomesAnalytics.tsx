@@ -7,6 +7,7 @@ import type {
   OutcomeDecision,
   RecordOutcomeInput,
 } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface ContactsOutcomesAnalyticsProps {
   contacts: Contact[];
@@ -25,6 +26,7 @@ export function ContactsOutcomesAnalytics({
   onRecordOutcome,
   loading = false,
 }: ContactsOutcomesAnalyticsProps) {
+  const { tr } = useI18n();
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [targetOppId, setTargetOppId] = useState(opportunities[0]?.id ?? "");
   const [decision, setDecision] = useState<OutcomeDecision>("accepted");
@@ -49,9 +51,18 @@ export function ContactsOutcomesAnalytics({
         retrospectiveNotes,
       });
       setShowOutcomeModal(false);
-      setNotice(`Outcome recorded: ${decision.toUpperCase()}. Pipeline metrics updated.`);
+      setNotice(
+        tr(
+          `Outcome recorded: ${decision.toUpperCase()}. Pipeline metrics updated.`,
+          `Résultat consigné : ${decision.toUpperCase()}. Métriques du pipeline mises à jour.`,
+        ),
+      );
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Failed to record outcome.");
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to record outcome.", "Échec de l'enregistrement du résultat."),
+      );
     }
   };
 
@@ -72,16 +83,21 @@ export function ContactsOutcomesAnalytics({
       >
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
-            Contacts, Interviews, Outcomes & Analytics
+            {tr(
+              "Contacts, Interviews, Outcomes & Analytics",
+              "Contacts, Entretiens, Résultats & Statistiques",
+            )}
           </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Network connections, interview question briefs, final decision retrospectives, and
-            conversion funnels.
+            {tr(
+              "Network connections, interview question briefs, final decision retrospectives, and conversion funnels.",
+              "Réseau professionnel, fiches de préparation aux entretiens, rétrospectives de décisions et entonnoirs de conversion.",
+            )}
           </p>
         </div>
 
         <button type="button" className="button primary" onClick={() => setShowOutcomeModal(true)}>
-          + Record Final Outcome
+          {tr("+ Record Final Outcome", "+ Enregistrer le résultat final")}
         </button>
       </div>
 
@@ -103,7 +119,10 @@ export function ContactsOutcomesAnalytics({
 
       {loading ? (
         <div className="career-card" style={{ textAlign: "center", padding: "2rem" }}>
-          Loading network contacts and interview analytics...
+          {tr(
+            "Loading network contacts and interview analytics...",
+            "Chargement des contacts et des analyses d'entretiens...",
+          )}
         </div>
       ) : (
         <>
@@ -111,44 +130,53 @@ export function ContactsOutcomesAnalytics({
           <div className="career-grid-3">
             <div className="career-card" style={{ gap: "0.35rem" }}>
               <span style={{ fontSize: "0.78rem", color: "var(--muted-text)", fontWeight: 700 }}>
-                DISCOVERED OPPORTUNITIES
+                {tr("DISCOVERED OPPORTUNITIES", "OPPORTUNITÉS DÉCOUVERTES")}
               </span>
               <span style={{ fontSize: "1.85rem", fontWeight: 800, color: "var(--text)" }}>
                 {analytics.totalOpportunitiesDiscovered}
               </span>
               <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
-                Across Inria, European Tech, & Freelance Feeds
+                {tr(
+                  "Across Inria, European Tech, & Freelance Feeds",
+                  "Sur les flux Inria, Tech Européenne & Freelance",
+                )}
               </span>
             </div>
 
             <div className="career-card" style={{ gap: "0.35rem" }}>
               <span style={{ fontSize: "0.78rem", color: "var(--muted-text)", fontWeight: 700 }}>
-                APPLICATIONS SUBMITTED
+                {tr("APPLICATIONS SUBMITTED", "CANDIDATURES SOUMISES")}
               </span>
               <span style={{ fontSize: "1.85rem", fontWeight: 800, color: "var(--accent)" }}>
                 {analytics.totalApplicationsSubmitted}
               </span>
               <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
-                100% Confirmed with Durable Human Approval
+                {tr(
+                  "100% Confirmed with Durable Human Approval",
+                  "100% Confirmées avec approbation humaine",
+                )}
               </span>
             </div>
 
             <div className="career-card" style={{ gap: "0.35rem" }}>
               <span style={{ fontSize: "0.78rem", color: "var(--muted-text)", fontWeight: 700 }}>
-                OFFERS RECEIVED
+                {tr("OFFERS RECEIVED", "OFFRES REÇUES")}
               </span>
               <span style={{ fontSize: "1.85rem", fontWeight: 800, color: "var(--ok)" }}>
                 {analytics.totalOffersReceived}
               </span>
               <span style={{ fontSize: "0.75rem", color: "var(--ok)" }}>
-                Avg Response Time: {analytics.averageResponseTimeDays} days
+                {tr("Avg Response Time:", "Délai moyen de réponse :")}{" "}
+                {analytics.averageResponseTimeDays} {tr("days", "jours")}
               </span>
             </div>
           </div>
 
           {/* Conversion Funnel Box */}
           <div className="career-card">
-            <strong style={{ fontSize: "0.95rem" }}>Application Conversion Funnel</strong>
+            <strong style={{ fontSize: "0.95rem" }}>
+              {tr("Application Conversion Funnel", "Entonnoir de Conversion des Candidatures")}
+            </strong>
             <div
               style={{
                 display: "grid",
@@ -181,7 +209,7 @@ export function ContactsOutcomesAnalytics({
                     {f.stage.replace("_", " ")}
                   </span>
                   <span style={{ fontSize: "0.68rem", color: "var(--ok)", marginTop: "0.25rem" }}>
-                    {f.conversionRateFromPrevious}% rate
+                    {f.conversionRateFromPrevious}% {tr("rate", "taux")}
                   </span>
                 </div>
               ))}
@@ -193,7 +221,7 @@ export function ContactsOutcomesAnalytics({
             {/* Contacts Directory */}
             <div className="career-card" style={{ gap: "0.75rem" }}>
               <strong style={{ fontSize: "0.95rem" }}>
-                Key Contacts Directory ({contacts.length})
+                {tr("Key Contacts Directory", "Répertoire des contacts clés")} ({contacts.length})
               </strong>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {contacts.map((c) => (
@@ -245,7 +273,9 @@ export function ContactsOutcomesAnalytics({
 
             {/* Interviews & Prep Questions */}
             <div className="career-card" style={{ gap: "0.75rem" }}>
-              <strong style={{ fontSize: "0.95rem" }}>Interview Rounds & Preparation</strong>
+              <strong style={{ fontSize: "0.95rem" }}>
+                {tr("Interview Rounds & Preparation", "Sessions d'entretien & Préparation")}
+              </strong>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {interviews.map((int) => (
                   <div
@@ -268,20 +298,21 @@ export function ContactsOutcomesAnalytics({
                       }}
                     >
                       <strong>
-                        Round {int.round}: {int.title}
+                        {tr("Round", "Tour")} {int.round}: {int.title}
                       </strong>
                       <span style={{ color: "var(--gradient)", fontSize: "0.75rem" }}>
                         {new Date(int.scheduledAt).toLocaleDateString()} ({int.durationMinutes} min)
                       </span>
                     </div>
                     <div style={{ color: "var(--muted-text)" }}>
-                      Interviewers: <strong>{int.interviewerNames.join(", ")}</strong> (
+                      {tr("Interviewers:", "Interlocuteurs :")}{" "}
+                      <strong>{int.interviewerNames.join(", ")}</strong> (
                       {int.format.replace("_", " ")})
                     </div>
 
                     <div style={{ marginTop: "0.25rem" }}>
                       <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text)" }}>
-                        Prepped Technical Questions:
+                        {tr("Prepped Technical Questions:", "Questions techniques préparées :")}
                       </span>
                       <ul
                         style={{
@@ -316,19 +347,23 @@ export function ContactsOutcomesAnalytics({
           <div className="career-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="career-modal-header">
               <h3 id="rec-outcome-title" className="career-modal-title">
-                Record Final Application Outcome
+                {tr(
+                  "Record Final Application Outcome",
+                  "Consigner le résultat final de la candidature",
+                )}
               </h3>
               <button
                 type="button"
                 className="button compact"
                 onClick={() => setShowOutcomeModal(false)}
+                aria-label={tr("Close", "Fermer")}
               >
                 ✕
               </button>
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="outcomeOpp">Target Opportunity</label>
+              <label htmlFor="outcomeOpp">{tr("Target Opportunity", "Opportunité ciblée")}</label>
               <select
                 id="outcomeOpp"
                 className="career-select"
@@ -344,22 +379,30 @@ export function ContactsOutcomesAnalytics({
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="outcomeDec">Decision</label>
+              <label htmlFor="outcomeDec">{tr("Decision", "Décision")}</label>
               <select
                 id="outcomeDec"
                 className="career-select"
                 value={decision}
                 onChange={(e) => setDecision(e.target.value as OutcomeDecision)}
               >
-                <option value="accepted">Offer Accepted</option>
-                <option value="declined">Offer Declined (Applicant Choice)</option>
-                <option value="rejected">Rejected by Organization</option>
-                <option value="withdrawn">Candidacy Withdrawn</option>
+                <option value="accepted">{tr("Offer Accepted", "Offre acceptée")}</option>
+                <option value="declined">
+                  {tr("Offer Declined (Applicant Choice)", "Offre déclinée (Choix du candidat)")}
+                </option>
+                <option value="rejected">
+                  {tr("Rejected by Organization", "Refusé par l'organisation")}
+                </option>
+                <option value="withdrawn">
+                  {tr("Candidacy Withdrawn", "Candidature retirée")}
+                </option>
               </select>
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="outcomeComp">Final Compensation / Terms</label>
+              <label htmlFor="outcomeComp">
+                {tr("Final Compensation / Terms", "Rémunération finale / Modalités")}
+              </label>
               <input
                 id="outcomeComp"
                 className="career-input"
@@ -370,7 +413,9 @@ export function ContactsOutcomesAnalytics({
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="outcomeFeedback">Feedback Received</label>
+              <label htmlFor="outcomeFeedback">
+                {tr("Feedback Received", "Commentaires reçus")}
+              </label>
               <textarea
                 id="outcomeFeedback"
                 className="career-textarea"
@@ -381,7 +426,12 @@ export function ContactsOutcomesAnalytics({
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="outcomeRetro">Retrospective Notes for NEXUS Memory</label>
+              <label htmlFor="outcomeRetro">
+                {tr(
+                  "Retrospective Notes for NEXUS Memory",
+                  "Notes rétrospectives pour la mémoire NEXUS",
+                )}
+              </label>
               <textarea
                 id="outcomeRetro"
                 className="career-textarea"
@@ -393,14 +443,14 @@ export function ContactsOutcomesAnalytics({
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <button type="button" className="button" onClick={() => setShowOutcomeModal(false)}>
-                Cancel
+                {tr("Cancel", "Annuler")}
               </button>
               <button
                 type="button"
                 className="button primary"
                 onClick={() => void handleOutcomeSubmit()}
               >
-                Save Outcome
+                {tr("Save Outcome", "Enregistrer le résultat")}
               </button>
             </div>
           </div>

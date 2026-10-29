@@ -4,6 +4,7 @@ import { classifyConnection } from "../lib/format.js";
 import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
+import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 
 type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
@@ -33,7 +34,7 @@ const STEP_TITLES_FR: Record<WizardStep, string> = {
 };
 
 export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: SetupWizardProps) {
-  const { locale } = useI18n();
+  const { tr, locale } = useI18n();
   const [step, setStep] = useState<WizardStep>(() => {
     try {
       const saved = window.sessionStorage.getItem("nexus.setup.step");
@@ -394,12 +395,16 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
   // ── Render Steps ───────────────────────────────────────────────────────────
   return (
     <main className="login-page">
-      <div className="login-shell" style={{ maxWidth: "680px", width: "100%" }}>
+      <div className="login-3d-bg" aria-hidden="true">
+        <Futuristic3DCanvas />
+      </div>
+      <div
+        className="login-shell"
+        style={{ maxWidth: "680px", width: "100%", position: "relative", zIndex: 1 }}
+      >
         <div className="login-brand">
           <span className="brand-mark">N</span>
-          <span>
-            {locale === "fr" ? "NEXUS · Assistant d'installation" : "NEXUS · Setup Wizard"}
-          </span>
+          <span>{tr("NEXUS · Setup Wizard", "NEXUS · Assistant d'installation")}</span>
           <span className="login-brand-spacer" />
           <LanguageSwitch />
           <ThemeToggle />
@@ -451,7 +456,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {error !== null && (
           <div className="banner error" role="alert" style={{ marginBottom: "16px" }}>
             <div>
-              <strong>Error:</strong> {error}
+              <strong>{tr("Error:", "Erreur :")}</strong> {error}
             </div>
             {diagnostic !== null && (
               <div style={{ marginTop: "8px" }}>
@@ -461,7 +466,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   onClick={copyDiagnostic}
                   style={{ fontSize: "11px" }}
                 >
-                  {copiedDiag ? "Copied diagnostic!" : "Copy sanitized diagnostic"}
+                  {copiedDiag
+                    ? tr("Copied diagnostic!", "Diagnostic copié !")
+                    : tr("Copy sanitized diagnostic", "Copier le diagnostic assaini")}
                 </button>
               </div>
             )}
@@ -472,8 +479,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {step === "prerequisites" && (
           <div>
             <div className="login-intro">
-              <h1>Verify Infrastructure Readiness</h1>
-              <p>Checking database, caching, and core service connectivity.</p>
+              <h1>
+                {tr(
+                  "Verify Infrastructure Readiness",
+                  "Vérifier la disponibilité de l'infrastructure",
+                )}
+              </h1>
+              <p>
+                {tr(
+                  "Checking database, caching, and core service connectivity.",
+                  "Vérification de la connectivité de la base de données, du cache et des services clés.",
+                )}
+              </p>
             </div>
 
             {alreadyInitialized && (
@@ -490,13 +507,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 }}
               >
                 <div>
-                  <strong>Administrator Account Already Created</strong>
+                  <strong>
+                    {tr("Administrator Account Already Created", "Compte Administrateur Déjà Créé")}
+                  </strong>
                   <div className="muted" style={{ fontSize: "13px" }}>
-                    NEXUS instance has already been initialized. You can sign in directly.
+                    {tr(
+                      "NEXUS instance has already been initialized. You can sign in directly.",
+                      "L'instance NEXUS a déjà été initialisée. Vous pouvez vous connecter directement.",
+                    )}
                   </div>
                 </div>
                 <button type="button" className="button primary compact" onClick={onSwitchToLogin}>
-                  Sign In
+                  {tr("Sign In", "Se connecter")}
                 </button>
               </div>
             )}
@@ -508,17 +530,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>PostgreSQL Database</strong>
+                  <strong>{tr("PostgreSQL Database", "Base de données PostgreSQL")}</strong>
                   <span
                     className={`state-pill ${readiness?.dependencies?.database?.status === "up" ? "good" : "danger"}`}
                   >
                     {readiness?.dependencies?.database?.status === "up"
-                      ? "Connected"
-                      : "Disconnected"}
+                      ? tr("Connected", "Connecté")
+                      : tr("Disconnected", "Déconnecté")}
                   </span>
                 </div>
                 <small className="muted">
-                  Latency: {readiness?.dependencies?.database?.latencyMs ?? "—"} ms
+                  {tr("Latency:", "Latence :")}{" "}
+                  {readiness?.dependencies?.database?.latencyMs ?? "—"} ms
                 </small>
               </div>
 
@@ -526,15 +549,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>Redis Cache & Broker</strong>
+                  <strong>{tr("Redis Cache & Broker", "Cache & Broker Redis")}</strong>
                   <span
                     className={`state-pill ${readiness?.dependencies?.redis?.status === "up" ? "good" : "danger"}`}
                   >
-                    {readiness?.dependencies?.redis?.status === "up" ? "Connected" : "Disconnected"}
+                    {readiness?.dependencies?.redis?.status === "up"
+                      ? tr("Connected", "Connecté")
+                      : tr("Disconnected", "Déconnecté")}
                   </span>
                 </div>
                 <small className="muted">
-                  Latency: {readiness?.dependencies?.redis?.latencyMs ?? "—"} ms
+                  {tr("Latency:", "Latence :")} {readiness?.dependencies?.redis?.latencyMs ?? "—"}{" "}
+                  ms
                 </small>
               </div>
 
@@ -542,11 +568,11 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>NEXUS Core API</strong>
+                  <strong>{tr("NEXUS Core API", "API Centrale NEXUS")}</strong>
                   <span
                     className={`state-pill ${readiness?.status === "ok" ? "good" : readiness?.status === "degraded" ? "warning" : "danger"}`}
                   >
-                    {readiness?.status ?? "Checking…"}
+                    {readiness?.status ?? tr("Checking…", "Vérification en cours…")}
                   </span>
                 </div>
                 <small className="muted">Version: {readiness?.version ?? "1.0.0"}</small>
@@ -560,7 +586,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 disabled={busy}
                 onClick={() => void probeReadiness()}
               >
-                {busy ? "Checking…" : "Re-check Readiness"}
+                {busy
+                  ? tr("Checking…", "Vérification…")
+                  : tr("Re-check Readiness", "Revérifier les prérequis")}
               </button>
               <button
                 type="button"
@@ -568,7 +596,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 disabled={busy || readiness?.status === "down"}
                 onClick={() => goToStep("admin")}
               >
-                Continue to Account Setup
+                {tr("Continue to Account Setup", "Continuer vers la configuration")}
               </button>
               <button
                 type="button"
@@ -576,7 +604,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 onClick={onSwitchToLogin}
                 style={{ marginLeft: "auto" }}
               >
-                Already have an account? Sign in
+                {tr("Already have an account? Sign in", "Déjà un compte ? Se connecter")}
               </button>
             </div>
           </div>
@@ -586,19 +614,22 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {step === "admin" && (
           <div>
             <div className="login-intro">
-              <h1>Create Administrator Account</h1>
+              <h1>{tr("Create Administrator Account", "Créer le compte administrateur")}</h1>
               <p>
-                The first registered user is automatically granted root administrative authority.
+                {tr(
+                  "The first registered user is automatically granted root administrative authority.",
+                  "Le premier utilisateur enregistré reçoit automatiquement l'autorité administrateur racine.",
+                )}
               </p>
             </div>
 
             <form className="login-form" onSubmit={(e) => void handleRegisterAdmin(e)}>
               <label>
-                Full Name
+                {tr("Full Name", "Nom complet")}
                 <input
                   className="field"
                   type="text"
-                  placeholder="Lead Engineer"
+                  placeholder={tr("Lead Engineer", "Ingénieur Principal")}
                   required
                   value={adminName}
                   onChange={(e) => setAdminName(e.target.value)}
@@ -606,7 +637,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </label>
 
               <label>
-                Administrator Email
+                {tr("Administrator Email", "E-mail administrateur")}
                 <input
                   className="field"
                   type="email"
@@ -619,7 +650,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </label>
 
               <label>
-                Password (minimum 12 characters)
+                {tr("Password (minimum 12 characters)", "Mot de passe (minimum 12 caractères)")}
                 <input
                   className="field"
                   type="password"
@@ -632,7 +663,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </label>
 
               <label>
-                Confirm Password
+                {tr("Confirm Password", "Confirmer le mot de passe")}
                 <input
                   className="field"
                   type="password"
@@ -650,20 +681,25 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   className="button secondary"
                   onClick={() => goToStep("prerequisites")}
                 >
-                  Back
+                  {tr("Back", "Retour")}
                 </button>
                 <button
                   type="submit"
                   className="button primary login-submit"
                   disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
                 >
-                  {busy ? "Creating Account…" : "Create Administrator & Continue"}
+                  {busy
+                    ? tr("Creating Account…", "Création du compte…")
+                    : tr("Create Administrator & Continue", "Créer l'administrateur & Continuer")}
                 </button>
               </div>
 
               <div style={{ marginTop: "12px", textAlign: "center" }}>
                 <button type="button" className="button compact" onClick={onSwitchToLogin}>
-                  Instance already initialized? Sign in directly
+                  {tr(
+                    "Instance already initialized? Sign in directly",
+                    "Instance déjà initialisée ? Se connecter directement",
+                  )}
                 </button>
               </div>
             </form>
@@ -674,10 +710,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {step === "agents" && (
           <div>
             <div className="login-intro">
-              <h1>Discover & Connect AI Agents</h1>
+              <h1>{tr("Discover & Connect AI Agents", "Découvrir & Connecter les agents IA")}</h1>
               <p>
-                NEXUS probes declared local CLI tools. No credentials or OAuth tokens ever pass
-                through the browser.
+                {tr(
+                  "NEXUS probes declared local CLI tools. No credentials or OAuth tokens ever pass through the browser.",
+                  "NEXUS sonde les outils CLI locaux déclarés. Aucun identifiant ou jeton OAuth ne transite par le navigateur.",
+                )}
               </p>
             </div>
 
@@ -689,14 +727,21 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 marginBottom: "12px",
               }}
             >
-              <span>Detected {connections.length} supported providers</span>
+              <span>
+                {tr(
+                  `Detected ${connections.length} supported providers`,
+                  `${connections.length} fournisseurs compatibles détectés`,
+                )}
+              </span>
               <button
                 type="button"
                 className="button secondary compact"
                 disabled={busy}
                 onClick={() => void scanAgents()}
               >
-                {busy ? "Scanning host…" : "Re-scan Host"}
+                {busy
+                  ? tr("Scanning host…", "Analyse en cours…")
+                  : tr("Re-scan Host", "Réanalyser l'hôte")}
               </button>
             </div>
 
@@ -740,7 +785,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                           disabled={isTesting || !entry.supportedOnThisHost}
                           onClick={() => void testProvider(entry.providerId)}
                         >
-                          {isTesting ? "Testing…" : "Test"}
+                          {isTesting ? tr("Testing…", "Test…") : tr("Test", "Tester")}
                         </button>
                         <button
                           type="button"
@@ -748,7 +793,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                           disabled={busy}
                           onClick={() => void addProviderToTeam(entry)}
                         >
-                          Add to Routing
+                          {tr("Add to Routing", "Ajouter au routage")}
                         </button>
                       </div>
                     </div>
@@ -765,11 +810,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                         }}
                       >
                         <div style={{ fontSize: "12px", fontWeight: "bold", marginBottom: "4px" }}>
-                          Official Sign-in Command
+                          {tr("Official Sign-in Command", "Commande officielle de connexion")}
                         </div>
                         <p style={{ margin: "0 0 6px 0", fontSize: "12px" }}>
-                          Run this official CLI command in your host terminal to open the provider's
-                          official browser login:
+                          {tr(
+                            "Run this official CLI command in your host terminal to open the provider's official browser login:",
+                            "Exécutez cette commande CLI officielle dans votre terminal pour ouvrir l'authentification officielle du fournisseur :",
+                          )}
                         </p>
                         <code
                           style={{
@@ -795,7 +842,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                               rel="noreferrer"
                               style={{ fontSize: "11px", color: "var(--accent)" }}
                             >
-                              View Official Documentation →
+                              {tr(
+                                "View Official Documentation →",
+                                "Consulter la documentation officielle →",
+                              )}
                             </a>
                           </div>
                         )}
@@ -808,14 +858,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
               <button type="button" className="button secondary" onClick={() => goToStep("admin")}>
-                Back
+                {tr("Back", "Retour")}
               </button>
               <button
                 type="button"
                 className="button primary"
                 onClick={() => goToStep("capabilities")}
               >
-                Continue to Capabilities
+                {tr("Continue to Capabilities", "Continuer vers les capacités")}
               </button>
             </div>
           </div>
@@ -825,10 +875,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {step === "capabilities" && (
           <div>
             <div className="login-intro">
-              <h1>Configure Optional Capabilities</h1>
+              <h1>
+                {tr("Configure Optional Capabilities", "Configurer les capacités optionnelles")}
+              </h1>
               <p>
-                Configure browser automation, MCP tools, and external worker pairing. All are
-                optional.
+                {tr(
+                  "Configure browser automation, MCP tools, and external worker pairing. All are optional.",
+                  "Configurez l'automatisation de navigateur, les outils MCP et l'association de nœuds de travail externes. Tout est optionnel.",
+                )}
               </p>
             </div>
 
@@ -837,9 +891,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               className="card"
               style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
             >
-              <h3>Browser Execution</h3>
+              <h3>{tr("Browser Execution", "Exécution du navigateur")}</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
-                Enable autonomous web browsing via CDP or dedicated container worker.
+                {tr(
+                  "Enable autonomous web browsing via CDP or dedicated container worker.",
+                  "Activez la navigation web autonome via CDP ou conteneur dédié.",
+                )}
               </p>
 
               <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
@@ -853,7 +910,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     checked={browserMode === "disabled"}
                     onChange={() => setBrowserMode("disabled")}
                   />
-                  Disabled
+                  {tr("Disabled", "Désactivé")}
                 </label>
                 <label
                   style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
@@ -865,7 +922,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     checked={browserMode === "local-harness"}
                     onChange={() => setBrowserMode("local-harness")}
                   />
-                  Local Chromium (CDP)
+                  {tr("Local Chromium (CDP)", "Chromium local (CDP)")}
                 </label>
                 <label
                   style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
@@ -877,13 +934,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     checked={browserMode === "remote-worker"}
                     onChange={() => setBrowserMode("remote-worker")}
                   />
-                  Remote Worker
+                  {tr("Remote Worker", "Nœud de travail distant")}
                 </label>
               </div>
 
               {browserMode === "local-harness" && (
                 <label style={{ display: "block", marginBottom: "10px" }}>
-                  CDP Endpoint URL
+                  {tr("CDP Endpoint URL", "URL du point de terminaison CDP")}
                   <input
                     className="field"
                     type="url"
@@ -895,7 +952,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
               {browserMode === "remote-worker" && (
                 <label style={{ display: "block", marginBottom: "10px" }}>
-                  Remote Worker Base URL
+                  {tr("Remote Worker Base URL", "URL de base du nœud distant")}
                   <input
                     className="field"
                     type="url"
@@ -911,7 +968,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 disabled={busy}
                 onClick={() => void handleSaveBrowser()}
               >
-                Save Browser Mode
+                {tr("Save Browser Mode", "Enregistrer le mode navigateur")}
               </button>
               {browserSuccessMsg && (
                 <span style={{ marginLeft: "10px", fontSize: "12px", color: "var(--ok)" }}>
@@ -927,7 +984,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             >
               <h3>Model Context Protocol (MCP)</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
-                Add local stdio tools. Sensitive variables must use vault references.
+                {tr(
+                  "Add local stdio tools. Sensitive variables must use vault references.",
+                  "Ajoutez des outils stdio locaux. Les variables sensibles doivent utiliser des références de coffre.",
+                )}
               </p>
               <div
                 style={{
@@ -939,20 +999,23 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               >
                 <input
                   className="field"
-                  placeholder="Server ID (e.g. filesystem)"
+                  placeholder={tr("Server ID (e.g. filesystem)", "ID du serveur (ex. filesystem)")}
                   value={mcpServerName}
                   onChange={(e) => setMcpServerName(e.target.value)}
                 />
                 <input
                   className="field"
-                  placeholder="Command (e.g. npx)"
+                  placeholder={tr("Command (e.g. npx)", "Commande (ex. npx)")}
                   value={mcpServerCommand}
                   onChange={(e) => setMcpServerCommand(e.target.value)}
                 />
               </div>
               <input
                 className="field"
-                placeholder="Arguments (e.g. -y @modelcontextprotocol/server-filesystem /path)"
+                placeholder={tr(
+                  "Arguments (e.g. -y @modelcontextprotocol/server-filesystem /path)",
+                  "Arguments (ex. -y @modelcontextprotocol/server-filesystem /chemin)",
+                )}
                 value={mcpServerArgs}
                 onChange={(e) => setMcpServerArgs(e.target.value)}
                 style={{ marginBottom: "10px" }}
@@ -963,7 +1026,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 disabled={busy || !mcpServerName.trim() || !mcpServerCommand.trim()}
                 onClick={() => void handleSaveMcp()}
               >
-                Register MCP Server
+                {tr("Register MCP Server", "Enregistrer le serveur MCP")}
               </button>
               {mcpSuccessMsg && (
                 <span style={{ marginLeft: "10px", fontSize: "12px", color: "var(--ok)" }}>
@@ -977,10 +1040,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               className="card"
               style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
             >
-              <h3>Pair a Device or Worker</h3>
+              <h3>{tr("Pair a Device or Worker", "Associer un appareil ou un travailleur")}</h3>
               <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
-                Generate a single-use pairing ticket to attach a Windows, Linux, or Android worker
-                without passing secrets on command lines.
+                {tr(
+                  "Generate a single-use pairing ticket to attach a Windows, Linux, or Android worker without passing secrets on command lines.",
+                  "Générez un ticket d'association à usage unique pour connecter un nœud Windows, Linux ou Android sans transmettre de secrets en ligne de commande.",
+                )}
               </p>
 
               {workerPairingTicket === null ? (
@@ -990,7 +1055,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   disabled={busy}
                   onClick={() => void handleGenerateWorkerTicket()}
                 >
-                  Generate Worker Ticket
+                  {tr("Generate Worker Ticket", "Générer un ticket de travailleur")}
                 </button>
               ) : (
                 <div
@@ -1003,14 +1068,15 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       alignItems: "center",
                     }}
                   >
-                    <strong>Pairing Ticket Generated</strong>
+                    <strong>{tr("Pairing Ticket Generated", "Ticket d'association généré")}</strong>
                     <small className="muted">
-                      Expires: {new Date(workerPairingTicket.expiresAt).toLocaleTimeString()}
+                      {tr("Expires:", "Expire à :")}{" "}
+                      {new Date(workerPairingTicket.expiresAt).toLocaleTimeString()}
                     </small>
                   </div>
                   <div style={{ margin: "8px 0" }}>
                     <span className="muted" style={{ fontSize: "11px" }}>
-                      One-time Token:
+                      {tr("One-time Token:", "Jeton à usage unique :")}
                     </span>
                     <code
                       style={{
@@ -1025,7 +1091,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     </code>
                   </div>
                   <div style={{ fontSize: "12px", marginTop: "8px" }}>
-                    To pair an external worker, run:
+                    {tr(
+                      "To pair an external worker, run:",
+                      "Pour associer un nœud externe, exécutez :",
+                    )}
                     <code
                       style={{
                         background: "var(--nx-canvas-sunken)",
@@ -1044,10 +1113,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
               <button type="button" className="button secondary" onClick={() => goToStep("agents")}>
-                Back
+                {tr("Back", "Retour")}
               </button>
               <button type="button" className="button primary" onClick={() => goToStep("complete")}>
-                Review & Finish
+                {tr("Review & Finish", "Vérifier & Terminer")}
               </button>
             </div>
           </div>
@@ -1057,9 +1126,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         {step === "complete" && (
           <div>
             <div className="login-intro">
-              <h1>Setup Complete!</h1>
+              <h1>{tr("Setup Complete!", "Installation terminée !")}</h1>
               <p>
-                Your local NEXUS assistant is configured and ready for autonomous mission execution.
+                {tr(
+                  "Your local NEXUS assistant is configured and ready for autonomous mission execution.",
+                  "Votre assistant local NEXUS est configuré et prêt pour l'exécution autonome de missions.",
+                )}
               </p>
             </div>
 
@@ -1079,19 +1151,39 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               >
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
-                  <span>Core services and database healthy</span>
+                  <span>
+                    {tr(
+                      "Core services and database healthy",
+                      "Services clés et base de données sains",
+                    )}
+                  </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
-                  <span>Administrator session authenticated</span>
+                  <span>
+                    {tr(
+                      "Administrator session authenticated",
+                      "Session administrateur authentifiée",
+                    )}
+                  </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
-                  <span>Discovered {connections.length} AI CLI providers</span>
+                  <span>
+                    {tr(
+                      `Discovered ${connections.length} AI CLI providers`,
+                      `${connections.length} fournisseurs IA CLI découverts`,
+                    )}
+                  </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
-                  <span>Optional capabilities & worker pairing initialized</span>
+                  <span>
+                    {tr(
+                      "Optional capabilities & worker pairing initialized",
+                      "Capacités optionnelles & association de nœuds initialisées",
+                    )}
+                  </span>
                 </li>
               </ul>
             </div>
@@ -1109,7 +1201,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   onComplete();
                 }}
               >
-                Launch NEXUS & Start Mission
+                {tr("Launch NEXUS & Start Mission", "Lancer NEXUS & Démarrer la mission")}
               </button>
             </div>
           </div>

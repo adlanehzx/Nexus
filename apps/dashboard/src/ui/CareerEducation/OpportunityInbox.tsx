@@ -5,6 +5,7 @@ import type {
   SavedSearch,
   MonitoredSource,
 } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface OpportunityInboxProps {
   opportunities: Opportunity[];
@@ -33,6 +34,7 @@ export function OpportunityInbox({
   onRefreshSource,
   loading = false,
 }: OpportunityInboxProps) {
+  const { tr } = useI18n();
   const [activeTrack, setActiveTrack] = useState<OpportunityTrack | "all">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [onlyFresh, setOnlyFresh] = useState(false);
@@ -63,7 +65,9 @@ export function OpportunityInbox({
       await task();
       setActionNotice(successMessage);
     } catch (err) {
-      setActionNotice(err instanceof Error ? err.message : "Action failed.");
+      setActionNotice(
+        err instanceof Error ? err.message : tr("Action failed.", "Échec de l'action."),
+      );
     }
   };
 
@@ -80,7 +84,7 @@ export function OpportunityInbox({
         }}
       >
         <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--muted-text)" }}>
-          MONITORED FEEDS:
+          {tr("MONITORED FEEDS:", "FLUX SURVEILLÉS :")}
         </span>
         {monitoredSources.map((source) => (
           <div
@@ -107,17 +111,22 @@ export function OpportunityInbox({
             />
             <span>{source.name}</span>
             {source.status === "degraded" && (
-              <span style={{ color: "var(--down)", fontWeight: 700 }}>[Degraded / 429]</span>
+              <span style={{ color: "var(--down)", fontWeight: 700 }}>
+                [{tr("Degraded / 429", "Dégradé / 429")}]
+              </span>
             )}
             <button
               type="button"
               className="button compact"
               style={{ padding: "0.1rem 0.35rem", fontSize: "0.68rem" }}
-              title="Refresh Source"
+              title={tr("Refresh Source", "Actualiser la source")}
               onClick={() =>
                 void handleAction(
                   () => onRefreshSource(source.id),
-                  `Source "${source.name}" refresh requested.`,
+                  tr(
+                    `Source "${source.name}" refresh requested.`,
+                    `Actualisation de la source "${source.name}" demandée.`,
+                  ),
                 )
               }
             >
@@ -138,14 +147,18 @@ export function OpportunityInbox({
           }}
         >
           {/* Track Filter Buttons */}
-          <div style={{ display: "flex", gap: "0.5rem" }} role="group" aria-label="Filter by track">
+          <div
+            style={{ display: "flex", gap: "0.5rem" }}
+            role="group"
+            aria-label={tr("Filter by track", "Filtrer par filière")}
+          >
             <button
               type="button"
               className={`career-tab-btn ${activeTrack === "all" ? "active" : ""}`}
               aria-pressed={activeTrack === "all"}
               onClick={() => setActiveTrack("all")}
             >
-              All Tracks ({opportunities.length})
+              {tr("All Tracks", "Toutes les filières")} ({opportunities.length})
             </button>
             <button
               type="button"
@@ -153,7 +166,8 @@ export function OpportunityInbox({
               aria-pressed={activeTrack === "phd"}
               onClick={() => setActiveTrack("phd")}
             >
-              PhD Positions ({opportunities.filter((o) => o.track === "phd").length})
+              {tr("PhD Positions", "Thèses & Doctorats")} (
+              {opportunities.filter((o) => o.track === "phd").length})
             </button>
             <button
               type="button"
@@ -161,7 +175,8 @@ export function OpportunityInbox({
               aria-pressed={activeTrack === "cdi"}
               onClick={() => setActiveTrack("cdi")}
             >
-              Permanent Employment ({opportunities.filter((o) => o.track === "cdi").length})
+              {tr("Permanent Employment", "Postes CDI")} (
+              {opportunities.filter((o) => o.track === "cdi").length})
             </button>
             <button
               type="button"
@@ -169,7 +184,8 @@ export function OpportunityInbox({
               aria-pressed={activeTrack === "freelance"}
               onClick={() => setActiveTrack("freelance")}
             >
-              Independent Work ({opportunities.filter((o) => o.track === "freelance").length})
+              {tr("Independent Work", "Missions Freelance")} (
+              {opportunities.filter((o) => o.track === "freelance").length})
             </button>
           </div>
 
@@ -183,7 +199,7 @@ export function OpportunityInbox({
                 checked={onlyFresh}
                 onChange={(e) => setOnlyFresh(e.target.checked)}
               />
-              Only Fresh
+              {tr("Only Fresh", "Uniquement récents")}
             </label>
             <label
               style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}
@@ -193,7 +209,7 @@ export function OpportunityInbox({
                 checked={includeDuplicates}
                 onChange={(e) => setIncludeDuplicates(e.target.checked)}
               />
-              Include Duplicates
+              {tr("Include Duplicates", "Inclure les doublons")}
             </label>
           </div>
         </div>
@@ -204,16 +220,21 @@ export function OpportunityInbox({
             type="search"
             className="career-input"
             style={{ flex: 1 }}
-            placeholder="Search roles, skills, disciplines, organizations, or institutions..."
+            placeholder={tr(
+              "Search roles, skills, disciplines, organizations, or institutions...",
+              "Rechercher rôles, compétences, disciplines, entreprises ou labos...",
+            )}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search opportunities"
+            aria-label={tr("Search opportunities", "Rechercher des opportunités")}
           />
         </div>
 
         {savedSearches.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>Saved Searches:</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
+              {tr("Saved Searches:", "Recherches enregistrées :")}
+            </span>
             {savedSearches.map((ss) => (
               <button
                 key={ss.id}
@@ -262,11 +283,19 @@ export function OpportunityInbox({
           }}
         >
           <span>
-            <strong>{selectedForComparison.length} opportunities</strong> selected for side-by-side
-            comparison.
+            <strong>
+              {selectedForComparison.length} {tr("opportunities", "opportunités")}
+            </strong>{" "}
+            {tr(
+              "selected for side-by-side comparison.",
+              "sélectionnées pour comparaison côte-à-côte.",
+            )}
           </span>
           <span style={{ color: "var(--muted-text)", fontSize: "0.82rem" }}>
-            Switch to the <em>Comparison Matrix</em> tab to inspect tradeoffs.
+            {tr(
+              "Switch to the Comparison Matrix tab to inspect tradeoffs.",
+              "Basculez sur l'onglet Matrice de comparaison pour inspecter les compromis.",
+            )}
           </span>
         </div>
       )}
@@ -274,14 +303,24 @@ export function OpportunityInbox({
       {/* Opportunities List */}
       {loading ? (
         <div className="career-card" style={{ textAlign: "center", padding: "2rem" }}>
-          Scanning feeds and evaluating explainable match models...
+          {tr(
+            "Scanning feeds and evaluating explainable match models...",
+            "Analyse des flux et évaluation des modèles d'adéquation explicables...",
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
-          <strong>No opportunities match your current filters</strong>
+          <strong>
+            {tr(
+              "No opportunities match your current filters",
+              "Aucune opportunité ne correspond à vos filtres actuels",
+            )}
+          </strong>
           <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-            Try clearing the search term, adjusting track filters, or updating your skills in the
-            Profile Wizard.
+            {tr(
+              "Try clearing the search term, adjusting track filters, or updating your skills in the Profile Wizard.",
+              "Essayez d'effacer la recherche, d'ajuster les filtres de filière ou de mettre à jour vos compétences dans l'Assistant Profil.",
+            )}
           </p>
         </div>
       ) : (
@@ -302,8 +341,10 @@ export function OpportunityInbox({
                   <div className="duplicate-alert-banner" role="alert">
                     <span aria-hidden="true">⚠️</span>
                     <span>
-                      Duplicate marker detected (reason: {opp.duplicate.reason}). Original post
-                      exists in inbox.
+                      {tr(
+                        `Duplicate marker detected (reason: ${opp.duplicate.reason}). Original post exists in inbox.`,
+                        `Doublon détecté (raison : ${opp.duplicate.reason}). L'annonce originale est dans la boîte de réception.`,
+                      )}
                     </span>
                   </div>
                 )}
@@ -339,9 +380,9 @@ export function OpportunityInbox({
                       type="checkbox"
                       checked={isCompared}
                       onChange={() => onToggleComparison(opp.id)}
-                      aria-label={`Select ${opp.title} for comparison`}
+                      aria-label={`${tr("Select", "Sélectionner")} ${opp.title} ${tr("for comparison", "pour comparaison")}`}
                     />
-                    Compare
+                    {tr("Compare", "Comparer")}
                   </label>
                 </div>
 
@@ -371,28 +412,34 @@ export function OpportunityInbox({
                 >
                   {opp.track === "phd" && opp.phdDetails && (
                     <div>
-                      <strong>Grant / Funding:</strong> {opp.phdDetails.fundingType} · €
-                      {opp.phdDetails.monthlyStipend}/mo
+                      <strong>{tr("Grant / Funding:", "Financement / Bourse :")}</strong>{" "}
+                      {opp.phdDetails.fundingType} · €{opp.phdDetails.monthlyStipend}/mo
                       <br />
-                      <strong>Advisors:</strong> {opp.phdDetails.supervisors.join(", ")}
+                      <strong>{tr("Advisors:", "Directeurs :")}</strong>{" "}
+                      {opp.phdDetails.supervisors.join(", ")}
                     </div>
                   )}
                   {opp.track === "cdi" && opp.cdiDetails && (
                     <div>
-                      <strong>Compensation:</strong> €{opp.cdiDetails.salaryMin?.toLocaleString()} -
-                      €{opp.cdiDetails.salaryMax?.toLocaleString()} / year CDI
+                      <strong>{tr("Compensation:", "Rémunération :")}</strong> €
+                      {opp.cdiDetails.salaryMin?.toLocaleString()} - €
+                      {opp.cdiDetails.salaryMax?.toLocaleString()} / {tr("year CDI", "an CDI")}
                       <br />
-                      <strong>Seniority:</strong> {opp.cdiDetails.seniority.toUpperCase()} ·
-                      Benefits: {opp.cdiDetails.benefits.join(", ")}
+                      <strong>{tr("Seniority:", "Séniorité :")}</strong>{" "}
+                      {opp.cdiDetails.seniority.toUpperCase()} · {tr("Benefits:", "Avantages :")}{" "}
+                      {opp.cdiDetails.benefits.join(", ")}
                     </div>
                   )}
                   {opp.track === "freelance" && opp.freelanceDetails && (
                     <div>
-                      <strong>Daily Rate:</strong> €{opp.freelanceDetails.dailyRateMin} - €
-                      {opp.freelanceDetails.dailyRateMax}/day TJM
+                      <strong>{tr("Daily Rate:", "TJM :")}</strong> €
+                      {opp.freelanceDetails.dailyRateMin} - €{opp.freelanceDetails.dailyRateMax}/day
+                      TJM
                       <br />
-                      <strong>Workload:</strong> {opp.freelanceDetails.daysPerWeek} days/week ·
-                      Duration: {opp.freelanceDetails.durationMonths} months
+                      <strong>{tr("Workload:", "Charge :")}</strong>{" "}
+                      {opp.freelanceDetails.daysPerWeek} {tr("days/week", "jours/semaine")} ·{" "}
+                      {tr("Duration:", "Durée :")} {opp.freelanceDetails.durationMonths}{" "}
+                      {tr("months", "mois")}
                     </div>
                   )}
                 </div>
@@ -412,7 +459,9 @@ export function OpportunityInbox({
                       alignItems: "center",
                     }}
                   >
-                    <span className="match-score-badge high">★ {opp.match.score}% Match Score</span>
+                    <span className="match-score-badge high">
+                      ★ {opp.match.score}% {tr("Match Score", "Score de compatibilité")}
+                    </span>
                     <button
                       type="button"
                       className="button compact"
@@ -420,7 +469,9 @@ export function OpportunityInbox({
                       aria-expanded={expandedMatchId === opp.id}
                       onClick={() => setExpandedMatchId(expandedMatchId === opp.id ? null : opp.id)}
                     >
-                      {expandedMatchId === opp.id ? "Hide Rationale" : "Why it matches"}
+                      {expandedMatchId === opp.id
+                        ? tr("Hide Rationale", "Masquer l'analyse")
+                        : tr("Why it matches", "Pourquoi ce match")}
                     </button>
                   </div>
 
@@ -439,7 +490,9 @@ export function OpportunityInbox({
                     >
                       <div className="match-breakdown-bars">
                         <div className="match-sub-bar">
-                          <span>Skills ({opp.match.breakdown.skills}%)</span>
+                          <span>
+                            {tr("Skills", "Compétences")} ({opp.match.breakdown.skills}%)
+                          </span>
                           <div className="match-bar-track">
                             <div
                               className="match-bar-fill"
@@ -448,7 +501,9 @@ export function OpportunityInbox({
                           </div>
                         </div>
                         <div className="match-sub-bar">
-                          <span>Rates ({opp.match.breakdown.compensation}%)</span>
+                          <span>
+                            {tr("Rates", "Rémunération")} ({opp.match.breakdown.compensation}%)
+                          </span>
                           <div className="match-bar-track">
                             <div
                               className="match-bar-fill"
@@ -457,7 +512,9 @@ export function OpportunityInbox({
                           </div>
                         </div>
                         <div className="match-sub-bar">
-                          <span>Location ({opp.match.breakdown.location}%)</span>
+                          <span>
+                            {tr("Location", "Localisation")} ({opp.match.breakdown.location}%)
+                          </span>
                           <div className="match-bar-track">
                             <div
                               className="match-bar-fill"
@@ -466,7 +523,9 @@ export function OpportunityInbox({
                           </div>
                         </div>
                         <div className="match-sub-bar">
-                          <span>Track ({opp.match.breakdown.trackFit}%)</span>
+                          <span>
+                            {tr("Track", "Filière")} ({opp.match.breakdown.trackFit}%)
+                          </span>
                           <div className="match-bar-track">
                             <div
                               className="match-bar-fill"
@@ -478,12 +537,13 @@ export function OpportunityInbox({
 
                       {opp.match.strengths.length > 0 && (
                         <div style={{ color: "var(--ok)", fontSize: "0.75rem" }}>
-                          <strong>Strengths:</strong> {opp.match.strengths.join(" · ")}
+                          <strong>{tr("Strengths:", "Forces :")}</strong>{" "}
+                          {opp.match.strengths.join(" · ")}
                         </div>
                       )}
                       {opp.match.gaps.length > 0 && (
                         <div style={{ color: "var(--gradient)", fontSize: "0.75rem" }}>
-                          <strong>Gaps:</strong> {opp.match.gaps.join(" · ")}
+                          <strong>{tr("Gaps:", "Écarts :")}</strong> {opp.match.gaps.join(" · ")}
                         </div>
                       )}
                     </div>
@@ -503,8 +563,8 @@ export function OpportunityInbox({
                       }
                     >
                       {expandedCitationId === opp.id
-                        ? "Hide Citations"
-                        : `Verified Citations (${opp.citations.length})`}
+                        ? tr("Hide Citations", "Masquer les citations")
+                        : `${tr("Verified Citations", "Citations vérifiées")} (${opp.citations.length})`}
                     </button>
 
                     {expandedCitationId === opp.id && (
@@ -513,7 +573,9 @@ export function OpportunityInbox({
                           <div key={cite.id} className="citation-item">
                             <div className="citation-quote">"{cite.quote}"</div>
                             <div className="citation-meta">
-                              <span>Source: {cite.title}</span>
+                              <span>
+                                {tr("Source:", "Source :")} {cite.title}
+                              </span>
                               <span title={`SHA-256: ${cite.documentSha256}`}>
                                 SHA: {cite.documentSha256.slice(0, 10)}...
                               </span>
@@ -545,12 +607,17 @@ export function OpportunityInbox({
                       void handleAction(
                         () => onToggleShortlist(opp.id, !isShortlisted),
                         isShortlisted
-                          ? "Removed from shortlist."
-                          : "Added to shortlist & application pipeline.",
+                          ? tr("Removed from shortlist.", "Retiré de la présélection.")
+                          : tr(
+                              "Added to shortlist & application pipeline.",
+                              "Ajouté à la présélection et au pipeline.",
+                            ),
                       )
                     }
                   >
-                    {isShortlisted ? "★ Shortlisted" : "☆ Shortlist"}
+                    {isShortlisted
+                      ? tr("★ Shortlisted", "★ Présélectionné")
+                      : tr("☆ Shortlist", "☆ Présélectionner")}
                   </button>
 
                   <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -560,12 +627,18 @@ export function OpportunityInbox({
                       onClick={() =>
                         void handleAction(
                           () => onPrepareDraftApplication(opp.id),
-                          "Form draft created. Action paused at Confirmation Card.",
+                          tr(
+                            "Form draft created. Action paused at Confirmation Card.",
+                            "Brouillon créé. Action suspendue à la carte de confirmation.",
+                          ),
                         )
                       }
-                      title="Generates a draft form submission that requires human confirmation"
+                      title={tr(
+                        "Generates a draft form submission that requires human confirmation",
+                        "Génère un brouillon de formulaire exigeant confirmation humaine",
+                      )}
                     >
-                      Draft Application
+                      {tr("Draft Application", "Préparer candidature")}
                     </button>
                     <button
                       type="button"
@@ -573,12 +646,18 @@ export function OpportunityInbox({
                       onClick={() =>
                         void handleAction(
                           () => onPrepareDraftEmail(opp.id),
-                          "Email draft created. Action paused at Confirmation Card.",
+                          tr(
+                            "Email draft created. Action paused at Confirmation Card.",
+                            "Brouillon d'e-mail créé. Action suspendue à la carte de confirmation.",
+                          ),
                         )
                       }
-                      title="Generates an outreach email draft in Gmail requiring confirmation"
+                      title={tr(
+                        "Generates an outreach email draft in Gmail requiring confirmation",
+                        "Génère un brouillon d'e-mail dans Gmail exigeant confirmation",
+                      )}
                     >
-                      Draft Outreach
+                      {tr("Draft Outreach", "Préparer message")}
                     </button>
                   </div>
                 </div>

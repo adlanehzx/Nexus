@@ -192,10 +192,15 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
       {offlineError && (
         <div className="career-offline-banner" role="alert">
           <div>
-            <strong>⚠️ Feeds Unreachable / Offline:</strong> {offlineError}
+            <strong>
+              {locale === "fr"
+                ? "⚠️ Flux inaccessibles / Hors ligne :"
+                : "⚠️ Feeds Unreachable / Offline:"}
+            </strong>{" "}
+            {offlineError}
           </div>
           <button type="button" className="button compact danger" onClick={() => void reloadAll()}>
-            Retry Connection
+            {locale === "fr" ? "Réessayer la connexion" : "Retry Connection"}
           </button>
         </div>
       )}

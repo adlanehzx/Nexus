@@ -4,6 +4,7 @@ import { DashboardApi, createSession, type SystemPauseState } from "../lib/api.j
 import { createCareerEducationClient } from "../lib/career-education.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
+import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 
 const Agents = lazy(() =>
   import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
@@ -210,7 +211,7 @@ export function App() {
 }
 
 function AppContent() {
-  const { t, locale } = useI18n();
+  const { t, tr } = useI18n();
   const [authenticated, setAuthenticated] = useState(false);
   const [restoringSession, setRestoringSession] = useState(true);
   const session = useMemo(() => createSession(backendUrl(), () => setAuthenticated(false)), []);
@@ -449,7 +450,7 @@ function AppContent() {
         <div className="sidebar-footer">
           <span className="system-dot" aria-hidden="true" />
           <span>
-            <strong>Local system</strong>
+            <strong>{tr("Local system", "Système local")}</strong>
             <small>{t("common.states.connected")}</small>
           </span>
         </div>
@@ -464,14 +465,37 @@ function AppContent() {
               section === "career-education" ||
               section === "trading-lab" ||
               section === "osint"
-                ? t("common.workspace")
-                : t("common.supervision")}
+                ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
+                : tr("SUPERVISION", "SUPERVISION")}
             </div>
             <h1>{metaTitle}</h1>
             <p>{metaDescription}</p>
           </div>
           <div className="header-actions">
-            <div className="live-pulse-container" title="NEXUS local services active">
+            <div
+              className="hud-telemetry-badge"
+              title={tr("System Core Status", "État du Cœur Système")}
+            >
+              <div className="radar-pulse-ring" />
+              <span>
+                {tr("CORE:", "CŒUR :")} <strong>{tr("NOMINAL", "NOMINAL")}</strong>
+              </span>
+              <div
+                className="hud-audio-bars"
+                title={tr("Neural Bus Activity", "Activité du Bus Neural")}
+              >
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+                <span className="hud-audio-bar" />
+              </div>
+              <span>{tr("SYNC 100%", "SYNC 100%")}</span>
+            </div>
+            <div
+              className="live-pulse-container"
+              title={tr("NEXUS local services active", "Services locaux NEXUS actifs")}
+            >
               <span className="live-pulse-dot" />
               <span>{t("common.messages.liveApi")}</span>
             </div>
@@ -482,17 +506,18 @@ function AppContent() {
               className={`button ${systemPause?.paused ? "ok" : "danger"}`}
               onClick={() => {
                 const willPause = !systemPause?.paused;
-                const reason = willPause ? "Manual emergency stop from dashboard" : undefined;
+                const reason = willPause
+                  ? tr(
+                      "Manual emergency stop from dashboard",
+                      "Arrêt d'urgence manuel depuis le tableau de bord",
+                    )
+                  : undefined;
                 void api.setGlobalPause(willPause, reason).then((state) => setSystemPause(state));
               }}
             >
               {systemPause?.paused
-                ? locale === "fr"
-                  ? "Reprendre NEXUS"
-                  : "Resume NEXUS"
-                : locale === "fr"
-                  ? "Arrêt d'urgence"
-                  : "Emergency stop"}
+                ? tr("Resume NEXUS", "Reprendre NEXUS")
+                : tr("Emergency stop", "Arrêt d'urgence")}
             </button>
             {section === "chat" ? null : (
               <button
@@ -526,12 +551,11 @@ function AppContent() {
             <div>
               <span aria-hidden="true">🛑</span>
               <span>
-                {locale === "fr"
-                  ? "ARRÊT D'URGENCE ACTIF : Toutes les actions de NEXUS sont suspendues."
-                  : "EMERGENCY STOP ACTIVE: All NEXUS actions are suspended."}
-                {systemPause.reason
-                  ? ` ${locale === "fr" ? "Raison :" : "Reason:"} ${systemPause.reason}`
-                  : ""}
+                {tr(
+                  "EMERGENCY STOP ACTIVE: All NEXUS actions are suspended.",
+                  "ARRÊT D'URGENCE ACTIF : Toutes les actions de NEXUS sont suspendues.",
+                )}
+                {systemPause.reason ? ` ${tr("Reason:", "Raison :")} ${systemPause.reason}` : ""}
               </span>
             </div>
             <button
@@ -541,7 +565,7 @@ function AppContent() {
                 void api.setGlobalPause(false).then((state) => setSystemPause(state));
               }}
             >
-              {locale === "fr" ? "Reprendre NEXUS" : "Resume NEXUS"}
+              {tr("Resume NEXUS", "Reprendre NEXUS")}
             </button>
           </div>
         )}
@@ -764,7 +788,7 @@ function Login({
   onSignIn: (email: string, password: string) => Promise<void>;
   onSwitchToSetup: () => void;
 }) {
-  const { locale } = useI18n();
+  const { tr } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -772,7 +796,8 @@ function Login({
 
   return (
     <main className="login-page">
-      <div className="login-shell">
+      <Futuristic3DCanvas className="login-3d-bg" />
+      <div className="login-shell cyber-reticle">
         <div className="login-brand">
           <span className="brand-mark">N</span>
           <span>NEXUS</span>
@@ -781,11 +806,12 @@ function Login({
           <ThemeToggle />
         </div>
         <div className="login-intro">
-          <h1>{locale === "fr" ? "Bienvenue." : "Welcome back."}</h1>
+          <h1>{tr("Welcome back.", "Bienvenue.")}</h1>
           <p>
-            {locale === "fr"
-              ? "Connectez-vous pour superviser vos agents et suivre leurs missions."
-              : "Sign in to supervise your agents and track their missions."}
+            {tr(
+              "Sign in to supervise your agents and track their missions.",
+              "Connectez-vous pour superviser vos agents et suivre leurs missions.",
+            )}
           </p>
         </div>
         <form
@@ -798,13 +824,17 @@ function Login({
             setPassword("");
             void onSignIn(email.trim(), secret)
               .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Sign-in failed."),
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : tr("Sign-in failed.", "Échec de connexion."),
+                ),
               )
               .finally(() => setBusy(false));
           }}
         >
           <label>
-            {locale === "fr" ? "Adresse email" : "Email address"}
+            {tr("Email address", "Adresse email")}
             <input
               className="field"
               type="email"
@@ -815,7 +845,7 @@ function Login({
             />
           </label>
           <label>
-            {locale === "fr" ? "Mot de passe" : "Password"}
+            {tr("Password", "Mot de passe")}
             <input
               className="field"
               type="password"
@@ -830,13 +860,7 @@ function Login({
             className="button primary login-submit"
             disabled={busy || email.trim().length === 0 || password.length === 0}
           >
-            {busy
-              ? locale === "fr"
-                ? "Connexion…"
-                : "Signing in…"
-              : locale === "fr"
-                ? "Se connecter"
-                : "Sign in"}
+            {busy ? tr("Signing in…", "Connexion…") : tr("Sign in", "Se connecter")}
           </button>
           {error === null ? null : (
             <div className="banner error" role="alert">
@@ -847,16 +871,12 @@ function Login({
 
         <div style={{ marginTop: "16px", textAlign: "center" }}>
           <button type="button" className="button compact" onClick={onSwitchToSetup}>
-            {locale === "fr"
-              ? "Première fois ? Lancer l'assistant"
-              : "First time? Run setup wizard"}
+            {tr("First time? Run setup wizard", "Première fois ? Lancer l'assistant")}
           </button>
         </div>
 
         <p className="login-security">
-          {locale === "fr"
-            ? "Session administrateur sécurisée locale."
-            : "Local secure administrator session."}
+          {tr("Local secure administrator session.", "Session administrateur sécurisée locale.")}
         </p>
       </div>
     </main>

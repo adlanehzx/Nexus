@@ -17,6 +17,7 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (path: string, vars?: Record<string, string | number>) => string;
+  tr: (enText: string, frText: string) => string;
   translations: Translations;
 }
 
@@ -92,14 +93,22 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale],
   );
 
+  const tr = useCallback(
+    (enText: string, frText: string): string => {
+      return locale === "fr" ? frText : enText;
+    },
+    [locale],
+  );
+
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
       setLocale,
       t,
+      tr,
       translations: DICTIONARIES[locale],
     }),
-    [locale, setLocale, t],
+    [locale, setLocale, t, tr],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -112,6 +121,7 @@ export function useI18n(): I18nContextValue {
       locale: "en",
       setLocale: () => undefined,
       t: (path: string) => path,
+      tr: (enText: string) => enText,
       translations: en,
     };
   }

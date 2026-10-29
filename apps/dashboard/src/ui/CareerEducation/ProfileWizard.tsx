@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CareerEducationProfile, OpportunityTrack, LocationType } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface ProfileWizardProps {
   profile: CareerEducationProfile;
@@ -8,20 +9,45 @@ interface ProfileWizardProps {
 }
 
 export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWizardProps) {
+  const { tr } = useI18n();
   const [activeStep, setActiveStep] = useState<number>(0);
   const [formData, setFormData] = useState<CareerEducationProfile>(profile);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const steps = [
-    { id: "identity", label: "Identity & Goals" },
-    { id: "tracks", label: "Career Tracks" },
-    { id: "skills", label: "Skills & Discipline" },
-    { id: "location", label: "Location & Remote" },
-    { id: "compensation", label: "Compensation & Rates" },
-    { id: "academic", label: "Academic & PhD" },
-    { id: "languages", label: "Languages & Visa" },
-    { id: "freelance", label: "Freelance Details" },
+    {
+      id: "identity",
+      label: tr("Identity & Goals", "Identité & Objectifs"),
+    },
+    {
+      id: "tracks",
+      label: tr("Career Tracks", "Filières de carrière"),
+    },
+    {
+      id: "skills",
+      label: tr("Skills & Discipline", "Compétences & Discipline"),
+    },
+    {
+      id: "location",
+      label: tr("Location & Remote", "Localisation & Télétravail"),
+    },
+    {
+      id: "compensation",
+      label: tr("Compensation & Rates", "Rémunération & TJM"),
+    },
+    {
+      id: "academic",
+      label: tr("Academic & PhD", "Parcours académique & Doctorat"),
+    },
+    {
+      id: "languages",
+      label: tr("Languages & Visa", "Langues & Visa"),
+    },
+    {
+      id: "freelance",
+      label: tr("Freelance Details", "Modalités Freelance"),
+    },
   ];
 
   const handleSave = async () => {
@@ -29,9 +55,18 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
     setSaveMessage(null);
     try {
       await onUpdate(formData);
-      setSaveMessage("Profile updated successfully. Completeness score recalculated.");
+      setSaveMessage(
+        tr(
+          "Profile updated successfully. Completeness score recalculated.",
+          "Profil mis à jour avec succès. Score de complétude recalculé.",
+        ),
+      );
     } catch (err) {
-      setSaveMessage(err instanceof Error ? err.message : "Failed to update profile.");
+      setSaveMessage(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to update profile.", "Échec de la mise à jour du profil."),
+      );
     } finally {
       setSaving(false);
     }
@@ -45,9 +80,14 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
       <div className="completeness-gauge-box">
         <div className="completeness-header">
           <div>
-            <strong style={{ fontSize: "1.05rem" }}>Profile Completeness</strong>
+            <strong style={{ fontSize: "1.05rem" }}>
+              {tr("Profile Completeness", "Complétude du profil")}
+            </strong>
             <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-              A complete profile enables accurate match scoring and verified recommendations.
+              {tr(
+                "A complete profile enables accurate match scoring and verified recommendations.",
+                "Un profil complet permet un calcul précis des correspondances et des recommandations vérifiées.",
+              )}
             </p>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -69,7 +109,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
           aria-valuenow={completeness.score}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="Profile completeness score"
+          aria-label={tr("Profile completeness score", "Score de complétude du profil")}
         >
           <div className="completeness-bar-fill" style={{ width: `${completeness.score}%` }} />
         </div>
@@ -102,7 +142,8 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               color: "var(--gradient)",
             }}
           >
-            <strong>Recommended Next Action:</strong> {completeness.actionableRecommendations[0]}
+            <strong>{tr("Recommended Next Action:", "Action recommandée :")}</strong>{" "}
+            {completeness.actionableRecommendations[0]}
           </div>
         )}
       </div>
@@ -132,9 +173,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
       <div className="career-card" style={{ padding: "1.5rem" }}>
         {activeStep === 0 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Identity & Career Summary</h3>
+            <h3>{tr("Identity & Career Summary", "Identité & Résumé de Carrière")}</h3>
             <div className="career-form-group">
-              <label htmlFor="fullName">Full Name</label>
+              <label htmlFor="fullName">{tr("Full Name", "Nom complet")}</label>
               <input
                 id="fullName"
                 className="career-input"
@@ -144,7 +185,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="email">Email Address</label>
+              <label htmlFor="email">{tr("Email Address", "Adresse e-mail")}</label>
               <input
                 id="email"
                 className="career-input"
@@ -154,7 +195,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="headline">Professional Headline</label>
+              <label htmlFor="headline">{tr("Professional Headline", "Titre professionnel")}</label>
               <input
                 id="headline"
                 className="career-input"
@@ -164,7 +205,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="summary">Executive Summary & Goals</label>
+              <label htmlFor="summary">
+                {tr("Executive Summary & Goals", "Synthèse & Objectifs")}
+              </label>
               <textarea
                 id="summary"
                 className="career-textarea"
@@ -178,10 +221,12 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 1 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Preferred Career Tracks</h3>
+            <h3>{tr("Preferred Career Tracks", "Filières ciblées")}</h3>
             <p style={{ color: "var(--muted-text)", fontSize: "0.85rem" }}>
-              Choose the opportunity processes that match your plans. Your profession, discipline,
-              seniority, and keywords are personal profile data—not NEXUS defaults.
+              {tr(
+                "Choose the opportunity processes that match your plans. Your profession, discipline, seniority, and keywords are personal profile data—not NEXUS defaults.",
+                "Sélectionnez les parcours qui correspondent à vos objectifs. Votre profession, discipline, niveau et mots-clés sont vos données personnelles, non des valeurs imposées par NEXUS.",
+              )}
             </p>
             <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
               {(["phd", "cdi", "freelance"] as OpportunityTrack[]).map((track) => {
@@ -211,9 +256,10 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                       }}
                     />
                     <strong>
-                      {track === "phd" && "PhD / Doctoral Positions"}
-                      {track === "cdi" && "Permanent Employment"}
-                      {track === "freelance" && "Independent Work & Consulting"}
+                      {track === "phd" && tr("PhD / Doctoral Positions", "Doctorat / Thèse CIFRE")}
+                      {track === "cdi" && tr("Permanent Employment", "Poste CDI / Cadre")}
+                      {track === "freelance" &&
+                        tr("Independent Work & Consulting", "Missions Freelance & Conseil")}
                     </strong>
                   </label>
                 );
@@ -224,9 +270,11 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 2 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Skills & Primary Discipline</h3>
+            <h3>{tr("Skills & Primary Discipline", "Compétences & Discipline Principale")}</h3>
             <div className="career-form-group">
-              <label htmlFor="discipline">Primary Discipline / Domain</label>
+              <label htmlFor="discipline">
+                {tr("Primary Discipline / Domain", "Discipline principale / Domaine")}
+              </label>
               <input
                 id="discipline"
                 className="career-input"
@@ -236,7 +284,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="skills">Core Skills (comma separated)</label>
+              <label htmlFor="skills">
+                {tr("Core Skills (comma separated)", "Compétences clés (séparées par virgules)")}
+              </label>
               <input
                 id="skills"
                 className="career-input"
@@ -258,9 +308,13 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 3 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Location & Remote Preferences</h3>
+            <h3>
+              {tr("Location & Remote Preferences", "Localisation & Préférences de Télétravail")}
+            </h3>
             <div className="career-form-group">
-              <label htmlFor="remotePolicy">Remote Policy Preference</label>
+              <label htmlFor="remotePolicy">
+                {tr("Remote Policy Preference", "Préférence de télétravail")}
+              </label>
               <select
                 id="remotePolicy"
                 className="career-select"
@@ -269,13 +323,23 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                   setFormData({ ...formData, remotePreference: e.target.value as LocationType })
                 }
               >
-                <option value="remote">100% Remote</option>
-                <option value="hybrid">Hybrid (Remote + Periodic Onsite)</option>
-                <option value="onsite">Onsite Only</option>
+                <option value="remote">{tr("100% Remote", "100% Télétravail")}</option>
+                <option value="hybrid">
+                  {tr(
+                    "Hybrid (Remote + Periodic Onsite)",
+                    "Hybride (Télétravail + Présentiel périodique)",
+                  )}
+                </option>
+                <option value="onsite">{tr("Onsite Only", "Présentiel uniquement")}</option>
               </select>
             </div>
             <div className="career-form-group">
-              <label htmlFor="targetLocations">Target Cities / Countries (comma separated)</label>
+              <label htmlFor="targetLocations">
+                {tr(
+                  "Target Cities / Countries (comma separated)",
+                  "Villes / Pays ciblés (séparés par virgules)",
+                )}
+              </label>
               <input
                 id="targetLocations"
                 className="career-input"
@@ -297,10 +361,12 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 4 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Compensation & Rate Expectations</h3>
+            <h3>{tr("Compensation & Rate Expectations", "Rémunération & Tarifs Attendus")}</h3>
             <div className="career-grid-3">
               <div className="career-form-group">
-                <label htmlFor="minCdi">Minimum Annual Salary (€)</label>
+                <label htmlFor="minCdi">
+                  {tr("Minimum Annual Salary (€)", "Salaire annuel minimum (€)")}
+                </label>
                 <input
                   id="minCdi"
                   className="career-input"
@@ -318,7 +384,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                 />
               </div>
               <div className="career-form-group">
-                <label htmlFor="minTjm">Minimum Independent Daily Rate (€/day)</label>
+                <label htmlFor="minTjm">
+                  {tr("Minimum Independent Daily Rate (€/day)", "TJM minimum indépendant (€/jour)")}
+                </label>
                 <input
                   id="minTjm"
                   className="career-input"
@@ -336,7 +404,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                 />
               </div>
               <div className="career-form-group">
-                <label htmlFor="minPhd">Min PhD Monthly Stipend (€/month)</label>
+                <label htmlFor="minPhd">
+                  {tr("Min PhD Monthly Stipend (€/month)", "Allocation doctorale min (€/mois)")}
+                </label>
                 <input
                   id="minPhd"
                   className="career-input"
@@ -359,9 +429,19 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 5 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Academic Background & PhD Research Interest</h3>
+            <h3>
+              {tr(
+                "Academic Background & PhD Research Interest",
+                "Parcours académique & Intérêts de recherche doctorale",
+              )}
+            </h3>
             <div className="career-form-group">
-              <label htmlFor="phdTopics">PhD Research Topics (comma separated)</label>
+              <label htmlFor="phdTopics">
+                {tr(
+                  "PhD Research Topics (comma separated)",
+                  "Thèmes de recherche doctorale (séparés par virgules)",
+                )}
+              </label>
               <input
                 id="phdTopics"
                 className="career-input"
@@ -382,7 +462,12 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="supervisors">Target Supervisors or Labs (comma separated)</label>
+              <label htmlFor="supervisors">
+                {tr(
+                  "Target Supervisors or Labs (comma separated)",
+                  "Directeurs de thèse ou laboratoires cibles",
+                )}
+              </label>
               <input
                 id="supervisors"
                 className="career-input"
@@ -407,9 +492,11 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 6 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Languages & Visa Status</h3>
+            <h3>{tr("Languages & Visa Status", "Langues & Statut de Visa")}</h3>
             <div className="career-form-group">
-              <label htmlFor="visa">Work Authorization / Visa Status</label>
+              <label htmlFor="visa">
+                {tr("Work Authorization / Visa Status", "Autorisation de travail / Statut de visa")}
+              </label>
               <input
                 id="visa"
                 className="career-input"
@@ -427,7 +514,10 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                     setFormData({ ...formData, requiresVisaSponsorship: e.target.checked })
                   }
                 />
-                Requires Visa Sponsorship for International Offers
+                {tr(
+                  "Requires Visa Sponsorship for International Offers",
+                  "Nécessite un parrainage de visa pour les offres internationales",
+                )}
               </label>
             </div>
           </div>
@@ -435,10 +525,12 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
 
         {activeStep === 7 && (
           <div className="career-form-group" style={{ gap: "1rem" }}>
-            <h3>Freelance Readiness</h3>
+            <h3>{tr("Freelance Readiness", "Disponibilité Freelance")}</h3>
             <div className="career-grid-2">
               <div className="career-form-group">
-                <label htmlFor="flDays">Available Days Per Week</label>
+                <label htmlFor="flDays">
+                  {tr("Available Days Per Week", "Jours disponibles par semaine")}
+                </label>
                 <input
                   id="flDays"
                   className="career-input"
@@ -458,7 +550,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
                 />
               </div>
               <div className="career-form-group">
-                <label htmlFor="flStart">Earliest Available Start Date</label>
+                <label htmlFor="flStart">
+                  {tr("Earliest Available Start Date", "Date de début au plus tôt")}
+                </label>
                 <input
                   id="flStart"
                   className="career-input"
@@ -497,7 +591,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               disabled={activeStep === 0 || loading || saving}
               onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
             >
-              Previous Step
+              {tr("Previous Step", "Étape précédente")}
             </button>
             <button
               type="button"
@@ -505,7 +599,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
               disabled={activeStep === steps.length - 1 || loading || saving}
               onClick={() => setActiveStep((prev) => Math.min(steps.length - 1, prev + 1))}
             >
-              Next Step
+              {tr("Next Step", "Étape suivante")}
             </button>
           </div>
 
@@ -515,7 +609,9 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
             disabled={loading || saving}
             onClick={() => void handleSave()}
           >
-            {saving ? "Saving Changes..." : "Save Profile"}
+            {saving
+              ? tr("Saving Changes...", "Enregistrement...")
+              : tr("Save Profile", "Enregistrer le profil")}
           </button>
         </div>
 
@@ -526,10 +622,14 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
             style={{
               padding: "0.5rem 0.75rem",
               borderRadius: "var(--radius)",
-              background: saveMessage.includes("success")
-                ? "var(--nx-ok-bg)"
-                : "rgb(242 118 118 / 12%)",
-              color: saveMessage.includes("success") ? "var(--ok)" : "var(--down)",
+              background:
+                saveMessage.includes("success") || saveMessage.includes("succès")
+                  ? "var(--nx-ok-bg)"
+                  : "rgb(242 118 118 / 12%)",
+              color:
+                saveMessage.includes("success") || saveMessage.includes("succès")
+                  ? "var(--ok)"
+                  : "var(--down)",
               fontSize: "0.85rem",
             }}
           >

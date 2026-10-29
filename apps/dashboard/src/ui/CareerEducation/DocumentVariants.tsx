@@ -5,6 +5,7 @@ import type {
   GenerateDocumentInput,
   Opportunity,
 } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface DocumentVariantsProps {
   documents: DocumentVariant[];
@@ -21,6 +22,7 @@ export function DocumentVariants({
   onExportConfirmation,
   loading = false,
 }: DocumentVariantsProps) {
+  const { tr } = useI18n();
   const [selectedType, setSelectedType] = useState<DocumentType | "all">("all");
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [targetOppId, setTargetOppId] = useState<string>(opportunities[0]?.id ?? "");
@@ -40,9 +42,18 @@ export function DocumentVariants({
         type: newDocType,
       });
       setShowGenerateModal(false);
-      setNotice("Tailored document variant generated with customized highlights and diff summary.");
+      setNotice(
+        tr(
+          "Tailored document variant generated with customized highlights and diff summary.",
+          "Variante documentaire générée avec points saillants personnalisés et résumé des différences.",
+        ),
+      );
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Failed to generate document.");
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to generate document.", "Échec de génération du document."),
+      );
     } finally {
       setGenerating(false);
     }
@@ -60,15 +71,22 @@ export function DocumentVariants({
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Tailored Document Variants & Previews</h2>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            {tr(
+              "Tailored Document Variants & Previews",
+              "Variantes Documentaires sur Mesure & Aperçus",
+            )}
+          </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Role-tailored CVs, motivation letters, research statements, and commercial rate cards
-            with cryptographic digests and diff summaries.
+            {tr(
+              "Role-tailored CVs, motivation letters, research statements, and commercial rate cards with cryptographic digests and diff summaries.",
+              "CV ciblés, lettres de motivation, déclarations de recherche et grilles tarifaires avec empreintes cryptographiques et résumés différentiels.",
+            )}
           </p>
         </div>
 
         <button type="button" className="button primary" onClick={() => setShowGenerateModal(true)}>
-          + Generate Tailored Variant
+          {tr("+ Generate Tailored Variant", "+ Générer une variante sur mesure")}
         </button>
       </div>
 
@@ -83,11 +101,11 @@ export function DocumentVariants({
             className="career-tab-btn"
             onClick={() => setSelectedType(t)}
           >
-            {t === "all" && "All Variants"}
-            {t === "cv" && "Tailored CVs"}
-            {t === "cover_letter" && "Cover Letters"}
-            {t === "research_statement" && "Research Statements"}
-            {t === "rate_card" && "Freelance Rate Cards"}
+            {t === "all" && tr("All Variants", "Toutes les variantes")}
+            {t === "cv" && tr("Tailored CVs", "CV sur mesure")}
+            {t === "cover_letter" && tr("Cover Letters", "Lettres de motivation")}
+            {t === "research_statement" && tr("Research Statements", "Projets de recherche")}
+            {t === "rate_card" && tr("Freelance Rate Cards", "Grilles tarifaires freelance")}
           </button>
         ))}
       </div>
@@ -111,14 +129,16 @@ export function DocumentVariants({
       {/* Document Grid */}
       {loading ? (
         <div className="career-card" style={{ textAlign: "center", padding: "2rem" }}>
-          Loading document variants...
+          {tr("Loading document variants...", "Chargement des variantes documentaires...")}
         </div>
       ) : filtered.length === 0 ? (
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
-          <strong>No tailored documents found</strong>
+          <strong>{tr("No tailored documents found", "Aucun document sur mesure trouvé")}</strong>
           <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-            Click <em>"Generate Tailored Variant"</em> to craft a role-specific CV, cover letter, or
-            statement.
+            {tr(
+              'Click "Generate Tailored Variant" to craft a role-specific CV, cover letter, or statement.',
+              'Cliquez sur "Générer une variante sur mesure" pour concevoir un CV, une lettre ou un projet ciblé.',
+            )}
           </p>
         </div>
       ) : (
@@ -134,7 +154,8 @@ export function DocumentVariants({
                   </span>
                   <h3 style={{ margin: "0.35rem 0 0", fontSize: "1rem" }}>{doc.title}</h3>
                   <div style={{ fontSize: "0.8rem", color: "var(--muted-text)" }}>
-                    Target: <strong>{doc.targetOrganization}</strong> ({doc.targetRole})
+                    {tr("Target:", "Cible :")} <strong>{doc.targetOrganization}</strong> (
+                    {doc.targetRole})
                   </div>
                 </div>
 
@@ -161,7 +182,9 @@ export function DocumentVariants({
                   fontSize: "0.8rem",
                 }}
               >
-                <strong style={{ color: "var(--bright-accent)" }}>Tailored Highlights:</strong>
+                <strong style={{ color: "var(--bright-accent)" }}>
+                  {tr("Tailored Highlights:", "Points saillants adaptés :")}
+                </strong>
                 <ul style={{ margin: "0.25rem 0 0.5rem", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
                   {doc.tailoredHighlights.map((h, i) => (
                     <li key={i}>{h}</li>
@@ -178,11 +201,12 @@ export function DocumentVariants({
                   }}
                 >
                   <span>
-                    Sections Tailored:{" "}
+                    {tr("Sections Tailored:", "Sections adaptées :")}{" "}
                     <strong>{doc.diffSummary.sectionsTailored.join(", ")}</strong>
                   </span>
                   <span>
-                    Skills: <strong>{doc.diffSummary.skillsEmphasized.join(", ")}</strong>
+                    {tr("Skills:", "Compétences :")}{" "}
+                    <strong>{doc.diffSummary.skillsEmphasized.join(", ")}</strong>
                   </span>
                 </div>
               </div>
@@ -218,7 +242,7 @@ export function DocumentVariants({
                 }}
               >
                 <span style={{ fontSize: "0.72rem", color: "var(--muted-text)" }}>
-                  Generated {new Date(doc.generatedAt).toLocaleDateString()}
+                  {tr("Generated", "Généré le")} {new Date(doc.generatedAt).toLocaleDateString()}
                 </span>
                 <button
                   type="button"
@@ -226,13 +250,22 @@ export function DocumentVariants({
                   onClick={() =>
                     void onExportConfirmation(doc).then(() =>
                       setNotice(
-                        `Export draft initiated for ${doc.title}. Paused at Confirmation Card for safety.`,
+                        tr(
+                          `Export draft initiated for ${doc.title}. Paused at Confirmation Card for safety.`,
+                          `Brouillon d'export initialisé pour ${doc.title}. Suspendu à la carte de confirmation pour sécurité.`,
+                        ),
                       ),
                     )
                   }
-                  title="Requests explicit confirmation before sending or exporting"
+                  title={tr(
+                    "Requests explicit confirmation before sending or exporting",
+                    "Requiert une confirmation explicite avant tout envoi ou export",
+                  )}
                 >
-                  Export Draft (Confirm Action)
+                  {tr(
+                    "Export Draft (Confirm Action)",
+                    "Exporter le brouillon (Confirmer l'action)",
+                  )}
                 </button>
               </div>
             </article>
@@ -252,19 +285,25 @@ export function DocumentVariants({
           <div className="career-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="career-modal-header">
               <h3 id="gen-modal-title" className="career-modal-title">
-                Generate Tailored Document Variant
+                {tr(
+                  "Generate Tailored Document Variant",
+                  "Générer une variante documentaire adaptée",
+                )}
               </h3>
               <button
                 type="button"
                 className="button compact"
                 onClick={() => setShowGenerateModal(false)}
+                aria-label={tr("Close", "Fermer")}
               >
                 ✕
               </button>
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="targetOpp">Select Target Opportunity</label>
+              <label htmlFor="targetOpp">
+                {tr("Select Target Opportunity", "Sélectionner l'opportunité ciblée")}
+              </label>
               <select
                 id="targetOpp"
                 className="career-select"
@@ -280,17 +319,33 @@ export function DocumentVariants({
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="docType">Document Variant Type</label>
+              <label htmlFor="docType">
+                {tr("Document Variant Type", "Type de document sur mesure")}
+              </label>
               <select
                 id="docType"
                 className="career-select"
                 value={newDocType}
                 onChange={(e) => setNewDocType(e.target.value as DocumentType)}
               >
-                <option value="cv">Curriculum Vitae (CV / Resume)</option>
-                <option value="cover_letter">Motivation / Cover Letter</option>
-                <option value="research_statement">Doctoral Research Statement (PhD)</option>
-                <option value="rate_card">Commercial Proposal & Rate Card (Freelance)</option>
+                <option value="cv">
+                  {tr("Curriculum Vitae (CV / Resume)", "Curriculum Vitae (CV)")}
+                </option>
+                <option value="cover_letter">
+                  {tr("Motivation / Cover Letter", "Lettre de motivation")}
+                </option>
+                <option value="research_statement">
+                  {tr(
+                    "Doctoral Research Statement (PhD)",
+                    "Projet de recherche doctoral (Doctorat / CIFRE)",
+                  )}
+                </option>
+                <option value="rate_card">
+                  {tr(
+                    "Commercial Proposal & Rate Card (Freelance)",
+                    "Proposition commerciale & TJM (Freelance)",
+                  )}
+                </option>
               </select>
             </div>
 
@@ -301,7 +356,7 @@ export function DocumentVariants({
                 disabled={generating}
                 onClick={() => setShowGenerateModal(false)}
               >
-                Cancel
+                {tr("Cancel", "Annuler")}
               </button>
               <button
                 type="button"
@@ -309,7 +364,9 @@ export function DocumentVariants({
                 disabled={generating}
                 onClick={() => void handleGenerate()}
               >
-                {generating ? "Generating..." : "Generate Variant"}
+                {generating
+                  ? tr("Generating...", "Génération en cours...")
+                  : tr("Generate Variant", "Générer la variante")}
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Application, ApplicationStage } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface ApplicationKanbanProps {
   applications: Application[];
@@ -8,15 +9,15 @@ interface ApplicationKanbanProps {
   onOpenApprovals: () => void;
 }
 
-const STAGES: { id: ApplicationStage; label: string }[] = [
-  { id: "discovered", label: "Discovered" },
-  { id: "shortlisted", label: "Shortlisted" },
-  { id: "preparing", label: "Preparing" },
-  { id: "pending_approval", label: "Pending Approval" },
-  { id: "submitted", label: "Submitted" },
-  { id: "interviewing", label: "Interviewing" },
-  { id: "offer", label: "Offer / Accepted" },
-  { id: "rejected", label: "Closed / Rejected" },
+const STAGES: { id: ApplicationStage; labelEn: string; labelFr: string }[] = [
+  { id: "discovered", labelEn: "Discovered", labelFr: "Découverte" },
+  { id: "shortlisted", labelEn: "Shortlisted", labelFr: "Présélectionnée" },
+  { id: "preparing", labelEn: "Preparing", labelFr: "En préparation" },
+  { id: "pending_approval", labelEn: "Pending Approval", labelFr: "En attente d'approbation" },
+  { id: "submitted", labelEn: "Submitted", labelFr: "Soumise" },
+  { id: "interviewing", labelEn: "Interviewing", labelFr: "En entretien" },
+  { id: "offer", labelEn: "Offer / Accepted", labelFr: "Offre / Acceptée" },
+  { id: "rejected", labelEn: "Closed / Rejected", labelFr: "Clôturée / Refusée" },
 ];
 
 export function ApplicationKanban({
@@ -25,6 +26,7 @@ export function ApplicationKanban({
   onOpenDocuments,
   onOpenApprovals,
 }: ApplicationKanbanProps) {
+  const { tr, locale } = useI18n();
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [stageNote, setStageNote] = useState("");
   const [updating, setUpdating] = useState(false);
@@ -42,13 +44,24 @@ export function ApplicationKanban({
   };
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Application Kanban Pipeline">
+    <div
+      className="career-edu-container"
+      role="region"
+      aria-label={tr("Application Kanban Pipeline", "Pipeline Kanban des Candidatures")}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Application Kanban & Pipeline Timeline</h2>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            {tr(
+              "Application Kanban & Pipeline Timeline",
+              "Kanban des Candidatures & Chronologie du Pipeline",
+            )}
+          </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Track application progression from initial discovery through tailored documents, human
-            confirmation, interviews, and offers.
+            {tr(
+              "Track application progression from initial discovery through tailored documents, human confirmation, interviews, and offers.",
+              "Suivez la progression des candidatures depuis la découverte jusqu'aux documents sur mesure, la confirmation humaine, les entretiens et les offres.",
+            )}
           </p>
         </div>
       </div>
@@ -58,11 +71,12 @@ export function ApplicationKanban({
         {STAGES.map((col) => {
           const inStage = applications.filter((a) => a.stage === col.id);
           const isApprovalCol = col.id === "pending_approval";
+          const label = locale === "fr" ? col.labelFr : col.labelEn;
 
           return (
             <div key={col.id} className="kanban-column">
               <div className="kanban-col-header">
-                <span>{col.label}</span>
+                <span>{label}</span>
                 <span className="kanban-col-count">{inStage.length}</span>
               </div>
 
@@ -84,7 +98,10 @@ export function ApplicationKanban({
                     if (e.key === "Enter") onOpenApprovals();
                   }}
                 >
-                  ⚡ Consequential action awaiting explicit confirmation! Click to inspect.
+                  {tr(
+                    "⚡ Consequential action awaiting explicit confirmation! Click to inspect.",
+                    "⚡ Action conséquente en attente d'approbation explicite ! Cliquez pour inspecter.",
+                  )}
                 </div>
               )}
 
@@ -96,7 +113,7 @@ export function ApplicationKanban({
                     onClick={() => setSelectedAppId(app.id)}
                     role="button"
                     tabIndex={0}
-                    aria-label={`Open application details for ${app.opportunity.title}`}
+                    aria-label={`${tr("Open application details for", "Ouvrir les détails de la candidature pour")} ${app.opportunity.title}`}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") setSelectedAppId(app.id);
                     }}
@@ -134,7 +151,8 @@ export function ApplicationKanban({
                           marginTop: "0.25rem",
                         }}
                       >
-                        ⏱ Deadline: {new Date(app.nextDeadlineAt).toLocaleDateString()}
+                        ⏱ {tr("Deadline:", "Échéance :")}{" "}
+                        {new Date(app.nextDeadlineAt).toLocaleDateString()}
                       </div>
                     )}
                   </div>
@@ -169,15 +187,15 @@ export function ApplicationKanban({
                 type="button"
                 className="button compact"
                 onClick={() => setSelectedAppId(null)}
-                aria-label="Close details"
+                aria-label={tr("Close details", "Fermer les détails")}
               >
                 ✕
               </button>
             </div>
 
             <div style={{ fontSize: "0.85rem", color: "var(--muted-text)" }}>
-              <strong>{selectedApp.opportunity.organization}</strong> · Track:{" "}
-              {selectedApp.opportunity.track.toUpperCase()} · Status:{" "}
+              <strong>{selectedApp.opportunity.organization}</strong> · {tr("Track:", "Filière :")}{" "}
+              {selectedApp.opportunity.track.toUpperCase()} · {tr("Status:", "Statut :")}{" "}
               <strong style={{ color: "var(--bright-accent)" }}>{selectedApp.stage}</strong>
             </div>
 
@@ -191,7 +209,8 @@ export function ApplicationKanban({
                   setSelectedAppId(null);
                 }}
               >
-                Inspect / Tailor Documents ({selectedApp.tailoredDocumentIds.length})
+                {tr("Inspect / Tailor Documents", "Inspecter / Personnaliser les documents")} (
+                {selectedApp.tailoredDocumentIds.length})
               </button>
               {selectedApp.stage === "pending_approval" && (
                 <button
@@ -202,14 +221,14 @@ export function ApplicationKanban({
                     setSelectedAppId(null);
                   }}
                 >
-                  Go to Approval Card ⚡
+                  {tr("Go to Approval Card ⚡", "Aller à la carte d'approbation ⚡")}
                 </button>
               )}
             </div>
 
             {/* Stage Transition Controls */}
             <div className="career-card" style={{ gap: "0.75rem" }}>
-              <strong>Transition Stage</strong>
+              <strong>{tr("Transition Stage", "Changer d'étape")}</strong>
               <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                 {STAGES.map((s) => (
                   <button
@@ -219,14 +238,17 @@ export function ApplicationKanban({
                     className={`button compact ${selectedApp.stage === s.id ? "primary" : ""}`}
                     onClick={() => void handleStageMove(selectedApp.id, s.id)}
                   >
-                    {s.label}
+                    {locale === "fr" ? s.labelFr : s.labelEn}
                   </button>
                 ))}
               </div>
               <input
                 type="text"
                 className="career-input"
-                placeholder="Optional transition note or rationale..."
+                placeholder={tr(
+                  "Optional transition note or rationale...",
+                  "Note facultative de transition ou justification...",
+                )}
                 value={stageNote}
                 onChange={(e) => setStageNote(e.target.value)}
               />
@@ -234,7 +256,12 @@ export function ApplicationKanban({
 
             {/* Stage History Timeline */}
             <div className="career-card" style={{ gap: "0.6rem" }}>
-              <strong>Stage Transition History & Audit</strong>
+              <strong>
+                {tr(
+                  "Stage Transition History & Audit",
+                  "Historique & Audit des transitions d'étapes",
+                )}
+              </strong>
               <div
                 style={{
                   display: "flex",

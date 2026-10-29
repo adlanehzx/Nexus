@@ -1,4 +1,5 @@
 import type { OpportunityComparisonMatrix } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface ShortlistComparisonProps {
   matrix: OpportunityComparisonMatrix | null;
@@ -11,14 +12,22 @@ export function ShortlistComparison({
   onClearComparison,
   onSelectApplication,
 }: ShortlistComparisonProps) {
+  const { tr } = useI18n();
+
   if (!matrix || matrix.opportunities.length === 0) {
     return (
       <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
-        <h3>No Opportunities Selected for Comparison</h3>
+        <h3>
+          {tr(
+            "No Opportunities Selected for Comparison",
+            "Aucune opportunité sélectionnée pour comparaison",
+          )}
+        </h3>
         <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-          In the <strong>Inbox & Discovery</strong> tab, check the <em>"Compare"</em> checkbox on
-          two or more opportunities (for example a doctoral position, permanent role, or independent
-          engagement) to view an objective side-by-side evaluation.
+          {tr(
+            'In the Inbox & Discovery tab, check the "Compare" checkbox on two or more opportunities (for example a doctoral position, permanent role, or independent engagement) to view an objective side-by-side evaluation.',
+            'Dans l\'onglet Découverte & Flux, cochez la case "Comparer" sur deux opportunités ou plus (par exemple une thèse, un poste CDI ou une mission freelance) pour afficher une évaluation comparative objective.',
+          )}
         </p>
       </div>
     );
@@ -29,16 +38,21 @@ export function ShortlistComparison({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
-            Multi-Track Opportunity Comparison ({matrix.opportunities.length} positions)
+            {tr(
+              `Multi-Track Opportunity Comparison (${matrix.opportunities.length} positions)`,
+              `Comparaison Multi-Filières (${matrix.opportunities.length} opportunités)`,
+            )}
           </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Side-by-side metrics across doctoral programmes, permanent employment, and independent
-            consulting missions.
+            {tr(
+              "Side-by-side metrics across doctoral programmes, permanent employment, and independent consulting missions.",
+              "Métriques comparatives entre programmes doctoraux, emplois en CDI et missions indépendantes.",
+            )}
           </p>
         </div>
 
         <button type="button" className="button" onClick={onClearComparison}>
-          Reset Comparison Selection
+          {tr("Reset Comparison Selection", "Réinitialiser la sélection")}
         </button>
       </div>
 
@@ -51,7 +65,9 @@ export function ShortlistComparison({
           gap: "0.5rem",
         }}
       >
-        <strong style={{ fontSize: "0.95rem" }}>Strategic Tradeoff Analysis</strong>
+        <strong style={{ fontSize: "0.95rem" }}>
+          {tr("Strategic Tradeoff Analysis", "Analyse Stratégique des Compromis")}
+        </strong>
         <ul
           style={{
             margin: "0.25rem 0 0",
@@ -68,10 +84,13 @@ export function ShortlistComparison({
 
       {/* Comparison Matrix Table */}
       <div className="comparison-table-wrapper">
-        <table className="comparison-table" aria-label="Comparison metrics matrix">
+        <table
+          className="comparison-table"
+          aria-label={tr("Comparison metrics matrix", "Matrice des métriques comparatives")}
+        >
           <thead>
             <tr>
-              <th scope="col">Evaluation Metric</th>
+              <th scope="col">{tr("Evaluation Metric", "Métrique d'évaluation")}</th>
               {matrix.opportunities.map((opp) => (
                 <th key={opp.id} scope="col">
                   <div>
@@ -112,7 +131,7 @@ export function ShortlistComparison({
               </tr>
             ))}
             <tr>
-              <th scope="row">Workflow Action</th>
+              <th scope="row">{tr("Workflow Action", "Action du flux")}</th>
               {matrix.opportunities.map((opp) => (
                 <td key={opp.id}>
                   <button
@@ -120,7 +139,7 @@ export function ShortlistComparison({
                     className="button primary compact"
                     onClick={() => onSelectApplication(opp.id)}
                   >
-                    Open Application Track
+                    {tr("Open Application Track", "Ouvrir le suivi de candidature")}
                   </button>
                 </td>
               ))}

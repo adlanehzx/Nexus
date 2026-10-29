@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ConfirmationRequest, ConfirmationStatus } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface ApprovalCardsProps {
   confirmations: ConfirmationRequest[];
@@ -16,6 +17,7 @@ export function ApprovalCards({
   onResolveConfirmation,
   loading = false,
 }: ApprovalCardsProps) {
+  const { tr } = useI18n();
   const [filterStatus, setFilterStatus] = useState<ConfirmationStatus | "all">("pending");
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -35,7 +37,11 @@ export function ApprovalCards({
       await onResolveConfirmation(id, decision, reason);
       setActionNotice(defaultNotice);
     } catch (err) {
-      setActionNotice(err instanceof Error ? err.message : "Failed to process confirmation.");
+      setActionNotice(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to process confirmation.", "Échec du traitement de la confirmation."),
+      );
     } finally {
       setProcessingId(null);
     }
@@ -59,10 +65,17 @@ export function ApprovalCards({
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Consequential Action Approval Center</h2>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            {tr(
+              "Consequential Action Approval Center",
+              "Centre d'approbation des actions à conséquences",
+            )}
+          </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Every external action stops here. Inspect destination, documents, risks, and
-            consequences before granting explicit human approval.
+            {tr(
+              "Every external action stops here. Inspect destination, documents, risks, and consequences before granting explicit human approval.",
+              "Toute action externe s'arrête ici. Inspectez la destination, les documents, les risques et les conséquences avant d'accorder une approbation humaine explicite.",
+            )}
           </p>
         </div>
       </div>
@@ -77,12 +90,13 @@ export function ApprovalCards({
         }}
       >
         <strong style={{ color: "var(--gradient)", fontSize: "0.95rem" }}>
-          🛡️ Zero Silent Mutations Policy
+          🛡️ {tr("Zero Silent Mutations Policy", "Politique Zéro Mutation Silencieuse")}
         </strong>
         <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.4 }}>
-          NEXUS web search, browser automation, and Google Workspace reach{" "}
-          <strong>preview/draft states only</strong>. No application form is submitted, no email is
-          transmitted, and no calendar event is written without your durable, explicit confirmation.
+          {tr(
+            "NEXUS web search, browser automation, and Google Workspace reach preview/draft states only. No application form is submitted, no email is transmitted, and no calendar event is written without your durable, explicit confirmation.",
+            "La recherche web, l'automatisation de navigateur et Google Workspace atteignent uniquement des états de prévisualisation ou brouillon. Aucun formulaire n'est soumis, aucun e-mail n'est transmis et aucun événement n'est écrit sans votre confirmation explicite et persistante.",
+          )}
         </p>
       </div>
 
@@ -99,15 +113,15 @@ export function ApprovalCards({
           >
             {s === "pending" && (
               <>
-                Pending Decisions
+                {tr("Pending Decisions", "Décisions en attente")}
                 {pendingCount > 0 && <span className="badge-counter">{pendingCount}</span>}
               </>
             )}
-            {s === "approved" && "Approved"}
-            {s === "rejected" && "Rejected"}
-            {s === "cancelled" && "Cancelled"}
-            {s === "expired" && "Expired"}
-            {s === "all" && "All History"}
+            {s === "approved" && tr("Approved", "Approuvées")}
+            {s === "rejected" && tr("Rejected", "Refusées")}
+            {s === "cancelled" && tr("Cancelled", "Annulées")}
+            {s === "expired" && tr("Expired", "Expirées")}
+            {s === "all" && tr("All History", "Tout l'historique")}
           </button>
         ))}
       </div>
@@ -131,13 +145,21 @@ export function ApprovalCards({
       {/* Confirmation Cards Grid */}
       {loading ? (
         <div className="career-card" style={{ textAlign: "center", padding: "2rem" }}>
-          Loading pending confirmations...
+          {tr("Loading pending confirmations...", "Chargement des confirmations en attente...")}
         </div>
       ) : filtered.length === 0 ? (
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
-          <strong>No actions in status "{filterStatus}"</strong>
+          <strong>
+            {tr(
+              `No actions in status "${filterStatus}"`,
+              `Aucune action avec le statut "${filterStatus}"`,
+            )}
+          </strong>
           <p style={{ color: "var(--muted-text)", marginTop: "0.5rem" }}>
-            All actions requiring human confirmation have been resolved.
+            {tr(
+              "All actions requiring human confirmation have been resolved.",
+              "Toutes les actions requérant une confirmation humaine ont été traitées.",
+            )}
           </p>
         </div>
       ) : (
@@ -156,10 +178,13 @@ export function ApprovalCards({
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span className="action-badge">
                       {conf.actionType === "browser_submit_application" &&
-                        "🌐 Browser Form Submission"}
-                      {conf.actionType === "gmail_send_draft" && "✉️ Gmail Outreach Email"}
-                      {conf.actionType === "calendar_create_event" && "📅 Google Calendar Mutation"}
-                      {conf.actionType === "document_export" && "📄 Document Package Export"}
+                        tr("🌐 Browser Form Submission", "🌐 Soumission de formulaire web")}
+                      {conf.actionType === "gmail_send_draft" &&
+                        tr("✉️ Gmail Outreach Email", "✉️ Envoi d'e-mail Gmail")}
+                      {conf.actionType === "calendar_create_event" &&
+                        tr("📅 Google Calendar Mutation", "📅 Création d'événement Google Agenda")}
+                      {conf.actionType === "document_export" &&
+                        tr("📄 Document Package Export", "📄 Export de dossier documentaire")}
                     </span>
                     <span
                       style={{
@@ -179,7 +204,7 @@ export function ApprovalCards({
                   </div>
 
                   <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
-                    Expires: {new Date(conf.expiresAt).toLocaleString()}
+                    {tr("Expires:", "Expire le :")} {new Date(conf.expiresAt).toLocaleString()}
                   </span>
                 </div>
 
@@ -207,7 +232,9 @@ export function ApprovalCards({
                     fontSize: "0.82rem",
                   }}
                 >
-                  <strong style={{ color: "var(--muted-text)" }}>DESTINATION:</strong>
+                  <strong style={{ color: "var(--muted-text)" }}>
+                    {tr("DESTINATION:", "DESTINATION :")}
+                  </strong>
                   <code style={{ color: "var(--bright-accent)", wordBreak: "break-all" }}>
                     {conf.destination}
                   </code>
@@ -216,7 +243,9 @@ export function ApprovalCards({
                 {/* Attached Documents */}
                 {conf.attachedDocuments.length > 0 && (
                   <div style={{ fontSize: "0.82rem" }}>
-                    <strong style={{ color: "var(--text)" }}>Attached Documents & Hashes:</strong>
+                    <strong style={{ color: "var(--text)" }}>
+                      {tr("Attached Documents & Hashes:", "Documents joints & Empreintes :")}
+                    </strong>
                     <div
                       style={{
                         display: "flex",
@@ -252,7 +281,10 @@ export function ApprovalCards({
                 {/* Form / Payload Preview */}
                 <details style={{ fontSize: "0.8rem", color: "var(--muted-text)" }}>
                   <summary style={{ cursor: "pointer", fontWeight: 600 }}>
-                    Inspect Draft Payload / Transmitted Data
+                    {tr(
+                      "Inspect Draft Payload / Transmitted Data",
+                      "Inspecter la charge utile / données transmises",
+                    )}
                   </summary>
                   <pre
                     style={{
@@ -270,7 +302,9 @@ export function ApprovalCards({
 
                 {/* Explicit Risks Box */}
                 <div className="risks-box" role="alert">
-                  <strong>⚠️ Explicit Risks Identified:</strong>
+                  <strong>
+                    {tr("⚠️ Explicit Risks Identified:", "⚠️ Risques explicites identifiés :")}
+                  </strong>
                   <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
                     {conf.risks.map((r, i) => (
                       <li key={i}>{r}</li>
@@ -280,7 +314,12 @@ export function ApprovalCards({
 
                 {/* Explicit Consequences Box */}
                 <div className="consequences-box" role="status">
-                  <strong>⚡ Anticipated Real-World Consequences:</strong>
+                  <strong>
+                    {tr(
+                      "⚡ Anticipated Real-World Consequences:",
+                      "⚡ Conséquences réelles anticipées :",
+                    )}
+                  </strong>
                   <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
                     {conf.consequences.map((c, i) => (
                       <li key={i}>{c}</li>
@@ -299,13 +338,14 @@ export function ApprovalCards({
                       borderLeft: `3px solid ${conf.status === "approved" ? "var(--ok)" : "var(--down)"}`,
                     }}
                   >
-                    <strong>Resolution Record:</strong> Marked as{" "}
-                    <em>{conf.status.toUpperCase()}</em> by{" "}
-                    <strong>{conf.resolvedBy ?? "User"}</strong> at{" "}
+                    <strong>{tr("Resolution Record:", "Registre de résolution :")}</strong>{" "}
+                    {tr("Marked as", "Marqué comme")} <em>{conf.status.toUpperCase()}</em>{" "}
+                    {tr("by", "par")}{" "}
+                    <strong>{conf.resolvedBy ?? tr("User", "Utilisateur")}</strong> {tr("at", "le")}{" "}
                     {conf.decidedAt ? new Date(conf.decidedAt).toLocaleString() : "—"}.
                     {conf.decisionRationale && (
                       <div style={{ marginTop: "0.25rem", color: "var(--muted-text)" }}>
-                        Rationale: {conf.decisionRationale}
+                        {tr("Rationale:", "Justification :")} {conf.decisionRationale}
                       </div>
                     )}
                   </div>
@@ -323,11 +363,14 @@ export function ApprovalCards({
                           void handleResolve(
                             conf.id,
                             "approve",
-                            `Action "${conf.title}" explicitly approved and recorded in audit log.`,
+                            tr(
+                              `Action "${conf.title}" explicitly approved and recorded in audit log.`,
+                              `Action "${conf.title}" explicitement approuvée et consignée dans l'audit.`,
+                            ),
                           )
                         }
                       >
-                        ✓ Grant Explicit Approval
+                        {tr("✓ Grant Explicit Approval", "✓ Accorder l'approbation explicite")}
                       </button>
 
                       <button
@@ -338,11 +381,14 @@ export function ApprovalCards({
                           void handleResolve(
                             conf.id,
                             "reject",
-                            `Action "${conf.title}" rejected. External transmission blocked.`,
+                            tr(
+                              `Action "${conf.title}" rejected. External transmission blocked.`,
+                              `Action "${conf.title}" rejetée. Transmission externe bloquée.`,
+                            ),
                           )
                         }
                       >
-                        ✕ Reject Action
+                        {tr("✕ Reject Action", "✕ Rejeter l'action")}
                       </button>
 
                       <button
@@ -353,11 +399,14 @@ export function ApprovalCards({
                           void handleResolve(
                             conf.id,
                             "cancel",
-                            `Action "${conf.title}" cancelled by user.`,
+                            tr(
+                              `Action "${conf.title}" cancelled by user.`,
+                              `Action "${conf.title}" annulée par l'utilisateur.`,
+                            ),
                           )
                         }
                       >
-                        Cancel Request
+                        {tr("Cancel Request", "Annuler la demande")}
                       </button>
                     </div>
 
@@ -365,12 +414,15 @@ export function ApprovalCards({
                       type="text"
                       className="career-input"
                       style={{ maxWidth: "260px" }}
-                      placeholder="Optional rationale / reason..."
+                      placeholder={tr(
+                        "Optional rationale / reason...",
+                        "Justification / motif facultatif...",
+                      )}
                       value={rejectionReasons[conf.id] ?? ""}
                       onChange={(e) =>
                         setRejectionReasons({ ...rejectionReasons, [conf.id]: e.target.value })
                       }
-                      aria-label="Decision rationale"
+                      aria-label={tr("Decision rationale", "Justification de la décision")}
                     />
                   </div>
                 )}

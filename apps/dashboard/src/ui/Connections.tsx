@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, ConnectionObservation, DashboardApi } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import { useI18n } from "./i18n/index.js";
+import { Futuristic3DCard } from "./Futuristic3DCard.js";
 
 export function Connections({ api }: { api: DashboardApi }) {
-  const { locale } = useI18n();
+  const { tr } = useI18n();
   const [connections, setConnections] = useState<ConnectionCatalogEntry[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -14,9 +15,14 @@ export function Connections({ api }: { api: DashboardApi }) {
     try {
       setConnections((await api.connections()).connections);
     } catch (cause) {
-      setError(messageOf(cause, "Unable to load connections."));
+      setError(
+        messageOf(
+          cause,
+          tr("Unable to load connections.", "Impossible de charger les connexions."),
+        ),
+      );
     }
-  }, [api]);
+  }, [api, tr]);
 
   useEffect(() => {
     void load();
@@ -28,7 +34,7 @@ export function Connections({ api }: { api: DashboardApi }) {
     try {
       setConnections((await api.detectConnections()).connections);
     } catch (cause) {
-      setError(messageOf(cause, "Host scan failed."));
+      setError(messageOf(cause, tr("Host scan failed.", "Échec de l'analyse de l'hôte.")));
     } finally {
       setBusy(null);
     }
@@ -44,7 +50,12 @@ export function Connections({ api }: { api: DashboardApi }) {
           current?.map((entry) => (entry.providerId === providerId ? updated : entry)) ?? [updated],
       );
     } catch (cause) {
-      setError(messageOf(cause, `Unable to test ${providerId}.`));
+      setError(
+        messageOf(
+          cause,
+          tr(`Unable to test ${providerId}.`, `Impossible de tester ${providerId}.`),
+        ),
+      );
     } finally {
       setBusy(null);
     }
@@ -54,18 +65,18 @@ export function Connections({ api }: { api: DashboardApi }) {
     <div className="content connections-page">
       <section className="connection-hero">
         <div>
-          <span className="connection-kicker">
-            {locale === "fr" ? "Découverte locale" : "Local discovery"}
-          </span>
+          <span className="connection-kicker">{tr("Local discovery", "Découverte locale")}</span>
           <h2>
-            {locale === "fr"
-              ? "Connectez les outils déjà installés sur cet hôte."
-              : "Connect the tools already installed on this host."}
+            {tr(
+              "Connect the tools already installed on this host.",
+              "Connectez les outils déjà installés sur cet hôte.",
+            )}
           </h2>
           <p>
-            {locale === "fr"
-              ? "NEXUS exécute uniquement des diagnostics déclarés en lecture seule. Les identifiants restent dans chaque CLI et ne transitent jamais par le tableau de bord."
-              : "NEXUS runs only declared, read-only diagnostics. Credentials stay inside each provider's own CLI and never pass through the dashboard."}
+            {tr(
+              "NEXUS runs only declared, read-only diagnostics. Credentials stay inside each provider's own CLI and never pass through the dashboard.",
+              "NEXUS exécute uniquement des diagnostics déclarés en lecture seule. Les identifiants restent dans chaque CLI et ne transitent jamais par le tableau de bord.",
+            )}
           </p>
         </div>
         <button
@@ -75,19 +86,17 @@ export function Connections({ api }: { api: DashboardApi }) {
           onClick={() => void scan()}
         >
           {busy === "all"
-            ? locale === "fr"
-              ? "Analyse…"
-              : "Scanning…"
-            : locale === "fr"
-              ? "Analyser cet hôte"
-              : "Scan this host"}
+            ? tr("Scanning…", "Analyse en cours…")
+            : tr("Scan this host", "Analyser cet hôte")}
         </button>
       </section>
 
       <div className="connection-scope" role="note">
-        <strong>Scope:</strong> discovery runs on the machine hosting the NEXUS API. If the API runs
-        in Docker, the CLI must be available inside that container or exposed through a NEXUS host
-        connector.
+        <strong>{tr("Scope:", "Périmètre :")}</strong>{" "}
+        {tr(
+          "discovery runs on the machine hosting the NEXUS API. If the API runs in Docker, the CLI must be available inside that container or exposed through a NEXUS host connector.",
+          "la découverte s'exécute sur la machine hébergeant l'API NEXUS. Si l'API s'exécute dans Docker, le CLI doit être disponible dans ce conteneur ou exposé via un connecteur d'hôte NEXUS.",
+        )}
       </div>
 
       {error === null ? null : (
@@ -97,7 +106,11 @@ export function Connections({ api }: { api: DashboardApi }) {
       )}
 
       {connections === null ? (
-        <div className="loading-state" role="status" aria-label="Loading connections">
+        <div
+          className="loading-state"
+          role="status"
+          aria-label={tr("Loading connections", "Chargement des connexions")}
+        >
           <span />
           <span />
           <span />
@@ -105,12 +118,13 @@ export function Connections({ api }: { api: DashboardApi }) {
       ) : (
         <div className="connection-grid">
           {connections.map((entry) => (
-            <ConnectionCard
-              key={entry.providerId}
-              entry={entry}
-              busy={busy === entry.providerId || busy === "all"}
-              onTest={() => void test(entry.providerId)}
-            />
+            <Futuristic3DCard key={entry.providerId} className="cyber-3d-card">
+              <ConnectionCard
+                entry={entry}
+                busy={busy === entry.providerId || busy === "all"}
+                onTest={() => void test(entry.providerId)}
+              />
+            </Futuristic3DCard>
           ))}
         </div>
       )}
@@ -127,11 +141,12 @@ function ConnectionCard({
   busy: boolean;
   onTest: () => void;
 }) {
+  const { tr } = useI18n();
   const observation = entry.observation;
-  const state = connectionState(entry);
+  const state = connectionState(entry, tr);
 
   return (
-    <article className="connection-card">
+    <article className="connection-card cyber-card" style={{ height: "100%", margin: 0 }}>
       <div className="connection-card-heading">
         <span className={`connection-logo ${state.tone}`} aria-hidden="true">
           {entry.displayName.slice(0, 1).toUpperCase()}
@@ -144,13 +159,19 @@ function ConnectionCard({
       </div>
 
       <dl className="connection-details">
-        <ConnectionDetail label="CLI version" value={observation?.version ?? "Not checked"} />
-        <ConnectionDetail label="Authentication" value={authLabel(observation)} />
         <ConnectionDetail
-          label="ACP adapter"
-          value={observation?.adapter?.availability ?? "unknown"}
+          label={tr("CLI version", "Version CLI")}
+          value={observation?.version ?? tr("Not checked", "Non vérifié")}
         />
-        <ConnectionDetail label="Provenance" value={entry.adapter.provenance} />
+        <ConnectionDetail
+          label={tr("Authentication", "Authentification")}
+          value={authLabel(observation, tr)}
+        />
+        <ConnectionDetail
+          label={tr("ACP adapter", "Adaptateur ACP")}
+          value={observation?.adapter?.availability ?? tr("unknown", "inconnu")}
+        />
+        <ConnectionDetail label={tr("Provenance", "Provenance")} value={entry.adapter.provenance} />
       </dl>
 
       {observation?.executablePath === null || observation?.executablePath === undefined ? null : (
@@ -164,11 +185,11 @@ function ConnectionCard({
       <p className="connection-evidence">{entry.adapter.provenanceEvidence}</p>
 
       <div className="connection-card-footer">
-        <span>{checkedLabel(observation)}</span>
+        <span>{checkedLabel(observation, tr)}</span>
         <div className="connection-actions">
           {entry.docsUrl === null ? null : (
             <a className="button compact" href={entry.docsUrl} target="_blank" rel="noreferrer">
-              Documentation
+              {tr("Documentation", "Documentation")}
             </a>
           )}
           <button
@@ -177,7 +198,7 @@ function ConnectionCard({
             disabled={busy || !entry.supportedOnThisHost}
             onClick={onTest}
           >
-            {busy ? "Testing…" : "Test"}
+            {busy ? tr("Testing…", "Test en cours…") : tr("Test", "Tester")}
           </button>
         </div>
       </div>
@@ -194,21 +215,47 @@ function ConnectionDetail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function connectionState(entry: ConnectionCatalogEntry): { label: string; tone: string } {
+function connectionState(
+  entry: ConnectionCatalogEntry,
+  tr: (en: string, fr: string) => string,
+): { label: string; tone: string } {
   const classified = classifyConnection(entry);
-  return { label: classified.label, tone: classified.tone };
+  const labels: Record<string, string> = {
+    "Unsupported host": tr("Unsupported host", "Hôte non supporté"),
+    "Not installed": tr("Not installed", "Non installé"),
+    Detected: tr("Detected", "Détecté"),
+    "Missing adapter": tr("Missing adapter", "Adaptateur manquant"),
+    "Connection required": tr("Connection required", "Connexion requise"),
+    Connected: tr("Connected", "Connecté"),
+    Degraded: tr("Degraded", "Dégradé"),
+    Failed: tr("Failed", "Échec"),
+  };
+  return { label: labels[classified.label] ?? classified.label, tone: classified.tone };
 }
 
-function authLabel(observation: ConnectionObservation | null): string {
-  if (observation === null) return "Not checked";
-  return observation.authStatus;
+function authLabel(
+  observation: ConnectionObservation | null,
+  tr: (en: string, fr: string) => string,
+): string {
+  if (observation === null) return tr("Not checked", "Non vérifié");
+  const map: Record<string, string> = {
+    authenticated: tr("Authenticated", "Authentifié"),
+    missing: tr("Missing", "Manquant"),
+    expired: tr("Expired", "Expiré"),
+    unsupported: tr("Unsupported", "Non supporté"),
+    not_checked: tr("Not checked", "Non vérifié"),
+  };
+  return map[observation.authStatus.toLowerCase()] ?? observation.authStatus;
 }
 
-function checkedLabel(observation: ConnectionObservation | null): string {
+function checkedLabel(
+  observation: ConnectionObservation | null,
+  tr: (en: string, fr: string) => string,
+): string {
   if (observation?.lastCheckedAt === null || observation?.lastCheckedAt === undefined) {
-    return "Never checked";
+    return tr("Never checked", "Jamais vérifié");
   }
-  return `Checked ${new Intl.DateTimeFormat(undefined, {
+  return `${tr("Checked", "Vérifié")} ${new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(observation.lastCheckedAt))}`;

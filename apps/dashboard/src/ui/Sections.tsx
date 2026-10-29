@@ -26,6 +26,8 @@ import {
 } from "../lib/format.js";
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.js";
 import { useI18n } from "./i18n/index.js";
+import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
+import { Futuristic3DCard } from "./Futuristic3DCard.js";
 
 /**
  * Supervision sections.
@@ -42,6 +44,7 @@ import { useI18n } from "./i18n/index.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Overview({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.overview());
 
   return (
@@ -49,47 +52,162 @@ export function Overview({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) => (
           <>
-            <div className="metrics">
-              <Metric value={formatCount(data.devices.online)} label="online devices" />
-              <Metric value={formatCount(data.workers.connected)} label="connected workers" />
-              <Metric value={formatCount(data.tasks.running)} label="running tasks" />
-              <Metric
-                value={formatCount(data.tasks.failed)}
-                label="failed tasks"
-                alert={data.tasks.failed > 0}
-              />
-              <Metric value={formatCount(data.agentRuns.running)} label="active agent runs" />
-              <Metric
-                value={formatCount(data.agentRuns.waitingForConfirmation)}
-                label="pending confirmation"
-                alert={data.agentRuns.waitingForConfirmation > 0}
-              />
-              <Metric value={formatCount(data.notifications.unread)} label="unread alerts" />
-              <Metric
-                value={HEALTH_LABELS[levelOf(overallHealth(data.health))]}
-                label="overall health"
-                alert={overallHealth(data.health) === "down"}
-              />
+            {/* 3D Holographic AI Core & Real-time HUD */}
+            <div className="cyber-core-hero cyber-reticle">
+              <div className="cyber-core-canvas-container">
+                <Futuristic3DCanvas />
+                <div className="cyber-core-overlay">
+                  <div className="cyber-hud-column">
+                    <div className="cyber-hud-stat">
+                      <div className="cyber-hud-stat-label">
+                        <span className="radar-pulse-ring" />
+                        {tr("Active Neural Mesh", "Réseau Neural Actif")}
+                      </div>
+                      <div className="cyber-hud-stat-value">
+                        {formatCount(data.workers.connected)}{" "}
+                        {tr("Workers Connected", "Agents Connectés")}
+                      </div>
+                    </div>
+                    <div className="cyber-hud-stat">
+                      <div className="cyber-hud-stat-label">
+                        <span className="system-dot" />
+                        {tr("Work Queue Flow", "Flux des Tâches")}
+                      </div>
+                      <div className="cyber-hud-stat-value">
+                        {formatCount(data.tasks.running)} {tr("Running Tasks", "Tâches en Cours")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="cyber-hud-column"
+                    style={{ alignItems: "flex-end", textAlign: "right" }}
+                  >
+                    <div className="cyber-hud-stat">
+                      <div className="cyber-hud-stat-label" style={{ justifyContent: "flex-end" }}>
+                        <div className="hud-audio-bars">
+                          <span className="hud-audio-bar" />
+                          <span className="hud-audio-bar" />
+                          <span className="hud-audio-bar" />
+                          <span className="hud-audio-bar" />
+                          <span className="hud-audio-bar" />
+                        </div>
+                        {tr("Singularity Core", "Cœur de Singularité")}
+                      </div>
+                      <div className="cyber-hud-stat-value">
+                        {overallHealth(data.health) === "down"
+                          ? tr("DEGRADED", "DÉGRADÉ")
+                          : tr("OPERATIONAL 100%", "OPÉRATIONNEL 100%")}
+                      </div>
+                    </div>
+                    <div className="cyber-hud-stat">
+                      <div className="cyber-hud-stat-label" style={{ justifyContent: "flex-end" }}>
+                        {tr("Security Grid", "Grille de Sécurité")}
+                      </div>
+                      <div className="cyber-hud-stat-value">
+                        {tr("SHIELD ACTIVE", "BOUCLIER ACTIF")}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <h3>Subsystem Health</h3>
-            <Table head={["Subsystem", "State", "Detail"]}>
+            <div className="metrics">
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.devices.online)}
+                  label={tr("online devices", "appareils en ligne")}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.workers.connected)}
+                  label={tr("connected workers", "agents connectés")}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.tasks.running)}
+                  label={tr("running tasks", "tâches en cours")}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.tasks.failed)}
+                  label={tr("failed tasks", "tâches échouées")}
+                  alert={data.tasks.failed > 0}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.agentRuns.running)}
+                  label={tr("active agent runs", "exécutions actives")}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.agentRuns.waitingForConfirmation)}
+                  label={tr("pending confirmation", "en attente de confirmation")}
+                  alert={data.agentRuns.waitingForConfirmation > 0}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={formatCount(data.notifications.unread)}
+                  label={tr("unread alerts", "alertes non lues")}
+                />
+              </Futuristic3DCard>
+              <Futuristic3DCard>
+                <Metric
+                  value={tr(
+                    HEALTH_LABELS[levelOf(overallHealth(data.health))],
+                    HEALTH_LABELS[levelOf(overallHealth(data.health))] === "healthy"
+                      ? "sain"
+                      : HEALTH_LABELS[levelOf(overallHealth(data.health))] === "degraded"
+                        ? "dégradé"
+                        : HEALTH_LABELS[levelOf(overallHealth(data.health))] === "down"
+                          ? "hors service"
+                          : "non configuré",
+                  )}
+                  label={tr("overall health", "santé globale")}
+                  alert={overallHealth(data.health) === "down"}
+                />
+              </Futuristic3DCard>
+            </div>
+
+            <h3>{tr("Subsystem Health", "Santé des Sous-systèmes")}</h3>
+            <Table
+              head={[tr("Subsystem", "Sous-système"), tr("State", "État"), tr("Detail", "Détail")]}
+            >
               {data.health.map((entry) => (
                 <tr key={entry.name}>
                   <td>{entry.name}</td>
                   <td>
-                    <State tone={entry.level} label={HEALTH_LABELS[entry.level]} />
+                    <State
+                      tone={entry.level}
+                      label={tr(
+                        HEALTH_LABELS[entry.level],
+                        entry.level === "ok"
+                          ? "opérationnel"
+                          : entry.level === "degraded"
+                            ? "dégradé"
+                            : entry.level === "down"
+                              ? "hors service"
+                              : "non configuré",
+                      )}
+                    />
                   </td>
                   <td className="muted">{entry.detail}</td>
                 </tr>
               ))}
             </Table>
 
-            <h3>Recent Activity</h3>
+            <h3>{tr("Recent Activity", "Activité Récente")}</h3>
             {data.recentActivity.length === 0 ? (
-              <Empty>Nothing to report.</Empty>
+              <Empty>{tr("Nothing to report.", "Rien à signaler.")}</Empty>
             ) : (
-              <Table head={["When", "Source", "Event"]}>
+              <Table head={[tr("When", "Quand"), tr("Source", "Source"), tr("Event", "Événement")]}>
                 {sortActivity(data.recentActivity).map((entry, index) => (
                   <tr key={`${entry.at}-${String(index)}`}>
                     <td className="muted">{formatAge(entry.at)}</td>
@@ -121,6 +239,7 @@ function levelOf(overall: ReturnType<typeof overallHealth>): keyof typeof HEALTH
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Devices({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.devices());
   const network = useSection(() => api.networkDiscovery());
   const [actionError, setActionError] = useState<string | null>(null);
@@ -197,15 +316,19 @@ export function Devices({ api }: { api: DashboardApi }) {
       <section className="card network-discovery-card" aria-labelledby="private-network-title">
         <div className="pairing-heading">
           <div>
-            <span className="eyebrow">PRIVATE NETWORK</span>
-            <h3 id="private-network-title">Automatic device discovery</h3>
+            <span className="eyebrow">{tr("PRIVATE NETWORK", "RÉSEAU PRIVÉ")}</span>
+            <h3 id="private-network-title">
+              {tr("Automatic device discovery", "Découverte automatique d'appareils")}
+            </h3>
             <p className="muted">
-              NEXUS detects machines visible through Tailscale. Discovery never grants trust:
-              pairing and approval remain explicit security boundaries.
+              {tr(
+                "NEXUS detects machines visible through Tailscale. Discovery never grants trust: pairing and approval remain explicit security boundaries.",
+                "NEXUS détecte les machines visibles via Tailscale. La découverte n'accorde jamais de confiance : le jumelage et l'approbation restent des limites de sécurité explicites.",
+              )}
             </p>
           </div>
           <button className="button" type="button" onClick={() => network.reload()}>
-            Refresh network
+            {tr("Refresh network", "Actualiser le réseau")}
           </button>
         </div>
         <Section state={network}>
@@ -214,18 +337,32 @@ export function Devices({ api }: { api: DashboardApi }) {
               <div className="network-summary">
                 <State
                   tone={data.running ? "ok" : data.installed ? "degraded" : "unconfigured"}
-                  label={data.running ? "TAILSCALE CONNECTED" : data.backendState.toUpperCase()}
+                  label={
+                    data.running
+                      ? tr("TAILSCALE CONNECTED", "TAILSCALE CONNECTÉ")
+                      : data.backendState.toUpperCase()
+                  }
                 />
                 <div>
-                  <strong>{data.self?.name ?? "NEXUS host"}</strong>
+                  <strong>{data.self?.name ?? tr("NEXUS host", "Hôte NEXUS")}</strong>
                   <span className="muted">{data.suggestedApiUrl ?? data.guidance}</span>
                 </div>
                 {data.automaticPairingUrl ? (
-                  <span className="network-auto-badge">Pairing address managed automatically</span>
+                  <span className="network-auto-badge">
+                    {tr(
+                      "Pairing address managed automatically",
+                      "Adresse de jumelage gérée automatiquement",
+                    )}
+                  </span>
                 ) : null}
               </div>
               {data.peers.length === 0 ? (
-                <Empty>No other Tailscale devices detected.</Empty>
+                <Empty>
+                  {tr(
+                    "No other Tailscale devices detected.",
+                    "Aucun autre appareil Tailscale détecté.",
+                  )}
+                </Empty>
               ) : (
                 <div className="network-peer-grid">
                   {data.peers.map((peer) => (
@@ -233,12 +370,15 @@ export function Devices({ api }: { api: DashboardApi }) {
                       <div>
                         <strong>{peer.name}</strong>
                         <span className="muted">
-                          {peer.os} · {peer.online ? "online" : "offline"}
+                          {peer.os} ·{" "}
+                          {peer.online ? tr("online", "en ligne") : tr("offline", "hors ligne")}
                         </span>
                       </div>
                       <State
                         tone={peer.online ? "ok" : "unconfigured"}
-                        label={peer.online ? "REACHABLE" : "OFFLINE"}
+                        label={
+                          peer.online ? tr("REACHABLE", "ACCESSIBLE") : tr("OFFLINE", "HORS LIGNE")
+                        }
                       />
                       <button
                         className="button primary"
@@ -246,15 +386,17 @@ export function Devices({ api }: { api: DashboardApi }) {
                         disabled={!peer.online || pairingBusy}
                         onClick={() => issuePairing(peer.name)}
                       >
-                        Pair with NEXUS
+                        {tr("Pair with NEXUS", "Jumeler avec NEXUS")}
                       </button>
                     </article>
                   ))}
                 </div>
               )}
               <p className="muted network-security-note">
-                A discovered device cannot execute tasks or access NEXUS data until its client uses
-                a single-use pairing ticket and you approve it.
+                {tr(
+                  "A discovered device cannot execute tasks or access NEXUS data until its client uses a single-use pairing ticket and you approve it.",
+                  "Un appareil découvert ne peut pas exécuter de tâches ni accéder aux données NEXUS tant que son client n'utilise pas un ticket de jumelage à usage unique et que vous ne l'approuvez pas.",
+                )}
               </p>
             </>
           )}
@@ -263,15 +405,17 @@ export function Devices({ api }: { api: DashboardApi }) {
       <section className="card pairing-card" aria-labelledby="pairing-title">
         <div className="pairing-heading">
           <div>
-            <span className="eyebrow">NEW WORKER</span>
-            <h3 id="pairing-title">Add machine</h3>
+            <span className="eyebrow">{tr("NEW WORKER", "NOUVEL AGENT")}</span>
+            <h3 id="pairing-title">{tr("Add machine", "Ajouter une machine")}</h3>
             <p className="muted">
-              The code expires after five minutes and can only be used once. The machine will remain
-              pending until approved below.
+              {tr(
+                "The code expires after five minutes and can only be used once. The machine will remain pending until approved below.",
+                "Le code expire après cinq minutes et ne peut être utilisé qu'une seule fois. La machine restera en attente jusqu'à approbation ci-dessous.",
+              )}
             </p>
           </div>
           <div className="pairing-create">
-            <label htmlFor="pairing-label">Expected name</label>
+            <label htmlFor="pairing-label">{tr("Expected name", "Nom attendu")}</label>
             <input
               id="pairing-label"
               className="field"
@@ -285,7 +429,7 @@ export function Devices({ api }: { api: DashboardApi }) {
               disabled={pairingBusy}
               onClick={() => issuePairing()}
             >
-              {pairingBusy ? "Creating…" : "Generate code"}
+              {pairingBusy ? tr("Creating…", "Création…") : tr("Generate code", "Générer le code")}
             </button>
           </div>
         </div>
@@ -293,19 +437,26 @@ export function Devices({ api }: { api: DashboardApi }) {
           <div className="pairing-platforms">
             <div>
               <strong>Windows</strong>
-              <span>Installer + automatic service</span>
+              <span>
+                {tr("Installer + automatic service", "Installateur + service automatique")}
+              </span>
             </div>
             <div>
               <strong>Android worker</strong>
-              <span>NEXUS APK then pairing link</span>
+              <span>{tr("NEXUS APK then pairing link", "APK NEXUS puis lien de jumelage")}</span>
             </div>
             <div>
               <strong>iOS client</strong>
-              <span>NEXUS app then connection</span>
+              <span>{tr("NEXUS app then connection", "Application NEXUS puis connexion")}</span>
             </div>
             <div>
               <strong>Linux / NAS / Raspberry Pi</strong>
-              <span>Isolated Docker image, amd64 and arm64</span>
+              <span>
+                {tr(
+                  "Isolated Docker image, amd64 and arm64",
+                  "Image Docker isolée, amd64 et arm64",
+                )}
+              </span>
             </div>
           </div>
         ) : (
@@ -322,13 +473,23 @@ export function Devices({ api }: { api: DashboardApi }) {
               >
                 <div aria-label="Pairing QR Code" dangerouslySetInnerHTML={{ __html: qrSvg }} />
                 <span style={{ fontSize: "0.8rem", marginTop: "8px", fontWeight: 500 }}>
-                  Scan with NEXUS mobile app
+                  {tr("Scan with NEXUS mobile app", "Scanner avec l'application mobile NEXUS")}
                 </span>
               </div>
             ) : null}
-            <strong>Windows (run in Administrator PowerShell — secret piped via stdin):</strong>
+            <strong>
+              {tr(
+                "Windows (run in Administrator PowerShell — secret piped via stdin):",
+                "Windows (exécuter dans PowerShell Administrateur — secret injecté via stdin) :",
+              )}
+            </strong>
             <code>{windowsCommand}</code>
-            <strong>Linux / Docker (secret piped via stdin):</strong>
+            <strong>
+              {tr(
+                "Linux / Docker (secret piped via stdin):",
+                "Linux / Docker (secret injecté via stdin) :",
+              )}
+            </strong>
             <code>{linuxCommand}</code>
             <div className="table-actions">
               <button
@@ -336,33 +497,36 @@ export function Devices({ api }: { api: DashboardApi }) {
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(windowsCommand)}
               >
-                Copy Windows command
+                {tr("Copy Windows command", "Copier commande Windows")}
               </button>
               <button
                 className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(pairing.payload)}
               >
-                Copy pairing link
+                {tr("Copy pairing link", "Copier lien de jumelage")}
               </button>
               <button
                 className="button"
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(linuxCommand)}
               >
-                Copy Linux command
+                {tr("Copy Linux command", "Copier commande Linux")}
               </button>
               <button className="button" type="button" onClick={() => setPairing(null)}>
-                Hide code
+                {tr("Hide code", "Masquer le code")}
               </button>
             </div>
             <div className="callout info network-managed-note">
-              <strong>Private connectivity:</strong> NEXUS automatically uses the host Tailscale
-              address when no explicit public API address is configured. No tailnet key is read or
-              stored.
+              <strong>{tr("Private connectivity:", "Connectivité privée :")}</strong>{" "}
+              {tr(
+                "NEXUS automatically uses the host Tailscale address when no explicit public API address is configured. No tailnet key is read or stored.",
+                "NEXUS utilise automatiquement l'adresse Tailscale de l'hôte lorsqu'aucune adresse d'API publique explicite n'est configurée. Aucune clé tailnet n'est lue ni stockée.",
+              )}
             </div>
             <small style={{ display: "block", marginTop: "8px" }}>
-              Expires at {new Date(pairing.expiresAt).toLocaleTimeString()}. Single-use ticket.
+              {tr("Expires at", "Expire à")} {new Date(pairing.expiresAt).toLocaleTimeString()}.{" "}
+              {tr("Single-use ticket.", "Ticket à usage unique.")}
             </small>
           </div>
         )}
@@ -370,20 +534,20 @@ export function Devices({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.devices.length === 0 ? (
-            <Empty>No paired devices.</Empty>
+            <Empty>{tr("No paired devices.", "Aucun appareil jumelé.")}</Empty>
           ) : (
             <Table
               head={[
-                "Device",
-                "Role",
-                "Platform",
-                "Status",
-                "Trust",
-                "Capabilities",
-                "Last Heartbeat",
-                "Health",
-                "Permissions",
-                "Actions",
+                tr("Device", "Appareil"),
+                tr("Role", "Rôle"),
+                tr("Platform", "Plateforme"),
+                tr("Status", "Statut"),
+                tr("Trust", "Confiance"),
+                tr("Capabilities", "Capacités"),
+                tr("Last Heartbeat", "Dernier signal"),
+                tr("Health", "Santé"),
+                tr("Permissions", "Permissions"),
+                tr("Actions", "Actions"),
               ]}
             >
               {data.devices.map((device) => {
@@ -470,7 +634,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 );
                               }}
                             >
-                              Pause all
+                              {tr("Pause all", "Tout suspendre")}
                             </button>
                             <button
                               className="button primary"
@@ -485,14 +649,14 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 });
                               }}
                             >
-                              Save
+                              {tr("Save", "Enregistrer")}
                             </button>
                             <button
                               className="button"
                               type="button"
                               onClick={() => setEditingCapabilitiesDeviceId(null)}
                             >
-                              Cancel
+                              {tr("Cancel", "Annuler")}
                             </button>
                           </div>
                         </div>
@@ -555,7 +719,8 @@ export function Devices({ api }: { api: DashboardApi }) {
                       })()}
                     </td>
                     <td className="muted">
-                      {device.health.activeTasks}/{device.health.maxConcurrentTasks} task(s)
+                      {device.health.activeTasks}/{device.health.maxConcurrentTasks}{" "}
+                      {tr("task(s)", "tâche(s)")}
                       {device.health.cpuLoad === null
                         ? ""
                         : ` · CPU ${String(Math.round(device.health.cpuLoad * 100))} %`}
@@ -578,7 +743,9 @@ export function Devices({ api }: { api: DashboardApi }) {
                           }}
                         >
                           <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                            <strong style={{ fontSize: "0.75rem", width: "100%" }}>Presets:</strong>
+                            <strong style={{ fontSize: "0.75rem", width: "100%" }}>
+                              {tr("Presets:", "Préréglages :")}
+                            </strong>
                             {Object.entries(PERMISSION_PRESETS).map(([presetName, presetPerms]) => (
                               <button
                                 key={presetName}
@@ -659,7 +826,10 @@ export function Devices({ api }: { api: DashboardApi }) {
                           <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
                             <input
                               className="field"
-                              placeholder="Custom (e.g. sensor.custom)"
+                              placeholder={tr(
+                                "Custom (e.g. sensor.custom)",
+                                "Personnalisé (ex: sensor.custom)",
+                              )}
                               value={customPermission}
                               onChange={(e) => setCustomPermission(e.target.value)}
                               style={{ fontSize: "0.75rem", padding: "2px 6px" }}
@@ -675,7 +845,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 }
                               }}
                             >
-                              Add
+                              {tr("Add", "Ajouter")}
                             </button>
                           </div>
 
@@ -690,14 +860,14 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 });
                               }}
                             >
-                              Save
+                              {tr("Save", "Enregistrer")}
                             </button>
                             <button
                               className="button compact"
                               type="button"
                               onClick={() => setEditingPermissionsDeviceId(null)}
                             >
-                              Cancel
+                              {tr("Cancel", "Annuler")}
                             </button>
                           </div>
                         </div>
@@ -717,7 +887,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                             type="button"
                             onClick={() => act(() => api.trustDevice(device.id))}
                           >
-                            Approve
+                            {tr("Approve", "Approuver")}
                           </button>
                         ) : null}
                         {device.trust !== "REVOKED" ? (
@@ -734,7 +904,9 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 }
                               }}
                             >
-                              {isEditingCapabilities ? "Close" : "Capabilities"}
+                              {isEditingCapabilities
+                                ? tr("Close", "Fermer")
+                                : tr("Capabilities", "Capacités")}
                             </button>
                             <button
                               className="button"
@@ -749,7 +921,9 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 }
                               }}
                             >
-                              {isEditingPermissions ? "Close" : "Permissions"}
+                              {isEditingPermissions
+                                ? tr("Close", "Fermer")
+                                : tr("Permissions", "Permissions")}
                             </button>
                             {device.status === "ONLINE" ? (
                               <button
@@ -757,7 +931,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 type="button"
                                 onClick={() => act(() => api.disconnectDevice(device.id))}
                               >
-                                Disconnect
+                                {tr("Disconnect", "Déconnecter")}
                               </button>
                             ) : null}
                             <button
@@ -766,13 +940,16 @@ export function Devices({ api }: { api: DashboardApi }) {
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    `Permanently revoke ${device.name}? All active sessions will terminate and credentials will be destroyed.`,
+                                    tr(
+                                      `Permanently revoke ${device.name}? All active sessions will terminate and credentials will be destroyed.`,
+                                      `Révoquer définitivement ${device.name} ? Toutes les sessions actives se termineront et les identifiants seront détruits.`,
+                                    ),
                                   )
                                 )
                                   act(() => api.revokeDevice(device.id));
                               }}
                             >
-                              Revoke
+                              {tr("Revoke", "Révoquer")}
                             </button>
                           </>
                         ) : null}
@@ -794,6 +971,7 @@ export function Devices({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Workers({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.workers());
 
   return (
@@ -801,9 +979,18 @@ export function Workers({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.workers.length === 0 ? (
-            <Empty>No paired workers.</Empty>
+            <Empty>{tr("No paired workers.", "Aucun agent jumelé.")}</Empty>
           ) : (
-            <Table head={["Worker", "State", "Channel", "Load", "Capabilities", "Seen"]}>
+            <Table
+              head={[
+                tr("Worker", "Agent"),
+                tr("State", "État"),
+                tr("Channel", "Canal"),
+                tr("Load", "Charge"),
+                tr("Capabilities", "Capacités"),
+                tr("Seen", "Vu"),
+              ]}
+            >
               {data.workers.map((worker) => {
                 const derived = workerState(worker);
                 return (
@@ -813,13 +1000,24 @@ export function Workers({ api }: { api: DashboardApi }) {
                       <div className="muted mono">{worker.role}</div>
                     </td>
                     <td>
-                      <State tone={derived} label={WORKER_LABELS[derived]} />
+                      <State
+                        tone={derived}
+                        label={tr(
+                          WORKER_LABELS[derived],
+                          derived === "accepting"
+                            ? "disponible"
+                            : derived === "saturated"
+                              ? "saturé"
+                              : derived === "degraded"
+                                ? "dégradé"
+                                : derived === "disconnected"
+                                  ? "déconnecté"
+                                  : "révoqué",
+                        )}
+                      />
                     </td>
                     <td className="muted">
-                      {/* The declared role and open channel are two different things:
-                          a paired but disconnected worker will not execute anything,
-                          and showing only the role would suggest otherwise. */}
-                      {worker.connected ? "open" : "closed"}
+                      {worker.connected ? tr("open", "ouvert") : tr("closed", "fermé")}
                     </td>
                     <td>
                       <Bar
@@ -855,6 +1053,7 @@ export function Workers({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Tasks({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.tasks());
   const [selected, setSelected] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -865,11 +1064,19 @@ export function Tasks({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.tasks.length === 0 ? (
-            <Empty>No tasks.</Empty>
+            <Empty>{tr("No tasks.", "Aucune tâche.")}</Empty>
           ) : (
             <>
               <Table
-                head={["Task", "Status", "Progress", "Origin", "Created", "Duration", "Actions"]}
+                head={[
+                  tr("Task", "Tâche"),
+                  tr("Status", "Statut"),
+                  tr("Progress", "Progression"),
+                  tr("Origin", "Origine"),
+                  tr("Created", "Créée"),
+                  tr("Duration", "Durée"),
+                  tr("Actions", "Actions"),
+                ]}
               >
                 {data.tasks.map((task) => (
                   <tr
@@ -915,18 +1122,25 @@ export function Tasks({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (!window.confirm(`Cancel "${task.title}"?`)) return;
+                            if (
+                              !window.confirm(
+                                tr(`Cancel "${task.title}"?`, `Annuler "${task.title}" ?`),
+                              )
+                            )
+                              return;
                             void api
                               .cancelTask(task.id)
                               .then(() => state.reload())
                               .catch((cause: unknown) =>
                                 setActionError(
-                                  cause instanceof Error ? cause.message : "Cancellation failed.",
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : tr("Cancellation failed.", "Échec de l'annulation."),
                                 ),
                               );
                           }}
                         >
-                          Cancel
+                          {tr("Cancel", "Annuler")}
                         </button>
                       ) : (
                         "—"
@@ -958,17 +1172,23 @@ function taskTone(status: string): string {
  * Execution plan, steps, assigned workers, progress, execution log, results, and errors.
  */
 function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) {
+  const { tr } = useI18n();
   const state = useSection<TaskDetail>(() => api.task(taskId), [taskId]);
 
   return (
     <Section state={state}>
       {(task) => (
         <>
-          <h3>Selected Workers</h3>
+          <h3>{tr("Selected Workers", "Agents Sélectionnés")}</h3>
           {selectedWorkers(task).length === 0 ? (
-            <Empty>No workers selected — the task has not been dispatched yet.</Empty>
+            <Empty>
+              {tr(
+                "No workers selected — the task has not been dispatched yet.",
+                "Aucun agent sélectionné — la tâche n'a pas encore été distribuée.",
+              )}
+            </Empty>
           ) : (
-            <Table head={["Worker", "Steps"]}>
+            <Table head={[tr("Worker", "Agent"), tr("Steps", "Étapes")]}>
               {selectedWorkers(task).map((worker) => (
                 <tr key={worker.id}>
                   <td>{worker.name}</td>
@@ -978,8 +1198,18 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
             </Table>
           )}
 
-          <h3>Steps</h3>
-          <Table head={["#", "Description", "Tool", "Capabilities", "Status", "Worker", "Risk"]}>
+          <h3>{tr("Steps", "Étapes")}</h3>
+          <Table
+            head={[
+              "#",
+              tr("Description", "Description"),
+              tr("Tool", "Outil"),
+              tr("Capabilities", "Capacités"),
+              tr("Status", "Statut"),
+              tr("Worker", "Agent"),
+              tr("Risk", "Risque"),
+            ]}
+          >
             {task.steps.map((step, index) => (
               <tr key={step.id}>
                 <td className="muted">{index + 1}</td>
@@ -995,11 +1225,20 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
             ))}
           </Table>
 
-          <h3>Execution Log</h3>
+          <h3>{tr("Execution Log", "Journal d'Exécution")}</h3>
           {task.executions.length === 0 ? (
-            <Empty>No recorded executions.</Empty>
+            <Empty>{tr("No recorded executions.", "Aucune exécution enregistrée.")}</Empty>
           ) : (
-            <Table head={["Step", "Worker", "Status", "Duration", "Result", "Error"]}>
+            <Table
+              head={[
+                tr("Step", "Étape"),
+                tr("Worker", "Agent"),
+                tr("Status", "Statut"),
+                tr("Duration", "Durée"),
+                tr("Result", "Résultat"),
+                tr("Error", "Erreur"),
+              ]}
+            >
               {task.executions.map((execution) => (
                 <tr key={execution.id}>
                   <td className="mono">{execution.stepId}</td>
@@ -1025,8 +1264,8 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
 
           {failedSteps(task).length === 0 ? null : (
             <>
-              <h3>Errors</h3>
-              <Table head={["Step", "Code", "Message"]}>
+              <h3>{tr("Errors", "Erreurs")}</h3>
+              <Table head={[tr("Step", "Étape"), tr("Code", "Code"), tr("Message", "Message")]}>
                 {failedSteps(task).map((step) => (
                   <tr key={step.id}>
                     <td>{step.description}</td>
@@ -1048,6 +1287,7 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Runs({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.runs());
   const observability = useSection(() => api.observability());
   const [selected, setSelected] = useState<string | null>(null);
@@ -1056,55 +1296,74 @@ export function Runs({ api }: { api: DashboardApi }) {
   const replay = async (runId: string): Promise<void> => {
     if (
       !globalThis.confirm(
-        "Create an analysis replay? Tools will be completely disabled to prevent any external effect.",
+        tr(
+          "Create an analysis replay? Tools will be completely disabled to prevent any external effect.",
+          "Créer un rejeu d'analyse ? Les outils seront complètement désactivés pour éviter tout effet externe.",
+        ),
       )
     )
       return;
-    setAction("Replay in progress…");
+    setAction(tr("Replay in progress…", "Rejeu en cours…"));
     try {
       const result = await api.replayRun(runId);
-      setAction(`Replay ${result.runId.slice(0, 8)} completed: ${result.status}.`);
+      setAction(
+        tr(
+          `Replay ${result.runId.slice(0, 8)} completed: ${result.status}.`,
+          `Rejeu ${result.runId.slice(0, 8)} terminé : ${result.status}.`,
+        ),
+      );
       state.reload();
       observability.reload();
     } catch (cause) {
-      setAction(cause instanceof Error ? cause.message : "Replay failed.");
+      setAction(cause instanceof Error ? cause.message : tr("Replay failed.", "Échec du rejeu."));
     }
   };
 
   return (
     <div className="content">
       <p className="muted" style={{ marginTop: 0 }}>
-        Status, actions, tools, progress, results, errors, and metrics. The model's reasoning is not
-        exposed — the server does not transmit it.
+        {tr(
+          "Status, actions, tools, progress, results, errors, and metrics. The model's reasoning is not exposed — the server does not transmit it.",
+          "Statut, actions, outils, progression, résultats, erreurs et métriques. Le raisonnement interne n'est pas exposé — le serveur ne le transmet pas.",
+        )}
       </p>
 
       <Section state={observability}>
         {(summary) => (
           <>
             <div className="metrics">
-              <Metric value={formatCount(summary.totals.runs)} label="analyzed runs" />
-              <Metric value={asPercent(summary.rates.fallback)} label="fallback rate" />
+              <Metric
+                value={formatCount(summary.totals.runs)}
+                label={tr("analyzed runs", "exécutions analysées")}
+              />
+              <Metric
+                value={asPercent(summary.rates.fallback)}
+                label={tr("fallback rate", "taux de secours")}
+              />
               <Metric
                 value={asPercent(summary.rates.toolError)}
-                label="tool errors"
+                label={tr("tool errors", "erreurs d'outils")}
                 alert={summary.rates.toolError > 0.1}
               />
-              <Metric value={asPercent(summary.rates.runError)} label="failed runs" />
+              <Metric
+                value={asPercent(summary.rates.runError)}
+                label={tr("failed runs", "exécutions échouées")}
+              />
               <Metric
                 value={formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
-                label="equivalent API cost"
+                label={tr("equivalent API cost", "coût API équivalent")}
               />
             </div>
             {summary.agents.length === 0 ? null : (
               <Table
                 head={[
-                  "Agent",
-                  "Runs",
-                  "Failures",
-                  "Average latency",
+                  tr("Agent", "Agent"),
+                  tr("Runs", "Exécutions"),
+                  tr("Failures", "Échecs"),
+                  tr("Average latency", "Latence moyenne"),
                   "p95",
-                  "Tokens",
-                  "Equiv. cost",
+                  tr("Tokens", "Jetons"),
+                  tr("Equiv. cost", "Coût équiv."),
                 ]}
               >
                 {summary.agents.map((agent) => (
@@ -1129,11 +1388,19 @@ export function Runs({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.runs.length === 0 ? (
-            <Empty>No recorded runs.</Empty>
+            <Empty>{tr("No recorded runs.", "Aucune exécution enregistrée.")}</Empty>
           ) : (
             <>
               <Table
-                head={["Run", "Status", "Stop Reason", "Iterations", "Tools", "Duration", "Tokens"]}
+                head={[
+                  tr("Run", "Exécution"),
+                  tr("Status", "Statut"),
+                  tr("Stop Reason", "Raison d'arrêt"),
+                  tr("Iterations", "Itérations"),
+                  tr("Tools", "Outils"),
+                  tr("Duration", "Durée"),
+                  tr("Tokens", "Jetons"),
+                ]}
               >
                 {data.runs.map((run) => (
                   <tr
@@ -1154,7 +1421,7 @@ export function Runs({ api }: { api: DashboardApi }) {
                       {run.metrics.failedToolCalls > 0 ? (
                         <span style={{ color: "var(--down)" }}>
                           {" "}
-                          ({run.metrics.failedToolCalls} failed)
+                          ({run.metrics.failedToolCalls} {tr("failed", "échoué(s)")})
                         </span>
                       ) : null}
                     </td>
@@ -1171,12 +1438,20 @@ export function Runs({ api }: { api: DashboardApi }) {
                 .filter((run) => run.runId === selected)
                 .map((run) => (
                   <div key={run.runId}>
-                    <h3>Actions</h3>
+                    <h3>{tr("Actions", "Actions")}</h3>
                     {run.tools.length === 0 ? (
-                      <Empty>No tools called.</Empty>
+                      <Empty>{tr("No tools called.", "Aucun outil appelé.")}</Empty>
                     ) : (
                       <Table
-                        head={["Tool", "Action", "Status", "Risk", "Duration", "Attempts", "Error"]}
+                        head={[
+                          tr("Tool", "Outil"),
+                          tr("Action", "Action"),
+                          tr("Status", "Statut"),
+                          tr("Risk", "Risque"),
+                          tr("Duration", "Durée"),
+                          tr("Attempts", "Tentatives"),
+                          tr("Error", "Erreur"),
+                        ]}
                       >
                         {run.tools.map((tool) => (
                           <tr key={tool.callId}>
@@ -1197,22 +1472,36 @@ export function Runs({ api }: { api: DashboardApi }) {
                       </Table>
                     )}
 
-                    <h3>Result</h3>
-                    <p>{run.response ?? <span className="muted">No final response.</span>}</p>
+                    <h3>{tr("Result", "Résultat")}</h3>
+                    <p>
+                      {run.response ?? (
+                        <span className="muted">
+                          {tr("No final response.", "Aucune réponse finale.")}
+                        </span>
+                      )}
+                    </p>
 
                     <button className="button" type="button" onClick={() => void replay(run.runId)}>
-                      Replay (analysis only)
+                      {tr("Replay (analysis only)", "Rejouer (analyse uniquement)")}
                     </button>
                     {run.replayOfRunId === null ? null : (
                       <p className="muted">
-                        Replay of run <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
+                        {tr("Replay of run", "Rejeu de l'exécution")}{" "}
+                        <span className="mono">{run.replayOfRunId.slice(0, 8)}</span>.
                       </p>
                     )}
 
                     {run.errors.length === 0 ? null : (
                       <>
-                        <h3>Errors</h3>
-                        <Table head={["When", "Iteration", "Code", "Message"]}>
+                        <h3>{tr("Errors", "Erreurs")}</h3>
+                        <Table
+                          head={[
+                            tr("When", "Quand"),
+                            tr("Iteration", "Itération"),
+                            tr("Code", "Code"),
+                            tr("Message", "Message"),
+                          ]}
+                        >
                           {run.errors.map((error, index) => (
                             <tr key={`${error.at}-${String(index)}`}>
                               <td className="muted">{formatAge(error.at)}</td>
@@ -1225,12 +1514,21 @@ export function Runs({ api }: { api: DashboardApi }) {
                       </>
                     )}
 
-                    <h3>Metrics</h3>
+                    <h3>{tr("Metrics", "Métriques")}</h3>
                     <div className="metrics">
-                      <Metric value={run.metrics.model} label="model" />
-                      <Metric value={formatCount(run.metrics.inputTokens)} label="input tokens" />
-                      <Metric value={formatCount(run.metrics.outputTokens)} label="output tokens" />
-                      <Metric value={formatCount(run.metrics.cacheReadTokens)} label="cache read" />
+                      <Metric value={run.metrics.model} label={tr("model", "modèle")} />
+                      <Metric
+                        value={formatCount(run.metrics.inputTokens)}
+                        label={tr("input tokens", "jetons d'entrée")}
+                      />
+                      <Metric
+                        value={formatCount(run.metrics.outputTokens)}
+                        label={tr("output tokens", "jetons de sortie")}
+                      />
+                      <Metric
+                        value={formatCount(run.metrics.cacheReadTokens)}
+                        label={tr("cache read", "lecture cache")}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1262,6 +1560,7 @@ function formatEstimatedCost(cost: number | null): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Tools({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.tools());
 
   return (
@@ -1269,9 +1568,23 @@ export function Tools({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.tools.length === 0 ? (
-            <Empty>No registered tools. The catalog populates when the agent service starts.</Empty>
+            <Empty>
+              {tr(
+                "No registered tools. The catalog populates when the agent service starts.",
+                "Aucun outil enregistré. Le catalogue se remplit au démarrage du service d'agent.",
+              )}
+            </Empty>
           ) : (
-            <Table head={["Tool", "Source", "Description", "Risk", "Permissions", "Allowed"]}>
+            <Table
+              head={[
+                tr("Tool", "Outil"),
+                tr("Source", "Source"),
+                tr("Description", "Description"),
+                tr("Risk", "Risque"),
+                tr("Permissions", "Permissions"),
+                tr("Allowed", "Autorisé"),
+              ]}
+            >
               {data.tools.map((tool) => (
                 <tr key={tool.name}>
                   <td className="mono">{tool.name}</td>
@@ -1282,7 +1595,7 @@ export function Tools({ api }: { api: DashboardApi }) {
                   <td>
                     <State
                       tone={tool.allowed ? "ok" : "degraded"}
-                      label={tool.allowed ? "yes" : "no"}
+                      label={tool.allowed ? tr("yes", "oui") : tr("no", "non")}
                     />
                   </td>
                 </tr>
@@ -1300,6 +1613,7 @@ export function Tools({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Mcp({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.mcp());
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<"stdio" | "http" | "sse">("stdio");
@@ -1318,7 +1632,9 @@ export function Mcp({ api }: { api: DashboardApi }) {
         state.reload();
       })
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action failed."),
+        setActionError(
+          cause instanceof Error ? cause.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -1327,7 +1643,12 @@ export function Mcp({ api }: { api: DashboardApi }) {
     try {
       refs = secretRefs.trim() === "" ? {} : (JSON.parse(secretRefs) as Record<string, string>);
     } catch {
-      setActionError("Secret references must be a JSON object.");
+      setActionError(
+        tr(
+          "Secret references must be a JSON object.",
+          "Les références de secrets doivent être un objet JSON.",
+        ),
+      );
       return;
     }
     const common = {
@@ -1360,7 +1681,10 @@ export function Mcp({ api }: { api: DashboardApi }) {
             envRefs: refs,
           }
         : { ...common, transport, url: target, headers: {}, headerRefs: refs };
-    act(() => api.saveMcp(config), `Server ${name} saved and connected.`);
+    act(
+      () => api.saveMcp(config),
+      tr(`Server ${name} saved and connected.`, `Serveur ${name} enregistré et connecté.`),
+    );
   };
 
   return (
@@ -1368,10 +1692,10 @@ export function Mcp({ api }: { api: DashboardApi }) {
       {message === null ? null : <p className="banner success">{message}</p>}
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
-        <h3>Add or Replace an MCP Server</h3>
+        <h3>{tr("Add or Replace an MCP Server", "Ajouter ou remplacer un serveur MCP")}</h3>
         <div className="settings-grid">
           <label>
-            Name
+            {tr("Name", "Nom")}
             <input
               className="field mono"
               value={name}
@@ -1380,7 +1704,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
             />
           </label>
           <label>
-            Transport
+            {tr("Transport", "Transport")}
             <select
               className="field"
               value={transport}
@@ -1392,7 +1716,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
             </select>
           </label>
           <label className="settings-wide">
-            {transport === "stdio" ? "Command" : "URL"}
+            {transport === "stdio" ? tr("Command", "Commande") : "URL"}
             <input
               className="field mono"
               value={target}
@@ -1402,7 +1726,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
           </label>
           {transport === "stdio" ? (
             <label className="settings-wide">
-              Arguments · one per line
+              {tr("Arguments · one per line", "Arguments · un par ligne")}
               <textarea
                 className="field mono"
                 rows={3}
@@ -1412,7 +1736,8 @@ export function Mcp({ api }: { api: DashboardApi }) {
             </label>
           ) : null}
           <label className="settings-wide">
-            {transport === "stdio" ? "envRefs" : "headerRefs"} · JSON to vault://nexus/…
+            {transport === "stdio" ? "envRefs" : "headerRefs"} ·{" "}
+            {tr("JSON to vault://nexus/…", "JSON vers vault://nexus/…")}
             <textarea
               className="field mono"
               rows={3}
@@ -1429,27 +1754,25 @@ export function Mcp({ api }: { api: DashboardApi }) {
             disabled={name === "" || target === ""}
             onClick={save}
           >
-            Save and connect
+            {tr("Save and connect", "Enregistrer et connecter")}
           </button>
         </div>
       </section>
       <Section state={state}>
         {(data) =>
           data.configurations.length === 0 ? (
-            // Unconfigured is not broken. Saying so prevents looking for an
-            // incident that does not exist.
-            <Empty>No MCP servers configured.</Empty>
+            <Empty>{tr("No MCP servers configured.", "Aucun serveur MCP configuré.")}</Empty>
           ) : (
             <Table
               head={[
-                "Server",
-                "State",
-                "Tools",
-                "Failures",
-                "Reconnects",
-                "Circuit",
-                "Last error",
-                "Actions",
+                tr("Server", "Serveur"),
+                tr("State", "État"),
+                tr("Tools", "Outils"),
+                tr("Failures", "Échecs"),
+                tr("Reconnects", "Reconnexions"),
+                tr("Circuit", "Disjoncteur"),
+                tr("Last error", "Dernière erreur"),
+                tr("Actions", "Actions"),
               ]}
             >
               {data.servers.map((server) => (
@@ -1473,8 +1796,8 @@ export function Mcp({ api }: { api: DashboardApi }) {
                   <td>{server.reconnectAttempts}</td>
                   <td className="muted">
                     {server.circuitOpenUntil === null
-                      ? "closed"
-                      : `open until ${server.circuitOpenUntil}`}
+                      ? tr("closed", "fermé")
+                      : `${tr("open until", "ouvert jusqu'à")} ${server.circuitOpenUntil}`}
                   </td>
                   <td className="muted">{server.lastError ?? "—"}</td>
                   <td>
@@ -1482,20 +1805,33 @@ export function Mcp({ api }: { api: DashboardApi }) {
                       className="button compact"
                       type="button"
                       onClick={() =>
-                        act(() => api.reconnectMcp(server.name), `${server.name} reconnected.`)
+                        act(
+                          () => api.reconnectMcp(server.name),
+                          tr(`${server.name} reconnected.`, `${server.name} reconnecté.`),
+                        )
                       }
                     >
-                      Reconnect
+                      {tr("Reconnect", "Reconnecter")}
                     </button>{" "}
                     <button
                       className="button compact danger"
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Delete server ${server.name}?`))
-                          act(() => api.removeMcp(server.name), `${server.name} deleted.`);
+                        if (
+                          window.confirm(
+                            tr(
+                              `Delete server ${server.name}?`,
+                              `Supprimer le serveur ${server.name} ?`,
+                            ),
+                          )
+                        )
+                          act(
+                            () => api.removeMcp(server.name),
+                            tr(`${server.name} deleted.`, `${server.name} supprimé.`),
+                          );
                       }}
                     >
-                      Delete
+                      {tr("Delete", "Supprimer")}
                     </button>
                   </td>
                 </tr>
@@ -1513,6 +1849,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Browser({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.browser());
   const [mode, setMode] = useState<"local-harness" | "remote-worker">("local-harness");
   const [cdpUrl, setCdpUrl] = useState("http://127.0.0.1:19222");
@@ -1543,7 +1880,9 @@ export function Browser({ api }: { api: DashboardApi }) {
         state.reload();
       })
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action failed."),
+        setActionError(
+          cause instanceof Error ? cause.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -1552,26 +1891,35 @@ export function Browser({ api }: { api: DashboardApi }) {
       {message === null ? null : <p className="banner success">{message}</p>}
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <section className="settings-panel">
-        <h3>Configure Browser Use</h3>
+        <h3>{tr("Configure Browser Use", "Configurer Browser Use")}</h3>
         <p className="muted">
-          Local mode uses the official harness with Codex or Claude as the brain. It requires no API
-          keys and maintains a separate NEXUS Chromium profile.
+          {tr(
+            "Local mode uses the official harness with Codex or Claude as the brain. It requires no API keys and maintains a separate NEXUS Chromium profile.",
+            "Le mode local utilise le banc officiel avec Codex ou Claude comme cerveau. Il ne requiert aucune clé d'API et maintient un profil Chromium NEXUS séparé.",
+          )}
         </p>
         <div className="settings-grid">
           <label className="settings-wide">
-            Mode
+            {tr("Mode", "Mode")}
             <select
               className="field"
               value={mode}
               onChange={(event) => setMode(event.target.value as "local-harness" | "remote-worker")}
             >
-              <option value="local-harness">Local browser — no API key</option>
-              <option value="remote-worker">Autonomous worker — LLM provider required</option>
+              <option value="local-harness">
+                {tr("Local browser — no API key", "Navigateur local — sans clé API")}
+              </option>
+              <option value="remote-worker">
+                {tr(
+                  "Autonomous worker — LLM provider required",
+                  "Agent autonome — fournisseur LLM requis",
+                )}
+              </option>
             </select>
           </label>
           {mode === "local-harness" ? (
             <label className="settings-wide">
-              Local CDP URL
+              {tr("Local CDP URL", "URL CDP locale")}
               <input
                 className="field mono"
                 value={cdpUrl}
@@ -1581,7 +1929,7 @@ export function Browser({ api }: { api: DashboardApi }) {
           ) : (
             <>
               <label className="settings-wide">
-                Worker URL
+                {tr("Worker URL", "URL de l'agent")}
                 <input
                   className="field mono"
                   value={baseUrl}
@@ -1589,7 +1937,7 @@ export function Browser({ api }: { api: DashboardApi }) {
                 />
               </label>
               <label className="settings-wide">
-                Token reference
+                {tr("Token reference", "Référence du jeton")}
                 <input
                   className="field mono"
                   value={tokenRef}
@@ -1604,7 +1952,7 @@ export function Browser({ api }: { api: DashboardApi }) {
               checked={enabled}
               onChange={(event) => setEnabled(event.target.checked)}
             />
-            Enable Browser Use
+            {tr("Enable Browser Use", "Activer Browser Use")}
           </label>
         </div>
         <div className="settings-actions">
@@ -1619,18 +1967,23 @@ export function Browser({ api }: { api: DashboardApi }) {
                       ? { enabled, mode, cdpUrl }
                       : { enabled, mode, baseUrl, tokenRef },
                   ),
-                "Browser configuration saved.",
+                tr("Browser configuration saved.", "Configuration du navigateur enregistrée."),
               )
             }
           >
-            Save
+            {tr("Save", "Enregistrer")}
           </button>
           <button
             className="button"
             type="button"
-            onClick={() => act(() => api.testBrowser(), "Browser worker reachable.")}
+            onClick={() =>
+              act(
+                () => api.testBrowser(),
+                tr("Browser worker reachable.", "Agent de navigation accessible."),
+              )
+            }
           >
-            Test
+            {tr("Test", "Tester")}
           </button>
         </div>
       </section>
@@ -1638,10 +1991,13 @@ export function Browser({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="metrics">
-              <Metric value={data.configured ? "yes" : "no"} label="configured" />
               <Metric
-                value={data.reachable ? "ready" : "unreachable"}
-                label="browser"
+                value={data.configured ? tr("yes", "oui") : tr("no", "non")}
+                label={tr("configured", "configuré")}
+              />
+              <Metric
+                value={data.reachable ? tr("ready", "prêt") : tr("unreachable", "inaccessible")}
+                label={tr("browser", "navigateur")}
                 alert={data.configured && !data.reachable}
               />
             </div>
@@ -1649,13 +2005,16 @@ export function Browser({ api }: { api: DashboardApi }) {
             <p className="muted">{data.detail}</p>
             {data.configuration?.mode === "remote-worker" ? (
               <p className="muted">
-                Secret: {data.tokenConfigured ? "present in keyring" : "missing"}
+                {tr("Secret:", "Secret :")}{" "}
+                {data.tokenConfigured
+                  ? tr("present in keyring", "présent dans le trousseau")
+                  : tr("missing", "manquant")}
               </p>
             ) : null}
 
             {data.health === null ? null : (
               <>
-                <h3>Reported Health</h3>
+                <h3>{tr("Reported Health", "Santé Rapportée")}</h3>
                 <pre className="mono scroll-x" style={{ padding: 12, margin: 0 }}>
                   {JSON.stringify(data.health, null, 2)}
                 </pre>
@@ -1681,7 +2040,7 @@ export function TradingLab({ api }: { api: DashboardApi }) {
 }
 
 function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" | "trading" }) {
-  const { locale } = useI18n();
+  const { tr } = useI18n();
   const state = useSection(() => api.missionControl());
   const isTrading = view === "trading";
   const [accountName, setAccountName] = useState("NEXUS Portfolio");
@@ -1706,7 +2065,9 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
     void operation()
       .then(() => state.reload())
       .catch((cause: unknown) =>
-        setActionError(cause instanceof Error ? cause.message : "Action failed."),
+        setActionError(
+          cause instanceof Error ? cause.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -1733,14 +2094,16 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                 <div className="paper-trading-banner">
                   <div>
                     <strong>
-                      {locale === "fr"
-                        ? "Simulation & Recherche — Aucun fonds réel"
-                        : "Simulation & Research — No Real Money"}
+                      {tr(
+                        "Simulation & Research — No Real Money",
+                        "Simulation & Recherche — Aucun fonds réel",
+                      )}
                     </strong>
                     <p className="muted" style={{ margin: "4px 0 0" }}>
-                      {locale === "fr"
-                        ? "La création de missions et de portefeuilles de recherche utilise l'API administrateur NEXUS. Aucune route d'exécution financière réelle n'est exposée."
-                        : "Creation of missions and paper portfolios uses the NEXUS administrator API. No live trading paths are exposed."}
+                      {tr(
+                        "Creation of missions and paper portfolios uses the NEXUS administrator API. No live trading paths are exposed.",
+                        "La création de missions et de portefeuilles de recherche utilise l'API administrateur NEXUS. Aucune route d'exécution financière réelle n'est exposée.",
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1748,82 +2111,84 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
 
               <div className="metrics">
                 <Metric
-                  value={
-                    data.configured
-                      ? locale === "fr"
-                        ? "oui"
-                        : "yes"
-                      : locale === "fr"
-                        ? "non"
-                        : "no"
-                  }
-                  label={locale === "fr" ? "configuré" : "configured"}
+                  value={data.configured ? tr("yes", "oui") : tr("no", "non")}
+                  label={tr("configured", "configuré")}
                 />
                 <Metric
                   value={
                     data.reachable
-                      ? locale === "fr"
-                        ? "accessible"
-                        : "reachable"
-                      : locale === "fr"
-                        ? "inaccessible"
-                        : "unreachable"
+                      ? tr("reachable", "accessible")
+                      : tr("unreachable", "inaccessible")
                   }
-                  label={locale === "fr" ? "moteur ACP" : "ACP engine"}
+                  label={tr("ACP engine", "moteur ACP")}
                   alert={data.configured && !data.reachable}
                 />
                 {isTrading ? (
                   <>
                     <Metric
                       value={`${(cash / 100).toFixed(2)} €`}
-                      label={locale === "fr" ? "liquidités papier" : "paper cash"}
+                      label={tr("paper cash", "liquidités papier")}
                     />
                     <Metric
                       value={`${(exposure / 100).toFixed(2)} €`}
-                      label={locale === "fr" ? "exposition papier" : "paper exposure"}
+                      label={tr("paper exposure", "exposition papier")}
                     />
                   </>
                 ) : (
                   <>
                     <Metric
-                      value={data.health?.worker_enabled === true ? "active" : "stopped"}
-                      label="workers"
+                      value={
+                        data.health?.worker_enabled === true
+                          ? tr("active", "actif")
+                          : tr("stopped", "arrêté")
+                      }
+                      label={tr("workers", "agents")}
                       alert={data.configured && data.health?.worker_enabled !== true}
                     />
                     <Metric
                       value={String(data.health?.worker_concurrency ?? 0)}
-                      label="concurrency"
+                      label={tr("concurrency", "concurrence")}
                     />
                     <Metric
-                      value={data.audit?.valid === true ? "valid" : "invalid"}
-                      label="audit chain"
+                      value={
+                        data.audit?.valid === true
+                          ? tr("valid", "valide")
+                          : tr("invalid", "invalide")
+                      }
+                      label={tr("audit chain", "chaîne d'audit")}
                       alert={data.configured && data.audit?.valid !== true}
                     />
-                    <Metric value={formatCount(data.audit?.checked ?? 0)} label="audited events" />
+                    <Metric
+                      value={formatCount(data.audit?.checked ?? 0)}
+                      label={tr("audited events", "événements audités")}
+                    />
                   </>
                 )}
-                <Metric value={formatCount(activeRuns)} label="active missions" />
+                <Metric
+                  value={formatCount(activeRuns)}
+                  label={tr("active missions", "missions actives")}
+                />
               </div>
 
               <p className="muted">{data.detail}</p>
 
               {isTrading ? null : (
                 <>
-                  <h3>NEXUS · ACP profiles</h3>
+                  <h3>{tr("NEXUS · ACP profiles", "NEXUS · Profils ACP")}</h3>
                   <p className="mono muted">
                     {data.health === null || data.health.profiles.length === 0
-                      ? "none"
+                      ? tr("none", "aucun")
                       : data.health.profiles.join(", ")}
                   </p>
 
-                  <h3>Autonomous Schedules</h3>
+                  <h3>{tr("Autonomous Schedules", "Planifications Autonomes")}</h3>
                   <div className="admin-form-card schedule-form-card">
                     <div className="inline-admin-form schedule-form">
                       <input
                         className="field"
                         value={scheduleName}
                         onChange={(event) => setScheduleName(event.target.value)}
-                        placeholder="Schedule name"
+                        placeholder={tr("Schedule name", "Nom de la planification")}
                       />
                       <select
                         className="field"
@@ -1832,15 +2197,20 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                           setScheduleKind(event.target.value as "one_shot" | "cron")
                         }
                       >
-                        <option value="cron">Recurring · cron</option>
-                        <option value="one_shot">One-shot</option>
+                        <option value="cron">{tr("Recurring · cron", "Récurrent · cron")}</option>
+                        <option value="one_shot">{tr("One-shot", "Ponctuel")}</option>
                       </select>
                       <select
                         className="field"
                         value={scheduleProfile}
                         onChange={(event) => setScheduleProfile(event.target.value)}
                       >
-                        <option value="">Automatically select first profile</option>
+                        <option value="">
+                          {tr(
+                            "Automatically select first profile",
+                            "Sélectionner automatiquement le premier profil",
+                          )}
+                        </option>
                         {(data.health?.profiles ?? []).map((profile) => (
                           <option value={profile} key={profile}>
                             {profile}
@@ -1875,16 +2245,31 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                           setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
                         }
                       >
-                        <option value="skip">Skip missed occurrences</option>
-                        <option value="latest">Catch up latest occurrence only</option>
-                        <option value="all">Catch up all missed occurrences</option>
+                        <option value="skip">
+                          {tr("Skip missed occurrences", "Ignorer occurrences manquées")}
+                        </option>
+                        <option value="latest">
+                          {tr(
+                            "Catch up latest occurrence only",
+                            "Rattraper la dernière occurrence uniquement",
+                          )}
+                        </option>
+                        <option value="all">
+                          {tr(
+                            "Catch up all missed occurrences",
+                            "Rattraper toutes les occurrences manquées",
+                          )}
+                        </option>
                       </select>
                     </div>
                     <textarea
                       className="field schedule-instruction"
                       value={scheduleInstruction}
                       onChange={(event) => setScheduleInstruction(event.target.value)}
-                      placeholder="Mission to execute automatically"
+                      placeholder={tr(
+                        "Mission to execute automatically",
+                        "Mission à exécuter automatiquement",
+                      )}
                       rows={3}
                     />
                     <button
@@ -1906,8 +2291,6 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                           api.createSchedule({
                             name: scheduleName.trim(),
                             mission: {
-                              // The server systematically replaces this value
-                              // with a key tied to the authenticated account.
                               external_key: "dashboard-owned-server-side",
                               title: scheduleName.trim(),
                               workspace: "/tmp/nexus-scheduled",
@@ -1932,15 +2315,22 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         );
                       }}
                     >
-                      Create schedule
+                      {tr("Create schedule", "Créer la planification")}
                     </button>
                     {data.health?.scheduler_enabled === true ? null : (
-                      <p className="muted">Schedule dispatcher is disabled.</p>
+                      <p className="muted">
+                        {tr(
+                          "Schedule dispatcher is disabled.",
+                          "Le répartiteur de planification est désactivé.",
+                        )}
+                      </p>
                     )}
                   </div>
 
                   {data.schedules.length === 0 ? (
-                    <Empty>No schedules for this account.</Empty>
+                    <Empty>
+                      {tr("No schedules for this account.", "Aucune planification pour ce compte.")}
+                    </Empty>
                   ) : (
                     <div className="stack">
                       {data.schedules.map((schedule) => (
@@ -1963,9 +2353,10 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                           </summary>
                           <div className="schedule-details">
                             <p className="muted">
-                              Timezone: {schedule.timezone} · Next run:{" "}
+                              {tr("Timezone:", "Fuseau horaire :")} {schedule.timezone} ·{" "}
+                              {tr("Next run:", "Prochaine exécution :")}{" "}
                               {schedule.next_run_at === null
-                                ? "none"
+                                ? tr("none", "aucune")
                                 : new Date(schedule.next_run_at).toLocaleString()}
                             </p>
                             <p>
@@ -1978,7 +2369,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                                   type="button"
                                   onClick={() => act(() => api.pauseSchedule(schedule.id))}
                                 >
-                                  Pause
+                                  {tr("Pause", "Suspendre")}
                                 </button>
                               ) : schedule.state === "paused" ? (
                                 <button
@@ -1986,7 +2377,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                                   type="button"
                                   onClick={() => act(() => api.resumeSchedule(schedule.id))}
                                 >
-                                  Resume
+                                  {tr("Resume", "Reprendre")}
                                 </button>
                               ) : null}
                               <button
@@ -2006,20 +2397,29 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                                       setActionError(
                                         cause instanceof Error
                                           ? cause.message
-                                          : "History unavailable.",
+                                          : tr("History unavailable.", "Historique indisponible."),
                                       ),
                                     );
                                 }}
                               >
-                                Load history
+                                {tr("Load history", "Charger l'historique")}
                               </button>
                             </div>
                             {scheduleHistory[schedule.id] === undefined ? null : scheduleHistory[
                                 schedule.id
                               ]?.length === 0 ? (
-                              <p className="muted">No occurrences executed.</p>
+                              <p className="muted">
+                                {tr("No occurrences executed.", "Aucune occurrence exécutée.")}
+                              </p>
                             ) : (
-                              <Table head={["Scheduled", "State", "Mission", "Error"]}>
+                              <Table
+                                head={[
+                                  tr("Scheduled", "Planifié"),
+                                  tr("State", "État"),
+                                  tr("Mission", "Mission"),
+                                  tr("Error", "Erreur"),
+                                ]}
+                              >
                                 {scheduleHistory[schedule.id]?.map((run) => (
                                   <tr key={run.id}>
                                     <td>{new Date(run.scheduled_for).toLocaleString()}</td>
@@ -2051,9 +2451,14 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                     </div>
                   )}
 
-                  <h3>Unified Mission Timeline</h3>
+                  <h3>{tr("Unified Mission Timeline", "Chronologie Unifiée des Missions")}</h3>
                   {data.missions.length === 0 ? (
-                    <Empty>No NEXUS ACP missions for this account.</Empty>
+                    <Empty>
+                      {tr(
+                        "No NEXUS ACP missions for this account.",
+                        "Aucune mission ACP NEXUS pour ce compte.",
+                      )}
+                    </Empty>
                   ) : (
                     <div className="stack">
                       {data.missions.map((mission) => (
@@ -2069,17 +2474,17 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                               }
                               label={mission.state}
                             />{" "}
-                            {mission.title} · {mission.tasks.length} step(s) ·{" "}
+                            {mission.title} · {mission.tasks.length} {tr("step(s)", "étape(s)")} ·{" "}
                             {formatAge(mission.created_at)}
                           </summary>
                           <Table
                             head={[
-                              "Step",
-                              "Agent",
-                              "State",
-                              "Dependencies",
-                              "Attempts",
-                              "Duration",
+                              tr("Step", "Étape"),
+                              tr("Agent", "Agent"),
+                              tr("State", "État"),
+                              tr("Dependencies", "Dépendances"),
+                              tr("Attempts", "Tentatives"),
+                              tr("Duration", "Durée"),
                             ]}
                           >
                             {mission.tasks.map((task) => {
@@ -2134,22 +2539,20 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
 
               {isTrading ? (
                 <>
-                  <h3>
-                    {locale === "fr" ? "Portefeuilles de recherche papier" : "Paper Portfolios"}
-                  </h3>
+                  <h3>{tr("Paper Portfolios", "Portefeuilles de recherche papier")}</h3>
                   <div className="inline-admin-form">
                     <input
                       className="field"
                       value={accountName}
                       onChange={(event) => setAccountName(event.target.value)}
-                      placeholder={locale === "fr" ? "Nom du portefeuille" : "Portfolio name"}
+                      placeholder={tr("Portfolio name", "Nom du portefeuille")}
                     />
                     <input
                       className="field"
                       value={bankroll}
                       onChange={(event) => setBankroll(event.target.value)}
                       inputMode="decimal"
-                      placeholder={locale === "fr" ? "Capital EUR" : "Capital EUR"}
+                      placeholder="Capital EUR"
                     />
                     <button
                       className="button"
@@ -2163,22 +2566,22 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         )
                       }
                     >
-                      {locale === "fr" ? "Créer" : "Create"}
+                      {tr("Create", "Créer")}
                     </button>
                   </div>
                   {data.accounts.length === 0 ? (
                     <Empty>
-                      {locale === "fr"
-                        ? "Aucun portefeuille de recherche."
-                        : "No research portfolios."}
+                      {tr("No research portfolios.", "Aucun portefeuille de recherche.")}
                     </Empty>
                   ) : (
                     <Table
-                      head={
-                        locale === "fr"
-                          ? ["Nom", "Liquidités", "Exposition", "P&L Réalisé", "Mode"]
-                          : ["Name", "Cash", "Exposure", "Realized P&L", "Mode"]
-                      }
+                      head={[
+                        tr("Name", "Nom"),
+                        tr("Cash", "Liquidités"),
+                        tr("Exposure", "Exposition"),
+                        tr("Realized P&L", "P&L Réalisé"),
+                        tr("Mode", "Mode"),
+                      ]}
                     >
                       {data.accounts.map((account) => (
                         <tr key={account.id}>
@@ -2197,30 +2600,24 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                             {(account.realized_pnl_cents / 100).toFixed(2)} €
                           </td>
                           <td>
-                            <State
-                              tone="ok"
-                              label={locale === "fr" ? "simulation-seule" : "paper-only"}
-                            />
+                            <State tone="ok" label={tr("paper-only", "simulation-seule")} />
                           </td>
                         </tr>
                       ))}
                     </Table>
                   )}
 
-                  <h3>{locale === "fr" ? "Missions récentes" : "Recent Missions"}</h3>
+                  <h3>{tr("Recent Missions", "Missions récentes")}</h3>
                   {data.recent_runs.length === 0 ? (
-                    <Empty>
-                      {locale === "fr"
-                        ? "Aucune mission ACP exécutée."
-                        : "No ACP missions executed."}
-                    </Empty>
+                    <Empty>{tr("No ACP missions executed.", "Aucune mission ACP exécutée.")}</Empty>
                   ) : (
                     <Table
-                      head={
-                        locale === "fr"
-                          ? ["Créé", "État", "Mission", "Erreur"]
-                          : ["Created", "State", "Mission", "Error"]
-                      }
+                      head={[
+                        tr("Created", "Créé"),
+                        tr("State", "État"),
+                        tr("Mission", "Mission"),
+                        tr("Error", "Erreur"),
+                      ]}
                     >
                       {data.recent_runs.map((run) => (
                         <tr key={run.id}>
@@ -2246,15 +2643,13 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                     </Table>
                   )}
 
-                  <h3>
-                    {locale === "fr" ? "Marché de recherche papier" : "Paper Research Market"}
-                  </h3>
+                  <h3>{tr("Paper Research Market", "Marché de recherche papier")}</h3>
                   <div className="inline-admin-form market-form">
                     <input
                       className="field"
                       value={marketQuestion}
                       onChange={(event) => setMarketQuestion(event.target.value)}
-                      placeholder={locale === "fr" ? "Question du marché" : "Market question"}
+                      placeholder={tr("Market question", "Question du marché")}
                     />
                     <input
                       className="field"
@@ -2276,13 +2671,15 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         setMarketQuestion("");
                       }}
                     >
-                      {locale === "fr" ? "Créer" : "Create"}
+                      {tr("Create", "Créer")}
                     </button>
                   </div>
 
                   <p className="muted">
-                    Creation of missions and paper portfolios uses the NEXUS administrator API. No
-                    live trading paths are exposed.
+                    {tr(
+                      "Creation of missions and paper portfolios uses the NEXUS administrator API. No live trading paths are exposed.",
+                      "La création de missions et de portefeuilles de recherche utilise l'API administrateur NEXUS. Aucune route d'exécution financière réelle n'est exposée.",
+                    )}
                   </p>
                 </>
               ) : null}
@@ -2440,6 +2837,7 @@ function MissionCollaborationPanel({ api, missionId }: { api: DashboardApi; miss
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Memory({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.memory());
   const [content, setContent] = useState("");
   const [layer, setLayer] = useState<"LONG_TERM" | "PREFERENCE">("LONG_TERM");
@@ -2450,27 +2848,27 @@ export function Memory({ api }: { api: DashboardApi }) {
   return (
     <div className="content">
       <div className="admin-form-card">
-        <h3>Add Memory</h3>
+        <h3>{tr("Add Memory", "Ajouter une Mémoire")}</h3>
         <div className="inline-admin-form memory-form">
           <input
             className="field"
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            placeholder="What NEXUS should remember"
+            placeholder={tr("What NEXUS should remember", "Ce dont NEXUS doit se souvenir")}
           />
           <select
             className="field"
             value={layer}
             onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
           >
-            <option value="LONG_TERM">Long-term</option>
-            <option value="PREFERENCE">Preference</option>
+            <option value="LONG_TERM">{tr("Long-term", "Long terme")}</option>
+            <option value="PREFERENCE">{tr("Preference", "Préférence")}</option>
           </select>
           <input
             className="field"
             value={tags}
             onChange={(event) => setTags(event.target.value)}
-            placeholder="tags, comma, separated"
+            placeholder={tr("tags, comma, separated", "tags, séparés, par des virgules")}
           />
           <label className="check-label">
             <input
@@ -2478,7 +2876,7 @@ export function Memory({ api }: { api: DashboardApi }) {
               checked={acknowledgedSensitive}
               onChange={(event) => setAcknowledgedSensitive(event.target.checked)}
             />
-            sensitive content verified
+            {tr("sensitive content verified", "contenu sensible vérifié")}
           </label>
           <button
             className="button primary"
@@ -2502,11 +2900,15 @@ export function Memory({ api }: { api: DashboardApi }) {
                   state.reload();
                 })
                 .catch((cause: unknown) =>
-                  setActionError(cause instanceof Error ? cause.message : "Unable to save."),
+                  setActionError(
+                    cause instanceof Error
+                      ? cause.message
+                      : tr("Unable to save.", "Impossible d'enregistrer."),
+                  ),
                 );
             }}
           >
-            Remember
+            {tr("Remember", "Mémoriser")}
           </button>
         </div>
       </div>
@@ -2515,20 +2917,34 @@ export function Memory({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="metrics">
-              <Metric value={formatCount(data.total)} label="memories" />
-              <Metric value={formatCount(data.byLayer.PREFERENCE ?? 0)} label="preferences" />
-              <Metric value={formatCount(data.byOrigin.AGENT ?? 0)} label="inferred by agent" />
+              <Metric value={formatCount(data.total)} label={tr("memories", "mémoires")} />
+              <Metric
+                value={formatCount(data.byLayer.PREFERENCE ?? 0)}
+                label={tr("preferences", "préférences")}
+              />
+              <Metric
+                value={formatCount(data.byOrigin.AGENT ?? 0)}
+                label={tr("inferred by agent", "déduit par l'agent")}
+              />
               <Metric
                 value={formatCount(data.bySensitivity.PERSONAL ?? 0)}
-                label="marked personal"
+                label={tr("marked personal", "marqué personnel")}
               />
             </div>
 
-            <h3>Recent Memories</h3>
+            <h3>{tr("Recent Memories", "Mémoires Récentes")}</h3>
             {data.recent.length === 0 ? (
-              <Empty>No memories stored.</Empty>
+              <Empty>{tr("No memories stored.", "Aucune mémoire enregistrée.")}</Empty>
             ) : (
-              <Table head={["Content", "Layer", "Origin", "Created", "Actions"]}>
+              <Table
+                head={[
+                  tr("Content", "Contenu"),
+                  tr("Layer", "Couche"),
+                  tr("Origin", "Origine"),
+                  tr("Created", "Créé"),
+                  tr("Actions", "Actions"),
+                ]}
+              >
                 {data.recent.map((record) => (
                   <tr key={record.id}>
                     <td>{record.content}</td>
@@ -2540,18 +2956,28 @@ export function Memory({ api }: { api: DashboardApi }) {
                         className="button danger"
                         type="button"
                         onClick={() => {
-                          if (!window.confirm("Permanently forget this memory?")) return;
+                          if (
+                            !window.confirm(
+                              tr(
+                                "Permanently forget this memory?",
+                                "Oublier définitivement cette mémoire ?",
+                              ),
+                            )
+                          )
+                            return;
                           void api
                             .forget(record.id)
                             .then(() => state.reload())
                             .catch((cause: unknown) =>
                               setActionError(
-                                cause instanceof Error ? cause.message : "Deletion failed.",
+                                cause instanceof Error
+                                  ? cause.message
+                                  : tr("Deletion failed.", "Échec de suppression."),
                               ),
                             );
                         }}
                       >
-                        Forget
+                        {tr("Forget", "Oublier")}
                       </button>
                     </td>
                   </tr>
@@ -2570,6 +2996,7 @@ export function Memory({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Notifications({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.notifications());
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -2597,7 +3024,12 @@ export function Notifications({ api }: { api: DashboardApi }) {
     setConfigFeedback(null);
     try {
       await api.saveNotificationConfig(config);
-      setConfigFeedback("External notification configuration saved.");
+      setConfigFeedback(
+        tr(
+          "External notification configuration saved.",
+          "Configuration des notifications externes enregistrée.",
+        ),
+      );
       setTimeout(() => setConfigFeedback(null), 3500);
     } catch (err) {
       setConfigFeedback(`Save error: ${err instanceof Error ? err.message : String(err)}`);
@@ -2629,9 +3061,12 @@ export function Notifications({ api }: { api: DashboardApi }) {
     <div className="content">
       <div className="agents-heading">
         <div>
-          <h2>Notifications</h2>
+          <h2>{tr("Notifications", "Notifications")}</h2>
           <p className="muted">
-            Central log and broadcast to external channels (desktop, mobile push ntfy, webhooks).
+            {tr(
+              "Central log and broadcast to external channels (desktop, mobile push ntfy, webhooks).",
+              "Journal central et diffusion vers les canaux externes (bureau, push mobile ntfy, webhooks).",
+            )}
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -2640,7 +3075,9 @@ export function Notifications({ api }: { api: DashboardApi }) {
             type="button"
             onClick={() => setShowConfig((curr) => !curr)}
           >
-            {showConfig ? "Hide channel config" : "Configure channels"}
+            {showConfig
+              ? tr("Hide channel config", "Masquer la configuration")
+              : tr("Configure channels", "Configurer les canaux")}
           </button>
           <button
             className="button"
@@ -2648,7 +3085,9 @@ export function Notifications({ api }: { api: DashboardApi }) {
             disabled={testing}
             onClick={() => void handleTest()}
           >
-            {testing ? "Testing..." : "Test external channels"}
+            {testing
+              ? tr("Testing...", "Test en cours...")
+              : tr("Test external channels", "Tester les canaux externes")}
           </button>
         </div>
       </div>
@@ -2671,7 +3110,9 @@ export function Notifications({ api }: { api: DashboardApi }) {
           onSubmit={(e) => void handleSaveConfig(e)}
           style={{ padding: "16px", marginBottom: "20px", border: "1px solid var(--border)" }}
         >
-          <h3 style={{ marginTop: 0 }}>External Notification Channels</h3>
+          <h3 style={{ marginTop: 0 }}>
+            {tr("External Notification Channels", "Canaux de Notification Externes")}
+          </h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "12px" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
@@ -2680,12 +3121,17 @@ export function Notifications({ api }: { api: DashboardApi }) {
                 checked={config.enabled}
                 onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
               />
-              <strong>Enable external notification broadcast</strong>
+              <strong>
+                {tr(
+                  "Enable external notification broadcast",
+                  "Activer la diffusion externe des notifications",
+                )}
+              </strong>
             </label>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <label>
-                Desktop Alert Urgency
+                {tr("Desktop Alert Urgency", "Urgence alerte bureau")}
                 <select
                   className="field"
                   value={config.desktop.urgency}
@@ -2699,14 +3145,14 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     })
                   }
                 >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="critical">Critical</option>
+                  <option value="low">{tr("Low", "Faible")}</option>
+                  <option value="normal">{tr("Normal", "Normal")}</option>
+                  <option value="critical">{tr("Critical", "Critique")}</option>
                 </select>
               </label>
 
               <label>
-                Dashboard Base URL
+                {tr("Dashboard Base URL", "URL de base du tableau de bord")}
                 <input
                   className="field"
                   type="url"
@@ -2718,7 +3164,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <label>
-                Ntfy Server URL
+                {tr("Ntfy Server URL", "URL serveur Ntfy")}
                 <input
                   className="field"
                   type="url"
@@ -2733,7 +3179,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
               </label>
 
               <label>
-                Ntfy Topic
+                {tr("Ntfy Topic", "Sujet Ntfy")}
                 <input
                   className="field"
                   type="text"
@@ -2750,7 +3196,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
 
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
               <label>
-                Webhook URL
+                {tr("Webhook URL", "URL Webhook")}
                 <input
                   className="field"
                   type="url"
@@ -2770,7 +3216,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
               </label>
 
               <label>
-                Webhook Format
+                {tr("Webhook Format", "Format Webhook")}
                 <select
                   className="field"
                   value={config.webhook?.format ?? "generic"}
@@ -2795,7 +3241,9 @@ export function Notifications({ api }: { api: DashboardApi }) {
 
             <div>
               <button type="submit" className="button primary" disabled={configSaving}>
-                {configSaving ? "Saving..." : "Save notification settings"}
+                {configSaving
+                  ? tr("Saving...", "Enregistrement...")
+                  : tr("Save notification settings", "Enregistrer les paramètres")}
               </button>
             </div>
           </div>
@@ -2806,14 +3254,26 @@ export function Notifications({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="metrics">
-              <Metric value={formatCount(data.unread)} label="unread" />
-              <Metric value={formatCount(data.notifications.length)} label="stored" />
+              <Metric value={formatCount(data.unread)} label={tr("unread", "non lues")} />
+              <Metric
+                value={formatCount(data.notifications.length)}
+                label={tr("stored", "enregistrées")}
+              />
             </div>
 
             {data.notifications.length === 0 ? (
-              <Empty>No notifications.</Empty>
+              <Empty>{tr("No notifications.", "Aucune notification.")}</Empty>
             ) : (
-              <Table head={["When", "Severity", "Title", "Body", "Read", "Actions"]}>
+              <Table
+                head={[
+                  tr("When", "Quand"),
+                  tr("Severity", "Gravité"),
+                  tr("Title", "Titre"),
+                  tr("Body", "Message"),
+                  tr("Read", "Lu"),
+                  tr("Actions", "Actions"),
+                ]}
+              >
                 {data.notifications.map((notification) => (
                   <tr key={notification.id}>
                     <td className="muted">{formatAge(notification.createdAt)}</td>
@@ -2831,7 +3291,9 @@ export function Notifications({ api }: { api: DashboardApi }) {
                     </td>
                     <td>{notification.title}</td>
                     <td className="muted">{notification.body}</td>
-                    <td className="muted">{notification.readAt === null ? "no" : "yes"}</td>
+                    <td className="muted">
+                      {notification.readAt === null ? tr("no", "non") : tr("yes", "oui")}
+                    </td>
                     <td>
                       {notification.readAt === null ? (
                         <button
@@ -2843,7 +3305,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
                               .then(() => state.reload())
                           }
                         >
-                          Mark read
+                          {tr("Mark read", "Marquer comme lu")}
                         </button>
                       ) : (
                         "—"
@@ -2865,6 +3327,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Security({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.security());
 
   return (
@@ -2873,34 +3336,37 @@ export function Security({ api }: { api: DashboardApi }) {
         {(data) => (
           <>
             <div className="metrics">
-              <Metric value={formatCount(data.trust.trusted)} label="trusted devices" />
+              <Metric
+                value={formatCount(data.trust.trusted)}
+                label={tr("trusted devices", "appareils de confiance")}
+              />
               <Metric
                 value={formatCount(data.trust.pending)}
-                label="pending approval"
+                label={tr("pending approval", "en attente d'approbation")}
                 alert={data.trust.pending > 0}
               />
-              <Metric value={formatCount(data.trust.revoked)} label="revoked" />
+              <Metric value={formatCount(data.trust.revoked)} label={tr("revoked", "révoqués")} />
               <Metric
                 value={formatCount(data.byKind["auth.login_failed"] ?? 0)}
-                label="login failures"
+                label={tr("login failures", "échecs de connexion")}
                 alert={(data.byKind["auth.login_failed"] ?? 0) > 0}
               />
               <Metric
                 value={formatCount(data.byKind["memory.refused"] ?? 0)}
-                label="rejected memories"
+                label={tr("rejected memories", "mémoires refusées")}
               />
             </div>
 
-            <h3>Effective Permissions</h3>
+            <h3>{tr("Effective Permissions", "Permissions Effectives")}</h3>
             <p className="mono muted">
-              {data.permissions.length === 0 ? "none" : data.permissions.join(", ")}
+              {data.permissions.length === 0 ? tr("none", "aucune") : data.permissions.join(", ")}
             </p>
 
-            <h3>Events</h3>
+            <h3>{tr("Events", "Événements")}</h3>
             {data.events.length === 0 ? (
-              <Empty>No security events.</Empty>
+              <Empty>{tr("No security events.", "Aucun événement de sécurité.")}</Empty>
             ) : (
-              <Table head={["When", "Type", "Summary"]}>
+              <Table head={[tr("When", "Quand"), tr("Type", "Type"), tr("Summary", "Résumé")]}>
                 {data.events.map((event, index) => (
                   <tr key={`${event.at}-${String(index)}`}>
                     <td className="muted">{formatAge(event.at)}</td>
@@ -2922,6 +3388,7 @@ export function Security({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Logs({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const [level, setLevel] = useState<string>("");
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState<{ level?: string; search?: string }>({});
@@ -2938,17 +3405,17 @@ export function Logs({ api }: { api: DashboardApi }) {
             setLevel(event.target.value);
           }}
         >
-          <option value="">all levels</option>
-          <option value="info">info and above</option>
-          <option value="warn">warnings</option>
-          <option value="error">errors</option>
+          <option value="">{tr("all levels", "tous les niveaux")}</option>
+          <option value="info">{tr("info and above", "info et supérieur")}</option>
+          <option value="warn">{tr("warnings", "avertissements")}</option>
+          <option value="error">{tr("errors", "erreurs")}</option>
         </select>
 
         <input
           className="field"
           style={{ flex: 1 }}
           value={search}
-          placeholder="Search messages…"
+          placeholder={tr("Search messages…", "Rechercher des messages…")}
           onChange={(event) => {
             setSearch(event.target.value);
           }}
@@ -2964,16 +3431,23 @@ export function Logs({ api }: { api: DashboardApi }) {
             });
           }}
         >
-          Filter
+          {tr("Filter", "Filtrer")}
         </button>
       </div>
 
       <Section state={state}>
         {(data) =>
           data.entries.length === 0 ? (
-            <Empty>No log lines matched.</Empty>
+            <Empty>{tr("No log lines matched.", "Aucune ligne de journal correspondante.")}</Empty>
           ) : (
-            <Table head={["When", "Level", "Message", "Correlation"]}>
+            <Table
+              head={[
+                tr("When", "Quand"),
+                tr("Level", "Niveau"),
+                tr("Message", "Message"),
+                tr("Correlation", "Corrélation"),
+              ]}
+            >
               {data.entries.map((entry, index) => (
                 <tr key={`${entry.at}-${String(index)}`}>
                   <td className="muted mono">{entry.at.slice(11, 23)}</td>
@@ -3006,6 +3480,7 @@ export function Logs({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function Marketplace({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.marketplacePlugins());
   const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -3015,7 +3490,9 @@ export function Marketplace({ api }: { api: DashboardApi }) {
     void op()
       .then(() => state.reload())
       .catch((err: unknown) =>
-        setActionError(err instanceof Error ? err.message : "Action failed."),
+        setActionError(
+          err instanceof Error ? err.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -3029,7 +3506,10 @@ export function Marketplace({ api }: { api: DashboardApi }) {
         <input
           className="field"
           type="search"
-          placeholder="Filter plugins or declared tools…"
+          placeholder={tr(
+            "Filter plugins or declared tools…",
+            "Filtrer les plugins ou outils déclarés…",
+          )}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ maxWidth: "320px" }}
@@ -3048,19 +3528,23 @@ export function Marketplace({ api }: { api: DashboardApi }) {
           });
 
           if (filtered.length === 0) {
-            return <Empty>No marketplace plugins found.</Empty>;
+            return (
+              <Empty>
+                {tr("No marketplace plugins found.", "Aucun plugin trouvé sur le marketplace.")}
+              </Empty>
+            );
           }
 
           return (
             <Table
               head={[
-                "Plugin",
-                "Publisher",
-                "Version",
-                "Status",
-                "Declared Tools",
-                "Reputation",
-                "Actions",
+                tr("Plugin", "Plugin"),
+                tr("Publisher", "Éditeur"),
+                tr("Version", "Version"),
+                tr("Status", "Statut"),
+                tr("Declared Tools", "Outils Déclarés"),
+                tr("Reputation", "Réputation"),
+                tr("Actions", "Actions"),
               ]}
             >
               {filtered.map((plugin) => (
@@ -3116,7 +3600,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={() => act(() => api.installPlugin(plugin.id))}
                         >
-                          Install
+                          {tr("Install", "Installer")}
                         </button>
                       ) : null}
                       {plugin.status === "installed" ? (
@@ -3125,7 +3609,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={() => act(() => api.togglePlugin(plugin.id, true))}
                         >
-                          Pause
+                          {tr("Pause", "Suspendre")}
                         </button>
                       ) : null}
                       {plugin.status === "paused" ? (
@@ -3134,7 +3618,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
                           type="button"
                           onClick={() => act(() => api.togglePlugin(plugin.id, false))}
                         >
-                          Resume
+                          {tr("Resume", "Reprendre")}
                         </button>
                       ) : null}
                       {plugin.status === "installed" || plugin.status === "paused" ? (
@@ -3144,14 +3628,17 @@ export function Marketplace({ api }: { api: DashboardApi }) {
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Revoke plugin "${plugin.name}"? This permanently uninstalls and disables all declared tools.`,
+                                tr(
+                                  `Revoke plugin "${plugin.name}"? This permanently uninstalls and disables all declared tools.`,
+                                  `Révoquer le plugin "${plugin.name}" ? Cela désinstalle définitivement et désactive tous les outils déclarés.`,
+                                ),
                               )
                             ) {
                               act(() => api.revokePlugin(plugin.id));
                             }
                           }}
                         >
-                          Revoke
+                          {tr("Revoke", "Révoquer")}
                         </button>
                       ) : null}
                     </div>
@@ -3171,6 +3658,7 @@ export function Marketplace({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function DagDebugger({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const [taskId, setTaskId] = useState("task-current");
   const [queriedTaskId, setQueriedTaskId] = useState("task-current");
   const state = useSection(() => api.dagDebug(queriedTaskId), [queriedTaskId]);
@@ -3181,7 +3669,9 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
     void op()
       .then(() => state.reload())
       .catch((err: unknown) =>
-        setActionError(err instanceof Error ? err.message : "Action failed."),
+        setActionError(
+          err instanceof Error ? err.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -3195,7 +3685,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
               htmlFor="dag-task-id"
               style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
             >
-              Task ID to debug
+              {tr("Task ID to debug", "ID de tâche à déboguer")}
             </label>
             <input
               id="dag-task-id"
@@ -3206,7 +3696,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
             />
           </div>
           <button className="button primary" type="button" onClick={() => setQueriedTaskId(taskId)}>
-            Inspect DAG
+            {tr("Inspect DAG", "Inspecter le DAG")}
           </button>
         </div>
       </section>
@@ -3215,27 +3705,35 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
         {(dag) => (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div className="metrics">
-              <Metric value={dag.taskId} label="active task" />
-              <Metric value={String(dag.nodes.length)} label="total DAG steps" />
+              <Metric value={dag.taskId} label={tr("active task", "tâche active")} />
               <Metric
-                value={dag.isPaused ? "PAUSED" : "RUNNING"}
-                label="pipeline state"
+                value={String(dag.nodes.length)}
+                label={tr("total DAG steps", "étapes DAG totales")}
+              />
+              <Metric
+                value={dag.isPaused ? tr("PAUSED", "EN PAUSE") : tr("RUNNING", "EN COURS")}
+                label={tr("pipeline state", "état du pipeline")}
                 alert={dag.isPaused}
               />
             </div>
 
             {dag.nodes.length === 0 ? (
-              <Empty>No execution nodes found in this DAG.</Empty>
+              <Empty>
+                {tr(
+                  "No execution nodes found in this DAG.",
+                  "Aucun nœud d'exécution trouvé dans ce DAG.",
+                )}
+              </Empty>
             ) : (
               <Table
                 head={[
-                  "Step ID",
-                  "Label",
-                  "Status",
-                  "Dependencies",
-                  "Assigned Worker",
-                  "Result / Error",
-                  "Actions",
+                  tr("Step ID", "ID Étape"),
+                  tr("Label", "Libellé"),
+                  tr("Status", "Statut"),
+                  tr("Dependencies", "Dépendances"),
+                  tr("Assigned Worker", "Agent Assigné"),
+                  tr("Result / Error", "Résultat / Erreur"),
+                  tr("Actions", "Actions"),
                 ]}
               >
                 {dag.nodes.map((node) => (
@@ -3281,7 +3779,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
                             type="button"
                             onClick={() => act(() => api.pauseDagStep(dag.taskId, node.id))}
                           >
-                            Pause step
+                            {tr("Pause step", "Suspendre l'étape")}
                           </button>
                         ) : null}
                         {node.status === "paused" ? (
@@ -3290,7 +3788,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
                             type="button"
                             onClick={() => act(() => api.resumeDagStep(dag.taskId, node.id))}
                           >
-                            Resume step
+                            {tr("Resume step", "Reprendre l'étape")}
                           </button>
                         ) : null}
                       </div>
@@ -3311,6 +3809,7 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function QuotaForecast({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.quotaForecast());
 
   return (
@@ -3318,17 +3817,19 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(data) =>
           data.forecasts.length === 0 ? (
-            <Empty>No quota forecasts available.</Empty>
+            <Empty>
+              {tr("No quota forecasts available.", "Aucune prévision de quota disponible.")}
+            </Empty>
           ) : (
             <Table
               head={[
-                "Provider",
-                "Account",
-                "Current Usage",
-                "Hard Limit",
-                "Burn Gauge",
-                "Projected Depletion",
-                "Confidence",
+                tr("Provider", "Fournisseur"),
+                tr("Account", "Compte"),
+                tr("Current Usage", "Utilisation Actuelle"),
+                tr("Hard Limit", "Limite Stricte"),
+                tr("Burn Gauge", "Jauge de Consommation"),
+                tr("Projected Depletion", "Épuisement Estimé"),
+                tr("Confidence", "Confiance"),
               ]}
             >
               {data.forecasts.map((f) => {
@@ -3342,7 +3843,7 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
                     <td>{f.accountLabel}</td>
                     <td className="mono">{f.currentUsage.toLocaleString()}</td>
                     <td className="mono">
-                      {f.hardLimit ? f.hardLimit.toLocaleString() : "Uncapped"}
+                      {f.hardLimit ? f.hardLimit.toLocaleString() : tr("Uncapped", "Illimité")}
                     </td>
                     <td>
                       {f.hardLimit ? <Bar percent={percent} /> : <span className="muted">—</span>}
@@ -3350,7 +3851,7 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
                     <td className="muted">
                       {f.estimatedDepletionDate
                         ? new Date(f.estimatedDepletionDate).toLocaleDateString()
-                        : "No exhaustion detected"}
+                        : tr("No exhaustion detected", "Aucun épuisement détecté")}
                     </td>
                     <td>
                       <State
@@ -3387,6 +3888,7 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function RunComparison({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const [runA, setRunA] = useState("");
   const [runB, setRunB] = useState("");
   const [queryRuns, setQueryRuns] = useState<{ a: string; b: string } | null>(null);
@@ -3404,7 +3906,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
               htmlFor="run-a-input"
               style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
             >
-              Baseline Run (A)
+              {tr("Baseline Run (A)", "Exécution de Référence (A)")}
             </label>
             <input
               id="run-a-input"
@@ -3419,7 +3921,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
               htmlFor="run-b-input"
               style={{ display: "block", marginBottom: "4px", fontSize: "0.85rem" }}
             >
-              Comparison Run (B)
+              {tr("Comparison Run (B)", "Exécution de Comparaison (B)")}
             </label>
             <input
               id="run-b-input"
@@ -3435,7 +3937,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
             disabled={runA.trim().length === 0 || runB.trim().length === 0}
             onClick={() => setQueryRuns({ a: runA, b: runB })}
           >
-            Compare Runs
+            {tr("Compare Runs", "Comparer les Exécutions")}
           </button>
         </div>
       </section>
@@ -3443,24 +3945,37 @@ export function RunComparison({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(comparison) =>
           comparison === null ? (
-            <Empty>Enter two run IDs from the Agent runs page to compare them.</Empty>
+            <Empty>
+              {tr(
+                "Enter two run IDs from the Agent runs page to compare them.",
+                "Entrez deux identifiants d'exécution depuis la page Exécutions pour les comparer.",
+              )}
+            </Empty>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div className="metrics">
                 <Metric
                   value={`${formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}`}
-                  label={`duration delta (${comparison.diffSummary.fasterRunId} faster)`}
+                  label={tr(
+                    `duration delta (${comparison.diffSummary.fasterRunId} faster)`,
+                    `écart de durée (${comparison.diffSummary.fasterRunId} plus rapide)`,
+                  )}
                 />
                 <Metric
                   value={`${comparison.diffSummary.tokenDelta > 0 ? "+" : ""}${String(comparison.diffSummary.tokenDelta)}`}
-                  label="token delta (B - A)"
+                  label={tr("token delta (B - A)", "écart de jetons (B - A)")}
                 />
-                <Metric value={comparison.diffSummary.cheaperRunId} label="cheaper run" />
+                <Metric
+                  value={comparison.diffSummary.cheaperRunId}
+                  label={tr("cheaper run", "exécution la plus économique")}
+                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <section className="card">
-                  <h3>Run A ({comparison.runA.id})</h3>
+                  <h3>
+                    {tr("Run A", "Exécution A")} ({comparison.runA.id})
+                  </h3>
                   <div
                     style={{
                       marginTop: "12px",
@@ -3470,28 +3985,34 @@ export function RunComparison({ api }: { api: DashboardApi }) {
                     }}
                   >
                     <div>
-                      <strong>Agent:</strong> {comparison.runA.agentKey}
+                      <strong>{tr("Agent:", "Agent :")}</strong> {comparison.runA.agentKey}
                     </div>
                     <div>
-                      <strong>Status:</strong> {comparison.runA.status}
+                      <strong>{tr("Status:", "Statut :")}</strong> {comparison.runA.status}
                     </div>
                     <div>
-                      <strong>Duration:</strong> {formatDuration(comparison.runA.durationMs)}
+                      <strong>{tr("Duration:", "Durée :")}</strong>{" "}
+                      {formatDuration(comparison.runA.durationMs)}
                     </div>
                     <div>
-                      <strong>Tokens:</strong> {comparison.runA.tokenCount.toLocaleString()}
+                      <strong>{tr("Tokens:", "Jetons :")}</strong>{" "}
+                      {comparison.runA.tokenCount.toLocaleString()}
                     </div>
                     <div>
-                      <strong>Cost:</strong> ${comparison.runA.costEstimateUsd.toFixed(4)}
+                      <strong>{tr("Cost:", "Coût :")}</strong> $
+                      {comparison.runA.costEstimateUsd.toFixed(4)}
                     </div>
                     <div>
-                      <strong>Steps:</strong> {String(comparison.runA.stepCount)}
+                      <strong>{tr("Steps:", "Étapes :")}</strong>{" "}
+                      {String(comparison.runA.stepCount)}
                     </div>
                   </div>
                 </section>
 
                 <section className="card">
-                  <h3>Run B ({comparison.runB.id})</h3>
+                  <h3>
+                    {tr("Run B", "Exécution B")} ({comparison.runB.id})
+                  </h3>
                   <div
                     style={{
                       marginTop: "12px",
@@ -3501,22 +4022,26 @@ export function RunComparison({ api }: { api: DashboardApi }) {
                     }}
                   >
                     <div>
-                      <strong>Agent:</strong> {comparison.runB.agentKey}
+                      <strong>{tr("Agent:", "Agent :")}</strong> {comparison.runB.agentKey}
                     </div>
                     <div>
-                      <strong>Status:</strong> {comparison.runB.status}
+                      <strong>{tr("Status:", "Statut :")}</strong> {comparison.runB.status}
                     </div>
                     <div>
-                      <strong>Duration:</strong> {formatDuration(comparison.runB.durationMs)}
+                      <strong>{tr("Duration:", "Durée :")}</strong>{" "}
+                      {formatDuration(comparison.runB.durationMs)}
                     </div>
                     <div>
-                      <strong>Tokens:</strong> {comparison.runB.tokenCount.toLocaleString()}
+                      <strong>{tr("Tokens:", "Jetons :")}</strong>{" "}
+                      {comparison.runB.tokenCount.toLocaleString()}
                     </div>
                     <div>
-                      <strong>Cost:</strong> ${comparison.runB.costEstimateUsd.toFixed(4)}
+                      <strong>{tr("Cost:", "Coût :")}</strong> $
+                      {comparison.runB.costEstimateUsd.toFixed(4)}
                     </div>
                     <div>
-                      <strong>Steps:</strong> {String(comparison.runB.stepCount)}
+                      <strong>{tr("Steps:", "Étapes :")}</strong>{" "}
+                      {String(comparison.runB.stepCount)}
                     </div>
                   </div>
                 </section>
@@ -3534,6 +4059,7 @@ export function RunComparison({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function CommunicationGraph({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const [range, setRange] = useState("24h");
   const state = useSection(() => api.communicationGraph(range), [range]);
 
@@ -3544,7 +4070,7 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
         style={{ marginBottom: "16px", display: "flex", gap: "12px", alignItems: "center" }}
       >
         <label htmlFor="comm-range" style={{ fontSize: "0.85rem" }}>
-          Time window:
+          {tr("Time window:", "Fenêtre temporelle :")}
         </label>
         <select
           id="comm-range"
@@ -3555,9 +4081,9 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
           }}
           style={{ maxWidth: "160px" }}
         >
-          <option value="1h">Last 1 hour</option>
-          <option value="24h">Last 24 hours</option>
-          <option value="7d">Last 7 days</option>
+          <option value="1h">{tr("Last 1 hour", "Dernière heure")}</option>
+          <option value="24h">{tr("Last 24 hours", "Dernières 24 heures")}</option>
+          <option value="7d">{tr("Last 7 days", "7 derniers jours")}</option>
         </select>
       </div>
 
@@ -3565,24 +4091,41 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
         {(graph) => (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <div className="metrics">
-              <Metric value={String(graph.nodes.length)} label="active agents" />
+              <Metric
+                value={String(graph.nodes.length)}
+                label={tr("active agents", "agents actifs")}
+              />
               <Metric
                 value={String(graph.edges.length)}
-                label="inter-agent communication channels"
+                label={tr(
+                  "inter-agent communication channels",
+                  "canaux de communication inter-agents",
+                )}
               />
               <Metric
                 value={String(graph.edges.reduce((sum, e) => sum + e.messageCount, 0))}
-                label="total messages exchanged"
+                label={tr("total messages exchanged", "total des messages échangés")}
               />
             </div>
 
             <section className="card">
-              <h3>Participating Agents</h3>
+              <h3>{tr("Participating Agents", "Agents Participants")}</h3>
               <div style={{ marginTop: "12px" }}>
                 {graph.nodes.length === 0 ? (
-                  <Empty>No agents active in this time window.</Empty>
+                  <Empty>
+                    {tr(
+                      "No agents active in this time window.",
+                      "Aucun agent actif dans cette fenêtre.",
+                    )}
+                  </Empty>
                 ) : (
-                  <Table head={["Agent Name", "Role", "Message Activity"]}>
+                  <Table
+                    head={[
+                      tr("Agent Name", "Nom de l'Agent"),
+                      tr("Role", "Rôle"),
+                      tr("Message Activity", "Activité de Messages"),
+                    ]}
+                  >
                     {graph.nodes.map((node) => (
                       <tr key={node.id}>
                         <td>
@@ -3599,17 +4142,22 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
             </section>
 
             <section className="card">
-              <h3>Inter-Agent Channels & Latencies</h3>
+              <h3>{tr("Inter-Agent Channels & Latencies", "Canaux Inter-Agents & Latences")}</h3>
               <div style={{ marginTop: "12px" }}>
                 {graph.edges.length === 0 ? (
-                  <Empty>No message channels detected in this window.</Empty>
+                  <Empty>
+                    {tr(
+                      "No message channels detected in this window.",
+                      "Aucun canal de message détecté dans cette fenêtre.",
+                    )}
+                  </Empty>
                 ) : (
                   <Table
                     head={[
-                      "Sender (Source)",
-                      "Receiver (Target)",
-                      "Messages Sent",
-                      "Avg Round-trip Latency",
+                      tr("Sender (Source)", "Expéditeur (Source)"),
+                      tr("Receiver (Target)", "Destinataire (Cible)"),
+                      tr("Messages Sent", "Messages Envoyés"),
+                      tr("Avg Round-trip Latency", "Latence Aller-Retour Moy."),
                     ]}
                   >
                     {graph.edges.map((edge) => (
@@ -3647,6 +4195,7 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function VisualControl({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
   const state = useSection(() => api.visualControlStatus());
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -3655,7 +4204,9 @@ export function VisualControl({ api }: { api: DashboardApi }) {
     void op()
       .then(() => state.reload())
       .catch((err: unknown) =>
-        setActionError(err instanceof Error ? err.message : "Action failed."),
+        setActionError(
+          err instanceof Error ? err.message : tr("Action failed.", "Échec de l'action."),
+        ),
       );
   };
 
@@ -3667,18 +4218,18 @@ export function VisualControl({ api }: { api: DashboardApi }) {
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div className="metrics">
               <Metric
-                value={vc.active ? "ACTIVE" : "IDLE"}
-                label="automation session"
+                value={vc.active ? tr("ACTIVE", "ACTIF") : tr("IDLE", "INACTIF")}
+                label={tr("automation session", "session d'automatisation")}
                 alert={vc.active && vc.paused}
               />
               <Metric
-                value={vc.paused ? "PAUSED" : "RUNNING"}
-                label="execution state"
+                value={vc.paused ? tr("PAUSED", "EN PAUSE") : tr("RUNNING", "EN COURS")}
+                label={tr("execution state", "état d'exécution")}
                 alert={vc.paused}
               />
               <Metric
                 value={`${String(vc.bounds.width)} × ${String(vc.bounds.height)}`}
-                label="viewport resolution"
+                label={tr("viewport resolution", "résolution de la vue")}
               />
             </div>
 
@@ -3691,22 +4242,34 @@ export function VisualControl({ api }: { api: DashboardApi }) {
                 }}
               >
                 <div>
-                  <h3>Remote Viewport & Safety Monitor</h3>
+                  <h3>
+                    {tr("Remote Viewport & Safety Monitor", "Vue Distante & Moniteur de Sécurité")}
+                  </h3>
                   <p className="muted">
-                    Active Session: <span className="mono">{vc.activeSessionId ?? "None"}</span>
+                    {tr("Active Session:", "Session active :")}{" "}
+                    <span className="mono">{vc.activeSessionId ?? tr("None", "Aucune")}</span>
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <State
                     tone={vc.safetyBoundaryEnforced ? "ok" : "down"}
-                    label={vc.safetyBoundaryEnforced ? "SAFETY BOUNDARY ENFORCED" : "UNRESTRICTED"}
+                    label={
+                      vc.safetyBoundaryEnforced
+                        ? tr("SAFETY BOUNDARY ENFORCED", "LIMITE DE SÉCURITÉ ACTIVE")
+                        : tr("UNRESTRICTED", "SANS RESTRICTION")
+                    }
                   />
                   <button
                     className={`button ${vc.paused ? "primary" : "danger"}`}
                     type="button"
                     onClick={() => act(() => api.toggleVisualControlPause(!vc.paused))}
                   >
-                    {vc.paused ? "Resume Session" : "Pause Session (Emergency Stop)"}
+                    {vc.paused
+                      ? tr("Resume Session", "Reprendre la session")
+                      : tr(
+                          "Pause Session (Emergency Stop)",
+                          "Suspendre la session (Arrêt d'urgence)",
+                        )}
                   </button>
                 </div>
               </div>
@@ -3726,13 +4289,16 @@ export function VisualControl({ api }: { api: DashboardApi }) {
                 {vc.lastScreenshotUrl ? (
                   <img
                     src={vc.lastScreenshotUrl}
-                    alt="Live visual control preview"
+                    alt={tr("Live visual control preview", "Aperçu du contrôle visuel en direct")}
                     style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "4px" }}
                   />
                 ) : (
                   <div className="muted" style={{ textAlign: "center" }}>
                     <span>
-                      No active frame capture. Remote viewport is waiting for agent interactions.
+                      {tr(
+                        "No active frame capture. Remote viewport is waiting for agent interactions.",
+                        "Aucune capture d'image active. La vue distante attend les interactions de l'agent.",
+                      )}
                     </span>
                   </div>
                 )}

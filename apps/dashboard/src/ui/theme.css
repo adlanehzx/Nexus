@@ -2726,3 +2726,297 @@ tbody tr:last-child td {
   z-index: 2;
   background: var(--nx-surface-raised);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   NEXUS Cyber-Futuristic Sci-Fi HUD & 3D Styling
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Ambient cyber grid background on main viewport */
+.main {
+  background-image:
+    radial-gradient(
+      circle at 80% 10%,
+      color-mix(in srgb, var(--nx-signal) 4%, transparent) 0%,
+      transparent 40%
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--nx-line) 25%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--nx-line) 25%, transparent) 1px,
+      transparent 1px
+    );
+  background-size:
+    100% 100%,
+    48px 48px,
+    48px 48px;
+  background-position:
+    0 0,
+    0 0,
+    0 0;
+}
+
+/* 3D Interactive Card container */
+.cyber-3d-card {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Cyber card base with reticle brackets and high-tech glow */
+.cyber-card {
+  position: relative;
+  background: var(--nx-surface);
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-md);
+  padding: var(--nx-space-6);
+  transition:
+    border-color var(--nx-fast) var(--nx-ease),
+    box-shadow var(--nx-normal) var(--nx-ease),
+    transform var(--nx-fast) var(--nx-ease);
+}
+
+.cyber-card:hover {
+  border-color: var(--nx-signal);
+  box-shadow: 0 8px 30px -8px color-mix(in srgb, var(--nx-signal) 22%, transparent);
+}
+
+/* Corner bracket reticles */
+.cyber-reticle {
+  position: relative;
+}
+
+.cyber-reticle::before,
+.cyber-reticle::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  z-index: 3;
+  transition: border-color var(--nx-fast) var(--nx-ease);
+}
+
+.cyber-reticle::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--nx-signal);
+  border-left: 2px solid var(--nx-signal);
+}
+
+.cyber-reticle::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--nx-signal);
+  border-right: 2px solid var(--nx-signal);
+}
+
+/* Holographic 3D Core Hero in Overview */
+.cyber-core-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--nx-line-strong);
+  border-radius: var(--nx-radius-lg);
+  background: color-mix(in srgb, var(--nx-surface-raised) 92%, var(--nx-signal) 8%);
+  box-shadow:
+    inset 0 0 40px -10px color-mix(in srgb, var(--nx-signal) 12%, transparent),
+    0 12px 36px -12px rgba(0, 0, 0, 0.4);
+  margin-bottom: var(--nx-space-8);
+}
+
+.cyber-core-canvas-container {
+  position: relative;
+  height: 270px;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cyber-core-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--nx-space-6) var(--nx-space-8);
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    transparent 35%,
+    color-mix(in srgb, var(--nx-surface-raised) 80%, transparent) 85%
+  );
+}
+
+.cyber-hud-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nx-space-4);
+  pointer-events: auto;
+  max-width: 280px;
+}
+
+.cyber-hud-stat {
+  padding: var(--nx-space-3) var(--nx-space-4);
+  background: color-mix(in srgb, var(--nx-surface) 85%, transparent);
+  border-left: 3px solid var(--nx-signal);
+  border-radius: var(--nx-radius-xs);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.3);
+}
+
+.cyber-hud-stat-label {
+  font-size: var(--nx-size-3xs);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-tracking-caps);
+  color: var(--nx-text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+}
+
+.cyber-hud-stat-value {
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-md);
+  font-weight: var(--nx-weight-semibold);
+  color: var(--nx-text);
+  margin-top: var(--nx-space-1);
+}
+
+/* HUD Audio Frequency Equalizer */
+.hud-audio-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  padding: 0 2px;
+}
+
+.hud-audio-bar {
+  width: 2.5px;
+  background: var(--nx-signal);
+  border-radius: 1px;
+  animation: hudBarBounce 1.2s ease-in-out infinite alternate;
+}
+
+.hud-audio-bar:nth-child(1) {
+  height: 40%;
+  animation-delay: 0.1s;
+}
+.hud-audio-bar:nth-child(2) {
+  height: 80%;
+  animation-delay: 0.35s;
+}
+.hud-audio-bar:nth-child(3) {
+  height: 100%;
+  animation-delay: 0.2s;
+}
+.hud-audio-bar:nth-child(4) {
+  height: 60%;
+  animation-delay: 0.5s;
+}
+.hud-audio-bar:nth-child(5) {
+  height: 30%;
+  animation-delay: 0.15s;
+}
+
+@keyframes hudBarBounce {
+  0% {
+    transform: scaleY(0.25);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Sci-fi Telemetry Badges in Header */
+.hud-telemetry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-3);
+  padding: var(--nx-space-2) var(--nx-space-4);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-2xs);
+  letter-spacing: 0.05em;
+  border-radius: var(--nx-radius-pill);
+  background: color-mix(in srgb, var(--nx-surface-raised) 75%, transparent);
+  border: 1px solid var(--nx-line);
+  color: var(--nx-text-muted);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.hud-telemetry-badge strong {
+  color: var(--nx-signal);
+  font-weight: var(--nx-weight-semibold);
+}
+
+/* Neon Glow on Metrics */
+.metric:hover {
+  border-color: var(--nx-signal);
+  box-shadow: 0 0 16px -4px color-mix(in srgb, var(--nx-signal) 30%, transparent);
+}
+
+/* Pulse radar ring */
+.radar-pulse-ring {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nx-signal);
+  flex-shrink: 0;
+}
+
+.radar-pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nx-signal);
+  animation: radarPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes radarPing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Login Shell Sci-Fi Hologram upgrade */
+.login-page {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-3d-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 5;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--nx-line-strong);
+  box-shadow:
+    0 24px 64px -12px rgba(0, 0, 0, 0.5),
+    0 0 40px -10px color-mix(in srgb, var(--nx-signal) 20%, transparent);
+}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CareerEducationSettings, LocationType } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface CareerSettingsProps {
   settings: CareerEducationSettings;
@@ -12,6 +13,7 @@ export function CareerSettings({
   onUpdateSettings,
   loading = false,
 }: CareerSettingsProps) {
+  const { tr } = useI18n();
   const [formData, setFormData] = useState<CareerEducationSettings>(settings);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -21,16 +23,29 @@ export function CareerSettings({
     setNotice(null);
     try {
       await onUpdateSettings(formData);
-      setNotice("Career engine settings saved successfully.");
+      setNotice(
+        tr(
+          "Career engine settings saved successfully.",
+          "Paramètres du moteur de carrière enregistrés avec succès.",
+        ),
+      );
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Failed to save settings.");
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to save settings.", "Échec de l'enregistrement des paramètres."),
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Career & Education Settings">
+    <div
+      className="career-edu-container"
+      role="region"
+      aria-label={tr("Career & Education Settings", "Paramètres Carrière & Formation")}
+    >
       <div
         style={{
           display: "flex",
@@ -41,10 +56,17 @@ export function CareerSettings({
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Career Engine & Source Settings</h2>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            {tr(
+              "Career Engine & Source Settings",
+              "Paramètres du Moteur de Carrière & des Sources",
+            )}
+          </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Configure discovery filters, rate expectations, blacklists, quiet hours, data retention,
-            and error degradation simulations.
+            {tr(
+              "Configure discovery filters, rate expectations, blacklists, quiet hours, data retention, and error degradation simulations.",
+              "Configurez les filtres de découverte, les rémunérations cibles, les listes d'exclusion, les heures silencieuses, la rétention et les simulations d'erreur.",
+            )}
           </p>
         </div>
 
@@ -54,7 +76,9 @@ export function CareerSettings({
           disabled={saving || loading}
           onClick={() => void handleSave()}
         >
-          {saving ? "Saving..." : "Save Settings"}
+          {saving
+            ? tr("Saving...", "Enregistrement...")
+            : tr("Save Settings", "Enregistrer les paramètres")}
         </button>
       </div>
 
@@ -79,10 +103,17 @@ export function CareerSettings({
         className="career-card"
         style={{ borderLeft: "4px solid var(--accent)", gap: "0.75rem" }}
       >
-        <strong>Simulated State Controls (Honest Error Verification)</strong>
+        <strong>
+          {tr(
+            "Simulated State Controls (Honest Error Verification)",
+            "Contrôles d'états simulés (Vérification honnête des erreurs)",
+          )}
+        </strong>
         <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--muted-text)" }}>
-          Test that the UX displays honest unavailable and degraded states rather than fake or
-          silent success.
+          {tr(
+            "Test that the UX displays honest unavailable and degraded states rather than fake or silent success.",
+            "Vérifiez que l'interface affiche fidèlement les indisponibilités et les états dégradés plutôt qu'un faux succès silencieux.",
+          )}
         </p>
 
         <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
@@ -101,7 +132,12 @@ export function CareerSettings({
               onChange={(e) => setFormData({ ...formData, offlineSimulation: e.target.checked })}
             />
             <span>
-              <strong>Simulate Network Offline</strong> (Forces feeds to throw NetworkOfflineError)
+              <strong>{tr("Simulate Network Offline", "Simuler réseau hors ligne")}</strong> (
+              {tr(
+                "Forces feeds to throw NetworkOfflineError",
+                "Force les flux à lever NetworkOfflineError",
+              )}
+              )
             </span>
           </label>
 
@@ -122,7 +158,12 @@ export function CareerSettings({
               }
             />
             <span>
-              <strong>Simulate Degraded Feeds</strong> (Shows HTTP 429 rate limit backoff alerts)
+              <strong>{tr("Simulate Degraded Feeds", "Simuler flux dégradés")}</strong> (
+              {tr(
+                "Shows HTTP 429 rate limit backoff alerts",
+                "Affiche les alertes de limitation HTTP 429",
+              )}
+              )
             </span>
           </label>
         </div>
@@ -132,9 +173,13 @@ export function CareerSettings({
       <div className="career-grid-2">
         {/* Locations & Remote */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Location & Remote Preferences</strong>
+          <strong>
+            {tr("Location & Remote Preferences", "Préférences de localisation & télétravail")}
+          </strong>
           <div className="career-form-group">
-            <label htmlFor="settingsRemote">Remote Work Policy</label>
+            <label htmlFor="settingsRemote">
+              {tr("Remote Work Policy", "Politique de télétravail")}
+            </label>
             <select
               id="settingsRemote"
               className="career-select"
@@ -143,14 +188,23 @@ export function CareerSettings({
                 setFormData({ ...formData, remotePolicy: e.target.value as LocationType })
               }
             >
-              <option value="remote">100% Remote Only</option>
-              <option value="hybrid">Hybrid (Periodic Onsite / Coworking)</option>
-              <option value="onsite">Onsite</option>
+              <option value="remote">
+                {tr("100% Remote Only", "100% Télétravail uniquement")}
+              </option>
+              <option value="hybrid">
+                {tr(
+                  "Hybrid (Periodic Onsite / Coworking)",
+                  "Hybride (Présentiel périodique / Coworking)",
+                )}
+              </option>
+              <option value="onsite">{tr("Onsite", "Sur site uniquement")}</option>
             </select>
           </div>
 
           <div className="career-form-group">
-            <label htmlFor="settingsLocations">Allowed Cities / Regions</label>
+            <label htmlFor="settingsLocations">
+              {tr("Allowed Cities / Regions", "Villes / Régions autorisées")}
+            </label>
             <input
               id="settingsLocations"
               className="career-input"
@@ -171,9 +225,13 @@ export function CareerSettings({
 
         {/* Disciplines & Keywords */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Disciplines & Search Keywords</strong>
+          <strong>
+            {tr("Disciplines & Search Keywords", "Disciplines & Mots-clés de recherche")}
+          </strong>
           <div className="career-form-group">
-            <label htmlFor="settingsKeywords">Keywords (comma separated)</label>
+            <label htmlFor="settingsKeywords">
+              {tr("Keywords (comma separated)", "Mots-clés (séparés par des virgules)")}
+            </label>
             <input
               id="settingsKeywords"
               className="career-input"
@@ -191,7 +249,12 @@ export function CareerSettings({
             />
           </div>
           <div className="career-form-group">
-            <label htmlFor="settingsVisa">Visa & Work Authorization Requirement</label>
+            <label htmlFor="settingsVisa">
+              {tr(
+                "Visa & Work Authorization Requirement",
+                "Exigence de visa & autorisation de travail",
+              )}
+            </label>
             <input
               id="settingsVisa"
               className="career-input"
@@ -204,10 +267,12 @@ export function CareerSettings({
 
         {/* Rates & Compensation Thresholds */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Compensation & Rate Thresholds</strong>
+          <strong>{tr("Compensation & Rate Thresholds", "Seuils de rémunération & TJM")}</strong>
           <div className="career-grid-3">
             <div className="career-form-group">
-              <label htmlFor="setMinCdi">Minimum Annual Salary (€)</label>
+              <label htmlFor="setMinCdi">
+                {tr("Minimum Annual Salary (€)", "Salaire annuel minimum (€)")}
+              </label>
               <input
                 id="setMinCdi"
                 className="career-input"
@@ -219,7 +284,9 @@ export function CareerSettings({
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="setMinTjm">Minimum Independent Daily Rate (€)</label>
+              <label htmlFor="setMinTjm">
+                {tr("Minimum Independent Daily Rate (€)", "TJM minimum indépendant (€)")}
+              </label>
               <input
                 id="setMinTjm"
                 className="career-input"
@@ -231,7 +298,9 @@ export function CareerSettings({
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="setMinStipend">Min PhD Stipend (€/mo)</label>
+              <label htmlFor="setMinStipend">
+                {tr("Min PhD Stipend (€/mo)", "Allocation doctorale min (€/mois)")}
+              </label>
               <input
                 id="setMinStipend"
                 className="career-input"
@@ -247,9 +316,19 @@ export function CareerSettings({
 
         {/* Blacklists & Excluded Sources */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Excluded Sources & Organizations (Blacklists)</strong>
+          <strong>
+            {tr(
+              "Excluded Sources & Organizations (Blacklists)",
+              "Sources & Organisations exclues (Listes noires)",
+            )}
+          </strong>
           <div className="career-form-group">
-            <label htmlFor="setExcludedSources">Excluded Domains / Feeds (comma separated)</label>
+            <label htmlFor="setExcludedSources">
+              {tr(
+                "Excluded Domains / Feeds (comma separated)",
+                "Domaines / Flux exclus (séparés par des virgules)",
+              )}
+            </label>
             <input
               id="setExcludedSources"
               className="career-input"
@@ -267,7 +346,12 @@ export function CareerSettings({
             />
           </div>
           <div className="career-form-group">
-            <label htmlFor="setExcludedOrgs">Excluded Organizations (comma separated)</label>
+            <label htmlFor="setExcludedOrgs">
+              {tr(
+                "Excluded Organizations (comma separated)",
+                "Organisations exclues (séparées par des virgules)",
+              )}
+            </label>
             <input
               id="setExcludedOrgs"
               className="career-input"
@@ -288,7 +372,9 @@ export function CareerSettings({
 
         {/* Quiet Hours & Alerts */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Quiet Hours & Notification Policy</strong>
+          <strong>
+            {tr("Quiet Hours & Notification Policy", "Heures silencieuses & Politique d'alerte")}
+          </strong>
           <label
             style={{
               display: "flex",
@@ -308,11 +394,14 @@ export function CareerSettings({
                 })
               }
             />
-            Enable Quiet Hours (Suppresses non-urgent opportunity alerts)
+            {tr(
+              "Enable Quiet Hours (Suppresses non-urgent opportunity alerts)",
+              "Activer les heures silencieuses (Bloque les alertes non urgentes)",
+            )}
           </label>
           <div className="career-grid-3">
             <div className="career-form-group">
-              <label htmlFor="qhStart">Start (HH:MM)</label>
+              <label htmlFor="qhStart">{tr("Start (HH:MM)", "Début (HH:MM)")}</label>
               <input
                 id="qhStart"
                 className="career-input"
@@ -327,7 +416,7 @@ export function CareerSettings({
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="qhEnd">End (HH:MM)</label>
+              <label htmlFor="qhEnd">{tr("End (HH:MM)", "Fin (HH:MM)")}</label>
               <input
                 id="qhEnd"
                 className="career-input"
@@ -342,7 +431,7 @@ export function CareerSettings({
               />
             </div>
             <div className="career-form-group">
-              <label htmlFor="qhTz">Timezone</label>
+              <label htmlFor="qhTz">{tr("Timezone", "Fuseau horaire")}</label>
               <input
                 id="qhTz"
                 className="career-input"
@@ -361,9 +450,16 @@ export function CareerSettings({
 
         {/* Data Retention */}
         <div className="career-card" style={{ gap: "0.75rem" }}>
-          <strong>Data Retention & Privacy</strong>
+          <strong>
+            {tr("Data Retention & Privacy", "Rétention des données & Confidentialité")}
+          </strong>
           <div className="career-form-group">
-            <label htmlFor="retentionDays">Application & Audit Retention (Days)</label>
+            <label htmlFor="retentionDays">
+              {tr(
+                "Application & Audit Retention (Days)",
+                "Rétention des candidatures & audits (Jours)",
+              )}
+            </label>
             <input
               id="retentionDays"
               className="career-input"
@@ -375,8 +471,10 @@ export function CareerSettings({
             />
           </div>
           <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--muted-text)" }}>
-            Automatically purges historical drafts, browser screenshots, and temporary traces after
-            the retention window.
+            {tr(
+              "Automatically purges historical drafts, browser screenshots, and temporary traces after the retention window.",
+              "Purge automatiquement les brouillons historiques, captures de navigateur et traces temporaires après la période de rétention.",
+            )}
           </p>
         </div>
       </div>

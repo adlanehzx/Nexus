@@ -9,21 +9,29 @@ const TEMPLATES = [
     "professional_person",
     "Professional footprint",
     "Roles, publications, affiliations and career chronology.",
+    "Empreinte professionnelle",
+    "Rôles, publications, affiliations et chronologie de carrière.",
   ],
   [
     "organization",
     "Organization intelligence",
     "Ownership, leadership, filings, products and public activity.",
+    "Renseignement d'organisation",
+    "Actionnariat, dirigeants, dépôts légaux, produits et activité publique.",
   ],
   [
     "technical_asset",
     "Technical exposure",
     "Public domains, certificates, repositories and infrastructure.",
+    "Exposition technique",
+    "Domaines publics, certificats, dépôts et infrastructure.",
   ],
   [
     "claim_verification",
     "Claim verification",
     "Corroborate a statement and expose contradictions.",
+    "Vérification d'allégations",
+    "Corroborer une déclaration et exposer les contradictions.",
   ],
 ] as const;
 type Tab = "evidence" | "graph" | "monitoring" | "enrichment" | "reports";
@@ -37,7 +45,7 @@ export function OsintWorkspace({
   api: DashboardApi;
   onOpenMissions: () => void;
 }) {
-  const { locale } = useI18n();
+  const { tr, locale } = useI18n();
   const [cases, setCases] = useState<OsintCaseRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("evidence");
@@ -105,16 +113,27 @@ export function OsintWorkspace({
     <div className="domain-workspace osint-workspace">
       <section className="domain-hero osint-hero">
         <div>
-          <span className="domain-kicker">PUBLIC-SOURCE INTELLIGENCE</span>
-          <h2>Evidence, not speculation.</h2>
+          <span className="domain-kicker">
+            {tr("PUBLIC-SOURCE INTELLIGENCE", "RENSEIGNEMENT DE SOURCES OUVERTES")}
+          </span>
+          <h2>
+            {tr("Evidence, not speculation.", "Des preuves vérifiées, pas des spéculations.")}
+          </h2>
           <p>
-            Coordinate analyst, verifier and critic agents; preserve source fingerprints; monitor
-            lawful public pages; export an auditable report.
+            {tr(
+              "Coordinate analyst, verifier and critic agents; preserve source fingerprints; monitor lawful public pages; export an auditable report.",
+              "Coordonnez les agents analystes, vérificateurs et critiques ; conservez les empreintes de sources ; surveillez les pages publiques légales ; exportez un rapport vérifiable.",
+            )}
           </p>
         </div>
         <div className="domain-hero-stat">
-          <strong>{cases.length} cases</strong>
-          <span>{cases.reduce((sum, item) => sum + item.evidence.length, 0)} archived sources</span>
+          <strong>
+            {cases.length} {tr("cases", "dossiers")}
+          </strong>
+          <span>
+            {cases.reduce((sum, item) => sum + item.evidence.length, 0)}{" "}
+            {tr("archived sources", "sources archivées")}
+          </span>
         </div>
       </section>
 
@@ -122,8 +141,8 @@ export function OsintWorkspace({
         <aside className="domain-panel osint-case-list">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">CASEBOOK</span>
-              <h3>Investigations</h3>
+              <span className="eyebrow">{tr("CASEBOOK", "REGISTRE")}</span>
+              <h3>{tr("Investigations", "Enquêtes")}</h3>
             </div>
           </div>
           <button
@@ -131,11 +150,9 @@ export function OsintWorkspace({
             className={`osint-case-row ${selectedId === null ? "active" : ""}`}
             onClick={() => setSelectedId(null)}
           >
-            <strong>{locale === "fr" ? "＋ Nouvelle enquête" : "＋ New investigation"}</strong>
+            <strong>{tr("＋ New investigation", "＋ Nouvelle enquête")}</strong>
             <span>
-              {locale === "fr"
-                ? "Définir le périmètre et lancer les agents"
-                : "Define scope and launch agents"}
+              {tr("Define scope and launch agents", "Définir le périmètre et lancer les agents")}
             </span>
           </button>
           {cases.map((item) => (
@@ -147,7 +164,7 @@ export function OsintWorkspace({
             >
               <strong>{item.investigation.title}</strong>
               <span>
-                {item.status} · {item.evidence.length} {locale === "fr" ? "sources" : "sources"}
+                {item.status} · {item.evidence.length} {tr("sources", "sources")}
               </span>
             </button>
           ))}
@@ -167,7 +184,7 @@ export function OsintWorkspace({
               lawful={lawful}
               setLawful={setLawful}
               busy={busy}
-              hint={active[2]}
+              hint={locale === "fr" ? active[4] : active[2]}
               launch={launch}
             />
           ) : (
@@ -186,19 +203,15 @@ export function OsintWorkspace({
                 {(["evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]).map(
                   (item) => {
                     const label =
-                      locale === "fr"
-                        ? item === "evidence"
-                          ? "Preuves"
-                          : item === "graph"
-                            ? "Graphe"
-                            : item === "monitoring"
-                              ? "Surveillance"
-                              : item === "enrichment"
-                                ? "Outils & Enrichissement"
-                                : "Rapports"
-                        : item === "enrichment"
-                          ? "tools & enrichment"
-                          : item;
+                      item === "evidence"
+                        ? tr("Evidence", "Preuves")
+                        : item === "graph"
+                          ? tr("Graph", "Graphe")
+                          : item === "monitoring"
+                            ? tr("Monitoring", "Surveillance")
+                            : item === "enrichment"
+                              ? tr("Tools & Enrichment", "Outils & Enrichissement")
+                              : tr("Reports", "Rapports");
                     return (
                       <button
                         type="button"
@@ -304,16 +317,23 @@ export function OsintWorkspace({
       {selected !== null && (
         <section className="domain-panel evidence-contract">
           <div>
-            <span className="eyebrow">COLLABORATION CONTRACT</span>
-            <h3>Three roles, one evidence standard</h3>
+            <span className="eyebrow">
+              {tr("COLLABORATION CONTRACT", "CONTRAT DE COLLABORATION")}
+            </span>
+            <h3>
+              {tr(
+                "Three roles, one evidence standard",
+                "Trois rôles, un standard de preuve unique",
+              )}
+            </h3>
           </div>
           <div className="evidence-grid">
-            <span>Analyst · collect</span>
-            <span>Verifier · corroborate</span>
-            <span>Critic · challenge</span>
-            <span>Source hashes</span>
-            <span>Confidence levels</span>
-            <span>Recorded disagreements</span>
+            <span>{tr("Analyst · collect", "Analyste · collecte")}</span>
+            <span>{tr("Verifier · corroborate", "Vérificateur · corrobore")}</span>
+            <span>{tr("Critic · challenge", "Critique · conteste")}</span>
+            <span>{tr("Source hashes", "Empreintes de sources")}</span>
+            <span>{tr("Confidence levels", "Niveaux de confiance")}</span>
+            <span>{tr("Recorded disagreements", "Désaccords consignés")}</span>
           </div>
         </section>
       )}
@@ -321,13 +341,16 @@ export function OsintWorkspace({
         <section className="domain-panel mission-launched">
           <div>
             <span className="status-dot" />
-            <strong>Investigation dispatched</strong>
+            <strong>{tr("Investigation dispatched", "Enquête déployée")}</strong>
             <p className="muted">
-              Mission {mission.missionId} is durable and can continue after a restart.
+              {tr(
+                `Mission ${mission.missionId} is durable and can continue after a restart.`,
+                `La mission ${mission.missionId} est persistante et peut continuer après redémarrage.`,
+              )}
             </p>
           </div>
           <button className="button" type="button" onClick={onOpenMissions}>
-            Open mission control
+            {tr("Open mission control", "Ouvrir le contrôle de mission")}
           </button>
         </section>
       )}
@@ -351,16 +374,17 @@ function NewCaseForm(props: {
   hint: string;
   launch: () => Promise<void>;
 }) {
+  const { tr, locale } = useI18n();
   return (
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">NEW CASE</span>
-          <h3>Define a lawful investigation</h3>
+          <span className="eyebrow">{tr("NEW CASE", "NOUVEAU DOSSIER")}</span>
+          <h3>{tr("Define a lawful investigation", "Définir une enquête légitime")}</h3>
         </div>
       </div>
       <div className="template-grid">
-        {TEMPLATES.map(([id, label, detail]) => (
+        {TEMPLATES.map(([id, labelEn, detailEn, labelFr, detailFr]) => (
           <button
             key={id}
             type="button"
@@ -368,19 +392,26 @@ function NewCaseForm(props: {
             onClick={() => props.setKind(id)}
           >
             <span className="template-marker" />
-            <strong>{label}</strong>
-            <small>{detail}</small>
+            <strong>{locale === "fr" ? labelFr : labelEn}</strong>
+            <small>{locale === "fr" ? detailFr : detailEn}</small>
           </button>
         ))}
       </div>
       <div className="banner info" role="note">
-        <strong>Investigation tools unlock after the case is created.</strong> Select the case, then
-        open <strong>Tools &amp; enrichment</strong> to run Sherlock, DNS, RDAP, TLS, company
-        registry, VirusTotal, or Shodan checks and archive their results.
+        <strong>
+          {tr(
+            "Investigation tools unlock after the case is created.",
+            "Les outils d'investigation se débloquent après création du dossier.",
+          )}
+        </strong>{" "}
+        {tr(
+          "Select the case, then open Tools & enrichment to run Sherlock, DNS, RDAP, TLS, company registry, VirusTotal, or Shodan checks and archive their results.",
+          "Sélectionnez le dossier, puis ouvrez Outils & enrichissement pour lancer Sherlock, DNS, RDAP, TLS, registres d'entreprises, VirusTotal ou Shodan et archiver leurs résultats.",
+        )}
       </div>
       <div className="settings-grid osint-form">
         <label>
-          Case title
+          {tr("Case title", "Titre du dossier")}
           <input
             className="field"
             value={props.title}
@@ -388,7 +419,7 @@ function NewCaseForm(props: {
           />
         </label>
         <label>
-          Public target
+          {tr("Public target", "Cible publique")}
           <input
             className="field"
             value={props.target}
@@ -396,7 +427,7 @@ function NewCaseForm(props: {
           />
         </label>
         <label className="settings-wide">
-          Decision or question
+          {tr("Decision or question", "Décision ou question clé")}
           <textarea
             className="field"
             rows={4}
@@ -413,8 +444,10 @@ function NewCaseForm(props: {
           onChange={(event) => props.setLawful(event.target.checked)}
         />
         <span>
-          I confirm a legitimate purpose and authorize research limited to lawfully accessible
-          public sources.
+          {tr(
+            "I confirm a legitimate purpose and authorize research limited to lawfully accessible public sources.",
+            "Je confirme un objectif légitime et autorise la recherche limitée aux sources publiques légalement accessibles.",
+          )}
         </span>
       </label>
       <button
@@ -429,7 +462,9 @@ function NewCaseForm(props: {
         }
         onClick={() => void props.launch()}
       >
-        {props.busy ? "Building investigation…" : "Create case and launch agents"}
+        {props.busy
+          ? tr("Building investigation…", "Création de l'enquête…")
+          : tr("Create case and launch agents", "Créer le dossier et lancer les agents")}
       </button>
     </>
   );
@@ -448,17 +483,24 @@ function EvidencePanel({
   busy: boolean;
   importDataset: () => Promise<void>;
 }) {
+  const { tr } = useI18n();
   return (
     <div className="osint-panel-stack">
       <div className="osint-metrics">
-        <Metric label="Evidence" value={record.evidence.length} />
-        <Metric label="Entities" value={record.entities.length} />
-        <Metric label="Alerts" value={record.alerts.filter((item) => !item.acknowledged).length} />
+        <Metric label={tr("Evidence", "Preuves")} value={record.evidence.length} />
+        <Metric label={tr("Entities", "Entités")} value={record.entities.length} />
+        <Metric
+          label={tr("Alerts", "Alertes")}
+          value={record.alerts.filter((item) => !item.acknowledged).length}
+        />
       </div>
       <div className="osint-evidence-list">
         {record.evidence.length === 0 ? (
           <p className="muted">
-            Import CSV/JSON or run an enrichment to archive the first evidence.
+            {tr(
+              "Import CSV/JSON or run an enrichment to archive the first evidence.",
+              "Importez un fichier CSV/JSON ou lancez un enrichissement pour archiver la première preuve.",
+            )}
           </p>
         ) : (
           record.evidence.map((item) => (
@@ -467,11 +509,11 @@ function EvidencePanel({
                 <strong>{item.title}</strong>
                 <p>{item.excerpt}</p>
                 <a href={item.url} target="_blank" rel="noreferrer">
-                  Open source
+                  {tr("Open source", "Source d'origine")}
                 </a>
                 {item.contentSnapshot.length > 0 && (
                   <details>
-                    <summary>Archived snapshot</summary>
+                    <summary>{tr("Archived snapshot", "Instantané archivé")}</summary>
                     <pre>{item.contentSnapshot.slice(0, 20_000)}</pre>
                   </details>
                 )}
@@ -485,7 +527,7 @@ function EvidencePanel({
         )}
       </div>
       <label>
-        Import CSV or JSON
+        {tr("Import CSV or JSON", "Importer CSV ou JSON")}
         <textarea
           className="field"
           rows={5}
@@ -500,7 +542,7 @@ function EvidencePanel({
         type="button"
         onClick={() => void importDataset()}
       >
-        Import and fingerprint
+        {tr("Import and fingerprint", "Importer et calculer l'empreinte")}
       </button>
     </div>
   );
@@ -521,11 +563,14 @@ function MonitoringPanel({
   addWatch: () => Promise<void>;
   acknowledge: (id: string) => Promise<void>;
 }) {
+  const { tr } = useI18n();
   return (
     <div className="osint-panel-stack">
       <p className="muted">
-        HTTPS pages are checked automatically when due. Redirects and private network targets are
-        refused.
+        {tr(
+          "HTTPS pages are checked automatically when due. Redirects and private network targets are refused.",
+          "Les pages HTTPS sont vérifiées automatiquement à échéance. Les redirections et cibles réseau privées sont refusées.",
+        )}
       </p>
       <div className="inline-fields">
         <input
@@ -540,7 +585,7 @@ function MonitoringPanel({
           type="button"
           onClick={() => void addWatch()}
         >
-          Watch hourly
+          {tr("Watch hourly", "Surveiller chaque heure")}
         </button>
       </div>
       {record.watches.map((watch) => (
@@ -548,16 +593,23 @@ function MonitoringPanel({
           <div>
             <strong>{watch.query}</strong>
             <small>
-              Every {watch.intervalMinutes} min · last checked{" "}
-              {watch.lastCheckedAt ? new Date(watch.lastCheckedAt).toLocaleString() : "pending"}
+              {tr(`Every ${watch.intervalMinutes} min`, `Toutes les ${watch.intervalMinutes} min`)}{" "}
+              · {tr("last checked", "dernière vérification")}{" "}
+              {watch.lastCheckedAt
+                ? new Date(watch.lastCheckedAt).toLocaleString()
+                : tr("pending", "en attente")}
             </small>
           </div>
-          <span className="status-badge">{watch.enabled ? "active" : "paused"}</span>
+          <span className="status-badge">
+            {watch.enabled ? tr("active", "actif") : tr("paused", "en pause")}
+          </span>
         </div>
       ))}
-      <h4>Alerts</h4>
+      <h4>{tr("Alerts", "Alertes")}</h4>
       {record.alerts.length === 0 ? (
-        <p className="muted">No content change detected.</p>
+        <p className="muted">
+          {tr("No content change detected.", "Aucun changement de contenu détecté.")}
+        </p>
       ) : (
         record.alerts.map((alert) => (
           <div className={`osint-alert ${alert.acknowledged ? "acknowledged" : ""}`} key={alert.id}>
@@ -567,7 +619,7 @@ function MonitoringPanel({
             </div>
             {!alert.acknowledged && (
               <button className="button" type="button" onClick={() => void acknowledge(alert.id)}>
-                Acknowledge
+                {tr("Acknowledge", "Acquitter")}
               </button>
             )}
           </div>
@@ -596,33 +648,41 @@ function EnrichmentPanel({
   busy: boolean;
   run: () => Promise<void>;
 }) {
+  const { tr } = useI18n();
   const paid = enrichment === "virustotal" || enrichment === "shodan";
   return (
     <div className="osint-panel-stack">
       <p className="muted">
-        Sherlock username discovery, DNS, RDAP, TLS certificates and official registries work
-        without a paid key. VirusTotal and Shodan use a vault reference; secrets never reach agent
-        prompts or browser responses.
+        {tr(
+          "Sherlock username discovery, DNS, RDAP, TLS certificates and official registries work without a paid key. VirusTotal and Shodan use a vault reference; secrets never reach agent prompts or browser responses.",
+          "La recherche de pseudo Sherlock, DNS, RDAP, certificats TLS et registres officiels fonctionnent sans clé payante. VirusTotal et Shodan utilisent une référence de coffre ; les secrets ne transitent jamais dans les invites d'agents ni dans les réponses du navigateur.",
+        )}
       </p>
       <div className="settings-grid">
         <label>
-          Provider
+          {tr("Provider", "Fournisseur")}
           <select
             className="field"
             value={enrichment}
             onChange={(event) => setEnrichment(event.target.value as Enrichment)}
           >
-            <option value="sherlock">Sherlock username search</option>
+            <option value="sherlock">
+              {tr("Sherlock username search", "Recherche de pseudo Sherlock")}
+            </option>
             <option value="dns">DNS</option>
             <option value="rdap">RDAP / WHOIS</option>
-            <option value="certificate">TLS certificate</option>
-            <option value="company_registry">Company registries</option>
+            <option value="certificate">{tr("TLS certificate", "Certificat TLS")}</option>
+            <option value="company_registry">
+              {tr("Company registries", "Registres d'entreprises")}
+            </option>
             <option value="virustotal">VirusTotal</option>
             <option value="shodan">Shodan</option>
           </select>
         </label>
         <label>
-          {enrichment === "sherlock" ? "Public username" : "Domain, IP or company"}
+          {enrichment === "sherlock"
+            ? tr("Public username", "Nom d'utilisateur public")
+            : tr("Domain, IP or company", "Domaine, IP ou entreprise")}
           <input
             className="field"
             value={query}
@@ -631,7 +691,7 @@ function EnrichmentPanel({
         </label>
         {paid && (
           <label className="settings-wide">
-            Vault reference
+            {tr("Vault reference", "Référence de coffre (vault)")}
             <input
               className="field"
               value={secretRef}
@@ -649,7 +709,7 @@ function EnrichmentPanel({
         }
         onClick={() => void run()}
       >
-        Run and archive
+        {tr("Run and archive", "Exécuter et archiver")}
       </button>
     </div>
   );
@@ -664,6 +724,7 @@ function ReportsPanel({
   record: OsintCaseRecord;
   act: (operation: () => Promise<void>) => Promise<void>;
 }) {
+  const { tr } = useI18n();
   const download = (format: "markdown" | "pdf") =>
     void act(async () => {
       const result = await api.osintReport(record.id, format);
@@ -684,15 +745,17 @@ function ReportsPanel({
   return (
     <div className="osint-panel-stack">
       <p>
-        Reports include the case objective, entities, source links, reliability labels and SHA-256
-        evidence fingerprints.
+        {tr(
+          "Reports include the case objective, entities, source links, reliability labels and SHA-256 evidence fingerprints.",
+          "Les rapports incluent l'objectif du dossier, les entités, les liens sources, les niveaux de fiabilité et les empreintes SHA-256 des preuves.",
+        )}
       </p>
       <div className="settings-actions">
         <button className="button primary" type="button" onClick={() => download("pdf")}>
-          Download PDF
+          {tr("Download PDF", "Télécharger le PDF")}
         </button>
         <button className="button" type="button" onClick={() => download("markdown")}>
-          Download Markdown
+          {tr("Download Markdown", "Télécharger en Markdown")}
         </button>
       </div>
     </div>
@@ -708,6 +771,7 @@ function GraphPanel({
   addEntity: (label: string, type: string) => Promise<void>;
   addRelation: (sourceId: string, targetId: string, label: string) => Promise<void>;
 }) {
+  const { tr } = useI18n();
   const [focus, setFocus] = useState<string | null>(null);
   const [entityLabel, setEntityLabel] = useState("");
   const [entityType, setEntityType] = useState("organization");
@@ -722,12 +786,18 @@ function GraphPanel({
   const positions = new Map(record.entities.map((entity, index) => [entity.id, position(index)]));
   return (
     <div className="osint-panel-stack">
-      <p className="muted">{focus ?? `${record.relations.length} verified relationships`}</p>
+      <p className="muted">
+        {focus ??
+          `${record.relations.length} ${tr("verified relationships", "relations vérifiées")}`}
+      </p>
       <svg
         className="osint-graph"
         viewBox="0 0 600 360"
         role="img"
-        aria-label="Interactive entity relationship graph"
+        aria-label={tr(
+          "Interactive entity relationship graph",
+          "Graphe interactif des relations entre entités",
+        )}
       >
         {record.relations.map((relation) => {
           const from = positions.get(relation.sourceId);
@@ -755,18 +825,24 @@ function GraphPanel({
                 {entity.label.slice(0, 16)}
               </text>
               <title>
-                {entity.label} · {Math.round(entity.confidence * 100)}% confidence
+                {entity.label} · {Math.round(entity.confidence * 100)}%{" "}
+                {tr("confidence", "confiance")}
               </title>
             </g>
           );
         })}
       </svg>
       {record.entities.length === 0 && (
-        <p className="muted">Add the first entity or wait for the investigation results.</p>
+        <p className="muted">
+          {tr(
+            "Add the first entity or wait for the investigation results.",
+            "Ajoutez la première entité ou attendez les résultats de l'enquête.",
+          )}
+        </p>
       )}
       <div className="settings-grid">
         <label>
-          Entity label
+          {tr("Entity label", "Libellé de l'entité")}
           <input
             className="field"
             value={entityLabel}
@@ -774,17 +850,17 @@ function GraphPanel({
           />
         </label>
         <label>
-          Entity type
+          {tr("Entity type", "Type d'entité")}
           <select
             className="field"
             value={entityType}
             onChange={(event) => setEntityType(event.target.value)}
           >
-            <option value="organization">Organization</option>
-            <option value="person">Person</option>
-            <option value="domain">Domain</option>
-            <option value="asset">Asset</option>
-            <option value="claim">Claim</option>
+            <option value="organization">{tr("Organization", "Organisation")}</option>
+            <option value="person">{tr("Person", "Personne")}</option>
+            <option value="domain">{tr("Domain", "Domaine")}</option>
+            <option value="asset">{tr("Asset", "Ressource / Actif")}</option>
+            <option value="claim">{tr("Claim", "Allégation / Fait")}</option>
           </select>
         </label>
       </div>
@@ -794,19 +870,19 @@ function GraphPanel({
         disabled={entityLabel.trim().length < 1}
         onClick={() => void addEntity(entityLabel, entityType).then(() => setEntityLabel(""))}
       >
-        Add entity
+        {tr("Add entity", "Ajouter l'entité")}
       </button>
       {record.entities.length >= 2 && (
         <>
           <div className="settings-grid">
             <label>
-              From
+              {tr("From", "De")}
               <select
                 className="field"
                 value={sourceId}
                 onChange={(event) => setSourceId(event.target.value)}
               >
-                <option value="">Select entity</option>
+                <option value="">{tr("Select entity", "Sélectionner une entité")}</option>
                 {record.entities.map((entity) => (
                   <option key={entity.id} value={entity.id}>
                     {entity.label}
@@ -815,13 +891,13 @@ function GraphPanel({
               </select>
             </label>
             <label>
-              To
+              {tr("To", "Vers")}
               <select
                 className="field"
                 value={targetId}
                 onChange={(event) => setTargetId(event.target.value)}
               >
-                <option value="">Select entity</option>
+                <option value="">{tr("Select entity", "Sélectionner une entité")}</option>
                 {record.entities.map((entity) => (
                   <option key={entity.id} value={entity.id}>
                     {entity.label}
@@ -830,12 +906,12 @@ function GraphPanel({
               </select>
             </label>
             <label className="settings-wide">
-              Relationship
+              {tr("Relationship", "Relation")}
               <input
                 className="field"
                 value={relationLabel}
                 onChange={(event) => setRelationLabel(event.target.value)}
-                placeholder="owns, directs, resolves to…"
+                placeholder={tr("owns, directs, resolves to…", "détient, dirige, résout vers…")}
               />
             </label>
           </div>
@@ -853,7 +929,7 @@ function GraphPanel({
               })
             }
           >
-            Add relationship
+            {tr("Add relationship", "Ajouter la relation")}
           </button>
         </>
       )}

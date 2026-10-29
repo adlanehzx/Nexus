@@ -5,6 +5,7 @@ import type {
   DeadlineCategory,
   Opportunity,
 } from "@nexus/client-core";
+import { useI18n } from "../i18n/index.js";
 
 interface DeadlinesCalendarProps {
   deadlines: Deadline[];
@@ -23,6 +24,7 @@ export function DeadlinesCalendar({
   onSyncCalendar,
   loading = false,
 }: DeadlinesCalendarProps) {
+  const { tr } = useI18n();
   const [showAddModal, setShowAddModal] = useState(false);
   const [title, setTitle] = useState("");
   const [targetOppId, setTargetOppId] = useState(opportunities[0]?.id ?? "");
@@ -50,9 +52,15 @@ export function DeadlinesCalendar({
       });
       setShowAddModal(false);
       setTitle("");
-      setNotice(`Deadline "${title}" added to schedule.`);
+      setNotice(
+        tr(`Deadline "${title}" added to schedule.`, `Échéance "${title}" ajoutée au calendrier.`),
+      );
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Failed to create deadline.");
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : tr("Failed to create deadline.", "Échec de création de l'échéance."),
+      );
     }
   };
 
@@ -72,15 +80,19 @@ export function DeadlinesCalendar({
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Deadlines & Milestone Schedule</h2>
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+            {tr("Deadlines & Milestone Schedule", "Échéances & Calendrier des Jalons")}
+          </h2>
           <p style={{ margin: "0.25rem 0 0", color: "var(--muted-text)", fontSize: "0.85rem" }}>
-            Application file closing dates, funding call deadlines, interview milestones, and
-            calendar sync.
+            {tr(
+              "Application file closing dates, funding call deadlines, interview milestones, and calendar sync.",
+              "Dates de clôture des dossiers, dates limites d'appels à financement, entretiens et synchronisation d'agenda.",
+            )}
           </p>
         </div>
 
         <button type="button" className="button primary" onClick={() => setShowAddModal(true)}>
-          + Add Deadline
+          {tr("+ Add Deadline", "+ Ajouter une échéance")}
         </button>
       </div>
 
@@ -103,11 +115,13 @@ export function DeadlinesCalendar({
       {/* Deadlines List */}
       {loading ? (
         <div className="career-card" style={{ textAlign: "center", padding: "2rem" }}>
-          Loading deadlines schedule...
+          {tr("Loading deadlines schedule...", "Chargement du calendrier des échéances...")}
         </div>
       ) : deadlines.length === 0 ? (
         <div className="career-card" style={{ textAlign: "center", padding: "3rem" }}>
-          <strong>No upcoming deadlines recorded</strong>
+          <strong>
+            {tr("No upcoming deadlines recorded", "Aucune échéance à venir enregistrée")}
+          </strong>
         </div>
       ) : (
         <div className="career-grid-2">
@@ -136,7 +150,7 @@ export function DeadlinesCalendar({
                       type="checkbox"
                       checked={d.completed}
                       onChange={(e) => void onToggleCompleted(d.id, e.target.checked)}
-                      aria-label={`Mark ${d.title} as completed`}
+                      aria-label={`${tr("Mark", "Marquer")} ${d.title} ${tr("as completed", "comme terminée")}`}
                     />
                     <strong
                       style={{
@@ -161,12 +175,13 @@ export function DeadlinesCalendar({
                             : "var(--muted-text)",
                     }}
                   >
-                    {d.priority} Priority
+                    {d.priority} {tr("Priority", "Priorité")}
                   </span>
                 </div>
 
                 <div style={{ fontSize: "0.82rem", color: "var(--muted-text)" }}>
-                  Target: <strong>{d.organization}</strong> ({d.opportunityTitle})
+                  {tr("Target:", "Cible :")} <strong>{d.organization}</strong> ({d.opportunityTitle}
+                  )
                 </div>
 
                 <div
@@ -178,7 +193,7 @@ export function DeadlinesCalendar({
                   }}
                 >
                   <span>
-                    Category: <strong>{d.category.replace("_", " ")}</strong>
+                    {tr("Category:", "Catégorie :")} <strong>{d.category.replace("_", " ")}</strong>
                   </span>
                   <span
                     style={{
@@ -187,7 +202,10 @@ export function DeadlinesCalendar({
                     }}
                   >
                     📅 {due.toLocaleDateString()} (
-                    {daysRemaining > 0 ? `${daysRemaining}d remaining` : "Past due"})
+                    {daysRemaining > 0
+                      ? `${daysRemaining} ${tr("d remaining", "j restants")}`
+                      : tr("Past due", "Dépassée")}
+                    )
                   </span>
                 </div>
 
@@ -203,7 +221,8 @@ export function DeadlinesCalendar({
                   }}
                 >
                   <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
-                    Calendar Sync: <strong>{d.calendarSyncStatus}</strong>
+                    {tr("Calendar Sync:", "Synchro agenda :")}{" "}
+                    <strong>{d.calendarSyncStatus}</strong>
                   </span>
                   {d.calendarSyncStatus !== "confirmed" && (
                     <button
@@ -212,13 +231,19 @@ export function DeadlinesCalendar({
                       onClick={() =>
                         void onSyncCalendar(d).then(() =>
                           setNotice(
-                            `Sync drafted for Google Calendar. Action paused at Confirmation Card.`,
+                            tr(
+                              "Sync drafted for Google Calendar. Action paused at Confirmation Card.",
+                              "Synchronisation préparée pour Google Agenda. Action suspendue en attente de confirmation.",
+                            ),
                           ),
                         )
                       }
-                      title="Syncs event to Google Calendar draft, requiring explicit confirmation"
+                      title={tr(
+                        "Syncs event to Google Calendar draft, requiring explicit confirmation",
+                        "Synchronise l'événement en brouillon Google Agenda, exigeant une confirmation explicite",
+                      )}
                     >
-                      Sync to Calendar Draft
+                      {tr("Sync to Calendar Draft", "Synchroniser en brouillon")}
                     </button>
                   )}
                 </div>
@@ -240,31 +265,32 @@ export function DeadlinesCalendar({
           <div className="career-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="career-modal-header">
               <h3 id="add-deadline-title" className="career-modal-title">
-                Add New Deadline or Milestone
+                {tr("Add New Deadline or Milestone", "Ajouter une échéance ou un jalon")}
               </h3>
               <button
                 type="button"
                 className="button compact"
                 onClick={() => setShowAddModal(false)}
+                aria-label={tr("Close", "Fermer")}
               >
                 ✕
               </button>
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="dTitle">Deadline Title</label>
+              <label htmlFor="dTitle">{tr("Deadline Title", "Titre de l'échéance")}</label>
               <input
                 id="dTitle"
                 className="career-input"
                 type="text"
-                placeholder="e.g. CIFRE Thesis File Submission"
+                placeholder={tr("e.g. CIFRE Thesis File Submission", "ex. Dépôt du dossier CIFRE")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="dOpp">Associated Opportunity</label>
+              <label htmlFor="dOpp">{tr("Associated Opportunity", "Opportunité associée")}</label>
               <select
                 id="dOpp"
                 className="career-select"
@@ -281,7 +307,7 @@ export function DeadlinesCalendar({
 
             <div className="career-grid-2">
               <div className="career-form-group">
-                <label htmlFor="dDate">Due Date</label>
+                <label htmlFor="dDate">{tr("Due Date", "Date limite")}</label>
                 <input
                   id="dDate"
                   className="career-input"
@@ -292,23 +318,29 @@ export function DeadlinesCalendar({
               </div>
 
               <div className="career-form-group">
-                <label htmlFor="dCat">Category</label>
+                <label htmlFor="dCat">{tr("Category", "Catégorie")}</label>
                 <select
                   id="dCat"
                   className="career-select"
                   value={category}
                   onChange={(e) => setCategory(e.target.value as DeadlineCategory)}
                 >
-                  <option value="application_deadline">Application Deadline</option>
-                  <option value="funding_call">Funding Call Cutoff</option>
-                  <option value="interview">Interview Slot</option>
-                  <option value="follow_up">Outreach Follow-up</option>
+                  <option value="application_deadline">
+                    {tr("Application Deadline", "Date limite de candidature")}
+                  </option>
+                  <option value="funding_call">
+                    {tr("Funding Call Cutoff", "Clôture d'appel à financement")}
+                  </option>
+                  <option value="interview">{tr("Interview Slot", "Créneau d'entretien")}</option>
+                  <option value="follow_up">
+                    {tr("Outreach Follow-up", "Relance de contact")}
+                  </option>
                 </select>
               </div>
             </div>
 
             <div className="career-form-group">
-              <label htmlFor="dPriority">Priority Level</label>
+              <label htmlFor="dPriority">{tr("Priority Level", "Niveau de priorité")}</label>
               <select
                 id="dPriority"
                 className="career-select"
@@ -317,19 +349,24 @@ export function DeadlinesCalendar({
                   setPriority(e.target.value as "low" | "medium" | "high" | "critical")
                 }
               >
-                <option value="critical">Critical (Immediate Action Required)</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="critical">
+                  {tr(
+                    "Critical (Immediate Action Required)",
+                    "Critique (Action immédiate requise)",
+                  )}
+                </option>
+                <option value="high">{tr("High", "Élevée")}</option>
+                <option value="medium">{tr("Medium", "Moyenne")}</option>
+                <option value="low">{tr("Low", "Basse")}</option>
               </select>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <button type="button" className="button" onClick={() => setShowAddModal(false)}>
-                Cancel
+                {tr("Cancel", "Annuler")}
               </button>
               <button type="button" className="button primary" onClick={() => void handleCreate()}>
-                Add Deadline
+                {tr("Add Deadline", "Ajouter l'échéance")}
               </button>
             </div>
           </div>
