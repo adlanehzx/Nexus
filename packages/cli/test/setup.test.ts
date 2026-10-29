@@ -7,20 +7,21 @@ import { resolvePaths } from "../src/environment.js";
 import { checkNodeVersion, isPortAvailable } from "../src/prerequisites.js";
 import { applyPlan, planSetup } from "../src/setup.js";
 
-function makeInstallation(): string {
+function makeInstallation(): { root: string; home: string } {
   const root = mkdtempSync(join(tmpdir(), "nexus-setup-"));
+  const home = join(root, "home");
   writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
   writeFileSync(
     join(root, ".env.example"),
     "NODE_ENV=development\nDATABASE_URL=\nAUTH_SIGNING_KEY=\nMASTER_KEY=\nSEARXNG_SECRET=\nPUBLIC_API_URL=\n",
   );
-  return root;
+  return { root, home };
 }
 
 describe("installation wizard planSetup", () => {
   it("generates required secrets safely without leaking them in action details", () => {
-    const root = makeInstallation();
-    const paths = resolvePaths(root);
+    const { root, home } = makeInstallation();
+    const paths = resolvePaths(root, home);
 
     const plan = planSetup({
       paths,
@@ -64,8 +65,8 @@ describe("installation wizard planSetup", () => {
   });
 
   it("is idempotent when executed repeatedly", () => {
-    const root = makeInstallation();
-    const paths = resolvePaths(root);
+    const { root, home } = makeInstallation();
+    const paths = resolvePaths(root, home);
 
     const plan1 = planSetup({
       paths,
@@ -90,8 +91,8 @@ describe("installation wizard planSetup", () => {
   });
 
   it("configures Tailscale URL when provided", () => {
-    const root = makeInstallation();
-    const paths = resolvePaths(root);
+    const { root, home } = makeInstallation();
+    const paths = resolvePaths(root, home);
 
     const plan = planSetup({
       paths,

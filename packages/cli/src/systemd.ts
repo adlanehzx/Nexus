@@ -91,6 +91,7 @@ export function foreignPaths(unitContent: string, root: string): string[] {
     const path = match[1] ?? "";
     if (!/nexus|mission-engine|services\/agent/.test(path)) continue;
     if (path.startsWith(root)) continue;
+    if (/\.config\/nexus/.test(path)) continue;
     found.add(path);
   }
   return [...found];
