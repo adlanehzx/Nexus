@@ -2555,3 +2555,174 @@ tbody tr:last-child td {
 .pairing-qr-wrapper {
   color: #0d1826;
 }
+/* ───────────────────────────────────────────────────────────────────────────
+   NEXUS Visual Overhaul & Multilingual Additions
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Language switcher */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-1);
+  padding: 2px 4px;
+  border: 1px solid var(--nx-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-surface-raised);
+}
+
+.lang-button {
+  padding: 2px var(--nx-space-2);
+  border: 0;
+  border-radius: var(--nx-radius-sm);
+  background: transparent;
+  color: var(--nx-text-faint);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  font-weight: var(--nx-weight-semibold);
+  letter-spacing: var(--nx-tracking-caps);
+  cursor: pointer;
+  transition: all var(--nx-fast) var(--nx-ease);
+}
+
+.lang-button:hover {
+  color: var(--nx-text);
+}
+
+.lang-button.active {
+  background: var(--nx-signal);
+  color: var(--nx-surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+}
+
+.lang-separator {
+  color: var(--nx-line-strong);
+  font-size: var(--nx-size-3xs);
+  user-select: none;
+}
+
+/* Glassmorphism Header */
+.top-bar {
+  background: color-mix(in srgb, var(--nx-canvas) 85%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border-bottom: 1px solid var(--nx-line);
+}
+
+/* Live API Pulse Indicator */
+.live-pulse-container {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nx-space-2);
+  padding: 2px var(--nx-space-3);
+  border: 1px solid var(--nx-ok-line);
+  border-radius: var(--nx-radius-pill);
+  background: var(--nx-ok-bg);
+  font-family: var(--nx-font-mono);
+  font-size: var(--nx-size-3xs);
+  color: var(--nx-ok);
+  font-weight: var(--nx-weight-medium);
+}
+
+.live-pulse-dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nx-ok);
+}
+
+.live-pulse-dot::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--nx-ok);
+  opacity: 0.7;
+  animation: live-pulse-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes live-pulse-ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Smooth section entrance */
+.section-frame {
+  animation: sectionFadeIn var(--nx-normal) var(--nx-ease-out);
+}
+
+@keyframes sectionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Cards & Metric elevation */
+.metric {
+  position: relative;
+  transition:
+    transform var(--nx-fast) var(--nx-ease),
+    border-color var(--nx-fast) var(--nx-ease);
+}
+
+.metric:hover {
+  border-color: var(--nx-accent-line);
+  transform: translateY(-1px);
+}
+
+.metric .value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Trading Lab Visual Flair */
+.paper-trading-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--nx-space-4) var(--nx-space-6);
+  border: 1px solid var(--nx-signal-muted);
+  border-left: 3px solid var(--nx-signal);
+  border-radius: var(--nx-radius-md);
+  background: color-mix(in srgb, var(--nx-signal) 6%, var(--nx-surface));
+  margin-bottom: var(--nx-space-6);
+}
+
+.paper-trading-banner strong {
+  color: var(--nx-signal);
+  font-size: var(--nx-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--nx-tracking-caps);
+}
+
+.metric.pnl-positive .value {
+  color: var(--nx-ok);
+}
+
+.metric.pnl-negative .value {
+  color: var(--nx-danger);
+}
+
+/* Tactile button micro-interaction */
+.button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Enhanced table sticky header */
+.scroll-x table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--nx-surface-raised);
+}

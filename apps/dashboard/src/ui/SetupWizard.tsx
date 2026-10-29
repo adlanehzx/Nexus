@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import type { ServerReadiness, SessionManager } from "@nexus/client-core";
+import { ThemeToggle } from "./ThemeToggle.js";
+import { LanguageSwitch, useI18n } from "./i18n/index.js";
 
 type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
@@ -22,7 +24,16 @@ const STEP_TITLES: Record<WizardStep, string> = {
   complete: "5. Ready to Launch",
 };
 
+const STEP_TITLES_FR: Record<WizardStep, string> = {
+  prerequisites: "1. Prérequis Système",
+  admin: "2. Compte Administrateur",
+  agents: "3. Connexion Agents",
+  capabilities: "4. Capacités Optionnelles",
+  complete: "5. Prêt au Lancement",
+};
+
 export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: SetupWizardProps) {
+  const { locale } = useI18n();
   const [step, setStep] = useState<WizardStep>(() => {
     try {
       const saved = window.sessionStorage.getItem("nexus.setup.step");
@@ -386,7 +397,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
       <div className="login-shell" style={{ maxWidth: "680px", width: "100%" }}>
         <div className="login-brand">
           <span className="brand-mark">N</span>
-          <span>NEXUS · Setup Wizard</span>
+          <span>
+            {locale === "fr" ? "NEXUS · Assistant d'installation" : "NEXUS · Setup Wizard"}
+          </span>
+          <span className="login-brand-spacer" />
+          <LanguageSwitch />
+          <ThemeToggle />
         </div>
 
         {/* Wizard progress tabs */}
@@ -425,7 +441,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   fontSize: "12px",
                 }}
               >
-                {STEP_TITLES[item]}
+                {locale === "fr" ? STEP_TITLES_FR[item] : STEP_TITLES[item]}
               </button>
             );
           })}

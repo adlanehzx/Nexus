@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
+import { useI18n } from "./i18n/index.js";
 
 interface ChatMessage {
   id: string;
@@ -9,6 +10,7 @@ interface ChatMessage {
 }
 
 export function NexusChat({ api }: { api: DashboardApi }) {
+  const { t, locale } = useI18n();
   const restoredMission = readMissionFromUrl();
   const [messages, setMessages] = useState<ChatMessage[]>(
     restoredMission === null
@@ -89,16 +91,23 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         {messages.length === 0 ? (
           <div className="chat-welcome">
             <div className="nexus-mark">N</div>
-            <h2>What would you like to accomplish?</h2>
+            <h2>
+              {locale === "fr"
+                ? "Que souhaitez-vous accomplir ?"
+                : "What would you like to accomplish?"}
+            </h2>
             <p>
-              Talk to NEXUS. It selects agents, distributes work, compares their answers, and
-              delivers a single outcome.
+              {locale === "fr"
+                ? "Échangez avec NEXUS. Il sélectionne les agents, répartit les tâches, compare leurs résultats et fournit une synthèse unifiée."
+                : "Talk to NEXUS. It selects agents, distributes work, compares their answers, and delivers a single outcome."}
             </p>
           </div>
         ) : null}
         {messages.map((message) => (
           <article key={message.id} className={`chat-message ${message.role}`}>
-            <div className="chat-role">{message.role === "user" ? "You" : "NEXUS"}</div>
+            <div className="chat-role">
+              {message.role === "user" ? (locale === "fr" ? "Vous" : "You") : "NEXUS"}
+            </div>
             {message.mission === undefined ? <div className="chat-text">{message.text}</div> : null}
             {message.mission !== undefined ? <MissionReply mission={message.mission} /> : null}
           </article>
@@ -118,7 +127,13 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           aria-label="Mission for NEXUS"
           value={draft}
           disabled={activeMission !== null}
-          placeholder={activeMission === null ? "Give NEXUS a mission…" : "Agents are working…"}
+          placeholder={
+            activeMission === null
+              ? t("chat.inputPlaceholder")
+              : locale === "fr"
+                ? "Les agents travaillent…"
+                : "Agents are working…"
+          }
           rows={3}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -129,7 +144,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           }}
         />
         <button type="submit" disabled={activeMission !== null || draft.trim().length === 0}>
-          Send
+          {t("chat.send")}
         </button>
       </form>
     </section>
@@ -155,9 +170,14 @@ function pendingMission(missionId: string): OrchestratedMission {
 }
 
 function MissionReply({ mission }: { mission: OrchestratedMission }) {
+  const { locale } = useI18n();
   if (mission.response !== null) return <div className="chat-text">{mission.response}</div>;
   if (mission.error !== null || mission.state === "failed") {
-    return <div className="chat-error">{mission.error ?? "Mission failed."}</div>;
+    return (
+      <div className="chat-error">
+        {mission.error ?? (locale === "fr" ? "Échec de la mission." : "Mission failed.")}
+      </div>
+    );
   }
   const percent =
     mission.totalTasks === 0 ? 0 : Math.round((mission.completedTasks / mission.totalTasks) * 100);
@@ -179,7 +199,9 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
         <div style={{ width: `${String(percent)}%` }} />
       </div>
       <div className="muted">
-        NEXUS orchestrating mission · {mission.completedTasks}/{mission.totalTasks} tasks completed
+        {locale === "fr"
+          ? `NEXUS orchestre la mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tâches accomplies`
+          : `NEXUS orchestrating mission · ${String(mission.completedTasks)}/${String(mission.totalTasks)} tasks completed`}
       </div>
     </div>
   );

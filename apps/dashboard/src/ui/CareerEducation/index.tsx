@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../i18n/index.js";
 import type {
   Application,
   CareerAnalytics,
@@ -46,6 +47,7 @@ interface CareerEducationProps {
 }
 
 export function CareerEducation({ client, initialTab = "inbox" }: CareerEducationProps) {
+  const { locale } = useI18n();
   const [activeTab, setActiveTab] = useState<CareerEducationTabId>(initialTab);
   const [loading, setLoading] = useState(true);
   const [offlineError, setOfflineError] = useState<string | null>(null);
@@ -207,7 +209,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("inbox")}
         >
-          <span>📥</span> Discovery & Inbox
+          <span>📥</span> {locale === "fr" ? "Découverte & Flux" : "Discovery & Inbox"}
         </button>
 
         <button
@@ -217,7 +219,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("comparison")}
         >
-          <span>⚖️</span> Comparison Matrix
+          <span>⚖️</span> {locale === "fr" ? "Matrice de comparaison" : "Comparison Matrix"}
           {selectedForComparison.length > 0 && (
             <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
               ({selectedForComparison.length})
@@ -232,7 +234,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("pipeline")}
         >
-          <span>📊</span> Application Kanban ({applications.length})
+          <span>📊</span> {locale === "fr" ? "Kanban Candidatures" : "Application Kanban"} (
+          {applications.length})
         </button>
 
         <button
@@ -242,7 +245,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("documents")}
         >
-          <span>📄</span> Tailored Documents ({documents.length})
+          <span>📄</span> {locale === "fr" ? "Documents sur mesure" : "Tailored Documents"} (
+          {documents.length})
         </button>
 
         <button
@@ -252,7 +256,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("deadlines")}
         >
-          <span>📅</span> Deadlines & Schedule ({deadlines.filter((d) => !d.completed).length})
+          <span>📅</span> {locale === "fr" ? "Échéances & Planning" : "Deadlines & Schedule"} (
+          {deadlines.filter((d) => !d.completed).length})
         </button>
 
         <button
@@ -262,7 +267,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("analytics")}
         >
-          <span>📈</span> Contacts & Analytics
+          <span>📈</span> {locale === "fr" ? "Contacts & Statistiques" : "Contacts & Analytics"}
         </button>
 
         <button
@@ -272,7 +277,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("approvals")}
         >
-          <span>🛡️</span> Approvals & Safety
+          <span>🛡️</span> {locale === "fr" ? "Approbations & Sécurité" : "Approvals & Safety"}
           {pendingApprovalsCount > 0 && (
             <span className="badge-counter">{pendingApprovalsCount}</span>
           )}
@@ -285,7 +290,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("profile")}
         >
-          <span>🎯</span> Goals & Profile Wizard
+          <span>🎯</span> {locale === "fr" ? "Objectifs & Profil" : "Goals & Profile Wizard"}
           {profile && (
             <span style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700 }}>
               {profile.completeness.score}%
@@ -300,7 +305,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("settings")}
         >
-          <span>⚙️</span> Settings & Feeds
+          <span>⚙️</span> {locale === "fr" ? "Paramètres & Sources" : "Settings & Feeds"}
         </button>
       </nav>
 

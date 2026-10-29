@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { buildOsintMission, osintInvestigationSchema } from "@nexus/osint/policy";
 import type { OsintCaseRecord } from "@nexus/osint";
 import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
+import { useI18n } from "./i18n/index.js";
 
 const TEMPLATES = [
   [
@@ -36,6 +37,7 @@ export function OsintWorkspace({
   api: DashboardApi;
   onOpenMissions: () => void;
 }) {
+  const { locale } = useI18n();
   const [cases, setCases] = useState<OsintCaseRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("evidence");
@@ -129,8 +131,12 @@ export function OsintWorkspace({
             className={`osint-case-row ${selectedId === null ? "active" : ""}`}
             onClick={() => setSelectedId(null)}
           >
-            <strong>＋ New investigation</strong>
-            <span>Define scope and launch agents</span>
+            <strong>{locale === "fr" ? "＋ Nouvelle enquête" : "＋ New investigation"}</strong>
+            <span>
+              {locale === "fr"
+                ? "Définir le périmètre et lancer les agents"
+                : "Define scope and launch agents"}
+            </span>
           </button>
           {cases.map((item) => (
             <button
@@ -141,7 +147,7 @@ export function OsintWorkspace({
             >
               <strong>{item.investigation.title}</strong>
               <span>
-                {item.status} · {item.evidence.length} sources
+                {item.status} · {item.evidence.length} {locale === "fr" ? "sources" : "sources"}
               </span>
             </button>
           ))}
@@ -178,16 +184,32 @@ export function OsintWorkspace({
               </div>
               <nav className="osint-tabs" aria-label="Investigation views">
                 {(["evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]).map(
-                  (item) => (
-                    <button
-                      type="button"
-                      className={tab === item ? "active" : ""}
-                      key={item}
-                      onClick={() => setTab(item)}
-                    >
-                      {item === "enrichment" ? "tools & enrichment" : item}
-                    </button>
-                  ),
+                  (item) => {
+                    const label =
+                      locale === "fr"
+                        ? item === "evidence"
+                          ? "Preuves"
+                          : item === "graph"
+                            ? "Graphe"
+                            : item === "monitoring"
+                              ? "Surveillance"
+                              : item === "enrichment"
+                                ? "Outils & Enrichissement"
+                                : "Rapports"
+                        : item === "enrichment"
+                          ? "tools & enrichment"
+                          : item;
+                    return (
+                      <button
+                        type="button"
+                        className={tab === item ? "active" : ""}
+                        key={item}
+                        onClick={() => setTab(item)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  },
                 )}
               </nav>
               {tab === "evidence" && (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "./i18n/index.js";
 
 /**
  * Dashboard UI building blocks.
@@ -6,9 +7,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * Presentation-only components that render decisions determined by `lib/format.ts`.
  */
 
-export function Metric(props: { value: string; label: string; alert?: boolean }) {
+export function Metric(props: {
+  value: string;
+  label: string;
+  alert?: boolean;
+  tone?: "positive" | "negative";
+}) {
+  const toneClass =
+    props.tone === "positive" ? "pnl-positive" : props.tone === "negative" ? "pnl-negative" : "";
   return (
-    <div className={`metric ${props.alert === true ? "alert" : ""}`}>
+    <div className={`metric ${props.alert === true ? "alert" : ""} ${toneClass}`}>
       <div className="value">{props.value}</div>
       <div className="label">{props.label}</div>
     </div>
@@ -59,7 +67,8 @@ export function Table({ head, children }: { head: string[]; children: React.Reac
   );
 }
 
-export function Empty({ children }: { children: React.ReactNode }) {
+export function Empty({ children }: { children?: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="empty-state">
       <span className="empty-state-icon" aria-hidden="true">
@@ -67,8 +76,8 @@ export function Empty({ children }: { children: React.ReactNode }) {
           <path d="M5 5h14v14H5zM8 9h8M8 13h5" />
         </svg>
       </span>
-      <strong>No data</strong>
-      <span>{children}</span>
+      <strong>{t("common.messages.noData")}</strong>
+      {children !== undefined ? <span>{children}</span> : null}
     </div>
   );
 }
@@ -145,15 +154,16 @@ export function Section<T>(props: {
   state: ReturnType<typeof useSection<T>>;
   children: (data: T) => React.ReactNode;
 }) {
+  const { t } = useI18n();
   if (props.state.error !== undefined) {
     return (
       <div className="banner error section-error" role="alert">
         <span>
-          <strong>This section could not be loaded.</strong>
+          <strong>{t("common.states.failed")}</strong>
           <small>{props.state.error}</small>
         </span>
         <button className="button compact" type="button" onClick={props.state.reload}>
-          Retry
+          {t("common.actions.refresh")}
         </button>
       </div>
     );
@@ -166,7 +176,7 @@ export function Section<T>(props: {
         <span />
       </div>
     ) : (
-      <Empty>No data available for this section.</Empty>
+      <Empty>{t("common.messages.noData")}</Empty>
     );
   }
   return <>{props.children(props.state.data)}</>;

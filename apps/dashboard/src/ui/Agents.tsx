@@ -6,8 +6,10 @@ import type {
   ProviderAccountDto,
   RoutingEvaluationDto,
 } from "../lib/api.js";
+import { useI18n } from "./i18n/index.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
+  const { locale, t } = useI18n();
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [accounts, setAccounts] = useState<ProviderAccountDto[]>([]);
   const [accountFeedback, setAccountFeedback] = useState<string | null>(null);
@@ -358,13 +360,15 @@ export function Agents({ api }: { api: DashboardApi }) {
     <section className="agents-page content">
       <div className="agents-heading">
         <div>
-          <h2>Agents</h2>
+          <h2>{locale === "fr" ? "Agents" : "Agents"}</h2>
           <p className="muted">
-            Profiles available for the orchestrator to select for your missions.
+            {locale === "fr"
+              ? "Profils d'agents disponibles que l'orchestrateur sélectionne pour vos missions."
+              : "Profiles available for the orchestrator to select for your missions."}
           </p>
         </div>
         <button className="button" type="button" onClick={refresh}>
-          Refresh
+          {t("common.actions.refresh")}
         </button>
       </div>
 

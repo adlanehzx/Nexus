@@ -10,8 +10,10 @@ import type {
   RuntimeSettings,
 } from "../lib/api.js";
 import { Section, useSection } from "./parts.js";
+import { useI18n } from "./i18n/index.js";
 
 export function Settings({ api }: { api: DashboardApi }) {
+  const { locale, t } = useI18n();
   const state = useSection(() => api.runtimeSettings());
   const secrets = useSection(() => api.secrets());
   const linkedin = useSection(() => api.linkedInStatus());
@@ -22,11 +24,15 @@ export function Settings({ api }: { api: DashboardApi }) {
     <div className="content settings-page">
       <div className="agents-heading">
         <div>
-          <h2>Settings</h2>
-          <p className="muted">Persistent settings for the NEXUS multi-agent engine.</p>
+          <h2>{locale === "fr" ? "Paramètres" : "Settings"}</h2>
+          <p className="muted">
+            {locale === "fr"
+              ? "Paramètres persistants du moteur multi-agents NEXUS."
+              : "Persistent settings for the NEXUS multi-agent engine."}
+          </p>
         </div>
         <button className="button" type="button" onClick={state.reload}>
-          Refresh
+          {t("common.actions.refresh")}
         </button>
       </div>
       <Section state={state}>

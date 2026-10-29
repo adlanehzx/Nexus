@@ -3,6 +3,7 @@ import type { SessionManager } from "@nexus/client-core";
 import { DashboardApi, createSession, type SystemPauseState } from "../lib/api.js";
 import { createCareerEducationClient } from "../lib/career-education.js";
 import { ThemeToggle } from "./ThemeToggle.js";
+import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 
 const Agents = lazy(() =>
   import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
@@ -201,6 +202,15 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
 };
 
 export function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
+  );
+}
+
+function AppContent() {
+  const { t, locale } = useI18n();
   const [authenticated, setAuthenticated] = useState(false);
   const [restoringSession, setRestoringSession] = useState(true);
   const session = useMemo(() => createSession(backendUrl(), () => setAuthenticated(false)), []);
@@ -326,7 +336,8 @@ export function App() {
     );
   }
 
-  const meta = PAGE_META[section];
+  const metaTitle = t(`meta.${section}.title`) || PAGE_META[section]?.title || section;
+  const metaDescription = t(`meta.${section}.description`) || PAGE_META[section]?.description || "";
 
   return (
     <div className="app">
@@ -337,29 +348,35 @@ export function App() {
           </span>
           <span>
             <strong>NEXUS</strong>
-            <small>Mission control</small>
+            <small>{t("nav.groups.supervision")}</small>
           </span>
         </button>
         <nav className="navigation" aria-label="Main navigation">
           <div className="nav-group nav-primary">
-            <NavItem id="chat" label="Chat" icon="chat" current={section} onSelect={navigate} />
+            <NavItem
+              id="chat"
+              label={t("nav.items.chat") || "Chat"}
+              icon="chat"
+              current={section}
+              onSelect={navigate}
+            />
             <NavItem
               id="agents"
-              label="Agents"
+              label={t("nav.items.agents") || "Agents"}
               icon="agents"
               current={section}
               onSelect={navigate}
             />
             <NavItem
               id="connections"
-              label="Connections"
+              label={t("nav.items.connections") || "Connections"}
               icon="connections"
               current={section}
               onSelect={navigate}
             />
           </div>
           <NavGroup
-            label="Workspaces"
+            label={t("nav.groups.workspaces")}
             expanded={expandedNavGroups.has("Workspaces")}
             onToggle={() =>
               setExpandedNavGroups((current) => toggleSetValue(current, "Workspaces"))
@@ -367,35 +384,41 @@ export function App() {
           >
             <NavItem
               id="career-education"
-              label="Career"
+              label={t("nav.items.career-education") || "Career"}
               icon="career"
               current={section}
               onSelect={navigate}
             />
             <NavItem
               id="trading-lab"
-              label="Trading Lab"
+              label={t("nav.items.trading-lab") || "Trading Lab"}
               icon="trading"
               current={section}
               onSelect={navigate}
             />
-            <NavItem id="osint" label="OSINT" icon="osint" current={section} onSelect={navigate} />
+            <NavItem
+              id="osint"
+              label={t("nav.items.osint") || "OSINT"}
+              icon="osint"
+              current={section}
+              onSelect={navigate}
+            />
           </NavGroup>
           <NavGroup
-            label="System"
+            label={t("nav.groups.system")}
             expanded={expandedNavGroups.has("System")}
             onToggle={() => setExpandedNavGroups((current) => toggleSetValue(current, "System"))}
           >
             <NavItem
               id="settings"
-              label="Settings"
+              label={t("nav.items.settings") || "Settings"}
               icon="settings"
               current={section}
               onSelect={navigate}
             />
             <NavItem
               id="setup"
-              label="Setup wizard"
+              label={t("nav.items.setup") || "Setup wizard"}
               icon="setup"
               current={section}
               onSelect={navigate}
@@ -403,7 +426,7 @@ export function App() {
           </NavGroup>
           {SUPERVISION_SECTIONS.map((group) => (
             <NavGroup
-              label={group.label}
+              label={t(`nav.groups.${group.label.toLowerCase()}`) || group.label}
               expanded={expandedNavGroups.has(group.label)}
               onToggle={() =>
                 setExpandedNavGroups((current) => toggleSetValue(current, group.label))
@@ -413,7 +436,7 @@ export function App() {
               {group.items.map(([id, label, icon]) => (
                 <NavItem
                   id={id}
-                  label={label}
+                  label={t(`nav.items.${id}`) || label}
                   icon={icon}
                   current={section}
                   onSelect={navigate}
@@ -427,13 +450,13 @@ export function App() {
           <span className="system-dot" aria-hidden="true" />
           <span>
             <strong>Local system</strong>
-            <small>Connected</small>
+            <small>{t("common.states.connected")}</small>
           </span>
         </div>
       </aside>
 
       <main className={`main section-${section}`}>
-        <header className="header">
+        <header className="header top-bar">
           <div>
             <div className="eyebrow">
               NEXUS /{" "}
@@ -441,13 +464,18 @@ export function App() {
               section === "career-education" ||
               section === "trading-lab" ||
               section === "osint"
-                ? "WORKSPACE"
-                : "SUPERVISION"}
+                ? t("common.workspace")
+                : t("common.supervision")}
             </div>
-            <h1>{meta.title}</h1>
-            <p>{meta.description}</p>
+            <h1>{metaTitle}</h1>
+            <p>{metaDescription}</p>
           </div>
           <div className="header-actions">
+            <div className="live-pulse-container" title="NEXUS local services active">
+              <span className="live-pulse-dot" />
+              <span>{t("common.messages.liveApi")}</span>
+            </div>
+            <LanguageSwitch />
             <ThemeToggle />
             <button
               type="button"
@@ -458,7 +486,13 @@ export function App() {
                 void api.setGlobalPause(willPause, reason).then((state) => setSystemPause(state));
               }}
             >
-              {systemPause?.paused ? "Resume NEXUS" : "Emergency stop"}
+              {systemPause?.paused
+                ? locale === "fr"
+                  ? "Reprendre NEXUS"
+                  : "Resume NEXUS"
+                : locale === "fr"
+                  ? "Arrêt d'urgence"
+                  : "Emergency stop"}
             </button>
             {section === "chat" ? null : (
               <button
@@ -475,7 +509,7 @@ export function App() {
                 >
                   <path d="M20 6v5h-5M4 18v-5h5M6.1 9a7 7 0 0 1 11.6-2.5L20 11M4 13l2.3 4.5A7 7 0 0 0 18 15" />
                 </svg>
-                Refresh
+                {t("common.actions.refresh")}
               </button>
             )}
             <button
@@ -483,7 +517,7 @@ export function App() {
               className="button logout-button"
               onClick={() => void session.logout().finally(() => setAuthenticated(false))}
             >
-              Sign out
+              {t("common.actions.disconnect")}
             </button>
           </div>
         </header>
@@ -492,8 +526,12 @@ export function App() {
             <div>
               <span aria-hidden="true">🛑</span>
               <span>
-                EMERGENCY STOP ACTIVE: All NEXUS actions are suspended.
-                {systemPause.reason ? ` Reason: ${systemPause.reason}` : ""}
+                {locale === "fr"
+                  ? "ARRÊT D'URGENCE ACTIF : Toutes les actions de NEXUS sont suspendues."
+                  : "EMERGENCY STOP ACTIVE: All NEXUS actions are suspended."}
+                {systemPause.reason
+                  ? ` ${locale === "fr" ? "Raison :" : "Reason:"} ${systemPause.reason}`
+                  : ""}
               </span>
             </div>
             <button
@@ -503,7 +541,7 @@ export function App() {
                 void api.setGlobalPause(false).then((state) => setSystemPause(state));
               }}
             >
-              Resume NEXUS
+              {locale === "fr" ? "Reprendre NEXUS" : "Resume NEXUS"}
             </button>
           </div>
         )}
@@ -726,6 +764,7 @@ function Login({
   onSignIn: (email: string, password: string) => Promise<void>;
   onSwitchToSetup: () => void;
 }) {
+  const { locale } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -738,11 +777,16 @@ function Login({
           <span className="brand-mark">N</span>
           <span>NEXUS</span>
           <span className="login-brand-spacer" />
+          <LanguageSwitch />
           <ThemeToggle />
         </div>
         <div className="login-intro">
-          <h1>Welcome back.</h1>
-          <p>Sign in to supervise your agents and track their missions.</p>
+          <h1>{locale === "fr" ? "Bienvenue." : "Welcome back."}</h1>
+          <p>
+            {locale === "fr"
+              ? "Connectez-vous pour superviser vos agents et suivre leurs missions."
+              : "Sign in to supervise your agents and track their missions."}
+          </p>
         </div>
         <form
           className="login-form"
@@ -760,7 +804,7 @@ function Login({
           }}
         >
           <label>
-            Email address
+            {locale === "fr" ? "Adresse email" : "Email address"}
             <input
               className="field"
               type="email"
@@ -771,7 +815,7 @@ function Login({
             />
           </label>
           <label>
-            Password
+            {locale === "fr" ? "Mot de passe" : "Password"}
             <input
               className="field"
               type="password"
@@ -786,7 +830,13 @@ function Login({
             className="button primary login-submit"
             disabled={busy || email.trim().length === 0 || password.length === 0}
           >
-            {busy ? "Signing in…" : "Sign in"}
+            {busy
+              ? locale === "fr"
+                ? "Connexion…"
+                : "Signing in…"
+              : locale === "fr"
+                ? "Se connecter"
+                : "Sign in"}
           </button>
           {error === null ? null : (
             <div className="banner error" role="alert">
@@ -797,11 +847,17 @@ function Login({
 
         <div style={{ marginTop: "16px", textAlign: "center" }}>
           <button type="button" className="button compact" onClick={onSwitchToSetup}>
-            First time? Run setup wizard
+            {locale === "fr"
+              ? "Première fois ? Lancer l'assistant"
+              : "First time? Run setup wizard"}
           </button>
         </div>
 
-        <p className="login-security">Local secure administrator session.</p>
+        <p className="login-security">
+          {locale === "fr"
+            ? "Session administrateur sécurisée locale."
+            : "Local secure administrator session."}
+        </p>
       </div>
     </main>
   );

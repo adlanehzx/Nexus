@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, ConnectionObservation, DashboardApi } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
+import { useI18n } from "./i18n/index.js";
 
 export function Connections({ api }: { api: DashboardApi }) {
+  const { locale } = useI18n();
   const [connections, setConnections] = useState<ConnectionCatalogEntry[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,11 +54,18 @@ export function Connections({ api }: { api: DashboardApi }) {
     <div className="content connections-page">
       <section className="connection-hero">
         <div>
-          <span className="connection-kicker">Local discovery</span>
-          <h2>Connect the tools already installed on this host.</h2>
+          <span className="connection-kicker">
+            {locale === "fr" ? "Découverte locale" : "Local discovery"}
+          </span>
+          <h2>
+            {locale === "fr"
+              ? "Connectez les outils déjà installés sur cet hôte."
+              : "Connect the tools already installed on this host."}
+          </h2>
           <p>
-            NEXUS runs only declared, read-only diagnostics. Credentials stay inside each provider's
-            own CLI and never pass through the dashboard.
+            {locale === "fr"
+              ? "NEXUS exécute uniquement des diagnostics déclarés en lecture seule. Les identifiants restent dans chaque CLI et ne transitent jamais par le tableau de bord."
+              : "NEXUS runs only declared, read-only diagnostics. Credentials stay inside each provider's own CLI and never pass through the dashboard."}
           </p>
         </div>
         <button
@@ -65,7 +74,13 @@ export function Connections({ api }: { api: DashboardApi }) {
           disabled={busy !== null}
           onClick={() => void scan()}
         >
-          {busy === "all" ? "Scanning…" : "Scan this host"}
+          {busy === "all"
+            ? locale === "fr"
+              ? "Analyse…"
+              : "Scanning…"
+            : locale === "fr"
+              ? "Analyser cet hôte"
+              : "Scan this host"}
         </button>
       </section>
 

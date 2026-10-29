@@ -25,6 +25,7 @@ import {
   workerState,
 } from "../lib/format.js";
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "./parts.js";
+import { useI18n } from "./i18n/index.js";
 
 /**
  * Supervision sections.
@@ -1680,6 +1681,7 @@ export function TradingLab({ api }: { api: DashboardApi }) {
 }
 
 function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" | "trading" }) {
+  const { locale } = useI18n();
   const state = useSection(() => api.missionControl());
   const isTrading = view === "trading";
   const [accountName, setAccountName] = useState("NEXUS Portfolio");
@@ -1727,17 +1729,59 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
 
           return (
             <>
+              {isTrading ? (
+                <div className="paper-trading-banner">
+                  <div>
+                    <strong>
+                      {locale === "fr"
+                        ? "Simulation & Recherche — Aucun fonds réel"
+                        : "Simulation & Research — No Real Money"}
+                    </strong>
+                    <p className="muted" style={{ margin: "4px 0 0" }}>
+                      {locale === "fr"
+                        ? "La création de missions et de portefeuilles de recherche utilise l'API administrateur NEXUS. Aucune route d'exécution financière réelle n'est exposée."
+                        : "Creation of missions and paper portfolios uses the NEXUS administrator API. No live trading paths are exposed."}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="metrics">
-                <Metric value={data.configured ? "yes" : "no"} label="configured" />
                 <Metric
-                  value={data.reachable ? "reachable" : "unreachable"}
-                  label="ACP engine"
+                  value={
+                    data.configured
+                      ? locale === "fr"
+                        ? "oui"
+                        : "yes"
+                      : locale === "fr"
+                        ? "non"
+                        : "no"
+                  }
+                  label={locale === "fr" ? "configuré" : "configured"}
+                />
+                <Metric
+                  value={
+                    data.reachable
+                      ? locale === "fr"
+                        ? "accessible"
+                        : "reachable"
+                      : locale === "fr"
+                        ? "inaccessible"
+                        : "unreachable"
+                  }
+                  label={locale === "fr" ? "moteur ACP" : "ACP engine"}
                   alert={data.configured && !data.reachable}
                 />
                 {isTrading ? (
                   <>
-                    <Metric value={`${(cash / 100).toFixed(2)} €`} label="paper cash" />
-                    <Metric value={`${(exposure / 100).toFixed(2)} €`} label="paper exposure" />
+                    <Metric
+                      value={`${(cash / 100).toFixed(2)} €`}
+                      label={locale === "fr" ? "liquidités papier" : "paper cash"}
+                    />
+                    <Metric
+                      value={`${(exposure / 100).toFixed(2)} €`}
+                      label={locale === "fr" ? "exposition papier" : "paper exposure"}
+                    />
                   </>
                 ) : (
                   <>
@@ -2090,20 +2134,22 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
 
               {isTrading ? (
                 <>
-                  <h3>Paper Portfolios</h3>
+                  <h3>
+                    {locale === "fr" ? "Portefeuilles de recherche papier" : "Paper Portfolios"}
+                  </h3>
                   <div className="inline-admin-form">
                     <input
                       className="field"
                       value={accountName}
                       onChange={(event) => setAccountName(event.target.value)}
-                      placeholder="Portfolio name"
+                      placeholder={locale === "fr" ? "Nom du portefeuille" : "Portfolio name"}
                     />
                     <input
                       className="field"
                       value={bankroll}
                       onChange={(event) => setBankroll(event.target.value)}
                       inputMode="decimal"
-                      placeholder="Capital EUR"
+                      placeholder={locale === "fr" ? "Capital EUR" : "Capital EUR"}
                     />
                     <button
                       className="button"
@@ -2117,32 +2163,65 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         )
                       }
                     >
-                      Create
+                      {locale === "fr" ? "Créer" : "Create"}
                     </button>
                   </div>
                   {data.accounts.length === 0 ? (
-                    <Empty>No research portfolios.</Empty>
+                    <Empty>
+                      {locale === "fr"
+                        ? "Aucun portefeuille de recherche."
+                        : "No research portfolios."}
+                    </Empty>
                   ) : (
-                    <Table head={["Name", "Cash", "Exposure", "Realized P&L", "Mode"]}>
+                    <Table
+                      head={
+                        locale === "fr"
+                          ? ["Nom", "Liquidités", "Exposition", "P&L Réalisé", "Mode"]
+                          : ["Name", "Cash", "Exposure", "Realized P&L", "Mode"]
+                      }
+                    >
                       {data.accounts.map((account) => (
                         <tr key={account.id}>
                           <td>{account.name}</td>
                           <td>{(account.cash_balance_cents / 100).toFixed(2)} €</td>
                           <td>{(account.open_exposure_cents / 100).toFixed(2)} €</td>
-                          <td>{(account.realized_pnl_cents / 100).toFixed(2)} €</td>
+                          <td
+                            className={
+                              account.realized_pnl_cents > 0
+                                ? "pnl-positive"
+                                : account.realized_pnl_cents < 0
+                                  ? "pnl-negative"
+                                  : ""
+                            }
+                          >
+                            {(account.realized_pnl_cents / 100).toFixed(2)} €
+                          </td>
                           <td>
-                            <State tone="ok" label="paper-only" />
+                            <State
+                              tone="ok"
+                              label={locale === "fr" ? "simulation-seule" : "paper-only"}
+                            />
                           </td>
                         </tr>
                       ))}
                     </Table>
                   )}
 
-                  <h3>Recent Missions</h3>
+                  <h3>{locale === "fr" ? "Missions récentes" : "Recent Missions"}</h3>
                   {data.recent_runs.length === 0 ? (
-                    <Empty>No ACP missions executed.</Empty>
+                    <Empty>
+                      {locale === "fr"
+                        ? "Aucune mission ACP exécutée."
+                        : "No ACP missions executed."}
+                    </Empty>
                   ) : (
-                    <Table head={["Created", "State", "Mission", "Error"]}>
+                    <Table
+                      head={
+                        locale === "fr"
+                          ? ["Créé", "État", "Mission", "Erreur"]
+                          : ["Created", "State", "Mission", "Error"]
+                      }
+                    >
                       {data.recent_runs.map((run) => (
                         <tr key={run.id}>
                           <td className="muted">{formatAge(run.created_at)}</td>
@@ -2167,13 +2246,15 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                     </Table>
                   )}
 
-                  <h3>Paper Research Market</h3>
+                  <h3>
+                    {locale === "fr" ? "Marché de recherche papier" : "Paper Research Market"}
+                  </h3>
                   <div className="inline-admin-form market-form">
                     <input
                       className="field"
                       value={marketQuestion}
                       onChange={(event) => setMarketQuestion(event.target.value)}
-                      placeholder="Market question"
+                      placeholder={locale === "fr" ? "Question du marché" : "Market question"}
                     />
                     <input
                       className="field"
@@ -2195,7 +2276,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         setMarketQuestion("");
                       }}
                     >
-                      Create
+                      {locale === "fr" ? "Créer" : "Create"}
                     </button>
                   </div>
 
