@@ -49,6 +49,9 @@ import { connectionRoutes } from "./routes/v1/connections.js";
 import { organizationRoutes } from "./routes/v1/organizations.js";
 import { careerRoutes } from "./routes/v1/career.js";
 import { linkedInRoutes } from "./routes/v1/linkedin.js";
+import { satelliteRoutes } from "./routes/v1/satellites.js";
+import { SatelliteService } from "./services/satellite-service.js";
+import { createFireTvTool, FireTvService } from "./services/fire-tv.js";
 import { osintRoutes } from "./routes/v1/osint.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
@@ -60,6 +63,7 @@ declare module "fastify" {
     /** Real-time channels. WebSocket transport connects here. */
     clientChannel: ClientChannel;
     workerChannel: WorkerChannel;
+    satellites: SatelliteService;
   }
 }
 
@@ -92,6 +96,8 @@ export interface BuildAppOptions {
   websocket?: boolean;
   /** WebSocket handshake timeout. Shortened in tests. */
   websocketHandshakeTimeoutMs?: number;
+  /** Injectable constrained-device gateway for protocol tests. */
+  satellites?: SatelliteService;
 }
 
 /**
@@ -135,6 +141,10 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.decorate("prisma", prisma);
   app.decorate("redis", redis);
+  app.decorate(
+    "satellites",
+    options.satellites ?? new SatelliteService(config.SATELLITE_TOKEN_HASHES_JSON),
+  );
 
   // The correlation identifier is returned with the response: in case of error,
   // the user can cite it and a single search reveals the whole history
@@ -182,6 +192,13 @@ export async function buildApp(options: BuildAppOptions) {
       missionGrantRegistry: new PrismaMissionGrantRegistry(prisma),
       scheduleGrantRegistry: new PrismaScheduleGrantRegistry(prisma),
     });
+
+  if (config.FIRE_TV_ADB_SERIAL !== undefined) {
+    services.toolRegistry.register(
+      createFireTvTool(new FireTvService(config.FIRE_TV_ADB_SERIAL, config.FIRE_TV_ADB_SERVER)),
+      { replace: true },
+    );
+  }
 
   app.decorate(
     "clientChannel",
@@ -278,6 +295,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(careerRoutes);
       await v1.register(linkedInRoutes);
       await v1.register(osintRoutes);
+      await v1.register(satelliteRoutes);
     },
     { prefix: "/api/v1" },
   );

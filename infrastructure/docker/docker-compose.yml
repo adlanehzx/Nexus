@@ -94,7 +94,7 @@ services:
       # Host networking is deliberate for the personal/local deployment: ACP
       # CLIs, Mission Engine and Chromium stay on host loopback and are never
       # copied into the container. The API itself also binds loopback only.
-      API_HOST: 127.0.0.1
+      API_HOST: ${API_HOST:-127.0.0.1}
       API_PORT: 3000
       API_VERSION: ${API_VERSION:-1.0.0}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
@@ -119,6 +119,9 @@ services:
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
+      SATELLITE_TOKEN_HASHES_JSON: ${SATELLITE_TOKEN_HASHES_JSON:-{}}
+      FIRE_TV_ADB_SERIAL: ${FIRE_TV_ADB_SERIAL:-}
+      FIRE_TV_ADB_SERVER: ${FIRE_TV_ADB_SERVER:-127.0.0.1:5037}
       # With host networking, local dependencies remain reachable only through
       # their loopback-published ports.
       DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@127.0.0.1:${POSTGRES_PORT:-15432}/${POSTGRES_DB:-nexus}?schema=public

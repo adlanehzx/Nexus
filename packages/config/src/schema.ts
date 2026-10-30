@@ -71,6 +71,17 @@ const modelPricing = z.preprocess((value, ctx) => {
   }
 }, modelPricingSchema);
 
+const satelliteTokenHashes = z.preprocess((value, ctx) => {
+  if (value === undefined || value === "") return {};
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    ctx.addIssue({ code: "custom", message: "must contain a valid JSON object" });
+    return z.NEVER;
+  }
+}, z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/), z.string().regex(/^[0-9a-f]{64}$/i)));
+
 /**
  * Tauri desktop shell origins.
  *
@@ -111,6 +122,17 @@ export const configSchema = z
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(0).max(120_000).default(10_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
     RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),
+
+    /** SHA-256 device-token digests keyed by ESP32 satellite ID. */
+    SATELLITE_TOKEN_HASHES_JSON: satelliteTokenHashes.default({}),
+    FIRE_TV_ADB_SERIAL: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z.string().regex(/^[a-zA-Z0-9._:-]{1,128}$/).optional(),
+    ),
+    FIRE_TV_ADB_SERVER: z
+      .string()
+      .regex(/^(127\.0\.0\.1|localhost):\d{1,5}$/)
+      .default("127.0.0.1:5037"),
 
     // Local observability. Prometheus uses a distinct port, unpublished by
     // default; OTLP remains optional so local development never depends on an

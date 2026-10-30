@@ -62,6 +62,7 @@ import type { LLMProvider } from "@nexus/llm";
 import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 import type { ConnectionCatalogService } from "../src/services/connection-manager.js";
+import type { SatelliteService } from "../src/services/satellite-service.js";
 
 export async function makeApi(
   options: {
@@ -72,6 +73,7 @@ export async function makeApi(
     connectionManager?: ConnectionCatalogService;
     publicApiUrl?: string;
     expectedWorkerVersion?: string;
+    satellites?: SatelliteService;
     /** Real PostgreSQL opt-in for integration suites. */
     prisma?: PrismaClient;
   } = {},
@@ -116,6 +118,7 @@ export async function makeApi(
     // Local in-memory counter: tests do not depend on a reachable Redis.
     rateLimitStore: "memory",
     services,
+    ...(options.satellites === undefined ? {} : { satellites: options.satellites }),
   });
   await app.ready();
 
