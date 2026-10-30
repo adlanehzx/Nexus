@@ -3046,7 +3046,7 @@ export function Notifications({ api }: { api: DashboardApi }) {
       const summary = report.channels
         .map(
           (c) =>
-            `${c.channel}: ${c.success ? "✓ success" : c.skippedReason ? `(skipped: ${c.skippedReason})` : `✗ error (${c.error ?? ""})`}`,
+            `${c.channel}: ${c.success ? "[OK] success" : c.skippedReason ? `(skipped: ${c.skippedReason})` : `[FAIL] error (${c.error ?? ""})`}`,
         )
         .join(" | ");
       setTestResult(`Report: ${summary}`);

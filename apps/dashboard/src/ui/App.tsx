@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ThemeToggle.js";
 import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
+import { IconStop } from "./icons.js";
 
 const Agents = lazy(() =>
   import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
@@ -551,8 +552,8 @@ function AppContent() {
         </header>
         {systemPause?.paused && (
           <div role="alert" className="emergency-banner">
-            <div>
-              <span aria-hidden="true">🛑</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <IconStop size={22} color="var(--nx-danger, #ff3366)" />
               <span>
                 {tr(
                   "EMERGENCY STOP ACTIVE: All NEXUS actions are suspended.",

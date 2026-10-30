@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CareerEducationProfile, OpportunityTrack, LocationType } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconCheck } from "../icons.js";
 
 interface ProfileWizardProps {
   profile: CareerEducationProfile;
@@ -118,8 +119,24 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
         <div className="checklist-items">
           {completeness.breakdown.map((item) => (
             <div key={item.id} className={`checklist-item ${item.completed ? "done" : ""}`}>
-              <span className="status-icon" aria-hidden="true">
-                {item.completed ? "✓" : "○"}
+              <span
+                className="status-icon"
+                aria-hidden="true"
+                style={{ display: "inline-flex", alignItems: "center" }}
+              >
+                {item.completed ? (
+                  <IconCheck size={14} color="var(--ok)" />
+                ) : (
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      border: "1.5px solid var(--muted-text)",
+                    }}
+                  />
+                )}
               </span>
               <div>
                 <strong>{item.label}</strong>

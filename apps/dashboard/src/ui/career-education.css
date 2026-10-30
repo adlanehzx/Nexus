@@ -708,6 +708,8 @@
   background: rgba(13, 24, 48, 0.9);
   color: #fff;
   font-weight: 700;
+  font-family: var(--nx-font-display, "Orbitron", monospace);
+  letter-spacing: 0.05em;
 }
 
 .comparison-table td.winner-cell {

@@ -7,6 +7,7 @@ import type {
   RoutingEvaluationDto,
 } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
+import { IconStar } from "./icons.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
   const { locale, t, tr } = useI18n();
@@ -467,20 +468,22 @@ export function Agents({ api }: { api: DashboardApi }) {
         <section className="settings-panel">
           <div className="settings-panel-heading">
             <div>
-              <h3>ACP Settings · {editing}</h3>
+              <h3>{tr("ACP Settings", "Paramètres ACP")} · {editing}</h3>
               <p className="muted">
-                Modifications are persistent and saved. Credentials remain in CLI keyrings and are
-                never displayed here.
+                {tr(
+                  "Modifications are persistent and saved. Credentials remain in CLI keyrings and are never displayed here.",
+                  "Les modifications sont persistantes et enregistrées. Les identifiants restent dans les trousseaux CLI et ne sont jamais affichés ici.",
+                )}
               </p>
             </div>
             <button className="button" type="button" onClick={() => setEditing(null)}>
-              Close
+              {tr("Close", "Fermer")}
             </button>
           </div>
 
           <div className="settings-grid">
             <label>
-              Display name
+              {tr("Display name", "Nom d'affichage")}
               <input
                 className="field"
                 value={editName}
@@ -488,16 +491,16 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label>
-              ACP model
+              {tr("ACP model", "Modèle ACP")}
               <input
                 className="field"
                 value={editModel}
-                placeholder="Default adapter model"
+                placeholder={tr("Default adapter model", "Modèle par défaut de l'adaptateur")}
                 onChange={(event) => setEditModel(event.target.value.slice(0, 200))}
               />
             </label>
             <label className="settings-wide">
-              Command
+              {tr("Command", "Commande")}
               <input
                 className="field mono"
                 value={editCommand}
@@ -505,7 +508,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Arguments · one per line
+              {tr("Arguments · one per line", "Arguments · un par ligne")}
               <textarea
                 className="field mono settings-textarea"
                 value={editArgs}
@@ -513,13 +516,13 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label>
-              Reasoning effort
+              {tr("Reasoning effort", "Effort de raisonnement")}
               <select
                 className="field"
                 value={editReasoning}
                 onChange={(event) => setEditReasoning(event.target.value)}
               >
-                <option value="">Default value</option>
+                <option value="">{tr("Default value", "Valeur par défaut")}</option>
                 <option value="minimal">minimal</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
@@ -530,7 +533,10 @@ export function Agents({ api }: { api: DashboardApi }) {
               </select>
             </label>
             <label className="settings-wide">
-              System prompt specific to this agent
+              {tr(
+                "System prompt specific to this agent",
+                "Invite système spécifique à cet agent",
+              )}
               <textarea
                 className="field settings-textarea"
                 value={editSystemPrompt}
@@ -538,7 +544,10 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Additional allowed directories · absolute paths, one per line
+              {tr(
+                "Additional allowed directories · absolute paths, one per line",
+                "Répertoires autorisés supplémentaires · chemins absolus, un par ligne",
+              )}
               <textarea
                 className="field mono"
                 rows={3}
@@ -547,7 +556,10 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Advanced ACP options · JSON, applied only if supported by adapter
+              {tr(
+                "Advanced ACP options · JSON, applied only if supported by adapter",
+                "Options ACP avancées · JSON, appliquées si supportées par l'adaptateur",
+              )}
               <textarea
                 className="field mono"
                 rows={4}
@@ -556,24 +568,31 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <div className="settings-wide policy-box">
-              <strong>Permissions: workspace + explicitly allowed directories</strong>
+              <strong>
+                {tr(
+                  "Permissions: workspace + explicitly allowed directories",
+                  "Permissions : espace de travail + répertoires explicitement autorisés",
+                )}
+              </strong>
               <span className="muted">
-                Write access allowed inside mission workspace. Pathless deletions and outside access
-                are denied. This guardrail cannot be disabled.
+                {tr(
+                  "Write access allowed inside mission workspace. Pathless deletions and outside access are denied. This guardrail cannot be disabled.",
+                  "Accès en écriture autorisé dans l'espace de mission. Suppressions sans chemin et accès externe refusés. Ce garde-fou ne peut être désactivé.",
+                )}
               </span>
             </div>
           </div>
 
           <div className="settings-actions">
             <button className="button primary" type="button" disabled={busy} onClick={saveProfile}>
-              Save
+              {tr("Save", "Enregistrer")}
             </button>
           </div>
 
-          <h3>Live connection test</h3>
+          <h3>{tr("Live connection test", "Test de connexion en direct")}</h3>
           <div className="settings-grid">
             <label className="settings-wide">
-              Test workspace
+              {tr("Test workspace", "Espace de test")}
               <input
                 className="field mono"
                 value={testWorkspace}
@@ -581,7 +600,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               />
             </label>
             <label className="settings-wide">
-              Test prompt
+              {tr("Test prompt", "Invite de test")}
               <input
                 className="field"
                 value={testPrompt}
@@ -591,7 +610,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           </div>
           <div className="settings-actions">
             <button className="button" type="button" disabled={busy} onClick={testProfile}>
-              Test agent
+              {tr("Test agent", "Tester l'agent")}
             </button>
           </div>
           {testResult === null ? null : <pre className="test-result">{testResult}</pre>}
@@ -600,10 +619,12 @@ export function Agents({ api }: { api: DashboardApi }) {
 
       <div className="agent-add">
         <div>
-          <h3>Create an ACP agent in NEXUS</h3>
+          <h3>{tr("Create an ACP agent in NEXUS", "Créer un agent ACP dans NEXUS")}</h3>
           <p className="muted">
-            Start from a secured ACP adapter. NEXUS creates the profile and registers it directly
-            with the orchestrator, without requesting your provider credentials.
+            {tr(
+              "Start from a secured ACP adapter. NEXUS creates the profile and registers it directly with the orchestrator, without requesting your provider credentials.",
+              "Démarrez depuis un adaptateur ACP sécurisé. NEXUS crée le profil et l'enregistre auprès de l'orchestrateur sans demander vos identifiants.",
+            )}
           </p>
         </div>
         <div className="agent-create-form">
@@ -612,7 +633,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             value={template}
             onChange={(event) => setTemplate(event.target.value)}
           >
-            <option value="">Agent type…</option>
+            <option value="">{tr("Agent type…", "Type d'agent…")}</option>
             {templates.map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
@@ -622,7 +643,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           <input
             className="field"
             value={newName}
-            placeholder="Profile name"
+            placeholder={tr("Profile name", "Nom du profil")}
             onChange={(event) => {
               const value = normalizeProfileName(event.target.value);
               setNewName(value);
@@ -632,13 +653,13 @@ export function Agents({ api }: { api: DashboardApi }) {
           <input
             className="field"
             value={newKey}
-            placeholder="nexus-name"
+            placeholder={tr("nexus-name", "nom-nexus")}
             onChange={(event) => setNewKey(normalizeKey(event.target.value))}
           />
           <input
             className="field"
             value={model}
-            placeholder="Optional model"
+            placeholder={tr("Optional model", "Modèle optionnel")}
             onChange={(event) => setModel(event.target.value.slice(0, 200))}
           />
           <button
@@ -647,18 +668,28 @@ export function Agents({ api }: { api: DashboardApi }) {
             disabled={busy || template.length === 0 || newName.length === 0 || newKey.length === 0}
             onClick={create}
           >
-            {busy ? "Creating…" : "Create and register"}
+            {busy ? tr("Creating…", "Création…") : tr("Create and register", "Créer et enregistrer")}
           </button>
         </div>
       </div>
 
       <div className="agent-add secondary">
         <div>
-          <h3>Import existing ACP profile</h3>
-          <p className="muted">For a custom adapter already configured in NEXUS.</p>
+          <h3>{tr("Import existing ACP profile", "Importer un profil ACP existant")}</h3>
+          <p className="muted">
+            {tr(
+              "For a custom adapter already configured in NEXUS.",
+              "Pour un adaptateur personnalisé déjà configuré dans NEXUS.",
+            )}
+          </p>
         </div>
         {candidates.length === 0 ? (
-          <div className="muted">All available ACP profiles are already registered.</div>
+          <div className="muted">
+            {tr(
+              "All available ACP profiles are already registered.",
+              "Tous les profils ACP disponibles sont déjà enregistrés.",
+            )}
+          </div>
         ) : (
           <div className="agent-add-form">
             <select
@@ -666,7 +697,9 @@ export function Agents({ api }: { api: DashboardApi }) {
               value={selected}
               onChange={(event) => choose(event.target.value)}
             >
-              <option value="">Select an ACP profile…</option>
+              <option value="">
+                {tr("Select an ACP profile…", "Sélectionner un profil ACP…")}
+              </option>
               {candidates.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name} · {agent.agent_kind}
@@ -676,7 +709,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             <input
               className="field"
               value={key}
-              placeholder="short-name"
+              placeholder={tr("short-name", "nom-court")}
               pattern="[a-z][a-z0-9_-]{0,63}"
               onChange={(event) => setKey(normalizeKey(event.target.value))}
             />
@@ -686,7 +719,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               disabled={busy || selected.length === 0 || key.length === 0}
               onClick={register}
             >
-              {busy ? "Adding…" : "Add to NEXUS"}
+              {busy ? tr("Adding…", "Ajout…") : tr("Add to NEXUS", "Ajouter à NEXUS")}
             </button>
           </div>
         )}
@@ -705,10 +738,17 @@ export function Agents({ api }: { api: DashboardApi }) {
           }}
         >
           <div>
-            <h3>Provider Accounts & Isolated Identities</h3>
+            <h3>
+              {tr(
+                "Provider Accounts & Isolated Identities",
+                "Comptes Fournisseurs & Identités Isolées",
+              )}
+            </h3>
             <p className="muted">
-              Multi-account management (Antigravity, Claude, Codex) with isolated local CLI
-              sessions, authentication tracking, quotas, cooldowns, and reliability.
+              {tr(
+                "Multi-account management (Antigravity, Claude, Codex) with isolated local CLI sessions, authentication tracking, quotas, cooldowns, and reliability.",
+                "Gestion multi-comptes (Antigravity, Claude, Codex) avec sessions CLI locales isolées, suivi de l'authentification, quotas, refroidissements et fiabilité.",
+              )}
             </p>
           </div>
           <div>
@@ -718,7 +758,9 @@ export function Agents({ api }: { api: DashboardApi }) {
               onChange={(e) => setProviderFilter(e.target.value)}
               style={{ width: "auto" }}
             >
-              <option value="all">All Providers ({accounts.length})</option>
+              <option value="all">
+                {tr("All Providers", "Tous les fournisseurs")} ({accounts.length})
+              </option>
               <option value="antigravity">Antigravity</option>
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
@@ -824,8 +866,17 @@ export function Agents({ api }: { api: DashboardApi }) {
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <h3>{acc.name}</h3>
                             {acc.priority === 1 ? (
-                              <span className="state-pill good" style={{ fontSize: "10px" }}>
-                                ★ {tr("Primary", "Principal")}
+                              <span
+                                className="state-pill good"
+                                style={{
+                                  fontSize: "10px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                <IconStar size={10} filled color="currentColor" />
+                                {tr("Primary", "Principal")}
                               </span>
                             ) : null}
                           </div>
@@ -1019,7 +1070,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           ) : null}
 
           {/* Affinity matrix */}
-          <div style={{ overflowX: "auto", marginBottom: "24px" }}>
+          <div className="scroll-x" style={{ marginBottom: "24px" }}>
             <table
               className="nexus-table"
               style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}
@@ -1186,9 +1237,17 @@ export function Agents({ api }: { api: DashboardApi }) {
                         </strong>{" "}
                         {idx === 0 && agent.isAvailable ? (
                           <span
-                            style={{ color: "var(--nx-ok)", fontWeight: "bold", marginLeft: "6px" }}
+                            style={{
+                              color: "var(--nx-ok)",
+                              fontWeight: "bold",
+                              marginLeft: "6px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
                           >
-                            ★ {tr("Recommended", "Recommandé")}
+                            <IconStar size={12} filled color="var(--nx-ok)" />
+                            {tr("Recommended", "Recommandé")}
                           </span>
                         ) : null}
                         {!agent.isAvailable ? (

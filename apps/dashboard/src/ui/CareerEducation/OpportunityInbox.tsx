@@ -6,6 +6,7 @@ import type {
   MonitoredSource,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconSearch, IconWarning, IconStar } from "../icons.js";
 
 interface OpportunityInboxProps {
   opportunities: Opportunity[];
@@ -290,8 +291,12 @@ export function OpportunityInbox({
                   if (ss.query.term) setSearchTerm(ss.query.term);
                   if (ss.track) setActiveTrack(ss.track);
                 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
               >
-                🔍 {ss.name} {ss.newMatchesCount > 0 && `(+${ss.newMatchesCount})`}
+                <IconSearch size={13} />
+                <span>
+                  {ss.name} {ss.newMatchesCount > 0 && `(+${ss.newMatchesCount})`}
+                </span>
               </button>
             ))}
           </div>
@@ -383,8 +388,12 @@ export function OpportunityInbox({
               >
                 {/* Duplicate Alert */}
                 {opp.duplicate.isDuplicate && (
-                  <div className="duplicate-alert-banner" role="alert">
-                    <span aria-hidden="true">⚠️</span>
+                  <div
+                    className="duplicate-alert-banner"
+                    role="alert"
+                    style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}
+                  >
+                    <IconWarning size={15} color="var(--warn)" />
                     <span>
                       {tr(
                         `Duplicate marker detected (reason: ${opp.duplicate.reason}). Original post exists in inbox.`,
@@ -509,8 +518,12 @@ export function OpportunityInbox({
                       alignItems: "center",
                     }}
                   >
-                    <span className="match-score-badge high">
-                      ★ {opp.match.score}% {tr("Match Score", "Score de compatibilité")}
+                    <span
+                      className="match-score-badge high"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
+                      <IconStar size={13} filled color="#00ff88" />
+                      <span>{opp.match.score}% {tr("Match Score", "Score de compatibilité")}</span>
                     </span>
                     <button
                       type="button"
@@ -665,9 +678,18 @@ export function OpportunityInbox({
                       )
                     }
                   >
-                    {isShortlisted
-                      ? tr("★ Shortlisted", "★ Présélectionné")
-                      : tr("☆ Shortlist", "☆ Présélectionner")}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <IconStar
+                        size={13}
+                        filled={isShortlisted}
+                        color={isShortlisted ? "var(--ok)" : "currentColor"}
+                      />
+                      <span>
+                        {isShortlisted
+                          ? tr("Shortlisted", "Présélectionné")
+                          : tr("Shortlist", "Présélectionner")}
+                      </span>
+                    </span>
                   </button>
 
                   <div style={{ display: "flex", gap: "0.5rem" }}>

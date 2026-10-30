@@ -6,6 +6,7 @@ import type {
   Opportunity,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconCalendar, IconClose } from "../icons.js";
 
 interface DeadlinesCalendarProps {
   deadlines: Deadline[];
@@ -199,13 +200,19 @@ export function DeadlinesCalendar({
                     style={{
                       fontWeight: 600,
                       color: daysRemaining <= 3 ? "var(--down)" : "var(--text)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
                     }}
                   >
-                    📅 {due.toLocaleDateString()} (
-                    {daysRemaining > 0
-                      ? `${daysRemaining} ${tr("d remaining", "j restants")}`
-                      : tr("Past due", "Dépassée")}
-                    )
+                    <IconCalendar size={13} />
+                    <span>
+                      {due.toLocaleDateString()} (
+                      {daysRemaining > 0
+                        ? `${daysRemaining} ${tr("d remaining", "j restants")}`
+                        : tr("Past due", "Dépassée")}
+                      )
+                    </span>
                   </span>
                 </div>
 
@@ -273,7 +280,7 @@ export function DeadlinesCalendar({
                 onClick={() => setShowAddModal(false)}
                 aria-label={tr("Close", "Fermer")}
               >
-                ✕
+                <IconClose size={16} />
               </button>
             </div>
 

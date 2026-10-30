@@ -8,6 +8,7 @@ import type {
   RecordOutcomeInput,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconNote, IconClose } from "../icons.js";
 
 interface ContactsOutcomesAnalyticsProps {
   contacts: Contact[];
@@ -261,9 +262,17 @@ export function ContactsOutcomesAnalytics({
                     </span>
                     {c.notes && (
                       <span
-                        style={{ fontSize: "0.75rem", color: "var(--text)", marginTop: "0.2rem" }}
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "var(--text)",
+                          marginTop: "0.2rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                        }}
                       >
-                        📝 {c.notes}
+                        <IconNote size={13} />
+                        <span>{c.notes}</span>
                       </span>
                     )}
                   </div>
@@ -358,7 +367,7 @@ export function ContactsOutcomesAnalytics({
                 onClick={() => setShowOutcomeModal(false)}
                 aria-label={tr("Close", "Fermer")}
               >
-                ✕
+                <IconClose size={16} />
               </button>
             </div>
 

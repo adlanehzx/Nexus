@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Application, ApplicationStage } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconBolt, IconDocument, IconClock, IconClose } from "../icons.js";
 
 interface ApplicationKanbanProps {
   applications: Application[];
@@ -102,6 +103,9 @@ export function ApplicationKanban({
                     fontSize: "0.75rem",
                     color: "var(--gradient)",
                     cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
                   }}
                   onClick={onOpenApprovals}
                   role="button"
@@ -110,10 +114,13 @@ export function ApplicationKanban({
                     if (e.key === "Enter") onOpenApprovals();
                   }}
                 >
-                  {tr(
-                    "⚡ Consequential action awaiting explicit confirmation! Click to inspect.",
-                    "⚡ Action conséquente en attente d'approbation explicite ! Cliquez pour inspecter.",
-                  )}
+                  <IconBolt size={14} color="var(--gradient)" />
+                  <span>
+                    {tr(
+                      "Consequential action awaiting explicit confirmation! Click to inspect.",
+                      "Action conséquente en attente d'approbation explicite ! Cliquez pour inspecter.",
+                    )}
+                  </span>
                 </div>
               )}
 
@@ -141,8 +148,17 @@ export function ApplicationKanban({
                         {formatTrack(app.opportunity.track)}
                       </span>
                       {app.tailoredDocumentIds.length > 0 && (
-                        <span style={{ fontSize: "0.72rem", color: "var(--accent)" }}>
-                          📄 {app.tailoredDocumentIds.length} Docs
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "var(--accent)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                          }}
+                        >
+                          <IconDocument size={12} />
+                          <span>{app.tailoredDocumentIds.length} Docs</span>
                         </span>
                       )}
                     </div>
@@ -161,10 +177,16 @@ export function ApplicationKanban({
                           fontSize: "0.72rem",
                           color: "var(--gradient)",
                           marginTop: "0.25rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
                         }}
                       >
-                        ⏱ {tr("Deadline:", "Échéance :")}{" "}
-                        {new Date(app.nextDeadlineAt).toLocaleDateString()}
+                        <IconClock size={12} />
+                        <span>
+                          {tr("Deadline:", "Échéance :")}{" "}
+                          {new Date(app.nextDeadlineAt).toLocaleDateString()}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -201,7 +223,7 @@ export function ApplicationKanban({
                 onClick={() => setSelectedAppId(null)}
                 aria-label={tr("Close details", "Fermer les détails")}
               >
-                ✕
+                <IconClose size={16} />
               </button>
             </div>
 
@@ -234,8 +256,10 @@ export function ApplicationKanban({
                     onOpenApprovals();
                     setSelectedAppId(null);
                   }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                 >
-                  {tr("Go to Approval Card ⚡", "Aller à la carte d'approbation ⚡")}
+                  <IconBolt size={14} />
+                  {tr("Go to Approval Card", "Aller à la carte d'approbation")}
                 </button>
               )}
             </div>
@@ -295,7 +319,18 @@ export function ApplicationKanban({
                       borderBottom: "1px solid var(--border)",
                     }}
                   >
-                    <span style={{ color: "var(--accent)", fontWeight: 700 }}>●</span>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "var(--accent)",
+                        boxShadow: "0 0 6px var(--accent)",
+                        marginTop: "5px",
+                        flexShrink: 0,
+                      }}
+                    />
                     <div style={{ flex: 1 }}>
                       <strong>{formatStage(h.stage).toUpperCase()}</strong> —{" "}
                       <span style={{ color: "var(--muted-text)" }}>

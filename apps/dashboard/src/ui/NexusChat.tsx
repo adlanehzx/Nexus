@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
+import { IconShield, IconTarget, IconBolt } from "./icons.js";
 
 interface ChatMessage {
   id: string;
@@ -202,7 +203,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   )
                 }
               >
-                <span>🛡️</span> {tr("Audit security & workers", "Auditer sécurité & agents")}
+                <IconShield size={15} color="#00f0ff" style={{ marginRight: 6 }} />
+                {tr("Audit security & workers", "Auditer sécurité & agents")}
               </button>
               <button
                 type="button"
@@ -212,6 +214,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   borderColor: "rgba(0, 240, 255, 0.25)",
                   fontSize: "0.82rem",
                   padding: "0.45rem 0.85rem",
+                  display: "inline-flex",
+                  alignItems: "center",
                 }}
                 onClick={() =>
                   setDraft(
@@ -222,7 +226,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   )
                 }
               >
-                <span>🎯</span> {tr("Scan career opportunities", "Scanner les opportunités")}
+                <IconTarget size={15} color="#00f0ff" style={{ marginRight: 6 }} />
+                {tr("Scan career opportunities", "Scanner les opportunités")}
               </button>
               <button
                 type="button"
@@ -232,6 +237,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   borderColor: "rgba(0, 240, 255, 0.25)",
                   fontSize: "0.82rem",
                   padding: "0.45rem 0.85rem",
+                  display: "inline-flex",
+                  alignItems: "center",
                 }}
                 onClick={() =>
                   setDraft(
@@ -242,7 +249,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   )
                 }
               >
-                <span>⚡</span> {tr("Optimize routing matrix", "Optimiser le routage")}
+                <IconBolt size={15} color="#00f0ff" style={{ marginRight: 6 }} />
+                {tr("Optimize routing matrix", "Optimiser le routage")}
               </button>
             </div>
           </div>

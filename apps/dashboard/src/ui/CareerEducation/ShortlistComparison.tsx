@@ -1,5 +1,6 @@
 import type { OpportunityComparisonMatrix } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconStar } from "../icons.js";
 
 interface ShortlistComparisonProps {
   matrix: OpportunityComparisonMatrix | null;
@@ -139,7 +140,12 @@ export function ShortlistComparison({
                   return (
                     <td key={opp.id} className={isWinner ? "winner-cell" : ""}>
                       {isWinner && (
-                        <span style={{ marginRight: "0.35rem", color: "var(--ok)" }}>★</span>
+                        <IconStar
+                          size={13}
+                          filled
+                          color="var(--ok)"
+                          style={{ marginRight: "0.35rem" }}
+                        />
                       )}
                       {String(val ?? "—")}
                     </td>

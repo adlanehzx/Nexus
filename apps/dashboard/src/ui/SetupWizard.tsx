@@ -5,6 +5,7 @@ import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
+import { IconCheck } from "./icons.js";
 
 type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
@@ -971,8 +972,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 {tr("Save Browser Mode", "Enregistrer le mode navigateur")}
               </button>
               {browserSuccessMsg && (
-                <span style={{ marginLeft: "10px", fontSize: "12px", color: "var(--ok)" }}>
-                  ✓ {browserSuccessMsg}
+                <span
+                  style={{
+                    marginLeft: "10px",
+                    fontSize: "12px",
+                    color: "var(--ok)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <IconCheck size={13} color="var(--ok)" />
+                  <span>{browserSuccessMsg}</span>
                 </span>
               )}
             </div>
@@ -1029,8 +1040,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 {tr("Register MCP Server", "Enregistrer le serveur MCP")}
               </button>
               {mcpSuccessMsg && (
-                <span style={{ marginLeft: "10px", fontSize: "12px", color: "var(--ok)" }}>
-                  ✓ {mcpSuccessMsg}
+                <span
+                  style={{
+                    marginLeft: "10px",
+                    fontSize: "12px",
+                    color: "var(--ok)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <IconCheck size={13} color="var(--ok)" />
+                  <span>{mcpSuccessMsg}</span>
                 </span>
               )}
             </div>
@@ -1150,7 +1171,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 }}
               >
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
+                  <IconCheck size={16} color="var(--ok)" />
                   <span>
                     {tr(
                       "Core services and database healthy",
@@ -1159,7 +1180,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
+                  <IconCheck size={16} color="var(--ok)" />
                   <span>
                     {tr(
                       "Administrator session authenticated",
@@ -1168,7 +1189,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
+                  <IconCheck size={16} color="var(--ok)" />
                   <span>
                     {tr(
                       `Discovered ${connections.length} AI CLI providers`,
@@ -1177,7 +1198,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "var(--ok)", fontWeight: "bold" }}>✓</span>
+                  <IconCheck size={16} color="var(--ok)" />
                   <span>
                     {tr(
                       "Optional capabilities & worker pairing initialized",

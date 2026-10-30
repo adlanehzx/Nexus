@@ -1,6 +1,17 @@
 import { useState } from "react";
 import type { ConfirmationRequest, ConfirmationStatus } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import {
+  IconShield,
+  IconGlobe,
+  IconMail,
+  IconCalendar,
+  IconDocument,
+  IconWarning,
+  IconBolt,
+  IconCheck,
+  IconClose,
+} from "../icons.js";
 
 interface ApprovalCardsProps {
   confirmations: ConfirmationRequest[];
@@ -98,8 +109,17 @@ export function ApprovalCards({
           gap: "0.4rem",
         }}
       >
-        <strong style={{ color: "var(--gradient)", fontSize: "0.95rem" }}>
-          🛡️ {tr("Zero Silent Mutations Policy", "Politique Zéro Mutation Silencieuse")}
+        <strong
+          style={{
+            color: "var(--gradient)",
+            fontSize: "0.95rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.45rem",
+          }}
+        >
+          <IconShield size={18} color="var(--gradient)" />
+          {tr("Zero Silent Mutations Policy", "Politique Zéro Mutation Silencieuse")}
         </strong>
         <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.4 }}>
           {tr(
@@ -185,15 +205,31 @@ export function ApprovalCards({
               >
                 <div className="action-type-header">
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span className="action-badge">
-                      {conf.actionType === "browser_submit_application" &&
-                        tr("🌐 Browser Form Submission", "🌐 Soumission de formulaire web")}
-                      {conf.actionType === "gmail_send_draft" &&
-                        tr("✉️ Gmail Outreach Email", "✉️ Envoi d'e-mail Gmail")}
-                      {conf.actionType === "calendar_create_event" &&
-                        tr("📅 Google Calendar Mutation", "📅 Création d'événement Google Agenda")}
-                      {conf.actionType === "document_export" &&
-                        tr("📄 Document Package Export", "📄 Export de dossier documentaire")}
+                    <span className="action-badge" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      {conf.actionType === "browser_submit_application" && (
+                        <>
+                          <IconGlobe size={13} />
+                          {tr("Browser Form Submission", "Soumission de formulaire web")}
+                        </>
+                      )}
+                      {conf.actionType === "gmail_send_draft" && (
+                        <>
+                          <IconMail size={13} />
+                          {tr("Gmail Outreach Email", "Envoi d'e-mail Gmail")}
+                        </>
+                      )}
+                      {conf.actionType === "calendar_create_event" && (
+                        <>
+                          <IconCalendar size={13} />
+                          {tr("Google Calendar Mutation", "Création d'événement Google Agenda")}
+                        </>
+                      )}
+                      {conf.actionType === "document_export" && (
+                        <>
+                          <IconDocument size={13} />
+                          {tr("Document Package Export", "Export de dossier documentaire")}
+                        </>
+                      )}
                     </span>
                     <span
                       style={{
@@ -275,8 +311,9 @@ export function ApprovalCards({
                             fontSize: "0.78rem",
                           }}
                         >
-                          <span>
-                            📄 {doc.title} ({doc.type})
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                            <IconDocument size={14} />
+                            {doc.title} ({doc.type})
                           </span>
                           <span style={{ color: "var(--muted-text)", fontFamily: "monospace" }}>
                             SHA: {doc.digest.slice(0, 12)}...
@@ -311,8 +348,9 @@ export function ApprovalCards({
 
                 {/* Explicit Risks Box */}
                 <div className="risks-box" role="alert">
-                  <strong>
-                    {tr("⚠️ Explicit Risks Identified:", "⚠️ Risques explicites identifiés :")}
+                  <strong style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                    <IconWarning size={16} color="var(--warn)" />
+                    {tr("Explicit Risks Identified:", "Risques explicites identifiés :")}
                   </strong>
                   <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
                     {conf.risks.map((r, i) => (
@@ -323,10 +361,11 @@ export function ApprovalCards({
 
                 {/* Explicit Consequences Box */}
                 <div className="consequences-box" role="status">
-                  <strong>
+                  <strong style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                    <IconBolt size={16} color="var(--accent)" />
                     {tr(
-                      "⚡ Anticipated Real-World Consequences:",
-                      "⚡ Conséquences réelles anticipées :",
+                      "Anticipated Real-World Consequences:",
+                      "Conséquences réelles anticipées :",
                     )}
                   </strong>
                   <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.2rem", lineHeight: 1.4 }}>
@@ -379,7 +418,8 @@ export function ApprovalCards({
                           )
                         }
                       >
-                        {tr("✓ Grant Explicit Approval", "✓ Accorder l'approbation explicite")}
+                        <IconCheck size={16} style={{ marginRight: "0.4rem" }} />
+                        {tr("Grant Explicit Approval", "Accorder l'approbation explicite")}
                       </button>
 
                       <button
@@ -397,7 +437,8 @@ export function ApprovalCards({
                           )
                         }
                       >
-                        {tr("✕ Reject Action", "✕ Rejeter l'action")}
+                        <IconClose size={16} style={{ marginRight: "0.4rem" }} />
+                        {tr("Reject Action", "Rejeter l'action")}
                       </button>
 
                       <button

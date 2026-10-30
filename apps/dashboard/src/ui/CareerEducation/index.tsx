@@ -2,6 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n/index.js";
 import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "../CyberRetypeTitle.js";
+import {
+  IconInbox,
+  IconScales,
+  IconKanban,
+  IconDocument,
+  IconCalendar,
+  IconAnalytics,
+  IconShield,
+  IconTarget,
+  IconSettings,
+  IconWarning,
+} from "../icons.js";
 import type {
   Application,
   CareerAnalytics,
@@ -287,8 +299,9 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
       {offlineError && (
         <div className="career-offline-banner" role="alert">
           <div>
-            <strong>
-              {tr("⚠️ Feeds Unreachable / Offline:", "⚠️ Flux inaccessibles / Hors ligne :")}
+            <strong style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <IconWarning size={16} color="var(--warn, #ffaa00)" />
+              {tr("Feeds Unreachable / Offline:", "Flux inaccessibles / Hors ligne :")}
             </strong>{" "}
             {offlineError}
           </div>
@@ -307,7 +320,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("inbox")}
         >
-          <span>📥</span> {tr("Discovery & Inbox", "Découverte & Flux")}
+          <IconInbox size={15} style={{ marginRight: 6 }} />
+          {tr("Discovery & Inbox", "Découverte & Flux")}
         </button>
 
         <button
@@ -317,9 +331,10 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("comparison")}
         >
-          <span>⚖️</span> {tr("Comparison Matrix", "Matrice de comparaison")}
+          <IconScales size={15} style={{ marginRight: 6 }} />
+          {tr("Comparison Matrix", "Matrice de comparaison")}
           {selectedForComparison.length > 0 && (
-            <span style={{ fontSize: "0.75rem", color: "var(--muted-text)" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--muted-text)", marginLeft: 4 }}>
               ({selectedForComparison.length})
             </span>
           )}
@@ -332,7 +347,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("pipeline")}
         >
-          <span>📊</span> {tr("Application Kanban", "Kanban Candidatures")} ({applications.length})
+          <IconKanban size={15} style={{ marginRight: 6 }} />
+          {tr("Application Kanban", "Kanban Candidatures")} ({applications.length})
         </button>
 
         <button
@@ -342,7 +358,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("documents")}
         >
-          <span>📄</span> {tr("Tailored Documents", "Documents sur mesure")} ({documents.length})
+          <IconDocument size={15} style={{ marginRight: 6 }} />
+          {tr("Tailored Documents", "Documents sur mesure")} ({documents.length})
         </button>
 
         <button
@@ -352,7 +369,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("deadlines")}
         >
-          <span>📅</span> {tr("Deadlines & Schedule", "Échéances & Planning")} (
+          <IconCalendar size={15} style={{ marginRight: 6 }} />
+          {tr("Deadlines & Schedule", "Échéances & Planning")} (
           {deadlines.filter((d) => !d.completed).length})
         </button>
 
@@ -363,7 +381,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("analytics")}
         >
-          <span>📈</span> {tr("Contacts & Analytics", "Contacts & Statistiques")}
+          <IconAnalytics size={15} style={{ marginRight: 6 }} />
+          {tr("Contacts & Analytics", "Contacts & Statistiques")}
         </button>
 
         <button
@@ -373,7 +392,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("approvals")}
         >
-          <span>🛡️</span> {tr("Approvals & Safety", "Approbations & Sécurité")}
+          <IconShield size={15} style={{ marginRight: 6 }} />
+          {tr("Approvals & Safety", "Approbations & Sécurité")}
           {pendingApprovalsCount > 0 && (
             <span className="badge-counter">{pendingApprovalsCount}</span>
           )}
@@ -386,9 +406,10 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("profile")}
         >
-          <span>🎯</span> {tr("Goals & Profile Wizard", "Objectifs & Profil")}
+          <IconTarget size={15} style={{ marginRight: 6 }} />
+          {tr("Goals & Profile Wizard", "Objectifs & Profil")}
           {profile && (
-            <span style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700 }}>
+            <span style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700, marginLeft: 4 }}>
               {profile.completeness.score}%
             </span>
           )}
@@ -401,7 +422,8 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           className="career-tab-btn"
           onClick={() => setActiveTab("settings")}
         >
-          <span>⚙️</span> {tr("Settings & Feeds", "Paramètres & Sources")}
+          <IconSettings size={15} style={{ marginRight: 6 }} />
+          {tr("Settings & Feeds", "Paramètres & Sources")}
         </button>
       </nav>
 

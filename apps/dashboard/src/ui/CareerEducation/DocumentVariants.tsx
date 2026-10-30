@@ -6,6 +6,7 @@ import type {
   Opportunity,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
+import { IconClose } from "../icons.js";
 
 interface DocumentVariantsProps {
   documents: DocumentVariant[];
@@ -296,7 +297,7 @@ export function DocumentVariants({
                 onClick={() => setShowGenerateModal(false)}
                 aria-label={tr("Close", "Fermer")}
               >
-                ✕
+                <IconClose size={16} />
               </button>
             </div>
 
