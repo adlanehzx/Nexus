@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../i18n/index.js";
 import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";
+import { CyberRetypeTitle } from "../CyberRetypeTitle.js";
 import type {
   Application,
   CareerAnalytics,
@@ -197,7 +198,11 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
               <span className="radar-pulse-ring" style={{ width: 8, height: 8 }} />
               {tr("Autonomous Career & Research Engine", "Moteur de Carrière & Recherche Autonome")}
             </div>
-            <h2>{tr("NEXUS Strategic Career Matrix", "Matrice de Carrière Stratégique NEXUS")}</h2>
+            <h2>
+              <CyberRetypeTitle
+                text={tr("NEXUS Strategic Career Matrix", "Matrice de Carrière Stratégique NEXUS")}
+              />
+            </h2>
             <p>
               {tr(
                 "Orchestrates PhD opportunities, permanent CDI positions, and high-impact freelance missions with explainable multi-factor scoring, audited safe drafts, and human-in-the-loop validation.",

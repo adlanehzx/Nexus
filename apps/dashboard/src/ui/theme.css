@@ -21,6 +21,47 @@
 @import "./career-education.css";
 
 /* ───────────────────────────────────────────────────────────────────────────
+   Futuristic Sci-Fi Typography (Orbitron & Rajdhani Local WOFF2)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Orbitron";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("../assets/fonts/Orbitron.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Rajdhani";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/Rajdhani-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Rajdhani";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/Rajdhani-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Rajdhani";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/Rajdhani-700.woff2") format("woff2");
+}
+
+:root {
+  --nx-font-display: "Orbitron", "Inter var", Inter, monospace;
+  --nx-font-futuristic: "Rajdhani", "Inter var", Inter, sans-serif;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
    Reset and document
    ─────────────────────────────────────────────────────────────────────────── */
 
@@ -38,12 +79,53 @@ body,
 body {
   background: var(--nx-canvas);
   color: var(--nx-text);
-  font-family: var(--nx-font-sans);
+  font-family: var(--nx-font-futuristic), var(--nx-font-sans);
   font-size: var(--nx-size-sm);
   line-height: var(--nx-leading-normal);
-  letter-spacing: var(--nx-tracking-tight);
+  letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
+}
+
+h1,
+h2,
+h3,
+.brand-mark,
+.eyebrow,
+.career-kicker {
+  font-family: var(--nx-font-display);
+  letter-spacing: 0.04em;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Cyber Retype / Sci-Fi Terminal Animation
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.cyber-retype-title {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.cyber-cursor {
+  display: inline-block;
+  margin-left: 3px;
+  color: var(--nx-signal, #00f0ff);
+  font-family: var(--nx-font-mono, monospace);
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+  animation: cyberCursorPulse 0.85s steps(2, start) infinite;
+}
+
+@keyframes cyberCursorPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(0.92);
+  }
 }
 
 button,
@@ -877,8 +959,15 @@ details.card,
 }
 .card,
 details.card {
-  margin-top: var(--nx-space-5);
-  padding: var(--nx-space-6);
+  margin-top: var(--nx-space-6);
+  padding: 1.4rem 1.65rem;
+}
+
+.card > p,
+.settings-panel > p,
+.domain-panel > p {
+  margin: var(--nx-space-3) 0 var(--nx-space-4);
+  line-height: var(--nx-leading-normal);
 }
 .card > summary,
 details.card > summary {
@@ -1061,55 +1150,79 @@ details.card[open] > summary {
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   Tables
+   Tables (Cyber Cockpit HUD Style)
    ─────────────────────────────────────────────────────────────────────────── */
 
 .scroll-x,
 .comparison-table-wrapper {
   overflow-x: auto;
-  border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
-  background: var(--nx-surface);
+  position: relative;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: var(--nx-radius-lg, 14px);
+  background: linear-gradient(180deg, rgba(14, 21, 38, 0.85) 0%, rgba(8, 12, 24, 0.95) 100%);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(0, 240, 255, 0.15);
+  margin-top: var(--nx-space-5);
+  margin-bottom: var(--nx-space-6);
 }
+
 table,
 .nexus-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--nx-size-xs);
+  font-size: var(--nx-size-sm, 13px);
+  letter-spacing: 0.015em;
 }
+
 th,
 td {
-  padding: var(--nx-space-5) var(--nx-space-6);
-  border-bottom: 1px solid var(--nx-line);
+  padding: 0.95rem 1.35rem;
+  border-bottom: 1px solid rgba(146, 172, 206, 0.1);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
+
 th {
   position: sticky;
   top: 0;
   z-index: var(--nx-z-sticky);
-  border-bottom-color: var(--nx-line-strong);
-  background: var(--nx-canvas-sunken);
-  color: var(--nx-text-faint);
-  font-family: var(--nx-font-mono);
-  font-size: var(--nx-size-3xs);
-  font-weight: var(--nx-weight-medium);
-  letter-spacing: var(--nx-tracking-caps);
+  border-bottom: 2px solid rgba(0, 240, 255, 0.4);
+  background: linear-gradient(180deg, rgba(18, 28, 52, 0.98) 0%, rgba(11, 18, 34, 0.98) 100%);
+  color: #00f0ff;
+  font-family: var(--nx-font-display, "Orbitron", monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
+
+/* Subtle futuristic zebra striping */
+tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+tbody tr {
+  transition: all var(--nx-fast, 140ms) var(--nx-ease);
+}
+
+/* Cyber HUD interactive row glow */
+tbody tr:hover {
+  background: rgba(0, 240, 255, 0.075);
+  box-shadow: inset 3px 0 0 #00f0ff;
+}
+
 /* Numbers line up: identifiers, counts and durations are mono everywhere. */
 td code,
 td .mono {
+  font-family: var(--nx-font-mono);
   font-variant-numeric: tabular-nums;
 }
-tbody tr {
-  transition: background var(--nx-instant) var(--nx-ease);
-}
-tbody tr:hover {
-  background: var(--nx-surface-hover);
-}
+
 tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -1679,10 +1792,10 @@ tbody tr:last-child td {
 .network-peer,
 .pairing-card {
   position: relative;
-  padding: var(--nx-space-7);
+  padding: 1.5rem 1.75rem;
   overflow: hidden;
   border: 1px solid var(--nx-line);
-  border-radius: var(--nx-radius-md);
+  border-radius: var(--nx-radius-lg, 14px);
   background: var(--nx-surface);
   transition: border-color var(--nx-fast) var(--nx-ease);
 }

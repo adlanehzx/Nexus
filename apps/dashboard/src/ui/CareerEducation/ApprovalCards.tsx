@@ -60,7 +60,7 @@ export function ApprovalCards({
 
   return (
     <div
-      className="career-edu-container"
+      className="career-tab-content"
       role="region"
       aria-label="Human-in-the-Loop Approval Action Center"
     >

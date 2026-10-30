@@ -75,7 +75,7 @@ export function ProfileWizard({ profile, onUpdate, loading = false }: ProfileWiz
   const completeness = profile.completeness;
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Goals and Profile Wizard">
+    <div className="career-tab-content" role="region" aria-label="Goals and Profile Wizard">
       {/* Completeness Meter */}
       <div className="completeness-gauge-box">
         <div className="completeness-header">

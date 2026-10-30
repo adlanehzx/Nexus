@@ -66,7 +66,7 @@ export function DeadlinesCalendar({
 
   return (
     <div
-      className="career-edu-container"
+      className="career-tab-content"
       role="region"
       aria-label="Deadlines and Calendar Schedule"
     >

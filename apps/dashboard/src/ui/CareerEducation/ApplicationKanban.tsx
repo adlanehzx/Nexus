@@ -57,7 +57,7 @@ export function ApplicationKanban({
 
   return (
     <div
-      className="career-edu-container"
+      className="career-tab-content"
       role="region"
       aria-label={tr("Application Kanban Pipeline", "Pipeline Kanban des Candidatures")}
     >

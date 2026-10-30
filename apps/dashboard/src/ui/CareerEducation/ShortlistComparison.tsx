@@ -51,7 +51,7 @@ export function ShortlistComparison({
   }
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Opportunity Comparison Matrix">
+    <div className="career-tab-content" role="region" aria-label="Opportunity Comparison Matrix">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "1.2rem" }}>

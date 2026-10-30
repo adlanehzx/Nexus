@@ -117,7 +117,7 @@ export function OpportunityInbox({
   };
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Opportunity Inbox">
+    <div className="career-tab-content" role="region" aria-label="Opportunity Inbox">
       {/* Monitored Sources Health Bar */}
       <div
         style={{

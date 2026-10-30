@@ -5,6 +5,7 @@ import { createCareerEducationClient } from "../lib/career-education.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
+import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
 
 const Agents = lazy(() =>
   import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
@@ -468,7 +469,9 @@ function AppContent() {
                 ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
                 : tr("SUPERVISION", "SUPERVISION")}
             </div>
-            <h1>{metaTitle}</h1>
+            <h1>
+              <CyberRetypeTitle text={metaTitle} />
+            </h1>
             <p>{metaDescription}</p>
           </div>
           <div className="header-actions">

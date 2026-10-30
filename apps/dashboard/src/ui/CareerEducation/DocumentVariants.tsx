@@ -60,7 +60,7 @@ export function DocumentVariants({
   };
 
   return (
-    <div className="career-edu-container" role="region" aria-label="Tailored Document Variants">
+    <div className="career-tab-content" role="region" aria-label="Tailored Document Variants">
       <div
         style={{
           display: "flex",

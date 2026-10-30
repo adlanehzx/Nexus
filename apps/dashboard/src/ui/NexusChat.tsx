@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
+import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
 
 interface ChatMessage {
   id: string;
@@ -159,9 +160,13 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               N
             </div>
             <h2>
-              {locale === "fr"
-                ? "Que souhaitez-vous accomplir ?"
-                : "What would you like to accomplish?"}
+              <CyberRetypeTitle
+                text={
+                  locale === "fr"
+                    ? "Que souhaitez-vous accomplir ?"
+                    : "What would you like to accomplish?"
+                }
+              />
             </h2>
             <p>
               {locale === "fr"

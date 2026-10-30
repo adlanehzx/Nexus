@@ -42,7 +42,7 @@ export function CareerSettings({
 
   return (
     <div
-      className="career-edu-container"
+      className="career-tab-content"
       role="region"
       aria-label={tr("Career & Education Settings", "Paramètres Carrière & Formation")}
     >
