@@ -7,7 +7,7 @@ import type {
   RoutingEvaluationDto,
 } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
-import { IconStar } from "./icons.js";
+import { IconCheck, IconShield, IconStar } from "./icons.js";
 
 export function Agents({ api }: { api: DashboardApi }) {
   const { locale, t, tr } = useI18n();
@@ -1073,18 +1073,18 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div className="scroll-x" style={{ marginBottom: "24px" }}>
             <table
               className="nexus-table"
-              style={{ width: "100%", textAlign: "left", fontSize: "0.9rem" }}
+              style={{ width: "100%", textAlign: "left", fontSize: "0.88rem" }}
             >
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--nx-line)" }}>
-                  <th style={{ padding: "8px" }}>{tr("Profile", "Profil")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Auth", "Auth")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Code", "Code")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Research", "Recherche")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Review", "Revue")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Browser", "Navigateur")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Synthesis", "Synthèse")}</th>
-                  <th style={{ padding: "8px" }}>{tr("Runs / Success", "Exécutions / Succès")}</th>
+                <tr>
+                  <th>{tr("Profile", "Profil")}</th>
+                  <th>{tr("Auth", "Auth")}</th>
+                  <th>{tr("Code", "Code")}</th>
+                  <th>{tr("Research", "Recherche")}</th>
+                  <th>{tr("Review", "Revue")}</th>
+                  <th>{tr("Browser", "Navigateur")}</th>
+                  <th>{tr("Synthesis", "Synthèse")}</th>
+                  <th>{tr("Runs / Success", "Exécutions / Succès")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1093,7 +1093,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                     <td
                       colSpan={8}
                       style={{
-                        padding: "12px",
+                        padding: "1.25rem",
                         textAlign: "center",
                         color: "var(--nx-text-muted)",
                       }}
@@ -1103,8 +1103,8 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </tr>
                 ) : (
                   routingMatrix.map((r) => (
-                    <tr key={r.key} style={{ borderBottom: "1px solid var(--nx-line-strong)" }}>
-                      <td style={{ padding: "8px", fontWeight: "bold" }}>
+                    <tr key={r.key}>
+                      <td style={{ fontWeight: "bold" }}>
                         {r.key}
                         {r.cooldownActive ? (
                           <span style={{ color: "var(--nx-warn)", marginLeft: "6px" }}>
@@ -1112,27 +1112,33 @@ export function Agents({ api }: { api: DashboardApi }) {
                           </span>
                         ) : null}
                       </td>
-                      <td style={{ padding: "8px" }}>
+                      <td>
                         <span
-                          className={`badge ${r.authStatus === "authenticated" ? "success" : "attention"}`}
+                          className={`state-pill ${
+                            r.authStatus === "authenticated"
+                              ? "good"
+                              : r.authStatus === "unknown" ||
+                                  r.authStatus === "not_checked" ||
+                                  !r.authStatus
+                                ? "info"
+                                : "warning"
+                          }`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
                         >
-                          {r.authStatus === "authenticated"
-                            ? tr("authenticated", "authentifié")
-                            : r.authStatus}
+                          {r.authStatus === "authenticated" ? (
+                            <IconCheck size={11} color="currentColor" />
+                          ) : (
+                            <IconShield size={11} color="currentColor" />
+                          )}
+                          <span>{formatAuthStatus(r.authStatus, tr)}</span>
                         </span>
                       </td>
-                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.code ?? 0)}</td>
-                      <td style={{ padding: "8px" }}>
-                        {Math.round(r.categoryScores.research ?? 0)}
-                      </td>
-                      <td style={{ padding: "8px" }}>{Math.round(r.categoryScores.review ?? 0)}</td>
-                      <td style={{ padding: "8px" }}>
-                        {Math.round(r.categoryScores.browser ?? 0)}
-                      </td>
-                      <td style={{ padding: "8px" }}>
-                        {Math.round(r.categoryScores.synthesis ?? 0)}
-                      </td>
-                      <td style={{ padding: "8px" }}>
+                      <td>{Math.round(r.categoryScores.code ?? 0)}</td>
+                      <td>{Math.round(r.categoryScores.research ?? 0)}</td>
+                      <td>{Math.round(r.categoryScores.review ?? 0)}</td>
+                      <td>{Math.round(r.categoryScores.browser ?? 0)}</td>
+                      <td>{Math.round(r.categoryScores.synthesis ?? 0)}</td>
+                      <td>
                         {r.totalRuns} {tr("runs", "exécutions")} (
                         {Math.round(r.overallSuccessRate * 100)} %)
                       </td>
@@ -1146,7 +1152,12 @@ export function Agents({ api }: { api: DashboardApi }) {
           {/* Simulateur de routage */}
           <div
             className="card"
-            style={{ padding: "16px", background: "var(--nx-surface)", borderRadius: "8px" }}
+            style={{
+              padding: "1.5rem 1.75rem",
+              background: "var(--nx-surface)",
+              borderRadius: "10px",
+              marginTop: "1.25rem",
+            }}
           >
             <h4 style={{ margin: "0 0 10px 0" }}>
               {tr("Routing Evaluation Simulator", "Simulateur d'Évaluation de Routage")}
@@ -1193,9 +1204,9 @@ export function Agents({ api }: { api: DashboardApi }) {
                 <div
                   style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}
                 >
-                  <div>
+                  <div style={{ display: "flex", alignItems: "center" }}>
                     <strong>{tr("Category:", "Catégorie :")}</strong>{" "}
-                    <span className="badge">
+                    <span className="state-pill info" style={{ marginLeft: "8px" }}>
                       {routingEvaluation.classification.primaryCategory}
                     </span>
                   </div>
@@ -1295,7 +1306,23 @@ function normalizeProfileName(value: string): string {
 }
 
 function percent(value: number | null): string {
-  return value === null ? "unknown" : `${value} %`;
+  return value === null ? "—" : `${value} %`;
+}
+
+function formatAuthStatus(
+  status: string | undefined,
+  tr: (en: string, fr: string) => string,
+): string {
+  if (!status) return tr("Not checked", "Non vérifié");
+  const s = status.toLowerCase();
+  if (s === "authenticated") return tr("Authenticated", "Authentifié");
+  if (s === "missing") return tr("Missing", "Manquant");
+  if (s === "expired") return tr("Expired", "Expiré");
+  if (s === "unsupported") return tr("Unsupported", "Non supporté");
+  if (s === "unknown" || s === "not_checked" || s === "unverified") {
+    return tr("Unverified", "Non vérifié");
+  }
+  return status;
 }
 
 function healthLabel(

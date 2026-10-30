@@ -399,31 +399,19 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
       <div className="login-3d-bg" aria-hidden="true">
         <Futuristic3DCanvas />
       </div>
-      <div
-        className="login-shell"
-        style={{ maxWidth: "680px", width: "100%", position: "relative", zIndex: 1 }}
-      >
-        <div className="login-brand">
+      <div className="setup-wizard-shell">
+        <div className="login-brand" style={{ marginBottom: "1.5rem" }}>
           <span className="brand-mark">N</span>
-          <span>{tr("NEXUS · Setup Wizard", "NEXUS · Assistant d'installation")}</span>
+          <span style={{ fontSize: "1rem", letterSpacing: "0.04em" }}>
+            {tr("NEXUS · Setup Wizard", "NEXUS · Assistant d'installation")}
+          </span>
           <span className="login-brand-spacer" />
           <LanguageSwitch />
           <ThemeToggle />
         </div>
 
         {/* Wizard progress tabs */}
-        <div
-          role="tablist"
-          aria-label="Setup steps"
-          style={{
-            display: "flex",
-            gap: "8px",
-            marginBottom: "20px",
-            overflowX: "auto",
-            paddingBottom: "4px",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
+        <div className="setup-wizard-tabs" role="tablist" aria-label="Setup steps">
           {STEP_ORDER.map((item, idx) => {
             const isCurrent = step === item;
             const isPassed = STEP_ORDER.indexOf(step) > idx;
@@ -431,23 +419,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               <button
                 key={item}
                 type="button"
-                className="button compact"
+                className={`setup-tab-btn ${isCurrent ? "active" : isPassed ? "passed" : ""}`}
                 role="tab"
                 aria-selected={isCurrent}
                 disabled={!isPassed && !isCurrent}
                 onClick={() => goToStep(item)}
-                style={{
-                  background: isCurrent ? "var(--soft-accent)" : "transparent",
-                  color: isCurrent
-                    ? "var(--bright-accent)"
-                    : isPassed
-                      ? "var(--text)"
-                      : "var(--muted-text)",
-                  border: isCurrent ? "1px solid var(--accent)" : "1px solid transparent",
-                  fontSize: "12px",
-                }}
               >
-                {locale === "fr" ? STEP_TITLES_FR[item] : STEP_TITLES[item]}
+                {isPassed && <IconCheck size={12} color="var(--ok)" />}
+                <span>{locale === "fr" ? STEP_TITLES_FR[item] : STEP_TITLES[item]}</span>
               </button>
             );
           })}
@@ -496,22 +475,22 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
             {alreadyInitialized && (
               <div
-                className="card"
+                className="setup-card"
                 style={{
-                  padding: "14px",
                   border: "1px solid var(--nx-accent)",
                   background: "var(--nx-accent-muted)",
-                  margin: "16px 0",
+                  marginBottom: "1.25rem",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: "1rem",
                 }}
               >
                 <div>
                   <strong>
                     {tr("Administrator Account Already Created", "Compte Administrateur Déjà Créé")}
                   </strong>
-                  <div className="muted" style={{ fontSize: "13px" }}>
+                  <div className="muted" style={{ fontSize: "13px", marginTop: "4px" }}>
                     {tr(
                       "NEXUS instance has already been initialized. You can sign in directly.",
                       "L'instance NEXUS a déjà été initialisée. Vous pouvez vous connecter directement.",
@@ -525,13 +504,20 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             )}
 
             <div
-              style={{ display: "flex", flexDirection: "column", gap: "12px", margin: "16px 0" }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+                margin: "1.25rem 0 1.75rem",
+              }}
             >
-              <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
+              <div className="setup-card">
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>{tr("PostgreSQL Database", "Base de données PostgreSQL")}</strong>
+                  <strong style={{ fontSize: "0.95rem" }}>
+                    {tr("PostgreSQL Database", "Base de données PostgreSQL")}
+                  </strong>
                   <span
                     className={`state-pill ${readiness?.dependencies?.database?.status === "up" ? "good" : "danger"}`}
                   >
@@ -540,17 +526,19 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       : tr("Disconnected", "Déconnecté")}
                   </span>
                 </div>
-                <small className="muted">
+                <div className="muted" style={{ fontSize: "0.8rem", marginTop: "6px" }}>
                   {tr("Latency:", "Latence :")}{" "}
-                  {readiness?.dependencies?.database?.latencyMs ?? "—"} ms
-                </small>
+                  <strong>{readiness?.dependencies?.database?.latencyMs ?? "—"} ms</strong>
+                </div>
               </div>
 
-              <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
+              <div className="setup-card">
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>{tr("Redis Cache & Broker", "Cache & Broker Redis")}</strong>
+                  <strong style={{ fontSize: "0.95rem" }}>
+                    {tr("Redis Cache & Broker", "Cache & Broker Redis")}
+                  </strong>
                   <span
                     className={`state-pill ${readiness?.dependencies?.redis?.status === "up" ? "good" : "danger"}`}
                   >
@@ -559,24 +547,28 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       : tr("Disconnected", "Déconnecté")}
                   </span>
                 </div>
-                <small className="muted">
-                  {tr("Latency:", "Latence :")} {readiness?.dependencies?.redis?.latencyMs ?? "—"}{" "}
-                  ms
-                </small>
+                <div className="muted" style={{ fontSize: "0.8rem", marginTop: "6px" }}>
+                  {tr("Latency:", "Latence :")}{" "}
+                  <strong>{readiness?.dependencies?.redis?.latencyMs ?? "—"} ms</strong>
+                </div>
               </div>
 
-              <div className="card" style={{ padding: "14px", border: "1px solid var(--border)" }}>
+              <div className="setup-card">
                 <div
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
                 >
-                  <strong>{tr("NEXUS Core API", "API Centrale NEXUS")}</strong>
+                  <strong style={{ fontSize: "0.95rem" }}>
+                    {tr("NEXUS Core API", "API Centrale NEXUS")}
+                  </strong>
                   <span
                     className={`state-pill ${readiness?.status === "ok" ? "good" : readiness?.status === "degraded" ? "warning" : "danger"}`}
                   >
                     {readiness?.status ?? tr("Checking…", "Vérification en cours…")}
                   </span>
                 </div>
-                <small className="muted">Version: {readiness?.version ?? "1.0.0"}</small>
+                <div className="muted" style={{ fontSize: "0.8rem", marginTop: "6px" }}>
+                  Version: <strong>{readiness?.version ?? "1.0.0"}</strong>
+                </div>
               </div>
             </div>
 
@@ -624,86 +616,128 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </p>
             </div>
 
-            <form className="login-form" onSubmit={(e) => void handleRegisterAdmin(e)}>
-              <label>
-                {tr("Full Name", "Nom complet")}
-                <input
-                  className="field"
-                  type="text"
-                  placeholder={tr("Lead Engineer", "Ingénieur Principal")}
-                  required
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                />
-              </label>
-
-              <label>
-                {tr("Administrator Email", "E-mail administrateur")}
-                <input
-                  className="field"
-                  type="email"
-                  autoComplete="username"
-                  placeholder="admin@example.com"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                />
-              </label>
-
-              <label>
-                {tr("Password (minimum 12 characters)", "Mot de passe (minimum 12 caractères)")}
-                <input
-                  className="field"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••••••"
-                  required
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                />
-              </label>
-
-              <label>
-                {tr("Confirm Password", "Confirmer le mot de passe")}
-                <input
-                  className="field"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••••••"
-                  required
-                  value={adminConfirm}
-                  onChange={(e) => setAdminConfirm(e.target.value)}
-                />
-              </label>
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => goToStep("prerequisites")}
+            <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
+              <form
+                className="login-form"
+                onSubmit={(e) => void handleRegisterAdmin(e)}
+                style={{ gap: "1.25rem" }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                    gap: "1.25rem",
+                  }}
                 >
-                  {tr("Back", "Retour")}
-                </button>
-                <button
-                  type="submit"
-                  className="button primary login-submit"
-                  disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
-                >
-                  {busy
-                    ? tr("Creating Account…", "Création du compte…")
-                    : tr("Create Administrator & Continue", "Créer l'administrateur & Continuer")}
-                </button>
-              </div>
+                  <label>
+                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                      {tr("Full Name", "Nom complet")}
+                    </span>
+                    <input
+                      className="field"
+                      type="text"
+                      placeholder={tr("Lead Engineer", "Ingénieur Principal")}
+                      required
+                      value={adminName}
+                      onChange={(e) => setAdminName(e.target.value)}
+                    />
+                  </label>
 
-              <div style={{ marginTop: "12px", textAlign: "center" }}>
-                <button type="button" className="button compact" onClick={onSwitchToLogin}>
-                  {tr(
-                    "Instance already initialized? Sign in directly",
-                    "Instance déjà initialisée ? Se connecter directement",
-                  )}
-                </button>
-              </div>
-            </form>
+                  <label>
+                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                      {tr("Administrator Email", "E-mail administrateur")}
+                    </span>
+                    <input
+                      className="field"
+                      type="email"
+                      autoComplete="username"
+                      placeholder="admin@example.com"
+                      required
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                    gap: "1.25rem",
+                  }}
+                >
+                  <label>
+                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                      {tr(
+                        "Password (minimum 12 characters)",
+                        "Mot de passe (minimum 12 caractères)",
+                      )}
+                    </span>
+                    <input
+                      className="field"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="••••••••••••"
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                      {tr("Confirm Password", "Confirmer le mot de passe")}
+                    </span>
+                    <input
+                      className="field"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="••••••••••••"
+                      required
+                      value={adminConfirm}
+                      onChange={(e) => setAdminConfirm(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1rem",
+                    marginTop: "1.5rem",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => goToStep("prerequisites")}
+                  >
+                    {tr("Back", "Retour")}
+                  </button>
+                  <button
+                    type="submit"
+                    className="button primary login-submit"
+                    disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
+                    style={{ flex: 1, minWidth: "220px" }}
+                  >
+                    {busy
+                      ? tr("Creating Account…", "Création du compte…")
+                      : tr("Create Administrator & Continue", "Créer l'administrateur & Continuer")}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: "1rem", textAlign: "center" }}>
+                  <button type="button" className="button compact" onClick={onSwitchToLogin}>
+                    {tr(
+                      "Instance already initialized? Sign in directly",
+                      "Instance déjà initialisée ? Se connecter directement",
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
@@ -746,40 +780,38 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {connections.map((entry) => {
                 const status = classifyConnection(entry);
                 const isTesting = testingProvider === entry.providerId;
                 return (
-                  <div
-                    key={entry.providerId}
-                    className="card"
-                    style={{
-                      padding: "14px",
-                      border: "1px solid var(--border)",
-                      background: "var(--surface)",
-                    }}
-                  >
+                  <div key={entry.providerId} className="setup-card">
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "flex-start",
+                        flexWrap: "wrap",
+                        gap: "12px",
                       }}
                     >
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <strong>{entry.displayName}</strong>
+                          <strong style={{ fontSize: "1rem" }}>{entry.displayName}</strong>
                           <span className={`state-pill ${status.tone}`}>{status.label}</span>
                         </div>
                         <p
-                          style={{ margin: "4px 0", fontSize: "12px", color: "var(--muted-text)" }}
+                          style={{
+                            margin: "6px 0 0",
+                            fontSize: "13px",
+                            color: "var(--muted-text)",
+                          }}
                         >
                           {status.description}
                         </p>
                       </div>
 
-                      <div style={{ display: "flex", gap: "6px" }}>
+                      <div style={{ display: "flex", gap: "8px" }}>
                         <button
                           type="button"
                           className="button compact"
@@ -803,30 +835,30 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     {status.key === "connection_required" && (
                       <div
                         style={{
-                          marginTop: "10px",
-                          padding: "8px 12px",
-                          background: "var(--surface-2)",
-                          borderRadius: "6px",
-                          borderLeft: "3px solid var(--gradient)",
+                          marginTop: "14px",
+                          padding: "12px 16px",
+                          background: "rgba(10, 18, 34, 0.8)",
+                          borderRadius: "8px",
+                          borderLeft: "3px solid var(--accent, #00f0ff)",
                         }}
                       >
-                        <div style={{ fontSize: "12px", fontWeight: "bold", marginBottom: "4px" }}>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            marginBottom: "6px",
+                            color: "var(--accent, #00f0ff)",
+                          }}
+                        >
                           {tr("Official Sign-in Command", "Commande officielle de connexion")}
                         </div>
-                        <p style={{ margin: "0 0 6px 0", fontSize: "12px" }}>
+                        <p style={{ margin: "0 0 8px 0", fontSize: "12px", lineHeight: 1.4 }}>
                           {tr(
                             "Run this official CLI command in your host terminal to open the provider's official browser login:",
                             "Exécutez cette commande CLI officielle dans votre terminal pour ouvrir l'authentification officielle du fournisseur :",
                           )}
                         </p>
-                        <code
-                          style={{
-                            background: "var(--nx-canvas-sunken)",
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            display: "inline-block",
-                          }}
-                        >
+                        <code className="setup-terminal-block">
                           {entry.providerId === "anthropic" || entry.providerId === "claude"
                             ? "claude login"
                             : entry.providerId === "codex" || entry.providerId === "openai"
@@ -836,12 +868,16 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                                 : `${entry.providerId} login`}
                         </code>
                         {entry.docsUrl && (
-                          <div style={{ marginTop: "6px" }}>
+                          <div style={{ marginTop: "8px" }}>
                             <a
                               href={entry.docsUrl}
                               target="_blank"
                               rel="noreferrer"
-                              style={{ fontSize: "11px", color: "var(--accent)" }}
+                              style={{
+                                fontSize: "12px",
+                                color: "var(--accent, #00f0ff)",
+                                fontWeight: 600,
+                              }}
                             >
                               {tr(
                                 "View Official Documentation →",
@@ -888,21 +924,18 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
             </div>
 
             {/* Browser Section */}
-            <div
-              className="card"
-              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
-            >
+            <div className="setup-card" style={{ marginBottom: "1.25rem" }}>
               <h3>{tr("Browser Execution", "Exécution du navigateur")}</h3>
-              <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
+              <p className="muted" style={{ fontSize: "13px", marginBottom: "1rem" }}>
                 {tr(
                   "Enable autonomous web browsing via CDP or dedicated container worker.",
                   "Activez la navigation web autonome via CDP ou conteneur dédié.",
                 )}
               </p>
 
-              <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
                 >
                   <input
                     type="radio"
@@ -914,7 +947,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   {tr("Disabled", "Désactivé")}
                 </label>
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
                 >
                   <input
                     type="radio"
@@ -926,7 +959,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   {tr("Local Chromium (CDP)", "Chromium local (CDP)")}
                 </label>
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
                 >
                   <input
                     type="radio"
@@ -940,8 +973,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </div>
 
               {browserMode === "local-harness" && (
-                <label style={{ display: "block", marginBottom: "10px" }}>
-                  {tr("CDP Endpoint URL", "URL du point de terminaison CDP")}
+                <label style={{ display: "block", marginBottom: "1rem" }}>
+                  <span style={{ display: "block", fontSize: "0.8rem", color: "var(--nx-text-muted)", marginBottom: "4px" }}>
+                    {tr("CDP Endpoint URL", "URL du point de terminaison CDP")}
+                  </span>
                   <input
                     className="field"
                     type="url"
@@ -952,8 +987,10 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               )}
 
               {browserMode === "remote-worker" && (
-                <label style={{ display: "block", marginBottom: "10px" }}>
-                  {tr("Remote Worker Base URL", "URL de base du nœud distant")}
+                <label style={{ display: "block", marginBottom: "1rem" }}>
+                  <span style={{ display: "block", fontSize: "0.8rem", color: "var(--nx-text-muted)", marginBottom: "4px" }}>
+                    {tr("Remote Worker Base URL", "URL de base du nœud distant")}
+                  </span>
                   <input
                     className="field"
                     type="url"
@@ -963,38 +1000,36 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 </label>
               )}
 
-              <button
-                type="button"
-                className="button secondary compact"
-                disabled={busy}
-                onClick={() => void handleSaveBrowser()}
-              >
-                {tr("Save Browser Mode", "Enregistrer le mode navigateur")}
-              </button>
-              {browserSuccessMsg && (
-                <span
-                  style={{
-                    marginLeft: "10px",
-                    fontSize: "12px",
-                    color: "var(--ok)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={busy}
+                  onClick={() => void handleSaveBrowser()}
                 >
-                  <IconCheck size={13} color="var(--ok)" />
-                  <span>{browserSuccessMsg}</span>
-                </span>
-              )}
+                  {tr("Save Browser Mode", "Enregistrer le mode navigateur")}
+                </button>
+                {browserSuccessMsg && (
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--ok)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <IconCheck size={13} color="var(--ok)" />
+                    <span>{browserSuccessMsg}</span>
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* MCP Section */}
-            <div
-              className="card"
-              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
-            >
+            <div className="setup-card" style={{ marginBottom: "1.25rem" }}>
               <h3>Model Context Protocol (MCP)</h3>
-              <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
+              <p className="muted" style={{ fontSize: "13px", marginBottom: "1rem" }}>
                 {tr(
                   "Add local stdio tools. Sensitive variables must use vault references.",
                   "Ajoutez des outils stdio locaux. Les variables sensibles doivent utiliser des références de coffre.",
@@ -1003,9 +1038,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                  marginBottom: "10px",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: "1rem",
+                  marginBottom: "1rem",
                 }}
               >
                 <input
@@ -1029,40 +1064,38 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 )}
                 value={mcpServerArgs}
                 onChange={(e) => setMcpServerArgs(e.target.value)}
-                style={{ marginBottom: "10px" }}
+                style={{ marginBottom: "1rem" }}
               />
-              <button
-                type="button"
-                className="button secondary compact"
-                disabled={busy || !mcpServerName.trim() || !mcpServerCommand.trim()}
-                onClick={() => void handleSaveMcp()}
-              >
-                {tr("Register MCP Server", "Enregistrer le serveur MCP")}
-              </button>
-              {mcpSuccessMsg && (
-                <span
-                  style={{
-                    marginLeft: "10px",
-                    fontSize: "12px",
-                    color: "var(--ok)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={busy || !mcpServerName.trim() || !mcpServerCommand.trim()}
+                  onClick={() => void handleSaveMcp()}
                 >
-                  <IconCheck size={13} color="var(--ok)" />
-                  <span>{mcpSuccessMsg}</span>
-                </span>
-              )}
+                  {tr("Register MCP Server", "Enregistrer le serveur MCP")}
+                </button>
+                {mcpSuccessMsg && (
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--ok)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <IconCheck size={13} color="var(--ok)" />
+                    <span>{mcpSuccessMsg}</span>
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Worker Pairing Section */}
-            <div
-              className="card"
-              style={{ padding: "16px", marginBottom: "14px", border: "1px solid var(--border)" }}
-            >
+            <div className="setup-card" style={{ marginBottom: "1.25rem" }}>
               <h3>{tr("Pair a Device or Worker", "Associer un appareil ou un travailleur")}</h3>
-              <p className="muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
+              <p className="muted" style={{ fontSize: "13px", marginBottom: "1rem" }}>
                 {tr(
                   "Generate a single-use pairing ticket to attach a Windows, Linux, or Android worker without passing secrets on command lines.",
                   "Générez un ticket d'association à usage unique pour connecter un nœud Windows, Linux ou Android sans transmettre de secrets en ligne de commande.",
@@ -1080,7 +1113,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 </button>
               ) : (
                 <div
-                  style={{ background: "var(--surface-2)", padding: "12px", borderRadius: "6px" }}
+                  style={{
+                    background: "rgba(10, 18, 34, 0.8)",
+                    border: "1px solid rgba(0, 240, 255, 0.2)",
+                    padding: "1rem 1.25rem",
+                    borderRadius: "8px",
+                  }}
                 >
                   <div
                     style={{
@@ -1089,42 +1127,28 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       alignItems: "center",
                     }}
                   >
-                    <strong>{tr("Pairing Ticket Generated", "Ticket d'association généré")}</strong>
+                    <strong style={{ color: "var(--nx-signal, #00f0ff)" }}>
+                      {tr("Pairing Ticket Generated", "Ticket d'association généré")}
+                    </strong>
                     <small className="muted">
                       {tr("Expires:", "Expire à :")}{" "}
                       {new Date(workerPairingTicket.expiresAt).toLocaleTimeString()}
                     </small>
                   </div>
-                  <div style={{ margin: "8px 0" }}>
-                    <span className="muted" style={{ fontSize: "11px" }}>
+                  <div style={{ margin: "10px 0" }}>
+                    <span className="muted" style={{ fontSize: "12px" }}>
                       {tr("One-time Token:", "Jeton à usage unique :")}
                     </span>
-                    <code
-                      style={{
-                        background: "var(--nx-canvas-sunken)",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        display: "block",
-                        wordBreak: "break-all",
-                      }}
-                    >
+                    <code className="setup-terminal-block" style={{ marginTop: "4px" }}>
                       {workerPairingTicket.token}
                     </code>
                   </div>
-                  <div style={{ fontSize: "12px", marginTop: "8px" }}>
+                  <div style={{ fontSize: "12px", marginTop: "10px" }}>
                     {tr(
                       "To pair an external worker, run:",
                       "Pour associer un nœud externe, exécutez :",
                     )}
-                    <code
-                      style={{
-                        background: "var(--nx-canvas-sunken)",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        display: "block",
-                        marginTop: "4px",
-                      }}
-                    >
+                    <code className="setup-terminal-block" style={{ marginTop: "6px" }}>
                       nexus-worker --ticket {workerPairingTicket.token}
                     </code>
                   </div>
@@ -1156,10 +1180,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </p>
             </div>
 
-            <div
-              className="card"
-              style={{ padding: "16px", margin: "16px 0", border: "1px solid var(--border)" }}
-            >
+            <div className="setup-card" style={{ margin: "1.5rem 0" }}>
               <ul
                 style={{
                   listStyle: "none",
@@ -1167,11 +1188,11 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   margin: 0,
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
+                  gap: "14px",
                 }}
               >
-                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <IconCheck size={16} color="var(--ok)" />
+                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                  <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
                       "Core services and database healthy",
@@ -1179,8 +1200,8 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <IconCheck size={16} color="var(--ok)" />
+                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                  <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
                       "Administrator session authenticated",
@@ -1188,8 +1209,8 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <IconCheck size={16} color="var(--ok)" />
+                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                  <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
                       `Discovered ${connections.length} AI CLI providers`,
@@ -1197,8 +1218,8 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <IconCheck size={16} color="var(--ok)" />
+                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                  <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
                       "Optional capabilities & worker pairing initialized",
@@ -1209,10 +1230,11 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </ul>
             </div>
 
-            <div style={{ marginTop: "24px" }}>
+            <div style={{ marginTop: "2rem" }}>
               <button
                 type="button"
                 className="button primary login-submit"
+                style={{ width: "100%", minHeight: "44px", fontSize: "1rem", fontWeight: 700 }}
                 onClick={() => {
                   try {
                     window.sessionStorage.removeItem("nexus.setup.step");
