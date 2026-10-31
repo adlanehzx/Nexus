@@ -154,6 +154,7 @@ export interface NetworkPeerDto {
 export interface DeviceNetworkDiscoveryDto {
   installed: boolean;
   running: boolean;
+  inventoryAvailable: boolean;
   backendState: string;
   tailnet?: string;
   suggestedApiUrl?: string;

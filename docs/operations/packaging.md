@@ -130,8 +130,11 @@ files so version updates do not require re-pairing the device.
 
 ## Windows Service Configuration
 
-`packaging/windows/install-worker-service.ps1`, orchestrated via native `sc.exe` — available on all
-Windows editions without third-party wrapper dependencies.
+`packaging/windows/install-worker-service.ps1` uses native `sc.exe` together with WinSW 2.12.0.
+Node.js is not a Service Control Manager executable and cannot be registered directly as a reliable
+Windows service. The installer pins the official WinSW download and verifies its SHA-256 digest before
+registration. An offline or packaged installation may pass a pre-fetched binary through `-WinSWPath`;
+the same digest check remains mandatory.
 
 | Decision                                     | Reason                                                                                                                                                       |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |

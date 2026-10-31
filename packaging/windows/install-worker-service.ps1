@@ -22,8 +22,9 @@
        FILE PATH. Service command lines are readable by any unprivileged user
        via Task Manager or WMI.
 
-    This script relies on native `sc.exe`, present on every Windows installation,
-    avoiding third-party service wrappers.
+    Node.js is not itself a Windows service executable. The script therefore
+    uses a pinned WinSW release as the minimal Service Control Manager bridge,
+    and verifies its SHA-256 digest before installing it.
 
 .PARAMETER InstallDir
     Worker installation directory (containing `dist/main.js`).
@@ -44,7 +45,10 @@ param(
     [string]$NodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source,
     [string]$ServiceName = 'nexus-worker',
     [string]$ServiceAccount = 'NT SERVICE\nexus-worker',
-    [string]$EnvFile = (Join-Path $env:ProgramData 'NEXUS\worker.env')
+    [string]$EnvFile = (Join-Path $env:ProgramData 'NEXUS\worker.env'),
+    [string]$WinSWPath,
+    [string]$WinSWDownloadUrl = 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe',
+    [string]$WinSWSha256 = '05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,8 +68,63 @@ if (-not (Test-Path $EnvFile)) {
 $acl = Get-Acl $EnvFile
 $inherited = $acl.Access | Where-Object { $_.IsInherited -eq $true }
 if ($inherited) {
-    Write-Warning "$EnvFile inherits permissions from parent directory. Restrict with: icacls `"$EnvFile`" /inheritance:r /grant:r `"$env:USERNAME:(R)`""
+    Write-Warning "$EnvFile inherits permissions from parent directory. Restrict with: icacls `"$EnvFile`" /inheritance:r /grant:r `"${env:USERNAME}:(R)`""
 }
+
+$configDir = Split-Path $EnvFile -Parent
+$serviceDir = Join-Path $configDir 'service'
+$logDir = Join-Path $configDir 'logs'
+$wrapperPath = Join-Path $serviceDir "$ServiceName.exe"
+$wrapperConfigPath = Join-Path $serviceDir "$ServiceName.xml"
+New-Item -ItemType Directory -Force -Path $serviceDir, $logDir | Out-Null
+
+$downloadedWrapper = $false
+if ($WinSWPath) {
+    if (-not (Test-Path $WinSWPath -PathType Leaf)) { throw "WinSW binary not found: $WinSWPath" }
+    Copy-Item -Force $WinSWPath $wrapperPath
+} elseif (-not (Test-Path $wrapperPath -PathType Leaf)) {
+    $temporaryWrapper = Join-Path ([IO.Path]::GetTempPath()) "nexus-winsw-$([guid]::NewGuid()).exe"
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $WinSWDownloadUrl -OutFile $temporaryWrapper
+        Move-Item -Force $temporaryWrapper $wrapperPath
+        $downloadedWrapper = $true
+    } finally {
+        Remove-Item -Force $temporaryWrapper -ErrorAction SilentlyContinue
+    }
+}
+$actualHash = (Get-FileHash $wrapperPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualHash -ne $WinSWSha256.ToLowerInvariant()) {
+    if ($downloadedWrapper) { Remove-Item -Force $wrapperPath -ErrorAction SilentlyContinue }
+    throw 'WinSW checksum verification failed.'
+}
+
+# WinSW must sit next to an XML file with the same base name. Arguments contain
+# paths only; credentials remain in the ACL-protected environment file.
+$escapedNode = [Security.SecurityElement]::Escape($NodeExe)
+$escapedEntry = [Security.SecurityElement]::Escape($entry)
+$escapedEnv = [Security.SecurityElement]::Escape($EnvFile)
+$escapedInstallDir = [Security.SecurityElement]::Escape($InstallDir)
+$escapedLogDir = [Security.SecurityElement]::Escape($logDir)
+$wrapperConfig = @"
+<service>
+  <id>$ServiceName</id>
+  <name>NEXUS - Local Worker</name>
+  <description>Executes NEXUS tasks assigned to this machine under local policy.</description>
+  <executable>$escapedNode</executable>
+  <arguments>--env-file=&quot;$escapedEnv&quot; &quot;$escapedEntry&quot;</arguments>
+  <workingdirectory>$escapedInstallDir</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>20 sec</stoptimeout>
+  <logpath>$escapedLogDir</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <hidewindow>true</hidewindow>
+</service>
+"@
+[IO.File]::WriteAllText($wrapperConfigPath, $wrapperConfig, [Text.UTF8Encoding]::new($false))
 
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
     Write-Host "Existing service detected: stopping and deleting before reinstall."
@@ -75,27 +134,34 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
     Start-Sleep -Seconds 1
 }
 
-# `binPath` quotes node AND entry script: unquoted paths with spaces break service execution.
-$binPath = "`"$NodeExe`" --env-file=`"$EnvFile`" `"$entry`""
-
 $createArgs = @(
     'create', $ServiceName,
-    "binPath= $binPath",
-    'start= delayed-auto',
-    'DisplayName= NEXUS — Local Worker'
+    'binPath=', $wrapperPath,
+    'start=', 'auto',
+    'DisplayName=', 'NEXUS - Local Worker'
 )
 if ($ServiceAccount) {
-    $createArgs += "obj= $ServiceAccount"
+    $createArgs += @('obj=', $ServiceAccount)
 }
 sc.exe @createArgs
 if ($LASTEXITCODE -ne 0) { throw "sc.exe create failed ($LASTEXITCODE)." }
+sc.exe config $ServiceName start= delayed-auto | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "sc.exe delayed-auto configuration failed ($LASTEXITCODE)." }
 
 # The virtual account only exists after `sc create`. Grant only read permissions.
 $credentialLine = Get-Content $EnvFile | Where-Object { $_ -match '^DEVICE_CREDENTIAL_PATH=' } | Select-Object -First 1
 if (-not $credentialLine) { throw 'DEVICE_CREDENTIAL_PATH missing from configuration.' }
 $credentialPath = $credentialLine.Substring('DEVICE_CREDENTIAL_PATH='.Length)
-icacls $EnvFile /inheritance:r /grant:r "${ServiceAccount}:(R)" 'Administrators:(F)' | Out-Null
-icacls $credentialPath /inheritance:r /grant:r "${ServiceAccount}:(R)" 'Administrators:(F)' | Out-Null
+# Use the built-in Administrators SID instead of its localized display name.
+$administrators = '*S-1-5-32-544'
+icacls $EnvFile /inheritance:r /grant:r "${ServiceAccount}:(R)" "${administrators}:(F)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to restrict the worker environment ACL ($LASTEXITCODE)." }
+icacls $credentialPath /inheritance:r /grant:r "${ServiceAccount}:(R)" "${administrators}:(F)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to restrict the device credential ACL ($LASTEXITCODE)." }
+icacls $serviceDir /grant:r "${ServiceAccount}:(OI)(CI)(RX)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to grant service wrapper access ($LASTEXITCODE)." }
+icacls $logDir /grant:r "${ServiceAccount}:(OI)(CI)(M)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to grant service log access ($LASTEXITCODE)." }
 
 sc.exe description $ServiceName 'Executes NEXUS tasks assigned to this machine. Enforces local policy ~/.nexus/device-policy.yaml.' | Out-Null
 

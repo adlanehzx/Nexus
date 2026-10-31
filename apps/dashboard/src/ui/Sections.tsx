@@ -356,7 +356,14 @@ export function Devices({ api }: { api: DashboardApi }) {
                   </span>
                 ) : null}
               </div>
-              {data.peers.length === 0 ? (
+              {!data.inventoryAvailable ? (
+                <Empty>
+                  {tr(
+                    "Peer inventory is unavailable inside the isolated Docker API. The configured Tailscale address remains available for secure pairing.",
+                    "L’inventaire des appareils n’est pas accessible depuis l’API Docker isolée. L’adresse Tailscale configurée reste disponible pour le jumelage sécurisé.",
+                  )}
+                </Empty>
+              ) : data.peers.length === 0 ? (
                 <Empty>
                   {tr(
                     "No other Tailscale devices detected.",

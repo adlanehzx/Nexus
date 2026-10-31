@@ -112,6 +112,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
             z.object({
               installed: z.boolean(),
               running: z.boolean(),
+              inventoryAvailable: z.boolean(),
               backendState: z.string(),
               tailnet: z.string().optional(),
               suggestedApiUrl: z.string().url().optional(),

@@ -39,3 +39,19 @@ describe("worker Linux packaging", () => {
     expect(dockerfile).toContain("WORKER_POLICY_FILE=/var/lib/nexus/device-policy.yaml");
   });
 });
+
+describe("worker Windows packaging", () => {
+  it("uses a pinned service wrapper instead of registering node as a service", async () => {
+    const installer = await readFile(
+      resolve(process.cwd(), "../../packaging/windows/install-worker-service.ps1"),
+      "utf8",
+    );
+
+    expect(installer).toContain("winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe");
+    expect(installer).toContain("05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da");
+    expect(installer).toContain("Get-FileHash $wrapperPath -Algorithm SHA256");
+    expect(installer).toContain("'binPath=', $wrapperPath");
+    expect(installer).not.toContain("'binPath=', $binPath");
+    expect(installer).toContain("*S-1-5-32-544");
+  });
+});

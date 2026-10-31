@@ -131,6 +131,18 @@ function plan(overrides: Partial<TaskPlan> = {}): TaskPlan {
   };
 }
 
+describe("PrismaDeviceStore on PostgreSQL", () => {
+  it("restores runtime authentication state when reading a persisted device", async () => {
+    const store = new PrismaDeviceStore(prisma);
+
+    const direct = await store.get(deviceId);
+    const listed = await store.listByUser(ownerId);
+
+    expect(direct?.authenticated).toBe(false);
+    expect(listed.find((device) => device.id === deviceId)?.authenticated).toBe(false);
+  });
+});
+
 describe("Task store on PostgreSQL", () => {
   it("writes a plan that the database accepts and reads it back identically", async () => {
     const store = new PrismaTaskStore(prisma);

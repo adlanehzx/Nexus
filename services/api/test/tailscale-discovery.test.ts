@@ -36,6 +36,7 @@ describe("TailscaleDiscoveryService", () => {
     expect(discovery).toMatchObject({
       installed: true,
       running: true,
+      inventoryAvailable: true,
       suggestedApiUrl: "http://nexus-host.example.ts.net:3000",
       self: { name: "nexus-host", ipv4: "100.64.0.10" },
       peers: [{ id: "iphone-id", name: "phone", os: "iOS", online: true }],
@@ -53,9 +54,26 @@ describe("TailscaleDiscoveryService", () => {
     await expect(service.inspect()).resolves.toEqual({
       installed: false,
       running: false,
+      inventoryAvailable: false,
       backendState: "NotInstalled",
       peers: [],
       guidance: "Install Tailscale on the NEXUS host to discover private-network devices.",
+    });
+  });
+
+  it("reports host-managed Tailscale without exposing the daemon socket to Docker", async () => {
+    const service = new TailscaleDiscoveryService({
+      run: async () => Promise.reject(new Error("ENOENT")),
+      publicApiUrl: "https://nexus-host.example.ts.net",
+    });
+
+    await expect(service.inspect()).resolves.toMatchObject({
+      installed: true,
+      running: false,
+      inventoryAvailable: false,
+      backendState: "HostManaged",
+      suggestedApiUrl: "https://nexus-host.example.ts.net",
+      peers: [],
     });
   });
 });

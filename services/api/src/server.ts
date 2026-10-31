@@ -230,7 +230,10 @@ const services = new ServiceContainer({
   llmProvider: llmRuntime,
   llmRuntimeProvider: llmRuntime,
   freeLlmProvider: freeLlm,
-  tailscale: new TailscaleDiscoveryService({ apiPort: config.API_PORT }),
+  tailscale: new TailscaleDiscoveryService({
+    apiPort: config.API_PORT,
+    ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
+  }),
   ...(config.PUBLIC_API_URL === undefined ? {} : { publicApiUrl: config.PUBLIC_API_URL }),
   ...(config.EXPECTED_WORKER_VERSION === undefined
     ? {}

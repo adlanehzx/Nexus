@@ -34,6 +34,7 @@ export interface TailscalePeer {
 export interface TailscaleDiscovery {
   installed: boolean;
   running: boolean;
+  inventoryAvailable: boolean;
   backendState: string;
   tailnet?: string;
   suggestedApiUrl?: string;
@@ -66,19 +67,36 @@ const defaultRunner: TailscaleCommandRunner = async (command, args) => {
 export class TailscaleDiscoveryService {
   readonly #run: TailscaleCommandRunner;
   readonly #apiPort: number;
+  readonly #configuredUrl: string | undefined;
 
-  constructor(options: { run?: TailscaleCommandRunner; apiPort?: number } = {}) {
+  constructor(
+    options: { run?: TailscaleCommandRunner; apiPort?: number; publicApiUrl?: string } = {},
+  ) {
     this.#run = options.run ?? defaultRunner;
     this.#apiPort = options.apiPort ?? 3000;
+    this.#configuredUrl = tailscaleUrl(options.publicApiUrl);
   }
 
   async inspect(): Promise<TailscaleDiscovery> {
     try {
       await this.#run("tailscale", ["version"]);
     } catch {
+      if (this.#configuredUrl !== undefined) {
+        return {
+          installed: true,
+          running: false,
+          inventoryAvailable: false,
+          backendState: "HostManaged",
+          suggestedApiUrl: this.#configuredUrl,
+          peers: [],
+          guidance:
+            "NEXUS uses the configured host Tailscale address. Peer inventory is unavailable inside the isolated API container; pairing remains available.",
+        };
+      }
       return {
         installed: false,
         running: false,
+        inventoryAvailable: false,
         backendState: "NotInstalled",
         peers: [],
         guidance: "Install Tailscale on the NEXUS host to discover private-network devices.",
@@ -92,6 +110,7 @@ export class TailscaleDiscoveryService {
       return {
         installed: true,
         running: false,
+        inventoryAvailable: false,
         backendState: "Stopped",
         peers: [],
         guidance: "Tailscale is installed but is not connected.",
@@ -111,6 +130,7 @@ export class TailscaleDiscoveryService {
       return {
         installed: true,
         running,
+        inventoryAvailable: true,
         backendState: status.BackendState ?? "Unknown",
         ...(status.MagicDNSSuffix === undefined ? {} : { tailnet: status.MagicDNSSuffix }),
         ...(running && host !== undefined
@@ -131,6 +151,7 @@ export class TailscaleDiscoveryService {
       return {
         installed: true,
         running: false,
+        inventoryAvailable: false,
         backendState: "InvalidStatus",
         peers: [],
         guidance: "Tailscale returned an unreadable status response.",
@@ -140,6 +161,16 @@ export class TailscaleDiscoveryService {
 
   async publicApiUrl(): Promise<string | undefined> {
     return (await this.inspect()).suggestedApiUrl;
+  }
+}
+
+function tailscaleUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const url = new URL(value);
+    return url.hostname.endsWith(".ts.net") ? url.toString().replace(/\/$/, "") : undefined;
+  } catch {
+    return undefined;
   }
 }
 

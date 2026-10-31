@@ -1,6 +1,6 @@
 import { uuidv7 } from "@nexus/shared";
 import type { InputJsonObject, PrismaClient } from "@nexus/database";
-import type { DeviceStore, Device } from "@nexus/devices";
+import { deviceSchema, type DeviceStore, type Device } from "@nexus/devices";
 
 export class PrismaDeviceStore implements DeviceStore {
   readonly #prisma: PrismaClient;
@@ -84,7 +84,7 @@ export class PrismaDeviceStore implements DeviceStore {
       include: { capabilities: true },
     });
     if (!device) return undefined;
-    return device as unknown as Device;
+    return hydrateDevice(device);
   }
 
   async delete(id: string): Promise<boolean> {
@@ -101,8 +101,39 @@ export class PrismaDeviceStore implements DeviceStore {
       where: { userId },
       include: { capabilities: true },
     });
-    return devices as unknown as Device[];
+    return devices.map(hydrateDevice);
   }
+}
+
+/**
+ * Restores runtime-only fields omitted by the relational model and validates
+ * JSON columns at the persistence boundary. A raw cast hid `authenticated`
+ * as `undefined`, which broke dashboard response validation for real devices.
+ */
+function hydrateDevice<
+  T extends {
+    capabilities: {
+      name: string;
+      version: string;
+      description: string;
+      inputSchema: unknown;
+      enabled: boolean;
+      metadata: unknown;
+    }[];
+  },
+>(device: T): Device {
+  return deviceSchema.parse({
+    ...device,
+    authenticated: false,
+    capabilities: device.capabilities.map((capability) => ({
+      name: capability.name,
+      version: capability.version,
+      description: capability.description,
+      enabled: capability.enabled,
+      metadata: capability.metadata,
+      ...(capability.inputSchema === null ? {} : { inputSchema: capability.inputSchema }),
+    })),
+  });
 }
 
 /**
