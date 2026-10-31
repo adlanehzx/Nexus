@@ -4,11 +4,20 @@ import { deviceSchema, type DeviceStore, type Device } from "@nexus/devices";
 
 export class PrismaDeviceStore implements DeviceStore {
   readonly #prisma: PrismaClient;
+  /**
+   * Authentication is a property of the currently attached worker socket, not
+   * durable device metadata. Keep it process-local so an API restart closes
+   * every session, while reads performed during a live connection preserve the
+   * state set by DeviceSessionService.
+   */
+  readonly #authenticated = new Map<string, boolean>();
+
   constructor(prisma: PrismaClient) {
     this.#prisma = prisma;
   }
 
   async save(device: Device): Promise<void> {
+    this.#authenticated.set(device.id, device.authenticated);
     const caps = device.capabilities.map((c) => ({
       id: uuidv7(),
       name: c.name,
@@ -84,12 +93,13 @@ export class PrismaDeviceStore implements DeviceStore {
       include: { capabilities: true },
     });
     if (!device) return undefined;
-    return hydrateDevice(device);
+    return hydrateDevice(device, this.#authenticated.get(device.id) ?? false);
   }
 
   async delete(id: string): Promise<boolean> {
     try {
       await this.#prisma.device.delete({ where: { id } });
+      this.#authenticated.delete(id);
       return true;
     } catch {
       return false;
@@ -101,7 +111,9 @@ export class PrismaDeviceStore implements DeviceStore {
       where: { userId },
       include: { capabilities: true },
     });
-    return devices.map(hydrateDevice);
+    return devices.map((device) =>
+      hydrateDevice(device, this.#authenticated.get(device.id) ?? false),
+    );
   }
 }
 
@@ -121,10 +133,10 @@ function hydrateDevice<
       metadata: unknown;
     }[];
   },
->(device: T): Device {
+>(device: T, authenticated: boolean): Device {
   return deviceSchema.parse({
     ...device,
-    authenticated: false,
+    authenticated,
     capabilities: device.capabilities.map((capability) => ({
       name: capability.name,
       version: capability.version,
