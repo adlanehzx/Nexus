@@ -8,6 +8,7 @@ import {
   encodePairingPayload,
   updateAdvice,
 } from "@nexus/devices";
+import { ValidationError } from "@nexus/shared";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
@@ -310,9 +311,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       if (apiUrl === undefined) {
         // Reject rather than guess: a QR with the wrong address
         // fails on the phone, far from the root cause.
-        throw new Error(
-          "QR pairing requires a reachable NEXUS address. Connect Tailscale or configure PUBLIC_API_URL.",
-        );
+        throw new ValidationError({
+          message: "Pairing ticket requested without a reachable public API URL.",
+          userMessage:
+            "QR pairing needs a reachable NEXUS address. Connect Tailscale or configure PUBLIC_API_URL, then try again.",
+        });
       }
       const { ticket, code } = await app.services.pairing.issue({
         userId,

@@ -322,7 +322,12 @@ describe("without PUBLIC_API_URL", () => {
       headers: { authorization: `Bearer ${token}` },
       payload: {},
     });
-    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        "QR pairing needs a reachable NEXUS address. Connect Tailscale or configure PUBLIC_API_URL, then try again.",
+    });
     await harness.close();
   });
 });
