@@ -57,11 +57,7 @@ export class FallbackProvider implements LLMProvider {
       }
     }
 
-    throw new LLMProviderError(this.id, {
-      message: "All fallback providers failed.",
-      retryable: false,
-      cause: lastError,
-    });
+    throw this.exhausted("during generation", lastError);
   }
 
   async *stream(request: GenerateRequest): AsyncIterable<StreamChunk> {
@@ -90,11 +86,7 @@ export class FallbackProvider implements LLMProvider {
       }
     }
 
-    throw new LLMProviderError(this.id, {
-      message: "All fallback providers failed during streaming.",
-      retryable: false,
-      cause: lastError,
-    });
+    throw this.exhausted("during streaming", lastError);
   }
 
   async structuredOutput<T>(request: GenerateRequest, schema: z.ZodType<T>): Promise<T> {
@@ -111,8 +103,23 @@ export class FallbackProvider implements LLMProvider {
       }
     }
 
-    throw new LLMProviderError(this.id, {
-      message: "All fallback providers failed for structured output.",
+    throw this.exhausted("for structured output", lastError);
+  }
+
+  /**
+   * Terminal error for an exhausted chain.
+   *
+   * "All fallback providers failed" alone cannot be acted on: the operator
+   * needs to know which engines were tried, in order, to tell a missing
+   * configuration from an unreachable one.
+   */
+  private exhausted(stage: string, lastError: unknown): LLMProviderError {
+    const tried = this.providers.map((provider) => provider.id).join(", ");
+    return new LLMProviderError(this.id, {
+      message: `All fallback providers failed ${stage}. Tried, in order: ${tried}.`,
+      userMessage:
+        "No language model answered. Check the engines in Settings — at least one must be reachable from the NEXUS server.",
+      context: { stage, tried: this.providers.map((provider) => provider.id) },
       retryable: false,
       cause: lastError,
     });
@@ -134,4 +141,5 @@ function withFallbackCount(chunk: StreamChunk, count: number): StreamChunk {
       fallbackCount: (chunk.response.fallbackCount ?? 0) + count,
     },
   };
+
 }

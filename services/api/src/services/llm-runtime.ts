@@ -168,26 +168,47 @@ export class UnifiedLlmRuntimeProvider implements LLMProvider {
   }
 
   async #router(request: GenerateRequest): Promise<FallbackProvider> {
-    const configured = await this.#configuredProviders(request);
+    const skipped: string[] = [];
+    const configured = await this.#configuredProviders(request, skipped);
     const providers = [
       ...configured.map((entry) => entry.provider),
       ...this.#baseProviders,
       ...this.#finalProviders,
     ];
-    if (providers.length === 0) throw unavailable("No LLM engine is configured.");
+    // An empty chain is a configuration fact, not an internal failure. Saying
+    // which engines were discarded, and why, is what turns it into something
+    // the operator can fix — a device engine skipped for want of a user
+    // context reads very differently from one with no credential.
+    if (providers.length === 0) {
+      throw unavailable(
+        skipped.length === 0
+          ? "No LLM engine is configured."
+          : `No eligible LLM engine for this request. Discarded: ${skipped.join("; ")}.`,
+      );
+    }
     return new FallbackProvider(providers);
   }
 
   async #configuredProviders(
     request: GenerateRequest,
+    skipped: string[] = [],
   ): Promise<{ id: string; priority: number; provider: LLMProvider; local: boolean }[]> {
     const config = await this.#runtime.loadLlmRouting();
-    if (!config.enabled) return [];
+    if (!config.enabled) {
+      skipped.push("engine routing is disabled");
+      return [];
+    }
     const providers: { id: string; priority: number; provider: LLMProvider; local: boolean }[] = [];
     for (const engine of config.engines) {
-      if (!engine.enabled) continue;
+      if (!engine.enabled) {
+        skipped.push(`${engine.id} is disabled`);
+        continue;
+      }
       if (engine.kind === "device") {
-        if (request.routingContext?.userId === undefined) continue;
+        if (request.routingContext?.userId === undefined) {
+          skipped.push(`${engine.id} needs a user context (private device inference)`);
+          continue;
+        }
         providers.push({
           id: engine.id,
           priority: engine.priority,
@@ -197,7 +218,10 @@ export class UnifiedLlmRuntimeProvider implements LLMProvider {
         continue;
       }
       const key = await this.#vault.get(engine.apiKeyRef);
-      if (key === undefined) continue;
+      if (key === undefined) {
+        skipped.push(`${engine.id} has no resolvable credential`);
+        continue;
+      }
       providers.push({
         id: engine.id,
         priority: engine.priority,

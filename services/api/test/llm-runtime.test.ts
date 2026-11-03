@@ -135,7 +135,10 @@ describe("unified LLM runtime", () => {
       provider.generate({
         messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
       }),
-    ).rejects.toThrow(/configured/i);
+      // The refusal must name the engine it discarded and why: a device engine
+      // skipped for want of a user context is a different problem from one with
+      // no credential, and the operator can only tell them apart if we say so.
+    ).rejects.toThrow(/needs a user context/i);
     expect(select).not.toHaveBeenCalled();
   });
 
