@@ -35,7 +35,7 @@ export interface SatelliteCommandResult {
   ok: boolean;
   status: number;
   message?: string | undefined;
-  data?: unknown | undefined;
+  data?: unknown;
 }
 
 export interface SatelliteView extends SatelliteHeartbeat {
@@ -68,7 +68,7 @@ export class SatelliteService {
     const expectedHex = this.#tokenHashes[deviceId];
     if (expectedHex === undefined || !/^[0-9a-f]{64}$/i.test(expectedHex)) return false;
     const prefix = "Bearer ";
-    if (authorization === undefined || !authorization.startsWith(prefix)) return false;
+    if (!authorization?.startsWith(prefix)) return false;
     const supplied = createHash("sha256").update(authorization.slice(prefix.length)).digest();
     const expected = Buffer.from(expectedHex, "hex");
     return expected.length === supplied.length && timingSafeEqual(expected, supplied);

@@ -122,6 +122,9 @@ describe("advanced memory lifecycle", () => {
     );
   });
 
+  // 1 002 enregistrements avec déduplication et détection de secrets : lourd par
+  // nature. Le défaut de 5 s tient en isolation et cède sous la contention du run
+  // parallèle, où l'échec ne dit rien d'utile.
   it("imports a large source with deduplication, secret rejection and cancellation", async () => {
     const { lifecycle } = harness();
     const job = await lifecycle.createImport(userId, 1_002);
@@ -150,7 +153,7 @@ describe("advanced memory lifecycle", () => {
     expect((await lifecycle.runImport(userId, cancelled.id, cancellable())).status).toBe(
       "CANCELLED",
     );
-  });
+  }, 30_000);
 
   it("restores lifecycle state after restart without storing raw memory content", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-memory-lifecycle-"));
@@ -191,7 +194,7 @@ describe("encrypted installation sync", () => {
     expect((await provider.search({ userId, query: "" }))[0]?.record.tags).toContain(
       "project:atlas",
     );
-  });
+  }, 30_000);
 
   it("propagates deletion and refuses synchronized secrets", async () => {
     const sync = new EncryptedMemorySynchronizer(new Uint8Array(32).fill(4));

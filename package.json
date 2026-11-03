@@ -12,10 +12,10 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint --continue",
     "lint:fix": "turbo run lint -- --fix",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "typecheck": "turbo run typecheck --continue",
+    "test": "turbo run test --continue",
     "test:watch": "turbo run test:watch",
     "test:pg": "pnpm --filter @nexus/api test:pg",
     "format": "prettier --write .",
