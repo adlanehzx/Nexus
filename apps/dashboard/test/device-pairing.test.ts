@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { generateQrSvg } from "@nexus/client-core";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+/**
+ * Reads every supervision section as one source blob.
+ *
+ * The sections used to be a single 4 300-line file; they are now one module
+ * each. These assertions are about properties of the source, so they must
+ * follow the code rather than a filename — reading the directory keeps them
+ * valid through the next split.
+ */
+function sectionsSource(): string {
+  const dir = resolve(__dirname, "../src/ui/sections");
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".tsx"))
+    .map((name) => readFileSync(resolve(dir, name), "utf8"))
+    .join("\n");
+}
 
 describe("Device discovery and pairing security (G3)", () => {
   it("generates valid SVG QR code for pairing payloads", () => {
@@ -42,7 +58,7 @@ describe("Device discovery and pairing security (G3)", () => {
   });
 
   it("ensures dashboard pairing commands stream tokens via stdin", () => {
-    const sectionsCode = readFileSync(resolve(__dirname, "../src/ui/Sections.tsx"), "utf8");
+    const sectionsCode = sectionsSource();
 
     // Linux command must pipe token via stdin, not pass as argv
     expect(sectionsCode).toContain("printf '%s' '${pairing.token}' | ./install-worker.sh");

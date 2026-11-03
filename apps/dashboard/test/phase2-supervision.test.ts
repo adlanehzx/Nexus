@@ -1,13 +1,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DashboardApi, createSession } from "../src/lib/api.js";
+
+/**
+ * Reads every supervision section as one source blob.
+ *
+ * The sections used to be a single 4 300-line file; they are now one module
+ * each. These assertions are about properties of the source, so they must
+ * follow the code rather than a filename — reading the directory keeps them
+ * valid through the next split.
+ */
+function sectionsSource(): string {
+  const dir = resolve(__dirname, "../src/ui/sections");
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".tsx"))
+    .map((name) => readFileSync(resolve(dir, name), "utf8"))
+    .join("\n");
+}
 
 describe("Phase 2 Supervision and UX Contracts (GA4)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("ensures free-form window.prompt permission editing is completely replaced by capability picker", () => {
-    const sectionsCode = readFileSync(resolve(__dirname, "../src/ui/Sections.tsx"), "utf8");
+    const sectionsCode = sectionsSource();
 
     // window.prompt must never be used for permissions
     expect(sectionsCode).not.toContain("window.prompt");
