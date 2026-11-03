@@ -7,7 +7,7 @@ ARG NODE_VERSION=24.20.0
 ARG PNPM_VERSION=11.25.0
 
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:${NODE_VERSION}-alpine AS base
+FROM node:${NODE_VERSION}-bookworm-slim AS base
 
 ARG PNPM_VERSION
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
@@ -47,7 +47,7 @@ RUN pnpm --filter @nexus/api... run build
 RUN pnpm --filter @nexus/api --prod deploy --legacy /out
 
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:${NODE_VERSION}-alpine AS runtime
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     PATH=/opt/nexus-python/bin:$PATH \
@@ -57,7 +57,15 @@ ENV NODE_ENV=production \
 # dumb-init forwards SIGTERM to Node for graceful shutdown. Sherlock is kept in
 # its own virtual environment and pinned: it is an external MIT-licensed tool,
 # not imported into NEXUS or allowed to execute arbitrary arguments.
-RUN apk add --no-cache dumb-init python3 py3-pip \
+#
+# The base is Debian rather than Alpine on purpose: `onnxruntime-node`, which
+# backs the `neural` memory embedding backend, ships glibc prebuilts only. On
+# musl it fails to load, writing a memory answers 500, and semantic recall
+# silently never works. See ADR-018.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      dumb-init python3 python3-venv python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/nexus-python \
     && /opt/nexus-python/bin/pip install --no-cache-dir \
       "sherlock-project==0.16.2" \
@@ -69,6 +77,7 @@ RUN mkdir -p \
       /var/lib/nexus/runtime-config \
       /var/lib/nexus/artifacts/browser \
       /var/lib/nexus/observability \
+      /var/lib/nexus/workspaces \
     && chown -R node:node /var/lib/nexus
 
 WORKDIR /app

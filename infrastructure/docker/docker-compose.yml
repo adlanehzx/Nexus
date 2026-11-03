@@ -116,6 +116,12 @@ services:
       NEXUS_RUNTIME_CONFIG_DIR: /var/lib/nexus/runtime-config
       NEXUS_BROWSER_ARTIFACTS_DIR: /var/lib/nexus/artifacts/browser
       NEXUS_OBSERVABILITY_DIR: /var/lib/nexus/observability
+      # ACP missions write a per-mission workspace here, and the Mission Engine
+      # — which runs on the host — spawns each agent with that path as its cwd
+      # (mission-engine/acp.py, `cwd=workspace`). The path must therefore resolve
+      # identically inside the container and on the host, which is why the mount
+      # below is a 1:1 bind and not a named volume. See ADR-017.
+      NEXUS_ACP_WORKSPACE_DIR: ${NEXUS_ACP_WORKSPACE_HOST_DIR:-/var/lib/nexus/workspaces}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-1 minute}
@@ -132,6 +138,7 @@ services:
       SEARXNG_TIMEOUT_MS: ${SEARXNG_TIMEOUT_MS:-15000}
     network_mode: host
     volumes:
+      - ${NEXUS_ACP_WORKSPACE_HOST_DIR:-/var/lib/nexus/workspaces}:${NEXUS_ACP_WORKSPACE_HOST_DIR:-/var/lib/nexus/workspaces}
       - nexus-models:/var/lib/nexus/models
       - nexus-runtime-config:/var/lib/nexus/runtime-config
       - nexus-artifacts:/var/lib/nexus/artifacts
