@@ -146,4 +146,57 @@ describe("TaskPlanner", () => {
       }),
     ).rejects.toThrowError(TaskPlannerError);
   });
+
+  test("Attaches the routing context so the user's own engines stay eligible", async () => {
+    // The unified LLM runtime skips every `device` engine when the request
+    // carries no user: private inference runs on a machine the user paired.
+    // Planning without a routing context therefore fell through to host-CLI
+    // providers, which do not exist inside the API container.
+    const seen: { routingContext?: { userId: string } }[] = [];
+    const llm = {
+      id: "spy",
+      model: "spy",
+      capabilities: {
+        tools: false,
+        vision: false,
+        structuredOutput: true,
+        maxContextTokens: 8192,
+      },
+      generate: () => Promise.reject(new Error("unused")),
+      stream: () => {
+        throw new Error("unused");
+      },
+      countTokens: () => Promise.resolve(0),
+      structuredOutput: (request: { routingContext?: { userId: string } }) => {
+        seen.push(request);
+        return Promise.resolve({
+          title: "Read file",
+          steps: [
+            {
+              id: "step-1",
+              description: "File reading",
+              requiredCapabilities: ["filesystem.read"],
+              tool: "device.filesystem.read",
+              arguments: {},
+              dependsOn: [],
+              riskLevel: "SAFE" as const,
+            },
+          ],
+          reasoning: "Local read",
+        });
+      },
+    } as unknown as ConstructorParameters<typeof TaskPlanner>[0]["llm"];
+
+    const planner = new TaskPlanner({ llm, availableCapabilities: DEFAULT_CAPS });
+
+    await planner.plan({
+      instruction: "Read file /tmp/test.txt",
+      userId: "user-42",
+      originClientDeviceId: "device-1",
+      correlationId: "corr-1",
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.routingContext).toEqual({ userId: "user-42" });
+  });
 });

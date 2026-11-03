@@ -78,6 +78,12 @@ ABSOLUTE RULES:
         { role: "user", content: [{ type: "text", text: input.instruction }] },
       ] as LlmMessage[],
       system: systemPrompt,
+      // Routing context is what makes the user's own engines eligible: the
+      // unified runtime skips every `device` engine when no user is attached,
+      // because private inference runs on a machine that user has paired.
+      // Without it, planning falls straight through to host-CLI providers,
+      // which do not exist inside the API container.
+      routingContext: { userId: input.userId },
     };
 
     let result: LlmTaskPlan;
