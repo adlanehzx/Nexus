@@ -234,6 +234,8 @@ export const configSchema = z
     NEXUS_RUNTIME_CONFIG_DIR: optionalAbsolutePath,
     NEXUS_BROWSER_ARTIFACTS_DIR: optionalAbsolutePath,
     NEXUS_OBSERVABILITY_DIR: optionalAbsolutePath,
+    /** ACP mission workspaces. Must be writable: a mission cannot start without one. */
+    NEXUS_ACP_WORKSPACE_DIR: optionalAbsolutePath,
 
     /** NEXUS ACP / paper-trading engine, optional. */
     MISSION_CONTROL_URL: z.preprocess(

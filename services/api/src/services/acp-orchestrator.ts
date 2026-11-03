@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { DependencyError } from "@nexus/shared";
 import type { LLMProvider, LlmMessage } from "@nexus/llm";
 import type { ContextAssembler } from "@nexus/memory";
 import type {
@@ -120,6 +121,7 @@ export class AcpOrchestrator {
   readonly #router: AgentRouter;
   readonly #sharedArtifacts: SharedArtifactStore;
   readonly #agentCollaboration: AgentCollaborationService;
+  readonly #onDegraded: ((event: { reason: string; cause: unknown }) => void) | undefined;
 
   constructor(options: {
     missionControl: MissionControlPort;
@@ -139,12 +141,21 @@ export class AcpOrchestrator {
     agentRouter?: AgentRouter;
     sharedArtifacts?: SharedArtifactStore;
     agentCollaboration?: AgentCollaborationService;
+    /**
+     * Reports a degradation that did not stop the mission.
+     *
+     * Memory enrichment is the case that matters: it improves a plan, it is not
+     * a precondition for one. Losing it silently would be the worse failure —
+     * the mission would simply get quietly dumber.
+     */
+    onDegraded?: (event: { reason: string; cause: unknown }) => void;
   }) {
     this.#missionControl = options.missionControl;
     this.#llm = options.llm;
     this.#context = options.context;
     this.#grants = options.grants;
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
+    this.#onDegraded = options.onDegraded;
     this.#router = options.agentRouter ?? new AgentRouter();
     this.#sharedArtifacts = options.sharedArtifacts ?? new SharedArtifactStore();
     this.#agentCollaboration = options.agentCollaboration ?? new AgentCollaborationService();
@@ -277,18 +288,39 @@ export class AcpOrchestrator {
 
     const missionKey = randomUUID();
     const workspace = resolve(this.#workspaceRoot, missionKey);
-    await mkdir(workspace, { recursive: true, mode: 0o700 });
+    // A mission cannot start without a writable workspace, and the failure is
+    // operational, not internal: in a read-only container image the default
+    // root resolves under the application directory, which is not writable.
+    // Saying so is the difference between a fixable deployment and a 500.
+    try {
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+    } catch (cause) {
+      throw new DependencyError({
+        message: `Unable to create the ACP mission workspace at ${workspace}.`,
+        userMessage:
+          "NEXUS cannot write the mission workspace. Point NEXUS_ACP_WORKSPACE_DIR at a writable directory and restart the API.",
+        context: { workspaceRoot: this.#workspaceRoot, workspace },
+        cause,
+      });
+    }
 
-    const memoryContext =
-      this.#context === undefined
-        ? ""
-        : (
-            await this.#context.assemble({
-              userId,
-              conversationId: missionKey,
-              query: objective,
-            })
-          ).text;
+    // Memory is an enrichment, not a precondition: an embedding backend that
+    // cannot load (a native runtime missing from the image, a cold model cache)
+    // must cost the mission its context, never its existence.
+    let memoryContext = "";
+    if (this.#context !== undefined) {
+      try {
+        memoryContext = (
+          await this.#context.assemble({
+            userId,
+            conversationId: missionKey,
+            query: objective,
+          })
+        ).text;
+      } catch (cause) {
+        this.#onDegraded?.({ reason: "memory context unavailable", cause });
+      }
+    }
     const planned = await this.#plan(
       userId,
       objective,

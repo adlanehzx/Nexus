@@ -95,7 +95,7 @@ import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/sub
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 import type { LinkedInIntegrationService } from "./linkedin-integration.js";
 import { OsintService } from "./osint-service.js";
-import { createOsintTools } from "@nexus/osint";
+import { registerToolDomains } from "./tool-registration.js";
 import type { FreeLlmRuntimeProvider } from "./freelm-runtime.js";
 import type { UnifiedLlmRuntimeProvider } from "./llm-runtime.js";
 
@@ -220,6 +220,8 @@ export interface ServiceContainerOptions {
   apiVersion?: string;
   /** Private local directory for redacted, bounded logs. */
   observabilityDirectory?: string;
+  /** Root directory for ACP mission workspaces. Must be writable. */
+  acpWorkspaceRoot?: string;
   /** LLM provider for TaskPlanner. */
   llmProvider?: LLMProvider;
   /** Hot-reloadable free-tier provider exposed to the dashboard. */
@@ -310,6 +312,7 @@ export class ServiceContainer {
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
+  readonly acpWorkspaceRoot: string | undefined;
   readonly llmProvider: LLMProvider | undefined;
   readonly freeLlm: FreeLlmRuntimeProvider | undefined;
   readonly llmRuntime: UnifiedLlmRuntimeProvider | undefined;
@@ -323,6 +326,7 @@ export class ServiceContainer {
   readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
+    this.acpWorkspaceRoot = options.acpWorkspaceRoot;
     this.llmProvider = options.llmProvider;
     this.freeLlm = options.freeLlmProvider;
     this.llmRuntime = options.llmRuntimeProvider;
@@ -621,7 +625,7 @@ export class ServiceContainer {
           : { runtime: options.runtimeConfiguration }),
         ...(options.vault === undefined ? {} : { vault: options.vault }),
       });
-    this.toolRegistry.registerAll(createOsintTools(this.osint));
+    registerToolDomains(this.toolRegistry, { osint: this.osint });
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
 

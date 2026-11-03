@@ -112,6 +112,11 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           agentRouter,
           sharedArtifacts: app.services.sharedArtifacts,
           agentCollaboration: app.services.agentCollaboration,
+          ...(app.services.acpWorkspaceRoot === undefined
+            ? {}
+            : { workspaceRoot: app.services.acpWorkspaceRoot }),
+          onDegraded: ({ reason, cause }) =>
+            app.log.warn({ err: cause, event: "mission.degraded", reason }, reason),
           ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
         });
 

@@ -148,7 +148,12 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
       const scheduleKey = randomUUID();
       const scheduleId = randomUUID();
       const externalKey = `${missionOwnerPrefix(userId)}-schedule-${scheduleKey}`;
-      const workspace = resolve(process.cwd(), ".nexus-workspaces", `schedule-${scheduleKey}`);
+      // Same writable-root requirement as ACP missions: scheduled runs carry
+      // the identical defect when the default resolves under a read-only image.
+      const workspace = resolve(
+        app.services.acpWorkspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces"),
+        `schedule-${scheduleKey}`,
+      );
       await mkdir(workspace, { recursive: true, mode: 0o700 });
       const needsAgentCore = request.body.mission.tasks.some(
         (task) => task.agent_kind === "agent-core" || task.profile === "agent-core",

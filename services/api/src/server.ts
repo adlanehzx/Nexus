@@ -227,6 +227,8 @@ const services = new ServiceContainer({
   ...(browser === undefined ? {} : { browser }),
   ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
   ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
+  acpWorkspaceRoot:
+    config.NEXUS_ACP_WORKSPACE_DIR ?? resolve(here, "../../../.nexus-workspaces"),
   llmProvider: llmRuntime,
   llmRuntimeProvider: llmRuntime,
   freeLlmProvider: freeLlm,
@@ -258,6 +260,22 @@ const services = new ServiceContainer({
 deviceRuntime.current = services;
 
 const logger = createLogger(config, [services.logs]);
+
+// Which embedding backend is live decides whether semantic recall is real or a
+// deterministic hash approximation. Nothing else reports it, so an installation
+// running on `hash` would look identical to one running the model — say it once,
+// loudly, at boot.
+logger.info(
+  {
+    event: "memory.embeddings",
+    backend: config.MEMORY_EMBEDDING_BACKEND,
+    model: embeddings.model,
+    semantic: config.MEMORY_EMBEDDING_BACKEND === "neural",
+  },
+  config.MEMORY_EMBEDDING_BACKEND === "neural"
+    ? `Semantic memory enabled with ${embeddings.model}`
+    : `Semantic memory DISABLED: embeddings fall back to ${embeddings.model}, recall is approximate`,
+);
 
 async function main(): Promise<void> {
   const app = await buildApp({ config, logger, services, prisma });
