@@ -18,6 +18,10 @@ coverage/
 # Secrets and local configuration — NEVER commit these
 .env
 .env.*
+# A prefixed name — qa.env, local.env — matched none of the patterns above, so
+# a fixture holding AUTH_SIGNING_KEY, MASTER_KEY and a database password was
+# committable. It takes one `git add -A` on a parent directory.
+*.env
 !.env.example
 *.pem
 *.key
