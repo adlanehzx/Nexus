@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { generateQrSvg } from "@nexus/client-core";
 import type { DashboardApi, PairingTicket } from "../../lib/api.js";
-import { KNOWN_PERMISSIONS, PERMISSION_PRESETS, formatAge, formatLatency } from "../../lib/format.js";
+import {
+  KNOWN_PERMISSIONS,
+  PERMISSION_PRESETS,
+  formatAge,
+  formatLatency,
+} from "../../lib/format.js";
 import { Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 

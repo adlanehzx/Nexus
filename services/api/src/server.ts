@@ -227,8 +227,7 @@ const services = new ServiceContainer({
   ...(browser === undefined ? {} : { browser }),
   ...(browserSessionManager === undefined ? {} : { browserSessionManager }),
   ...(notificationDispatcher === undefined ? {} : { notificationDispatcher }),
-  acpWorkspaceRoot:
-    config.NEXUS_ACP_WORKSPACE_DIR ?? resolve(here, "../../../.nexus-workspaces"),
+  acpWorkspaceRoot: config.NEXUS_ACP_WORKSPACE_DIR ?? resolve(here, "../../../.nexus-workspaces"),
   llmProvider: llmRuntime,
   llmRuntimeProvider: llmRuntime,
   freeLlmProvider: freeLlm,

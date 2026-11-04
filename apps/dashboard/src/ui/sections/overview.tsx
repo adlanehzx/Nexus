@@ -1,5 +1,11 @@
 import type { DashboardApi } from "../../lib/api.js";
-import { HEALTH_LABELS, formatAge, formatCount, overallHealth, sortActivity } from "../../lib/format.js";
+import {
+  HEALTH_LABELS,
+  formatAge,
+  formatCount,
+  overallHealth,
+  sortActivity,
+} from "../../lib/format.js";
 import { Empty, Metric, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";

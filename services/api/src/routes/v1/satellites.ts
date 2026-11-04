@@ -32,10 +32,8 @@ export const satelliteRoutes: FastifyPluginCallback = (fastify, _options, done) 
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const deviceParams = z.object({ deviceId: deviceIdSchema });
 
-  const requireSatellite = (
-    deviceId: string,
-    authorization: string | undefined,
-  ): boolean => app.satellites.authenticate(deviceId, authorization);
+  const requireSatellite = (deviceId: string, authorization: string | undefined): boolean =>
+    app.satellites.authenticate(deviceId, authorization);
 
   app.post(
     "/satellites/:deviceId/heartbeat",

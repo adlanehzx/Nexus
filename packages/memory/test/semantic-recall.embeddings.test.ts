@@ -60,11 +60,7 @@ describe("semantic recall with the real model", () => {
 
   it("shows the hash backend failing that same property, so the difference is documented", async () => {
     const hashed = new LocalHashEmbeddingProvider();
-    const [base, paraphrase, unrelated] = await hashed.embed([
-      PARAPHRASE,
-      SAME_MEANING,
-      UNRELATED,
-    ]);
+    const [base, paraphrase, unrelated] = await hashed.embed([PARAPHRASE, SAME_MEANING, UNRELATED]);
 
     const near = cosine(base!, paraphrase!);
     const far = cosine(base!, unrelated!);

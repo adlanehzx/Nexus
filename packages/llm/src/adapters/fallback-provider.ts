@@ -141,5 +141,4 @@ function withFallbackCount(chunk: StreamChunk, count: number): StreamChunk {
       fallbackCount: (chunk.response.fallbackCount ?? 0) + count,
     },
   };
-
 }

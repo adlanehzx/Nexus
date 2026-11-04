@@ -71,16 +71,19 @@ const modelPricing = z.preprocess((value, ctx) => {
   }
 }, modelPricingSchema);
 
-const satelliteTokenHashes = z.preprocess((value, ctx) => {
-  if (value === undefined || value === "") return {};
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    ctx.addIssue({ code: "custom", message: "must contain a valid JSON object" });
-    return z.NEVER;
-  }
-}, z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/), z.string().regex(/^[0-9a-f]{64}$/i)));
+const satelliteTokenHashes = z.preprocess(
+  (value, ctx) => {
+    if (value === undefined || value === "") return {};
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "must contain a valid JSON object" });
+      return z.NEVER;
+    }
+  },
+  z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/), z.string().regex(/^[0-9a-f]{64}$/i)),
+);
 
 /**
  * Tauri desktop shell origins.
@@ -127,7 +130,10 @@ export const configSchema = z
     SATELLITE_TOKEN_HASHES_JSON: satelliteTokenHashes.default({}),
     FIRE_TV_ADB_SERIAL: z.preprocess(
       (value) => (value === "" ? undefined : value),
-      z.string().regex(/^[a-zA-Z0-9._:-]{1,128}$/).optional(),
+      z
+        .string()
+        .regex(/^[a-zA-Z0-9._:-]{1,128}$/)
+        .optional(),
     ),
     FIRE_TV_ADB_SERVER: z
       .string()
