@@ -52,10 +52,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                 label={tr("unified drivers", "drivers unifiés")}
               />
               <Metric
-                value="4"
+                value="9"
                 label={tr(
-                  "active engines (Claude, Cursor, Grok, ACP)",
-                  "moteurs actifs (Claude, Cursor, Grok, ACP)",
+                  "active engines (Claude, Codex, Antigravity, Cursor, Grok, OpenCode, Pi, ACP, Local)",
+                  "moteurs actifs (Claude, Codex, Antigravity, Cursor, Grok, OpenCode, Pi, ACP, Local)",
                 )}
                 tone="positive"
               />
