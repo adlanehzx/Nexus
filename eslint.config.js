@@ -13,6 +13,8 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/src/generated/**",
       "**/*.d.ts",
+      "**/target/**",
+      "**/src-tauri/target/**",
       // MCP test server executed as a child process outside the TS project.
       "**/test/*.mjs",
       // Android React Native UI and JavaScript engine adapters are compiled by

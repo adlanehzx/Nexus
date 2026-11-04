@@ -91,6 +91,8 @@ export const en: Translations = {
       "quota-forecast": "Quota forecast",
       agents: "Agents",
       connections: "Connections",
+      "vcs-worktrees": "VCS & Worktrees",
+      providers: "Model Providers",
       settings: "Settings",
       setup: "Setup wizard",
     },
@@ -204,6 +206,16 @@ export const en: Translations = {
     "quota-forecast": {
       title: "Quota forecast",
       description: "Provider usage projections, estimated depletion dates, and confidence.",
+    },
+    "vcs-worktrees": {
+      title: "VCS & Worktrees",
+      description:
+        "Manage isolated git worktrees, inspect turn checkpoints, and link source control pull requests.",
+    },
+    providers: {
+      title: "Model Providers",
+      description:
+        "Supervise multi-engine model drivers, token accounting, and active AI runtimes.",
     },
   },
   chat: {

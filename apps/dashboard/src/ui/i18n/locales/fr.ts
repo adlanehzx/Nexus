@@ -91,6 +91,8 @@ export const fr: Translations = {
       "quota-forecast": "Prévisions quotas",
       agents: "Agents",
       connections: "Connexions",
+      "vcs-worktrees": "VCS & Worktrees",
+      providers: "Fournisseurs de modèles",
       settings: "Paramètres",
       setup: "Assistant d'installation",
     },
@@ -206,6 +208,16 @@ export const fr: Translations = {
     "quota-forecast": {
       title: "Prévisions quotas",
       description: "Projections d'usage des modèles, dates estimées d'épuisement et confiance.",
+    },
+    "vcs-worktrees": {
+      title: "VCS & Worktrees",
+      description:
+        "Gérez les worktrees Git isolés, inspectez les checkpoints par tour et reliez les pull requests.",
+    },
+    providers: {
+      title: "Fournisseurs de modèles",
+      description:
+        "Supervisez les moteurs d'IA réels, la comptabilité des jetons et les runtimes actifs.",
     },
   },
   chat: {

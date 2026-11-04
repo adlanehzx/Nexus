@@ -468,7 +468,9 @@ export function Agents({ api }: { api: DashboardApi }) {
         <section className="settings-panel">
           <div className="settings-panel-heading">
             <div>
-              <h3>{tr("ACP Settings", "Paramètres ACP")} · {editing}</h3>
+              <h3>
+                {tr("ACP Settings", "Paramètres ACP")} · {editing}
+              </h3>
               <p className="muted">
                 {tr(
                   "Modifications are persistent and saved. Credentials remain in CLI keyrings and are never displayed here.",
@@ -533,10 +535,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               </select>
             </label>
             <label className="settings-wide">
-              {tr(
-                "System prompt specific to this agent",
-                "Invite système spécifique à cet agent",
-              )}
+              {tr("System prompt specific to this agent", "Invite système spécifique à cet agent")}
               <textarea
                 className="field settings-textarea"
                 value={editSystemPrompt}
@@ -668,7 +667,9 @@ export function Agents({ api }: { api: DashboardApi }) {
             disabled={busy || template.length === 0 || newName.length === 0 || newKey.length === 0}
             onClick={create}
           >
-            {busy ? tr("Creating…", "Création…") : tr("Create and register", "Créer et enregistrer")}
+            {busy
+              ? tr("Creating…", "Création…")
+              : tr("Create and register", "Créer et enregistrer")}
           </button>
         </div>
       </div>

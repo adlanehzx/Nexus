@@ -68,11 +68,7 @@ export function ContactsOutcomesAnalytics({
   };
 
   return (
-    <div
-      className="career-tab-content"
-      role="region"
-      aria-label="Contacts, Outcomes and Analytics"
-    >
+    <div className="career-tab-content" role="region" aria-label="Contacts, Outcomes and Analytics">
       <div
         style={{
           display: "flex",

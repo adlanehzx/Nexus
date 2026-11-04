@@ -63,6 +63,11 @@ model User {
   careerConfirmations      CareerConfirmation[]
   careerApplicationEvents  CareerApplicationEvent[]
 
+  /// Unified T3 Code & VCS Extensions
+  worktrees                Worktree[]
+  sourceControlLinks       SourceControlLink[]
+  agentProviderConfigs     AgentProviderConfig[]
+
   @@map("users")
 }
 
@@ -1194,3 +1199,93 @@ model CareerApplicationEvent {
   @@index([userId, createdAt(sort: Desc)])
   @@map("career_application_events")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unified T3 Code & VCS Extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Git worktree metadata used for isolated agent execution.
+model Worktree {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String?      @db.Uuid
+  path          String       @db.VarChar(1024)
+  branch        String       @db.VarChar(255)
+  headCommit    String?      @db.VarChar(40)
+  baseBranch    String?      @db.VarChar(255)
+  workspaceRoot String       @db.VarChar(1024)
+  strategy      String       @default("isolated") @db.VarChar(32)
+  status        String       @default("active") @db.VarChar(32)
+  isDetached    Boolean      @default(false)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  user          User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkpoints   Checkpoint[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([workspaceRoot, branch])
+  @@map("worktrees")
+}
+
+/// Point-in-time code snapshot / diff checkpoint enabling atomic rollback.
+model Checkpoint {
+  id           String    @id @default(uuid()) @db.Uuid
+  worktreeId   String?   @db.Uuid
+  threadId     String    @db.VarChar(255)
+  turnNumber   Int
+  commitHash   String?   @db.VarChar(40)
+  diffBlob     String?   @db.Text
+  description  String?   @db.VarChar(500)
+  snapshotRoot String?   @db.VarChar(1024)
+  createdBy    String?   @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  worktree     Worktree? @relation(fields: [worktreeId], references: [id], onDelete: SetNull)
+
+  @@index([threadId, turnNumber])
+  @@index([worktreeId])
+  @@map("checkpoints")
+}
+
+/// Linked VCS Pull Request / Branch tracking for threads and task plans.
+model SourceControlLink {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String?  @db.Uuid
+  provider          String   @db.VarChar(32)
+  repoUrl           String   @db.VarChar(1024)
+  pullRequestNumber Int?
+  branch            String   @db.VarChar(255)
+  headSha           String?  @db.VarChar(40)
+  checksState       String   @default("unknown") @db.VarChar(32)
+  reviewState       String   @default("pending") @db.VarChar(32)
+  watched           Boolean  @default(false)
+  threadId          String?  @db.VarChar(255)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider, repoUrl])
+  @@index([threadId])
+  @@map("source_control_links")
+}
+
+/// Provider runtime configuration (ACP, Claude, Cursor, Grok, Codex, OpenCode, etc.)
+model AgentProviderConfig {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String?  @db.Uuid
+  providerType  String   @db.VarChar(64)
+  modelId       String   @db.VarChar(255)
+  displayName   String?  @db.VarChar(255)
+  isDefault     Boolean  @default(false)
+  authSecretRef String?  @db.VarChar(255)
+  settings      Json     @default("{}")
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, providerType])
+  @@map("agent_provider_configs")
+}
+

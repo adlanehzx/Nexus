@@ -915,6 +915,85 @@ export interface LlmEnginesSection {
   }[];
 }
 
+export interface WorktreeDto {
+  id: string;
+  path: string;
+  branch: string;
+  baseBranch?: string;
+  headSha?: string;
+  status: "active" | "dirty" | "stale" | "pruned";
+  strategy?: "inherit" | "branch" | "share" | "isolated";
+  createdAt: string;
+}
+
+export interface WorktreeStatusDto {
+  clean: boolean;
+  branch: string;
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  files: string[];
+}
+
+export interface CheckpointDto {
+  id: string;
+  threadId: string;
+  turnCount: number;
+  gitRef: string;
+  snapshotSha: string;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ThreadTurnDiffDto {
+  threadId: string;
+  fromTurnCount: number;
+  toTurnCount: number;
+  diff: string;
+  filesChanged: string[];
+  insertions: number;
+  deletions: number;
+}
+
+export interface SourceControlLinkDto {
+  id: string;
+  provider: "local" | "github" | "gitlab" | "bitbucket" | "azure-devops" | "forgejo" | "gitcafe";
+  repoUrl: string;
+  branch: string;
+  pullRequestNumber?: number;
+  headSha?: string;
+  checksState: "unknown" | "pending" | "success" | "failure" | "error" | "skipped";
+  reviewState: "unknown" | "pending" | "approved" | "changes_requested" | "commented";
+  watched: boolean;
+  threadId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UnifiedProviderDto {
+  id: string;
+  displayName: string;
+  capabilities: {
+    streaming: boolean;
+    toolCall: boolean;
+    imageInput: boolean;
+    audioInput: boolean;
+    contextHandoff: boolean;
+    checkpointRollback: boolean;
+  };
+}
+
+export interface UnifiedModelDto {
+  id: string;
+  provider: string;
+  modelId?: string;
+  displayName: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  maxOutputTokens?: number;
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -1539,6 +1618,133 @@ export class DashboardApi {
     });
   }
 
+  worktrees(workspaceRoot?: string): Promise<{ worktrees: WorktreeDto[] }> {
+    const path = workspaceRoot
+      ? `/api/v1/worktrees?workspaceRoot=${encodeURIComponent(workspaceRoot)}`
+      : "/api/v1/worktrees";
+    return this.#get(path);
+  }
+
+  createWorktree(input: {
+    workspaceRoot: string;
+    branchName: string;
+    baseBranch?: string;
+    targetPath?: string;
+    strategy?: "inherit" | "branch" | "share" | "isolated";
+  }): Promise<{ worktree: WorktreeDto }> {
+    return this.#request("POST", "/api/v1/worktrees", input);
+  }
+
+  worktreeStatus(worktreePath: string, workspaceRoot?: string): Promise<WorktreeStatusDto> {
+    const query = new URLSearchParams({ worktreePath });
+    if (workspaceRoot) query.set("workspaceRoot", workspaceRoot);
+    return this.#get(`/api/v1/worktrees/status?${query.toString()}`);
+  }
+
+  handoffWorktree(input: {
+    worktreePath: string;
+    targetBranch: string;
+    commitMessage: string;
+    autoMerge?: boolean;
+  }): Promise<{ success: boolean; commitSha?: string }> {
+    return this.#request("POST", "/api/v1/worktrees/handoff", input);
+  }
+
+  removeWorktree(input: {
+    workspaceRoot: string;
+    worktreePath: string;
+    force?: boolean;
+    deleteBranch?: boolean;
+  }): Promise<{ success: boolean }> {
+    return this.#request("DELETE", "/api/v1/worktrees", input);
+  }
+
+  checkpoints(threadId: string): Promise<{ checkpoints: CheckpointDto[] }> {
+    return this.#get(`/api/v1/checkpoints/${encodeURIComponent(threadId)}`);
+  }
+
+  createCheckpoint(
+    threadId: string,
+    input: { turnCount: number; cwd: string; description?: string },
+  ): Promise<{ checkpoint: CheckpointDto }> {
+    return this.#request("POST", `/api/v1/checkpoints/${encodeURIComponent(threadId)}`, input);
+  }
+
+  restoreCheckpoint(
+    threadId: string,
+    input: { turnCount: number; cwd: string },
+  ): Promise<{ success: boolean; restoredTurnCount: number; gitRef: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/checkpoints/${encodeURIComponent(threadId)}/restore`,
+      input,
+    );
+  }
+
+  checkpointDiff(
+    threadId: string,
+    fromTurn: number,
+    toTurn: number,
+    cwd?: string,
+  ): Promise<{ diff: ThreadTurnDiffDto }> {
+    const query = new URLSearchParams({
+      fromTurn: String(fromTurn),
+      toTurn: String(toTurn),
+    });
+    if (cwd) query.set("cwd", cwd);
+    return this.#get(
+      `/api/v1/checkpoints/${encodeURIComponent(threadId)}/diff?${query.toString()}`,
+    );
+  }
+
+  sourceControlLinks(threadId?: string): Promise<{ links: SourceControlLinkDto[] }> {
+    const path = threadId
+      ? `/api/v1/source-control/links?threadId=${encodeURIComponent(threadId)}`
+      : "/api/v1/source-control/links";
+    return this.#get(path);
+  }
+
+  linkPullRequest(input: {
+    provider: string;
+    repoUrl: string;
+    branch: string;
+    pullRequestNumber?: number;
+    headSha?: string;
+    checksState?: string;
+    reviewState?: string;
+    watched?: boolean;
+    threadId?: string;
+  }): Promise<{ link: SourceControlLinkDto }> {
+    return this.#request("POST", "/api/v1/source-control/links", input);
+  }
+
+  unlinkPullRequest(id: string): Promise<{ success: boolean }> {
+    return this.#request("DELETE", `/api/v1/source-control/links/${encodeURIComponent(id)}`);
+  }
+
+  setPullRequestWatched(id: string, watched: boolean): Promise<{ link: SourceControlLinkDto }> {
+    return this.#request("PATCH", `/api/v1/source-control/links/${encodeURIComponent(id)}/watch`, {
+      watched,
+    });
+  }
+
+  unifiedProviders(): Promise<{ providers: UnifiedProviderDto[] }> {
+    return this.#get("/api/v1/providers");
+  }
+
+  unifiedProviderModels(providerId: string): Promise<{ models: UnifiedModelDto[] }> {
+    return this.#get(`/api/v1/providers/${encodeURIComponent(providerId)}/models`);
+  }
+
+  validateProviderCredentials(
+    providerId: string,
+    credentials: Record<string, string>,
+  ): Promise<{ valid: boolean; error?: string }> {
+    return this.#request("POST", `/api/v1/providers/${encodeURIComponent(providerId)}/validate`, {
+      credentials,
+    });
+  }
+
   async #get<T>(path: string): Promise<T> {
     return this.#request("GET", path);
   }
@@ -1558,7 +1764,17 @@ export class DashboardApi {
       throw new Error(messageOf(response.body));
     }
 
-    return (response.body as { data: T }).data;
+    const responseBody = response.body as { data?: T } | T;
+    if (
+      responseBody !== null &&
+      typeof responseBody === "object" &&
+      "data" in responseBody &&
+      responseBody.data !== undefined
+    ) {
+      return (responseBody as { data: T }).data;
+    }
+
+    return responseBody as T;
   }
 }
 

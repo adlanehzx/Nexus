@@ -122,9 +122,9 @@ describe("advanced memory lifecycle", () => {
     );
   });
 
-  // 1 002 enregistrements avec déduplication et détection de secrets : lourd par
-  // nature. Le défaut de 5 s tient en isolation et cède sous la contention du run
-  // parallèle, où l'échec ne dit rien d'utile.
+  // 1,002 records with deduplication and secret detection: inherently heavy.
+  // The default 5s holds in isolation and fails under parallel run contention,
+  // where failure does not report anything useful.
   it("imports a large source with deduplication, secret rejection and cancellation", async () => {
     const { lifecycle } = harness();
     const job = await lifecycle.createImport(userId, 1_002);
@@ -183,8 +183,10 @@ describe("encrypted installation sync", () => {
     expect(() =>
       new EncryptedMemorySynchronizer(new Uint8Array(32).fill(8)).decrypt(envelope),
     ).toThrow();
+    const tamperedBuf = Buffer.from(envelope.ciphertext, "base64url");
+    tamperedBuf.writeUInt8(tamperedBuf.readUInt8(0) ^ 1, 0);
     expect(() =>
-      sync.decrypt({ ...envelope, ciphertext: `${envelope.ciphertext.slice(0, -1)}A` }),
+      sync.decrypt({ ...envelope, ciphertext: tamperedBuf.toString("base64url") }),
     ).toThrow();
     const { provider, service } = harness();
     expect(await sync.apply(envelope, { userId, provider, service })).toEqual({

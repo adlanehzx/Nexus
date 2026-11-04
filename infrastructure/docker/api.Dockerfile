@@ -28,6 +28,20 @@ COPY packages/database/package.json    packages/database/
 COPY packages/llm/package.json         packages/llm/
 COPY packages/memory/package.json      packages/memory/
 COPY packages/tools/package.json       packages/tools/
+COPY packages/agent-core/package.json  packages/agent-core/
+COPY packages/vcs/package.json         packages/vcs/
+COPY packages/career/package.json      packages/career/
+COPY packages/devices/package.json     packages/devices/
+COPY packages/linkedin/package.json    packages/linkedin/
+COPY packages/mission-control-client/package.json packages/mission-control-client/
+COPY packages/browser-client/package.json packages/browser-client/
+COPY packages/notifications/package.json packages/notifications/
+COPY packages/osint/package.json       packages/osint/
+COPY packages/mcp/package.json         packages/mcp/
+COPY packages/web-search/package.json  packages/web-search/
+COPY packages/worker-core/package.json packages/worker-core/
+COPY packages/design/package.json      packages/design/
+COPY packages/client-core/package.json packages/client-core/
 COPY services/api/package.json         services/api/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
@@ -64,7 +78,7 @@ ENV NODE_ENV=production \
 # silently never works. See ADR-018.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      dumb-init python3 python3-venv python3-pip \
+      dumb-init git python3 python3-venv python3-pip \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/nexus-python \
     && /opt/nexus-python/bin/pip install --no-cache-dir \

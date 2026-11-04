@@ -73,8 +73,17 @@ struct WorkerState {
 }
 
 fn worker_state_path() -> Option<PathBuf> {
-    std::env::var_os("ProgramData")
-        .map(|root| PathBuf::from(root).join("NEXUS").join("worker").join("device.json"))
+    #[cfg(windows)]
+    {
+        std::env::var_os("ProgramData")
+            .map(|root| PathBuf::from(root).join("NEXUS").join("worker").join("device.json"))
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME")
+            .map(|root| PathBuf::from(root).join(".nexus").join("worker").join("device.json"))
+            .or_else(|| Some(PathBuf::from("/var/lib/nexus/worker/device.json")))
+    }
 }
 
 /// Identifier of worker installed on this machine.
@@ -93,7 +102,17 @@ fn local_worker_device_id() -> Option<String> {
 
 #[tauri::command]
 fn machine_name() -> String {
-    std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Windows PC".to_string())
+    #[cfg(windows)]
+    {
+        std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Windows PC".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::read_to_string("/etc/hostname")
+            .map(|s| s.trim().to_string())
+            .or_else(|_| std::env::var("HOSTNAME"))
+            .unwrap_or_else(|_| "Omarchy PC".to_string())
+    }
 }
 
 /// Opens a URL in the system default browser.

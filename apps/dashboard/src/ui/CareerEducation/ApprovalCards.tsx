@@ -205,7 +205,10 @@ export function ApprovalCards({
               >
                 <div className="action-type-header">
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span className="action-badge" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                    <span
+                      className="action-badge"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
                       {conf.actionType === "browser_submit_application" && (
                         <>
                           <IconGlobe size={13} />
@@ -311,7 +314,9 @@ export function ApprovalCards({
                             fontSize: "0.78rem",
                           }}
                         >
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                          <span
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          >
                             <IconDocument size={14} />
                             {doc.title} ({doc.type})
                           </span>

@@ -7,6 +7,9 @@ import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
 import { IconStop } from "./icons.js";
+import { NexusLogo } from "./NexusLogo.js";
+import { SpatialShell, useSpatialStore } from "./spatial/index.js";
+import { getDigitFromEvent, isEditingText } from "./spatial/keyboardUtils.js";
 
 const Agents = lazy(() =>
   import("./Agents.js").then(({ Agents: component }) => ({ default: component })),
@@ -54,6 +57,8 @@ const Tasks = lazySection("Tasks");
 const Tools = lazySection("Tools");
 const VisualControl = lazySection("VisualControl");
 const Workers = lazySection("Workers");
+const VcsWorktrees = lazySection("VcsWorktrees");
+const Providers = lazySection("Providers");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -62,65 +67,179 @@ function backendUrl(): string {
   return injected?.PROD === true ? window.location.origin : "http://localhost:3000";
 }
 
-const SUPERVISION_SECTIONS = [
+export const SETTINGS_CATEGORIES = [
   {
-    label: "Control",
+    id: "general-ai",
+    label: "Général & IA",
+    labelEn: "General & AI",
+    icon: "settings",
     items: [
-      ["overview", "Overview", "overview"],
-      ["tasks", "Tasks", "tasks"],
-      ["runs", "Agent runs", "runs"],
-      ["mission-control", "ACP missions", "missions"],
-      ["dag-debugger", "DAG debugger", "tasks"],
-      ["run-comparison", "Run comparison", "runs"],
+      {
+        id: "settings" as const,
+        label: "Paramètres généraux",
+        labelEn: "General Settings",
+        icon: "settings",
+      },
+      {
+        id: "providers" as const,
+        label: "Fournisseurs de modèles",
+        labelEn: "Model Providers",
+        icon: "agents",
+      },
+      {
+        id: "agents" as const,
+        label: "Agents & Quotas",
+        labelEn: "Agents & Quotas",
+        icon: "agents",
+      },
+      {
+        id: "connections" as const,
+        label: "Connexions CLIs",
+        labelEn: "CLI Connections",
+        icon: "connections",
+      },
     ],
   },
   {
+    id: "vcs-code",
+    label: "Code & VCS",
+    labelEn: "Code & VCS",
+    icon: "tools",
+    items: [
+      {
+        id: "vcs-worktrees" as const,
+        label: "VCS & Worktrees",
+        labelEn: "VCS & Worktrees",
+        icon: "tools",
+      },
+    ],
+  },
+  {
+    id: "infrastructure",
     label: "Infrastructure",
+    labelEn: "Infrastructure",
+    icon: "devices",
     items: [
-      ["devices", "Devices", "devices"],
-      ["workers", "Workers", "workers"],
-      ["tools", "Tools", "tools"],
-      ["mcp", "MCP", "mcp"],
-      ["browser", "Browser", "browser"],
-      ["marketplace", "Marketplace", "tools"],
-      ["visual-control", "Visual control", "browser"],
+      { id: "devices" as const, label: "Appareils", labelEn: "Devices", icon: "devices" },
+      { id: "workers" as const, label: "Workers", labelEn: "Workers", icon: "workers" },
+      { id: "tools" as const, label: "Outils", labelEn: "Tools", icon: "tools" },
+      { id: "mcp" as const, label: "Serveurs MCP", labelEn: "MCP Servers", icon: "mcp" },
+      { id: "browser" as const, label: "Navigateur", labelEn: "Browser", icon: "browser" },
     ],
   },
   {
-    label: "Governance",
+    id: "governance",
+    label: "Sécurité & Données",
+    labelEn: "Security & Data",
+    icon: "security",
     items: [
-      ["memory", "Memory", "memory"],
-      ["notifications", "Notifications", "notifications"],
-      ["security", "Security", "security"],
-      ["logs", "Logs", "logs"],
-      ["communication-graph", "Agent comms", "agents"],
-      ["quota-forecast", "Quota forecast", "overview"],
+      {
+        id: "security" as const,
+        label: "Sécurité & Garde-fous",
+        labelEn: "Security & Guardrails",
+        icon: "security",
+      },
+      {
+        id: "memory" as const,
+        label: "Mémoire sémantique",
+        labelEn: "Semantic Memory",
+        icon: "memory",
+      },
+      { id: "logs" as const, label: "Journaux système", labelEn: "Diagnostic Logs", icon: "logs" },
+      {
+        id: "notifications" as const,
+        label: "Notifications",
+        labelEn: "Notifications",
+        icon: "notifications",
+      },
+    ],
+  },
+  {
+    id: "diagnostics",
+    label: "Diagnostics & Outils",
+    labelEn: "Diagnostics & Tools",
+    icon: "tasks",
+    items: [
+      { id: "runs" as const, label: "Exécutions d'agents", labelEn: "Agent Runs", icon: "runs" },
+      {
+        id: "mission-control" as const,
+        label: "Missions ACP",
+        labelEn: "ACP Missions",
+        icon: "missions",
+      },
+      {
+        id: "dag-debugger" as const,
+        label: "Débogueur DAG",
+        labelEn: "DAG Debugger",
+        icon: "tasks",
+      },
+      {
+        id: "run-comparison" as const,
+        label: "Comparaison de runs",
+        labelEn: "Run Comparison",
+        icon: "runs",
+      },
+      {
+        id: "visual-control" as const,
+        label: "Contrôle visuel",
+        labelEn: "Visual Control",
+        icon: "browser",
+      },
+      {
+        id: "communication-graph" as const,
+        label: "Comms agents",
+        labelEn: "Agent Comms",
+        icon: "agents",
+      },
+      {
+        id: "quota-forecast" as const,
+        label: "Prévisions quotas",
+        labelEn: "Quota Forecast",
+        icon: "overview",
+      },
+      {
+        id: "marketplace" as const,
+        label: "Place de marché",
+        labelEn: "Marketplace",
+        icon: "tools",
+      },
+      {
+        id: "setup" as const,
+        label: "Assistant d'installation",
+        labelEn: "Setup Wizard",
+        icon: "setup",
+      },
     ],
   },
 ] as const;
 
-type SupervisionId = (typeof SUPERVISION_SECTIONS)[number]["items"][number][0];
-type SectionId =
-  | SupervisionId
+export type SettingsSubSectionId = (typeof SETTINGS_CATEGORIES)[number]["items"][number]["id"];
+
+export const ALL_SETTINGS_IDS: ReadonlySet<SettingsSubSectionId> = new Set<SettingsSubSectionId>(
+  SETTINGS_CATEGORIES.flatMap((c) => c.items.map((i) => i.id)),
+);
+
+export function isSettingsSubSection(id: SectionId): boolean {
+  return ALL_SETTINGS_IDS.has(id as SettingsSubSectionId);
+}
+
+export type SectionId =
+  | SettingsSubSectionId
   | "chat"
+  | "overview"
+  | "tasks"
   | "career-education"
   | "trading-lab"
-  | "osint"
-  | "agents"
-  | "connections"
-  | "settings"
-  | "setup";
+  | "osint";
 
 const SECTION_IDS = new Set<SectionId>([
   "chat",
+  "overview",
+  "tasks",
   "career-education",
   "trading-lab",
   "osint",
-  "agents",
-  "connections",
-  "settings",
-  "setup",
-  ...SUPERVISION_SECTIONS.flatMap((group) => group.items.map(([id]) => id)),
+  ...ALL_SETTINGS_IDS,
 ]);
 
 function sectionFromHash(): SectionId {
@@ -202,6 +321,15 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     title: "Quota forecast",
     description: "Provider usage projections, estimated depletion dates, and confidence.",
   },
+  "vcs-worktrees": {
+    title: "VCS & Worktrees",
+    description: "Git worktrees, per-turn checkpoints, safe atomic rollbacks, and PR reviews.",
+  },
+  providers: {
+    title: "Model Providers",
+    description:
+      "Unified AI engines (Claude, Cursor, Grok, ACP) with pre-execution safety and streaming.",
+  },
 };
 
 export function App() {
@@ -225,6 +353,40 @@ function AppContent() {
     () => new Set(["Workspaces"]),
   );
 
+  const spatialStore = useSpatialStore();
+  const [viewMode, setViewMode] = useState<"spatial" | "classic">(() => {
+    try {
+      const saved = window.sessionStorage.getItem("nexus.ui.viewMode");
+      if (saved === "classic") return "classic";
+    } catch {
+      // Storage unavailable
+    }
+    return "spatial";
+  });
+
+  const toggleViewMode = useCallback((mode?: "spatial" | "classic") => {
+    setViewMode((prev) => {
+      const next = mode ?? (prev === "spatial" ? "classic" : "spatial");
+      try {
+        window.sessionStorage.setItem("nexus.ui.viewMode", next);
+      } catch {
+        // Storage unavailable
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleViewModeChange = (e: Event) => {
+      const custom = e as CustomEvent<"spatial" | "classic">;
+      if (custom.detail === "spatial" || custom.detail === "classic") {
+        setViewMode(custom.detail);
+      }
+    };
+    window.addEventListener("nexus-viewmode-change", handleViewModeChange);
+    return () => window.removeEventListener("nexus-viewmode-change", handleViewModeChange);
+  }, []);
+
   const navigate = useCallback((next: SectionId): void => {
     setSection(next);
     const nextHash = `#/${next}`;
@@ -242,22 +404,70 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const activeGroup = SUPERVISION_SECTIONS.find((group) =>
-      group.items.some(([id]) => id === section),
-    )?.label;
-    const nextGroup =
-      activeGroup ??
-      (section === "career-education" || section === "trading-lab" || section === "osint"
-        ? "Workspaces"
-        : section === "settings" || section === "setup"
-          ? "System"
-          : undefined);
-    if (nextGroup === undefined) return;
-    setExpandedNavGroups((current) => {
-      if (current.has(nextGroup)) return current;
-      return new Set([...current, nextGroup]);
-    });
+    if (section === "career-education" || section === "trading-lab" || section === "osint") {
+      setExpandedNavGroups((current) => {
+        if (current.has("Workspaces")) return current;
+        return new Set([...current, "Workspaces"]);
+      });
+    }
   }, [section]);
+
+  // Classic Dashboard Keyboard Shortcuts (Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
+  useEffect(() => {
+    if (!authenticated || viewMode !== "classic") return;
+
+    const handleClassicKeyDown = (e: KeyboardEvent) => {
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+      if (!hasModifier) return;
+
+      // Ctrl+K or Ctrl+P: Switch to Spatial and open Command Palette
+      if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleViewMode("spatial");
+        setTimeout(() => spatialStore.setIsPaletteOpen(true), 50);
+        return;
+      }
+
+      // Ctrl+Shift+O / Alt+O: Toggle view mode between Classic and Spatial
+      if (e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleViewMode("spatial");
+        return;
+      }
+
+      // Ctrl+, : Settings
+      if (e.key === ",") {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate("settings");
+        return;
+      }
+
+      if (isEditingText()) return;
+
+      const digit = getDigitFromEvent(e);
+      if (digit !== null && digit >= 1 && digit <= 7) {
+        e.preventDefault();
+        e.stopPropagation();
+        const sectionMap: Record<number, SectionId> = {
+          1: "chat",
+          2: "overview",
+          3: "tasks",
+          4: "career-education",
+          5: "trading-lab",
+          6: "osint",
+          7: "settings",
+        };
+        const target = sectionMap[digit];
+        if (target) navigate(target);
+      }
+    };
+
+    window.addEventListener("keydown", handleClassicKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleClassicKeyDown, { capture: true });
+  }, [authenticated, viewMode, navigate, toggleViewMode, spatialStore]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -303,9 +513,7 @@ function AppContent() {
   if (restoringSession) {
     return (
       <main className="session-restoring" role="status" aria-label="Restoring session">
-        <span className="brand-mark" aria-hidden="true">
-          N
-        </span>
+        <NexusLogo size={48} />
       </main>
     );
   }
@@ -339,6 +547,17 @@ function AppContent() {
     );
   }
 
+  if (viewMode === "spatial") {
+    return (
+      <SpatialShell
+        store={spatialStore}
+        api={api}
+        session={session}
+        onToggleClassicView={() => toggleViewMode("classic")}
+      />
+    );
+  }
+
   const metaTitle = t(`meta.${section}.title`) || PAGE_META[section]?.title || section;
   const metaDescription = t(`meta.${section}.description`) || PAGE_META[section]?.description || "";
 
@@ -346,9 +565,7 @@ function AppContent() {
     <div className="app">
       <aside className="sidebar">
         <button className="nexus-home" type="button" onClick={() => navigate("chat")}>
-          <span className="brand-mark" aria-hidden="true">
-            N
-          </span>
+          <NexusLogo size={32} />
           <span>
             <strong>NEXUS</strong>
             <small>{t("nav.groups.supervision")}</small>
@@ -364,16 +581,16 @@ function AppContent() {
               onSelect={navigate}
             />
             <NavItem
-              id="agents"
-              label={t("nav.items.agents") || "Agents"}
-              icon="agents"
+              id="overview"
+              label={t("nav.items.overview") || "Overview"}
+              icon="overview"
               current={section}
               onSelect={navigate}
             />
             <NavItem
-              id="connections"
-              label={t("nav.items.connections") || "Connections"}
-              icon="connections"
+              id="tasks"
+              label={t("nav.items.tasks") || "Tasks"}
+              icon="tasks"
               current={section}
               onSelect={navigate}
             />
@@ -407,47 +624,18 @@ function AppContent() {
               onSelect={navigate}
             />
           </NavGroup>
-          <NavGroup
-            label={t("nav.groups.system")}
-            expanded={expandedNavGroups.has("System")}
-            onToggle={() => setExpandedNavGroups((current) => toggleSetValue(current, "System"))}
+          <div
+            className="nav-group nav-settings-entry"
+            style={{ marginTop: "auto", paddingTop: "0.5rem" }}
           >
             <NavItem
               id="settings"
               label={t("nav.items.settings") || "Settings"}
               icon="settings"
-              current={section}
+              current={isSettingsSubSection(section) ? "settings" : section}
               onSelect={navigate}
             />
-            <NavItem
-              id="setup"
-              label={t("nav.items.setup") || "Setup wizard"}
-              icon="setup"
-              current={section}
-              onSelect={navigate}
-            />
-          </NavGroup>
-          {SUPERVISION_SECTIONS.map((group) => (
-            <NavGroup
-              label={t(`nav.groups.${group.label.toLowerCase()}`) || group.label}
-              expanded={expandedNavGroups.has(group.label)}
-              onToggle={() =>
-                setExpandedNavGroups((current) => toggleSetValue(current, group.label))
-              }
-              key={group.label}
-            >
-              {group.items.map(([id, label, icon]) => (
-                <NavItem
-                  id={id}
-                  label={t(`nav.items.${id}`) || label}
-                  icon={icon}
-                  current={section}
-                  onSelect={navigate}
-                  key={id}
-                />
-              ))}
-            </NavGroup>
-          ))}
+          </div>
         </nav>
         <div className="sidebar-footer">
           <span className="system-dot" aria-hidden="true" />
@@ -463,12 +651,14 @@ function AppContent() {
           <div>
             <div className="eyebrow">
               NEXUS /{" "}
-              {section === "chat" ||
-              section === "career-education" ||
-              section === "trading-lab" ||
-              section === "osint"
-                ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
-                : tr("SUPERVISION", "SUPERVISION")}
+              {isSettingsSubSection(section)
+                ? tr("SETTINGS", "PARAMÈTRES")
+                : section === "chat" ||
+                    section === "career-education" ||
+                    section === "trading-lab" ||
+                    section === "osint"
+                  ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
+                  : tr("SUPERVISION", "SUPERVISION")}
             </div>
             <h1>
               <CyberRetypeTitle text={metaTitle} />
@@ -503,8 +693,6 @@ function AppContent() {
               <span className="live-pulse-dot" />
               <span>{t("common.messages.liveApi")}</span>
             </div>
-            <LanguageSwitch />
-            <ThemeToggle />
             <button
               type="button"
               className={`button ${systemPause?.paused ? "ok" : "danger"}`}
@@ -575,6 +763,9 @@ function AppContent() {
         )}
         <Suspense fallback={<SectionLoading />}>
           <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
+            {isSettingsSubSection(section) && (
+              <SettingsHubNav currentSection={section} navigate={navigate} />
+            )}
             {renderSection(section, api, session, navigate)}
           </div>
         </Suspense>
@@ -586,9 +777,7 @@ function AppContent() {
 function FullPageLoading() {
   return (
     <main className="session-restoring" role="status" aria-label="Loading setup">
-      <span className="brand-mark" aria-hidden="true">
-        N
-      </span>
+      <NexusLogo size={48} />
     </main>
   );
 }
@@ -642,6 +831,79 @@ function NavGroup({
         {children}
       </div>
     </div>
+  );
+}
+
+function SettingsHubNav({
+  currentSection,
+  navigate,
+}: {
+  currentSection: SectionId;
+  navigate: (next: SectionId) => void;
+}) {
+  const { locale, t } = useI18n();
+
+  const currentCategory = useMemo(() => {
+    return (
+      SETTINGS_CATEGORIES.find((cat) => cat.items.some((item) => item.id === currentSection)) ??
+      SETTINGS_CATEGORIES[0]
+    );
+  }, [currentSection]);
+
+  const [activeCategoryId, setActiveCategoryId] = useState<string>(currentCategory.id);
+
+  useEffect(() => {
+    setActiveCategoryId(currentCategory.id);
+  }, [currentCategory.id]);
+
+  const activeCategory =
+    SETTINGS_CATEGORIES.find((cat) => cat.id === activeCategoryId) ?? SETTINGS_CATEGORIES[0];
+
+  return (
+    <nav className="settings-hub-nav" aria-label="Settings sub-navigation">
+      <div className="settings-categories-strip" role="tablist" aria-label="Settings categories">
+        {SETTINGS_CATEGORIES.map((cat) => {
+          const isActive = cat.id === activeCategoryId;
+          const label = locale === "fr" ? cat.label : cat.labelEn;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`settings-category-btn ${isActive ? "active" : ""}`}
+              onClick={() => {
+                setActiveCategoryId(cat.id);
+                if (!cat.items.some((item) => item.id === currentSection)) {
+                  navigate(cat.items[0].id);
+                }
+              }}
+            >
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="settings-subitems-strip" role="group" aria-label="Settings items">
+        {activeCategory.items.map((item) => {
+          const isActive = item.id === currentSection;
+          const translated = t(`nav.items.${item.id}`);
+          const fallback = locale === "fr" ? item.label : item.labelEn;
+          const displayLabel = translated || fallback;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`settings-subitem-pill ${isActive ? "active" : ""}`}
+              onClick={() => navigate(item.id)}
+            >
+              <span>{displayLabel}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -713,6 +975,10 @@ function renderSection(
       return <CommunicationGraph api={api} />;
     case "quota-forecast":
       return <QuotaForecast api={api} />;
+    case "vcs-worktrees":
+      return <VcsWorktrees api={api} />;
+    case "providers":
+      return <Providers api={api} />;
   }
 }
 
@@ -803,7 +1069,7 @@ function Login({
       <Futuristic3DCanvas className="login-3d-bg" />
       <div className="login-shell cyber-reticle">
         <div className="login-brand">
-          <span className="brand-mark">N</span>
+          <NexusLogo size={32} style={{ marginRight: 8 }} />
           <span>NEXUS</span>
           <span className="login-brand-spacer" />
           <LanguageSwitch />
