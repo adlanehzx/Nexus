@@ -115,7 +115,39 @@ export const CANONICAL_MODELS: readonly ModelDescriptor[] = [
     supportsToolCalling: true,
     supportsImages: true,
   },
-  // Ollama
+  // Google Antigravity
+  {
+    id: "gemini-2.5-pro",
+    provider: "antigravity",
+    displayName: "Google Gemini 2.5 Pro (Antigravity)",
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+    supportsStreaming: true,
+    supportsToolCalling: true,
+    supportsImages: true,
+  },
+  {
+    id: "gemini-2.5-flash",
+    provider: "antigravity",
+    displayName: "Google Gemini 2.5 Flash",
+    contextWindow: 1048576,
+    maxOutputTokens: 65536,
+    supportsStreaming: true,
+    supportsToolCalling: true,
+    supportsImages: true,
+  },
+  // Pi Inflection
+  {
+    id: "pi-inflection-2.5",
+    provider: "pi",
+    displayName: "Inflection Pi 2.5",
+    contextWindow: 16000,
+    maxOutputTokens: 4096,
+    supportsStreaming: true,
+    supportsToolCalling: false,
+    supportsImages: false,
+  },
+  // Ollama & Local
   {
     id: "llama3.3:70b",
     provider: "ollama",
@@ -128,8 +160,8 @@ export const CANONICAL_MODELS: readonly ModelDescriptor[] = [
   },
   {
     id: "qwen2.5-coder:32b",
-    provider: "ollama",
-    displayName: "Ollama Qwen 2.5 Coder 32B (Local)",
+    provider: "local",
+    displayName: "Local Qwen 2.5 Coder 32B (vLLM / llama.cpp)",
     contextWindow: 32768,
     maxOutputTokens: 8192,
     supportsStreaming: true,

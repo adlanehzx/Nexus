@@ -24,6 +24,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "1.8.0",
     "@nexus/llm": "workspace:*",
     "@nexus/memory": "workspace:*",
     "@nexus/protocol": "workspace:*",
