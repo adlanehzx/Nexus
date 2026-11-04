@@ -43,7 +43,7 @@
     "k8s:render": "kubectl kustomize infrastructure/kubernetes",
     "test:ha": "bash scripts/test-ha-replication.sh",
     "translation:status": "bash scripts/translation-status.sh",
-    "translation:check": "bash scripts/translation-status.sh --check all"
+    "translation:check": "bash scripts/translation-status.sh --check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
