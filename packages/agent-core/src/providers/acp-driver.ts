@@ -67,23 +67,9 @@ export class AcpInMemoryTransport implements AcpTransport {
       return;
     }
 
-    // Default compliant ACP protocol stream
-    yield {
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        type: "text",
-        delta: `[ACP Server] Processed: ${typeof params.prompt === "string" ? params.prompt.slice(0, 50) : ""}`,
-      },
-    };
-    yield {
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        type: "turn_complete",
-        stopReason: "end_turn",
-      },
-    };
+    throw new Error(
+      "AcpInMemoryTransport: no simulated stream handler is configured. Real ACP communication requires an active ACP subprocess or WebSocket/stdio transport.",
+    );
   }
 
   async close(): Promise<void> {
@@ -104,7 +90,12 @@ export class AcpProviderSession implements ProviderSession {
     this.config = config;
     this.id = config.sessionId;
     this.modelId = config.model.modelId;
-    this.transport = transport ?? new AcpInMemoryTransport();
+    if (!transport) {
+      throw new Error(
+        `Cannot create AcpProviderSession '${this.id}' without an active AcpTransport connection`,
+      );
+    }
+    this.transport = transport;
   }
 
   getConfig(): ProviderSessionConfig {
@@ -234,6 +225,11 @@ export class AcpProviderDriver implements ProviderDriver {
 
   async createSession(config: ProviderSessionConfig): Promise<ProviderSession> {
     await Promise.resolve();
+    if (!this.injectedTransport) {
+      throw new Error(
+        `Cannot create ACP session '${config.sessionId}': no active ACP transport provided. Configure an ACP subprocess command or inject an active AcpTransport.`,
+      );
+    }
     return new AcpProviderSession(config, this.injectedTransport);
   }
 
@@ -244,7 +240,10 @@ export class AcpProviderDriver implements ProviderDriver {
     const command = credentials?.command ?? process.env.ACP_COMMAND;
     const key = credentials?.apiKey ?? process.env.ACP_API_KEY;
     if (!command && !key && !process.env.ANTHROPIC_API_KEY) {
-      return { valid: true };
+      return {
+        valid: false,
+        error: "ACP configuration missing: neither ACP_COMMAND nor ACP_API_KEY is configured",
+      };
     }
     return { valid: true };
   }

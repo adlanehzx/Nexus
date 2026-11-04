@@ -500,8 +500,6 @@ export class ProviderAccountService {
       existing.reliability.consecutiveFailures === 0
     ) {
       authStatus = "authenticated";
-    } else if (existsSync(existing.sessionDir)) {
-      authStatus = "authenticated";
     } else if (authStatus === "unknown") {
       authStatus = "unknown";
     }
