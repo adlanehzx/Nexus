@@ -13,8 +13,8 @@ export interface CommandReceipt<TResult = unknown> {
   readonly idempotencyKey: string;
   readonly commandType: string;
   readonly status: "completed" | "failed";
-  readonly result?: TResult;
-  readonly error?: string;
+  readonly result?: TResult | undefined;
+  readonly error?: string | undefined;
   readonly executedAt: string;
 }
 
@@ -24,9 +24,9 @@ export interface TransactionalInboxMessage<TPayload = unknown> {
   readonly commandType: string;
   readonly payload: TPayload;
   readonly receivedAt: string;
-  readonly processedAt?: string;
+  readonly processedAt?: string | undefined;
   readonly status: InboxStatus;
-  readonly receipt?: CommandReceipt;
+  readonly receipt?: CommandReceipt | undefined;
 }
 
 export interface ReceiveCommandInput<TPayload = unknown> {
@@ -38,7 +38,7 @@ export interface ReceiveCommandInput<TPayload = unknown> {
 export interface ReceiveCommandResult<TResult = unknown> {
   duplicate: boolean;
   messageId: string;
-  existingReceipt?: CommandReceipt<TResult>;
+  existingReceipt?: CommandReceipt<TResult> | undefined;
 }
 
 export interface TransactionalInbox {

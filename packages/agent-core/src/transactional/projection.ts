@@ -20,9 +20,9 @@ export interface ProjectedToolExecution {
   toolCallId: string;
   toolName: string;
   status: "pending" | "confirmed" | "rejected" | "completed" | "failed";
-  durationMs?: number;
+  durationMs?: number | undefined;
   result?: unknown;
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface ProjectedMissionState {
@@ -32,17 +32,17 @@ export interface ProjectedMissionState {
   plan?: {
     goal: string;
     steps: { id: string; title: string; status: "pending" | "running" | "completed" | "failed" }[];
-  };
+  } | undefined;
   tools: ProjectedToolExecution[];
   pendingConfirmation?: {
     confirmationId: string;
     callId: string;
     toolName: string;
     arguments: unknown;
-  };
+  } | undefined;
   createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
+  startedAt?: string | undefined;
+  completedAt?: string | undefined;
   failureReason?: string;
   finalOutput?: string;
   correlationId: string;

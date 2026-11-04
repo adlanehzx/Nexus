@@ -9,7 +9,7 @@ import type { MissionEventStore } from "./events.js";
 import type { TransactionalOutbox } from "./outbox.js";
 import type { LeaseManager } from "./leases.js";
 import type { DeadLetterQueue } from "./dead-letter.js";
-import { projectMission, type ProjectedMissionState } from "./projection.js";
+import { projectMission } from "./projection.js";
 
 export interface ReconciliationReport {
   timestamp: string;
@@ -23,14 +23,29 @@ export interface ReconciliationReport {
 export class ReconciliationEngine {
   private isRunning = false;
   private timer: NodeJS.Timeout | null = null;
+  private readonly eventStore: MissionEventStore;
+  private readonly outbox: TransactionalOutbox;
+  private readonly leaseManager: LeaseManager;
+  private readonly deadLetterQueue: DeadLetterQueue;
+  private readonly publisher?: ((msg: unknown) => Promise<void>) | undefined;
 
   constructor(
-    private readonly eventStore: MissionEventStore,
-    private readonly outbox: TransactionalOutbox,
-    private readonly leaseManager: LeaseManager,
-    private readonly deadLetterQueue: DeadLetterQueue,
-    private readonly publisher?: (msg: unknown) => Promise<void>,
-  ) {}
+    eventStore: MissionEventStore,
+    outbox: TransactionalOutbox,
+    leaseManager: LeaseManager,
+    deadLetterQueue: DeadLetterQueue,
+    publisher?: (msg: unknown) => Promise<void>,
+  ) {
+    this.eventStore = eventStore;
+    this.outbox = outbox;
+    this.leaseManager = leaseManager;
+    this.deadLetterQueue = deadLetterQueue;
+    this.publisher = publisher;
+  }
+
+  getDeadLetterQueue(): DeadLetterQueue {
+    return this.deadLetterQueue;
+  }
 
   async runSinglePass(): Promise<ReconciliationReport> {
     const report: ReconciliationReport = {

@@ -25,10 +25,10 @@ export interface ProviderInstanceConfig {
 
 export interface ProviderInstanceHealth {
   status: "healthy" | "degraded" | "unreachable" | "cooling_down";
-  latencyMs?: number;
+  latencyMs?: number | undefined;
   consecutiveFailures: number;
   lastCheckedAt: string;
-  cooldownUntil?: string;
+  cooldownUntil?: string | undefined;
 }
 
 export class ProviderInstance {

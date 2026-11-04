@@ -134,20 +134,23 @@ export class ContextTransferService {
     }
 
     // 3. Transform to standard LlmMessage format with provenance annotation
+    let totalTurnChars = 0;
     const messages: LlmMessage[] = keptTurns.map((turn) => {
       const provenancePrefix = `[Turn ${turn.turnNumber} via ${turn.providerOrigin}] `;
-      const content =
+      const text =
         turn.role === "assistant" ? `${provenancePrefix}${turn.content}` : turn.content;
+      totalTurnChars += text.length;
+
+      const role: "user" | "assistant" | "system" =
+        turn.role === "tool" ? "user" : turn.role;
 
       return {
-        role: turn.role === "tool" ? "user" : turn.role,
-        content,
+        role,
+        content: [{ type: "text" as const, text }],
       };
     });
 
-    const totalTokensEstimated = preambleTokens + Math.ceil(
-      messages.reduce((acc, m) => acc + (typeof m.content === "string" ? m.content.length : 0), 0) / 4,
-    );
+    const totalTokensEstimated = preambleTokens + Math.ceil(totalTurnChars / 4);
 
     return {
       systemPrompt: preamble,

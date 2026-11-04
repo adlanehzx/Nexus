@@ -32,6 +32,14 @@ export class PiProviderSession implements ProviderSession {
     this.llm = llm;
   }
 
+  getConfig(): ProviderSessionConfig {
+    return this.config;
+  }
+
+  getMessages(): readonly LlmMessage[] {
+    return this.messages;
+  }
+
   async *sendPrompt(
     prompt: string,
     _attachments: string[] = [],
@@ -42,12 +50,12 @@ export class PiProviderSession implements ProviderSession {
 
     this.activeAbortController = new AbortController();
     const signal = this.activeAbortController.signal;
-    this.messages.push({ role: "user", content: prompt });
+    this.messages.push({ role: "user", content: [{ type: "text", text: prompt }] });
 
     try {
       const stream = this.llm.stream({
         messages: this.messages,
-        model: this.modelId,
+        ...(this.config.systemPrompt ? { system: this.config.systemPrompt } : {}),
         signal,
       });
 
@@ -75,7 +83,7 @@ export class PiProviderSession implements ProviderSession {
       }
 
       if (assistantText.length > 0) {
-        this.messages.push({ role: "assistant", content: assistantText });
+        this.messages.push({ role: "assistant", content: [{ type: "text", text: assistantText }] });
       }
 
       yield { type: "turn-complete", stopReason: "end_turn" };

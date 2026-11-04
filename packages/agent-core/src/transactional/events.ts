@@ -33,7 +33,7 @@ export interface MissionEvent<TPayload = Record<string, unknown>> {
   readonly version: number;
   readonly timestamp: string;
   readonly correlationId: string;
-  readonly causationId?: string;
+  readonly causationId?: string | undefined;
   readonly payload: TPayload;
   readonly metadata: Record<string, unknown>;
 }

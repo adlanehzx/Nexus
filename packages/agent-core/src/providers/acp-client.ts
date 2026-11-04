@@ -8,7 +8,6 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { uuidv7 } from "@nexus/shared";
 import type { ProviderTurnStreamEvent } from "./types.js";
 
 export interface AcpClientInfo {
@@ -22,11 +21,11 @@ export interface AcpServerCapabilities {
   toolCall: boolean;
   imageInput: boolean;
   sessionResumption: boolean;
-  contextWindow?: number;
+  contextWindow?: number | undefined;
   serverInfo?: {
     name: string;
     version: string;
-  };
+  } | undefined;
 }
 
 export interface AcpConnectionStatus {
@@ -80,11 +79,15 @@ export class RealAcpClient {
   >();
   private activeStreams = new Map<string, (event: ProviderTurnStreamEvent) => void>();
   private nextReqId = 1;
+  private readonly transport: RealAcpTransport;
+  private readonly clientInfo: AcpClientInfo;
 
   constructor(
-    private readonly transport: RealAcpTransport,
-    private readonly clientInfo: AcpClientInfo = { name: "nexus-acp-client", version: "0.2.0" },
+    transport: RealAcpTransport,
+    clientInfo: AcpClientInfo = { name: "nexus-acp-client", version: "0.2.0" },
   ) {
+    this.transport = transport;
+    this.clientInfo = clientInfo;
     this.setupTransportListeners();
   }
 
@@ -208,7 +211,7 @@ export class RealAcpClient {
         },
       });
 
-      this.serverCapabilities = {
+      const caps: AcpServerCapabilities = {
         protocolVersion: result.protocolVersion,
         streaming: result.capabilities?.streaming ?? true,
         toolCall: result.capabilities?.toolCall ?? true,
@@ -218,13 +221,15 @@ export class RealAcpClient {
         serverInfo: result.serverInfo,
       };
 
+      this.serverCapabilities = caps;
+
       this.status = {
         state: "connected",
         endpoint: this.status.endpoint,
         lastConnectedAt: new Date().toISOString(),
       };
 
-      return this.serverCapabilities;
+      return caps;
     } catch (err) {
       this.status = {
         state: "unreachable",

@@ -69,8 +69,10 @@ describe("Cross-Provider Context Transfer & Handoff (LOT E)", () => {
 
     // Verify provenance preservation
     expect(adapted.messages).toHaveLength(3);
-    expect(adapted.messages[1]?.content).toContain("[Turn 2 via claude]");
-    expect(adapted.messages[2]?.content).toContain("[Turn 3 via codex]");
+    const m1Text = (adapted.messages[1]?.content[0] as { text: string }).text;
+    const m2Text = (adapted.messages[2]?.content[0] as { text: string }).text;
+    expect(m1Text).toContain("[Turn 2 via claude]");
+    expect(m2Text).toContain("[Turn 3 via codex]");
 
     expect(adapted.preservedProvenance.providerCounts).toEqual({
       claude: 2,
@@ -107,8 +109,10 @@ describe("Cross-Provider Context Transfer & Handoff (LOT E)", () => {
 
     expect(adapted.truncatedTurnCount).toBeGreaterThan(0);
     // Turn 1 (initial user goal) must ALWAYS be preserved
-    expect(adapted.messages[0]?.content).toContain("Turn content 1:");
+    const firstText = (adapted.messages[0]?.content[0] as { text: string }).text;
+    const lastText = (adapted.messages[adapted.messages.length - 1]?.content[0] as { text: string }).text;
+    expect(firstText).toContain("Turn content 1:");
     // Most recent turn must also be preserved
-    expect(adapted.messages[adapted.messages.length - 1]?.content).toContain("Turn content 20:");
+    expect(lastText).toContain("Turn content 20:");
   });
 });
