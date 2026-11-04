@@ -105,7 +105,8 @@ export class NexusMcpServer {
     token: string,
     toolName: string,
     arguments_: Record<string, unknown>,
-  ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
+  ): Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }> {
+    await Promise.resolve();
     const toolDef = NEXUS_EXPOSED_MCP_TOOLS.find((t) => t.name === toolName);
     if (!toolDef) {
       return {

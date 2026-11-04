@@ -115,7 +115,8 @@ export class AdaptiveRateLimiter {
   inspectHeaders(headers: Record<string, string | number | undefined>): void {
     const retryAfter = headers["retry-after"] ?? headers["Retry-After"];
     if (retryAfter !== undefined) {
-      const seconds = typeof retryAfter === "number" ? retryAfter : Number.parseInt(String(retryAfter), 10);
+      const seconds =
+        typeof retryAfter === "number" ? retryAfter : Number.parseInt(String(retryAfter), 10);
       if (!Number.isNaN(seconds) && seconds > 0) {
         this.throttledUntil = Math.max(this.throttledUntil, Date.now() + seconds * 1000);
       }

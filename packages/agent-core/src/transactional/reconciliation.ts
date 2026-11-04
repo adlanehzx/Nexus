@@ -72,7 +72,7 @@ export class ReconciliationEngine {
       const events = await this.eventStore.getEvents(missionId);
       const projection = projectMission(events);
 
-      if (projection && projection.phase === "running") {
+      if (projection?.phase === "running") {
         const lease = await this.leaseManager.getLease(missionId);
         if (!lease) {
           // Mission is marked running but lease has expired or was never renewed!
@@ -99,7 +99,9 @@ export class ReconciliationEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     this.timer = setInterval(() => {
-      void this.runSinglePass().catch(() => {});
+      void this.runSinglePass().catch((err: unknown) => {
+        void err;
+      });
     }, intervalMs);
     if (this.timer.unref) this.timer.unref();
   }

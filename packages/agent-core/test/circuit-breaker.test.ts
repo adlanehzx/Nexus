@@ -17,6 +17,7 @@ describe("Performance & Reliability: Circuit Breaker & Adaptive Throttling (LOT 
       expect(breaker.getState()).toBe("closed");
 
       const failingTask = async () => {
+        await Promise.resolve();
         throw new Error("Downstream 503 Provider Unavailable");
       };
 
@@ -38,7 +39,10 @@ describe("Performance & Reliability: Circuit Breaker & Adaptive Throttling (LOT 
       expect(breaker.getState()).toBe("half_open");
 
       // Successful recovery in HALF_OPEN resets breaker to CLOSED
-      const recoverResult = await breaker.execute(async () => "recovered");
+      const recoverResult = await breaker.execute(async () => {
+        await Promise.resolve();
+        return "recovered";
+      });
       expect(recoverResult).toBe("recovered");
       expect(breaker.getState()).toBe("closed");
     });

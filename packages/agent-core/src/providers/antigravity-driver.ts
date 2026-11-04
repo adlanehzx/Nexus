@@ -100,6 +100,7 @@ export class AntigravityProviderSession implements ProviderSession {
   }
 
   async interrupt(): Promise<void> {
+    await Promise.resolve();
     if (this.activeAbortController) {
       this.activeAbortController.abort();
       this.activeAbortController = null;
@@ -152,9 +153,7 @@ export class AntigravityProviderDriver implements ProviderDriver {
   ): Promise<{ valid: boolean; error?: string }> {
     await Promise.resolve();
     const key =
-      credentials?.apiKey ??
-      process.env.GEMINI_API_KEY ??
-      process.env.ANTIGRAVITY_API_KEY;
+      credentials?.apiKey ?? process.env.GEMINI_API_KEY ?? process.env.ANTIGRAVITY_API_KEY;
     if (!key || key.trim().length === 0) {
       return { valid: false, error: "GEMINI_API_KEY / ANTIGRAVITY_API_KEY is not configured" };
     }

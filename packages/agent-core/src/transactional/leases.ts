@@ -36,6 +36,7 @@ export class InMemoryLeaseManager implements LeaseManager {
     holderId: string,
     ttlMs: number,
   ): Promise<ExecutionLease | null> {
+    await Promise.resolve();
     const now = Date.now();
     const existing = this.leases.get(resourceId);
 
@@ -71,6 +72,7 @@ export class InMemoryLeaseManager implements LeaseManager {
     fencingToken: number,
     ttlMs: number,
   ): Promise<ExecutionLease | null> {
+    await Promise.resolve();
     const existing = this.leases.get(resourceId);
     if (!existing) return null;
 
@@ -92,6 +94,7 @@ export class InMemoryLeaseManager implements LeaseManager {
   }
 
   async release(resourceId: string, holderId: string, fencingToken: number): Promise<boolean> {
+    await Promise.resolve();
     const existing = this.leases.get(resourceId);
     if (!existing) return false;
 
@@ -104,6 +107,7 @@ export class InMemoryLeaseManager implements LeaseManager {
   }
 
   async verifyToken(resourceId: string, fencingToken: number): Promise<boolean> {
+    await Promise.resolve();
     const existing = this.leases.get(resourceId);
     if (!existing) return false;
 
@@ -115,6 +119,7 @@ export class InMemoryLeaseManager implements LeaseManager {
   }
 
   async getLease(resourceId: string): Promise<ExecutionLease | null> {
+    await Promise.resolve();
     const existing = this.leases.get(resourceId);
     if (!existing) return null;
 

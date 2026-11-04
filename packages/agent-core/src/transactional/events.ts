@@ -78,6 +78,7 @@ export class InMemoryMissionEventStore implements MissionEventStore {
   private readonly allEvents: MissionEvent[] = [];
 
   async append(input: AppendEventInput): Promise<MissionEvent> {
+    await Promise.resolve();
     const existing = this.eventsByMission.get(input.missionId) ?? [];
     const currentVersion = existing.length > 0 ? existing[existing.length - 1]!.version : 0;
 
@@ -106,11 +107,13 @@ export class InMemoryMissionEventStore implements MissionEventStore {
   }
 
   async getEvents(missionId: string, fromVersion = 0): Promise<MissionEvent[]> {
+    await Promise.resolve();
     const list = this.eventsByMission.get(missionId) ?? [];
     return list.filter((e) => e.version >= fromVersion);
   }
 
   async getAllEvents(fromTimestamp?: string): Promise<MissionEvent[]> {
+    await Promise.resolve();
     if (!fromTimestamp) return [...this.allEvents];
     return this.allEvents.filter((e) => e.timestamp >= fromTimestamp);
   }

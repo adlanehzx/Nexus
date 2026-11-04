@@ -101,6 +101,7 @@ export class CodexProviderSession implements ProviderSession {
   }
 
   async interrupt(): Promise<void> {
+    await Promise.resolve();
     if (this.activeAbortController) {
       this.activeAbortController.abort();
       this.activeAbortController = null;

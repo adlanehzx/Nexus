@@ -137,12 +137,10 @@ export class ContextTransferService {
     let totalTurnChars = 0;
     const messages: LlmMessage[] = keptTurns.map((turn) => {
       const provenancePrefix = `[Turn ${turn.turnNumber} via ${turn.providerOrigin}] `;
-      const text =
-        turn.role === "assistant" ? `${provenancePrefix}${turn.content}` : turn.content;
+      const text = turn.role === "assistant" ? `${provenancePrefix}${turn.content}` : turn.content;
       totalTurnChars += text.length;
 
-      const role: "user" | "assistant" | "system" =
-        turn.role === "tool" ? "user" : turn.role;
+      const role: "user" | "assistant" | "system" = turn.role === "tool" ? "user" : turn.role;
 
       return {
         role,

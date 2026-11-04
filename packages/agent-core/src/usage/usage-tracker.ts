@@ -12,11 +12,7 @@ import { uuidv7 } from "@nexus/shared";
 import { PricingCatalog, type TokenBreakdown } from "./pricing-catalog.js";
 
 export type ConfidenceLevel =
-  | "official"
-  | "provider_reported"
-  | "locally_observed"
-  | "estimated"
-  | "unavailable";
+  "official" | "provider_reported" | "locally_observed" | "estimated" | "unavailable";
 
 export interface TokenUsageRecord {
   id?: string;
@@ -70,8 +66,7 @@ export class UsageTracker {
       ...input,
       id: input.id ?? uuidv7(),
       timestamp: input.timestamp ?? new Date().toISOString(),
-      costUsd:
-        input.costUsd ?? this.pricing.calculateCostUsd(input.modelId, input.tokens),
+      costUsd: input.costUsd ?? this.pricing.calculateCostUsd(input.modelId, input.tokens),
     };
     this.records.push(record);
     return record;
@@ -126,9 +121,7 @@ export class UsageTracker {
       prov.requests++;
       prov.costUsd += r.costUsd ?? 0;
       prov.totalTokens +=
-        r.tokens.inputTokens +
-        r.tokens.outputTokens +
-        (r.tokens.reasoningTokens ?? 0);
+        r.tokens.inputTokens + r.tokens.outputTokens + (r.tokens.reasoningTokens ?? 0);
     }
 
     const totalRequests = list.length;

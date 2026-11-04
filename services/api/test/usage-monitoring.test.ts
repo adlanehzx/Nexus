@@ -70,8 +70,8 @@ describe("Usage, Quotas & Equivalent Pricing Architecture (LOT F)", () => {
       expect(agg.byConfidence.official).toBe(1);
       expect(agg.byConfidence.provider_reported).toBe(1);
       expect(agg.byConfidence.locally_observed).toBe(1);
-      expect(agg.byProvider.claude.requests).toBe(2);
-      expect(agg.byProvider.codex.requests).toBe(1);
+      expect(agg.byProvider.claude?.requests).toBe(2);
+      expect(agg.byProvider.codex?.requests).toBe(1);
       expect(agg.averageLatencyMs).toBe(Math.round((800 + 1200 + 600) / 3));
     });
 

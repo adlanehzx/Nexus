@@ -22,10 +22,12 @@ export interface AcpServerCapabilities {
   imageInput: boolean;
   sessionResumption: boolean;
   contextWindow?: number | undefined;
-  serverInfo?: {
-    name: string;
-    version: string;
-  } | undefined;
+  serverInfo?:
+    | {
+        name: string;
+        version: string;
+      }
+    | undefined;
 }
 
 export interface AcpConnectionStatus {
@@ -67,6 +69,14 @@ export interface RealAcpTransport {
   close(): Promise<void>;
 }
 
+interface JsonRpcIncoming {
+  id?: string | number;
+  result?: unknown;
+  error?: { code: number; message: string };
+  method?: string;
+  params?: { sessionId?: string; event?: ProviderTurnStreamEvent };
+}
+
 export class RealAcpClient {
   private status: AcpConnectionStatus = {
     state: "disconnected",
@@ -75,7 +85,7 @@ export class RealAcpClient {
   private serverCapabilities: AcpServerCapabilities | null = null;
   private pendingRequests = new Map<
     string | number,
-    { resolve: (res: any) => void; reject: (err: Error) => void; timeout: NodeJS.Timeout }
+    { resolve: (res: unknown) => void; reject: (err: Error) => void; timeout: NodeJS.Timeout }
   >();
   private activeStreams = new Map<string, (event: ProviderTurnStreamEvent) => void>();
   private nextReqId = 1;
@@ -123,10 +133,10 @@ export class RealAcpClient {
     if (!trimmed) return;
 
     try {
-      const parsed = JSON.parse(trimmed) as Record<string, any>;
+      const parsed = JSON.parse(trimmed) as JsonRpcIncoming;
 
       // Check if response
-      if ("id" in parsed && (parsed.result !== undefined || parsed.error !== undefined)) {
+      if (parsed.id !== undefined && (parsed.result !== undefined || parsed.error !== undefined)) {
         const pending = this.pendingRequests.get(parsed.id);
         if (pending) {
           clearTimeout(pending.timeout);
@@ -145,7 +155,7 @@ export class RealAcpClient {
       // Check if notification (e.g. session update)
       if (parsed.method === "session/update" && parsed.params) {
         const sessionId = parsed.params.sessionId;
-        const handler = this.activeStreams.get(sessionId);
+        const handler = sessionId ? this.activeStreams.get(sessionId) : undefined;
         if (handler && parsed.params.event) {
           handler(parsed.params.event);
         }
@@ -174,12 +184,16 @@ export class RealAcpClient {
         reject(new Error(`ACP request '${method}' timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
-      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequests.set(id, {
+        resolve: (val) => resolve(val as TResult),
+        reject,
+        timeout,
+      });
 
       this.transport.send(JSON.stringify(req)).catch((err) => {
         clearTimeout(timeout);
         this.pendingRequests.delete(id);
-        reject(err);
+        reject(err instanceof Error ? err : new Error(String(err)));
       });
     });
   }

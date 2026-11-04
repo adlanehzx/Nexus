@@ -48,6 +48,7 @@ export class InMemoryTransactionalOutbox implements TransactionalOutbox {
   private readonly messages = new Map<string, TransactionalOutboxMessage>();
 
   async enqueue(inputs: EnqueueOutboxInput[]): Promise<TransactionalOutboxMessage[]> {
+    await Promise.resolve();
     const created: TransactionalOutboxMessage[] = [];
     const now = new Date().toISOString();
 
@@ -72,6 +73,7 @@ export class InMemoryTransactionalOutbox implements TransactionalOutbox {
   }
 
   async fetchPending(batchSize = 50): Promise<TransactionalOutboxMessage[]> {
+    await Promise.resolve();
     const pending: TransactionalOutboxMessage[] = [];
     for (const msg of this.messages.values()) {
       if (msg.status === "pending" || msg.status === "failed") {
@@ -85,6 +87,7 @@ export class InMemoryTransactionalOutbox implements TransactionalOutbox {
   }
 
   async markPublished(ids: string[]): Promise<void> {
+    await Promise.resolve();
     const now = new Date().toISOString();
     for (const id of ids) {
       const msg = this.messages.get(id);
@@ -99,6 +102,7 @@ export class InMemoryTransactionalOutbox implements TransactionalOutbox {
   }
 
   async markFailed(id: string, error: string): Promise<OutboxStatus> {
+    await Promise.resolve();
     const msg = this.messages.get(id);
     if (!msg) return "failed";
 
@@ -140,7 +144,10 @@ export class InMemoryTransactionalOutbox implements TransactionalOutbox {
   getPendingCount(): number {
     let count = 0;
     for (const msg of this.messages.values()) {
-      if ((msg.status === "pending" || msg.status === "failed") && msg.retryCount < msg.maxRetries) {
+      if (
+        (msg.status === "pending" || msg.status === "failed") &&
+        msg.retryCount < msg.maxRetries
+      ) {
         count++;
       }
     }

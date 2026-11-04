@@ -38,7 +38,10 @@ export class TenantSecurityService {
    * Ensures an individual user has a default personal organization and default workspace.
    * This provides full backward compatibility with personal/local mode.
    */
-  async ensurePersonalTenant(userId: string, email: string): Promise<{
+  async ensurePersonalTenant(
+    userId: string,
+    email: string,
+  ): Promise<{
     organizationId: string;
     workspaceId: string;
   }> {
@@ -52,17 +55,15 @@ export class TenantSecurityService {
       const org = membership.organization;
       let defaultWorkspace = org.workspaces.find((w) => w.isDefault) ?? org.workspaces[0];
 
-      if (!defaultWorkspace) {
-        defaultWorkspace = await this.prisma.workspace.create({
-          data: {
-            id: uuidv7(),
-            organizationId: org.id,
-            slug: "default",
-            name: "Default Workspace",
-            isDefault: true,
-          },
-        });
-      }
+      defaultWorkspace ??= await this.prisma.workspace.create({
+        data: {
+          id: uuidv7(),
+          organizationId: org.id,
+          slug: "default",
+          name: "Default Workspace",
+          isDefault: true,
+        },
+      });
 
       return {
         organizationId: org.id,
@@ -116,7 +117,7 @@ export class TenantSecurityService {
       select: { organizationId: true },
     });
 
-    if (!ws || ws.organizationId !== tenant.organizationId) {
+    if (ws?.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested workspace", tenant);
     }
   }
@@ -130,7 +131,7 @@ export class TenantSecurityService {
       include: { workspace: { select: { organizationId: true } } },
     });
 
-    if (!project || project.workspace.organizationId !== tenant.organizationId) {
+    if (project?.workspace.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested project", tenant);
     }
   }
@@ -144,7 +145,7 @@ export class TenantSecurityService {
       include: { project: { include: { workspace: { select: { organizationId: true } } } } },
     });
 
-    if (!mission || mission.project.workspace.organizationId !== tenant.organizationId) {
+    if (mission?.project.workspace.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested mission", tenant);
     }
   }

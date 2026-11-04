@@ -141,6 +141,7 @@ export class ProviderRegistry {
   }
 
   async resolveBestInstance(providerType: ProviderType): Promise<ProviderInstance | undefined> {
+    await Promise.resolve();
     const instances = this.listInstances(providerType);
     return instances.find((i) => i.isAvailable());
   }

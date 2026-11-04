@@ -38,7 +38,12 @@ export class ApprovalDerivationError extends Error {
 }
 
 export function computePayloadHash(payload: unknown): string {
-  const json = JSON.stringify(payload, Object.keys(payload as any).sort());
+  if (payload !== null && typeof payload === "object") {
+    const sortedKeys = Object.keys(payload).sort();
+    const json = JSON.stringify(payload, sortedKeys);
+    return createHash("sha256").update(json).digest("hex");
+  }
+  const json = JSON.stringify(payload);
   return createHash("sha256").update(json).digest("hex");
 }
 

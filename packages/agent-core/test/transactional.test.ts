@@ -195,6 +195,7 @@ describe("Transactional Orchestration Engine (LOT A)", () => {
 
       // Publisher fails on m-2
       const publisher = vi.fn().mockImplementation(async (msg) => {
+        await Promise.resolve();
         if (msg.aggregateId === "m-2") {
           throw new Error("Redis cluster offline");
         }
@@ -282,12 +283,7 @@ describe("Transactional Orchestration Engine (LOT A)", () => {
       const leaseManager = new InMemoryLeaseManager();
       const deadLetterQueue = new InMemoryDeadLetterQueue();
 
-      const engine = new ReconciliationEngine(
-        eventStore,
-        outbox,
-        leaseManager,
-        deadLetterQueue,
-      );
+      const engine = new ReconciliationEngine(eventStore, outbox, leaseManager, deadLetterQueue);
 
       const missionId = "mission-crashed-worker";
 

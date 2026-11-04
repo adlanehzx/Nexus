@@ -8,16 +8,17 @@ import {
 
 describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
   it("provisions personal tenant and default workspace automatically for individual user", async () => {
-    const mockCreatedOrg: any = {};
+    const mockCreatedOrg: Record<string, unknown> = {};
+    const orgCreateSpy = vi.fn().mockImplementation((args: { data: Record<string, unknown> }) => {
+      Object.assign(mockCreatedOrg, args.data);
+      return Promise.resolve(mockCreatedOrg);
+    });
     const mockPrisma = {
       organizationMembership: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
       organization: {
-        create: vi.fn().mockImplementation((args) => {
-          Object.assign(mockCreatedOrg, args.data);
-          return Promise.resolve(mockCreatedOrg);
-        }),
+        create: orgCreateSpy,
       },
       workspace: {
         create: vi.fn(),
@@ -29,7 +30,7 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
 
     expect(result.organizationId).toBeDefined();
     expect(result.workspaceId).toBeDefined();
-    expect(mockPrisma.organization.create).toHaveBeenCalledWith(
+    expect(orgCreateSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           slug: expect.stringContaining("personal-user-123"),
@@ -46,9 +47,7 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
         findFirst: vi.fn().mockResolvedValue({
           organization: {
             id: "org-existing-456",
-            workspaces: [
-              { id: "ws-default-789", isDefault: true, name: "Default Workspace" },
-            ],
+            workspaces: [{ id: "ws-default-789", isDefault: true, name: "Default Workspace" }],
           },
         }),
       },
@@ -115,8 +114,14 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
       role: "MEMBER",
     };
 
-    await expect(security.assertWorkspaceAccess(legitimateTenant, "ws-victim")).resolves.toBeUndefined();
-    await expect(security.assertProjectAccess(legitimateTenant, "proj-victim")).resolves.toBeUndefined();
-    await expect(security.assertMissionAccess(legitimateTenant, "mission-victim")).resolves.toBeUndefined();
+    await expect(
+      security.assertWorkspaceAccess(legitimateTenant, "ws-victim"),
+    ).resolves.toBeUndefined();
+    await expect(
+      security.assertProjectAccess(legitimateTenant, "proj-victim"),
+    ).resolves.toBeUndefined();
+    await expect(
+      security.assertMissionAccess(legitimateTenant, "mission-victim"),
+    ).resolves.toBeUndefined();
   });
 });

@@ -59,9 +59,11 @@ export class InMemoryTransactionalInbox implements TransactionalInbox {
   async receive<TPayload, TResult>(
     input: ReceiveCommandInput<TPayload>,
   ): Promise<ReceiveCommandResult<TResult>> {
+    await Promise.resolve();
     const existing = this.messages.get(input.idempotencyKey);
     if (existing) {
-      const receipt = this.receipts.get(input.idempotencyKey) as CommandReceipt<TResult> | undefined;
+      const receipt = this.receipts.get(input.idempotencyKey) as
+        CommandReceipt<TResult> | undefined;
       return {
         duplicate: true,
         messageId: existing.id,
@@ -90,6 +92,7 @@ export class InMemoryTransactionalInbox implements TransactionalInbox {
     idempotencyKey: string,
     outcome: { status: "completed" | "failed"; result?: TResult; error?: string },
   ): Promise<CommandReceipt<TResult>> {
+    await Promise.resolve();
     const existingMsg = this.messages.get(idempotencyKey);
     const now = new Date().toISOString();
 
@@ -102,14 +105,14 @@ export class InMemoryTransactionalInbox implements TransactionalInbox {
       executedAt: now,
     };
 
-    this.receipts.set(idempotencyKey, receipt as CommandReceipt);
+    this.receipts.set(idempotencyKey, receipt);
 
     if (existingMsg) {
       this.messages.set(idempotencyKey, {
         ...existingMsg,
         status: outcome.status,
         processedAt: now,
-        receipt: receipt as CommandReceipt,
+        receipt,
       });
     }
 
@@ -117,6 +120,7 @@ export class InMemoryTransactionalInbox implements TransactionalInbox {
   }
 
   async getReceipt<TResult>(idempotencyKey: string): Promise<CommandReceipt<TResult> | undefined> {
+    await Promise.resolve();
     return this.receipts.get(idempotencyKey) as CommandReceipt<TResult> | undefined;
   }
 }

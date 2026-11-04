@@ -36,11 +36,7 @@ export interface OAuthTokenResult {
 }
 
 function base64UrlEncode(buffer: Buffer): string {
-  return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 export class OAuthFlowService {
@@ -131,7 +127,9 @@ export class OAuthFlowService {
   async pollDeviceToken(
     provider: string,
     deviceCode: string,
-    fetchToken: (deviceCode: string) => Promise<
+    fetchToken: (
+      deviceCode: string,
+    ) => Promise<
       | { status: "success"; token: OAuthTokenResult }
       | { status: "pending" }
       | { status: "slow_down" }
@@ -139,7 +137,7 @@ export class OAuthFlowService {
     >,
   ): Promise<OAuthTokenResult> {
     const entry = this.pendingDeviceFlows.get(deviceCode);
-    if (!entry || entry.provider !== provider) {
+    if (entry?.provider !== provider) {
       throw new Error("Invalid or unknown device code");
     }
 

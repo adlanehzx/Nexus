@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  ContextTransferService,
-  type CanonicalHandoffContext,
-} from "../src/index.js";
+import { ContextTransferService, type CanonicalHandoffContext } from "../src/index.js";
 
 describe("Cross-Provider Context Transfer & Handoff (LOT E)", () => {
   it("adapts context preserving Git checkpoint, artifacts, short-term facts, and provenance", () => {
@@ -110,7 +107,8 @@ describe("Cross-Provider Context Transfer & Handoff (LOT E)", () => {
     expect(adapted.truncatedTurnCount).toBeGreaterThan(0);
     // Turn 1 (initial user goal) must ALWAYS be preserved
     const firstText = (adapted.messages[0]?.content[0] as { text: string }).text;
-    const lastText = (adapted.messages[adapted.messages.length - 1]?.content[0] as { text: string }).text;
+    const lastText = (adapted.messages[adapted.messages.length - 1]?.content[0] as { text: string })
+      .text;
     expect(firstText).toContain("Turn content 1:");
     // Most recent turn must also be preserved
     expect(lastText).toContain("Turn content 20:");

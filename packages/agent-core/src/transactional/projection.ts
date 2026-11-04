@@ -25,26 +25,30 @@ export interface ProjectedToolExecution {
   error?: string | undefined;
 }
 
+export interface MissionPlan {
+  goal: string;
+  steps: { id: string; title: string; status: "pending" | "running" | "completed" | "failed" }[];
+}
+
 export interface ProjectedMissionState {
   missionId: string;
   version: number;
   phase: MissionPhase;
-  plan?: {
-    goal: string;
-    steps: { id: string; title: string; status: "pending" | "running" | "completed" | "failed" }[];
-  } | undefined;
+  plan?: MissionPlan | undefined;
   tools: ProjectedToolExecution[];
-  pendingConfirmation?: {
-    confirmationId: string;
-    callId: string;
-    toolName: string;
-    arguments: unknown;
-  } | undefined;
+  pendingConfirmation?:
+    | {
+        confirmationId: string;
+        callId: string;
+        toolName: string;
+        arguments: unknown;
+      }
+    | undefined;
   createdAt: string;
   startedAt?: string | undefined;
   completedAt?: string | undefined;
-  failureReason?: string;
-  finalOutput?: string;
+  failureReason?: string | undefined;
+  finalOutput?: string | undefined;
   correlationId: string;
 }
 
@@ -68,9 +72,26 @@ export function projectMission(events: MissionEvent[]): ProjectedMissionState | 
     correlationId: first.correlationId,
   };
 
+  interface EventPayloadData {
+    plan?: MissionPlan;
+    stepId?: string;
+    success?: boolean;
+    confirmationId?: string;
+    callId?: string;
+    toolName?: string;
+    arguments?: Record<string, unknown>;
+    approved?: boolean;
+    toolCallId?: string;
+    durationMs?: number;
+    result?: unknown;
+    error?: string;
+    output?: string;
+    reason?: string;
+  }
+
   for (const ev of sorted) {
     state.version = ev.version;
-    const payload = ev.payload as Record<string, any>;
+    const payload = (ev.payload ?? {}) as EventPayloadData;
 
     switch (ev.type) {
       case "mission.created":
@@ -87,7 +108,7 @@ export function projectMission(events: MissionEvent[]): ProjectedMissionState | 
       case "mission.started":
       case "mission.resumed":
         state.phase = "running";
-        if (!state.startedAt) state.startedAt = ev.timestamp;
+        state.startedAt ??= ev.timestamp;
         state.pendingConfirmation = undefined;
         break;
 
@@ -109,9 +130,9 @@ export function projectMission(events: MissionEvent[]): ProjectedMissionState | 
         state.phase = "waiting_for_confirmation";
         state.pendingConfirmation = {
           confirmationId: payload.confirmationId ?? ev.id,
-          callId: payload.callId,
-          toolName: payload.toolName,
-          arguments: payload.arguments,
+          callId: payload.callId ?? "",
+          toolName: payload.toolName ?? "unknown",
+          arguments: payload.arguments ?? {},
         };
         break;
 
@@ -128,7 +149,7 @@ export function projectMission(events: MissionEvent[]): ProjectedMissionState | 
       case "tool.execution_requested":
         state.tools.push({
           toolCallId: payload.toolCallId ?? ev.id,
-          toolName: payload.toolName,
+          toolName: payload.toolName ?? "unknown",
           status: "pending",
         });
         break;

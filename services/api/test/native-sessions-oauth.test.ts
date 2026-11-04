@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { OAuthFlowService } from "../src/services/oauth-flow.js";
-import {
-  NativeSessionManager,
-  ApprovalDerivationError,
-} from "../src/services/native-session.js";
+import { NativeSessionManager, ApprovalDerivationError } from "../src/services/native-session.js";
 
 describe("Accounts, OAuth and Native Sessions (LOT D)", () => {
   describe("OAuth PKCE & Device Authorization Flows", () => {
@@ -39,6 +36,7 @@ describe("Accounts, OAuth and Native Sessions (LOT D)", () => {
 
       let pollAttempts = 0;
       const token = await oauth.pollDeviceToken("antigravity", "dev-code-123", async () => {
+        await Promise.resolve();
         pollAttempts++;
         if (pollAttempts < 2) {
           return { status: "pending" };

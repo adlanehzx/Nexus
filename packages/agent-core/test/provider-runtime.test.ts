@@ -77,9 +77,7 @@ describe("Next-Gen Provider Runtime (LOT C)", () => {
       );
 
       const pi = new PiProviderDriver();
-      expect(await pi.validateCredentials({})).toEqual(
-        expect.objectContaining({ valid: false }),
-      );
+      expect(await pi.validateCredentials({})).toEqual(expect.objectContaining({ valid: false }));
     });
   });
 
@@ -132,6 +130,7 @@ describe("Next-Gen Provider Runtime (LOT C)", () => {
 
       const mockTransport: RealAcpTransport = {
         send: vi.fn().mockImplementation(async (msg: string) => {
+          await Promise.resolve();
           sentPayload = msg;
           const parsed = JSON.parse(msg);
           if (parsed.method === "initialize") {
@@ -175,14 +174,10 @@ describe("Next-Gen Provider Runtime (LOT C)", () => {
     });
 
     it("marks status as unreachable when transport fails instead of inventing fake turns", async () => {
-      let errorHandler: ((err: Error) => void) | null = null;
-
       const mockTransport: RealAcpTransport = {
         send: vi.fn().mockRejectedValue(new Error("Connection refused (ECONNREFUSED)")),
         onMessage: vi.fn(),
-        onError: vi.fn().mockImplementation((handler) => {
-          errorHandler = handler;
-        }),
+        onError: vi.fn(),
         onClose: vi.fn(),
         close: vi.fn().mockResolvedValue(undefined),
       };

@@ -19,7 +19,9 @@ export interface DeadLetterEntry {
 }
 
 export interface DeadLetterQueue {
-  enqueue(entry: Omit<DeadLetterEntry, "id" | "failedAt" | "replayCount">): Promise<DeadLetterEntry>;
+  enqueue(
+    entry: Omit<DeadLetterEntry, "id" | "failedAt" | "replayCount">,
+  ): Promise<DeadLetterEntry>;
   list(filter?: { origin?: string; limit?: number }): Promise<DeadLetterEntry[]>;
   get(id: string): Promise<DeadLetterEntry | undefined>;
   replay(id: string, handler: (entry: DeadLetterEntry) => Promise<boolean>): Promise<boolean>;
@@ -32,6 +34,7 @@ export class InMemoryDeadLetterQueue implements DeadLetterQueue {
   async enqueue(
     entry: Omit<DeadLetterEntry, "id" | "failedAt" | "replayCount">,
   ): Promise<DeadLetterEntry> {
+    await Promise.resolve();
     const item: DeadLetterEntry = {
       id: uuidv7(),
       origin: entry.origin,
@@ -47,6 +50,7 @@ export class InMemoryDeadLetterQueue implements DeadLetterQueue {
   }
 
   async list(filter?: { origin?: string; limit?: number }): Promise<DeadLetterEntry[]> {
+    await Promise.resolve();
     let list = [...this.entries.values()];
     if (filter?.origin) {
       list = list.filter((e) => e.origin === filter.origin);
@@ -58,10 +62,14 @@ export class InMemoryDeadLetterQueue implements DeadLetterQueue {
   }
 
   async get(id: string): Promise<DeadLetterEntry | undefined> {
+    await Promise.resolve();
     return this.entries.get(id);
   }
 
-  async replay(id: string, handler: (entry: DeadLetterEntry) => Promise<boolean>): Promise<boolean> {
+  async replay(
+    id: string,
+    handler: (entry: DeadLetterEntry) => Promise<boolean>,
+  ): Promise<boolean> {
     const item = this.entries.get(id);
     if (!item) return false;
 
@@ -79,6 +87,7 @@ export class InMemoryDeadLetterQueue implements DeadLetterQueue {
   }
 
   async delete(id: string): Promise<boolean> {
+    await Promise.resolve();
     return this.entries.delete(id);
   }
 }
