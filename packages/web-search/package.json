@@ -27,7 +27,7 @@
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
     "pdf-parse": "2.4.5",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
