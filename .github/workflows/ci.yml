@@ -75,6 +75,19 @@ jobs:
       - name: Release hygiene
         run: pnpm release:check
 
+      # A route with no caller is a feature with no interface, or an interface
+      # that was removed and left its endpoint behind. Seventy-one had
+      # accumulated before anything counted them.
+      - name: API wiring
+        run: pnpm check:api-wiring
+
+      # Four workers negotiate on one envelope version, and none is covered
+      # end to end yet. An unversioned change breaks all of them at once.
+      - name: Worker contract
+        run: pnpm check:worker-contract
+        env:
+          BASE_REF: origin/${{ github.base_ref || github.event.repository.default_branch }}
+
       - name: English-only repository
         run: pnpm translation:check
 

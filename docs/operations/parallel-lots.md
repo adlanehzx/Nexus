@@ -32,11 +32,11 @@ Each worktree needs its own `pnpm install` — worktrees share git history, not 
 
 ## Ownership
 
-| Agent | Lots | Owns exclusively | Must not touch |
-| --- | --- | --- | --- |
+| Agent           | Lots       | Owns exclusively                                                                                                                                                                                                                                                                         | Must not touch                                                                             |
+| --------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | **Claude Code** | 3, 4, 6, 8 | `services/api/src/{app,server}.ts` · `services/api/src/services/{container,tool-registration,autonomy-safety,connection-manager,pause}.ts` · `routes/v1/{organizations,connections}.ts` · `packages/{config,llm,protocol}` · `infrastructure/` · `packaging/linux` · `.github/workflows` | `apps/dashboard/**` · `services/api/src/services/career/**` · `services/mission-engine/**` |
-| **Codex** | 5, 9, 10 | `apps/dashboard/src/ui/sections/**` · `apps/dashboard/src/lib/api.ts` · `routes/v1/dashboard.ts` · `services/api/src/services/observability*` · `e2e/**` | `container.ts` · `packages/protocol` · `prisma/schema.prisma` |
-| **Antigravity** | 7, 11, 12 | `packages/client-core/src/career-education/**` · `services/api/src/services/career/**` · `routes/v1/career.ts` · `services/mission-engine/**` · `routes/v1/satellites.ts` · `packaging/satellite` · `apps/dashboard/src/ui/i18n/**` | `container.ts` · `routes/v1/dashboard.ts` · `packages/protocol` |
+| **Codex**       | 5, 9, 10   | `apps/dashboard/src/ui/sections/**` · `apps/dashboard/src/lib/api.ts` · `routes/v1/dashboard.ts` · `services/api/src/services/observability*` · `e2e/**`                                                                                                                                 | `container.ts` · `packages/protocol` · `prisma/schema.prisma`                              |
+| **Antigravity** | 7, 11, 12  | `packages/client-core/src/career-education/**` · `services/api/src/services/career/**` · `routes/v1/career.ts` · `services/mission-engine/**` · `routes/v1/satellites.ts` · `packaging/satellite` · `apps/dashboard/src/ui/i18n/**`                                                      | `container.ts` · `routes/v1/dashboard.ts` · `packages/protocol`                            |
 
 Codex works through its own CLI in its worktree, **not** as an agent orchestrated by NEXUS:
 BUG-003 leaves `@agentclientprotocol/codex-acp@1.10.0` silent on `initialize`. Lot 3.4 fixes the
@@ -57,10 +57,15 @@ A branch merges into integration when it passes, in this order:
 
 1. `pnpm lint`, `pnpm typecheck`, `pnpm test` — all three now run with `--continue`, so a failure
    in one package no longer hides the rest.
-2. The API wiring check (lot 1.3): a route with no caller and no justified allowlist entry fails.
-3. The worker contract check (lot 1.3): any diff under `packages/protocol/src/{envelope,worker}.ts`
-   without a version bump fails. Four workers share that envelope — Windows, Android, browser
-   host, and the future ESP32 — so an unversioned change breaks all of them at once.
+2. `pnpm check:api-wiring` — a route with no caller and no justified allowlist entry fails. The
+   allowlist is checked in both directions: an entry that no longer matches an uncalled route is
+   itself a failure, so `docs/api-wiring-allowlist.json` cannot rot into a list of excuses. It
+   currently holds 32 entries against 220 routes, and every lot that wires a client should be
+   shrinking it.
+3. `pnpm check:worker-contract` — any diff under `packages/protocol/src/{envelope,worker}.ts`
+   without a `PROTOCOL_VERSION` bump fails. Four workers share that envelope — Windows, Android,
+   browser host, and the future ESP32 — so an unversioned change breaks all of them at once. Pass
+   a base ref, or set `BASE_REF`; CI passes the pull request's base branch.
 4. From lot 10.1 onward, the end-to-end job against the compose deployment. It is the gate that
    would have caught BUG-002: 2 169 unit tests passed while the chat answered 500.
 
