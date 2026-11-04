@@ -11,9 +11,116 @@ import type {
 } from "../lib/api.js";
 import { Section, useSection } from "./parts.js";
 import { useI18n } from "./i18n/index.js";
+import { PreferencesPanel } from "./PreferencesPanel.js";
+import { KeybindingsPanel } from "./KeybindingsPanel.js";
+
+type SettingsTab = "preferences" | "shortcuts" | "engine" | "secrets" | "backup";
+
+function IconKeyboard() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ verticalAlign: "middle", marginRight: "6px" }}
+    >
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
+    </svg>
+  );
+}
+
+function IconPreferences() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ verticalAlign: "middle", marginRight: "6px" }}
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function IconCpu() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ verticalAlign: "middle", marginRight: "6px" }}
+    >
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+    </svg>
+  );
+}
+
+function IconKey() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ verticalAlign: "middle", marginRight: "6px" }}
+    >
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.6 9.6M15.5 7.5l3 3M18.5 4.5l3 3" />
+    </svg>
+  );
+}
+
+function IconDatabase() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ verticalAlign: "middle", marginRight: "6px" }}
+    >
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+    </svg>
+  );
+}
 
 export function Settings({ api }: { api: DashboardApi }) {
-  const { locale, t } = useI18n();
+  const { locale, t, tr } = useI18n();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("preferences");
+
   const state = useSection(() => api.runtimeSettings());
   const secrets = useSection(() => api.secrets());
   const linkedin = useSection(() => api.linkedInStatus());
@@ -27,36 +134,183 @@ export function Settings({ api }: { api: DashboardApi }) {
           <h2>{locale === "fr" ? "Paramètres" : "Settings"}</h2>
           <p className="muted">
             {locale === "fr"
-              ? "Paramètres persistants du moteur multi-agents NEXUS."
-              : "Persistent settings for the NEXUS multi-agent engine."}
+              ? "Préférences de l'interface, configuration du moteur multi-agents et gestion des secrets."
+              : "Interface preferences, multi-agent engine configuration and secrets management."}
           </p>
         </div>
         <button className="button" type="button" onClick={state.reload}>
           {t("common.actions.refresh")}
         </button>
       </div>
-      <Section state={state}>
-        {(data) => <SettingsForm api={api} initial={data} reload={state.reload} />}
-      </Section>
-      <Section state={secrets}>
-        {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
-      </Section>
-      <Section state={freeLlm}>
-        {(data) => <FreeLlmForm api={api} status={data} reload={freeLlm.reload} />}
-      </Section>
-      <Section state={llmEngines}>
-        {(data) => <LlmEnginesForm api={api} section={data} reload={llmEngines.reload} />}
-      </Section>
-      <Section state={linkedin}>
-        {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
-      </Section>
-      <BackupRestorePanel
-        api={api}
-        onReloadAll={() => {
-          state.reload();
-          secrets.reload();
+
+      {/* Tabs navigation */}
+      <div
+        className="settings-tabs"
+        role="tablist"
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
+          paddingBottom: "0.75rem",
+          marginBottom: "1.75rem",
+          flexWrap: "wrap",
         }}
-      />
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "preferences"}
+          className={`button ${activeTab === "preferences" ? "primary" : ""}`}
+          onClick={() => setActiveTab("preferences")}
+          style={{
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            ...(activeTab === "preferences"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}),
+          }}
+        >
+          <IconPreferences />
+          {tr("Preferences", "Préférences")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "shortcuts"}
+          className={`button ${activeTab === "shortcuts" ? "primary" : ""}`}
+          onClick={() => setActiveTab("shortcuts")}
+          style={{
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            ...(activeTab === "shortcuts"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}),
+          }}
+        >
+          <IconKeyboard />
+          {tr("Keybindings", "Raccourcis")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "engine"}
+          className={`button ${activeTab === "engine" ? "primary" : ""}`}
+          onClick={() => setActiveTab("engine")}
+          style={{
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            ...(activeTab === "engine"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}),
+          }}
+        >
+          <IconCpu />
+          {tr("Engine & LLMs", "Moteur & LLM")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "secrets"}
+          className={`button ${activeTab === "secrets" ? "primary" : ""}`}
+          onClick={() => setActiveTab("secrets")}
+          style={{
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            ...(activeTab === "secrets"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}),
+          }}
+        >
+          <IconKey />
+          {tr("Secrets & Access", "Secrets & Accès")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "backup"}
+          className={`button ${activeTab === "backup" ? "primary" : ""}`}
+          onClick={() => setActiveTab("backup")}
+          style={{
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            ...(activeTab === "backup"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}),
+          }}
+        >
+          <IconDatabase />
+          {tr("Backup & Restore", "Sauvegarde & Restauration")}
+        </button>
+      </div>
+
+      {/* Tab 1: Preferences (OS, Lighting Mode, Language, Color Themes) */}
+      {activeTab === "preferences" && <PreferencesPanel />}
+
+      {/* Tab 1b: Keybindings (Customizable keyboard shortcuts) */}
+      {activeTab === "shortcuts" && <KeybindingsPanel />}
+
+      {/* Tab 2: Multi-agent Engine & LLMs */}
+      {activeTab === "engine" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <Section state={state}>
+            {(data) => <SettingsForm api={api} initial={data} reload={state.reload} />}
+          </Section>
+          <Section state={freeLlm}>
+            {(data) => <FreeLlmForm api={api} status={data} reload={freeLlm.reload} />}
+          </Section>
+          <Section state={llmEngines}>
+            {(data) => <LlmEnginesForm api={api} section={data} reload={llmEngines.reload} />}
+          </Section>
+        </div>
+      )}
+
+      {/* Tab 3: Secrets & API Keys */}
+      {activeTab === "secrets" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <Section state={secrets}>
+            {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
+          </Section>
+          <Section state={linkedin}>
+            {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
+          </Section>
+        </div>
+      )}
+
+      {/* Tab 4: Backup & Restore */}
+      {activeTab === "backup" && (
+        <BackupRestorePanel
+          api={api}
+          onReloadAll={() => {
+            state.reload();
+            secrets.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

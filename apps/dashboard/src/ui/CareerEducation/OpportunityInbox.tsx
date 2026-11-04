@@ -523,7 +523,9 @@ export function OpportunityInbox({
                       style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
                     >
                       <IconStar size={13} filled color="#00ff88" />
-                      <span>{opp.match.score}% {tr("Match Score", "Score de compatibilité")}</span>
+                      <span>
+                        {opp.match.score}% {tr("Match Score", "Score de compatibilité")}
+                      </span>
                     </span>
                     <button
                       type="button"

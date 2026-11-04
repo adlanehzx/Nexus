@@ -409,7 +409,9 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           <IconTarget size={15} style={{ marginRight: 6 }} />
           {tr("Goals & Profile Wizard", "Objectifs & Profil")}
           {profile && (
-            <span style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700, marginLeft: 4 }}>
+            <span
+              style={{ fontSize: "0.72rem", color: "var(--ok)", fontWeight: 700, marginLeft: 4 }}
+            >
               {profile.completeness.score}%
             </span>
           )}

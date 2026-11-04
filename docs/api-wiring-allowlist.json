@@ -126,5 +126,29 @@
   {
     "route": "POST /api/v1/mission-control/schedules/:p/:p",
     "reason": "Registered by a loop over ['pause','resume'], so the declared path ends in a parameter where callers use the literal action. Both are called from the dashboard; the checker compares paths and cannot match a generated segment."
+  },
+  {
+    "route": "GET /api/v1/providers/capabilities",
+    "reason": "Unified provider capabilities endpoint. Kept as the direct canonical capabilities route alongside the /api/v1/providers alias used by the UI."
+  },
+  {
+    "route": "GET /api/v1/providers/models",
+    "reason": "Global model catalog across all providers. The dashboard accesses models per-provider via /api/v1/providers/:provider/models; kept for cross-provider model queries."
+  },
+  {
+    "route": "POST /api/v1/checkpoints",
+    "reason": "Differential turn snapshot capture endpoint. Called by automated agent loop orchestration and background workers rather than user-facing dashboard buttons."
+  },
+  {
+    "route": "POST /api/v1/checkpoints/rollback",
+    "reason": "Agent rollback checkpoint restore endpoint. Invoked by autonomous supervisor mechanisms during error recovery."
+  },
+  {
+    "route": "GET /api/v1/source-control/guides/:p",
+    "reason": "PR architectural review guide retrieval. Kept for agent review routines and CLI workflows."
+  },
+  {
+    "route": "POST /api/v1/source-control/guides",
+    "reason": "PR architectural review guide creation and publication endpoint. Written by reviewing subagents during synthesis turns."
   }
 ]

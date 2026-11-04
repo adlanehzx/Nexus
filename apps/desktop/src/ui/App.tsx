@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { activeTasks, pendingConfirmations, unreadNotifications } from "@nexus/client-core";
 import { useNexus, type Screen } from "../lib/nexus.js";
+import { getDigitFromEvent, isEditingText } from "../lib/keyboardUtils.js";
 import { Chat } from "./Chat.js";
 import { Devices, Memory, Notifications, Settings, Tasks, Worker } from "./Screens.js";
 import { ConnectionBanner, ErrorBanner } from "./cards.js";
 import { Login } from "./Login.js";
 import { NexusOrb } from "./NexusOrb.js";
 import { ThemeToggle } from "./ThemeToggle.js";
+import { NexusLogo } from "./NexusLogo.js";
 import { nexusVisualState } from "./visual-state.js";
 
 const TITRES: Record<Screen, string> = {
@@ -31,6 +33,43 @@ const NAVIGATION: { screen: Screen; icon: string }[] = [
 export function App() {
   const nexus = useNexus();
   const [ecran, setEcran] = useState<Screen>("chat");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+      if (!hasModifier) return;
+
+      if (e.key === ",") {
+        e.preventDefault();
+        e.stopPropagation();
+        setEcran("settings");
+        return;
+      }
+
+      if (isEditingText()) return;
+
+      const digit = getDigitFromEvent(e);
+      if (digit !== null && digit >= 1 && digit <= 7) {
+        e.preventDefault();
+        e.stopPropagation();
+        const screenMap: Record<number, Screen> = {
+          1: "chat",
+          2: "tasks",
+          3: "devices",
+          4: "notifications",
+          5: "memory",
+          6: "worker",
+          7: "settings",
+        };
+        const target = screenMap[digit];
+        if (target) setEcran(target);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, []);
+
   if (!nexus.ready) return <p className="empty-state">Opening NEXUS…</p>;
   if (!nexus.authenticated) return <Login />;
 
@@ -48,6 +87,7 @@ export function App() {
     <div className="app nexus-background">
       <nav className="sidebar" aria-label="NEXUS Navigation">
         <div className="brand-lockup">
+          <NexusLogo size={24} style={{ marginRight: 6 }} />
           <NexusOrb state={visualState} compact />
           <div>
             <h1>NEXUS</h1>

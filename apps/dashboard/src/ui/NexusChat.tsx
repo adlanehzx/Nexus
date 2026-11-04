@@ -28,6 +28,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
   );
   const [draft, setDraft] = useState("");
   const [activeMission, setActiveMission] = useState<string | null>(restoredMission);
+  const [selectedEngine, setSelectedEngine] = useState<
+    "auto" | "claude" | "cursor" | "grok" | "acp"
+  >("auto");
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -276,6 +279,38 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         }}
       >
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.4rem",
+              alignItems: "center",
+              marginBottom: "0.25rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontSize: "0.72rem", color: "var(--muted-text, #8b949e)" }}>
+              {tr("Engine:", "Moteur :")}
+            </span>
+            {(
+              [
+                { id: "auto", label: "Auto (NEXUS)" },
+                { id: "claude", label: "Claude 3.5" },
+                { id: "cursor", label: "Cursor Bridge" },
+                { id: "grok", label: "Grok" },
+                { id: "acp", label: "ACP Agent" },
+              ] as const
+            ).map((engine) => (
+              <button
+                key={engine.id}
+                type="button"
+                className={`button compact ${selectedEngine === engine.id ? "primary" : "secondary"}`}
+                style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", height: "auto" }}
+                onClick={() => setSelectedEngine(engine.id)}
+              >
+                {engine.label}
+              </button>
+            ))}
+          </div>
           <textarea
             aria-label="Mission for NEXUS"
             value={draft}
@@ -345,7 +380,34 @@ function pendingMission(missionId: string): OrchestratedMission {
 
 function MissionReply({ mission }: { mission: OrchestratedMission }) {
   const { tr } = useI18n();
-  if (mission.response !== null) return <div className="chat-text">{mission.response}</div>;
+  if (mission.response !== null) {
+    return (
+      <div className="chat-text">
+        <div>{mission.response}</div>
+        <div
+          style={{
+            marginTop: "0.6rem",
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            fontSize: "0.72rem",
+            borderTop: "1px dashed rgba(255,255,255,0.1)",
+            paddingTop: "0.4rem",
+          }}
+        >
+          <span style={{ color: "var(--accent, #00f0ff)" }}>
+            💾 {tr("Checkpoint captured", "Checkpoint sauvegardé")}
+          </span>
+          <a
+            href="#vcs-worktrees"
+            style={{ color: "var(--text-muted, #8b949e)", textDecoration: "underline" }}
+          >
+            {tr("View VCS & Rollbacks →", "Gérer les worktrees & rollbacks →")}
+          </a>
+        </div>
+      </div>
+    );
+  }
   if (mission.error !== null || mission.state === "failed") {
     return (
       <div className="chat-error">

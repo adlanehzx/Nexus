@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { IconCheck } from "./icons.js";
+import { NexusLogo } from "./NexusLogo.js";
 
 type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
@@ -401,7 +402,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
       </div>
       <div className="setup-wizard-shell">
         <div className="login-brand" style={{ marginBottom: "1.5rem" }}>
-          <span className="brand-mark">N</span>
+          <NexusLogo size={28} style={{ marginRight: 8 }} />
           <span style={{ fontSize: "1rem", letterSpacing: "0.04em" }}>
             {tr("NEXUS · Setup Wizard", "NEXUS · Assistant d'installation")}
           </span>
@@ -933,9 +934,17 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 )}
               </p>
 
-              <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <div
+                style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem", flexWrap: "wrap" }}
+              >
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.88rem",
+                  }}
                 >
                   <input
                     type="radio"
@@ -947,7 +956,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   {tr("Disabled", "Désactivé")}
                 </label>
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.88rem",
+                  }}
                 >
                   <input
                     type="radio"
@@ -959,7 +974,13 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   {tr("Local Chromium (CDP)", "Chromium local (CDP)")}
                 </label>
                 <label
-                  style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.88rem" }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.88rem",
+                  }}
                 >
                   <input
                     type="radio"
@@ -974,7 +995,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
               {browserMode === "local-harness" && (
                 <label style={{ display: "block", marginBottom: "1rem" }}>
-                  <span style={{ display: "block", fontSize: "0.8rem", color: "var(--nx-text-muted)", marginBottom: "4px" }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      color: "var(--nx-text-muted)",
+                      marginBottom: "4px",
+                    }}
+                  >
                     {tr("CDP Endpoint URL", "URL du point de terminaison CDP")}
                   </span>
                   <input
@@ -988,7 +1016,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
               {browserMode === "remote-worker" && (
                 <label style={{ display: "block", marginBottom: "1rem" }}>
-                  <span style={{ display: "block", fontSize: "0.8rem", color: "var(--nx-text-muted)", marginBottom: "4px" }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      color: "var(--nx-text-muted)",
+                      marginBottom: "4px",
+                    }}
+                  >
                     {tr("Remote Worker Base URL", "URL de base du nœud distant")}
                   </span>
                   <input
@@ -1000,7 +1035,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 </label>
               )}
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "0.5rem" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "0.5rem" }}
+              >
                 <button
                   type="button"
                   className="button secondary compact"
@@ -1191,7 +1228,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   gap: "14px",
                 }}
               >
-                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                <li
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontSize: "0.92rem",
+                  }}
+                >
                   <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
@@ -1200,7 +1244,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                <li
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontSize: "0.92rem",
+                  }}
+                >
                   <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
@@ -1209,7 +1260,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                <li
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontSize: "0.92rem",
+                  }}
+                >
                   <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(
@@ -1218,7 +1276,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     )}
                   </span>
                 </li>
-                <li style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.92rem" }}>
+                <li
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    fontSize: "0.92rem",
+                  }}
+                >
                   <IconCheck size={18} color="var(--ok)" />
                   <span>
                     {tr(

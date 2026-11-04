@@ -31,3 +31,5 @@ export * from "./sections/tasks.js";
 export * from "./sections/tools.js";
 export * from "./sections/visual-control.js";
 export * from "./sections/workers.js";
+export * from "./sections/vcs-worktrees.js";
+export * from "./sections/providers.js";

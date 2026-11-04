@@ -26,6 +26,7 @@
   "dependencies": {
     "@nexus/llm": "workspace:*",
     "@nexus/memory": "workspace:*",
+    "@nexus/protocol": "workspace:*",
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
     "zod": "4.5.4"

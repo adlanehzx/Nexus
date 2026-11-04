@@ -53,6 +53,10 @@ import { satelliteRoutes } from "./routes/v1/satellites.js";
 import { SatelliteService } from "./services/satellite-service.js";
 import { createFireTvTool, FireTvService } from "./services/fire-tv.js";
 import { osintRoutes } from "./routes/v1/osint.js";
+import { worktreeRoutes } from "./routes/v1/worktrees.js";
+import { checkpointRoutes } from "./routes/v1/checkpoints.js";
+import { providerRoutes } from "./routes/v1/providers.js";
+import { sourceControlRoutes } from "./routes/v1/source-control.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
 declare module "fastify" {
@@ -296,6 +300,10 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(linkedInRoutes);
       await v1.register(osintRoutes);
       await v1.register(satelliteRoutes);
+      await v1.register(worktreeRoutes);
+      await v1.register(checkpointRoutes);
+      await v1.register(providerRoutes);
+      await v1.register(sourceControlRoutes);
     },
     { prefix: "/api/v1" },
   );

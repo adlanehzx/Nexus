@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNexus } from "../lib/nexus.js";
 import { NexusOrb } from "./NexusOrb.js";
+import { NexusLogo } from "./NexusLogo.js";
 
 /** The password is cleared before the async session exchange starts. */
 export function Login() {
@@ -36,6 +37,9 @@ export function Login() {
         <p>A unified presence for your devices, tasks, and sensitive decisions.</p>
       </section>
       <section className="login-panel" aria-label="Sign in to NEXUS">
+        <div style={{ marginBottom: "1rem" }}>
+          <NexusLogo size={36} />
+        </div>
         <span className="eyebrow">Secure connection</span>
         <h2>Sign in to NEXUS</h2>
         <p className="muted">Windows desktop — client and local worker.</p>
