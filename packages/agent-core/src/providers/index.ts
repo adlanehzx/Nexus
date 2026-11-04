@@ -20,3 +20,4 @@ export * from "./pi-driver.js";
 export * from "./local-driver.js";
 export * from "./acp-client.js";
 export * from "./registry.js";
+export * from "./circuit-breaker.js";
