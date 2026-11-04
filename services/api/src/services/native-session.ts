@@ -14,7 +14,7 @@ import { uuidv7 } from "@nexus/shared";
 export interface SessionTurnCheckpoint {
   checkpointId: string;
   turnNumber: number;
-  commitHash?: string;
+  commitHash?: string | undefined;
   timestamp: string;
   status: "completed" | "interrupted" | "failed";
 }

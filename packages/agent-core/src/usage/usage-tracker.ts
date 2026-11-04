@@ -78,9 +78,9 @@ export class UsageTracker {
   }
 
   getAggregation(filter?: {
-    organizationId?: string;
-    provider?: string;
-    accountId?: string;
+    organizationId?: string | undefined;
+    provider?: string | undefined;
+    accountId?: string | undefined;
   }): UsageAggregation {
     let list = this.records;
 

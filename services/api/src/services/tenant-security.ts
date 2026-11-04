@@ -18,15 +18,21 @@ export interface TenantContext {
 export class TenantIsolationError extends Error {
   readonly code = "TENANT_ISOLATION_VIOLATION";
   readonly statusCode = 403;
+  readonly tenantContext?: TenantContext | undefined;
 
-  constructor(message: string, public readonly tenantContext?: TenantContext) {
+  constructor(message: string, tenantContext?: TenantContext) {
     super(message);
     this.name = "TenantIsolationError";
+    this.tenantContext = tenantContext;
   }
 }
 
 export class TenantSecurityService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    this.prisma = prisma;
+  }
 
   /**
    * Ensures an individual user has a default personal organization and default workspace.
