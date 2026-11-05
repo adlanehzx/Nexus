@@ -185,6 +185,21 @@ describe("ChatController.send", () => {
     expect(actions).toContainEqual(expect.objectContaining({ code: "CHAT_SEND_FAILED" }));
   });
 
+  it("withdraws a refused message and reports it was not delivered", async () => {
+    const { controller, actions } = setup({
+      runAgent: vi.fn(() => Promise.reject(new ApiError(403, "No."))),
+    });
+
+    await expect(controller.send("hello")).resolves.toBe(false);
+
+    const shown = actions.find((action) => action.kind === "localMessage");
+    const removed = actions.find((action) => action.kind === "removeMessage");
+    expect(removed).toEqual({
+      kind: "removeMessage",
+      messageId: shown?.kind === "localMessage" ? shown.message.id : "missing",
+    });
+  });
+
   it("action: goes through the channel and the planner", async () => {
     const { controller, api, realtime } = setup();
 

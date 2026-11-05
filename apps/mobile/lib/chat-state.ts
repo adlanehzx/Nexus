@@ -21,6 +21,8 @@ export type MobileAction =
   /** Replaces the timeline with a conversation's server history, keeping what is still in flight. */
   | { kind: "hydrateMessages"; messages: MessageView[] }
   | { kind: "clearMessages" }
+  /** Withdraws a message the core refused, so it does not read as sent. */
+  | { kind: "removeMessage"; messageId: string }
   | { kind: "hydrateNotifications"; notifications: NotificationView[] };
 
 export function reduceMobile(state: ClientState, action: MobileAction): ClientState {
@@ -29,6 +31,11 @@ export function reduceMobile(state: ClientState, action: MobileAction): ClientSt
       return { ...state, messages: mergeMessages(state.messages, action.messages) };
     case "clearMessages":
       return { ...state, messages: [], toolCalls: [], confirmations: [] };
+    case "removeMessage":
+      return {
+        ...state,
+        messages: state.messages.filter((message) => message.id !== action.messageId),
+      };
     case "hydrateNotifications":
       return {
         ...state,

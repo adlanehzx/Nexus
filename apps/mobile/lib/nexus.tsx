@@ -83,7 +83,7 @@ export interface NexusContextValue {
 
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  send: (text: string) => Promise<void>;
+  send: (text: string) => Promise<boolean>;
   setSendMode: (mode: SendMode) => void;
   newConversation: () => void;
   openConversation: (conversationId: string) => Promise<void>;

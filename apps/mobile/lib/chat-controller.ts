@@ -133,19 +133,23 @@ export class ChatController {
     }
   }
 
-  async send(rawText: string, mode: SendMode = "chat"): Promise<void> {
+  /** False when the core refused the text, which the caller should give back to the user. */
+  async send(rawText: string, mode: SendMode = "chat"): Promise<boolean> {
     const text = rawText.trim();
-    if (text.length === 0) return;
+    if (text.length === 0) return true;
 
-    this.#showLocally(text);
+    const localId = this.#showLocally(text);
 
     try {
       if (mode === "chat") await this.#sendToAgent(text);
       else if (mode === "action") await this.#sendAsAction(text);
       else await this.#sendAsMission(text);
+      return true;
     } catch (cause) {
       this.#set({ ...this.#state, running: false, activeRunId: null });
+      this.#options.dispatch({ kind: "removeMessage", messageId: localId });
       this.#fail("CHAT_SEND_FAILED", cause);
+      return false;
     }
   }
 
@@ -293,12 +297,13 @@ export class ChatController {
     };
   }
 
-  #showLocally(text: string): void {
+  #showLocally(text: string): string {
     this.#sequence += 1;
+    const id = `${LOCAL_MESSAGE_PREFIX}${String(this.#sequence)}-${this.#now()}`;
     this.#options.dispatch({
       kind: "localMessage",
       message: {
-        id: `${LOCAL_MESSAGE_PREFIX}${String(this.#sequence)}-${this.#now()}`,
+        id,
         role: "user",
         content: text,
         streaming: false,
@@ -306,6 +311,7 @@ export class ChatController {
         originClientDeviceId: this.#options.session.deviceId,
       },
     });
+    return id;
   }
 
   #fail(code: string, cause: unknown): void {

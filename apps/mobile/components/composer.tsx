@@ -12,7 +12,8 @@ import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
  */
 
 export interface ComposerProps {
-  onSend: (text: string) => void | Promise<void>;
+  /** Resolves to false when the text was not delivered and should return to the field. */
+  onSend: (text: string) => void | boolean | Promise<void | boolean>;
   onStartListening: () => void | Promise<void>;
   onStopListening: () => void | Promise<void>;
   onCancelListening: () => void | Promise<void>;
@@ -40,7 +41,9 @@ export function Composer(props: ComposerProps) {
     if (trimmed.length === 0 || !props.enabled) return;
 
     setText("");
-    void props.onSend(trimmed);
+    void Promise.resolve(props.onSend(trimmed)).then((delivered) => {
+      if (delivered === false) setText((current) => (current.length === 0 ? trimmed : current));
+    });
   };
 
   return (
