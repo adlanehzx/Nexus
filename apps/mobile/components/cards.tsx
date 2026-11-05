@@ -51,6 +51,7 @@ export function TaskCard({
   deviceName?: string | undefined;
   onCancel?: ((taskId: string) => void) | undefined;
 }) {
+  const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const running = task.status === "running" || task.status === "pending";
 
@@ -60,7 +61,7 @@ export function TaskCard({
         <Text style={styles.cardTitle} numberOfLines={2}>
           {task.title}
         </Text>
-        <Text style={[styles.badge, { color: statusColor(task.status) }]}>
+        <Text style={[styles.badge, { color: statusColor(task.status, theme) }]}>
           {statusLabel(task.status)}
         </Text>
       </View>
@@ -120,7 +121,7 @@ export function ToolCard({ call }: { call: ToolCallView }) {
     <View style={[styles.card, styles.toolCard]}>
       <View style={styles.cardHeader}>
         <Text style={styles.toolName}>{call.tool}</Text>
-        <Text style={[styles.riskChip, { color: riskColor(call.riskLevel) }]}>
+        <Text style={[styles.riskChip, { color: riskColor(call.riskLevel, theme) }]}>
           {call.riskLevel}
         </Text>
       </View>
@@ -136,7 +137,7 @@ export function ToolCard({ call }: { call: ToolCallView }) {
             <Text style={styles.cardFaint}>{call.label ?? "running"}</Text>
           </View>
         ) : (
-          <Text style={[styles.cardFaint, { color: statusColor(call.status) }]}>
+          <Text style={[styles.cardFaint, { color: statusColor(call.status, theme) }]}>
             {call.status === "succeeded" ? "completed" : "failed"}
             {call.durationMs === null ? "" : ` · ${formatDuration(call.durationMs)}`}
           </Text>
@@ -165,6 +166,7 @@ export function ConfirmationCard({
   confirmation: ConfirmationView;
   onAnswer: (id: string, decision: "approved" | "rejected") => void;
 }) {
+  const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [armed, setArmed] = useState(false);
   const highRisk = confirmation.riskLevel === "HIGH" || confirmation.riskLevel === "CRITICAL";
@@ -179,7 +181,11 @@ export function ConfirmationCard({
 
   return (
     <View
-      style={[styles.card, styles.confirmCard, { borderColor: riskColor(confirmation.riskLevel) }]}
+      style={[
+        styles.card,
+        styles.confirmCard,
+        { borderColor: riskColor(confirmation.riskLevel, theme) },
+      ]}
     >
       <Text style={styles.confirmIntro}>NEXUS requests to:</Text>
       <Text style={styles.confirmAction}>{confirmation.action}</Text>
@@ -192,7 +198,7 @@ export function ConfirmationCard({
 
       <View style={styles.riskRow}>
         <Text style={styles.cardFaint}>Risk</Text>
-        <Text style={[styles.riskValue, { color: riskColor(confirmation.riskLevel) }]}>
+        <Text style={[styles.riskValue, { color: riskColor(confirmation.riskLevel, theme) }]}>
           {confirmation.riskLevel}
         </Text>
       </View>
@@ -219,7 +225,7 @@ export function ConfirmationCard({
           style={[
             styles.button,
             armed ? styles.buttonArmed : styles.buttonApprove,
-            { borderColor: riskColor(confirmation.riskLevel) },
+            { borderColor: riskColor(confirmation.riskLevel, theme) },
           ]}
           onPress={approve}
           accessibilityRole="button"

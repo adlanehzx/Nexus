@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { VoiceState } from "@nexus/client-core";
 import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
@@ -69,7 +70,7 @@ export function Composer(props: ComposerProps) {
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder={props.enabled ? "Ask NEXUS anything…" : "Offline"}
+          placeholder={props.enabled ? "Ask NEXUS anything…" : "Waiting for NEXUS…"}
           placeholderTextColor={theme.color.textFaint}
           editable={props.enabled && !listening}
           multiline
@@ -92,7 +93,11 @@ export function Composer(props: ComposerProps) {
             accessibilityLabel="Hold to dictate"
             accessibilityHint="Microphone only listens while held"
           >
-            <Text style={styles.micGlyph}>{listening ? "●" : "🎙"}</Text>
+            <Ionicons
+              name={listening ? "radio-button-on" : "mic-outline"}
+              size={20}
+              color={listening ? theme.color.textOnAccent : theme.color.text}
+            />
           </Pressable>
         )}
 
@@ -103,7 +108,7 @@ export function Composer(props: ComposerProps) {
             accessibilityRole="button"
             accessibilityLabel="Stop response"
           >
-            <ActivityIndicator size="small" color={theme.color.text} />
+            <Ionicons name="stop" size={18} color={theme.color.text} />
           </Pressable>
         ) : (
           <Pressable
@@ -116,14 +121,10 @@ export function Composer(props: ComposerProps) {
             accessibilityRole="button"
             accessibilityLabel="Send"
           >
-            <Text style={styles.sendGlyph}>↑</Text>
+            <Ionicons name="arrow-up" size={20} color={theme.color.textOnAccent} />
           </Pressable>
         )}
       </View>
-
-      {!props.microphoneAvailable && (
-        <Text style={styles.hint}>Voice input is not available on this device.</Text>
-      )}
     </View>
   );
 }
@@ -164,7 +165,6 @@ const makeStyles = (theme: Theme) =>
       justifyContent: "center",
     },
     micButtonActive: { backgroundColor: theme.color.danger, borderColor: theme.color.danger },
-    micGlyph: { fontSize: 18 },
     sendButton: {
       width: 44,
       height: 44,
@@ -175,7 +175,6 @@ const makeStyles = (theme: Theme) =>
     },
     stopButton: { backgroundColor: theme.color.surfaceRaised },
     sendDisabled: { backgroundColor: theme.color.border },
-    sendGlyph: { color: theme.color.text, fontSize: 20, fontWeight: "700" },
 
     transcriptRow: { flexDirection: "row", alignItems: "center", gap: theme.space(4) },
     recordingDot: {
@@ -187,5 +186,4 @@ const makeStyles = (theme: Theme) =>
     transcript: { flex: 1, color: theme.color.textMuted, fontSize: 14 },
     linkButton: { paddingVertical: theme.space(2), paddingHorizontal: theme.space(4) },
     linkText: { color: theme.color.accent, fontSize: 13, fontWeight: "600" },
-    hint: { color: theme.color.textFaint, fontSize: 12 },
   });
