@@ -311,9 +311,9 @@ export class McpClient {
       fetch: safeFetch,
     };
 
-    return (config.transport === "sse"
+    return config.transport === "sse"
       ? new SSEClientTransport(url, transportOpts)
-      : new StreamableHTTPClientTransport(url, transportOpts)) as unknown as Transport;
+      : new StreamableHTTPClientTransport(url, transportOpts);
   }
 
   async #resolveEnv(

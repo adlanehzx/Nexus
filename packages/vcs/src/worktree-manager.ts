@@ -42,12 +42,12 @@ export class WorktreeManager {
       NodePath.join(workspaceRoot, ".nexus-worktrees", branchName.replace(/[/\\:]/g, "-"));
 
     // Ensure path is within workspaceRoot or allowed sandbox
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_\-\.\/]{0,100}$/.test(branchName)) {
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/.test(branchName)) {
       throw new Error(
         `Invalid branch name '${branchName}': cannot start with '-' or contain illegal characters.`,
       );
     }
-    if (baseBranch && !/^[a-zA-Z0-9][a-zA-Z0-9_\-\.\/]{0,100}$/.test(baseBranch)) {
+    if (baseBranch && !/^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/.test(baseBranch)) {
       throw new Error(`Invalid base branch '${baseBranch}'.`);
     }
 
