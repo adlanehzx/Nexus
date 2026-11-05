@@ -117,71 +117,22 @@ export class NexusMcpServer {
 
     const ctx = this.assertAuthorized(token, toolDef.requiredScope);
 
-    switch (toolName) {
-      case "nexus_list_missions":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                organizationId: ctx.organizationId,
-                missions: [
-                  { id: "mission-1", goal: "Implement caching layer", status: "completed" },
-                  { id: "mission-2", goal: "Audit security headers", status: "running" },
-                ],
-              }),
-            },
-          ],
-        };
-
-      case "nexus_trigger_mission":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                missionId: `mission-${Date.now()}`,
-                status: "queued",
-                goal: arguments_.goal,
-              }),
-            },
-          ],
-        };
-
-      case "nexus_list_devices":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                devices: [
-                  { id: "dev-desktop-1", name: "Workstation Linux", status: "connected" },
-                  { id: "dev-mobile-1", name: "Pixel 9 Pro", status: "idle" },
-                ],
-              }),
-            },
-          ],
-        };
-
-      case "nexus_get_usage_metrics":
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                totalTokens: 145000,
-                totalCostUsd: 0.85,
-                status: "healthy",
-              }),
-            },
-          ],
-        };
-
-      default:
-        return {
-          content: [{ type: "text", text: `Unimplemented tool: ${toolName}` }],
-          isError: true,
-        };
-    }
+    // This exported facade is not connected to the operational API services yet.
+    // Authorization alone must never manufacture a successful business operation.
+    void ctx;
+    void arguments_;
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            code: "NEXUS_SERVICE_UNAVAILABLE",
+            tool: toolName,
+            message: "This MCP tool is not connected to the operational NEXUS service.",
+          }),
+        },
+      ],
+      isError: true,
+    };
   }
 }
