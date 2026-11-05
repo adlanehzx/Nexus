@@ -543,6 +543,130 @@ describe("confirmations", () => {
   });
 });
 
+describe("cancellation", () => {
+  const onePlan = (riskLevel: "SAFE" | "HIGH") =>
+    createTaskPlan({
+      userId: USER_ID,
+      title: "long",
+      originClientDeviceId: IPHONE.id,
+      correlationId: "c",
+      steps: [
+        {
+          id: "run",
+          description: "Run for a long time",
+          requiredCapabilities: ["filesystem.write"],
+          tool: "device.filesystem.write",
+          riskLevel,
+        },
+      ],
+    });
+
+  it("stops a running step through the transport and reports it cancelled", async () => {
+    const h = makeHarness();
+    await setupFleet(h);
+    const transport = new FakeTransport();
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    vi.spyOn(transport, "dispatch").mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          received = input.signal;
+          input.signal.addEventListener("abort", () => {
+            resolve({
+              ok: false,
+              error: { code: "STEP_CANCELLED", message: "Step cancelled.", retryable: false },
+            });
+          });
+          controller.abort();
+        }),
+    );
+
+    const result = await makeCoordinator(h, transport).execute(onePlan("SAFE"), {
+      userPermissions: ALL_PERMISSIONS,
+      signal: controller.signal,
+    });
+
+    expect(received?.aborted).toBe(true);
+    expect(result.status).toBe("cancelled");
+    expect(result.steps[0]?.status).toBe("cancelled");
+  });
+
+  it("does not retry a step that was cancelled", async () => {
+    const h = makeHarness();
+    await setupFleet(h);
+    const transport = new FakeTransport();
+    const controller = new AbortController();
+    const dispatch = vi.spyOn(transport, "dispatch").mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve({
+        ok: false,
+        error: { code: "STEP_CANCELLED", message: "Step cancelled.", retryable: true },
+      });
+    });
+
+    await makeCoordinator(h, transport).execute(onePlan("SAFE"), {
+      userPermissions: ALL_PERMISSIONS,
+      signal: controller.signal,
+    });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a step that finished before the request as succeeded", async () => {
+    const h = makeHarness();
+    await setupFleet(h);
+    const transport = new FakeTransport();
+    const controller = new AbortController();
+    vi.spyOn(transport, "dispatch").mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve({ ok: true, result: null });
+    });
+
+    const result = await makeCoordinator(h, transport).execute(onePlan("SAFE"), {
+      userPermissions: ALL_PERMISSIONS,
+      signal: controller.signal,
+    });
+
+    expect(result.steps[0]?.status).toBe("succeeded");
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("does not wait for a human once the task is cancelled", async () => {
+    const h = makeHarness();
+    await setupFleet(h);
+    const transport = new FakeTransport();
+    const controller = new AbortController();
+    const gate: ConfirmationGate = {
+      request: vi.fn(() => {
+        controller.abort();
+        return new Promise<"approved">(() => undefined);
+      }),
+    };
+
+    const result = await makeCoordinator(h, transport, gate).execute(onePlan("HIGH"), {
+      userPermissions: ALL_PERMISSIONS,
+      signal: controller.signal,
+    });
+
+    expect(result.status).toBe("cancelled");
+    expect(transport.dispatched).toHaveLength(0);
+  });
+
+  it("tells clients when a step starts running", async () => {
+    const h = makeHarness();
+    await setupFleet(h);
+    const iphone = makeClient(IPHONE.id);
+    await h.router.attach(iphone);
+
+    await makeCoordinator(h, new FakeTransport()).execute(onePlan("SAFE"), {
+      userPermissions: ALL_PERMISSIONS,
+    });
+
+    const progress = iphone.received.filter((event) => event.type === "task.progress");
+    expect(progress[0]).toMatchObject({ label: "Run for a long time" });
+  });
+});
+
 describe("secrets in execution log", () => {
   it("redacts arguments before persisting to task log", async () => {
     const h = makeHarness();

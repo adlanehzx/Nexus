@@ -157,6 +157,11 @@ export interface ExecuteOptions {
   signal?: AbortSignal;
 }
 
+/** Read through a call: the flag changes while a step is awaited. */
+function isCancelled(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 export class TaskCoordinator {
   readonly #registry: DeviceRegistry;
   readonly #selector: DeviceSelector;
@@ -249,7 +254,12 @@ export class TaskCoordinator {
     await this.#emit(current, "task.started", { taskId: current.id });
 
     for (;;) {
-      if (options.signal?.aborted === true) {
+      // Only what has not ended is cancelled: a step that finished before the
+      // request arrived did run, and the final status has to say so.
+      if (
+        options.signal?.aborted === true &&
+        current.steps.some((step) => step.status === "pending" || step.status === "running")
+      ) {
         current = await this.#cancel(current, "cancelled by user");
         return current;
       }
@@ -361,7 +371,7 @@ export class TaskCoordinator {
 
       // 3. Human confirmation
       if (this.#needsConfirmation(step.riskLevel)) {
-        const decision = await this.#confirm(plan, step, capability);
+        const decision = await this.#confirm(plan, step, capability, options.signal);
         if (decision !== "approved") {
           return {
             ...step,
@@ -382,6 +392,10 @@ export class TaskCoordinator {
       }
 
       // 4. Dispatch
+      if (isCancelled(options.signal)) {
+        return { ...step, status: "cancelled", attempt, completedAt: this.#now().toISOString() };
+      }
+
       const startedAt = this.#now();
       last = {
         ...step,
@@ -397,12 +411,26 @@ export class TaskCoordinator {
         deviceId: device.id,
         tool: step.tool,
       });
+      // Clients show a task as queued until told otherwise, and the worker event
+      // does not reach them.
+      await this.#emit(plan, "task.progress", {
+        taskId: plan.id,
+        stepId: step.id,
+        deviceId: device.id,
+        percent: planProgress(plan),
+        label: step.description,
+      });
 
       const controller = new AbortController();
       const timeout = setTimeout(() => {
         controller.abort();
       }, step.timeoutMs);
       timeout.unref?.();
+      // The transport tells the worker to stop when this signal fires.
+      const onCancel = () => {
+        controller.abort();
+      };
+      options.signal?.addEventListener("abort", onCancel, { once: true });
 
       let result: WorkerResult;
       try {
@@ -436,6 +464,7 @@ export class TaskCoordinator {
         };
       } finally {
         clearTimeout(timeout);
+        options.signal?.removeEventListener("abort", onCancel);
       }
 
       const completedAt = this.#now();
@@ -471,6 +500,15 @@ export class TaskCoordinator {
           completedAt: completedAt.toISOString(),
           result: result.result ?? null,
           error: null,
+        };
+      }
+
+      if (isCancelled(options.signal)) {
+        return {
+          ...last,
+          status: "cancelled",
+          completedAt: completedAt.toISOString(),
+          error: result.error ?? null,
         };
       }
 
@@ -511,6 +549,7 @@ export class TaskCoordinator {
     plan: TaskPlan,
     step: TaskStep,
     capability: string,
+    signal?: AbortSignal,
   ): Promise<"approved" | "rejected" | "expired"> {
     const gate = this.#confirmations;
     if (gate === undefined) return "approved";
@@ -529,7 +568,7 @@ export class TaskCoordinator {
       expiresAt: expiresAt.toISOString(),
     });
 
-    const decision = await gate.request({
+    const answer = gate.request({
       confirmationId,
       taskId: plan.id,
       stepId: step.id,
@@ -541,6 +580,23 @@ export class TaskCoordinator {
       userId: plan.userId,
       expiresAt,
     });
+    // Nobody should have to answer for a task that was cancelled meanwhile.
+    const decision = await (signal === undefined
+      ? answer
+      : Promise.race([
+          answer,
+          new Promise<"rejected">((resolve) => {
+            if (signal.aborted) resolve("rejected");
+            else
+              signal.addEventListener(
+                "abort",
+                () => {
+                  resolve("rejected");
+                },
+                { once: true },
+              );
+          }),
+        ]));
 
     await this.#emit(plan, "confirmation.responded", {
       confirmationId,
