@@ -271,6 +271,28 @@ export class DashboardService {
         level: this.#services.router.connectedDeviceIds.length === 0 ? "degraded" : "ok",
         detail: `${String(this.#services.router.connectedDeviceIds.length)} client(s) attached`,
       },
+      {
+        name: "Database",
+        level: this.#services.prisma !== undefined ? "ok" : "unconfigured",
+        detail:
+          this.#services.prisma !== undefined
+            ? "PostgreSQL persistent store active"
+            : "in-memory mock store",
+      },
+      {
+        name: "Providers",
+        level:
+          this.#services.llmRuntime !== undefined ||
+          this.#services.freeLlm !== undefined ||
+          this.#services.llmProvider !== undefined
+            ? "ok"
+            : "unconfigured",
+        detail:
+          this.#services.llmRuntime !== undefined
+            ? "unified model router active"
+            : "local heuristics fallback",
+      },
+      this.#missionEngineHealth(),
       this.#mcpHealth(),
       this.#browserHealth(),
       {
@@ -281,6 +303,14 @@ export class DashboardService {
     ];
 
     return entries;
+  }
+
+  #missionEngineHealth(): SubsystemHealth {
+    const mc = this.#services.missionControl;
+    if (mc === undefined) {
+      return { name: "Mission Engine", level: "unconfigured", detail: "port 18100 unconfigured" };
+    }
+    return { name: "Mission Engine", level: "ok", detail: "configured on port 18100" };
   }
 
   #mcpHealth(): SubsystemHealth {

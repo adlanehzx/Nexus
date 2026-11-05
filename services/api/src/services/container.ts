@@ -339,6 +339,7 @@ export class ServiceContainer {
   /** Secret-free local connection catalogue and safe diagnostic probes. */
   readonly connections: ConnectionCatalogService;
   /** Hosted organization services. Undefined keeps personal mode dependency-free. */
+  readonly prisma: PrismaClient | undefined;
   readonly tenantPlatform: TenantPlatformService | undefined;
   readonly tenantRealtime: TenantRealtimeHub;
   readonly tenantSecurity: TenantSecurityService | undefined;
@@ -352,6 +353,7 @@ export class ServiceContainer {
     this.freeLlm = options.freeLlmProvider;
     this.llmRuntime = options.llmRuntimeProvider;
     this.connections = options.connectionManager ?? new LocalConnectionManager();
+    this.prisma = options.prisma;
     this.tenantPlatform =
       options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);
     this.tenantRealtime = new TenantRealtimeHub();
