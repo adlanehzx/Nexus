@@ -62,6 +62,7 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
 
   it("prevents cross-tenant access to workspaces, projects, and missions", async () => {
     const mockPrisma = {
+      workspaceMembership: { findUnique: vi.fn().mockResolvedValue({ role: "MEMBER" }) },
       workspace: {
         findUnique: vi.fn().mockResolvedValue({
           id: "ws-victim",
@@ -71,6 +72,7 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
       project: {
         findUnique: vi.fn().mockResolvedValue({
           id: "proj-victim",
+          workspaceId: "ws-victim",
           workspace: { organizationId: "org-victim" },
         }),
       },
@@ -78,6 +80,7 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
         findUnique: vi.fn().mockResolvedValue({
           id: "mission-victim",
           project: {
+            workspaceId: "ws-victim",
             workspace: { organizationId: "org-victim" },
           },
         }),
@@ -123,5 +126,22 @@ describe("Multi-Tenant Isolation Architecture (LOT B)", () => {
     await expect(
       security.assertMissionAccess(legitimateTenant, "mission-victim"),
     ).resolves.toBeUndefined();
+  });
+  it("rejects missing membership and unknown roles even within the same organization", async () => {
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const prisma = {
+      workspace: { findUnique: vi.fn().mockResolvedValue({ organizationId: "org" }) },
+      workspaceMembership: { findUnique },
+    } as unknown as PrismaClient;
+    const service = new TenantSecurityService(prisma);
+    const tenant: TenantContext = { organizationId: "org", userId: "user", role: "ADMIN" };
+    await expect(service.assertWorkspaceAccess(tenant, "ws")).rejects.toThrow(TenantIsolationError);
+    findUnique.mockResolvedValue({ role: "UNKNOWN" });
+    await expect(service.assertWorkspaceAccess(tenant, "ws")).rejects.toThrow(TenantIsolationError);
+    findUnique.mockResolvedValue({ role: "VIEWER" });
+    await expect(service.assertWorkspaceAccess(tenant, "ws")).resolves.toBeUndefined();
+    await expect(
+      service.assertWorkspaceAccess({ ...tenant, workspaceId: "other" }, "ws"),
+    ).rejects.toThrow(TenantIsolationError);
   });
 });

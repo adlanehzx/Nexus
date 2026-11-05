@@ -120,6 +120,7 @@ export class TenantSecurityService {
     if (ws?.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested workspace", tenant);
     }
+    await this.assertMembership(tenant, workspaceId);
   }
 
   /**
@@ -134,6 +135,7 @@ export class TenantSecurityService {
     if (project?.workspace.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested project", tenant);
     }
+    await this.assertMembership(tenant, project.workspaceId);
   }
 
   /**
@@ -147,6 +149,20 @@ export class TenantSecurityService {
 
     if (mission?.project.workspace.organizationId !== tenant.organizationId) {
       throw new TenantIsolationError("Access denied to requested mission", tenant);
+    }
+    await this.assertMembership(tenant, mission.project.workspaceId);
+  }
+
+  private async assertMembership(tenant: TenantContext, workspaceId: string): Promise<void> {
+    const membership = await this.prisma.workspaceMembership.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: tenant.userId } },
+    });
+    if (
+      !membership ||
+      !["ADMIN", "MEMBER", "VIEWER"].includes(membership.role) ||
+      (tenant.workspaceId !== undefined && tenant.workspaceId !== workspaceId)
+    ) {
+      throw new TenantIsolationError("Workspace membership required", tenant);
     }
   }
 }

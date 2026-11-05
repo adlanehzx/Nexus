@@ -109,33 +109,26 @@ describe("Usage, Quotas & Equivalent Pricing Architecture (LOT F)", () => {
       await harness.close();
     });
 
-    it("GET /api/v1/usage returns aggregated analytics", async () => {
+    it("GET /api/v1/usage reports unavailable telemetry", async () => {
       const res = await harness.app.inject({
         method: "GET",
         url: "/api/v1/usage",
         headers: account.authorization,
       });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body).toHaveProperty("totalTokens");
-      expect(body).toHaveProperty("totalCostUsd");
-      expect(body).toHaveProperty("byConfidence");
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("USAGE_TELEMETRY_UNAVAILABLE");
     });
 
-    it("GET /api/v1/usage/quotas returns predictive quota status", async () => {
+    it("GET /api/v1/usage/quotas reports unavailable telemetry", async () => {
       const res = await harness.app.inject({
         method: "GET",
         url: "/api/v1/usage/quotas",
         headers: account.authorization,
       });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.quotas).toBeInstanceOf(Array);
-      expect(body.quotas.length).toBeGreaterThan(0);
-      expect(body.quotas[0]).toHaveProperty("window5hPercentRemaining");
-      expect(body.quotas[0]).toHaveProperty("shouldFailover");
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("USAGE_TELEMETRY_UNAVAILABLE");
     });
   });
 });
