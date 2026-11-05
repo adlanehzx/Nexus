@@ -1545,6 +1545,25 @@ export class DashboardApi {
     );
   }
 
+  usage(): Promise<{
+    source: "agent_run_records";
+    days: number;
+    runs: {
+      runId: string;
+      model: string;
+      startedAt: string;
+      status: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number | null;
+      cacheWriteTokens: number | null;
+    }[];
+    billedCostUsd: null;
+    providerQuota: null;
+  }> {
+    return this.#get("/api/v1/usage");
+  }
+
   quotaForecast(): Promise<{ forecasts: QuotaForecastDto[] }> {
     return this.#get("/api/v1/dashboard/quota/forecast");
   }

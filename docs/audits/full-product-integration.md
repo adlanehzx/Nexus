@@ -74,3 +74,13 @@ Rollback for the first correction: revert its dedicated commit; no database chan
 | MCP server              | partially_integrated | in_memory_only       | missing              | missing              | blocked | partially_integrated |
 | Multi-tenant            | partially_integrated | operational          | partially_integrated | partially_integrated | blocked | partially_integrated |
 | Observability           | partially_integrated | partially_integrated | partially_integrated | partially_integrated | blocked | partially_integrated |
+
+## Iteration 2 — observed personal usage
+
+Production bootstrap (`services/api/src/server.ts`) injects PrismaAgentRunStore. Agent Core's execution loop accumulates actual response input/output token usage in the run record. The `/api/v1/usage` endpoint now projects these existing records for the authenticated user, within a validated 1–366 day window (default 30). It rejects client-supplied organization scopes and returns no transcript, response text, secret or reasoning content. Existing snapshot upserts avoid double-counting a run each time it is saved.
+
+The existing quota forecast screen now also displays observed runs, model, date and input/output/cache counters through DashboardApi. Missing cache metrics remain null and display Unavailable. Billed costs and subscription quotas remain unavailable; no inference from a model name is used to invent provider/account attribution. This is a personal Agent Core usage slice, not complete external CLI telemetry or organization billing.
+
+Validation: 7 usage API/package tests passed, including anonymous access and forged tenant query rejection; API wiring check passed. API and dashboard TypeScript checks passed. Browser E2E and PostgreSQL restart validation for this new endpoint have not been performed. The API tests use the existing test harness and are not proof of production persistence.
+
+Remaining work for this slice: database-side scoped projection/pagination (current implementation follows the existing dashboard's listAll then owner-filter pattern), aggregate graphs, explicit primary navigation, collector/account attribution, exports, period controls, durable integration test and browser evidence. Usage & Quotas remains partially_integrated.

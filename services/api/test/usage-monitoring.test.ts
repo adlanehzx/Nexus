@@ -109,15 +109,30 @@ describe("Usage, Quotas & Equivalent Pricing Architecture (LOT F)", () => {
       await harness.close();
     });
 
-    it("GET /api/v1/usage reports unavailable telemetry", async () => {
+    it("GET /api/v1/usage returns observed records for the authenticated account", async () => {
       const res = await harness.app.inject({
         method: "GET",
         url: "/api/v1/usage",
         headers: account.authorization,
       });
 
-      expect(res.statusCode).toBe(503);
-      expect(res.json().code).toBe("USAGE_TELEMETRY_UNAVAILABLE");
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toMatchObject({
+        source: "agent_run_records",
+        runs: [],
+        billedCostUsd: null,
+      });
+    });
+
+    it("requires authentication and rejects client-supplied tenant scopes", async () => {
+      const anonymous = await harness.app.inject({ method: "GET", url: "/api/v1/usage" });
+      expect(anonymous.statusCode).toBe(401);
+      const forged = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/usage?organizationId=other-tenant",
+        headers: account.authorization,
+      });
+      expect(forged.statusCode).toBe(400);
     });
 
     it("GET /api/v1/usage/quotas reports unavailable telemetry", async () => {

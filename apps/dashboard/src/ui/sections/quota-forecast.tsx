@@ -9,9 +9,55 @@ import { useI18n } from "../i18n/index.js";
 export function QuotaForecast({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const state = useSection(() => api.quotaForecast());
+  const usage = useSection(() => api.usage());
 
   return (
     <div className="content">
+      <h2>{tr("Observed usage — last 30 days", "Consommation observée — 30 derniers jours")}</h2>
+      <p>
+        {tr(
+          "Agent Core runs for your account. Provider subscription quotas and billed costs are unavailable here.",
+          "Runs Agent Core de votre compte. Les quotas d’abonnement et les coûts facturés sont indisponibles ici.",
+        )}
+      </p>
+      <Section state={usage}>
+        {(data) =>
+          data.runs.length === 0 ? (
+            <Empty>
+              {tr(
+                "No observed runs in this period.",
+                "Aucune exécution observée sur cette période.",
+              )}
+            </Empty>
+          ) : (
+            <Table
+              head={[
+                tr("Date", "Date"),
+                tr("Model", "Modèle"),
+                tr("Input tokens", "Tokens entrants"),
+                tr("Output tokens", "Tokens sortants"),
+                tr("Cache read", "Cache lu"),
+                tr("Cache write", "Cache écrit"),
+              ]}
+            >
+              {data.runs.map((run) => (
+                <tr key={run.runId}>
+                  <td>{new Date(run.startedAt).toLocaleString()}</td>
+                  <td>{run.model}</td>
+                  <td>{run.inputTokens.toLocaleString()}</td>
+                  <td>{run.outputTokens.toLocaleString()}</td>
+                  <td>
+                    {run.cacheReadTokens?.toLocaleString() ?? tr("Unavailable", "Indisponible")}
+                  </td>
+                  <td>
+                    {run.cacheWriteTokens?.toLocaleString() ?? tr("Unavailable", "Indisponible")}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )
+        }
+      </Section>
       <Section state={state}>
         {(data) =>
           data.forecasts.length === 0 ? (
