@@ -18,7 +18,7 @@ import { createBrowserOpenCapability } from "./capabilities/browser.js";
 import { createAppOpenCapability } from "./capabilities/app.js";
 import { createLocalLlmCapability } from "./capabilities/llm.js";
 import { DEFAULT_ALLOWED_ENV, ExecPolicy } from "./policy/exec-policy.js";
-import { PathPolicy } from "./policy/path-policy.js";
+import { PathPolicy, type PathPlatform } from "./policy/path-policy.js";
 import { DockerPolicy } from "./policy/docker-policy.js";
 import { GitPolicy } from "./policy/git-policy.js";
 import { NodeProcessRunner, type ProcessRunner } from "./runtime/process-runner.js";
@@ -31,6 +31,8 @@ import { NodeFileSystem, type FileSystemPort } from "./runtime/file-system.js";
  */
 
 export interface AssembleOptions {
+  /** Path rules to apply. Only tests choose: a worker uses those of its own machine. */
+  pathPlatform?: PathPlatform;
   config: WorkerConfig;
   runner?: ProcessRunner;
   fileSystem?: FileSystemPort;
@@ -56,6 +58,7 @@ export function assembleCapabilities(options: AssembleOptions): AssembledWorker 
   const policy = options.devicePolicy;
 
   const pathPolicy = new PathPolicy({
+    ...(options.pathPlatform === undefined ? {} : { platform: options.pathPlatform }),
     allowedRoots:
       policy === undefined
         ? config.allowedPaths

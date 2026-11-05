@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { devicePolicySchema } from "@nexus/device-policy";
 import { assembleCapabilities } from "../src/assemble.js";
 import { PathPolicy } from "../src/policy/path-policy.js";
-import { testConfig } from "./fixtures.js";
+import { FakeFileSystem, testConfig } from "./fixtures.js";
 
 /**
  * Verifies that local policy is properly applied by the worker.
@@ -17,6 +17,7 @@ const advertised = (assembled: ReturnType<typeof assembleCapabilities>): string[
 describe("configurable path denials", () => {
   const base = {
     allowedRoots: ["C:\\Projets"],
+    platform: "win32" as const,
     realpath: (candidate: string) => Promise.resolve(candidate),
   };
 
@@ -40,7 +41,11 @@ describe("configurable path denials", () => {
   });
 
   it("never opens what worker inherently denies", async () => {
-    const permissive = new PathPolicy({ allowedRoots: ["C:\\"], realpath: base.realpath });
+    const permissive = new PathPolicy({
+      allowedRoots: ["C:\\"],
+      platform: "win32",
+      realpath: base.realpath,
+    });
     await expect(permissive.resolve("C:\\Users\\me\\.ssh\\id_ed25519")).rejects.toThrow();
     await expect(permissive.resolve("C:\\Windows\\System32\\config\\SAM")).rejects.toThrow();
   });
@@ -48,13 +53,15 @@ describe("configurable path denials", () => {
 
 describe("daemon assembly with policy", () => {
   it("without policy, configures from environment", () => {
-    const assembled = assembleCapabilities({ config: testConfig() });
+    const assembled = assembleCapabilities({ pathPlatform: "win32", config: testConfig() });
     expect(assembled.pathPolicy.roots.length).toBeGreaterThan(0);
     expect(advertised(assembled)).toContain("terminal.execute");
   });
 
   it("with policy, policy roots take precedence", async () => {
     const assembled = assembleCapabilities({
+      pathPlatform: "win32",
+      fileSystem: new FakeFileSystem(),
       config: testConfig(),
       devicePolicy: policy({ filesystem: { allow: ["C:\\Allowed"] } }),
     });
@@ -64,6 +71,7 @@ describe("daemon assembly with policy", () => {
 
   it("policy denials apply under an allowed root", async () => {
     const assembled = assembleCapabilities({
+      pathPlatform: "win32",
       config: testConfig(),
       devicePolicy: policy({
         filesystem: { allow: ["C:\\Allowed"], deny: { names: ["secret*"] } },
@@ -74,6 +82,7 @@ describe("daemon assembly with policy", () => {
 
   it("disabled exec mode does not declare execution capabilities", () => {
     const assembled = assembleCapabilities({
+      pathPlatform: "win32",
       config: testConfig(),
       devicePolicy: policy({ exec: { mode: "disabled" } }),
     });
@@ -85,6 +94,7 @@ describe("daemon assembly with policy", () => {
 
   it("policy controls git and docker permissions", () => {
     const assembled = assembleCapabilities({
+      pathPlatform: "win32",
       config: testConfig(),
       devicePolicy: policy({
         git: { allowWrite: true },

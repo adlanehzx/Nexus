@@ -218,6 +218,7 @@ export async function assembleForTest(
   seed?.({ runner, fileSystem });
 
   const { capabilities } = assembleCapabilities({
+    pathPlatform: "win32",
     config,
     runner,
     fileSystem,
@@ -366,6 +367,7 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<WorkerH
   options.seed?.({ runner, fileSystem });
 
   const { capabilities } = assembleCapabilities({
+    pathPlatform: "win32",
     config,
     runner,
     fileSystem,

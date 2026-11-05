@@ -54,6 +54,8 @@ const Logs = lazySection("Logs");
 const CommunicationGraph = lazySection("CommunicationGraph");
 const QuotaForecast = lazySection("QuotaForecast");
 const Providers = lazySection("Providers");
+const Organizations = lazySection("Organizations");
+const Observability = lazySection("Observability");
 const TradingLab = lazySection("TradingLab");
 const Marketplace = lazySection("Marketplace");
 const Notifications = lazySection("Notifications");
@@ -151,6 +153,10 @@ function renderWindowContent(
       return <Connections api={api} />;
     case "marketplace":
       return <Marketplace api={api} />;
+    case "organizations":
+      return <Organizations api={api} />;
+    case "observability":
+      return <Observability api={api} />;
     case "notifications":
       return <Notifications api={api} />;
     case "shortcuts":

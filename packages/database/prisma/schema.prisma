@@ -44,6 +44,8 @@ model User {
   memories                Memory[]
   notifications           Notification[]
   agentRuns               AgentRunSnapshot[]
+  pushTokens              PushToken[]
+  mcpAccessTokens         McpAccessToken[]
   scheduleGrants          ScheduleGrant[]
   organizationMemberships OrganizationMembership[]
   teamMemberships         TeamMembership[]
@@ -357,6 +359,7 @@ model Device {
   sessions        Session[]
   capabilities    DeviceCapability[]
   credentials     DeviceCredential[]
+  pushToken       PushToken?
   deviceSessions  DeviceSession[]
   executions      TaskExecution[]
   originatedTasks TaskPlan[]         @relation("TaskOrigin")
@@ -775,6 +778,59 @@ model AgentRunSnapshot {
   @@index([status])
   @@index([missionExternalKey])
   @@map("agent_run_snapshots")
+}
+
+/// Where to reach a device whose socket is closed. Removed with the device or on revocation.
+model PushToken {
+  deviceId  String   @id @db.Uuid
+  userId    String   @db.Uuid
+  token     String
+  provider  String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+/// A credential an external MCP client uses to act for its creator. Only a hash is stored.
+model McpAccessToken {
+  id         String    @id @db.Uuid
+  userId     String    @db.Uuid
+  name       String
+  scopes     String[]
+  tokenHash  String    @unique
+  createdAt  DateTime  @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  lastUsedAt DateTime? @db.Timestamptz(3)
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity McpActivity[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mcp_access_tokens")
+}
+
+/// One tool call made through an MCP token. Holds no arguments or results.
+model McpActivity {
+  id         String   @id @db.Uuid
+  tokenId    String   @db.Uuid
+  userId     String   @db.Uuid
+  tool       String
+  outcome    String
+  errorCode  String?
+  durationMs Int
+  createdAt  DateTime @db.Timestamptz(3)
+
+  token McpAccessToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mcp_activity")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -63,7 +63,9 @@ export class PrismaConversationStore implements ConversationStore {
     );
   }
 
-  async appendMessage(input: Omit<Message, "id" | "createdAt">): Promise<Message> {
+  async appendMessage(
+    input: Omit<Message, "id" | "createdAt"> & { id?: string },
+  ): Promise<Message> {
     const existing = await this.#prisma.conversation.findUnique({
       where: { id: input.conversationId },
       select: { id: true },
@@ -74,7 +76,7 @@ export class PrismaConversationStore implements ConversationStore {
     const record = await this.#prisma.$transaction(async (transaction) => {
       const message = await transaction.message.create({
         data: {
-          id: uuidv7(),
+          id: input.id ?? uuidv7(),
           conversationId: input.conversationId,
           role: input.role.toUpperCase() as StoredRole,
           content: [{ type: "text", text: input.content }],
@@ -95,10 +97,11 @@ export class PrismaConversationStore implements ConversationStore {
 
   async listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>> {
     const where = { conversationId };
+    const direction = page.order ?? "asc";
     const [records, total] = await Promise.all([
       this.#prisma.message.findMany({
         where,
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        orderBy: [{ createdAt: direction }, { id: direction }],
         take: page.limit + 1,
         ...(page.cursor === undefined ? {} : { cursor: { id: page.cursor }, skip: 1 }),
       }),

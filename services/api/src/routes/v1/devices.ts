@@ -500,6 +500,51 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
   );
 
   app.post(
+    "/devices/:deviceId/push-token",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Registers where to reach this device when its socket is closed",
+        params: z.object({ deviceId: z.string().min(1) }),
+        body: z.object({ token: z.string().min(1).max(512), provider: z.literal("expo") }),
+        response: { 200: okSchema(z.object({ registered: z.literal(true) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Device");
+      await app.services.push.register({
+        deviceId: device.id,
+        userId,
+        token: request.body.token,
+        provider: request.body.provider,
+      });
+      return ok({ registered: true as const }, request.id);
+    },
+  );
+
+  app.delete(
+    "/devices/:deviceId/push-token",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        params: z.object({ deviceId: z.string().min(1) }),
+        response: { 200: okSchema(z.object({ registered: z.literal(false) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const device = await app.services.deviceRegistry.requireDevice(request.params.deviceId);
+      assertOwnedBy(device.userId, userId, "Device");
+      await app.services.push.unregister(device.id);
+      return ok({ registered: false as const }, request.id);
+    },
+  );
+
+  app.post(
     "/devices/:deviceId/revoke",
     {
       preHandler: app.requireUser,
@@ -531,6 +576,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       // to check trust: without a key, the handshake cannot be verified and is
       // therefore impossible, regardless of any overlooked rule.
       await app.services.deviceCredentials.revoke(device.id);
+      await app.services.push.unregister(device.id);
 
       return ok(present(revoked, app.services.expectedWorkerVersion), request.id);
     },

@@ -11,6 +11,18 @@ export interface AgentRunStore {
   listByStatus(status: AgentState["record"]["status"]): Promise<AgentState[]>;
 }
 
+/** One day and model of a user's observed token counters. Null means never reported. */
+export interface RunUsageBucket {
+  day: string;
+  model: string;
+  runs: number;
+  failedRuns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+}
+
 export class InMemoryAgentRunStore implements AgentRunStore {
   readonly #states = new Map<string, AgentState>();
 
@@ -49,6 +61,54 @@ export class InMemoryAgentRunStore implements AgentRunStore {
    */
   listAll(): Promise<AgentState[]> {
     return Promise.resolve([...this.#states.values()].map((state) => structuredClone(state)));
+  }
+
+  async listForUser(
+    userId: string,
+    since: Date,
+    offset: number,
+    limit: number,
+  ): Promise<AgentState[]> {
+    return (await this.listAll())
+      .filter(
+        ({ record }) => record.userId === userId && Date.parse(record.startTime) >= since.getTime(),
+      )
+      .sort(
+        (a, b) =>
+          b.record.startTime.localeCompare(a.record.startTime) ||
+          b.record.runId.localeCompare(a.record.runId),
+      )
+      .slice(offset, offset + limit);
+  }
+
+  async summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]> {
+    const buckets = new Map<string, RunUsageBucket>();
+    for (const { record } of await this.listAll()) {
+      if (record.userId !== userId || Date.parse(record.startTime) < since.getTime()) continue;
+      const day = record.startTime.slice(0, 10);
+      const key = `${day}\u0000${record.model}`;
+      const bucket = buckets.get(key) ?? {
+        day,
+        model: record.model,
+        runs: 0,
+        failedRuns: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
+      };
+      bucket.runs += 1;
+      if (record.status === "failed") bucket.failedRuns += 1;
+      bucket.inputTokens += record.usage.inputTokens;
+      bucket.outputTokens += record.usage.outputTokens;
+      const { cacheReadTokens: read, cacheWriteTokens: write } = record.usage;
+      if (read !== undefined) bucket.cacheReadTokens = (bucket.cacheReadTokens ?? 0) + read;
+      if (write !== undefined) bucket.cacheWriteTokens = (bucket.cacheWriteTokens ?? 0) + write;
+      buckets.set(key, bucket);
+    }
+    return [...buckets.values()].sort(
+      (a, b) => a.day.localeCompare(b.day) || a.model.localeCompare(b.model),
+    );
   }
 
   get size(): number {

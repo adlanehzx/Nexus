@@ -4,6 +4,8 @@ import type { RiskLevel, RetryPolicy } from "@nexus/tools";
  * Execution policy budgets and constraints.
  */
 export interface ExecutionPolicy {
+  /** Reports the model's text as it arrives, as `agent.delta` events. */
+  streamResponses?: boolean;
   /** Maximum number of model reasoning iterations. */
   maxIterations: number;
   /** Global run timeout in ms, excluding human confirmation latency. */

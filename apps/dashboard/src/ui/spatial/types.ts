@@ -35,6 +35,8 @@ export type WindowContentType =
   | "connections"
   | "marketplace"
   | "notifications"
+  | "organizations"
+  | "observability"
   | "career-education"
   | "trading-lab"
   | "osint";

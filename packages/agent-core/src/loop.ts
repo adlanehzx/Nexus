@@ -78,11 +78,26 @@ export class AgentLoop {
       // ── Reason ───────────────────────────────────────────────────────────
       let decision;
       try {
-        const result = await planner.decide(context, signal, {
-          userId: state.record.userId,
-          conversationId: state.record.conversationId,
-          runId: state.record.runId,
-        });
+        const result = await planner.decide(
+          context,
+          signal,
+          {
+            userId: state.record.userId,
+            conversationId: state.record.conversationId,
+            runId: state.record.runId,
+            ...(state.record.requestedModel == null ? {} : { model: state.record.requestedModel }),
+          },
+          policy.streamResponses === true
+            ? (delta) => {
+                events.emit({
+                  type: "agent.delta",
+                  runId: state.record.runId,
+                  delta,
+                  at: new Date(this.#now()).toISOString(),
+                });
+              }
+            : undefined,
+        );
         decision = result.decision;
 
         state.record.usage.inputTokens += result.response.usage.inputTokens;

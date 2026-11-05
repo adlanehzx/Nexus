@@ -115,7 +115,7 @@ const taskStepSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }).nullable(),
 });
 
-const taskViewSchema = z.object({
+export const taskViewSchema = z.object({
   id: z.string(),
   title: z.string(),
   status: z.string(),
@@ -155,7 +155,7 @@ const taskDetailSchema = taskViewSchema.extend({
  * result, error, metrics — and the Zod serialization schema guarantees that
  * nothing else crosses the boundary, even if the projection changed.
  */
-const agentRunSchema = z.object({
+export const agentRunSchema = z.object({
   runId: z.string(),
   userId: z.string(),
   conversationId: z.string(),

@@ -172,6 +172,34 @@ export interface CreateTaskPlanInput {
  *
  * @throws {InvalidTaskPlanError} If duplicate IDs, missing dependency targets, or cycles are found.
  */
+/**
+ * Gives steps identifiers NEXUS generated itself, and repoints `dependsOn` at them.
+ *
+ * Step ids written by a model or a client ("step-1", "clone") are only labels: storage
+ * requires UUIDs, so keeping them made saving the plan fail after the request had
+ * already been accepted. A dependency on a step the plan does not contain is left
+ * as written, for `createTaskPlan`'s validation to refuse.
+ */
+export function assignStepIds(
+  steps: readonly TaskStepInput[],
+  newId: () => string = uuidv7,
+): TaskStepInput[] {
+  const ids = new Map<string, string>();
+  const assigned = steps.map((step) => {
+    const id = newId();
+    if (step.id !== undefined) {
+      if (ids.has(step.id)) throw new Error(`Duplicate step identifier: ${step.id}`);
+      ids.set(step.id, id);
+    }
+    return { ...step, id };
+  });
+  return assigned.map((step) =>
+    step.dependsOn === undefined
+      ? step
+      : { ...step, dependsOn: step.dependsOn.map((label) => ids.get(label) ?? label) },
+  );
+}
+
 export function createTaskPlan(input: CreateTaskPlanInput): TaskPlan {
   const now = input.now ?? (() => new Date());
   const newId = input.newId ?? uuidv7;

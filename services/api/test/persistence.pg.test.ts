@@ -296,6 +296,12 @@ describe("Agent Core run store on PostgreSQL", () => {
     await store.save(state);
     const loaded = await store.load(runId);
 
+    const reopened = new PrismaAgentRunStore(prisma);
+    const own = await reopened.listForUser(ownerId, new Date("2026-01-01"), 0, 1);
+    expect(own[0]?.record.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
+    expect(await reopened.listForUser(randomUUID(), new Date("2026-01-01"), 0, 10)).toEqual([]);
+    expect(await reopened.listForUser(ownerId, new Date("2027-01-01"), 0, 10)).toEqual([]);
+    expect(await reopened.listForUser(ownerId, new Date("2026-01-01"), 1, 1)).toEqual([]);
     expect(loaded?.record.status).toBe("waiting_for_confirmation");
     expect(loaded?.record.missionExternalKey).toBe("nexus-integration-mission");
 

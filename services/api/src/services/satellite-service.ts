@@ -57,11 +57,25 @@ export class SatelliteService {
   readonly #satellites = new Map<string, SatelliteRecord>();
   readonly #commands = new Map<string, SatelliteCommand[]>();
   readonly #results = new Map<string, SatelliteCommandResult>();
+  readonly #issued = new Map<
+    string,
+    { command: SatelliteCommand; state: "queued" | "delivered" | "completed" }
+  >();
   readonly #now: () => number;
+  private readonly owners: Readonly<Record<string, string>>;
 
-  constructor(tokenHashes: Readonly<Record<string, string>>, now: () => number = Date.now) {
+  constructor(
+    tokenHashes: Readonly<Record<string, string>>,
+    now: () => number = Date.now,
+    owners: Readonly<Record<string, string>> = {},
+  ) {
     this.#tokenHashes = tokenHashes;
     this.#now = now;
+    this.owners = owners;
+  }
+
+  isOwnedBy(deviceId: string, userId: string): boolean {
+    return this.owners[deviceId] === userId && this.#tokenHashes[deviceId] !== undefined;
   }
 
   authenticate(deviceId: string, authorization: string | undefined): boolean {
@@ -94,8 +108,8 @@ export class SatelliteService {
   ): SatelliteCommand {
     const queue = this.#commands.get(deviceId) ?? [];
     if (idempotencyKey !== undefined) {
-      const existing = queue.find((item) => item.correlationId === idempotencyKey);
-      if (existing !== undefined) return existing;
+      const existing = this.#issued.get(`${deviceId}:${idempotencyKey}`);
+      if (existing !== undefined) return existing.command;
     }
     const item: SatelliteCommand = {
       v: 1,
@@ -105,6 +119,7 @@ export class SatelliteService {
       params,
       ts: this.#now(),
     };
+    this.#issued.set(`${deviceId}:${item.correlationId}`, { command: item, state: "queued" });
     queue.push(item);
     this.#commands.set(deviceId, queue);
     return item;
@@ -112,15 +127,37 @@ export class SatelliteService {
 
   next(deviceId: string): SatelliteCommand | undefined {
     const queue = this.#commands.get(deviceId);
-    return queue?.shift();
+    const command = queue?.shift();
+    if (command) {
+      const issued = this.#issued.get(`${deviceId}:${command.correlationId}`);
+      if (issued) issued.state = "delivered";
+    }
+    return command;
   }
 
-  acceptResult(result: SatelliteCommandResult): void {
-    this.#results.set(result.correlationId, result);
+  acceptResult(deviceId: string, result: SatelliteCommandResult): boolean {
+    const key = `${deviceId}:${result.correlationId}`;
+    const issued = this.#issued.get(key);
+    if (!issued || issued.state === "queued") return false;
+    if (issued.state !== "completed") {
+      this.#results.set(key, result);
+      issued.state = "completed";
+    }
+    return true;
   }
 
-  result(correlationId: string): SatelliteCommandResult | undefined {
-    return this.#results.get(correlationId);
+  result(deviceId: string, correlationId: string): SatelliteCommandResult | undefined {
+    return this.#results.get(`${deviceId}:${correlationId}`);
+  }
+
+  commandStatus(deviceId: string, correlationId: string) {
+    const issued = this.#issued.get(`${deviceId}:${correlationId}`);
+    return issued === undefined
+      ? undefined
+      : {
+          state: issued.state,
+          result: this.result(deviceId, correlationId) ?? null,
+        };
   }
 
   #view(heartbeat: SatelliteHeartbeat, lastSeenAt: number): SatelliteView {

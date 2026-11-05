@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SERVER_TO_CLIENT } from "@nexus/protocol";
 import { RealtimeClient } from "../src/realtime.js";
-import { SessionManager } from "../src/session.js";
+import { NotAuthenticatedError, SessionManager } from "../src/session.js";
 import { initialState, reduce, type ClientAction, type ClientState } from "../src/store.js";
 import {
   FakeHttpClient,
@@ -72,6 +72,39 @@ async function makeClient(options?: { withDevice?: boolean }): Promise<Harness> 
 
   return { client, socket, network, timers, http, session, actions, state: () => state };
 }
+
+describe("handshake failures", () => {
+  it("reports an unexpected error and retries instead of claiming a missing session", async () => {
+    const h = await makeClient();
+    const hello = vi.spyOn(h.session, "accessToken").mockImplementationOnce(() => {
+      throw new TypeError("crypto.getRandomValues is not a function");
+    });
+    await h.client.start();
+
+    expect(hello).toHaveBeenCalled();
+    expect(h.actions).toContainEqual(
+      expect.objectContaining({
+        kind: "error",
+        code: "CLIENT_HANDSHAKE_FAILED",
+        message: "crypto.getRandomValues is not a function",
+      }),
+    );
+    expect(h.state().connection).toBe("reconnecting");
+  });
+
+  it("still stops when the session really is missing", async () => {
+    const h = await makeClient();
+    vi.spyOn(h.session, "accessToken").mockImplementationOnce(() => {
+      throw new NotAuthenticatedError("no token in memory");
+    });
+    await h.client.start();
+
+    expect(h.state().connection).toBe("offline");
+    expect(h.actions).not.toContainEqual(
+      expect.objectContaining({ code: "CLIENT_HANDSHAKE_FAILED" }),
+    );
+  });
+});
 
 describe("connection", () => {
   it("connects and announces session", async () => {

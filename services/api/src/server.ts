@@ -230,6 +230,10 @@ const services = new ServiceContainer({
   acpWorkspaceRoot: config.NEXUS_ACP_WORKSPACE_DIR ?? resolve(here, "../../../.nexus-workspaces"),
   llmProvider: llmRuntime,
   llmRuntimeProvider: llmRuntime,
+  onPushError: (cause) => {
+    // Bound late: the logger is built from the services this object configures.
+    logger.warn({ err: cause, event: "push.failed" }, "Push delivery failed");
+  },
   freeLlmProvider: freeLlm,
   tailscale: new TailscaleDiscoveryService({
     apiPort: config.API_PORT,

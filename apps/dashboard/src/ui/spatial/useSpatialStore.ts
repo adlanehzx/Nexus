@@ -322,52 +322,57 @@ export interface SpatialStoreState {
   isPaletteOpen: boolean;
 }
 
-const DEFAULT_CAMERA: CameraState = { x: 0, y: 0, zoom: 1.0 };
+/** Starts below the shell's bars, which float above the canvas. */
+const DEFAULT_CAMERA: CameraState = { x: 0, y: 40, zoom: 1.0 };
+
+/** Height covered by the top and hint bars, and the gap kept around a new window. */
+const SHELL_CHROME_HEIGHT = 70;
+const WINDOW_MARGIN = 16;
+
+interface PersistedSpatialState {
+  windows?: Record<NativeSpaceId, SpatialWindow[]>;
+  activeSpace?: NativeSpaceId;
+  camerasPerSpace?: Record<NativeSpaceId, CameraState>;
+  layoutMode?: LayoutMode;
+  showMinimap?: boolean;
+}
+
+function readPersistedState(): PersistedSpatialState {
+  try {
+    const saved = window.sessionStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = saved === null ? null : JSON.parse(saved);
+    if (typeof parsed !== "object" || parsed === null) return {};
+    const state = parsed as PersistedSpatialState;
+    return state.windows !== undefined && state.activeSpace !== undefined ? state : {};
+  } catch {
+    return {};
+  }
+}
 
 export function useSpatialStore() {
-  const [activeSpace, setActiveSpaceState] = useState<NativeSpaceId>("command");
-  const [camerasPerSpace, setCamerasPerSpace] = useState<Record<NativeSpaceId, CameraState>>({
-    command: { ...DEFAULT_CAMERA },
-    mission: { ...DEFAULT_CAMERA },
-    code: { ...DEFAULT_CAMERA },
-    device: { ...DEFAULT_CAMERA },
-    memory: { ...DEFAULT_CAMERA },
-  });
-  const [windows, setWindows] =
-    useState<Record<NativeSpaceId, SpatialWindow[]>>(INITIAL_WINDOWS_PER_SPACE);
+  // Read while initializing state: restoring from an effect races with the effect that saves,
+  // which then overwrites what was stored with the defaults.
+  const [persisted] = useState(readPersistedState);
+  const [activeSpace, setActiveSpaceState] = useState<NativeSpaceId>(
+    persisted.activeSpace ?? "command",
+  );
+  const [camerasPerSpace, setCamerasPerSpace] = useState<Record<NativeSpaceId, CameraState>>(
+    persisted.camerasPerSpace ?? {
+      command: { ...DEFAULT_CAMERA },
+      mission: { ...DEFAULT_CAMERA },
+      code: { ...DEFAULT_CAMERA },
+      device: { ...DEFAULT_CAMERA },
+      memory: { ...DEFAULT_CAMERA },
+    },
+  );
+  const [windows, setWindows] = useState<Record<NativeSpaceId, SpatialWindow[]>>(
+    persisted.windows ?? INITIAL_WINDOWS_PER_SPACE,
+  );
   const [focusedWindowId, setFocusedWindowId] = useState<string | null>("cmd-chat-1");
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("manual");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(persisted.layoutMode ?? "manual");
   const [tilingLayout, setTilingLayout] = useState<TilingLayout>("grid");
-  const [showMinimap, setShowMinimap] = useState<boolean>(true);
+  const [showMinimap, setShowMinimap] = useState<boolean>(persisted.showMinimap ?? true);
   const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
-
-  // Load from sessionStorage on mount
-  useEffect(() => {
-    try {
-      const saved = window.sessionStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed: unknown = JSON.parse(saved);
-        if (typeof parsed === "object" && parsed !== null) {
-          const state = parsed as {
-            windows?: Record<NativeSpaceId, SpatialWindow[]>;
-            activeSpace?: NativeSpaceId;
-            camerasPerSpace?: Record<NativeSpaceId, CameraState>;
-            layoutMode?: LayoutMode;
-            showMinimap?: boolean;
-          };
-          if (state.windows && state.activeSpace) {
-            setWindows(state.windows);
-            setActiveSpaceState(state.activeSpace);
-            if (state.camerasPerSpace) setCamerasPerSpace(state.camerasPerSpace);
-            if (state.layoutMode) setLayoutMode(state.layoutMode);
-            if (state.showMinimap !== undefined) setShowMinimap(state.showMinimap);
-          }
-        }
-      }
-    } catch {
-      // safe fallback
-    }
-  }, []);
 
   // Save to sessionStorage on change
   useEffect(() => {
@@ -436,7 +441,7 @@ export function useSpatialStore() {
   );
 
   const resetCamera = useCallback(() => {
-    setCamera({ x: 0, y: 0, zoom: 1.0 });
+    setCamera({ ...DEFAULT_CAMERA });
   }, [setCamera]);
 
   const fitAll = useCallback(() => {
@@ -581,15 +586,28 @@ export function useSpatialStore() {
     ) => {
       const space = targetSpace ?? activeSpace;
       const id = `${space}-${type}-${Date.now().toString(36)}`;
+      // Placed in what the user is looking at, whatever the camera and screen size.
+      const camera = camerasPerSpace[space] ?? DEFAULT_CAMERA;
+      const viewWidth = window.innerWidth / camera.zoom;
+      const viewHeight = (window.innerHeight - SHELL_CHROME_HEIGHT) / camera.zoom;
+      const width = Math.min(720, viewWidth - 2 * WINDOW_MARGIN);
+      const height = Math.min(520, viewHeight - 2 * WINDOW_MARGIN);
+      const cascade = Math.random() * 40;
       const newWin: SpatialWindow = {
         id,
         title,
         spaceId: space,
         type,
-        x: 80 + Math.random() * 60,
-        y: 80 + Math.random() * 60,
-        width: 720,
-        height: 520,
+        x:
+          -camera.x / camera.zoom +
+          WINDOW_MARGIN +
+          Math.min(cascade, viewWidth - width - 2 * WINDOW_MARGIN),
+        y:
+          (SHELL_CHROME_HEIGHT - camera.y) / camera.zoom +
+          WINDOW_MARGIN +
+          Math.min(cascade, viewHeight - height - 2 * WINDOW_MARGIN),
+        width,
+        height,
         zIndex: 20,
         isMinimized: false,
         isMaximized: false,
@@ -607,7 +625,7 @@ export function useSpatialStore() {
       }
       setFocusedWindowId(id);
     },
-    [activeSpace],
+    [activeSpace, camerasPerSpace],
   );
 
   const tileWindows = useCallback(

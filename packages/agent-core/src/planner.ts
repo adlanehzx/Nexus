@@ -2,6 +2,7 @@ import {
   toolInputJsonSchema,
   textOf,
   toolCallsOf,
+  type GenerateRequest,
   type GenerateResponse,
   type LLMProvider,
   type LlmMessage,
@@ -53,19 +54,35 @@ export class Planner {
     }));
   }
 
+  async #streamed(
+    request: GenerateRequest,
+    onTextDelta: (delta: string) => void,
+  ): Promise<GenerateResponse> {
+    for await (const chunk of this.#llm.stream(request)) {
+      if (chunk.type === "text_delta") onTextDelta(chunk.delta);
+      if (chunk.type === "done") return chunk.response;
+    }
+    throw new Error("The model's stream ended without a final response.");
+  }
+
   async decide(
     context: AgentContext,
     signal: AbortSignal,
-    routingContext?: { userId: string; conversationId?: string; runId?: string },
+    routingContext?: { userId: string; conversationId?: string; runId?: string; model?: string },
+    onTextDelta?: (delta: string) => void,
   ): Promise<{ decision: AgentDecision; response: GenerateResponse }> {
-    const response = await this.#llm.generate({
+    const request = {
       messages: [...context.messages],
       system: context.systemPrompt,
       tools: Planner.toolSpecs(context.tools),
       ...(this.#maxTokens !== undefined ? { maxTokens: this.#maxTokens } : {}),
       ...(routingContext === undefined ? {} : { routingContext }),
       signal,
-    });
+    };
+    const response =
+      onTextDelta === undefined
+        ? await this.#llm.generate(request)
+        : await this.#streamed(request, onTextDelta);
 
     const text = textOf(response.content);
     const calls = toolCallsOf(response.content);

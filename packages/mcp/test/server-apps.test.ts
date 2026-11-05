@@ -27,7 +27,7 @@ describe("NEXUS MCP Platform Architecture (LOT G)", () => {
       expect(toolNames).not.toContain("nexus_list_devices");
     });
 
-    it("executes permitted tools and denies unauthorized operations", async () => {
+    it("reports unavailable services and denies unauthorized operations", async () => {
       const server = new NexusMcpServer();
 
       server.registerClientToken({
@@ -42,12 +42,15 @@ describe("NEXUS MCP Platform Architecture (LOT G)", () => {
         scopes: ["metrics:read"],
       });
 
-      // Admin can trigger mission
+      // Authorization cannot manufacture a mission without an operational service.
       const adminResult = await server.executeTool("tok-admin", "nexus_trigger_mission", {
         goal: "Deploy staging canary",
       });
-      expect(adminResult.isError).toBeUndefined();
-      expect(adminResult.content[0]?.text).toContain("Deploy staging canary");
+      expect(adminResult.isError).toBe(true);
+      expect(JSON.parse(adminResult.content[0]!.text)).toMatchObject({
+        code: "NEXUS_SERVICE_UNAVAILABLE",
+        tool: "nexus_trigger_mission",
+      });
 
       // Metrics token is blocked from triggering mission
       await expect(

@@ -248,6 +248,55 @@ export class TenantPlatformService {
     return presentOrganization(row);
   }
 
+  /** Organizations the user belongs to, with their role. Never anyone else's. */
+  async listOrganizations(
+    userId: string,
+  ): Promise<(TenantOrganization & { role: OrganizationRole })[]> {
+    const memberships = await this.#prisma.organizationMembership.findMany({
+      where: { userId },
+      include: { organization: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return memberships.map(({ organization, role }) => ({
+      ...presentOrganization(organization),
+      role: organizationRoleSchema.parse(role),
+    }));
+  }
+
+  async listMembers(
+    organizationId: string,
+    actorUserId: string,
+  ): Promise<{ userId: string; email: string; displayName: string; role: string }[]> {
+    await this.#authorize(organizationId, actorUserId, "organization.read");
+    const rows = await this.#prisma.organizationMembership.findMany({
+      where: { organizationId },
+      include: { user: { select: { email: true, displayName: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(({ userId, role, user }) => ({
+      userId,
+      email: user.email,
+      displayName: user.displayName,
+      role,
+    }));
+  }
+
+  /** Authorized before the lookup: an outsider cannot use this to test which emails exist. */
+  async addMemberByEmail(
+    organizationId: string,
+    actorUserId: string,
+    input: { email: string; role: OrganizationRole },
+  ): Promise<boolean> {
+    await this.#authorize(organizationId, actorUserId, "organization.manage_members");
+    const user = await this.#prisma.user.findUnique({
+      where: { email: input.email.trim().toLowerCase() },
+      select: { id: true },
+    });
+    if (user === null) return false;
+    await this.addMember(organizationId, actorUserId, { userId: user.id, role: input.role });
+    return true;
+  }
+
   async addMember(
     organizationId: string,
     actorUserId: string,
@@ -255,10 +304,37 @@ export class TenantPlatformService {
   ): Promise<void> {
     await this.#authorize(organizationId, actorUserId, "organization.manage_members");
     const role = organizationRoleSchema.parse(input.role);
-    await this.#prisma.organizationMembership.upsert({
-      where: { organizationId_userId: { organizationId, userId: input.userId } },
-      create: { organizationId, userId: input.userId, role },
-      update: { role },
+    await this.#prisma.$transaction(async (tx) => {
+      const memberships = await tx.organizationMembership.findMany({
+        where: { organizationId, OR: [{ userId: actorUserId }, { userId: input.userId }] },
+      });
+      const actorRole = memberships.find((m) => m.userId === actorUserId)?.role;
+      const targetRole = memberships.find((m) => m.userId === input.userId)?.role;
+      // Managing members must not be a path to ownership, or to removing an owner.
+      if ((role === "OWNER" || targetRole === "OWNER") && actorRole !== "OWNER") {
+        throw new TenantAccessDenied();
+      }
+      if (targetRole === "OWNER" && role !== "OWNER") {
+        const owners = await tx.organizationMembership.count({
+          where: { organizationId, role: "OWNER" },
+        });
+        if (owners <= 1) throw new TenantAccessDenied();
+      }
+      await tx.organizationMembership.upsert({
+        where: { organizationId_userId: { organizationId, userId: input.userId } },
+        create: { organizationId, userId: input.userId, role },
+        update: { role },
+      });
+      await tx.tenantAuditEvent.create({
+        data: {
+          organizationId,
+          userId: actorUserId,
+          action: "organization.member_role_set",
+          resourceType: "user",
+          resourceId: input.userId,
+          details: { role, previousRole: targetRole ?? null },
+        },
+      });
     });
   }
 
