@@ -53,6 +53,18 @@ export interface ProviderProbe {
    * as `invalid_output` rather than as a failure of the provider.
    */
   interpret?: (stdout: string) => ProbeInterpretation | undefined;
+  /**
+   * For a session probe whose CLI reports "nobody is signed in" as a failing exit code.
+   *
+   * Sees the whole result, because `codex login status` answers on stderr and exits 1.
+   * Returning `undefined` means this is not one of the observed answers, and the outcome
+   * is then handled as an ordinary failure. A timeout never reaches this.
+   */
+  interpretResult?: (result: {
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+  }) => ProbeInterpretation | undefined;
 }
 
 export interface ProbeInterpretation {

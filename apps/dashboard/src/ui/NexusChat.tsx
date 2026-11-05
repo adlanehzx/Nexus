@@ -28,9 +28,6 @@ export function NexusChat({ api }: { api: DashboardApi }) {
   );
   const [draft, setDraft] = useState("");
   const [activeMission, setActiveMission] = useState<string | null>(restoredMission);
-  const [selectedEngine, setSelectedEngine] = useState<
-    "auto" | "claude" | "cursor" | "grok" | "acp"
-  >("auto");
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -279,38 +276,6 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         }}
       >
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: "0.4rem",
-              alignItems: "center",
-              marginBottom: "0.25rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontSize: "0.72rem", color: "var(--muted-text, #8b949e)" }}>
-              {tr("Engine:", "Moteur :")}
-            </span>
-            {(
-              [
-                { id: "auto", label: "Auto (NEXUS)" },
-                { id: "claude", label: "Claude 3.5" },
-                { id: "cursor", label: "Cursor Bridge" },
-                { id: "grok", label: "Grok" },
-                { id: "acp", label: "ACP Agent" },
-              ] as const
-            ).map((engine) => (
-              <button
-                key={engine.id}
-                type="button"
-                className={`button compact ${selectedEngine === engine.id ? "primary" : "secondary"}`}
-                style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", height: "auto" }}
-                onClick={() => setSelectedEngine(engine.id)}
-              >
-                {engine.label}
-              </button>
-            ))}
-          </div>
           <textarea
             aria-label="Mission for NEXUS"
             value={draft}

@@ -30,7 +30,7 @@ test("A — Providers shows real host detection, never a claimed connection", as
     data: {
       connections: {
         providerId: string;
-        observation: { state: string; version: string | null } | null;
+        observation: { state: string; version: string | null; authStatus: string } | null;
       }[];
     };
   };
@@ -39,7 +39,15 @@ test("A — Providers shows real host detection, never a claimed connection", as
     const row = page.locator(`tr[data-provider="${providerId}"]`);
     if (observation !== null) await expect(row).toContainText(observation.state);
     if (observation?.version != null) await expect(row).toContainText(observation.version);
+    if (observation !== null) {
+      await expect(row.locator("td[data-auth]")).toHaveAttribute(
+        "data-auth",
+        observation.authStatus,
+      );
+    }
   }
+  // The chat's engine buttons changed nothing, so they must stay gone.
+  await expect(page.getByRole("button", { name: "Claude 3.5" })).toHaveCount(0);
   await page.locator(`tr[data-provider]`).first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${EVIDENCE_DIR}/providers.png` });
 });

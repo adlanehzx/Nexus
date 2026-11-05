@@ -5,6 +5,8 @@ import {
   CLAUDE_PROVIDER,
   CODEX_PROVIDER,
   createBuiltInRegistry,
+  parseClaudeAuthStatus,
+  parseCodexLoginStatus,
   parseVersionLine,
 } from "../src/providers.js";
 import {
@@ -51,7 +53,7 @@ describe("provider registry", () => {
   it("refuses a probe a provider does not declare", () => {
     // No built-in provider declares a session probe in this batch; asking for
     // one must be a refusal, not an invented command.
-    expect(() => createBuiltInRegistry().probeFor("codex", "authenticate")).toThrow(
+    expect(() => createBuiltInRegistry().probeFor("antigravity", "authenticate")).toThrow(
       UnsupportedProbeError,
     );
   });
@@ -168,12 +170,54 @@ describe("built-in providers", () => {
     }
   });
 
-  it("declares no session probe yet, rather than an unobserved one", () => {
-    // Deliberate: the mechanism is tested with fakes, and no real provider
-    // claims `connected` until its real output has been observed.
-    for (const provider of BUILT_IN_PROVIDERS) {
-      expect(provider.authenticate).toBeUndefined();
+  it("declares a session probe only for CLIs whose real output was observed", () => {
+    const withProbe = BUILT_IN_PROVIDERS.filter((provider) => provider.authenticate !== undefined);
+    expect(withProbe.map((provider) => provider.id).sort()).toEqual(["claude", "codex"]);
+    for (const provider of withProbe) {
+      expect(provider.authenticate?.verification).toBe("verified");
     }
+  });
+});
+
+describe("session status of real CLIs", () => {
+  it("reads claude auth status as observed", () => {
+    const signedIn = JSON.stringify({ loggedIn: true, email: "someone@example.test" });
+    const signedOut = JSON.stringify({ loggedIn: false, authMethod: "none" });
+
+    expect(parseClaudeAuthStatus({ exitCode: 0, stdout: signedIn })).toEqual({
+      authenticated: true,
+    });
+    expect(parseClaudeAuthStatus({ exitCode: 1, stdout: signedOut })).toEqual({
+      authenticated: false,
+    });
+  });
+
+  it("reads codex login status as observed, on stderr among warnings", () => {
+    expect(
+      parseCodexLoginStatus({ exitCode: 0, stderr: "WARNING: x\nLogged in using ChatGPT" }),
+    ).toEqual({ authenticated: true });
+    expect(parseCodexLoginStatus({ exitCode: 1, stderr: "WARNING: x\nNot logged in" })).toEqual({
+      authenticated: false,
+    });
+  });
+
+  it.each([
+    ["a crash that printed nothing", 1, ""],
+    ["a different message", 1, "Could not read configuration"],
+    ["signed-in text with a failing exit", 1, "Logged in using ChatGPT"],
+    ["signed-out text with a clean exit", 0, "Not logged in"],
+  ])("does not guess from codex: %s", (_name, exitCode, stderr) => {
+    expect(parseCodexLoginStatus({ exitCode, stderr })).toBeUndefined();
+  });
+
+  it.each([
+    ["no JSON", 1, "Error: config unreadable"],
+    ["JSON without the flag", 0, "{}"],
+    ["null", 0, "null"],
+    ["a truthy non-boolean", 0, '{"loggedIn":"yes"}'],
+    ["signed in with a failing exit", 1, '{"loggedIn":true}'],
+  ])("does not guess from claude: %s", (_name, exitCode, stdout) => {
+    expect(parseClaudeAuthStatus({ exitCode, stdout })).toBeUndefined();
   });
 });
 

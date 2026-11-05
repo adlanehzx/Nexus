@@ -15,6 +15,7 @@ import type {
   ProbeInterpretation,
   ProviderDefinition,
   ProviderRegistry,
+  ProviderProbe,
 } from "./registry.js";
 import { stateRequiresHumanAction, transition } from "./state-machine.js";
 
@@ -294,7 +295,12 @@ export class ConnectionDetector {
     }
 
     const session = await this.#runner.run(sessionProbe.command, this.#env);
-    const state = this.#sessionState(session, sessionProbe.verification, sessionProbe.interpret);
+    const state = this.#sessionState(
+      session,
+      sessionProbe.verification,
+      sessionProbe.interpret,
+      sessionProbe.interpretResult,
+    );
     return this.#build(definition, {
       state: this.#move(definition, probing, state.state, session.durationMs, state.errorCategory),
       errorCategory: state.errorCategory,
@@ -390,6 +396,7 @@ export class ConnectionDetector {
             }
           | undefined)
       | undefined,
+    interpretResult?: ProviderProbe["interpretResult"],
   ): {
     state: ConnectionState;
     authStatus: ConnectionAuthStatus;
@@ -397,7 +404,9 @@ export class ConnectionDetector {
     version: string | undefined;
     capabilities: readonly string[];
   } {
-    if (!outcome.ok) {
+    const observed = outcome.timedOut ? undefined : interpretResult?.(outcome);
+
+    if (!outcome.ok && observed === undefined) {
       const category = outcome.errorCategory ?? "internal";
       const state: ConnectionState =
         category === "authentication_required"
@@ -420,7 +429,7 @@ export class ConnectionDetector {
       };
     }
 
-    const parsed = interpret?.(outcome.stdout);
+    const parsed = observed ?? interpret?.(outcome.stdout);
     if (parsed === undefined) {
       return {
         state: "error",

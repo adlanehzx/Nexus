@@ -190,6 +190,61 @@ posixOnly("connection detection", () => {
     expect((await detector.detect("fixture")).state).toBe("detected");
   });
 
+  describe("a session probe reading the whole result", () => {
+    const probeWith = (dir: string) =>
+      detectorFor(
+        dir,
+        fixtureProvider({
+          authenticate: {
+            command: { file: "fixture-session", args: [], timeoutMs: 300 },
+            verification: "verified",
+            interpretResult: ({ exitCode, stderr }) => {
+              if (exitCode === 0 && stderr.includes("Logged in")) return { authenticated: true };
+              if (exitCode === 1 && stderr.includes("Not logged in")) {
+                return { authenticated: false };
+              }
+              return undefined;
+            },
+          },
+        }),
+      );
+
+    const setUp = async (session: string) => {
+      const bin = await createFakeBinDir();
+      await bin.write("fixture", "echo 1.2.3");
+      await bin.write("fixture-session", session);
+      return probeWith(bin.dir).detector;
+    };
+
+    it("reports signed in", async () => {
+      const detector = await setUp("echo 'Logged in' >&2");
+      const connection = await detector.detect("fixture");
+      expect(connection.state).toBe("connected");
+      expect(connection.authStatus).toBe("authenticated");
+    });
+
+    it("reads a failing exit as signed out, not as a broken tool", async () => {
+      const detector = await setUp("echo 'Not logged in' >&2; exit 1");
+      const connection = await detector.detect("fixture");
+      expect(connection.state).toBe("authentication_required");
+      expect(connection.authStatus).toBe("unauthenticated");
+    });
+
+    it("treats any other failure as a failure, and claims nothing about the session", async () => {
+      const detector = await setUp("echo 'disk full' >&2; exit 1");
+      const connection = await detector.detect("fixture");
+      expect(connection.state).toBe("error");
+      expect(connection.authStatus).toBe("unknown");
+    });
+
+    it("claims nothing when the probe times out", async () => {
+      const detector = await setUp("exec sleep 5");
+      const connection = await detector.detect("fixture");
+      expect(connection.errorCategory).toBe("timeout");
+      expect(connection.authStatus).toBe("unknown");
+    });
+  });
+
   it("asks for a sign-in when a session probe says there is no session", async () => {
     const bin = await createFakeBinDir();
     await bin.write("fixture", 'echo "fixture 2.3.4"');

@@ -64,6 +64,51 @@ export function parseVersionLine(stdout: string): ProbeInterpretation | undefine
  */
 const DESKTOP_PLATFORMS = ["linux", "darwin"] as const;
 
+/**
+ * `claude auth status`, observed on 2.1.318 signed in and with an empty config directory.
+ *
+ * Prints JSON with `loggedIn`, exiting 0 when signed in and 1 when not. It runs locally and
+ * consumes no quota. Only that flag is read: the output also holds the account's email and
+ * organization, which NEXUS has no use for and does not keep.
+ *
+ * A lapsed session has not been observed, so this never reports one.
+ */
+export function parseClaudeAuthStatus(result: {
+  exitCode: number | null;
+  stdout: string;
+}): ProbeInterpretation | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return undefined;
+  }
+  const loggedIn = (parsed as { loggedIn?: unknown } | null)?.loggedIn;
+  if (loggedIn === true && result.exitCode === 0) return { authenticated: true };
+  if (loggedIn === false && result.exitCode === 1) return { authenticated: false };
+  return undefined;
+}
+
+/**
+ * `codex login status`, observed on 0.166.0 signed in and with an empty CODEX_HOME.
+ *
+ * Answers on stderr, among possible warnings: "Logged in using ChatGPT" exiting 0, or
+ * "Not logged in" exiting 1. It runs locally and consumes no quota. A lapsed session has not
+ * been observed, so this never reports one.
+ */
+export function parseCodexLoginStatus(result: {
+  exitCode: number | null;
+  stderr: string;
+}): ProbeInterpretation | undefined {
+  if (result.exitCode === 0 && /^Logged in using /m.test(result.stderr)) {
+    return { authenticated: true };
+  }
+  if (result.exitCode === 1 && /^Not logged in$/m.test(result.stderr)) {
+    return { authenticated: false };
+  }
+  return undefined;
+}
+
 export const CODEX_PROVIDER: ProviderDefinition = {
   id: "codex",
   displayName: "Codex",
@@ -92,6 +137,11 @@ export const CODEX_PROVIDER: ProviderDefinition = {
     command: { file: "codex", args: ["--version"], timeoutMs: 10_000 },
     verification: "verified",
     interpret: parseVersionLine,
+  },
+  authenticate: {
+    command: { file: "codex", args: ["login", "status"], timeoutMs: 15_000 },
+    verification: "verified",
+    interpretResult: parseCodexLoginStatus,
   },
   actions: ["detect", "test", "open_docs"],
   docsUrl: "https://developers.openai.com/codex/cli",
@@ -124,6 +174,11 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
     command: { file: "claude", args: ["--version"], timeoutMs: 10_000 },
     verification: "verified",
     interpret: parseVersionLine,
+  },
+  authenticate: {
+    command: { file: "claude", args: ["auth", "status"], timeoutMs: 15_000 },
+    verification: "verified",
+    interpretResult: parseClaudeAuthStatus,
   },
   actions: ["detect", "test", "open_docs"],
   docsUrl: "https://docs.claude.com/en/docs/claude-code",

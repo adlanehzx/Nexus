@@ -87,7 +87,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                     ? tr("Unavailable", "Indisponible")
                     : String(installed.filter((c) => c.observation?.state === "connected").length)
                 }
-                label={tr("verified connections", "connexions vérifiées")}
+                label={tr("accounts signed in", "comptes connectés")}
               />
             </div>
 
@@ -95,8 +95,8 @@ export function Providers({ api }: { api: DashboardApi }) {
               <h3>{tr("Status on this host", "État sur cet hôte")}</h3>
               <p className="muted">
                 {tr(
-                  "An installed CLI is not a connected account: only a successful check shows “connected”.",
-                  "Un CLI installé n’est pas un compte connecté : seule une vérification réussie affiche « connecté ».",
+                  "An installed CLI is not a connected account. “Signed in” is what the CLI itself reports, read locally without using quota; it does not prove a model call would succeed.",
+                  "Un CLI installé n’est pas un compte connecté. « Connecté au compte » est ce que le CLI déclare lui-même, lu localement sans consommer de quota ; cela ne prouve pas qu’un appel au modèle réussirait.",
                 )}
               </p>
               <button
@@ -120,6 +120,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                     head={[
                       tr("Engine", "Moteur"),
                       tr("State", "État"),
+                      tr("Signed in", "Connecté au compte"),
                       tr("Version", "Version"),
                       tr("Last check", "Dernière vérification"),
                     ]}
@@ -134,6 +135,16 @@ export function Providers({ api }: { api: DashboardApi }) {
                           {entry.observation?.userMessage == null ? null : (
                             <div className="muted">{entry.observation.userMessage}</div>
                           )}
+                        </td>
+                        <td data-auth={entry.observation?.authStatus ?? "unknown"}>
+                          {
+                            {
+                              authenticated: tr("Yes", "Oui"),
+                              unauthenticated: tr("No", "Non"),
+                              expired: tr("Expired", "Expiré"),
+                              unknown: tr("Unknown", "Inconnu"),
+                            }[entry.observation?.authStatus ?? "unknown"]
+                          }
                         </td>
                         <td className="mono">
                           {entry.observation?.version ?? tr("Unavailable", "Indisponible")}
