@@ -76,7 +76,7 @@ describe("PushNotificationService", () => {
     const store = new InMemoryPushTokenStore();
     const push = new PushNotificationService({
       store,
-      fetchFn: (() => Promise.resolve(jsonResponse({}, 500))),
+      fetchFn: () => Promise.resolve(jsonResponse({}, 500)),
       onError,
     });
     await push.register({ deviceId: "d", userId: "u", token: "t", provider: "expo" });
