@@ -96,6 +96,12 @@ import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/sub
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 import { AgentRealtimeBridge } from "./agent-realtime.js";
 import {
+  InMemoryPushTokenStore,
+  PrismaPushTokenStore,
+  PushNotificationService,
+  type PushTokenStore,
+} from "./push-notifications.js";
+import {
   InMemoryMcpAccessStore,
   PrismaMcpAccessStore,
   type McpAccessStore,
@@ -158,6 +164,9 @@ export interface ServiceContainerOptions {
   /** Expected worker version. Advisory: see `@nexus/devices/updates`. */
   expectedWorkerVersion?: string;
   runStore?: QueryableAgentRunStore;
+  /** Replaces the network call to the push provider. */
+  pushFetch?: typeof fetch;
+  onPushError?: (cause: unknown) => void;
   telemetry?: NexusTelemetry;
   embeddings?: EmbeddingProvider;
 
@@ -291,6 +300,8 @@ export class ServiceContainer {
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
   readonly mcpAccessStore: McpAccessStore;
+  readonly pushTokenStore: PushTokenStore;
+  readonly push: PushNotificationService;
   readonly telemetry: NexusTelemetry;
   readonly agentRunClaims: AgentRunClaimStore;
   readonly missionGrants: MissionGrantService;
@@ -395,7 +406,22 @@ export class ServiceContainer {
       verifier: options.deviceVerifier ?? multiAlgorithmVerifier,
       now,
     });
-    this.router = new EventRouter({ registry: this.deviceRegistry, now });
+    this.pushTokenStore =
+      options.prisma === undefined
+        ? new InMemoryPushTokenStore()
+        : new PrismaPushTokenStore(options.prisma);
+    this.push = new PushNotificationService({
+      store: this.pushTokenStore,
+      ...(options.pushFetch === undefined ? {} : { fetchFn: options.pushFetch }),
+      ...(options.onPushError === undefined ? {} : { onError: options.onPushError }),
+    });
+    this.router = new EventRouter({
+      registry: this.deviceRegistry,
+      now,
+      onPublished: (report) => {
+        void this.push.deliver(report);
+      },
+    });
     this.gateway = new WorkerGateway({
       registry: this.deviceRegistry,
       sessions: this.deviceSessions,

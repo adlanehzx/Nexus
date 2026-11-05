@@ -44,6 +44,7 @@ model User {
   memories                Memory[]
   notifications           Notification[]
   agentRuns               AgentRunSnapshot[]
+  pushTokens              PushToken[]
   mcpAccessTokens         McpAccessToken[]
   scheduleGrants          ScheduleGrant[]
   organizationMemberships OrganizationMembership[]
@@ -358,6 +359,7 @@ model Device {
   sessions        Session[]
   capabilities    DeviceCapability[]
   credentials     DeviceCredential[]
+  pushToken       PushToken?
   deviceSessions  DeviceSession[]
   executions      TaskExecution[]
   originatedTasks TaskPlan[]         @relation("TaskOrigin")
@@ -776,6 +778,23 @@ model AgentRunSnapshot {
   @@index([status])
   @@index([missionExternalKey])
   @@map("agent_run_snapshots")
+}
+
+/// Where to reach a device whose socket is closed. Removed with the device or on revocation.
+model PushToken {
+  deviceId  String   @id @db.Uuid
+  userId    String   @db.Uuid
+  token     String
+  provider  String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 /// A credential an external MCP client uses to act for its creator. Only a hash is stored.

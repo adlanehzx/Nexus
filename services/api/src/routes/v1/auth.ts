@@ -133,11 +133,19 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       schema: {
         tags: ["auth"],
         summary: "Closes current session",
+        // A session does not record its device. The client names it so that this phone
+        // stops receiving pushes for an account it just left.
+        body: z.object({ deviceId: z.string().min(1).optional() }).optional(),
         response: { 200: okSchema(z.object({ closed: z.boolean() })) },
       },
     },
     async (request) => {
       const { sessionId, userId } = currentUser(request);
+      const deviceId = request.body?.deviceId;
+      if (deviceId !== undefined) {
+        const device = await app.services.deviceRegistry.getDevice(deviceId);
+        if (device?.userId === userId) await app.services.push.unregister(device.id);
+      }
       await app.services.auth.logout(sessionId);
       app.services.securityLog.record({ kind: "auth.logout", userId, summary: "Logout" });
       return ok({ closed: true }, request.id);

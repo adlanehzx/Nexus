@@ -162,5 +162,9 @@
   {
     "route": "GET /api/v1/agent-core/models",
     "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
+  },
+  {
+    "route": "* /api/v1/devices/:deviceId/push-token",
+    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
   }
 ]
