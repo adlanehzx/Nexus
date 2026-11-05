@@ -11,7 +11,7 @@ import {
 } from "@nexus/protocol";
 import type { NetworkMonitor, SocketTransport, TimerPort } from "./ports.js";
 import { systemTimers } from "./ports.js";
-import type { SessionManager } from "./session.js";
+import { NotAuthenticatedError, type SessionManager } from "./session.js";
 import type { ClientAction, ConnectionState } from "./store.js";
 
 /**
@@ -259,7 +259,20 @@ export class RealtimeClient {
         },
         this.#newId(),
       );
-    } catch {
+    } catch (cause) {
+      // Anything else is not a missing session and must not read as one: calling it
+      // that once hid a missing crypto source behind a permanent "Connecting".
+      if (!(cause instanceof NotAuthenticatedError)) {
+        this.#dispatch({
+          kind: "error",
+          code: "CLIENT_HANDSHAKE_FAILED",
+          message: cause instanceof Error ? cause.message : "The realtime handshake failed.",
+          at: this.#now().toISOString(),
+        });
+        this.#socket.close("handshake failed");
+        this.#scheduleReconnect("handshake failed");
+        return;
+      }
       // Missing token: stop retrying in a loop; user must re-authenticate.
       this.#stopped = true;
       this.#setState("offline");
