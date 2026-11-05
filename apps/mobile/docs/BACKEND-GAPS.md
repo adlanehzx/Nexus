@@ -201,6 +201,8 @@ or dispatch `CLIENT_HANDSHAKE_FAILED`, and correct the comment.
 
 ### 15. Cancel does not stop a step that is running
 
+**Fixed in `packages/devices/src/coordinator.ts`;** kept here until it is confirmed on a phone.
+
 Reproduced with a 60 s command: it ran to the end after Cancel, its step finished `succeeded`, and
 the task was then marked `cancelled`. The client therefore reports a cancellation that stopped
 nothing. `DeviceCoordinator` reads `options.signal` only at the top of its loop.
@@ -211,6 +213,8 @@ nothing. `DeviceCoordinator` reads `options.signal` only at the top of its loop.
 the step ends `cancelled`. If the step really completed, the final state says so.
 
 ### 16. Cancel has no effect while a confirmation is pending
+
+**Fixed in `packages/devices/src/coordinator.ts`;** kept here until it is confirmed on a phone.
 
 `await #confirm` does not watch the signal, so the task waits until the confirmation expires.
 
@@ -228,6 +232,8 @@ command produced.
 **Contract:** a bounded `output`, redacted under the audit policy, at least for the task's owner.
 
 ### 18. No running state for a step
+
+**Fixed in `packages/devices/src/coordinator.ts`;** kept here until it is confirmed on a phone.
 
 During execution the step stays `pending` and the app received no running state, so the card reads
 "queued" while the command runs.
