@@ -224,6 +224,72 @@ function McpExternalAccess({ api }: { api: DashboardApi }) {
   );
 }
 
+export const MCP_PRESETS = [
+  {
+    name: "filesystem",
+    label: "Filesystem",
+    description: "Read & write access to workspace files",
+    transport: "stdio" as const,
+    target: "npx",
+    args: "-y\n@modelcontextprotocol/server-filesystem\n/workspace",
+    secretRefs: "",
+  },
+  {
+    name: "memory-graph",
+    label: "Memory Graph",
+    description: "Knowledge graph persistent memory",
+    transport: "stdio" as const,
+    target: "npx",
+    args: "-y\n@modelcontextprotocol/server-memory",
+    secretRefs: "",
+  },
+  {
+    name: "github",
+    label: "GitHub",
+    description: "Repositories, issues, and PR management",
+    transport: "stdio" as const,
+    target: "npx",
+    args: "-y\n@modelcontextprotocol/server-github",
+    secretRefs: '{"GITHUB_PERSONAL_ACCESS_TOKEN":"vault://nexus/github-pat"}',
+  },
+  {
+    name: "postgres",
+    label: "PostgreSQL",
+    description: "Read-only schema queries",
+    transport: "stdio" as const,
+    target: "npx",
+    args: "-y\n@modelcontextprotocol/server-postgres\npostgresql://user:pass@localhost:5432/db",
+    secretRefs: "",
+  },
+  {
+    name: "brave-search",
+    label: "Brave Search",
+    description: "Web and entity search API",
+    transport: "stdio" as const,
+    target: "npx",
+    args: "-y\n@modelcontextprotocol/server-brave-search",
+    secretRefs: '{"BRAVE_API_KEY":"vault://nexus/brave-key"}',
+  },
+] as const;
+
+export function isForbiddenRemoteUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host === "169.254.169.254" ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function Mcp({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const state = useSection(() => api.mcp());
@@ -232,6 +298,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
   const [target, setTarget] = useState("");
   const [args, setArgs] = useState("");
   const [secretRefs, setSecretRefs] = useState("");
+  const [showGuide, setShowGuide] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -251,6 +318,16 @@ export function Mcp({ api }: { api: DashboardApi }) {
   };
 
   const save = (): void => {
+    if (transport !== "stdio" && isForbiddenRemoteUrl(target)) {
+      setActionError(
+        tr(
+          "Remote MCP servers cannot point to loopback, localhost, or private addresses (SSRF Protection).",
+          "Les serveurs MCP distants ne peuvent pas pointer vers loopback, localhost ou des adresses privées (protection SSRF).",
+        ),
+      );
+      return;
+    }
+
     let refs: Record<string, string>;
     try {
       refs = secretRefs.trim() === "" ? {} : (JSON.parse(secretRefs) as Record<string, string>);
@@ -299,6 +376,8 @@ export function Mcp({ api }: { api: DashboardApi }) {
     );
   };
 
+  const ssrfWarning = transport !== "stdio" && isForbiddenRemoteUrl(target);
+
   return (
     <div className="content">
       {message === null ? null : <p className="banner success">{message}</p>}
@@ -306,6 +385,80 @@ export function Mcp({ api }: { api: DashboardApi }) {
       <McpExternalAccess api={api} />
       <section className="settings-panel">
         <h3>{tr("Add or Replace an MCP Server", "Ajouter ou remplacer un serveur MCP")}</h3>
+
+        {/* Quick Presets Bar */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.2rem", alignItems: "center" }}>
+          <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>
+            {tr("One-Click Presets:", "Préconfigurations en 1 clic :")}
+          </span>
+          {MCP_PRESETS.map((preset) => (
+            <button
+              key={preset.name}
+              className="button compact secondary"
+              type="button"
+              onClick={() => {
+                setName(preset.name);
+                setTransport(preset.transport);
+                setTarget(preset.target);
+                setArgs(preset.args);
+                setSecretRefs(preset.secretRefs ?? "");
+              }}
+              title={preset.description}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            className="button compact"
+            type="button"
+            onClick={() => setShowGuide((prev) => !prev)}
+          >
+            {showGuide
+              ? tr("Hide Documentation", "Masquer la documentation")
+              : tr("Show MCP Guide", "Afficher guide MCP")}
+          </button>
+        </div>
+
+        {/* Documentation & Guidance Accordion */}
+        {showGuide && (
+          <div
+            style={{
+              padding: "1rem",
+              marginBottom: "1.2rem",
+              background: "rgba(255, 255, 255, 0.03)",
+              border: "1px solid var(--border-subtle, #333)",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              lineHeight: "1.5",
+            }}
+          >
+            <h4>{tr("How to Add and Secure MCP Servers", "Comment ajouter et sécuriser les serveurs MCP")}</h4>
+            <ul style={{ paddingLeft: "1.2rem", marginTop: "0.5rem" }}>
+              <li>
+                <strong>stdio</strong>: {tr("Spawns a local sandboxed subprocess. Use `npx` or binary path.", "Lance un sous-processus local isolé. Utilisez `npx` ou le chemin du binaire.")}
+              </li>
+              <li>
+                <strong>HTTP / SSE</strong>: {tr("Connects to a remote server. Enforces network isolation and blocks loopback/SSRF targets.", "Se connecte à un serveur distant. Applique l'isolation réseau et bloque le loopback/SSRF.")}
+              </li>
+              <li>
+                <strong>envRefs / headerRefs</strong>: {tr("Maps vault keys (e.g. `vault://nexus/api-key`) without storing plaintext credentials.", "Associe des clés de coffre-fort (ex: `vault://nexus/api-key`) sans stocker de clés en clair.")}
+              </li>
+              <li>
+                <strong>Per-Tool Safeguards</strong>: {tr("Each server tool is monitored with latency metrics and guarded by circuit breakers.", "Chaque outil est supervisé avec latence et protégé par disjoncteur.")}
+              </li>
+            </ul>
+          </div>
+        )}
+
+        {ssrfWarning && (
+          <div className="banner error" role="alert" style={{ marginBottom: "1rem" }}>
+            {tr(
+              "Security warning: Remote MCP servers cannot connect to localhost, loopback (127.0.0.1), or private cloud metadata (169.254.169.254).",
+              "Avertissement de sécurité : Les serveurs MCP distants ne peuvent pas se connecter à localhost, loopback ou métadonnées cloud privées.",
+            )}
+          </div>
+        )}
+
         <div className="settings-grid">
           <label>
             {tr("Name", "Nom")}
