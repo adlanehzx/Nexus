@@ -1,7 +1,27 @@
-import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
-import { router } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import { useAppLock, useBiometricSupport } from "../lib/app-lock.js";
+import { failureMessage } from "../lib/errors.js";
 import { useNexus } from "../lib/nexus.js";
+import {
+  notificationPermission,
+  pushOutcomeLabel,
+  registerForPush,
+  requestNotificationPermission,
+  type PermissionState,
+  type PushOutcome,
+} from "../lib/notifications.js";
+import { useResource } from "../lib/use-resource.js";
 import {
   type Theme,
   type ThemePreference,
@@ -13,13 +33,43 @@ import {
 /**
  * Settings and session management.
  *
- * Focuses on security (session, device identity) and accessibility preferences (voice read aloud).
+ * Account, security, notifications, voice, appearance. Providers and connections
+ * have their own screen; this one holds what concerns this phone and this person.
  */
 export default function SettingsScreen() {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   const nexus = useNexus();
+  const lock = useAppLock();
+  const biometrics = useBiometricSupport();
   const [speakReplies, setSpeakReplies] = useState(nexus.voice.speakRepliesEnabled);
+  const [permission, setPermission] = useState<PermissionState>("undetermined");
+  const [push, setPush] = useState<PushOutcome>();
+  const account = useResource("me", () => nexus.mobile.me());
+
+  const deviceId = nexus.session.deviceId;
+  const syncPush = useCallback(async () => {
+    const current = await notificationPermission();
+    setPermission(current);
+    if (current === "granted" && deviceId !== null) {
+      setPush(await registerForPush(nexus.mobile, deviceId));
+    }
+  }, [deviceId, nexus.mobile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void syncPush();
+    }, [syncPush]),
+  );
+
+  const enableNotifications = async () => {
+    if (permission === "denied") {
+      await Linking.openSettings();
+      return;
+    }
+    setPermission(await requestNotificationPermission());
+    await syncPush();
+  };
 
   const confirmSignOut = () => {
     Alert.alert("Sign out?", "Your session tokens will be removed from this device.", [
@@ -28,14 +78,117 @@ export default function SettingsScreen() {
         text: "Sign out",
         style: "destructive",
         onPress: () => {
-          void nexus.signOut().then(() => router.replace("/login"));
+          void nexus.signOut().then(() => {
+            router.replace("/login");
+          });
         },
       },
     ]);
   };
 
+  const confirmSignOutEverywhere = () => {
+    Alert.alert(
+      "Sign out everywhere?",
+      "Every session on every device ends, including this one. Each will have to sign in again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign out everywhere",
+          style: "destructive",
+          onPress: () => {
+            nexus.mobile
+              .logoutEverywhere()
+              .then(() => nexus.signOut())
+              .then(() => {
+                router.replace("/login");
+              })
+              .catch((cause: unknown) => {
+                Alert.alert("Sessions not closed", failureMessage(cause));
+              });
+          },
+        },
+      ],
+    );
+  };
+
   return (
-    <View style={styles.screen}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
+      <Section title="Account">
+        <Text style={styles.value}>
+          {account.data === undefined
+            ? account.failure === undefined
+              ? "Loading…"
+              : account.failure.title
+            : `${account.data.displayName} · ${account.data.email}`}
+        </Text>
+        <Text style={styles.hint}>{nexus.serverUrl}</Text>
+      </Section>
+
+      <Section title="Security">
+        <Row
+          label="Lock the app"
+          hint={
+            biometrics?.available === false
+              ? biometrics.needsEnrollment
+                ? "Set up Face ID, fingerprint or a passcode on this phone first."
+                : "This phone has no screen lock."
+              : "Ask for Face ID, fingerprint or passcode to open NEXUS."
+          }
+        >
+          <Switch
+            value={lock.lockEnabled}
+            disabled={biometrics?.available !== true}
+            onValueChange={(value) => void lock.setLockEnabled(value)}
+            accessibilityLabel="Lock the app"
+          />
+        </Row>
+        <Row
+          label="Confirm remote control"
+          hint="Authenticate before acting on another device or changing the fleet."
+        >
+          <Switch
+            value={lock.confirmRemote}
+            disabled={biometrics?.available !== true}
+            onValueChange={(value) => void lock.setConfirmRemote(value)}
+            accessibilityLabel="Confirm remote control"
+          />
+        </Row>
+      </Section>
+
+      <Section title="Notifications">
+        <Row
+          label="System notifications"
+          hint={
+            permission === "unavailable"
+              ? "Not supported by this build."
+              : permission === "denied"
+                ? "Turned off in system settings."
+                : permission === "granted"
+                  ? push === undefined
+                    ? "On."
+                    : pushOutcomeLabel(push)
+                  : "Be told when a mission finishes, needs approval, or fails."
+          }
+        >
+          {permission !== "granted" && permission !== "unavailable" ? (
+            <Pressable
+              style={styles.inlineButton}
+              onPress={() => void enableNotifications()}
+              accessibilityRole="button"
+              accessibilityLabel={
+                permission === "denied" ? "Open system settings" : "Turn on notifications"
+              }
+            >
+              <Text style={styles.inlineButtonText}>
+                {permission === "denied" ? "Settings" : "Turn on"}
+              </Text>
+            </Pressable>
+          ) : (
+            <View />
+          )}
+        </Row>
+      </Section>
+
       <Section title="Appearance">
         <Row
           label="Theme"
@@ -54,7 +207,7 @@ export default function SettingsScreen() {
             value={speakReplies}
             onValueChange={(value) => {
               setSpeakReplies(value);
-              nexus.voice.setSpeakReplies(value);
+              nexus.setSpeakReplies(value);
             }}
             accessibilityLabel="Read responses aloud"
           />
@@ -64,8 +217,8 @@ export default function SettingsScreen() {
       <Section title="This device">
         <Text style={styles.value}>{nexus.session.deviceId ?? "not registered with NEXUS"}</Text>
         <Text style={styles.hint}>
-          Session tokens are stored in the iOS Keychain, encrypted by the system and excluded from
-          iCloud backups.
+          Session tokens are stored in the system keychain, encrypted by the OS and excluded from
+          device backups.
         </Text>
         {nexus.session.deviceId ? (
           <Pressable
@@ -112,7 +265,14 @@ export default function SettingsScreen() {
       <Pressable style={styles.signOut} onPress={confirmSignOut} accessibilityRole="button">
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
-    </View>
+      <Pressable
+        style={styles.signOut}
+        onPress={confirmSignOutEverywhere}
+        accessibilityRole="button"
+      >
+        <Text style={styles.signOutText}>Sign out everywhere</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -184,12 +344,17 @@ function Row({
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: theme.color.background,
-      padding: theme.space(6),
-      gap: theme.space(8),
+    scroll: { flex: 1, backgroundColor: theme.color.background },
+    screen: { padding: theme.space(6), gap: theme.space(8), paddingBottom: theme.space(10) },
+    inlineButton: {
+      minHeight: 36,
+      justifyContent: "center",
+      paddingHorizontal: theme.space(5),
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.color.accent,
     },
+    inlineButtonText: { color: theme.color.accent, fontSize: 13, fontWeight: "600" },
     section: { gap: theme.space(4) },
     sectionTitle: {
       color: theme.color.textFaint,
@@ -209,7 +374,6 @@ const makeStyles = (theme: Theme) =>
     value: { color: theme.color.text, fontSize: 14, fontVariant: ["tabular-nums"] },
     hint: { color: theme.color.textMuted, fontSize: 12, lineHeight: 17 },
     signOut: {
-      marginTop: "auto",
       borderWidth: 1,
       borderColor: theme.color.danger,
       borderRadius: theme.radius.lg,

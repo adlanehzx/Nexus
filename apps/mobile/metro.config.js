@@ -1,6 +1,8 @@
 // Metro loads this configuration file via CommonJS.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getDefaultConfig } = require("expo/metro-config");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const path = require("node:path");
 
 /**
  * Metro configuration for ESM-style imports.
@@ -30,6 +32,17 @@ const config = getDefaultConfig(__dirname);
  * The fallback activates only when standard resolution fails.
  */
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  /**
+   * `@nexus/client-core` re-exports its peer-sync module, which imports `node:crypto`.
+   * The mobile app does not use that module, but the barrel makes Metro bundle it, and
+   * Metro has no such builtin: without this the app does not build at all. The shim
+   * throws if anything ever calls it, so a future use fails loudly instead of quietly
+   * running without encryption. See docs/BACKEND-GAPS.md.
+   */
+  if (moduleName === "node:crypto") {
+    return { type: "sourceFile", filePath: path.join(__dirname, "lib/shims/node-crypto.ts") };
+  }
+
   try {
     return context.resolveRequest(context, moduleName, platform);
   } catch (error) {
