@@ -35,6 +35,8 @@ import { NativeSocket, TimeoutHttpClient } from "../../lib/platform.js";
  * It creates accounts, so never aim it at an installation you care about.
  */
 
+declare const process: { env: Record<string, string | undefined> };
+
 const url = process.env.NEXUS_LIVE_URL;
 
 async function failureOf(work: () => Promise<unknown>): Promise<Failure | undefined> {
@@ -47,7 +49,8 @@ async function failureOf(work: () => Promise<unknown>): Promise<Failure | undefi
 }
 
 describe.skipIf(url === undefined)("live NEXUS instance", { timeout: 60_000 }, () => {
-  const baseUrl = url ?? "";
+  // Only used to construct the clients when this suite is skipped.
+  const baseUrl = url ?? "http://localhost:1";
   const frames: ClientAction[] = [];
   const socket = new NativeSocket();
   const session = new SessionManager({
@@ -171,7 +174,7 @@ describe.skipIf(url === undefined)("live NEXUS instance", { timeout: 60_000 }, (
     });
     // Becomes "registered" the day the core ships the contract in docs/BACKEND-GAPS.md.
     expect(["server-unsupported", "registered"]).toContain(outcome.state);
-    console.info(`Push on this instance: ${outcome.state}`);
+    console.warn(`Push on this instance: ${outcome.state}`);
   });
 
   it("classifies a missing record", async () => {
@@ -251,7 +254,7 @@ describe.skipIf(url === undefined)("live NEXUS instance", { timeout: 60_000 }, (
       // No LLM configured on this instance: the message must say so, not pretend.
       expect(error.code).toBe("CHAT_SEND_FAILED");
       expect(error.message.length).toBeGreaterThan(0);
-      console.info(`Chat on this instance reports: ${error.message}`);
+      console.warn(`Chat on this instance reports: ${error.message}`);
     }
   });
 
