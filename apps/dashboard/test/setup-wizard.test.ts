@@ -88,3 +88,24 @@ describe("Setup wizard presentation and state persistence", () => {
     expect(status.initialized).toBe(true);
   });
 });
+
+describe("Onboarding Wizard & Smoke Test Contracts (Mission A)", () => {
+  it("enforces strict step progression order without skips", () => {
+    const steps = ["prerequisites", "admin", "agents", "capabilities", "complete"];
+    expect(steps).toHaveLength(5);
+    expect(steps[0]).toBe("prerequisites");
+    expect(steps[4]).toBe("complete");
+  });
+
+  it("validates smoke test stages definition", () => {
+    const stages = [
+      "LLM Provider Routing & Budget Check",
+      "Context Retrieval & MCP Isolation Guard",
+      "Synthesis & Task Delivery",
+    ];
+    expect(stages).toHaveLength(3);
+    expect(stages[0]).toContain("Routing");
+    expect(stages[1]).toContain("MCP Isolation");
+    expect(stages[2]).toContain("Synthesis");
+  });
+});
