@@ -565,6 +565,7 @@ export class ServiceContainer {
     this.runStore = new ObservableAgentRunStore(
       options.runStore ?? new InMemoryAgentRunStore(),
       this.telemetry,
+      this.router,
     );
     this.agentRunClaims = options.agentRunClaims ?? new InMemoryAgentRunClaimStore();
     this.missionGrants = new MissionGrantService({

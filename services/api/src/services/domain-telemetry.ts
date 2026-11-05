@@ -1,3 +1,4 @@
+import type { EventRouter } from "@nexus/devices";
 import { metrics } from "@opentelemetry/api";
 import type { AgentState, AgentRunStore } from "@nexus/agent-core";
 import type { AgentRunView } from "./observability.js";
@@ -197,14 +198,29 @@ interface ListableAgentRunStore extends AgentRunStore {
 export class ObservableAgentRunStore implements ListableAgentRunStore {
   readonly #delegate: ListableAgentRunStore;
   readonly #telemetry: NexusTelemetry;
+  readonly #router: EventRouter | undefined;
 
-  constructor(delegate: ListableAgentRunStore, telemetry: NexusTelemetry) {
+  constructor(delegate: ListableAgentRunStore, telemetry: NexusTelemetry, router?: EventRouter) {
     this.#delegate = delegate;
     this.#telemetry = telemetry;
+    this.#router = router;
   }
 
   async save(state: AgentState): Promise<void> {
+    const starting =
+      this.#router !== undefined &&
+      state.record.status === "running" &&
+      state.record.iterations === 0 &&
+      (await this.#delegate.load(state.record.runId)) === undefined;
     await this.#delegate.save(state);
+    if (starting) {
+      await this.#router?.emit({
+        type: "agent.started",
+        userId: state.record.userId,
+        correlationId: state.record.correlationId,
+        payload: { runId: state.record.runId, conversationId: state.record.conversationId },
+      });
+    }
     this.#telemetry.observeRun(state);
   }
 
