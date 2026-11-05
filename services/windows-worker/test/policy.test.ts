@@ -215,6 +215,28 @@ describe("execution policy", () => {
     expect(() => policy.validate({ executable: "git", args: ["status"] }, env)).not.toThrow();
   });
 
+  it("rejects dangerous arguments like git --extcmd, node --inspect, python -m (SEC-06)", () => {
+    const policy = new ExecPolicy({ allowedExecutables: ["git", "node", "python"] });
+
+    throwsWith(
+      () => policy.validate({ executable: "git", args: ["diff", "--extcmd=calc.exe"] }, env),
+      "WORKER_POLICY_VIOLATION",
+      "args.codeExecution",
+    );
+
+    throwsWith(
+      () => policy.validate({ executable: "node", args: ["--inspect=0.0.0.0:9229", "index.js"] }, env),
+      "WORKER_POLICY_VIOLATION",
+      "args.codeExecution",
+    );
+
+    throwsWith(
+      () => policy.validate({ executable: "python", args: ["-m", "http.server"] }, env),
+      "WORKER_POLICY_VIOLATION",
+      "args.codeExecution",
+    );
+  });
+
   it("rejects path as executable", () => {
     const policy = new ExecPolicy({ allowedExecutables: ["git"] });
     throwsWith(

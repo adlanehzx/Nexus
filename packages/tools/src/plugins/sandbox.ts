@@ -43,6 +43,13 @@ export class PluginSandbox {
       /\bglobalThis\b/,
       /\bFunction\b/,
       /\beval\b/,
+      /\bconstructor\b/,
+      /\b__proto__\b/,
+      /\bprototype\b/,
+      /\bmainModule\b/,
+      /\bbinding\b/,
+      /\bAsyncFunction\b/,
+      /\bGeneratorFunction\b/,
       /169\.254\.169\.254/,
       /metadata\.google\.internal/,
     ];
@@ -57,7 +64,8 @@ export class PluginSandbox {
     }
 
     // 2. Build isolated sandbox context: pure data and restricted utilities
-    const sandboxScope = {
+    const sandboxScope = Object.create(null);
+    Object.assign(sandboxScope, {
       input: Object.freeze(JSON.parse(JSON.stringify(input)) as Record<string, unknown>),
       secrets: Object.freeze({ ...context.injectedSecrets }),
       tenantId: context.tenantId ?? "default",
@@ -70,9 +78,27 @@ export class PluginSandbox {
       Boolean,
       Array,
       Object,
-    };
+    });
 
     const vmContext = vm.createContext(sandboxScope);
+
+    // Defense-in-depth: neutralize constructor escape routes on prototypes in context
+    try {
+      vm.runInContext(
+        `
+        try {
+          delete Object.prototype.constructor;
+          delete Function.prototype.constructor;
+          delete Array.prototype.constructor;
+          delete String.prototype.constructor;
+          delete Number.prototype.constructor;
+          delete Boolean.prototype.constructor;
+          delete Date.prototype.constructor;
+        } catch (_) {}
+      `,
+        vmContext,
+      );
+    } catch (_) {}
 
     // 3. Wrap script to set result
     const wrappedScript = `

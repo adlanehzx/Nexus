@@ -121,6 +121,24 @@ export class UnifiedAgentRuntime {
             continue;
           }
           authorizedCallIds.add(event.callId);
+
+          if (this.options.toolExecutor && event.result === undefined) {
+            try {
+              const result = await this.options.toolExecutor(event.toolName, event.args);
+              this.logAudit(event.toolName, event.args);
+              yield {
+                ...event,
+                result,
+              };
+            } catch (err) {
+              yield {
+                type: "error",
+                message: `Tool execution error: ${err instanceof Error ? err.message : String(err)}`,
+                recoverable: true,
+              };
+            }
+            continue;
+          }
         }
 
         this.logAudit(event.toolName, event.args);

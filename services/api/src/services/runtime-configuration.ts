@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  hkdfSync,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
 import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -383,7 +390,15 @@ export class EncryptedFileVault implements SecretVault {
       throw new Error("MASTER_KEY must contain at least 32 characters.");
     }
     this.#store = store;
-    this.#key = createHash("sha256").update(masterSecret, "utf8").digest();
+    // SEC-11: Derive 256-bit key via HKDF with cryptographic domain separation
+    const derivedKey = hkdfSync(
+      "sha256",
+      Buffer.from(masterSecret, "utf8"),
+      Buffer.from("nexus:encrypted-file-vault:v1", "utf8"),
+      Buffer.from("aes-256-gcm-key", "utf8"),
+      32,
+    );
+    this.#key = Buffer.from(derivedKey);
   }
 
   async list(): Promise<string[]> {

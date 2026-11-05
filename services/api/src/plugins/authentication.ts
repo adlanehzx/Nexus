@@ -27,6 +27,8 @@ declare module "fastify" {
     services: ServiceContainer;
     /** Requires an authenticated user. */
     requireUser: (request: FastifyRequest) => Promise<void>;
+    /** Requires an authenticated tenant membership. */
+    requireTenant: (request: FastifyRequest) => Promise<void>;
     /** Requires an authenticated device. Distinct surface from the former. */
     requireDevice: (request: FastifyRequest) => Promise<void>;
     /**
@@ -97,6 +99,18 @@ export const authenticationPlugin = fp<AuthenticationPluginOptions>(
       await options.services.auth.assertSessionActive(claims.sid);
 
       request.principal = { kind: "user", userId: claims.sub, sessionId: claims.sid };
+    });
+
+    app.decorate("requireTenant", async (request: FastifyRequest) => {
+      await app.requireUser(request);
+      if (options.services.tenantSecurity !== undefined) {
+        const { userId } = currentUser(request);
+        const user = await options.services.users.findById(userId);
+        await options.services.tenantSecurity.ensurePersonalTenant(
+          userId,
+          user?.email ?? `${userId}@nexus.local`,
+        );
+      }
     });
 
     /**
