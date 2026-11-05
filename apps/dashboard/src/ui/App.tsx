@@ -193,8 +193,8 @@ export const SETTINGS_CATEGORIES = [
       },
       {
         id: "quota-forecast" as const,
-        label: "Prévisions quotas",
-        labelEn: "Quota Forecast",
+        label: "Usage & Quotas",
+        labelEn: "Usage & Quotas",
         icon: "overview",
       },
       {
@@ -318,8 +318,8 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     description: "Inter-agent message topologies, communication volume, and latency.",
   },
   "quota-forecast": {
-    title: "Quota forecast",
-    description: "Provider usage projections, estimated depletion dates, and confidence.",
+    title: "Usage & Quotas",
+    description: "Observed tokens, estimated API costs, exports, and provider quota windows.",
   },
   "vcs-worktrees": {
     title: "VCS & Worktrees",

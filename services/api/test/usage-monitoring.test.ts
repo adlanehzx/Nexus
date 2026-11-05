@@ -135,15 +135,35 @@ describe("Usage, Quotas & Equivalent Pricing Architecture (LOT F)", () => {
       expect(forged.statusCode).toBe(400);
     });
 
-    it("GET /api/v1/usage/quotas reports unavailable telemetry", async () => {
+    it("GET /api/v1/usage/summary aggregates only the signed-in account", async () => {
       const res = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/usage/summary?days=7",
+        headers: account.authorization,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({ source: "agent_run_records", days: 7, buckets: [] });
+      const anonymous = await harness.app.inject({ method: "GET", url: "/api/v1/usage/summary" });
+      expect(anonymous.statusCode).toBe(401);
+    });
+
+    it("GET /api/v1/usage/quotas is reserved to administrators", async () => {
+      const member = await createAccount(harness, "usage-member@nexus.ai");
+      const refused = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/usage/quotas",
+        headers: member.authorization,
+      });
+      expect(refused.statusCode).toBe(403);
+
+      const allowed = await harness.app.inject({
         method: "GET",
         url: "/api/v1/usage/quotas",
         headers: account.authorization,
       });
-
-      expect(res.statusCode).toBe(503);
-      expect(res.json().code).toBe("USAGE_TELEMETRY_UNAVAILABLE");
+      expect(allowed.statusCode).toBe(200);
+      expect(allowed.json().data.accounts).toEqual(expect.any(Array));
     });
   });
 });

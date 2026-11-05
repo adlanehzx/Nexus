@@ -1,6 +1,6 @@
 import type { EventRouter } from "@nexus/devices";
 import { metrics } from "@opentelemetry/api";
-import type { AgentState, AgentRunStore } from "@nexus/agent-core";
+import type { AgentState, AgentRunStore, RunUsageBucket } from "@nexus/agent-core";
 import type { AgentRunView } from "./observability.js";
 
 export interface ModelPricing {
@@ -193,6 +193,7 @@ export class NexusTelemetry {
 interface ListableAgentRunStore extends AgentRunStore {
   listAll(): Promise<AgentState[]>;
   listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]>;
+  summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]>;
 }
 
 export class ObservableAgentRunStore implements ListableAgentRunStore {
@@ -238,6 +239,10 @@ export class ObservableAgentRunStore implements ListableAgentRunStore {
 
   listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]> {
     return this.#delegate.listForUser(userId, since, offset, limit);
+  }
+
+  summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]> {
+    return this.#delegate.summarizeForUser(userId, since);
   }
 
   listAll(): Promise<AgentState[]> {

@@ -43,6 +43,7 @@ import {
   InMemoryAgentRunStore,
   type AgentRunStore,
   type AgentState,
+  type RunUsageBucket,
 } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
 import {
@@ -696,6 +697,7 @@ export class ServiceContainer {
 export interface QueryableAgentRunStore extends AgentRunStore {
   listAll(): Promise<AgentState[]>;
   listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]>;
+  summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]>;
 }
 
 /**

@@ -150,9 +150,5 @@
   {
     "route": "POST /api/v1/source-control/guides",
     "reason": "PR architectural review guide creation and publication endpoint. Written by reviewing subagents during synthesis turns."
-  },
-  {
-    "route": "* /api/v1/usage*",
-    "reason": "Quota monitoring and token usage telemetry endpoints. Ingested by automated quota supervisors, CLI telemetry, and tenant billing pipelines."
   }
 ]

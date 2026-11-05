@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@nexus/database";
-import type { AgentState } from "@nexus/agent-core";
+import type { AgentState, RunUsageBucket } from "@nexus/agent-core";
 import { NotFoundError } from "@nexus/shared";
 import type { QueryableAgentRunStore } from "../container.js";
 
@@ -66,6 +66,35 @@ export class PrismaAgentRunStore implements QueryableAgentRunStore {
       take: limit,
     });
     return rows.map((row) => row.state as unknown as AgentState);
+  }
+
+  /** Aggregated in SQL: a year of runs must not be loaded to draw one chart. */
+  async summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]> {
+    const rows = await this.#prisma.$queryRaw<
+      {
+        day: string;
+        model: string;
+        runs: number;
+        failedRuns: number;
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number | null;
+        cacheWriteTokens: number | null;
+      }[]
+    >`
+      SELECT to_char("startTime" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+             COALESCE(state #>> '{record,model}', '') AS model,
+             COUNT(*)::float8 AS "runs",
+             (COUNT(*) FILTER (WHERE status = 'failed'))::float8 AS "failedRuns",
+             COALESCE(SUM((state #>> '{record,usage,inputTokens}')::float8), 0)::float8 AS "inputTokens",
+             COALESCE(SUM((state #>> '{record,usage,outputTokens}')::float8), 0)::float8 AS "outputTokens",
+             SUM((state #>> '{record,usage,cacheReadTokens}')::float8)::float8 AS "cacheReadTokens",
+             SUM((state #>> '{record,usage,cacheWriteTokens}')::float8)::float8 AS "cacheWriteTokens"
+        FROM agent_run_snapshots
+       WHERE "userId" = ${userId}::uuid AND "startTime" >= ${since}
+       GROUP BY 1, 2
+       ORDER BY 1, 2`;
+    return rows;
   }
 
   async listAll(): Promise<AgentState[]> {
