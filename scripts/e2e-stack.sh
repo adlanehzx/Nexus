@@ -54,7 +54,33 @@ start_engine() {
   [[ -f "$STATE_DIR/engine/profiles.json" ]] || echo '{"claude":"claude","codex":"codex"}' >"$STATE_DIR/engine/profiles.json"
   local worker=false database="$STATE_DIR/engine/engine.db" profiles="$STATE_DIR/engine/profiles.json"
   local acp_env=()
-  if [[ "${NEXUS_E2E_ENGINE_WORKER:-0}" == "1" ]]; then
+  local settings="$STATE_DIR/engine/runtime-settings.json"
+  local target_worker="${NEXUS_E2E_ENGINE_WORKER:-0}"
+  [[ "$target_worker" == "agy" ]] && target_worker="antigravity"
+
+  if [[ "$target_worker" =~ ^(claude|antigravity|codex)$ ]]; then
+    # Reaches the real provider, on the account signed in to the local CLI, and uses its
+    # quota. Only an explicit request gets here. The limits keep one mission small.
+    local profile="$target_worker"
+    worker=true
+    database="$STATE_DIR/engine/engine-${profile}-$(date +%s).db"
+    profiles="$STATE_DIR/engine/${profile}-profiles.json"
+    settings="$STATE_DIR/engine/${profile}-settings.json"
+    echo "{\"$profile\":\"$profile\"}" >"$profiles"
+    echo "{\"task_timeout_seconds\":120,\"max_attempts\":1,\"retry_delay_seconds\":10,\"context_budget_chars\":20000,\"quality_review\":false,\"research_priority\":[\"$profile\"],\"review_priority\":[\"$profile\"],\"synthesis_priority\":[\"$profile\"]}" >"$settings"
+    node -e '
+      const fs = require("node:fs");
+      const [example, registry, prof] = process.argv.slice(1);
+      const all = JSON.parse(fs.readFileSync(example, "utf8")).profiles;
+      const target = all[prof];
+      if (!target) throw new Error("Unknown profile: " + prof);
+      fs.writeFileSync(registry, JSON.stringify({ profiles: { [prof]: target } }), { mode: 0o600 });
+    ' "$ROOT/services/agent/config/profiles.example.json" "$STATE_DIR/engine/${profile}-registry.json" "$profile"
+    acp_env=(
+      "NEXUS_ENGINE_ACP_RUNNER=$ROOT/services/agent/dist/cli.js"
+      "NEXUS_ENGINE_ACP_REGISTRY=$STATE_DIR/engine/${profile}-registry.json"
+    )
+  elif [[ "${NEXUS_E2E_ENGINE_WORKER:-0}" == "1" ]]; then
     worker=true
     database="$STATE_DIR/engine/engine-worker.db"
     profiles="$STATE_DIR/engine/fake-profiles.json"
@@ -74,7 +100,7 @@ start_engine() {
     env "${acp_env[@]}" NEXUS_ENGINE_PORT="$ENGINE_PORT" NEXUS_ENGINE_DATABASE="$database" \
       NEXUS_ENGINE_API_PUBLIC_KEY_FILE="$STATE_DIR/signing.pub.pem" \
       NEXUS_ENGINE_PROFILES_FILE="$profiles" \
-      NEXUS_ENGINE_RUNTIME_SETTINGS_FILE="$STATE_DIR/engine/runtime-settings.json" \
+      NEXUS_ENGINE_RUNTIME_SETTINGS_FILE="$settings" \
       NEXUS_ENGINE_SCHEDULER_ENABLED=true NEXUS_ENGINE_WORKER_ENABLED="$worker" \
       nohup setsid .venv/bin/nexus-mission-engine >"$STATE_DIR/engine.log" 2>&1 &
     echo $! >"$STATE_DIR/engine.pid"
