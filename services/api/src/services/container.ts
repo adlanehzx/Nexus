@@ -89,6 +89,7 @@ import { AgentCollaborationService } from "./agent-collaboration.js";
 import { NexusTelemetry, ObservableAgentRunStore } from "./domain-telemetry.js";
 import { LocalConnectionManager, type ConnectionCatalogService } from "./connection-manager.js";
 import { TenantPlatformService, TenantRealtimeHub } from "./tenant-platform.js";
+import { TenantSecurityService } from "./tenant-security.js";
 import { TailscaleDiscoveryService } from "./tailscale-discovery.js";
 import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
@@ -340,6 +341,7 @@ export class ServiceContainer {
   /** Hosted organization services. Undefined keeps personal mode dependency-free. */
   readonly tenantPlatform: TenantPlatformService | undefined;
   readonly tenantRealtime: TenantRealtimeHub;
+  readonly tenantSecurity: TenantSecurityService | undefined;
 
   readonly #now: () => Date;
   readonly #browserToolNames = new Set<string>();
@@ -353,6 +355,8 @@ export class ServiceContainer {
     this.tenantPlatform =
       options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);
     this.tenantRealtime = new TenantRealtimeHub();
+    this.tenantSecurity =
+      options.prisma === undefined ? undefined : new TenantSecurityService(options.prisma);
     const now = options.now ?? (() => new Date());
     this.#now = now;
 

@@ -45,9 +45,32 @@ class AcpGateway:
             "--registry",
             str(self.registry),
         ]
-        environment = dict(os.environ)
-        for key in ("LOCAL_BACKEND_API_KEY",):
-            environment.pop(key, None)
+        # SEC-07: Allowlist safe environment variables to avoid leaking host credentials
+        safe_env_keys = {
+            "PATH",
+            "SYSTEMROOT",
+            "TEMP",
+            "TMP",
+            "TMPDIR",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "SHELL",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "NODE_ENV",
+            "NODE_PATH",
+            # Where agent CLIs keep their own sign-in. Paths, not secrets: adapters
+            # reuse these local authentications, and cannot find them without them.
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+            "XDG_STATE_HOME",
+            "CLAUDE_CONFIG_DIR",
+            "CODEX_HOME",
+        }
+        environment = {k: v for k, v in os.environ.items() if k in safe_env_keys}
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,

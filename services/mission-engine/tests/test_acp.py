@@ -93,3 +93,31 @@ def test_update_profile_is_atomic_and_preserves_no_secret_fields(tmp_path) -> No
         "config_options": {"approval_mode": "strict"},
     }
     assert list(tmp_path.glob("profiles.json.bak-*"))
+
+
+def test_acp_subprocess_environment_is_sanitized(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://admin:supersecret@127.0.0.1:5432/nexus")
+    monkeypatch.setenv("MASTER_KEY", "0123456789abcdef0123456789abcdef")
+
+    registry = tmp_path / "profiles.json"
+    registry.write_text('{"profiles":{}}', encoding="utf-8")
+    runner = tmp_path / "runner.js"
+    # runner script prints environment keys received as json
+    runner.write_text(
+        "console.log(JSON.stringify({ response: JSON.stringify(Object.keys(process.env)) }));",
+        encoding="utf-8",
+    )
+
+    gateway = AcpGateway(runner, registry)
+    # verify execution doesn't leak DATABASE_URL
+    output = gateway.execute(
+        profile_key="dummy",
+        workspace=str(tmp_path),
+        prompt="test prompt",
+        timeout_seconds=10,
+        heartbeat=lambda: None,
+    )
+    keys = json.loads(output)
+    assert "DATABASE_URL" not in keys
+    assert "MASTER_KEY" not in keys
+    assert "PATH" in keys

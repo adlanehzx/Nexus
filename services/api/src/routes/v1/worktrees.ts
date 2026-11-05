@@ -62,8 +62,9 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
         return reply.send({ worktrees });
       } catch {
         if (app.prisma?.worktree) {
+          const user = currentUser(request);
           const dbWorktrees = await app.prisma.worktree.findMany({
-            where: { status: "active" },
+            where: { status: "active", userId: user.userId },
             orderBy: { createdAt: "desc" },
           });
           const mapped = dbWorktrees.map((w) => ({
@@ -96,8 +97,16 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
         summary: "Create a new isolated worktree for agent mission execution",
         body: z.object({
           workspaceRoot: z.string().min(1),
-          branchName: z.string().min(1),
-          baseBranch: z.string().optional(),
+          branchName: z
+            .string()
+            .regex(
+              /^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/,
+              "Invalid branch name: cannot start with '-'",
+            ),
+          baseBranch: z
+            .string()
+            .regex(/^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/, "Invalid base branch")
+            .optional(),
           targetPath: z.string().optional(),
           strategy: z.enum(["inherit", "branch", "share", "isolated"]).optional(),
         }),

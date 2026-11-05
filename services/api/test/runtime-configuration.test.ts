@@ -1,3 +1,4 @@
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -208,5 +209,38 @@ describe("NEXUS manageable configuration", () => {
     expect(await reopened.get("vault://nexus/browser-worker-token")).toBe(
       "never-store-this-token-in-plaintext",
     );
+  });
+});
+
+describe("EncryptedFileVault key upgrade", () => {
+  it("reads a secret sealed with the previous key derivation, then reseals it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-vault-upgrade-"));
+    const store = new RuntimeConfigurationStore(directory);
+    const master = "a-master-key-of-at-least-32-characters";
+    const name = "legacy_secret";
+    const iv = randomBytes(12);
+    const legacyKey = createHash("sha256").update(master, "utf8").digest();
+    const cipher = createCipheriv("aes-256-gcm", legacyKey, iv);
+    cipher.setAAD(Buffer.from(name, "utf8"));
+    const ciphertext = Buffer.concat([cipher.update("stored-value", "utf8"), cipher.final()]);
+    const sealed = {
+      iv: iv.toString("base64"),
+      ciphertext: ciphertext.toString("base64"),
+      tag: cipher.getAuthTag().toString("base64"),
+    };
+    await store.saveEncryptedSecrets({ version: 1, secrets: { [name]: sealed } });
+
+    const vault = new EncryptedFileVault(store, master);
+    await expect(vault.get(`vault://nexus/${name}`)).resolves.toBe("stored-value");
+
+    const resealed = (await store.loadEncryptedSecrets()).secrets[name];
+    expect(resealed?.ciphertext).not.toBe(sealed.ciphertext);
+    await expect(vault.get(`vault://nexus/${name}`)).resolves.toBe("stored-value");
+
+    await expect(
+      new EncryptedFileVault(store, "another-master-key-of-at-least-32-chars").get(
+        `vault://nexus/${name}`,
+      ),
+    ).rejects.toThrow();
   });
 });

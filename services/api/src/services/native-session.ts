@@ -37,14 +37,26 @@ export class ApprovalDerivationError extends Error {
   }
 }
 
-export function computePayloadHash(payload: unknown): string {
-  if (payload !== null && typeof payload === "object") {
-    const sortedKeys = Object.keys(payload).sort();
-    const json = JSON.stringify(payload, sortedKeys);
-    return createHash("sha256").update(json).digest("hex");
+function canonicalize(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
   }
-  const json = JSON.stringify(payload);
-  return createHash("sha256").update(json).digest("hex");
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) {
+    sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
+  }
+  return sorted;
+}
+
+export function computePayloadHash(payload: unknown): string {
+  const normalized = canonicalize(payload);
+  const json = JSON.stringify(normalized);
+  return createHash("sha256")
+    .update(json ?? "null")
+    .digest("hex");
 }
 
 export class NativeSessionManager {

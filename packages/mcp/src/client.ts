@@ -295,11 +295,25 @@ export class McpClient {
     await assertSafeRemoteUrl(config.url, { serverName: config.name });
     const url = new URL(config.url);
 
-    return (config.transport === "sse"
-      ? new SSEClientTransport(url, { requestInit: { headers } })
-      : new StreamableHTTPClientTransport(url, {
-          requestInit: { headers },
-        })) as unknown as Transport;
+    // SEC-05: Strict redirect and SSRF enforcement for remote transports
+    const safeFetch: typeof fetch = async (input, init) => {
+      const targetUrl =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      await assertSafeRemoteUrl(targetUrl, { serverName: config.name });
+      return fetch(input, {
+        ...init,
+        redirect: "error",
+      });
+    };
+
+    const transportOpts = {
+      requestInit: { headers, redirect: "error" as const },
+      fetch: safeFetch,
+    };
+
+    return config.transport === "sse"
+      ? new SSEClientTransport(url, transportOpts)
+      : new StreamableHTTPClientTransport(url, transportOpts);
   }
 
   async #resolveEnv(

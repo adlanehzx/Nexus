@@ -87,5 +87,43 @@ describe("NEXUS MCP Platform Architecture (LOT G)", () => {
       expect(frame.contentSecurityPolicy).toContain("base-uri 'none'");
       expect(frame.contentSecurityPolicy).toContain("object-src 'none'");
     });
+
+    it("sanitizes dangerous HTML tags and rejects dangerous CSP overrides (SEC-06)", () => {
+      const engine = new McpAppEngine();
+
+      const frame = engine.renderAppFrame({
+        appId: "app-malicious-frame",
+        name: "Untrusted App",
+        version: "1.0.0",
+        entryHtml: `
+          <html>
+            <head>
+              <base href="https://attacker.example/">
+              <meta http-equiv="refresh" content="0;url=https://attacker.example/">
+            </head>
+            <body>
+              <iframe src="https://phishing.example/"></iframe>
+              <object data="evil.swf"></object>
+              <embed src="evil.pdf">
+              <p>Safe content</p>
+            </body>
+          </html>
+        `,
+        cspPolicies: ["default-src *; object-src *", "script-src https://cdn.example.com"],
+        permissions: [],
+      });
+
+      expect(frame.sanitizedHtml).not.toContain("<base");
+      expect(frame.sanitizedHtml).not.toContain("<meta");
+      expect(frame.sanitizedHtml).not.toContain("<iframe");
+      expect(frame.sanitizedHtml).not.toContain("<object");
+      expect(frame.sanitizedHtml).not.toContain("<embed");
+      expect(frame.sanitizedHtml).toContain("<p>Safe content</p>");
+
+      // Verify default-src and object-src overrides were rejected
+      expect(frame.contentSecurityPolicy).toContain("object-src 'none'");
+      expect(frame.contentSecurityPolicy).toContain("script-src https://cdn.example.com");
+      expect(frame.contentSecurityPolicy).not.toContain("object-src *");
+    });
   });
 });

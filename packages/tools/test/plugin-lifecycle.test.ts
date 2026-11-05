@@ -215,6 +215,42 @@ describe("CLA4: Third-Party Plugin Lifecycle & Isolation", () => {
         ),
       ).rejects.toThrow(/forbidden host access/);
     });
+
+    it("rejects malicious fixture attempting prototype constructor escape (SEC-01)", async () => {
+      const manager = new PluginLifecycleManager(localPolicy);
+      const hostileManifest: PluginManifest = {
+        ...validManifest,
+        id: "plugin-proto-escape",
+        declaredTools: [
+          {
+            name: "escape_proto",
+            description: "Tries prototype constructor",
+            riskLevel: "CRITICAL",
+            requiredPermissions: ["calendar.read"],
+            requiresConfirmation: true,
+            handlerCode: `
+              function handle() {
+                const fn = Object.constructor;
+                return fn ? fn('return 123')() : null;
+              }
+            `,
+          },
+        ],
+      };
+
+      manager.installPlugin(hostileManifest);
+      manager.validatePolicy("plugin-proto-escape", sampleApproval);
+      manager.enablePlugin("plugin-proto-escape");
+
+      await expect(
+        manager.executePluginTool(
+          "plugin-proto-escape",
+          "escape_proto",
+          {},
+          { tenantId: "tenant-marketing" },
+        ),
+      ).rejects.toThrow(/forbidden host access/);
+    });
   });
 
   describe("Tenant Isolation, Secret Scoping and Undeclared Tools", () => {

@@ -102,5 +102,40 @@ describe("Accounts, OAuth and Native Sessions (LOT D)", () => {
         });
       }).toThrow(ApprovalDerivationError);
     });
+
+    it("detects tampering on deeply nested payload properties (SEC-02)", () => {
+      const sessionManager = new NativeSessionManager();
+      const toolCallId = "call-nested-opts";
+
+      sessionManager.registerApproval(toolCallId, "deploy", {
+        action: "deploy",
+        options: {
+          target: "staging",
+          overrideSafeGuards: false,
+        },
+      });
+
+      // Attacker tampers with deeply nested option
+      expect(() => {
+        sessionManager.consumeApproval(toolCallId, "deploy", {
+          action: "deploy",
+          options: {
+            target: "staging",
+            overrideSafeGuards: true,
+          },
+        });
+      }).toThrow(ApprovalDerivationError);
+
+      // Exact match succeeds
+      expect(() => {
+        sessionManager.consumeApproval(toolCallId, "deploy", {
+          action: "deploy",
+          options: {
+            target: "staging",
+            overrideSafeGuards: false,
+          },
+        });
+      }).not.toThrow();
+    });
   });
 });

@@ -42,6 +42,15 @@ export class WorktreeManager {
       NodePath.join(workspaceRoot, ".nexus-worktrees", branchName.replace(/[/\\:]/g, "-"));
 
     // Ensure path is within workspaceRoot or allowed sandbox
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/.test(branchName)) {
+      throw new Error(
+        `Invalid branch name '${branchName}': cannot start with '-' or contain illegal characters.`,
+      );
+    }
+    if (baseBranch && !/^[a-zA-Z0-9][a-zA-Z0-9_\-./]{0,100}$/.test(baseBranch)) {
+      throw new Error(`Invalid base branch '${baseBranch}'.`);
+    }
+
     const isContained = SymlinkAwarePathChecker.isContained(worktreePath, workspaceRoot);
     if (!isContained) {
       throw new Error(
@@ -54,7 +63,7 @@ export class WorktreeManager {
 
     // Execute git worktree add
     await this.runGit(
-      ["worktree", "add", "-b", branchName, worktreePath, baseBranch],
+      ["worktree", "add", "-b", branchName, "--", worktreePath, baseBranch],
       workspaceRoot,
     );
 
@@ -207,7 +216,7 @@ export class WorktreeManager {
 
     if (autoMerge) {
       try {
-        await this.runGit(["merge", sourceBranch.trim()], worktreePath);
+        await this.runGit(["merge", targetBranch.trim()], worktreePath);
         merged = true;
       } catch (err: unknown) {
         const e = err as { stdout?: string; stderr?: string };
