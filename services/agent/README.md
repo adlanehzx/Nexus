@@ -26,7 +26,7 @@ account owner approves quota use:
 ```bash
 NEXUS_REAL_AGENT_CONVERSATION=1 \
 NEXUS_REAL_AGENT_PROFILE=codex \
-NEXUS_REAL_AGENT_REGISTRY=services/agent/config/profiles.example.json \
+NEXUS_REAL_AGENT_REGISTRY="$PWD/services/agent/config/profiles.example.json" \
 pnpm --filter @nexus/agent exec vitest run test/real-agent.smoke.test.ts
 ```
 
