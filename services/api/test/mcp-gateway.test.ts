@@ -1,5 +1,4 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
@@ -39,7 +38,7 @@ describe("MCP endpoint", () => {
     await client.connect(
       new StreamableHTTPClientTransport(endpoint, {
         requestInit: { headers: { authorization: `Bearer ${token}` } },
-      }) as Transport,
+      }),
     );
     return client;
   };
