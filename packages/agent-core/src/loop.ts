@@ -85,6 +85,7 @@ export class AgentLoop {
             userId: state.record.userId,
             conversationId: state.record.conversationId,
             runId: state.record.runId,
+            ...(state.record.requestedModel == null ? {} : { model: state.record.requestedModel }),
           },
           policy.streamResponses === true
             ? (delta) => {

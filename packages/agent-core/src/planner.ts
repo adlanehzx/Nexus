@@ -68,7 +68,7 @@ export class Planner {
   async decide(
     context: AgentContext,
     signal: AbortSignal,
-    routingContext?: { userId: string; conversationId?: string; runId?: string },
+    routingContext?: { userId: string; conversationId?: string; runId?: string; model?: string },
     onTextDelta?: (delta: string) => void,
   ): Promise<{ decision: AgentDecision; response: GenerateResponse }> {
     const request = {

@@ -70,6 +70,8 @@ export interface AgentRunRecord {
   errors: RecordedError[];
   usage: TokenUsage;
   model: string;
+  /** Model the user chose for this run. Unset lets routing decide. */
+  requestedModel?: string | null;
   /** Final response delivered to user, including partial output on limits. */
   response: string | null;
   /** Associated mission external key or null for user-initiated conversations. */

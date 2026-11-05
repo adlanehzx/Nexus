@@ -1,5 +1,6 @@
 import { assignStepIds, createTaskPlan } from "@nexus/devices";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { ScriptedLLMProvider } from "@nexus/llm/testing";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
 /** Contracts the mobile app depends on: docs in apps/mobile/docs/BACKEND-GAPS.md. */
@@ -173,6 +174,45 @@ describe("a task that breaks after its 202", () => {
       expect(failed?.payload).toMatchObject({ taskId: plan.id, code: "TASK_EXECUTION_FAILED" });
       // What broke stays in the logs; the client gets no internal detail.
       expect(JSON.stringify(failed?.payload)).not.toContain("storage down");
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe("choosing a model for a run", () => {
+  it("lists what is usable, runs on it, and refuses anything else", async () => {
+    const llm = new ScriptedLLMProvider([{ kind: "final", text: "ok" }]);
+    const harness = await makeApi({ llmProvider: llm });
+    try {
+      const account = await createAccount(harness, "model-choice@example.test");
+      const conversation = await harness.app.services.conversations.create({
+        userId: account.userId,
+        title: "model",
+      });
+      const listed = await harness.app.inject({
+        method: "GET",
+        url: "/api/v1/agent-core/models",
+        headers: account.authorization,
+      });
+      const { models } = listed.json<{ data: { models: { model: string }[] } }>().data;
+      expect(models.map((entry) => entry.model)).toEqual([llm.model]);
+
+      const refused = await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/agent-core/runs",
+        headers: account.authorization,
+        payload: { conversationId: conversation.id, message: "hi", model: "not-a-model" },
+      });
+      expect(refused.statusCode).toBe(400);
+
+      const accepted = await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/agent-core/runs",
+        headers: account.authorization,
+        payload: { conversationId: conversation.id, message: "hi", model: llm.model },
+      });
+      expect(accepted.statusCode).toBe(200);
     } finally {
       await harness.close();
     }

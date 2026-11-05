@@ -170,11 +170,15 @@ export class UnifiedLlmRuntimeProvider implements LLMProvider {
   async #router(request: GenerateRequest): Promise<FallbackProvider> {
     const skipped: string[] = [];
     const configured = await this.#configuredProviders(request, skipped);
-    const providers = [
-      ...configured.map((entry) => entry.provider),
-      ...this.#baseProviders,
-      ...this.#finalProviders,
-    ];
+    // A model the user chose is a restriction: answering with another would misreport it.
+    const providers =
+      request.routingContext?.model === undefined
+        ? [
+            ...configured.map((entry) => entry.provider),
+            ...this.#baseProviders,
+            ...this.#finalProviders,
+          ]
+        : configured.map((entry) => entry.provider);
     // An empty chain is a configuration fact, not an internal failure. Saying
     // which engines were discarded, and why, is what turns it into something
     // the operator can fix — a device engine skipped for want of a user
@@ -199,9 +203,14 @@ export class UnifiedLlmRuntimeProvider implements LLMProvider {
       return [];
     }
     const providers: { id: string; priority: number; provider: LLMProvider; local: boolean }[] = [];
+    const requestedModel = request.routingContext?.model;
     for (const engine of config.engines) {
       if (!engine.enabled) {
         skipped.push(`${engine.id} is disabled`);
+        continue;
+      }
+      if (requestedModel !== undefined && engine.model !== requestedModel) {
+        skipped.push(`${engine.id} does not serve the requested model`);
         continue;
       }
       if (engine.kind === "device") {

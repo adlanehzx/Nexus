@@ -50,6 +50,8 @@ export interface StartRunInput {
   missionExternalKey?: string;
   replayOfRunId?: string;
   runId?: string;
+  /** Restricts this run to one model. The caller validates it is usable. */
+  model?: string;
 }
 
 export interface AgentRunResult {
@@ -128,6 +130,7 @@ export class AgentOrchestrator {
         errors: [],
         usage: { inputTokens: 0, outputTokens: 0 },
         model: this.#options.llm.model,
+        requestedModel: input.model ?? null,
         response: null,
         missionExternalKey: input.missionExternalKey ?? null,
         replayOfRunId: input.replayOfRunId ?? null,
