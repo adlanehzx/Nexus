@@ -12,7 +12,7 @@
  *   Node >= 18   crypto is global, without imports
  *   browser      native
  *   Tauri        native (WebView2)
- *   Hermes       native Android adapter via SecureRandom
+ *   Hermes       not built in: the app must install a source before first use
  *
  * No Math.random fallback: predictability would compromise session and
  * correlation IDs. Clear failure is preferred over predictable IDs.

@@ -129,10 +129,10 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
       },
       {
         id: "win-providers",
-        title: "Ouvrir Fournisseurs de Modèles",
-        subtitle: "Claude, Cursor, Grok, ACP Local",
+        title: "Ouvrir Providers (fournisseurs de modèles)",
+        subtitle: "Moteurs, CLI détectés et état réel des connexions",
         category: "Agents & Code",
-        action: () => openWindow("providers", "Fournisseurs de modèles"),
+        action: () => openWindow("providers", "Providers"),
       },
       {
         id: "win-tasks",
@@ -175,6 +175,34 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         subtitle: "Statut des tunnels et sessions",
         category: "Windows",
         action: () => openWindow("connections", "Connexions CLIs"),
+      },
+      {
+        id: "win-organizations",
+        title: "Ouvrir Organizations (organisations)",
+        subtitle: "Organisations, membres et rôles",
+        category: "Windows",
+        action: () => openWindow("organizations", "Organizations"),
+      },
+      {
+        id: "win-mission-control",
+        title: "Ouvrir Mission Control",
+        subtitle: "Missions, planifications et état du moteur",
+        category: "Windows",
+        action: () => openWindow("mission-control", "Mission Control"),
+      },
+      {
+        id: "win-observability",
+        title: "Ouvrir Observability (observabilité)",
+        subtitle: "Santé des services, erreurs récentes, recherche par correlationId",
+        category: "Windows",
+        action: () => openWindow("observability", "Observability"),
+      },
+      {
+        id: "win-usage",
+        title: "Ouvrir Usage & Quotas",
+        subtitle: "Tokens observés, coûts estimés et fenêtres de quota",
+        category: "Windows",
+        action: () => openWindow("quota-forecast", "Usage & Quotas"),
       },
       {
         id: "win-mcp",

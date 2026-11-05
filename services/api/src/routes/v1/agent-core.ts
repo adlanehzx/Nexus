@@ -9,8 +9,10 @@ import {
   currentUser,
 } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { agentRunSchema } from "./dashboard.js";
 import { ConflictError, NotFoundError, type ConversationStore } from "../../services/stores.js";
-import { AuthenticationError, DependencyError } from "@nexus/shared";
+import { AuthenticationError, DependencyError, ValidationError } from "@nexus/shared";
+import type { LlmRuntimeStatus } from "../../services/llm-runtime.js";
 import type { IssuedMissionGrant } from "../../services/mission-grants.js";
 import type { AgentRunResult } from "@nexus/agent-core";
 
@@ -91,6 +93,45 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
+  app.get(
+    "/agent-core/models",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["agent-core"],
+        summary: "Models a run can actually use now: enabled engines with a credential",
+        response: {
+          200: okSchema(
+            z.object({
+              models: z.array(z.object({ model: z.string(), provider: z.string() })),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => ok({ models: await usableModels(app.services) }, request.id),
+  );
+
+  app.get(
+    "/agent-core/runs",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["agent-core"],
+        summary: "Runs of the signed-in account",
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+        response: { 200: okSchema(z.object({ runs: z.array(agentRunSchema) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      return ok(
+        { runs: await app.services.dashboard.listAgentRuns(userId, request.query.limit) },
+        request.id,
+      );
+    },
+  );
+
   app.post(
     "/agent-core/runs",
     {
@@ -100,6 +141,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         body: z.object({
           conversationId: z.string().uuid(),
           message: z.string().min(1).max(32_000),
+          model: z.string().min(1).max(200).optional(),
         }),
         response: { 200: okSchema(runSchema) },
       },
@@ -118,11 +160,23 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         });
       }
 
+      const requested = request.body.model;
+      if (
+        requested !== undefined &&
+        !(await usableModels(app.services)).some((usable) => usable.model === requested)
+      ) {
+        throw new ValidationError({
+          message: `Model not usable: ${requested}`,
+          userMessage: "This model is not available.",
+        });
+      }
+
       const result = await app.services.agentCore.run({
         userId,
         conversationId: conversation.id,
         message: request.body.message,
         correlationId: request.id,
+        ...(requested === undefined ? {} : { model: requested }),
       });
       // Current message is added by AgentOrchestrator after assembling history.
       // Persisting it before `run()` would make it appear twice in the prompt.
@@ -132,7 +186,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         content: request.body.message,
         originClientDeviceId: null,
       });
-      await persistResponse(app.services.conversations, conversation.id, result.record.response);
+      await persistResponse(
+        app.services.conversations,
+        conversation.id,
+        result.record.response,
+        result.record.runId,
+      );
       return ok(present(result), request.id);
     },
   );
@@ -278,7 +337,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         content: request.body.instruction,
         originClientDeviceId: null,
       });
-      await persistResponse(app.services.conversations, conversation.id, result.record.response);
+      await persistResponse(
+        app.services.conversations,
+        conversation.id,
+        result.record.response,
+        result.record.runId,
+      );
       // Rotation is calculated after work, not before: if the run fails,
       // there is no justification for issuing another grant.
       const renewed = await app.services.missionGrants.renewById(mission.grantId);
@@ -428,6 +492,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         app.services.conversations,
         result.record.conversationId,
         result.record.response,
+        result.record.runId,
       );
       return ok(present(result), request.id);
     },
@@ -524,13 +589,34 @@ async function resolveMissionConversation(
   return existing;
 }
 
+async function usableModels(services: {
+  llmRuntime: { status(): Promise<LlmRuntimeStatus> } | undefined;
+  llmProvider: { id: string; model: string } | undefined;
+}): Promise<{ model: string; provider: string }[]> {
+  if (services.llmRuntime === undefined) {
+    const single = services.llmProvider;
+    return single === undefined ? [] : [{ model: single.model, provider: single.id }];
+  }
+  const { enabled, engines } = await services.llmRuntime.status();
+  if (!enabled) return [];
+  const usable = engines.filter(
+    (engine) => engine.enabled && (engine.kind === "device" || engine.credentialConfigured),
+  );
+  return [
+    ...new Map(usable.map((e) => [e.model, { model: e.model, provider: e.provider }])).values(),
+  ];
+}
+
 async function persistResponse(
   conversations: ConversationStore,
   conversationId: string,
   response: string | null,
+  runId: string,
 ): Promise<void> {
   if (response === null) return;
   await conversations.appendMessage({
+    // The id it was streamed under, so history replaces the streamed copy.
+    id: runId,
     conversationId,
     role: "assistant",
     content: response,

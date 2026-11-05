@@ -413,6 +413,7 @@ describe("channel safeguards", () => {
     const runner = new FakeProcessRunner();
     const config = testConfig();
     const { capabilities } = assembleCapabilities({
+      pathPlatform: "win32",
       config,
       runner,
       fileSystem: new FakeFileSystem(),

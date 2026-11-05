@@ -1,9 +1,10 @@
 import { z } from "zod";
-import type { FastifyPluginCallback } from "fastify";
+import type { FastifyInstance, FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { AcpOrchestrator } from "../../services/acp-orchestrator.js";
+import { DependencyError } from "@nexus/shared";
 import { NotFoundError } from "../../services/stores.js";
 import {
   createProviderAccountSchema,
@@ -95,30 +96,34 @@ const runtimeSettingsViewSchema = z.object({
   synthesis_priority: z.array(z.string().min(1)).min(1).max(20),
 });
 
+/** Undefined when no Mission Engine is configured. Shared with the MCP endpoint. */
+export function buildAcpOrchestrator(app: FastifyInstance): AcpOrchestrator | undefined {
+  const missionControl = app.services.missionControl;
+  if (missionControl === undefined) return undefined;
+  return new AcpOrchestrator({
+    missionControl,
+    context: app.services.context,
+    // The grant service signs **and** registers: the orchestrator only
+    // receives the ability to issue mission scopes.
+    grants: app.services.missionGrants,
+    agentRouter: app.services.agentRouter,
+    sharedArtifacts: app.services.sharedArtifacts,
+    agentCollaboration: app.services.agentCollaboration,
+    ...(app.services.acpWorkspaceRoot === undefined
+      ? {}
+      : { workspaceRoot: app.services.acpWorkspaceRoot }),
+    onDegraded: ({ reason, cause }) =>
+      app.log.warn({ err: cause, event: "mission.degraded", reason }, reason),
+    ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
+  });
+}
+
 export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
   const providerAccounts = app.services.providerAccounts;
   const agentRouter = app.services.agentRouter;
-  const orchestrator =
-    missionControl === undefined
-      ? undefined
-      : new AcpOrchestrator({
-          missionControl,
-          context: app.services.context,
-          // The grant service signs **and** registers: the orchestrator only
-          // receives the ability to issue mission scopes.
-          grants: app.services.missionGrants,
-          agentRouter,
-          sharedArtifacts: app.services.sharedArtifacts,
-          agentCollaboration: app.services.agentCollaboration,
-          ...(app.services.acpWorkspaceRoot === undefined
-            ? {}
-            : { workspaceRoot: app.services.acpWorkspaceRoot }),
-          onDegraded: ({ reason, cause }) =>
-            app.log.warn({ err: cause, event: "mission.degraded", reason }, reason),
-          ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
-        });
+  const orchestrator = buildAcpOrchestrator(app);
 
   app.get(
     "/orchestrator/settings",
@@ -130,7 +135,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(await missionControl.settings(), request.id);
     },
   );
@@ -146,7 +152,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(await missionControl.updateSettings(request.body), request.id);
     },
   );
@@ -170,7 +177,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       // and a half-dispatched mission would be worse than a rejected one. It must not
       // rely on downstream tool rejection either.
       app.services.pause.assertRunning();
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
       const mission = await orchestrator.submit(
         userId,
@@ -205,7 +213,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(
         await missionControl.updateAgentProfile(request.params.profileId, request.body),
         request.id,
@@ -224,7 +233,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(await missionControl.disableAgent(request.params.key), request.id);
     },
   );
@@ -248,7 +258,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(
         await missionControl.testAgentProfile(request.params.profileId, request.body),
         request.id,
@@ -267,7 +278,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
       const mission = await orchestrator.status(userId, request.params.missionId);
       if (mission === undefined) throw new NotFoundError("Mission", request.params.missionId);
@@ -285,7 +297,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       return ok(await missionControl.agents(), request.id);
     },
   );
@@ -304,7 +317,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const registry = await missionControl.registerAgent(request.body);
       return reply.code(201).send(ok(registry, request.id));
     },
@@ -326,7 +340,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const registry = await missionControl.createAgent(request.body);
       return reply.code(201).send(ok(registry, request.id));
     },
@@ -359,7 +374,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (missionControl === undefined) throw new Error("ACP engine is not configured.");
+      if (missionControl === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const registry = await missionControl.updateAgentHealth(request.params.key, request.body);
       return ok(registry, request.id);
     },
@@ -694,7 +710,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const artifacts = await orchestrator.getArtifacts(request.params.missionId);
       return ok({ artifacts }, request.id);
     },
@@ -711,7 +728,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { record, content } = await orchestrator.readArtifact(
         request.params.missionId,
         request.query.uri,
@@ -742,7 +760,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const artifact = await orchestrator.saveArtifact(request.params.missionId, {
         taskKey: request.body.taskKey,
         name: request.body.name,
@@ -831,7 +850,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const view = await orchestrator.getCollaborationView(request.params.missionId);
       return ok(view, request.id);
     },
@@ -849,7 +869,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
       const event = await orchestrator.startAdvancedCollaboration(
         userId,
@@ -873,7 +894,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request, reply) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
       const event = await orchestrator.applyAdvancedCollaborationAction(
         userId,
@@ -897,7 +919,8 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
-      if (orchestrator === undefined) throw new Error("ACP engine is not configured.");
+      if (orchestrator === undefined)
+        throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
       const events = await orchestrator.replayAdvancedCollaboration(
         userId,

@@ -34,6 +34,7 @@ export interface ConfirmationStore {
   save(request: ConfirmationRequest): Promise<void>;
   get(id: string): Promise<ConfirmationRequest | undefined>;
   listPending(runId: string): Promise<ConfirmationRequest[]>;
+  listPendingForUser(userId: string): Promise<ConfirmationRequest[]>;
 }
 
 export class InMemoryConfirmationStore implements ConfirmationStore {
@@ -51,6 +52,12 @@ export class InMemoryConfirmationStore implements ConfirmationStore {
   listPending(runId: string): Promise<ConfirmationRequest[]> {
     return Promise.resolve(
       [...this.#byId.values()].filter((r) => r.runId === runId && r.status === "pending"),
+    );
+  }
+
+  listPendingForUser(userId: string): Promise<ConfirmationRequest[]> {
+    return Promise.resolve(
+      [...this.#byId.values()].filter((r) => r.userId === userId && r.status === "pending"),
     );
   }
 }
@@ -139,6 +146,15 @@ export class ConfirmationService {
   }
 
   /** Resolves confirmation request with human decision. */
+  /** Requests still awaiting this user's decision. Expired ones are not listed. */
+  async listPendingForUser(userId: string): Promise<ConfirmationRequest[]> {
+    const now = this.#now().getTime();
+    const pending = await this.#store.listPendingForUser(userId);
+    return pending
+      .filter((request) => request.expiresAt.getTime() > now)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
   async resolve(id: string, decision: "approved" | "rejected"): Promise<ConfirmationRequest> {
     const existing = await this.#store.get(id);
     if (!existing) {

@@ -45,7 +45,8 @@
 .spatial-canvas-viewport {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  /* clip, not hidden: only the camera may move the world, never a browser scroll. */
+  overflow: clip;
   cursor: grab;
   touch-action: none;
 }
@@ -208,7 +209,9 @@
   position: relative;
   overflow: auto;
   user-select: auto;
-  background: var(--sp-bg-deep);
+  /* Sections use the theme's tokens, so their surface must use the same theme. */
+  background: var(--nx-canvas);
+  color: var(--nx-text);
 }
 
 /* Window Resizers (8 handles) */
@@ -292,14 +295,17 @@
 
 .spatial-topbar-left {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
 }
 
 .spatial-logo {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
   font-family: var(--sp-font-mono);
   font-size: 13px;
   font-weight: 700;
@@ -809,11 +815,10 @@
 }
 
 /* Responsive Spatial OS (Tablets & Mobile Viewports) */
-@media (max-width: 1024px) {
+@media (max-width: 1360px) {
+  /* The hint bar still advertises Ctrl+K; the pills and tools must not collide. */
+  .spatial-breadcrumb,
   .spatial-topbar-center {
-    display: none;
-  }
-  .spatial-breadcrumb {
     display: none;
   }
 }

@@ -1,5 +1,6 @@
+import type { EventRouter } from "@nexus/devices";
 import { metrics } from "@opentelemetry/api";
-import type { AgentState, AgentRunStore } from "@nexus/agent-core";
+import type { AgentState, AgentRunStore, RunUsageBucket } from "@nexus/agent-core";
 import type { AgentRunView } from "./observability.js";
 
 export interface ModelPricing {
@@ -191,19 +192,36 @@ export class NexusTelemetry {
 
 interface ListableAgentRunStore extends AgentRunStore {
   listAll(): Promise<AgentState[]>;
+  listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]>;
+  summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]>;
 }
 
 export class ObservableAgentRunStore implements ListableAgentRunStore {
   readonly #delegate: ListableAgentRunStore;
   readonly #telemetry: NexusTelemetry;
+  readonly #router: EventRouter | undefined;
 
-  constructor(delegate: ListableAgentRunStore, telemetry: NexusTelemetry) {
+  constructor(delegate: ListableAgentRunStore, telemetry: NexusTelemetry, router?: EventRouter) {
     this.#delegate = delegate;
     this.#telemetry = telemetry;
+    this.#router = router;
   }
 
   async save(state: AgentState): Promise<void> {
+    const starting =
+      this.#router !== undefined &&
+      state.record.status === "running" &&
+      state.record.iterations === 0 &&
+      (await this.#delegate.load(state.record.runId)) === undefined;
     await this.#delegate.save(state);
+    if (starting) {
+      await this.#router?.emit({
+        type: "agent.started",
+        userId: state.record.userId,
+        correlationId: state.record.correlationId,
+        payload: { runId: state.record.runId, conversationId: state.record.conversationId },
+      });
+    }
     this.#telemetry.observeRun(state);
   }
 
@@ -217,6 +235,14 @@ export class ObservableAgentRunStore implements ListableAgentRunStore {
 
   listByStatus(status: AgentState["record"]["status"]): Promise<AgentState[]> {
     return this.#delegate.listByStatus(status);
+  }
+
+  listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]> {
+    return this.#delegate.listForUser(userId, since, offset, limit);
+  }
+
+  summarizeForUser(userId: string, since: Date): Promise<RunUsageBucket[]> {
+    return this.#delegate.summarizeForUser(userId, since);
   }
 
   listAll(): Promise<AgentState[]> {

@@ -18,6 +18,11 @@ import { AcpProviderDriver } from "./acp-driver.js";
 import { ClaudeProviderDriver } from "./claude-driver.js";
 import { CursorProviderDriver } from "./cursor-driver.js";
 import { GrokProviderDriver } from "./grok-driver.js";
+import { CodexProviderDriver } from "./codex-driver.js";
+import { AntigravityProviderDriver } from "./antigravity-driver.js";
+import { OpenCodeProviderDriver } from "./opencode-driver.js";
+import { PiProviderDriver } from "./pi-driver.js";
+import { LocalProviderDriver } from "./local-driver.js";
 
 export class ProviderHub {
   private readonly drivers = new Map<ProviderType, ProviderDriver>();
@@ -32,6 +37,11 @@ export class ProviderHub {
     this.registerDriver(new ClaudeProviderDriver());
     this.registerDriver(new CursorProviderDriver());
     this.registerDriver(new GrokProviderDriver());
+    this.registerDriver(new CodexProviderDriver());
+    this.registerDriver(new AntigravityProviderDriver());
+    this.registerDriver(new OpenCodeProviderDriver());
+    this.registerDriver(new PiProviderDriver());
+    this.registerDriver(new LocalProviderDriver());
   }
 
   registerDriver(driver: ProviderDriver): void {

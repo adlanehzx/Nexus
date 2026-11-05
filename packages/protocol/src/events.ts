@@ -39,6 +39,37 @@ const withBase = <T extends z.ZodRawShape>(shape: T) => z.object({ ...baseShape,
 const agentEvents = [
   withBase({ type: z.literal("agent.started"), runId: z.string(), conversationId: z.string() }),
   withBase({
+    type: z.literal("message.delta"),
+    conversationId: z.string(),
+    messageId: z.string(),
+    delta: z.string(),
+    done: z.boolean(),
+  }),
+  withBase({
+    type: z.literal("tool.started"),
+    runId: z.string(),
+    callId: z.string(),
+    tool: z.string(),
+    summary: z.string(),
+    riskLevel: z.string(),
+  }),
+  withBase({
+    type: z.literal("tool.progress"),
+    runId: z.string(),
+    callId: z.string(),
+    percent: z.number().int().min(0).max(100).nullable(),
+    label: z.string().nullable(),
+  }),
+  withBase({
+    type: z.literal("tool.completed"),
+    runId: z.string(),
+    callId: z.string(),
+    tool: z.string(),
+    ok: z.boolean(),
+    summary: z.string(),
+    durationMs: z.number().nonnegative(),
+  }),
+  withBase({
     type: z.literal("agent.progress"),
     runId: z.string(),
     iteration: z.number().int().nonnegative(),
@@ -225,6 +256,10 @@ export type NexusEventType = NexusEvent["type"];
 /** All known event types for subscription routing and exhaustive test coverage. */
 export const NEXUS_EVENT_TYPES = [
   "agent.started",
+  "message.delta",
+  "tool.started",
+  "tool.progress",
+  "tool.completed",
   "agent.progress",
   "agent.completed",
   "agent.failed",

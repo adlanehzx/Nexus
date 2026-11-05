@@ -8,6 +8,7 @@ import { generateSigningKeyPair, SCRYPT_FAST } from "@nexus/auth";
 import { InMemoryCredentialProvider, type Device, type DeviceRole } from "@nexus/devices";
 import { buildApp, type NexusApp } from "../src/app.js";
 import { ServiceContainer } from "../src/services/container.js";
+import { PrismaAgentRunStore } from "../src/services/persistence/prisma-agent-run-store.js";
 import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "../src/services/persistence/prisma-session-store.js";
 import type { ClientSocket } from "../src/ws/client-channel.js";
@@ -88,6 +89,7 @@ export async function makeApi(
           prisma: options.prisma,
           users: new PrismaUserStore(options.prisma),
           sessions: new PrismaSessionStore(options.prisma),
+          runStore: new PrismaAgentRunStore(options.prisma),
         }),
     ...(options.confirmationThreshold === undefined
       ? {}

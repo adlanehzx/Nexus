@@ -8,8 +8,20 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "browser": {
+        "types": "./dist/mobile.d.ts",
+        "default": "./dist/mobile.js"
+      },
+      "react-native": {
+        "types": "./dist/mobile.d.ts",
+        "default": "./dist/mobile.js"
+      },
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./mobile": {
+      "types": "./dist/mobile.d.ts",
+      "default": "./dist/mobile.js"
     }
   },
   "files": [

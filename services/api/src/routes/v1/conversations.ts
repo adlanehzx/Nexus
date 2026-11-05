@@ -136,7 +136,9 @@ export const conversationRoutes: FastifyPluginCallback = (fastify, _options, don
       schema: {
         tags: ["messages"],
         params: z.object({ conversationId: z.string().min(1) }),
-        querystring: paginationQuerySchema,
+        querystring: paginationQuerySchema.extend({
+          order: z.enum(["asc", "desc"]).default("asc"),
+        }),
         response: { 200: listSchema(messageSchema) },
       },
     },

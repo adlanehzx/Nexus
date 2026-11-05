@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScriptedLLMProvider } from "@nexus/llm/testing";
 import { createAccount, makeApi, type ApiHarness } from "./harness.js";
 
@@ -24,6 +24,7 @@ describe("Agent Core HTTP", () => {
     });
     const conversationId = created.json<{ data: { id: string } }>().data.id;
 
+    const emitted = vi.spyOn(harness.services.router, "emit");
     const executed = await harness.app.inject({
       method: "POST",
       url: "/api/v1/agent-core/runs",
@@ -33,6 +34,14 @@ describe("Agent Core HTTP", () => {
 
     expect(executed.statusCode).toBe(200);
     const body = executed.json<{ data: { runId: string; status: string; response: string } }>();
+    expect(emitted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "agent.started",
+        userId: account.userId,
+        payload: { runId: body.data.runId, conversationId },
+      }),
+    );
+    expect(emitted.mock.calls.filter(([input]) => input.type === "agent.started")).toHaveLength(1);
     expect(body.data.status).toBe("completed");
     expect(body.data.response).toBe("Effective Agent Core response.");
     const occurrences = llm.requests[0]?.messages.filter(

@@ -85,6 +85,20 @@ const satelliteTokenHashes = z.preprocess(
   z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/), z.string().regex(/^[0-9a-f]{64}$/i)),
 );
 
+const satelliteOwners = z.preprocess(
+  (value, ctx) => {
+    if (value === undefined || value === "") return {};
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      ctx.addIssue({ code: "custom", message: "must contain a valid JSON object" });
+      return z.NEVER;
+    }
+  },
+  z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/), z.string().uuid()),
+);
+
 /**
  * Tauri desktop shell origins.
  *
@@ -128,6 +142,7 @@ export const configSchema = z
 
     /** SHA-256 device-token digests keyed by ESP32 satellite ID. */
     SATELLITE_TOKEN_HASHES_JSON: satelliteTokenHashes.default({}),
+    SATELLITE_OWNERS_JSON: satelliteOwners.default({}),
     FIRE_TV_ADB_SERIAL: z.preprocess(
       (value) => (value === "" ? undefined : value),
       z

@@ -24,6 +24,8 @@ export * from "./sections/mission-engine.js";
 export * from "./sections/notifications.js";
 export * from "./sections/overview.js";
 export * from "./sections/quota-forecast.js";
+export * from "./sections/organizations.js";
+export * from "./sections/observability.js";
 export * from "./sections/run-comparison.js";
 export * from "./sections/runs.js";
 export * from "./sections/security.js";

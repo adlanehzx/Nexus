@@ -27,11 +27,11 @@ export class NodeFileSystem implements FileSystemPort {
     for (let depth = 0; depth < 64; depth += 1) {
       try {
         const real = await fs.realpath(current);
-        return suffixes.length === 0 ? real : path.win32.join(real, ...suffixes.reverse());
+        return suffixes.length === 0 ? real : path.join(real, ...suffixes.reverse());
       } catch {
-        const parent = path.win32.dirname(current);
+        const parent = path.dirname(current);
         if (parent === current) return candidate;
-        suffixes.push(path.win32.basename(current));
+        suffixes.push(path.basename(current));
         current = parent;
       }
     }
@@ -51,7 +51,7 @@ export class NodeFileSystem implements FileSystemPort {
   }
 
   async writeFile(absolutePath: string, content: string, append: boolean): Promise<number> {
-    await fs.mkdir(path.win32.dirname(absolutePath), { recursive: true });
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     if (append) await fs.appendFile(absolutePath, content, "utf8");
     else await fs.writeFile(absolutePath, content, "utf8");
     return Buffer.byteLength(content, "utf8");

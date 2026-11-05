@@ -57,6 +57,7 @@ import { worktreeRoutes } from "./routes/v1/worktrees.js";
 import { checkpointRoutes } from "./routes/v1/checkpoints.js";
 import { providerRoutes } from "./routes/v1/providers.js";
 import { usageRoutes } from "./routes/v1/usage.js";
+import { mcpRoutes } from "./routes/v1/mcp.js";
 import { sourceControlRoutes } from "./routes/v1/source-control.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
@@ -148,7 +149,12 @@ export async function buildApp(options: BuildAppOptions) {
   app.decorate("redis", redis);
   app.decorate(
     "satellites",
-    options.satellites ?? new SatelliteService(config.SATELLITE_TOKEN_HASHES_JSON),
+    options.satellites ??
+      new SatelliteService(
+        config.SATELLITE_TOKEN_HASHES_JSON,
+        Date.now,
+        config.SATELLITE_OWNERS_JSON,
+      ),
   );
 
   // The correlation identifier is returned with the response: in case of error,
@@ -305,6 +311,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(checkpointRoutes);
       await v1.register(providerRoutes);
       await v1.register(usageRoutes);
+      await v1.register(mcpRoutes);
       await v1.register(sourceControlRoutes);
     },
     { prefix: "/api/v1" },

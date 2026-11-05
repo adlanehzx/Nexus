@@ -3,6 +3,8 @@ import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { DependencyError } from "@nexus/shared";
+import { NotFoundError } from "../../services/stores.js";
 import { organizationRoleSchema, identityProtocolSchema } from "../../services/tenant-platform.js";
 
 const organizationSchema = z.object({
@@ -17,9 +19,89 @@ export const organizationRoutes: FastifyPluginCallback = (fastify, _options, don
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const service = app.services.tenantPlatform;
   const requireService = () => {
-    if (service === undefined) throw new Error("Hosted organization services are not configured.");
+    if (service === undefined)
+      throw new DependencyError({ message: "Hosted organization services are not configured." });
     return service;
   };
+
+  app.get(
+    "/organizations",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["organizations"],
+        summary: "Organizations of the signed-in user. Creates their personal one if missing.",
+        response: {
+          200: okSchema(
+            z.object({
+              organizations: z.array(organizationSchema.extend({ role: organizationRoleSchema })),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      await requireService().ensurePersonalOrganization(userId);
+      return ok({ organizations: await requireService().listOrganizations(userId) }, request.id);
+    },
+  );
+
+  app.get(
+    "/organizations/:organizationId/members",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["organizations"],
+        params: organizationParams,
+        response: {
+          200: okSchema(
+            z.object({
+              members: z.array(
+                z.object({
+                  userId: z.string(),
+                  email: z.string(),
+                  displayName: z.string(),
+                  role: z.string(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      return ok(
+        { members: await requireService().listMembers(request.params.organizationId, userId) },
+        request.id,
+      );
+    },
+  );
+
+  app.post(
+    "/organizations/:organizationId/members",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["organizations"],
+        summary: "Adds an existing account by email, or changes its role",
+        params: organizationParams,
+        body: z.object({ email: z.email(), role: organizationRoleSchema }),
+        response: { 200: okSchema(z.object({ added: z.literal(true) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const added = await requireService().addMemberByEmail(
+        request.params.organizationId,
+        userId,
+        request.body,
+      );
+      if (!added) throw new NotFoundError("Account", request.body.email);
+      return ok({ added: true as const }, request.id);
+    },
+  );
 
   app.post(
     "/organizations",

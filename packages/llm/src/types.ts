@@ -78,6 +78,8 @@ export interface GenerateRequest {
     userId: string;
     conversationId?: string;
     runId?: string;
+    /** Only engines serving this model may answer. Never falls back to another one. */
+    model?: string;
   };
   signal?: AbortSignal;
 }

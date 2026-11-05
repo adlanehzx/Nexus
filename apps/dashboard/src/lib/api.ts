@@ -998,6 +998,72 @@ export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
 
+export interface UsageBucketDto {
+  day: string;
+  model: string;
+  runs: number;
+  failedRuns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  estimatedApiCostUsd: number | null;
+}
+
+export interface UsageSummaryDto {
+  source: "agent_run_records";
+  days: number;
+  buckets: UsageBucketDto[];
+}
+
+export interface UsageQuotaAccountDto {
+  id: string;
+  provider: string;
+  name: string;
+  authStatus: string;
+  lastCheckedAt: string | null;
+  remaining5hPercent: number | null;
+  remainingWeekPercent: number | null;
+  resets5hAt: string | null;
+  resetsWeekAt: string | null;
+  exhausted: boolean;
+}
+
+export interface OrganizationDto {
+  id: string;
+  slug: string;
+  name: string;
+  mode: "LOCAL" | "HOSTED";
+  role: string;
+}
+
+export interface OrganizationMemberDto {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
+
+export interface McpTokenDto {
+  id: string;
+  name: string;
+  scopes: string[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface McpActivityDto {
+  id: string;
+  tokenId: string;
+  tool: string;
+  outcome: string;
+  errorCode: string | null;
+  durationMs: number;
+  createdAt: string;
+}
+
 export class DashboardApi {
   readonly #session: SessionManager;
 
@@ -1543,6 +1609,79 @@ export class DashboardApi {
     return this.#get(
       `/api/v1/dashboard/runs/compare?a=${encodeURIComponent(runIdA)}&b=${encodeURIComponent(runIdB)}`,
     );
+  }
+
+  usage(
+    days = 30,
+    offset = 0,
+  ): Promise<{
+    source: "agent_run_records";
+    nextOffset: number | null;
+    days: number;
+    runs: {
+      runId: string;
+      model: string;
+      startedAt: string;
+      status: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number | null;
+      cacheWriteTokens: number | null;
+    }[];
+    billedCostUsd: null;
+    providerQuota: null;
+  }> {
+    return this.#get(`/api/v1/usage?days=${days}&offset=${offset}`);
+  }
+
+  organizations(): Promise<{ organizations: OrganizationDto[] }> {
+    return this.#get("/api/v1/organizations");
+  }
+
+  createOrganization(input: { name: string; slug: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/organizations", input);
+  }
+
+  organizationMembers(id: string): Promise<{ members: OrganizationMemberDto[] }> {
+    return this.#get(`/api/v1/organizations/${encodeURIComponent(id)}/members`);
+  }
+
+  addOrganizationMember(id: string, input: { email: string; role: string }): Promise<unknown> {
+    return this.#request("POST", `/api/v1/organizations/${encodeURIComponent(id)}/members`, input);
+  }
+
+  mcpTokens(): Promise<{ tokens: McpTokenDto[]; availableScopes: string[] }> {
+    return this.#get("/api/v1/mcp/tokens");
+  }
+
+  createMcpToken(input: {
+    name: string;
+    scopes: string[];
+    expiresInDays: number;
+  }): Promise<{ token: string; record: McpTokenDto }> {
+    return this.#request("POST", "/api/v1/mcp/tokens", input);
+  }
+
+  revokeMcpToken(id: string): Promise<{ revoked: true }> {
+    return this.#request("DELETE", `/api/v1/mcp/tokens/${encodeURIComponent(id)}`);
+  }
+
+  mcpActivity(): Promise<{ activity: McpActivityDto[] }> {
+    return this.#get("/api/v1/mcp/activity");
+  }
+
+  mcpExposedTools(): Promise<{
+    tools: { name: string; description: string; requiredScope: string }[];
+  }> {
+    return this.#get("/api/v1/mcp/tools");
+  }
+
+  usageSummary(days = 30): Promise<UsageSummaryDto> {
+    return this.#get(`/api/v1/usage/summary?days=${days}`);
+  }
+
+  usageQuotas(): Promise<{ accounts: UsageQuotaAccountDto[] }> {
+    return this.#get("/api/v1/usage/quotas");
   }
 
   quotaForecast(): Promise<{ forecasts: QuotaForecastDto[] }> {
