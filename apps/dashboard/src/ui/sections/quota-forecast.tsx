@@ -1,10 +1,14 @@
 import { useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
 import {
+  formatCountdown,
+  getProvenanceBadge,
   groupUsage,
+  isQuotaAlertTriggered,
   usageCsv,
   usagePeriod,
   usageTotals,
+  type TelemetryProvenance,
   type UsageGranularity,
 } from "../../lib/usage.js";
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "../parts.js";
@@ -32,6 +36,7 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
   const [days, setDays] = useState<number>(30);
   const [offset, setOffset] = useState(0);
   const [granularity, setGranularity] = useState<UsageGranularity>("day");
+  const [alertThreshold, setAlertThreshold] = useState<number>(20);
   const usage = useSection(() => api.usage(days, offset), [api, days, offset]);
   const summary = useSection(() => api.usageSummary(days), [api, days]);
   const unavailable = tr("Unavailable", "Indisponible");
@@ -74,6 +79,18 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
             <option value="day">{tr("Day", "Jour")}</option>
             <option value="week">{tr("Week", "Semaine")}</option>
             <option value="month">{tr("Month", "Mois")}</option>
+          </select>
+        </label>
+        <label>
+          {tr("Quota Alert Threshold", "Seuil d'alerte quota")}{" "}
+          <select
+            value={alertThreshold}
+            onChange={(event) => setAlertThreshold(Number(event.target.value))}
+          >
+            <option value={10}>10 %</option>
+            <option value={15}>15 %</option>
+            <option value={20}>20 %</option>
+            <option value={25}>25 %</option>
           </select>
         </label>
         <button
@@ -279,35 +296,66 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
                 tr("5 h reset", "Réinitialisation 5 h"),
                 tr("Week remaining", "Restant semaine"),
                 tr("Week reset", "Réinitialisation semaine"),
+                tr("Status / Alert", "État / Alerte"),
               ]}
             >
-              {accounts.map((account) => (
-                <tr key={account.id}>
-                  <td>{account.provider}</td>
-                  <td>{account.name}</td>
-                  <td>{account.authStatus}</td>
-                  <td>
-                    {account.remaining5hPercent === null
-                      ? unavailable
-                      : `${String(account.remaining5hPercent)} %`}
-                  </td>
-                  <td>
-                    {account.resets5hAt === null
-                      ? unavailable
-                      : new Date(account.resets5hAt).toLocaleString()}
-                  </td>
-                  <td>
-                    {account.remainingWeekPercent === null
-                      ? unavailable
-                      : `${String(account.remainingWeekPercent)} %`}
-                  </td>
-                  <td>
-                    {account.resetsWeekAt === null
-                      ? unavailable
-                      : new Date(account.resetsWeekAt).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
+              {accounts.map((account) => {
+                const isAlert =
+                  isQuotaAlertTriggered(account.remaining5hPercent, alertThreshold) ||
+                  isQuotaAlertTriggered(account.remainingWeekPercent, alertThreshold);
+
+                const countdown5h = account.resets5hAt
+                  ? formatCountdown(account.resets5hAt)
+                  : unavailable;
+                const countdownWeek = account.resetsWeekAt
+                  ? formatCountdown(account.resetsWeekAt)
+                  : unavailable;
+
+                return (
+                  <tr key={account.id}>
+                    <td><strong>{account.provider}</strong></td>
+                    <td>{account.name}</td>
+                    <td>{account.authStatus}</td>
+                    <td>
+                      {account.remaining5hPercent === null
+                        ? unavailable
+                        : `${String(account.remaining5hPercent)} %`}
+                    </td>
+                    <td>
+                      {account.resets5hAt === null ? (
+                        unavailable
+                      ) : (
+                        <span title={new Date(account.resets5hAt).toLocaleString()}>
+                          {countdown5h}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {account.remainingWeekPercent === null
+                        ? unavailable
+                        : `${String(account.remainingWeekPercent)} %`}
+                    </td>
+                    <td>
+                      {account.resetsWeekAt === null ? (
+                        unavailable
+                      ) : (
+                        <span title={new Date(account.resetsWeekAt).toLocaleString()}>
+                          {countdownWeek}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {account.exhausted ? (
+                        <State tone="down" label={tr("Exhausted", "Épuisé")} />
+                      ) : isAlert ? (
+                        <State tone="warning" label={tr("Low Quota", "Quota Bas")} />
+                      ) : (
+                        <State tone="ok" label={tr("Optimal", "Optimal")} />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </Table>
           )
         }
