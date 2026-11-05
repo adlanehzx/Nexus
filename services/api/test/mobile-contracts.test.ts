@@ -80,10 +80,10 @@ describe("mobile API contracts", () => {
         });
       }
       const url = `/api/v1/conversations/${conversation.id}/messages`;
-      type Page = {
+      interface Page {
         data: { content: string }[];
         meta: { nextCursor: string | null; total: number };
-      };
+      }
 
       const first = (await get(owner, `${url}?order=desc&limit=2`)).json<Page>();
       expect(first.data.map((m) => m.content)).toEqual(["three", "two"]);

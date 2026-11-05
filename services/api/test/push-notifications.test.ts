@@ -16,7 +16,7 @@ describe("PushNotificationService", () => {
   it("sends fixed text to unreachable devices, with the route to open", async () => {
     const store = new InMemoryPushTokenStore();
     const fetchFn = vi.fn(() => Promise.resolve(jsonResponse({ data: [{ status: "ok" }] })));
-    const push = new PushNotificationService({ store, fetchFn: fetchFn as never });
+    const push = new PushNotificationService({ store, fetchFn: fetchFn });
     await push.register({
       deviceId: "d",
       userId: "u",
@@ -63,7 +63,7 @@ describe("PushNotificationService", () => {
         }),
       ),
     );
-    const push = new PushNotificationService({ store, fetchFn: fetchFn as never });
+    const push = new PushNotificationService({ store, fetchFn: fetchFn });
     await push.register({ deviceId: "d", userId: "u", token: "gone", provider: "expo" });
 
     await push.deliver(report("task.completed", ["d"]));
@@ -76,7 +76,7 @@ describe("PushNotificationService", () => {
     const store = new InMemoryPushTokenStore();
     const push = new PushNotificationService({
       store,
-      fetchFn: (() => Promise.resolve(jsonResponse({}, 500))) as never,
+      fetchFn: (() => Promise.resolve(jsonResponse({}, 500))),
       onError,
     });
     await push.register({ deviceId: "d", userId: "u", token: "t", provider: "expo" });
