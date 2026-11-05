@@ -56,6 +56,7 @@ import { osintRoutes } from "./routes/v1/osint.js";
 import { worktreeRoutes } from "./routes/v1/worktrees.js";
 import { checkpointRoutes } from "./routes/v1/checkpoints.js";
 import { providerRoutes } from "./routes/v1/providers.js";
+import { usageRoutes } from "./routes/v1/usage.js";
 import { sourceControlRoutes } from "./routes/v1/source-control.js";
 import { finishHttpSpan, startHttpSpan } from "./services/telemetry-runtime.js";
 
@@ -303,6 +304,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(worktreeRoutes);
       await v1.register(checkpointRoutes);
       await v1.register(providerRoutes);
+      await v1.register(usageRoutes);
       await v1.register(sourceControlRoutes);
     },
     { prefix: "/api/v1" },

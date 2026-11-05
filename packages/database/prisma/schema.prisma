@@ -67,6 +67,7 @@ model User {
   worktrees                Worktree[]
   sourceControlLinks       SourceControlLink[]
   agentProviderConfigs     AgentProviderConfig[]
+  workspaceMemberships     WorkspaceMembership[]
 
   @@map("users")
 }
@@ -89,6 +90,13 @@ model Organization {
   fleet             FleetInstallation[]
   collaboration     OrganizationCollaborationEvent[]
   artifacts         OrganizationArtifact[]
+
+  /// Multi-tenant industrial architecture (LOT B)
+  workspaces           Workspace[]
+  providerAccounts     TenantProviderAccount[]
+  credentialReferences CredentialReference[]
+  quotaPolicies        TenantQuotaPolicy[]
+  auditEvents          TenantAuditEvent[]
 
   @@map("organizations")
 }
@@ -1287,5 +1295,230 @@ model AgentProviderConfig {
 
   @@index([userId, providerType])
   @@map("agent_provider_configs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Tenant Industrial Architecture (LOT B)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Workspace entity isolating projects, agents and configurations within an Organization.
+model Workspace {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  slug           String   @db.VarChar(64)
+  name           String   @db.VarChar(128)
+  description    String?  @db.VarChar(512)
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects         Project[]
+  environments     WorkspaceEnvironment[]
+  agents           TenantAgent[]
+  providerAccounts TenantProviderAccount[]
+  memberships      WorkspaceMembership[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("workspaces")
+}
+
+/// Project entity grouping missions, code repositories and task runs.
+model Project {
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @db.Uuid
+  slug          String   @db.VarChar(64)
+  name          String   @db.VarChar(128)
+  description   String?  @db.VarChar(512)
+  repoUrl       String?  @db.VarChar(1024)
+  defaultBranch String   @default("master") @db.VarChar(128)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  missions  TenantMission[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+/// Workspace Membership linking users with scoped workspace roles.
+model WorkspaceMembership {
+  workspaceId String   @db.Uuid
+  userId      String   @db.Uuid
+  role        String   @default("MEMBER") @db.VarChar(32)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId, workspaceId])
+  @@map("workspace_memberships")
+}
+
+/// Environment configuration scoped to a workspace (development, staging, production).
+model WorkspaceEnvironment {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  name        String   @db.VarChar(64)
+  variables   Json     @default("{}")
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("workspace_environments")
+}
+
+/// Agent instance defined within a Workspace.
+model TenantAgent {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @db.Uuid
+  name         String   @db.VarChar(128)
+  description  String?  @db.VarChar(512)
+  provider     String   @db.VarChar(64)
+  modelId      String   @db.VarChar(128)
+  systemPrompt String?  @db.Text
+  toolsEnabled String[]
+  status       String   @default("active") @db.VarChar(32)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("tenant_agents")
+}
+
+/// Provider Account persistent entity scoped to an Organization or Workspace.
+model TenantProviderAccount {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  workspaceId     String?  @db.Uuid
+  provider        String   @db.VarChar(64)
+  name            String   @db.VarChar(128)
+  authStatus      String   @default("unknown") @db.VarChar(32)
+  profileKey      String   @db.VarChar(128)
+  priority        Int      @default(1)
+  enabled         Boolean  @default(true)
+  credentialRefId String?  @db.Uuid
+  reliability     Json     @default("{}")
+  cooldown        Json     @default("{}")
+  sessionDir      String?  @db.VarChar(1024)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace     Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  credentialRef CredentialReference? @relation(fields: [credentialRefId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, provider])
+  @@index([workspaceId])
+  @@map("tenant_provider_accounts")
+}
+
+/// Encrypted Credential Reference. Secrets are encrypted using AES-256-GCM.
+model CredentialReference {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String    @db.VarChar(128)
+  type           String    @db.VarChar(32)
+  encryptedData  String    @db.Text
+  iv             String    @db.VarChar(64)
+  authTag        String    @db.VarChar(64)
+  keyFingerprint String    @db.VarChar(64)
+  expiresAt      DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  providerAccounts TenantProviderAccount[]
+
+  @@index([organizationId, type])
+  @@map("credential_references")
+}
+
+/// Tenant Mission with transactional state and execution leasing.
+model TenantMission {
+  id                String    @id @default(uuid()) @db.Uuid
+  projectId         String    @db.Uuid
+  title             String    @db.VarChar(255)
+  goal              String    @db.Text
+  status            String    @default("created") @db.VarChar(32)
+  currentVersion    Int       @default(0)
+  fencingToken      Int       @default(0)
+  activeLeaseHolder String?   @db.VarChar(128)
+  leaseExpiresAt    DateTime? @db.Timestamptz(3)
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events  TenantMissionEvent[]
+
+  @@index([projectId, status])
+  @@map("tenant_missions")
+}
+
+/// Append-only event store for mission transitions.
+model TenantMissionEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  missionId     String   @db.Uuid
+  type          String   @db.VarChar(64)
+  version       Int
+  timestamp     DateTime @default(now()) @db.Timestamptz(3)
+  correlationId String   @db.VarChar(128)
+  causationId   String?  @db.VarChar(128)
+  payload       Json
+  metadata      Json     @default("{}")
+
+  mission TenantMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([missionId, version])
+  @@index([missionId, timestamp])
+  @@map("tenant_mission_events")
+}
+
+/// Quota policy enforcing budgets and rate limits per Organization.
+model TenantQuotaPolicy {
+  id                      String   @id @default(uuid()) @db.Uuid
+  organizationId          String   @unique @db.Uuid
+  tier                    String   @default("standard") @db.VarChar(32)
+  monthlyBudgetUsd        Decimal  @default(100.00) @db.Decimal(10, 2)
+  hardLimitUsd            Decimal  @default(120.00) @db.Decimal(10, 2)
+  tokenRateLimitPerMin    Int      @default(100000)
+  concurrentMissionsLimit Int      @default(5)
+  alertThresholdPercent   Int      @default(80)
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_quota_policies")
+}
+
+/// Audit event tracking sensitive administrative and operational actions.
+model TenantAuditEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  workspaceId    String?  @db.Uuid
+  userId         String?  @db.Uuid
+  action         String   @db.VarChar(128)
+  resourceType   String   @db.VarChar(64)
+  resourceId     String   @db.VarChar(128)
+  details        Json     @default("{}")
+  ipAddress      String?  @db.VarChar(64)
+  userAgent      String?  @db.VarChar(255)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([workspaceId])
+  @@map("tenant_audit_events")
 }
 

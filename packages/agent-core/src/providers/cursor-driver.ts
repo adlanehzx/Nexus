@@ -183,6 +183,9 @@ export class CursorProviderDriver implements ProviderDriver {
     if (!key && !url) {
       return { valid: false, error: "Neither CURSOR_API_KEY nor CURSOR_BASE_URL is configured" };
     }
+    if (key && key.trim().length < 8) {
+      return { valid: false, error: "CURSOR_API_KEY is malformed (too short)" };
+    }
     return { valid: true };
   }
 }

@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -499,8 +498,6 @@ export class ProviderAccountService {
       existing.reliability.successCount > 0 &&
       existing.reliability.consecutiveFailures === 0
     ) {
-      authStatus = "authenticated";
-    } else if (existsSync(existing.sessionDir)) {
       authStatus = "authenticated";
     } else if (authStatus === "unknown") {
       authStatus = "unknown";

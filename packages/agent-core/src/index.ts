@@ -13,3 +13,7 @@ export * from "./providers/index.js";
 export * from "./runtime-security.js";
 export * from "./unified-runtime.js";
 export * from "./telemetry-supervisor.js";
+export * from "./transactional/index.js";
+export * from "./handoff/context-transfer.js";
+export * from "./usage/pricing-catalog.js";
+export * from "./usage/usage-tracker.js";

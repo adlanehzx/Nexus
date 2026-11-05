@@ -14,6 +14,7 @@ export const ProviderTypeSchema = z.enum([
   "claude",
   "cursor",
   "grok",
+  "antigravity",
   "opencode",
   "fx",
   "kiro",
@@ -22,6 +23,7 @@ export const ProviderTypeSchema = z.enum([
   "anthropic",
   "ollama",
   "freelm",
+  "local",
 ]);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 

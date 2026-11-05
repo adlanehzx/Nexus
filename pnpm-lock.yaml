@@ -230,6 +230,9 @@ importers:
 
   packages/agent-core:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.5.4)
       '@nexus/llm':
         specifier: workspace:*
         version: link:../llm
@@ -7123,6 +7126,10 @@ snapshots:
   '@agentclientprotocol/sdk@1.8.0(zod@4.3.6)':
     dependencies:
       zod: 4.3.6
+
+  '@agentclientprotocol/sdk@1.8.0(zod@4.5.4)':
+    dependencies:
+      zod: 4.5.4
 
   '@anthropic-ai/sdk@0.122.0(zod@4.5.4)':
     dependencies:

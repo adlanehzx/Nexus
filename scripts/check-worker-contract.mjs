@@ -22,8 +22,10 @@ let mergeBase;
 try {
   mergeBase = git("merge-base", base, "HEAD");
 } catch {
-  console.log(`Worker contract check skipped: no merge base with ${base}.`);
-  process.exit(0);
+  console.error(
+    `Worker contract check failed: no merge base with ${base}. Fetch the base history.`,
+  );
+  process.exit(1);
 }
 
 const changed = git("diff", "--name-only", `${mergeBase}..HEAD`).split("\n").filter(Boolean);

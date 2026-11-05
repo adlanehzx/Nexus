@@ -180,6 +180,9 @@ export class GrokProviderDriver implements ProviderDriver {
     if (!key || key.trim().length === 0) {
       return { valid: false, error: "XAI_API_KEY is not configured" };
     }
+    if (key.trim().length < 8) {
+      return { valid: false, error: "XAI_API_KEY is malformed (too short)" };
+    }
     return { valid: true };
   }
 }
