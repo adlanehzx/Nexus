@@ -1,3 +1,4 @@
+import type { Href } from "expo-router";
 import { Platform } from "react-native";
 import type * as ExpoNotifications from "expo-notifications";
 import Constants from "expo-constants";
@@ -146,13 +147,16 @@ export async function presentLocalAlert(alert: LocalAlert): Promise<void> {
 }
 
 /** Opens the screen a tapped notification points to. Returns the unsubscribe. */
-export function onNotificationTapped(open: (route: string) => void): () => void {
+export function onNotificationTapped(open: (route: Href) => void): () => void {
   const module = load();
   if (module === undefined) return () => undefined;
   try {
     const subscription = module.addNotificationResponseReceivedListener((response) => {
       const route = response.notification.request.content.data?.route;
-      if (typeof route === "string") open(route);
+      // A notification only ever opens a screen of this app, never an outside address.
+      if (typeof route === "string" && route.startsWith("/") && !route.startsWith("//")) {
+        open(route as Href);
+      }
     });
     return () => {
       subscription.remove();
