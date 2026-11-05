@@ -1,19 +1,21 @@
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import * as SecureStore from "expo-secure-store";
 import * as Speech from "expo-speech";
-import type {
-  HttpClient,
-  HttpResponse,
-  NetworkMonitor,
-  SecureStorage,
-  SocketState,
-  SocketTransport,
-  SpeechToTextProvider,
-  TextToSpeechProvider,
-  TranscriptionResult,
+import {
+  FetchHttpClient,
+  type HttpClient,
+  type HttpResponse,
+  type NetworkMonitor,
+  type SecureStorage,
+  type SocketState,
+  type SocketTransport,
+  type SpeechToTextProvider,
+  type TextToSpeechProvider,
+  type TranscriptionResult,
 } from "@nexus/client-core";
 
 /**
- * Five ports of `@nexus/client-core`, implemented for iOS.
+ * Five ports of `@nexus/client-core`, implemented for iOS and Android.
  *
  * This file contains **no domain logic**: session lifecycle, reconnection,
  * state machines, and voice pipelines live in client core, which is fully unit tested.
@@ -27,10 +29,10 @@ import type {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * iOS Keychain storage.
+ * Platform secret storage.
  *
- * `expo-secure-store` backs onto Keychain: encrypted by iOS, hardware-bound,
- * isolated from other applications.
+ * `expo-secure-store` backs onto the iOS Keychain and the Android Keystore:
+ * encrypted by the OS, hardware-bound where available, isolated from other apps.
  *
  * `WHEN_UNLOCKED_THIS_DEVICE_ONLY` is deliberate. "This device only" excludes the
  * key from iCloud backups: a NEXUS token must not migrate to another device via restore.
@@ -62,29 +64,38 @@ export class KeychainStorage implements SecureStorage {
 // Network
 // ─────────────────────────────────────────────────────────────────────────────
 
-export class FetchHttpClient implements HttpClient {
-  readonly #baseUrl: string;
+/** Default deadline of a request that did not bring its own signal. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 
-  constructor(baseUrl: string) {
-    this.#baseUrl = baseUrl.replace(/\/$/, "");
+/**
+ * Bounded HTTP client.
+ *
+ * `fetch` on a phone that just lost coverage may hang for minutes. The shared
+ * client handles encoding and error shapes; this adapter adds the deadline a
+ * mobile screen needs to leave its loading state. A caller with a legitimately
+ * long request — an agent run — passes its own signal and is left alone.
+ */
+export class TimeoutHttpClient implements HttpClient {
+  readonly #inner: HttpClient;
+  readonly #timeoutMs: number;
+
+  constructor(baseUrl: string, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+    this.#inner = new FetchHttpClient(baseUrl);
+    this.#timeoutMs = timeoutMs;
   }
 
   async request(input: Parameters<HttpClient["request"]>[0]): Promise<HttpResponse> {
-    const response = await fetch(`${this.#baseUrl}${input.path}`, {
-      method: input.method,
-      headers: {
-        "content-type": "application/json",
-        ...input.headers,
-      },
-      ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-    });
+    if (input.signal !== undefined) return this.#inner.request(input);
 
-    // Responses without JSON body (204 or infrastructure errors) must not fail
-    // caller on parse exceptions.
-    const body: unknown = await response.json().catch(() => null);
-
-    return { status: response.status, body };
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, this.#timeoutMs);
+    try {
+      return await this.#inner.request({ ...input, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -112,22 +123,31 @@ export class NativeSocket implements SocketTransport {
       this.#socket = socket;
 
       socket.onopen = () => {
+        if (this.#socket !== socket) return;
         this.#state = "open";
         resolve();
       };
 
       socket.onerror = () => {
         // `onerror` then `onclose`: reject here and let `onclose` notify close without duplicate reporting.
-        if (this.#state === "connecting") reject(new Error("connection failed"));
+        if (this.#socket === socket && this.#state === "connecting") {
+          reject(new Error("connection failed"));
+        }
       };
 
       socket.onmessage = (event: { data: unknown }) => {
-        if (typeof event.data === "string") this.#onMessage?.(event.data);
+        if (this.#socket === socket && typeof event.data === "string") {
+          this.#onMessage?.(event.data);
+        }
       };
 
       // The close code accompanies the reason: it informs client-core whether
       // the session was rejected or the connection dropped unexpectedly.
+      //
+      // A replaced socket closes late, after its successor opened. Reporting
+      // that close would tear the healthy connection down.
       socket.onclose = (event: { reason?: string; code?: number }) => {
+        if (this.#socket !== socket) return;
         this.#state = "closed";
         this.#onClose?.(event.reason ?? "socket closed", event.code);
       };
@@ -154,15 +174,30 @@ export class NativeSocket implements SocketTransport {
 }
 
 /**
- * Network monitor.
+ * Connectivity as reported by the OS.
  *
- * Intentionally minimal without `@react-native-community/netinfo`.
- * An extra native dependency for connectivity status already observed via
- * connection attempts is unnecessary overhead.
+ * `isInternetReachable` is `null` until the OS has probed: unknown must not
+ * read as offline, or the app would show a false outage at every launch.
  */
-export class OptimisticNetworkMonitor implements NetworkMonitor {
+export function isOnline(
+  state: Pick<NetInfoState, "isConnected" | "isInternetReachable">,
+): boolean {
+  return state.isConnected !== false && state.isInternetReachable !== false;
+}
+
+export class NativeNetworkMonitor implements NetworkMonitor {
   #online = true;
   #handler: ((online: boolean) => void) | undefined;
+  readonly #unsubscribe: () => void;
+
+  constructor() {
+    this.#unsubscribe = NetInfo.addEventListener((state) => {
+      const online = isOnline(state);
+      if (online === this.#online) return;
+      this.#online = online;
+      this.#handler?.(online);
+    });
+  }
 
   isOnline(): boolean {
     return this.#online;
@@ -172,11 +207,8 @@ export class OptimisticNetworkMonitor implements NetworkMonitor {
     this.#handler = handler;
   }
 
-  /** Called by network layer when connection succeeds or fails. */
-  report(online: boolean): void {
-    if (this.#online === online) return;
-    this.#online = online;
-    this.#handler?.(online);
+  dispose(): void {
+    this.#unsubscribe();
   }
 }
 
@@ -185,7 +217,7 @@ export class OptimisticNetworkMonitor implements NetworkMonitor {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * iOS Text-to-Speech via `expo-speech`.
+ * Text-to-Speech through the OS engine, via `expo-speech`.
  *
  * `stop()` is called before each utterance to prevent overlapping audio.
  */
@@ -223,231 +255,158 @@ export class ExpoTextToSpeech implements TextToSpeechProvider {
   }
 }
 
-interface WebSpeechEvent {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: {
-      isFinal: boolean;
-      0: { transcript: string };
-    };
-  };
+/** The part of `expo-speech-recognition` this port relies on. */
+export interface SpeechRecognitionModule {
+  isRecognitionAvailable(): boolean;
+  requestPermissionsAsync(): Promise<{ granted: boolean }>;
+  start(options: { lang: string; interimResults: boolean; continuous: boolean }): void;
+  stop(): void;
+  abort(): void;
+  addListener(
+    event: "result" | "end" | "error",
+    listener: (event: {
+      isFinal?: boolean;
+      results?: { transcript: string }[];
+      error?: string;
+      message?: string;
+    }) => void,
+  ): { remove: () => void };
 }
 
-type WebSpeechRecognition = new () => {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: WebSpeechEvent) => void) | null;
-  start: () => void;
-  abort: () => void;
-};
+/** How long a stopped recognizer may take to deliver its final words. */
+const FINAL_RESULT_TIMEOUT_MS = 3_000;
 
 /**
- * Local Piper Text-to-Speech provider with native ExpoTextToSpeech fallback.
- * Keeps synthesized audio in-memory and streams directly to speakers without disk persistence.
- */
-export class PiperTextToSpeech implements TextToSpeechProvider {
-  readonly #piperEndpoint: string | undefined;
-  readonly #fallback: ExpoTextToSpeech;
-  #speaking = false;
-
-  constructor(options?: { piperEndpoint?: string }) {
-    this.#piperEndpoint = options?.piperEndpoint;
-    this.#fallback = new ExpoTextToSpeech();
-  }
-
-  isAvailable(): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-
-  async speak(text: string, options?: { locale?: string; rate?: number }): Promise<void> {
-    await this.stop();
-    this.#speaking = true;
-
-    try {
-      if (this.#piperEndpoint !== undefined && this.#piperEndpoint.length > 0) {
-        const response = await fetch(`${this.#piperEndpoint.replace(/\/$/, "")}/synthesize`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text, length_scale: options?.rate ? 1 / options.rate : 1 }),
-        });
-        if (response.ok) {
-          return;
-        }
-      }
-    } catch {
-      // Fallback to system text-to-speech if local Piper daemon is unreachable
-    }
-
-    try {
-      await this.#fallback.speak(text, options);
-    } finally {
-      this.#speaking = false;
-    }
-  }
-
-  async stop(): Promise<void> {
-    this.#speaking = false;
-    await this.#fallback.stop();
-  }
-
-  isSpeaking(): Promise<boolean> {
-    if (this.#speaking) return Promise.resolve(true);
-    return this.#fallback.isSpeaking();
-  }
-}
-
-/**
- * Local Speech-to-Text abstraction supporting on-device dictation and local Whisper.
+ * Dictation through the recognizer built into the phone.
  *
- * Guarantees:
- * 1. Zero raw audio persisted: audio processing is ephemeral in memory.
- * 2. Real-time partial transcriptions streamed via `onPartial`.
- * 3. Explicit diagnostics when a native recognizer or local whisper engine is missing.
- * 4. Immediate cancellation teardown.
+ * Audio stays with the OS engine; nothing is recorded or stored by NEXUS. The
+ * module is injected because it is absent from Expo Go: a missing native module
+ * reports "unavailable" instead of crashing at import.
  */
-export class LocalSpeechToText implements SpeechToTextProvider {
-  readonly #whisperEndpoint: string | undefined;
+export class NativeSpeechToText implements SpeechToTextProvider {
+  readonly #load: () => SpeechRecognitionModule | undefined;
+  #subscriptions: { remove: () => void }[] = [];
+  #finalText = "";
+  #partialText = "";
+  #failure: string | undefined;
+  #onEnd: (() => void) | undefined;
   #listening = false;
-  #onPartial: ((text: string) => void) | undefined;
-  #accumulatedText = "";
-  #abortController: AbortController | undefined;
 
-  constructor(options?: { whisperEndpoint?: string }) {
-    this.#whisperEndpoint = options?.whisperEndpoint;
+  constructor(load: () => SpeechRecognitionModule | undefined = loadSpeechRecognition) {
+    this.#load = load;
   }
 
   isAvailable(): Promise<boolean> {
-    if (
-      typeof window !== "undefined" &&
-      ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
-    ) {
-      return Promise.resolve(true);
+    try {
+      return Promise.resolve(this.#load()?.isRecognitionAvailable() === true);
+    } catch {
+      return Promise.resolve(false);
     }
-    if (this.#whisperEndpoint !== undefined && this.#whisperEndpoint.length > 0) {
-      return Promise.resolve(true);
-    }
-    return Promise.resolve(false);
   }
 
   async requestPermission(): Promise<boolean> {
-    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
-        return true;
-      } catch {
-        return false;
-      }
+    const module = this.#load();
+    if (module === undefined) return false;
+    try {
+      return (await module.requestPermissionsAsync()).granted;
+    } catch {
+      return false;
     }
-    return true;
   }
 
-  async start(options?: { locale?: string; onPartial?: (text: string) => void }): Promise<void> {
-    if (this.#listening) return;
+  start(options?: { locale?: string; onPartial?: (text: string) => void }): Promise<void> {
+    const module = this.#load();
+    if (module === undefined) return Promise.reject(new Error("speech recognition unavailable"));
+
+    this.#release();
+    this.#finalText = "";
+    this.#partialText = "";
+    this.#failure = undefined;
     this.#listening = true;
-    this.#onPartial = options?.onPartial;
-    this.#accumulatedText = "";
-    this.#abortController = new AbortController();
 
-    if (typeof window !== "undefined") {
-      const windowObject = window as unknown as {
-        SpeechRecognition?: WebSpeechRecognition;
-        webkitSpeechRecognition?: WebSpeechRecognition;
-      };
-      const SpeechRecognition =
-        windowObject.SpeechRecognition ?? windowObject.webkitSpeechRecognition;
-
-      if (SpeechRecognition) {
-        try {
-          const recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = options?.locale ?? "en-US";
-
-          recognition.onresult = (event: WebSpeechEvent) => {
-            let interim = "";
-            let final = "";
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              const res = event.results[i];
-              if (res) {
-                if (res.isFinal) {
-                  final += res[0].transcript;
-                } else {
-                  interim += res[0].transcript;
-                }
-              }
-            }
-            if (final.length > 0) {
-              this.#accumulatedText += (this.#accumulatedText ? " " : "") + final;
-            }
-            const current = this.#accumulatedText + (interim ? " " + interim : "");
-            this.#onPartial?.(current);
-          };
-
-          recognition.start();
-          this.#abortController.signal.addEventListener("abort", () => {
-            try {
-              recognition.abort();
-            } catch (_ignored: unknown) {
-              // The recognizer may already be stopped during teardown.
-            }
-          });
-          return;
-        } catch (_ignored: unknown) {
-          // Fall through to the configured local Whisper bridge.
+    this.#subscriptions = [
+      module.addListener("result", (event) => {
+        const transcript = event.results?.[0]?.transcript ?? "";
+        if (event.isFinal === true) {
+          this.#finalText = `${this.#finalText} ${transcript}`.trim();
+          this.#partialText = "";
+        } else {
+          this.#partialText = transcript;
         }
-      }
-    }
+        options?.onPartial?.(`${this.#finalText} ${this.#partialText}`.trim());
+      }),
+      module.addListener("error", (event) => {
+        // "no-speech" and "aborted" are normal endings of a press, not faults.
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          this.#failure = event.message ?? event.error ?? "speech recognition failed";
+        }
+        this.#finish();
+      }),
+      module.addListener("end", () => {
+        this.#finish();
+      }),
+    ];
 
-    if (!(await this.isAvailable())) {
-      this.#listening = false;
-      throw new Error(
-        "Local speech recognition requires on-device dictation or local Whisper bridge.",
-      );
-    }
+    module.start({
+      lang: options?.locale ?? "en-US",
+      interimResults: true,
+      continuous: true,
+    });
+    return Promise.resolve();
   }
 
-  stop(): Promise<TranscriptionResult> {
+  async stop(): Promise<TranscriptionResult> {
+    const module = this.#load();
+    if (this.#listening && module !== undefined) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, FINAL_RESULT_TIMEOUT_MS);
+        this.#onEnd = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        module.stop();
+      });
+    }
+
+    const text = `${this.#finalText} ${this.#partialText}`.trim();
+    const failure = this.#failure;
+    this.#release();
     this.#listening = false;
-    const text = this.#accumulatedText.trim();
-    this.#accumulatedText = "";
-    this.#abortController?.abort();
-    this.#abortController = undefined;
-    return Promise.resolve({ text });
+    if (failure !== undefined && text.length === 0) throw new Error(failure);
+    return { text };
   }
 
   cancel(): Promise<void> {
+    this.#finalText = "";
+    this.#partialText = "";
+    if (this.#listening) this.#load()?.abort();
     this.#listening = false;
-    this.#accumulatedText = "";
-    this.#abortController?.abort();
-    this.#abortController = undefined;
+    this.#release();
     return Promise.resolve();
+  }
+
+  #finish(): void {
+    this.#listening = false;
+    this.#onEnd?.();
+    this.#onEnd = undefined;
+  }
+
+  #release(): void {
+    for (const subscription of this.#subscriptions) subscription.remove();
+    this.#subscriptions = [];
+    this.#onEnd = undefined;
   }
 }
 
-/**
- * Speech recognition stub retained for explicit unavailability testing.
- */
-export class UnavailableSpeechToText implements SpeechToTextProvider {
-  isAvailable(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
-  requestPermission(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
-  start(): Promise<void> {
-    return Promise.reject(new Error("speech recognition unavailable"));
-  }
-
-  stop(): Promise<TranscriptionResult> {
-    return Promise.resolve({ text: "" });
-  }
-
-  cancel(): Promise<void> {
-    return Promise.resolve();
+/** Absent from Expo Go: the import itself throws when the native module is missing. */
+function loadSpeechRecognition(): SpeechRecognitionModule | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- may be absent at runtime
+    const loaded = require("expo-speech-recognition") as {
+      ExpoSpeechRecognitionModule?: SpeechRecognitionModule;
+    };
+    return loaded.ExpoSpeechRecognitionModule;
+  } catch {
+    return undefined;
   }
 }
