@@ -384,9 +384,18 @@ export function NexusProvider({
 
   const cancelTask = useCallback(
     async (taskId: string) => {
+      // The core only sees a cancellation between steps, and a task waiting for a
+      // human is not between steps. Declining is what actually stops it.
+      const waiting = stateRef.current.confirmations.find(
+        (confirmation) => confirmation.taskId === taskId && !confirmation.answered,
+      );
+      if (waiting !== undefined) {
+        await answerConfirmation(waiting.id, "rejected");
+        return;
+      }
       await realtime.cancelTask(taskId).catch(reportError);
     },
-    [realtime, reportError],
+    [realtime, reportError, answerConfirmation],
   );
 
   const refreshDevices = useCallback(async () => {
