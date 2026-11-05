@@ -46,17 +46,36 @@ ensure_signing_key() {
   openssl pkey -in "$STATE_DIR/signing.pem" -pubout -out "$STATE_DIR/signing.pub.pem" 2>/dev/null
 }
 
+# NEXUS_E2E_ENGINE_WORKER=1 runs missions, on its own database, through the real ACP runner.
+# Its registry holds only the repository's deterministic agent, so no provider is reachable.
 start_engine() {
   stop_service engine
   mkdir -p "$STATE_DIR/engine"
   [[ -f "$STATE_DIR/engine/profiles.json" ]] || echo '{"claude":"claude","codex":"codex"}' >"$STATE_DIR/engine/profiles.json"
+  local worker=false database="$STATE_DIR/engine/engine.db" profiles="$STATE_DIR/engine/profiles.json"
+  local acp_env=()
+  if [[ "${NEXUS_E2E_ENGINE_WORKER:-0}" == "1" ]]; then
+    worker=true
+    database="$STATE_DIR/engine/engine-worker.db"
+    profiles="$STATE_DIR/engine/fake-profiles.json"
+    echo '{"fake-acp":"fake-acp"}' >"$profiles"
+    node -e '
+      const [registry, agent] = process.argv.slice(1);
+      const profile = { command: process.execPath, args: [agent, "--mode", "succeed", "--marker", "chat-chain-e2e"], additional_dirs: [] };
+      require("node:fs").writeFileSync(registry, JSON.stringify({ profiles: { "fake-acp": profile } }), { mode: 0o600 });
+    ' "$STATE_DIR/engine/fake-registry.json" "$ROOT/services/agent/scripts/e2e-acp-agent.mjs"
+    acp_env=(
+      "NEXUS_ENGINE_ACP_RUNNER=$ROOT/services/agent/dist/cli.js"
+      "NEXUS_ENGINE_ACP_REGISTRY=$STATE_DIR/engine/fake-registry.json"
+    )
+  fi
   (
     cd "$ROOT/services/mission-engine"
-    NEXUS_ENGINE_PORT="$ENGINE_PORT" NEXUS_ENGINE_DATABASE="$STATE_DIR/engine/engine.db" \
+    env "${acp_env[@]}" NEXUS_ENGINE_PORT="$ENGINE_PORT" NEXUS_ENGINE_DATABASE="$database" \
       NEXUS_ENGINE_API_PUBLIC_KEY_FILE="$STATE_DIR/signing.pub.pem" \
-      NEXUS_ENGINE_PROFILES_FILE="$STATE_DIR/engine/profiles.json" \
+      NEXUS_ENGINE_PROFILES_FILE="$profiles" \
       NEXUS_ENGINE_RUNTIME_SETTINGS_FILE="$STATE_DIR/engine/runtime-settings.json" \
-      NEXUS_ENGINE_SCHEDULER_ENABLED=true NEXUS_ENGINE_WORKER_ENABLED=false \
+      NEXUS_ENGINE_SCHEDULER_ENABLED=true NEXUS_ENGINE_WORKER_ENABLED="$worker" \
       nohup setsid .venv/bin/nexus-mission-engine >"$STATE_DIR/engine.log" 2>&1 &
     echo $! >"$STATE_DIR/engine.pid"
   )
@@ -72,6 +91,7 @@ start_api() {
       METRICS_ENABLED=false MEMORY_EMBEDDING_BACKEND=hash \
       NEXUS_RUNTIME_CONFIG_DIR="$STATE_DIR/runtime" NEXUS_OBSERVABILITY_DIR="$STATE_DIR/observability" \
       CORS_ORIGINS="http://127.0.0.1:$DASHBOARD_PORT" \
+      NEXUS_ACP_WORKSPACE_DIR="$STATE_DIR/acp-workspaces" \
       NEXUS_PROBE_ENV_ALLOWLIST="${NEXUS_PROBE_ENV_ALLOWLIST:-__MISE_DIFF,XDG_CONFIG_HOME,XDG_DATA_HOME,XDG_CACHE_HOME,XDG_STATE_HOME}" \
       nohup setsid ./node_modules/.bin/tsx src/server.ts >"$STATE_DIR/api.log" 2>&1 &
     echo $! >"$STATE_DIR/api.pid"
@@ -108,6 +128,7 @@ up() {
   (cd "$ROOT" && DATABASE_URL="$DATABASE_URL" pnpm --filter @nexus/database exec prisma migrate deploy >"$STATE_DIR/migrate.log" 2>&1)
   ensure_signing_key
   (cd "$ROOT/services/mission-engine" && uv sync --quiet)
+  (cd "$ROOT" && pnpm --filter @nexus/agent build >"$STATE_DIR/agent-build.log" 2>&1)
   start_engine
   start_api
   start_dashboard
