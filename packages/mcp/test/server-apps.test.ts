@@ -109,10 +109,7 @@ describe("NEXUS MCP Platform Architecture (LOT G)", () => {
             </body>
           </html>
         `,
-        cspPolicies: [
-          "default-src *; object-src *",
-          "script-src https://cdn.example.com",
-        ],
+        cspPolicies: ["default-src *; object-src *", "script-src https://cdn.example.com"],
         permissions: [],
       });
 

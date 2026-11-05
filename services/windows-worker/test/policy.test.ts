@@ -226,7 +226,8 @@ describe("execution policy", () => {
     );
 
     throwsWith(
-      () => policy.validate({ executable: "node", args: ["--inspect=0.0.0.0:9229", "index.js"] }, env),
+      () =>
+        policy.validate({ executable: "node", args: ["--inspect=0.0.0.0:9229", "index.js"] }, env),
       "WORKER_POLICY_VIOLATION",
       "args.codeExecution",
     );

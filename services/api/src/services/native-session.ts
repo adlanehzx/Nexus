@@ -45,7 +45,7 @@ function canonicalize(value: unknown): unknown {
     return value.map(canonicalize);
   }
   const sorted: Record<string, unknown> = {};
-  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+  for (const key of Object.keys(value).sort()) {
     sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
   }
   return sorted;
@@ -54,7 +54,9 @@ function canonicalize(value: unknown): unknown {
 export function computePayloadHash(payload: unknown): string {
   const normalized = canonicalize(payload);
   const json = JSON.stringify(normalized);
-  return createHash("sha256").update(json ?? "null").digest("hex");
+  return createHash("sha256")
+    .update(json ?? "null")
+    .digest("hex");
 }
 
 export class NativeSessionManager {
