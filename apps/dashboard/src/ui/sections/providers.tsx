@@ -6,6 +6,25 @@ import { useI18n } from "../i18n/index.js";
 export function Providers({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const providersState = useSection(() => api.unifiedProviders());
+  const connections = useSection(() => api.connections());
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const installed = (connections.data?.connections ?? []).filter(
+    (entry) => entry.observation !== null && entry.observation.state !== "not_installed",
+  );
+
+  const detect = async () => {
+    setDetecting(true);
+    setDetectError(null);
+    try {
+      await api.detectConnections();
+      connections.reload();
+    } catch (cause) {
+      setDetectError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const [selectedProvider, setSelectedProvider] = useState<string>("claude");
   const modelsState = useSection(
@@ -38,8 +57,8 @@ export function Providers({ api }: { api: DashboardApi }) {
     <div className="content">
       <p className="muted" style={{ marginTop: 0 }}>
         {tr(
-          "Unified LLM & Agent drivers fused from T3 Code into NEXUS. Every provider supports pre-execution tool safety policies, session checkpoint rollbacks, and streaming.",
-          "Drivers LLM & Agents unifiés fusionnés de T3 Code dans NEXUS. Tous les providers supportent la politique de sécurité pré-exécution, les rollbacks de checkpoints et le streaming.",
+          "Engines known to NEXUS. The capabilities shown are those each driver declares; a live check is what proves a connection.",
+          "Moteurs connus de NEXUS. Les capacités affichées sont celles déclarées par chaque driver ; seule une vérification réelle prouve une connexion.",
         )}
       </p>
 
@@ -49,22 +68,81 @@ export function Providers({ api }: { api: DashboardApi }) {
             <div className="metrics" style={{ marginBottom: "1.5rem" }}>
               <Metric
                 value={String(providers.length)}
-                label={tr("unified drivers", "drivers unifiés")}
+                label={tr("registered drivers", "drivers enregistrés")}
               />
               <Metric
-                value="9"
-                label={tr(
-                  "active engines (Claude, Codex, Antigravity, Cursor, Grok, OpenCode, Pi, ACP, Local)",
-                  "moteurs actifs (Claude, Codex, Antigravity, Cursor, Grok, OpenCode, Pi, ACP, Local)",
-                )}
-                tone="positive"
+                value={
+                  connections.data === undefined
+                    ? tr("Unavailable", "Indisponible")
+                    : String(installed.length)
+                }
+                label={tr("CLIs detected on this host", "CLI détectés sur cet hôte")}
               />
               <Metric
-                value="100%"
-                label={tr("pre-call security coverage", "couverture sécurité pré-exécution")}
-                tone="positive"
+                value={
+                  connections.data === undefined
+                    ? tr("Unavailable", "Indisponible")
+                    : String(installed.filter((c) => c.observation?.state === "connected").length)
+                }
+                label={tr("verified connections", "connexions vérifiées")}
               />
             </div>
+
+            <section className="settings-panel" style={{ marginBottom: "1.5rem" }}>
+              <h3>{tr("Status on this host", "État sur cet hôte")}</h3>
+              <p className="muted">
+                {tr(
+                  "An installed CLI is not a connected account: only a successful check shows “connected”.",
+                  "Un CLI installé n’est pas un compte connecté : seule une vérification réussie affiche « connecté ».",
+                )}
+              </p>
+              <button
+                className="button compact"
+                type="button"
+                disabled={detecting}
+                onClick={() => void detect()}
+              >
+                {detecting
+                  ? tr("Scanning…", "Analyse…")
+                  : tr("Detect installed CLIs", "Détecter les CLI installés")}
+              </button>
+              {detectError === null ? null : (
+                <div className="banner error" role="alert">
+                  {detectError}
+                </div>
+              )}
+              <Section state={connections}>
+                {({ connections: entries }) => (
+                  <Table
+                    head={[
+                      tr("Engine", "Moteur"),
+                      tr("State", "État"),
+                      tr("Version", "Version"),
+                      tr("Last check", "Dernière vérification"),
+                    ]}
+                  >
+                    {entries.map((entry) => (
+                      <tr key={entry.providerId} data-provider={entry.providerId}>
+                        <td>{entry.displayName}</td>
+                        <td>
+                          {entry.observation === null
+                            ? tr("Not checked", "Non vérifié")
+                            : entry.observation.state}
+                        </td>
+                        <td className="mono">
+                          {entry.observation?.version ?? tr("Unavailable", "Indisponible")}
+                        </td>
+                        <td>
+                          {entry.observation?.lastCheckedAt == null
+                            ? tr("Never", "Jamais")
+                            : new Date(entry.observation.lastCheckedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                )}
+              </Section>
+            </section>
 
             {/* Providers Grid */}
             <div

@@ -129,10 +129,10 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
       },
       {
         id: "win-providers",
-        title: "Ouvrir Fournisseurs de Modèles",
-        subtitle: "Claude, Cursor, Grok, ACP Local",
+        title: "Ouvrir Providers (fournisseurs de modèles)",
+        subtitle: "Moteurs, CLI détectés et état réel des connexions",
         category: "Agents & Code",
-        action: () => openWindow("providers", "Fournisseurs de modèles"),
+        action: () => openWindow("providers", "Providers"),
       },
       {
         id: "win-tasks",
