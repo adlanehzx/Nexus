@@ -47,6 +47,7 @@ function throwsWith(action: () => unknown, code: string, rule?: string): CaughtE
 function makePathPolicy(fileSystem = new FakeFileSystem()): PathPolicy {
   return new PathPolicy({
     allowedRoots: [ALLOWED_ROOT],
+    platform: "win32",
     realpath: (candidate) => fileSystem.realpath(candidate),
   });
 }
@@ -159,7 +160,7 @@ describe("path policy", () => {
   });
 
   it("denies everything when no root is configured", async () => {
-    const policy = new PathPolicy({ allowedRoots: [] });
+    const policy = new PathPolicy({ allowedRoots: [], platform: "win32" });
     await rejectsWith(
       policy.resolve("C:\\Projets\\x"),
       "PATH_NOT_ALLOWED",
