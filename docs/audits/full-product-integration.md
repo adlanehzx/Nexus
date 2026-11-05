@@ -127,7 +127,7 @@ Run with Playwright against a real API, dashboard and Mission Engine on disposab
 | G Observability    | PASS    | Controlled 404 found from its correlation id; plain account refused.                                                                  |
 | H Responsive       | PASS    | Three screens at 390, 820, 1280 and 1920 px. Only those screens.                                                                      |
 
-Each scenario passed when last run; they were not all re-run together on the final commit.
+All ten browser tests passed together on `e09811d`. Only the logout fix `6f1a327` came after, and it was covered by the API suites: 515 unit tests and 37 PostgreSQL tests passing. A full turbo run reached 149 of 154 tasks before the host killed it, so the whole monorepo has no single green run yet, and GitHub CI has not run on this branch since it is not pushed.
 
 ### Matrix
 
