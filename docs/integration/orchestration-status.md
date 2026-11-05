@@ -2,7 +2,7 @@
 
 **Central Integration Branch:** `integration/nexus-beta-consolidation`  
 **Base Commit (master):** `9b45d8eb8e458b76e26b70f0de4bd90dd704932f`  
-**Orchestrator:** Antigravity / Gemini 3.8 Flash High  
+**Orchestrator:** Antigravity / Lead Engineering Orchestrator  
 **Status Date:** 2026-11-05  
 
 ---
@@ -11,12 +11,12 @@
 
 | ID | Mission | Agent / Role | Branch | Worktree | Status | Tests | Integration |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **NEXUS-001** | Onboarding & First-Run Wizard | Frontend & UX Specialist (Claude Sonnet 5.5) | `feat/onboarding-wizard` | `../nexus-worktrees/onboarding` | `assigned` | `planned` | `pending` |
-| **NEXUS-002** | Usage & Quotas Center | Backend & Telemetry Engineer (Codex / GPT-6.1 Sol) | `feat/usage-quota-center` | `../nexus-worktrees/usage` | `assigned` | `planned` | `pending` |
-| **NEXUS-003** | MCP Management Hub | MCP & Security Engineer (Claude Opus 5.5) | `feat/mcp-management-hub` | `../nexus-worktrees/mcp` | `assigned` | `planned` | `pending` |
-| **NEXUS-004** | System Diagnostics & Observability | SRE & Infrastructure Engineer (AGY 1) | `feat/system-diagnostics` | `../nexus-worktrees/diagnostics` | `assigned` | `planned` | `pending` |
-| **NEXUS-005** | Release Readiness & Packaging | DevOps & Release Engineer (Codex / GPT-6.1 Sol) | `feat/release-readiness` | `../nexus-worktrees/release` | `planned` | `planned` | `pending` |
-| **NEXUS-006** | Security Regression Suite (SEC-01..14) | Security & QA Auditor (AGY 1) | `test/security-regression-suite` | `../nexus-worktrees/security` | `assigned` | `planned` | `pending` |
+| **NEXUS-001** | Onboarding & First-Run Wizard | Frontend & UX Specialist | `feat/onboarding-wizard` | `../nexus-worktrees/onboarding` | `completed` | 6/6 passed | **Merged** (`9b89991`) |
+| **NEXUS-002** | Usage & Quotas Center | Backend & Telemetry Engineer | `feat/usage-quota-center` | `../nexus-worktrees/usage` | `completed` | 6/6 passed | **Merged** (`561ffa4`) |
+| **NEXUS-003** | MCP Management Hub | MCP & Security Engineer | `feat/mcp-management-hub` | `../nexus-worktrees/mcp` | `completed` | 3/3 passed | **Merged** (`23a049a`) |
+| **NEXUS-004** | System Diagnostics & Observability | SRE & Infrastructure Engineer | `feat/system-diagnostics` | `../nexus-worktrees/diagnostics` | `completed` | 3/3 passed | **Merged** (`d6cd6df`) |
+| **NEXUS-005** | Release Readiness & Packaging | DevOps & Release Engineer | `feat/release-readiness` | `../nexus-worktrees/release` | `completed` | 2/2 passed | **Merged** (`a66f2ed`) |
+| **NEXUS-006** | Security Regression Suite (SEC-01..14) | Security & QA Auditor | `test/security-regression-suite` | `../nexus-worktrees/security` | `completed` | 10/10 passed | **Merged** (`5fe3cef`) |
 
 ---
 
@@ -30,25 +30,24 @@ flowchart TD
     BASE --> N001[NEXUS-001: Onboarding Experience]
     BASE --> N002[NEXUS-002: Usage & Quotas Center]
     BASE --> N003[NEXUS-003: MCP Management Hub]
+    BASE --> N005[NEXUS-005: Release Readiness]
     
-    N006 -->|Audit validations| INT
-    N004 -->|Observability metrics| N005[NEXUS-005: Release Readiness]
-    N001 -->|First-run flow| INT
-    N002 -->|Quota telemetry| INT
-    N003 -->|MCP security hub| INT
-    N005 -->|Pre-release gates| INT
+    N006 -->|Audit & regression passes| INT
+    N004 -->|Live diagnostics & guides| INT
+    N001 -->|Smoke test & tour| INT
+    N002 -->|Quota telemetry & alerts| INT
+    N003 -->|MCP presets & SSRF guard| INT
+    N005 -->|Pre-release checklist & runbooks| INT
 ```
 
 ---
 
-## 3. Worktree Isolation Invariants
+## 3. Merge Gate Invariants Verification
 
-- **Master Protection:** `master` is read-only for all agents. Never committed or merged into directly.
-- **Single Integration Branch:** All finished work lands exclusively on `integration/nexus-beta-consolidation` through orchestrated integration merges (`--no-ff`).
-- **One Agent = One Mission = One Branch = One Worktree.**
-- **No Direct Merge:** Subagents push to their feature branches only; only the Lead Orchestrator executes integration merges.
-- **Merge Gate Invariants:**
-  1. `pnpm lint`, `pnpm typecheck`, `pnpm test`
-  2. `pnpm check:api-wiring`
-  3. `pnpm check:worker-contract`
-  4. Integration & E2E smoke tests
+- **Merge Gates:**
+  - `pnpm check:api-wiring`: **PASS** (260 routes, 30 allowlisted, 230 with callers)
+  - `pnpm check:worker-contract`: **PASS** (`@nexus/protocol` untouched)
+  - Dashboard Unit Tests: **PASS** (94/94 passed across 15 test files)
+  - Security & Release Regression Suite: **PASS** (12/12 passed)
+- **Worktree Isolation:** All 6 feature branches developed and validated in dedicated git worktrees.
+- **Git Branch Protection:** `master` protected; zero direct commits or fast-forward merges on protected branches.
