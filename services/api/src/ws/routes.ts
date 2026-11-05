@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import { uuidv7 } from "@nexus/shared";
 import { WsCloseCode, parseClientHello } from "@nexus/protocol";
+import { isAllowedSocketOrigin } from "./socket-origin.js";
 
 /**
  * WebSocket transport for both channels.
@@ -51,11 +52,14 @@ export async function websocketRoutes(
     options: {
       maxPayload: MAX_PAYLOAD_BYTES,
       // `Origin` does not replace authentication — token and signature handle
-      // that — but it takes three lines and shuts down cross-site WebSocket
-      // hijacking even before the handshake. A missing origin is accepted:
-      // the worker daemon is not a browser and does not send one.
-      verifyClient: ({ origin }, done) => {
-        if (origin === undefined || options.allowedOrigins.includes(origin)) {
+      // that — but it shuts down cross-site WebSocket hijacking before the handshake.
+      verifyClient: ({ origin, req }, done) => {
+        const allowed = isAllowedSocketOrigin({
+          origin,
+          host: req.headers.host,
+          allowedOrigins: options.allowedOrigins,
+        });
+        if (allowed) {
           done(true);
           return;
         }
