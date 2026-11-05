@@ -148,7 +148,12 @@ export async function buildApp(options: BuildAppOptions) {
   app.decorate("redis", redis);
   app.decorate(
     "satellites",
-    options.satellites ?? new SatelliteService(config.SATELLITE_TOKEN_HASHES_JSON),
+    options.satellites ??
+      new SatelliteService(
+        config.SATELLITE_TOKEN_HASHES_JSON,
+        Date.now,
+        config.SATELLITE_OWNERS_JSON,
+      ),
   );
 
   // The correlation identifier is returned with the response: in case of error,

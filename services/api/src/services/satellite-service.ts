@@ -58,10 +58,20 @@ export class SatelliteService {
   readonly #commands = new Map<string, SatelliteCommand[]>();
   readonly #results = new Map<string, SatelliteCommandResult>();
   readonly #now: () => number;
+  private readonly owners: Readonly<Record<string, string>>;
 
-  constructor(tokenHashes: Readonly<Record<string, string>>, now: () => number = Date.now) {
+  constructor(
+    tokenHashes: Readonly<Record<string, string>>,
+    now: () => number = Date.now,
+    owners: Readonly<Record<string, string>> = {},
+  ) {
     this.#tokenHashes = tokenHashes;
     this.#now = now;
+    this.owners = owners;
+  }
+
+  isOwnedBy(deviceId: string, userId: string): boolean {
+    return this.owners[deviceId] === userId && this.#tokenHashes[deviceId] !== undefined;
   }
 
   authenticate(deviceId: string, authorization: string | undefined): boolean {

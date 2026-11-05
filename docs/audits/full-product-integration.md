@@ -90,3 +90,11 @@ Remaining work for this slice: database-side scoped projection/pagination (curre
 Usage reads now filter user and period inside Prisma, with a bounded page size and deterministic ordering. The existing quota screen supports periods and previous/next pages. The response retains its existing shape and adds nullable `nextOffset`.
 
 Executed: 27 persistence tests against disposable PostgreSQL; authenticated Fastify usage test backed by real Prisma, including two-account isolation and exclusion of private response text; 7 usage tests; API/dashboard type checks and targeted lint. These tests do not exercise a browser or an actual provider. A new service instance reads the persisted run; this is not a crash/restart mission test.
+
+## Mobile coordination — satellite authorization
+
+Reviewed `apps/mobile/docs/BACKEND-GAPS.md` from the separate mobile checkout. No mobile files were modified. `/usage` retains the coordinated shape with additive `nextOffset`.
+
+Confirmed unauthorised satellite listing and command submission in the prior API. Added trusted provisioning configuration `SATELLITE_OWNERS_JSON` mapping satellite IDs to owner user UUIDs, alongside existing token hash provisioning. List responses are owner-filtered; command submission to another owner's or unassigned satellite returns 404 before queue mutation. Existing installations must assign owners before user control is restored. This is an immediate access-control fix, not the final provisioning UI or durable command queue.
+
+Validation: all 4 satellite route tests passed, including cross-account infrared command denial, unassigned-device denial and owner-only visibility. API TypeScript and targeted lint passed. Streaming, `agent.started`, push delivery, satellite result ownership and client-core Metro entrypoint remain pending. No mobile branch was merged.

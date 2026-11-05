@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { SATELLITE_COMMANDS } from "../../services/satellite-service.js";
+import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 
 const deviceIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,47}$/);
@@ -86,13 +87,26 @@ export const satelliteRoutes: FastifyPluginCallback = (fastify, _options, done) 
       preHandler: app.requireUser,
       schema: { response: { 200: okSchema(z.object({ satellites: z.array(z.unknown()) })) } },
     },
-    (request) => ok({ satellites: app.satellites.list() }, request.id),
+    (request) =>
+      ok(
+        {
+          satellites: app.satellites
+            .list()
+            .filter((satellite) =>
+              app.satellites.isOwnedBy(satellite.deviceId, currentUser(request).userId),
+            ),
+        },
+        request.id,
+      ),
   );
 
   app.post(
     "/satellites/:deviceId/commands",
     { preHandler: app.requireUser, schema: { params: deviceParams, body: commandSchema } },
     async (request, reply) => {
+      if (!app.satellites.isOwnedBy(request.params.deviceId, currentUser(request).userId)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
       const item = app.satellites.enqueue(
         request.params.deviceId,
         request.body.command,

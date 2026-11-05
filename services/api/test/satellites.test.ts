@@ -10,9 +10,11 @@ const hash = createHash("sha256").update(TOKEN).digest("hex");
 describe("ESP32 satellite gateway", () => {
   let api: ApiHarness;
   let satellites: SatelliteService;
+  let owners: Record<string, string>;
 
   beforeEach(async () => {
-    satellites = new SatelliteService({ [DEVICE_ID]: hash });
+    owners = {};
+    satellites = new SatelliteService({ [DEVICE_ID]: hash }, Date.now, owners);
     api = await makeApi({ satellites });
   });
 
@@ -47,6 +49,7 @@ describe("ESP32 satellite gateway", () => {
 
   it("isolates queues and returns correlated command results", async () => {
     const account = await createAccount(api);
+    owners[DEVICE_ID] = account.userId;
     const queued = await api.app.inject({
       method: "POST",
       url: `/api/v1/satellites/${DEVICE_ID}/commands`,
@@ -87,8 +90,38 @@ describe("ESP32 satellite gateway", () => {
     expect(satellites.result(command.correlationId)?.ok).toBe(true);
   });
 
+  it("hides satellites and rejects cross-account commands, including unassigned devices", async () => {
+    const owner = await createAccount(api, "owner@example.test");
+    const other = await createAccount(api, "other@example.test");
+    owners[DEVICE_ID] = owner.userId;
+    satellites.heartbeat(heartbeat);
+    const list = await api.app.inject({
+      method: "GET",
+      url: "/api/v1/satellites",
+      headers: other.authorization,
+    });
+    expect(list.json().data.satellites).toEqual([]);
+    for (const deviceId of [DEVICE_ID, "unassigned"]) {
+      const denied = await api.app.inject({
+        method: "POST",
+        url: `/api/v1/satellites/${deviceId}/commands`,
+        headers: other.authorization,
+        payload: { command: "infrared.transmit", params: {} },
+      });
+      expect(denied.statusCode).toBe(404);
+      expect(satellites.next(deviceId)).toBeUndefined();
+    }
+    const own = await api.app.inject({
+      method: "GET",
+      url: "/api/v1/satellites",
+      headers: owner.authorization,
+    });
+    expect(own.json().data.satellites).toHaveLength(1);
+  });
+
   it("rejects non-allowlisted commands", async () => {
     const account = await createAccount(api);
+    owners[DEVICE_ID] = account.userId;
     const response = await api.app.inject({
       method: "POST",
       url: `/api/v1/satellites/${DEVICE_ID}/commands`,
