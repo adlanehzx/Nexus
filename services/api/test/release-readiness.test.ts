@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
+import fs, { mkdtempSync, rmSync } from "node:fs";
+import path, { join } from "node:path";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
 
 describe("Release Readiness & Operational Runbooks (Mission E)", () => {
   it("ensures release-readiness operational runbook exists and is comprehensive", () => {
@@ -51,6 +53,7 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
       User: [{ id: "u-1", name: "Alice_Corrupted", value: 0 }],
       TenantQuotaPolicy: [],
     };
+    expect(corruptedState.User).toHaveLength(1);
 
     // 4. Schema-only restore fails to bring back table rows
     const restoredFromSchemaOnly = JSON.parse(schemaOnlySnapshot) as Record<string, TableRow[]>;
@@ -62,6 +65,76 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
     expect(restoredFromFull.User).toHaveLength(2);
     expect(restoredFromFull.User[1]?.name).toBe("Bob");
   });
+
+  const isPostgresReachable = (): boolean => {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) return false;
+    try {
+      const res = execSync(`psql "${dbUrl}" -t -c "SELECT 1;"`, { stdio: "pipe" });
+      return res.toString().trim() === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  it.skipIf(!isPostgresReachable())(
+    "performs real PostgreSQL pg_dump -Fc and pg_restore against isolated database, validating rows, constraints, and sequences",
+    () => {
+      const sourceDbUrl = process.env.DATABASE_URL!;
+      const tempDir = mkdtempSync(join(tmpdir(), "nexus-pg-restore-"));
+      const dumpFile = join(tempDir, "backup.dump");
+      const tempDbName = `nexus_restore_test_${Date.now()}`;
+
+      try {
+        // 1. Export custom-format archive using pg_dump -Fc
+        execSync(`pg_dump -Fc -f "${dumpFile}" "${sourceDbUrl}"`, { stdio: "pipe" });
+        expect(fs.existsSync(dumpFile)).toBe(true);
+
+        // 2. Create isolated target database
+        execSync(`createdb "${tempDbName}"`, { stdio: "pipe" });
+
+        // 3. Restore archive to isolated database
+        execSync(`pg_restore -d "${tempDbName}" "${dumpFile}"`, { stdio: "pipe" });
+
+        // 4. Verify table row counts match between source and restored
+        const sourceCounts = execSync(
+          `psql "${sourceDbUrl}" -t -c "SELECT count(*) FROM \\"User\\";"`,
+          { stdio: "pipe" },
+        )
+          .toString()
+          .trim();
+        const restoredCounts = execSync(
+          `psql "${tempDbName}" -t -c "SELECT count(*) FROM \\"User\\";"`,
+          { stdio: "pipe" },
+        )
+          .toString()
+          .trim();
+        expect(restoredCounts).toBe(sourceCounts);
+
+        // 5. Verify constraints match
+        const sourceConstraints = execSync(
+          `psql "${sourceDbUrl}" -t -c "SELECT count(*) FROM information_schema.table_constraints WHERE table_schema = 'public';"`,
+          { stdio: "pipe" },
+        )
+          .toString()
+          .trim();
+        const restoredConstraints = execSync(
+          `psql "${tempDbName}" -t -c "SELECT count(*) FROM information_schema.table_constraints WHERE table_schema = 'public';"`,
+          { stdio: "pipe" },
+        )
+          .toString()
+          .trim();
+        expect(restoredConstraints).toBe(sourceConstraints);
+      } finally {
+        try {
+          execSync(`dropdb --if-exists "${tempDbName}"`, { stdio: "pipe" });
+        } catch {
+          // ignore drop errors in test teardown
+        }
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("verifies prisma schema defines safe nullable fields and models", () => {
     const schemaPath = path.resolve(__dirname, "../../../packages/database/prisma/schema.prisma");

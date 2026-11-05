@@ -395,6 +395,27 @@ function unseal(
   ]).toString("utf8");
 }
 
+/**
+ * Cryptographic Secret Vault (SEC-11).
+ *
+ * Architecture & Key Derivation:
+ * - Master Key: Minimum 32 characters required.
+ * - Primary Key Derivation: HKDF-SHA256 (RFC 5869)
+ *     Salt: "nexus:encrypted-file-vault:v1" (domain separation against cross-protocol reuse)
+ *     Info: "aes-256-gcm-key" (purpose binding)
+ *     Key Length: 32 bytes (256 bits)
+ * - Encryption: AES-256-GCM with 96-bit cryptographically secure random IV
+ * - Authenticated Additional Data (AAD): Secret name UTF-8, preventing ciphertext relocation.
+ * - Integrity: 128-bit GCM authentication tag.
+ *
+ * Seamless Legacy Migration:
+ * - Legacy Vault (NEXUS <= 0.9.x) derived keys using raw `createHash("sha256").update(masterSecret)`.
+ * - On `.get(ref)`: Attempt primary HKDF decryption first.
+ * - If decryption fails, attempt legacy key decryption. If authentic, transparently re-encrypt
+ *   with HKDF key + fresh IV, and persist back to disk.
+ * - Subsequent reads decrypt directly with HKDF key.
+ * - Integrity guarantee: Tampered ciphertext or wrong master key fails AEAD tag validation.
+ */
 export class EncryptedFileVault implements SecretVault {
   readonly #store: RuntimeConfigurationStore;
   readonly #key: Buffer;

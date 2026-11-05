@@ -13,18 +13,24 @@ import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { IconCheck } from "./icons.js";
 import { NexusLogo } from "./NexusLogo.js";
 
-type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
+export type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
-interface SetupWizardProps {
+export interface SetupWizardProps {
   session: SessionManager;
   api: DashboardApi;
   onComplete: () => void;
   onSwitchToLogin: () => void;
 }
 
-const STEP_ORDER: WizardStep[] = ["prerequisites", "admin", "agents", "capabilities", "complete"];
+export const STEP_ORDER: readonly WizardStep[] = [
+  "prerequisites",
+  "admin",
+  "agents",
+  "capabilities",
+  "complete",
+];
 
-const STEP_TITLES: Record<WizardStep, string> = {
+export const STEP_TITLES: Record<WizardStep, string> = {
   prerequisites: "1. System Readiness",
   admin: "2. Admin Account",
   agents: "3. Connect Agents",
@@ -32,13 +38,27 @@ const STEP_TITLES: Record<WizardStep, string> = {
   complete: "5. Ready to Launch",
 };
 
-const STEP_TITLES_FR: Record<WizardStep, string> = {
+export const STEP_TITLES_FR: Record<WizardStep, string> = {
   prerequisites: "1. Prérequis Système",
   admin: "2. Compte Administrateur",
   agents: "3. Connexion Agents",
   capabilities: "4. Capacités Optionnelles",
   complete: "5. Prêt au Lancement",
 };
+
+export function getStepIndex(step: WizardStep): number {
+  const idx = STEP_ORDER.indexOf(step);
+  return idx >= 0 ? idx : 0;
+}
+
+export function getStepProgress(step: WizardStep): number {
+  const idx = getStepIndex(step);
+  return Math.round((idx / (STEP_ORDER.length - 1)) * 100);
+}
+
+export function isStepOptional(step: WizardStep): boolean {
+  return step === "capabilities";
+}
 
 export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: SetupWizardProps) {
   const { tr, locale } = useI18n();

@@ -15,9 +15,28 @@ const commentSchema = z.object({
   text: z.string().trim().min(1).max(1250),
 });
 
-export function createLinkedInTools(input: {
-  client: LinkedInClient;
-}): ToolDefinition<never, unknown>[] {
+export type LinkedInClientResolver = (
+  context: ToolContext,
+) => Promise<LinkedInClient> | LinkedInClient;
+
+export interface CreateLinkedInToolsOptions {
+  client?: LinkedInClient;
+  resolveClient?: LinkedInClientResolver;
+}
+
+export function createLinkedInTools(
+  input: CreateLinkedInToolsOptions,
+): ToolDefinition<never, unknown>[] {
+  const getClient = async (context: ToolContext): Promise<LinkedInClient> => {
+    if (input.resolveClient) {
+      return input.resolveClient(context);
+    }
+    if (input.client) {
+      return input.client;
+    }
+    throw new Error("No LinkedIn client or client resolver configured for tool execution.");
+  };
+
   const profile: ToolDefinition<Record<string, never>, z.infer<typeof linkedInProfileSchema>> = {
     name: "linkedin.profile.read",
     version: "1.0.0",
@@ -28,7 +47,10 @@ export function createLinkedInTools(input: {
     riskLevel: "SAFE",
     requiredPermissions: ["linkedin.profile.read"],
     requiresConfirmation: false,
-    execute: (_value, context) => input.client.getProfile(context.signal),
+    execute: async (_value, context) => {
+      const client = await getClient(context);
+      return client.getProfile(context.signal);
+    },
   };
   const publish: ToolDefinition<
     z.infer<typeof publishSchema>,
@@ -46,8 +68,10 @@ export function createLinkedInTools(input: {
     idempotent: false,
     summarize: (value) =>
       `Publish LinkedIn post (${value.visibility}): ${value.text.slice(0, 120)}`,
-    execute: (value, context: ToolContext) =>
-      input.client.createTextPost({ ...value, signal: context.signal }),
+    execute: async (value, context: ToolContext) => {
+      const client = await getClient(context);
+      return client.createTextPost({ ...value, signal: context.signal });
+    },
   };
   const comment: ToolDefinition<
     z.infer<typeof commentSchema>,
@@ -63,8 +87,10 @@ export function createLinkedInTools(input: {
     requiresConfirmation: true,
     idempotent: false,
     summarize: (value) => `Comment on LinkedIn post ${value.postUrn}: ${value.text.slice(0, 120)}`,
-    execute: (value, context: ToolContext) =>
-      input.client.createComment({ ...value, signal: context.signal }),
+    execute: async (value, context: ToolContext) => {
+      const client = await getClient(context);
+      return client.createComment({ ...value, signal: context.signal });
+    },
   };
   return [profile, publish, comment] as unknown as ToolDefinition<never, unknown>[];
 }

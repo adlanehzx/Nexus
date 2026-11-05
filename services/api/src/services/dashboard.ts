@@ -32,12 +32,37 @@ import { checkRedis } from "../lib/redis.js";
 export type HealthStatus = "healthy" | "degraded" | "unavailable" | "unknown";
 export type HealthLevel = "ok" | "degraded" | "down" | "unconfigured" | HealthStatus;
 
+/**
+ * 4-state subsystem health taxonomy:
+ * - unconfigured: parameters/secrets are absent
+ * - configured: parameters/secrets are set but unauthenticated
+ * - authenticated: credentials validated against the service
+ * - reachable: network communication is established
+ * - operational: minimal test cycle / readiness probe verified
+ */
+export type SubsystemState =
+  "unconfigured" | "configured" | "authenticated" | "reachable" | "operational";
+
+export function evaluateSubsystemTaxonomy(params: {
+  hasConfig: boolean;
+  isAuthenticated: boolean;
+  isReachable: boolean;
+  isOperational: boolean;
+}): SubsystemState {
+  if (!params.hasConfig) return "unconfigured";
+  if (!params.isAuthenticated) return "configured";
+  if (!params.isReachable) return "authenticated";
+  if (!params.isOperational) return "reachable";
+  return "operational";
+}
+
 export interface SubsystemHealth {
   name: string;
   level: HealthLevel;
   status: HealthStatus;
+  state?: SubsystemState | undefined;
   detail: string;
-  latencyMs?: number | null;
+  latencyMs?: number | null | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -265,6 +290,7 @@ export class DashboardService {
         name: "Database",
         level: "unconfigured",
         status: "unknown",
+        state: "unconfigured",
         detail: "in-memory mock store",
         latencyMs: null,
       };
@@ -282,6 +308,7 @@ export class DashboardService {
               name: "Database",
               level: "degraded",
               status: "degraded",
+              state: "reachable",
               detail: `PostgreSQL active with high latency (${lat}ms)`,
               latencyMs: lat,
             };
@@ -290,6 +317,7 @@ export class DashboardService {
               name: "Database",
               level: "ok",
               status: "healthy",
+              state: "operational",
               detail: `PostgreSQL persistent store active (${lat}ms)`,
               latencyMs: lat,
             };
@@ -299,6 +327,7 @@ export class DashboardService {
             name: "Database",
             level: "down",
             status: "unavailable",
+            state: "configured",
             detail: `PostgreSQL error: ${res.error ?? "unavailable"}`,
             latencyMs: res.latencyMs ?? null,
           };
@@ -308,6 +337,7 @@ export class DashboardService {
           name: "Database",
           level: "down",
           status: "unavailable",
+          state: "configured",
           detail: `PostgreSQL unreachable: ${err instanceof Error ? err.message : String(err)}`,
           latencyMs: null,
         };
@@ -321,6 +351,7 @@ export class DashboardService {
         name: "Redis",
         level: "unconfigured",
         status: "unknown",
+        state: "unconfigured",
         detail: "in-memory cache/queues (no Redis configured)",
         latencyMs: null,
       };
@@ -334,6 +365,7 @@ export class DashboardService {
               name: "Redis",
               level: "degraded",
               status: "degraded",
+              state: "reachable",
               detail: `Redis active with high latency (${lat}ms)`,
               latencyMs: lat,
             };
@@ -342,6 +374,7 @@ export class DashboardService {
               name: "Redis",
               level: "ok",
               status: "healthy",
+              state: "operational",
               detail: `Redis responsive (${lat}ms)`,
               latencyMs: lat,
             };
@@ -351,6 +384,7 @@ export class DashboardService {
             name: "Redis",
             level: "down",
             status: "unavailable",
+            state: "configured",
             detail: `Redis error: ${res.error ?? "unavailable"}`,
             latencyMs: res.latencyMs ?? null,
           };
@@ -360,6 +394,7 @@ export class DashboardService {
           name: "Redis",
           level: "down",
           status: "unavailable",
+          state: "configured",
           detail: `Redis unreachable: ${err instanceof Error ? err.message : String(err)}`,
           latencyMs: null,
         };
@@ -380,6 +415,7 @@ export class DashboardService {
         name: "Providers",
         level: "unconfigured",
         status: "unknown",
+        state: "unconfigured",
         detail: "no LLM provider configured",
       };
     } else {
@@ -387,6 +423,7 @@ export class DashboardService {
         name: "Providers",
         level: "ok",
         status: "healthy",
+        state: this.#services.llmRuntime !== undefined ? "operational" : "reachable",
         detail:
           this.#services.llmRuntime !== undefined
             ? "unified model router active"
@@ -412,17 +449,26 @@ export class DashboardService {
             ? "degraded"
             : "healthy";
 
+    const workerState = evaluateSubsystemTaxonomy({
+      hasConfig: workers.length > 0,
+      isAuthenticated: workers.some((w) => w.authenticated),
+      isReachable: connected.length > 0,
+      isOperational: connected.some((w) => w.status === "ONLINE"),
+    });
+
     const entries: SubsystemHealth[] = [
       {
         name: "API",
         level: "ok",
         status: "healthy",
+        state: "operational",
         detail: `version ${this.#apiVersion}`,
       },
       {
         name: "Workers",
         level: workerLevel,
         status: workerStatus,
+        state: workerState,
         detail:
           workers.length === 0
             ? "no paired workers"
@@ -444,6 +490,7 @@ export class DashboardService {
         name: "Memory",
         level: "ok",
         status: "healthy",
+        state: "operational",
         detail: "in-memory store",
       },
     ];
@@ -526,6 +573,7 @@ export class DashboardService {
         name: "Browser",
         level: "ok",
         status: "healthy",
+        state: "operational",
         detail: "connected local Chromium harness (native mode)",
       };
     }
@@ -534,6 +582,7 @@ export class DashboardService {
         name: "Browser Use",
         level: "unconfigured",
         status: "unknown",
+        state: "unconfigured",
         detail: "browser worker not configured",
       };
     }
@@ -541,6 +590,7 @@ export class DashboardService {
       name: "Browser Use",
       level: "ok",
       status: "healthy",
+      state: "configured",
       detail: "configured; see dedicated section",
     };
   }

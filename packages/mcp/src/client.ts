@@ -9,7 +9,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { isStdioConfig, type McpServerConfig } from "./config.js";
 import { McpConnectionError, McpTimeoutError } from "./errors.js";
 import { McpSandboxManager } from "./sandbox.js";
-import { assertSafeRemoteUrl } from "./ssrf.js";
+import { assertSafeRemoteUrl, createSafeMcpFetch } from "./ssrf.js";
 
 export const MAX_TOOL_OUTPUT_CHARS = 65_536;
 
@@ -295,16 +295,8 @@ export class McpClient {
     await assertSafeRemoteUrl(config.url, { serverName: config.name });
     const url = new URL(config.url);
 
-    // SEC-05: Strict redirect and SSRF enforcement for remote transports
-    const safeFetch: typeof fetch = async (input, init) => {
-      const targetUrl =
-        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      await assertSafeRemoteUrl(targetUrl, { serverName: config.name });
-      return fetch(input, {
-        ...init,
-        redirect: "error",
-      });
-    };
+    // SEC-05 & SEC-SSRF: Strict redirect and SSRF enforcement for remote transports
+    const safeFetch = createSafeMcpFetch({ serverName: config.name });
 
     const transportOpts = {
       requestInit: { headers, redirect: "error" as const },

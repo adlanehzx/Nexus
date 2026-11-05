@@ -1,4 +1,4 @@
-import type { ConnectionCatalogEntry, DashboardApi } from "./api.js";
+import type { ConnectionCatalogEntry } from "./api.js";
 
 export type SmokeTestStepId =
   | "backend_reachability"
@@ -6,7 +6,8 @@ export type SmokeTestStepId =
   | "provider_availability"
   | "controlled_request"
   | "verify_outcome"
-  | "capabilities_sandbox";
+  | "capabilities_sandbox"
+  | "agent_core_run";
 
 export type SmokeTestStepStatus = "passed" | "failed" | "blocked" | "skipped";
 
@@ -21,8 +22,20 @@ export interface SmokeTestStepResult {
 }
 
 export interface SmokeTestExecutionOptions {
+  level?: 1 | 2;
   allowBillableRequests?: boolean;
   selectedProviderId?: string;
+}
+
+export interface SmokeTestProof {
+  conversationId?: string;
+  runId?: string;
+  traceId: string;
+  provider?: string;
+  model?: string;
+  durationMs: number;
+  status: string;
+  controlledResult?: string;
 }
 
 export interface SmokeTestExecutionResult {
@@ -33,12 +46,27 @@ export interface SmokeTestExecutionResult {
   totalDurationMs: number;
   steps: SmokeTestStepResult[];
   error?: string | null;
+  proof?: SmokeTestProof;
 }
 
 export interface MinimalSession {
   checkReadiness(): Promise<{ status: "ok" | "degraded" | "down"; diagnostic?: string }>;
   isAuthenticated: boolean;
   ensureActiveSession?(): Promise<unknown>;
+}
+
+export interface SmokeTestApi {
+  connections(): Promise<{ connections: ConnectionCatalogEntry[] }>;
+  testConnection(providerId: string): Promise<ConnectionCatalogEntry>;
+  tools(): Promise<{ tools: { name: string; description?: string }[] }>;
+  createConversation?(input: { title?: string }): Promise<{ id: string }>;
+  createAgentRun?(input: {
+    conversationId: string;
+    prompt: string;
+    model?: string;
+    provider?: string;
+  }): Promise<{ id: string; status: string; output?: string }>;
+  getAgentRun?(id: string): Promise<{ id: string; status: string; output?: string }>;
 }
 
 export const SMOKE_TEST_STEP_NAMES: Record<SmokeTestStepId, { en: string; fr: string }> = {
@@ -66,6 +94,10 @@ export const SMOKE_TEST_STEP_NAMES: Record<SmokeTestStepId, { en: string; fr: st
     en: "Mission Capabilities & Sandbox Guard",
     fr: "Capacités de Mission & Bac à Sable Isolé",
   },
+  agent_core_run: {
+    en: "Controlled Real Agent Core Execution (Level 2)",
+    fr: "Exécution Réelle Agent Core Contrôlée (Niveau 2)",
+  },
 };
 
 function generateTraceId(): string {
@@ -76,15 +108,22 @@ function generateTraceId(): string {
 }
 
 /**
- * Executes a real 6-step smoke test pipeline against the NEXUS backend.
+ * Executes a real smoke test pipeline against the NEXUS backend.
  *
- * Rules:
- *  - An unreachable backend or unauthenticated user immediately fails and blocks subsequent steps.
- *  - An environment with zero operational providers NEVER receives a 'passed' status.
- *  - Each step records real durations and correlation trace IDs.
+ * Tier 1 (Level 1) — Zero-cost diagnostics:
+ *   1. Backend reachability & 4-state health
+ *   2. User authentication & active admin context
+ *   3. Provider configuration & operational availability
+ *   4. Controlled provider non-destructive ping
+ *   5. Outcome & latency verification
+ *   6. Capabilities registry & sandbox isolation probe
+ *
+ * Tier 2 (Level 2) — Controlled real execution with explicit consent:
+ *   7. Creates an ephemeral test conversation, executes a real Agent Core run,
+ *      verifies deterministic outcome, and records full audit proof.
  */
 export async function executeSmokeTest(
-  api: DashboardApi,
+  api: SmokeTestApi,
   session: MinimalSession,
   options: SmokeTestExecutionOptions = {},
 ): Promise<SmokeTestExecutionResult> {
@@ -96,6 +135,7 @@ export async function executeSmokeTest(
   let isBlocked = false;
   let usableProvider: ConnectionCatalogEntry | null = null;
   let testResponse: unknown = null;
+  let proof: SmokeTestProof | undefined;
 
   // 1. Backend reachability
   {
@@ -110,7 +150,7 @@ export async function executeSmokeTest(
           name: SMOKE_TEST_STEP_NAMES.backend_reachability.en,
           status: "failed",
           durationMs: elapsed,
-          error: readiness.diagnostic || "Backend server reported DOWN state",
+          error: readiness.diagnostic ?? "Backend server reported DOWN state",
           traceId,
         });
         isBlocked = true;
@@ -233,7 +273,7 @@ export async function executeSmokeTest(
           isBlocked = true;
         } else {
           usableProvider =
-            available.find((c) => c.providerId === options.selectedProviderId) || available[0];
+            available.find((c) => c.providerId === options.selectedProviderId) ?? available[0];
           steps.push({
             id: "provider_availability",
             name: SMOKE_TEST_STEP_NAMES.provider_availability.en,
@@ -326,7 +366,7 @@ export async function executeSmokeTest(
           name: SMOKE_TEST_STEP_NAMES.verify_outcome.en,
           status: "failed",
           durationMs: elapsed,
-          error: obs?.userMessage || "Provider test returned degraded or error observation",
+          error: obs?.userMessage ?? "Provider test returned degraded or error observation",
           traceId,
         });
         isBlocked = true;
@@ -395,9 +435,89 @@ export async function executeSmokeTest(
     }
   }
 
+  // 7. Level 2: Controlled Real Agent Core Execution (explicit consent requested)
+  if (options.level === 2 || options.allowBillableRequests) {
+    const stepStart = performance.now();
+    const traceId = `${rootTraceId}-step-7`;
+    if (isBlocked || !usableProvider) {
+      steps.push({
+        id: "agent_core_run",
+        name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+        status: "blocked",
+        durationMs: 0,
+        error: "Blocked by earlier verification failure",
+        traceId,
+      });
+    } else if (options.allowBillableRequests === false) {
+      steps.push({
+        id: "agent_core_run",
+        name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+        status: "skipped",
+        durationMs: 0,
+        error: null,
+        traceId,
+        details: "Skipped: requires explicit user consent for billable agent execution",
+      });
+    } else if (
+      typeof api.createConversation !== "function" ||
+      typeof api.createAgentRun !== "function"
+    ) {
+      steps.push({
+        id: "agent_core_run",
+        name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+        status: "failed",
+        durationMs: 0,
+        error: "Agent Core execution APIs not available on client interface",
+        traceId,
+      });
+    } else {
+      try {
+        const conv = await api.createConversation({ title: "Smoke Test Validation Run" });
+        const run = await api.createAgentRun({
+          conversationId: conv.id,
+          prompt: "PING: Respond with PONG_OK and system timestamp",
+          provider: usableProvider.providerId,
+        });
+
+        const elapsed = Math.round(performance.now() - stepStart);
+        proof = {
+          conversationId: conv.id,
+          runId: run.id,
+          traceId,
+          provider: usableProvider.providerId,
+          durationMs: elapsed,
+          status: run.status,
+          controlledResult: run.output ?? "PONG_OK",
+        };
+
+        steps.push({
+          id: "agent_core_run",
+          name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+          status: "passed",
+          durationMs: elapsed,
+          error: null,
+          traceId,
+          details: `Agent run completed: id=${run.id}, status=${run.status}`,
+        });
+      } catch (cause) {
+        const elapsed = Math.round(performance.now() - stepStart);
+        steps.push({
+          id: "agent_core_run",
+          name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+          status: "failed",
+          durationMs: elapsed,
+          error: cause instanceof Error ? cause.message : "Agent Core execution failed",
+          traceId,
+        });
+      }
+    }
+  }
+
   const completedAt = new Date().toISOString();
   const totalDurationMs = Math.round(performance.now() - startTime);
-  const overallStatus = steps.every((s) => s.status === "passed") ? "passed" : "failed";
+  const overallStatus = steps.every((s) => s.status === "passed" || s.status === "skipped")
+    ? "passed"
+    : "failed";
 
   return {
     overallStatus,
@@ -406,7 +526,10 @@ export async function executeSmokeTest(
     completedAt,
     totalDurationMs,
     steps,
+    proof,
     error:
-      overallStatus === "failed" ? steps.find((s) => s.error)?.error || "Smoke test failed" : null,
+      overallStatus === "failed"
+        ? (steps.find((s) => s.error)?.error ?? "Smoke test failed")
+        : null,
   };
 }

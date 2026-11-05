@@ -6,7 +6,7 @@ import {
   exchangeLinkedInAuthorizationCode,
   linkedInTokensSchema,
 } from "@nexus/linkedin";
-import type { ToolRegistry } from "@nexus/tools";
+import type { ToolContext, ToolRegistry } from "@nexus/tools";
 import type {
   LinkedInRuntimeConfig,
   RuntimeConfigurationStore,
@@ -40,18 +40,32 @@ export class LinkedInIntegrationService {
 
   async initialize(): Promise<void> {
     const config = await this.#runtime.loadLinkedIn();
-    if (config !== null && (await this.#vault.get(config.tokenRef)) !== undefined) {
-      this.#registerTools(config);
+    if (config !== null) {
+      this.#registerTools();
     }
   }
 
-  async status(): Promise<{ configured: boolean; connected: boolean; tools: string[] }> {
+  async status(
+    userId?: string,
+  ): Promise<{ configured: boolean; connected: boolean; tools: string[] }> {
     const config = await this.#runtime.loadLinkedIn();
-    const connected = config !== null && (await this.#vault.get(config.tokenRef)) !== undefined;
-    return { configured: config !== null, connected, tools: connected ? [...TOOL_NAMES] : [] };
+    if (config === null) {
+      return { configured: false, connected: false, tools: [] };
+    }
+    const baseKey = config.tokenRef.replace("vault://nexus/", "");
+    const userKey = userId ? `${baseKey}/${userId}` : baseKey;
+    let raw = await this.#vault.get(userKey);
+    if (raw === undefined && userId) {
+      raw = await this.#vault.get(baseKey);
+    }
+    const connected = raw !== undefined;
+    return { configured: true, connected, tools: connected ? [...TOOL_NAMES] : [] };
   }
 
-  async start(config: LinkedInRuntimeConfig): Promise<{ authorizationUrl: string }> {
+  async start(
+    config: LinkedInRuntimeConfig,
+    _userId?: string,
+  ): Promise<{ authorizationUrl: string }> {
     await this.#runtime.saveLinkedIn(config);
     const state = this.#states.create(config.redirectUri);
     return {
@@ -63,7 +77,7 @@ export class LinkedInIntegrationService {
     };
   }
 
-  async complete(input: { code: string; state: string }): Promise<string> {
+  async complete(input: { code: string; state: string }, userId?: string): Promise<string> {
     const pending = this.#states.consume(input.state);
     if (pending === undefined) throw new Error("Invalid or expired LinkedIn OAuth state.");
     const config = await this.#runtime.loadLinkedIn();
@@ -79,29 +93,78 @@ export class LinkedInIntegrationService {
       redirectUri: config.redirectUri,
       fetchFn: this.#fetch,
     });
-    await this.#vault.set(config.tokenRef.replace("vault://nexus/", ""), JSON.stringify(tokens));
-    this.#registerTools(config);
+    const baseKey = config.tokenRef.replace("vault://nexus/", "");
+    const serializedTokens = JSON.stringify(tokens);
+    if (userId) {
+      await this.#vault.set(`${baseKey}/${userId}`, serializedTokens);
+    }
+    await this.#vault.set(baseKey, serializedTokens);
+    this.#registerTools();
     return new URL("/settings?linkedin=connected", config.redirectUri).toString();
   }
 
-  async disconnect(): Promise<void> {
+  async storeUserTokens(
+    userId: string,
+    tokens: { accessToken: string; expiresAt: number },
+  ): Promise<void> {
     const config = await this.#runtime.loadLinkedIn();
-    if (config !== null) await this.#vault.delete(config.tokenRef.replace("vault://nexus/", ""));
-    for (const name of TOOL_NAMES) this.#registry.unregister(name);
+    if (config === null) {
+      throw new Error("LinkedIn runtime configuration is not initialized.");
+    }
+    const baseKey = config.tokenRef.replace("vault://nexus/", "");
+    await this.#vault.set(`${baseKey}/${userId}`, JSON.stringify(tokens));
+    this.#registerTools();
   }
 
-  #registerTools(config: LinkedInRuntimeConfig): void {
-    const client = new LinkedInClient({
+  async disconnect(userId?: string): Promise<void> {
+    const config = await this.#runtime.loadLinkedIn();
+    if (config !== null) {
+      const baseKey = config.tokenRef.replace("vault://nexus/", "");
+      if (userId) {
+        await this.#vault.delete(`${baseKey}/${userId}`);
+      } else {
+        await this.#vault.delete(baseKey);
+        for (const name of TOOL_NAMES) {
+          this.#registry.unregister(name);
+        }
+      }
+    }
+  }
+
+  async resolveClient(context: ToolContext): Promise<LinkedInClient> {
+    if (!context.userId || context.userId.trim() === "" || context.userId === "anonymous") {
+      throw new Error(
+        "Unauthenticated user: LinkedIn actions require an authenticated user context.",
+      );
+    }
+    const config = await this.#runtime.loadLinkedIn();
+    if (!config) {
+      throw new Error("LinkedIn integration is not configured on this system.");
+    }
+    const baseKey = config.tokenRef.replace("vault://nexus/", "");
+    // Strictly isolate: lookup tokens belonging to context.userId
+    let raw = await this.#vault.get(`${baseKey}/${context.userId}`);
+    // In single-tenant mode without per-user keys, check baseKey
+    raw ??= await this.#vault.get(baseKey);
+    if (raw === undefined) {
+      throw new Error(`LinkedIn is not connected for user '${context.userId}'.`);
+    }
+    const tokens = linkedInTokensSchema.parse(JSON.parse(raw));
+    if (Date.now() >= tokens.expiresAt) {
+      throw new Error("LinkedIn authorization has expired.");
+    }
+    return new LinkedInClient({
       fetchFn: this.#fetch,
-      accessToken: async () => {
-        const raw = await this.#vault.get(config.tokenRef);
-        if (raw === undefined) throw new Error("LinkedIn is not connected.");
-        const tokens = linkedInTokensSchema.parse(JSON.parse(raw));
-        if (Date.now() >= tokens.expiresAt) throw new Error("LinkedIn authorization has expired.");
-        return tokens.accessToken;
-      },
+      accessToken: tokens.accessToken,
     });
-    for (const tool of createLinkedInTools({ client }))
+  }
+
+  #registerTools(): void {
+    const tools = createLinkedInTools({
+      resolveClient: (context: ToolContext) => this.resolveClient(context),
+    });
+    for (const tool of tools) {
       this.#registry.register(tool, { replace: true });
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTaskPlan } from "@nexus/devices";
 import { projectAgentRun, LogBuffer, SecurityLog } from "../src/services/observability.js";
+import { evaluateSubsystemTaxonomy } from "../src/services/dashboard.js";
 import {
   createAccount,
   makeApi,
@@ -318,6 +319,76 @@ describe("overview", () => {
         expect(validStates).toContain(h.status);
       }
     }
+  });
+
+  it("verifies the 4 granular state transitions (configured -> authenticated -> reachable -> operational)", () => {
+    // 1. Missing configuration
+    expect(
+      evaluateSubsystemTaxonomy({
+        hasConfig: false,
+        isAuthenticated: false,
+        isReachable: false,
+        isOperational: false,
+      }),
+    ).toBe("unconfigured");
+
+    // 2. Config present, unauthenticated credentials
+    expect(
+      evaluateSubsystemTaxonomy({
+        hasConfig: true,
+        isAuthenticated: false,
+        isReachable: false,
+        isOperational: false,
+      }),
+    ).toBe("configured");
+
+    // 3. Authenticated credentials, network unreachable
+    expect(
+      evaluateSubsystemTaxonomy({
+        hasConfig: true,
+        isAuthenticated: true,
+        isReachable: false,
+        isOperational: false,
+      }),
+    ).toBe("authenticated");
+
+    // 4. Reachable network communication, but test cycle / readiness probe pending
+    expect(
+      evaluateSubsystemTaxonomy({
+        hasConfig: true,
+        isAuthenticated: true,
+        isReachable: true,
+        isOperational: false,
+      }),
+    ).toBe("reachable");
+
+    // 5. Fully operational after validating test cycle
+    expect(
+      evaluateSubsystemTaxonomy({
+        hasConfig: true,
+        isAuthenticated: true,
+        isReachable: true,
+        isOperational: true,
+      }),
+    ).toBe("operational");
+  });
+
+  it("rejects operational status if network dependency fails", async () => {
+    // Register worker device with valid credentials
+    await registerDevice(harness, admin, { name: "Worker1", role: "WORKER" });
+
+    // When worker is not connected via gateway, network is unreachable
+    const response = await get("/api/v1/dashboard/overview", admin);
+    const health = response.json<{
+      data: { health: { name: string; state?: string; level: string; status?: string }[] };
+    }>().data.health;
+
+    const workersHealth = health.find((h) => h.name === "Workers");
+    expect(workersHealth).toBeDefined();
+    // Must NOT be operational when network channel is down
+    expect(workersHealth?.state).not.toBe("operational");
+    expect(["configured", "authenticated"]).toContain(workersHealth?.state);
+    expect(workersHealth?.status).toBe("unavailable");
   });
 
   it("blends recent activities from all sources", async () => {

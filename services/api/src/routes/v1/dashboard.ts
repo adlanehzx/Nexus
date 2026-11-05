@@ -62,6 +62,9 @@ const healthSchema = z.object({
   name: z.string(),
   level: z.enum(["ok", "degraded", "down", "unconfigured", "healthy", "unavailable", "unknown"]),
   status: z.enum(["healthy", "degraded", "unavailable", "unknown"]).optional(),
+  state: z
+    .enum(["unconfigured", "configured", "authenticated", "reachable", "operational"])
+    .optional(),
   detail: z.string(),
   latencyMs: z.number().nullable().optional(),
 });

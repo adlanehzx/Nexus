@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { WORKER_MESSAGE, workerEnvelope } from "@nexus/protocol";
 import { assertSafeRemoteUrl, isPrivateOrReservedIp, McpAppEngine } from "@nexus/mcp";
 import { PluginSandbox, ToolRegistry } from "@nexus/tools";
+import { LinkedInIntegrationService } from "../src/services/linkedin-integration.js";
 import { SatelliteService } from "../src/services/satellite-service.js";
 import {
   FakeWorkerSocket,
@@ -145,7 +146,7 @@ describe("SEC-04: Cross-Tenant Worktree Boundary", () => {
     });
     expect([200, 400]).toContain(res.statusCode);
     if (res.statusCode === 200) {
-      const data = res.json<{ worktrees?: Array<{ userId?: string }> }>();
+      const data = res.json<{ worktrees?: { userId?: string }[] }>();
       const items = data.worktrees ?? [];
       for (const item of items) {
         if (item.userId) {
@@ -281,18 +282,119 @@ describe("SEC-11: Encrypted Vault Key Derivation & Tenancy", () => {
 });
 
 describe("SEC-12: ToolRegistry LinkedIn Integration Scoping Leak Prevention", () => {
-  it("requires confirmation for social publish tools and protects against unscoped execution", () => {
+  it("enforces multi-user credential isolation, preventing Alice from using Bob's tokens", async () => {
+    const secrets = new Map<string, string>([
+      ["linkedin-client-secret", "super-secret"],
+      [
+        "linkedin-token/user-alice",
+        JSON.stringify({ accessToken: "token-alice-111", expiresAt: Date.now() + 3_600_000 }),
+      ],
+      [
+        "linkedin-token/user-bob",
+        JSON.stringify({ accessToken: "token-bob-222", expiresAt: Date.now() + 3_600_000 }),
+      ],
+    ]);
+
+    const vault = {
+      get: (ref: string) => Promise.resolve(secrets.get(ref.replace("vault://nexus/", ""))),
+      set: (name: string, value: string) => {
+        secrets.set(name, value);
+        return Promise.resolve();
+      },
+      delete: (name: string) => {
+        secrets.delete(name);
+        return Promise.resolve();
+      },
+    };
+
+    const outboundCalls: { token: string | null }[] = [];
+    const fetchFn: typeof fetch = (_url: unknown, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      outboundCalls.push({ token: headers.get("Authorization") });
+      return Promise.resolve(
+        new Response(null, {
+          status: 201,
+          headers: { "x-restli-id": "urn:li:share:999" },
+        }),
+      );
+    };
+
+    const runtime = {
+      loadLinkedIn: () =>
+        Promise.resolve({
+          clientId: "client-id",
+          clientSecretRef: "vault://nexus/linkedin-client-secret",
+          tokenRef: "vault://nexus/linkedin-token",
+          redirectUri: "http://localhost:3000/api/v1/linkedin/oauth/callback",
+        }),
+      saveLinkedIn: () => Promise.resolve(),
+    };
+
     const registry = new ToolRegistry();
-    registry.register({
-      name: "linkedin.post.publish",
-      description: "Publishes an update to LinkedIn",
-      inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
-      requiresConfirmation: true,
-      execute: async () => ({ published: true }),
+    const service = new LinkedInIntegrationService({
+      runtime: runtime as never,
+      vault,
+      registry,
+      fetchFn,
     });
 
-    const tool = registry.require("linkedin.post.publish");
-    expect(tool.requiresConfirmation).toBe(true);
+    await service.initialize();
+
+    const publishTool = registry.require("linkedin.post.publish");
+    expect(publishTool.requiresConfirmation).toBe(true);
+
+    const makeContext = (userId: string) => ({
+      userId,
+      runId: "run-sec12",
+      conversationId: "conv-sec12",
+      correlationId: "corr-sec12",
+      signal: new AbortController().signal,
+      idempotencyKey: "idem-sec12",
+      attempt: 1,
+      onProgress: () => {
+        void 0;
+      },
+    });
+
+    // Alice uses Token A
+    await publishTool.execute(
+      { authorUrn: "urn:li:person:alice", text: "Post Alice", visibility: "PUBLIC" },
+      makeContext("user-alice"),
+    );
+    expect(outboundCalls[0]?.token).toBe("Bearer token-alice-111");
+
+    // Bob uses Token B
+    await publishTool.execute(
+      { authorUrn: "urn:li:person:bob", text: "Post Bob", visibility: "PUBLIC" },
+      makeContext("user-bob"),
+    );
+    expect(outboundCalls[1]?.token).toBe("Bearer token-bob-222");
+
+    // Unauthenticated user is rejected with zero requests
+    await expect(
+      publishTool.execute(
+        { authorUrn: "urn:li:person:anon", text: "Anon", visibility: "PUBLIC" },
+        makeContext(""),
+      ),
+    ).rejects.toThrow(/unauthenticated/i);
+    expect(outboundCalls).toHaveLength(2);
+
+    // Disconnecting Alice leaves Bob functional
+    await service.disconnect("user-alice");
+    await expect(
+      publishTool.execute(
+        { authorUrn: "urn:li:person:alice", text: "Post 2", visibility: "PUBLIC" },
+        makeContext("user-alice"),
+      ),
+    ).rejects.toThrow(/not connected/i);
+    expect(outboundCalls).toHaveLength(2);
+
+    await publishTool.execute(
+      { authorUrn: "urn:li:person:bob", text: "Bob Post 2", visibility: "PUBLIC" },
+      makeContext("user-bob"),
+    );
+    expect(outboundCalls).toHaveLength(3);
+    expect(outboundCalls[2]?.token).toBe("Bearer token-bob-222");
   });
 });
 

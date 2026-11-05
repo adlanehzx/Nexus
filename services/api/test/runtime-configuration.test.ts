@@ -212,8 +212,8 @@ describe("NEXUS manageable configuration", () => {
   });
 });
 
-describe("EncryptedFileVault key upgrade", () => {
-  it("reads a secret sealed with the previous key derivation, then reseals it", async () => {
+describe("EncryptedFileVault key upgrade & integrity (SEC-11)", () => {
+  it("reads a legacy SHA-256 sealed secret, transparently migrates to HKDF, and verifies stability across restarts", async () => {
     const directory = await mkdtemp(join(tmpdir(), "nexus-vault-upgrade-"));
     const store = new RuntimeConfigurationStore(directory);
     const master = "a-master-key-of-at-least-32-characters";
@@ -230,17 +230,58 @@ describe("EncryptedFileVault key upgrade", () => {
     };
     await store.saveEncryptedSecrets({ version: 1, secrets: { [name]: sealed } });
 
+    // 1. Read through new HKDF implementation
     const vault = new EncryptedFileVault(store, master);
     await expect(vault.get(`vault://nexus/${name}`)).resolves.toBe("stored-value");
 
+    // 2. Verify automatic re-sealing with new HKDF key and fresh IV
     const resealed = (await store.loadEncryptedSecrets()).secrets[name];
     expect(resealed?.ciphertext).not.toBe(sealed.ciphertext);
-    await expect(vault.get(`vault://nexus/${name}`)).resolves.toBe("stored-value");
+    expect(resealed?.iv).not.toBe(sealed.iv);
 
-    await expect(
-      new EncryptedFileVault(store, "another-master-key-of-at-least-32-chars").get(
-        `vault://nexus/${name}`,
-      ),
-    ).rejects.toThrow();
+    // 3. Verify stability across cold restart (new vault instance reading persisted HKDF state)
+    const restartedVault = new EncryptedFileVault(store, master);
+    await expect(restartedVault.get(`vault://nexus/${name}`)).resolves.toBe("stored-value");
+
+    // 4. Verify rejection of an incorrect master key
+    const badVault = new EncryptedFileVault(store, "wrong-master-key-at-least-32-characters");
+    await expect(badVault.get(`vault://nexus/${name}`)).rejects.toThrow();
+  });
+
+  it("detects and rejects ciphertext tampering and tag corruption", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "nexus-vault-tamper-"));
+    const store = new RuntimeConfigurationStore(directory);
+    const master = "a-master-key-of-at-least-32-characters";
+    const vault = new EncryptedFileVault(store, master);
+
+    await vault.set("tamper_test", "super-sensitive-data");
+
+    // 1. Verify normal read
+    await expect(vault.get("vault://nexus/tamper_test")).resolves.toBe("super-sensitive-data");
+
+    // 2. Tamper with ciphertext by flipping bits in the base64 string
+    const persisted = await store.loadEncryptedSecrets();
+    const originalSealed = persisted.secrets.tamper_test!;
+    const cipherBuf = Buffer.from(originalSealed.ciphertext, "base64");
+    cipherBuf[0] = (cipherBuf[0] ?? 0) ^ 0xff; // flip byte
+    persisted.secrets.tamper_test = {
+      ...originalSealed,
+      ciphertext: cipherBuf.toString("base64"),
+    };
+    await store.saveEncryptedSecrets(persisted);
+
+    // Attempting to read tampered secret must fail integrity validation
+    await expect(vault.get("vault://nexus/tamper_test")).rejects.toThrow();
+
+    // 3. Tamper with authentication tag
+    const tagBuf = Buffer.from(originalSealed.tag, "base64");
+    tagBuf[0] = (tagBuf[0] ?? 0) ^ 0xaa;
+    persisted.secrets.tamper_test = {
+      ...originalSealed,
+      tag: tagBuf.toString("base64"),
+    };
+    await store.saveEncryptedSecrets(persisted);
+
+    await expect(vault.get("vault://nexus/tamper_test")).rejects.toThrow();
   });
 });

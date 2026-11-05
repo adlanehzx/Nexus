@@ -50,6 +50,9 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
   });
 
   it("executes the full lifecycle: worktree -> DB persist -> checkpoint -> rollback -> source control", async () => {
+    const threadId = `e2e-thread-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const branchName = `agent-task-e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
     // 1. Allocate isolated worktree
     const createWorktreeRes = await harness.app.inject({
       method: "POST",
@@ -57,38 +60,39 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
       headers: account.authorization,
       payload: {
         workspaceRoot: testRepoDir,
-        branchName: "agent-task-e2e-1",
+        branchName,
         baseBranch: "main",
       },
     });
 
     expect(createWorktreeRes.statusCode).toBe(201);
     const { worktree } = createWorktreeRes.json<{
-      worktree: { id: string; branch: string; status: string; path: string };
+      worktree: { id: string; branchName: string; path: string; status: string };
     }>();
-    expect(worktree.branch).toBe("agent-task-e2e-1");
+    expect(worktree.branchName).toBe(branchName);
     expect(worktree.status).toBe("active");
 
-    // 2. Verify PostgreSQL persistence
+    // 2. Verify PostgreSQL worktree persistence
     if (harness.app.prisma?.worktree) {
       const persistedWorktree = await harness.app.prisma.worktree.findUnique({
         where: { id: worktree.id },
       });
       expect(persistedWorktree).not.toBeNull();
-      expect(persistedWorktree?.branch).toBe("agent-task-e2e-1");
+      expect(persistedWorktree?.branchName).toBe(branchName);
+      expect(persistedWorktree?.status).toBe("active");
     }
 
-    // 3. Make changes in worktree
-    const testFile = path.join(String(worktree.path), "feature.ts");
+    // 3. Perform code changes in isolated worktree
+    const testFile = path.join(worktree.path, "feature.ts");
     await fs.writeFile(testFile, "export const add = (a: number, b: number) => a + b;\n");
 
-    // 4. Capture differential checkpoint
+    // 4. Capture turn 1 checkpoint
     const checkpointRes = await harness.app.inject({
       method: "POST",
       url: "/api/v1/checkpoints",
       headers: account.authorization,
       payload: {
-        threadId: "e2e-thread-01",
+        threadId,
         turnNumber: 1,
         cwd: worktree.path,
         description: "Implemented add function",
@@ -108,7 +112,7 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
         where: { id: checkpoint.id },
       });
       expect(persistedCheckpoint).not.toBeNull();
-      expect(persistedCheckpoint?.threadId).toBe("e2e-thread-01");
+      expect(persistedCheckpoint?.threadId).toBe(threadId);
       expect(persistedCheckpoint?.turnNumber).toBe(1);
     }
 
@@ -122,7 +126,7 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
       url: "/api/v1/checkpoints",
       headers: account.authorization,
       payload: {
-        threadId: "e2e-thread-01",
+        threadId,
         turnNumber: 2,
         cwd: worktree.path,
         description: "Added multiply function",
@@ -133,7 +137,7 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
     // 7. Compute turn diff between turn 1 and 2
     const diffRes = await harness.app.inject({
       method: "GET",
-      url: `/api/v1/checkpoints/e2e-thread-01/diff?fromTurn=1&toTurn=2&cwd=${encodeURIComponent(String(worktree.path))}`,
+      url: `/api/v1/checkpoints/${threadId}/diff?fromTurn=1&toTurn=2&cwd=${encodeURIComponent(String(worktree.path))}`,
       headers: account.authorization,
     });
     expect(diffRes.statusCode).toBe(200);
@@ -146,7 +150,7 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
       url: "/api/v1/checkpoints/rollback",
       headers: account.authorization,
       payload: {
-        threadId: "e2e-thread-01",
+        threadId,
         turnNumber: 1,
         cwd: worktree.path,
       },
