@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 export const API_URL = process.env.NEXUS_E2E_API_URL ?? "http://127.0.0.1:3107";
@@ -10,11 +11,19 @@ export interface Account {
   accessToken: string;
 }
 
+const REDIS_CONTAINER = process.env.NEXUS_E2E_REDIS_CONTAINER ?? "nexus-integration-redis";
+
+/** Suites register more accounts than the per-minute limit, which lives in the disposable Redis. */
+function resetRateLimits(): void {
+  execFileSync("docker", ["exec", REDIS_CONTAINER, "redis-cli", "FLUSHALL"], { stdio: "ignore" });
+}
+
 /** Registers a real account through the public API, with a unique identity per run. */
 export async function registerAccount(request: APIRequestContext, label: string): Promise<Account> {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const email = `${label}-${suffix}@e2e.nexus.test`;
   const password = `e2e-${suffix}-disposable`;
+  resetRateLimits();
   const response = await request.post(`${API_URL}/api/v1/auth/register`, {
     data: { email, password, displayName: label },
   });
@@ -27,6 +36,7 @@ export async function registerAccount(request: APIRequestContext, label: string)
 
 /** Signs in through the real login form. */
 export async function signIn(page: Page, account: Pick<Account, "email" | "password">) {
+  resetRateLimits();
   await page.goto("/");
   await page.getByRole("textbox", { name: /email/i }).fill(account.email);
   await page.getByRole("textbox", { name: /password|mot de passe/i }).fill(account.password);

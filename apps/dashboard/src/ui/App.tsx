@@ -59,6 +59,7 @@ const VisualControl = lazySection("VisualControl");
 const Workers = lazySection("Workers");
 const VcsWorktrees = lazySection("VcsWorktrees");
 const Providers = lazySection("Providers");
+const Organizations = lazySection("Organizations");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -137,6 +138,12 @@ export const SETTINGS_CATEGORIES = [
         id: "security" as const,
         label: "Sécurité & Garde-fous",
         labelEn: "Security & Guardrails",
+        icon: "security",
+      },
+      {
+        id: "organizations" as const,
+        label: "Organisations",
+        labelEn: "Organizations",
         icon: "security",
       },
       {
@@ -316,6 +323,10 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   "communication-graph": {
     title: "Agent communication graph",
     description: "Inter-agent message topologies, communication volume, and latency.",
+  },
+  organizations: {
+    title: "Organizations",
+    description: "Organizations you belong to, their members and roles.",
   },
   "quota-forecast": {
     title: "Usage & Quotas",
@@ -957,6 +968,8 @@ function renderSection(
       return <TradingLab api={api} />;
     case "memory":
       return <Memory api={api} />;
+    case "organizations":
+      return <Organizations api={api} />;
     case "notifications":
       return <Notifications api={api} />;
     case "security":

@@ -177,6 +177,13 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("connections", "Connexions CLIs"),
       },
       {
+        id: "win-organizations",
+        title: "Ouvrir Organizations (organisations)",
+        subtitle: "Organisations, membres et rôles",
+        category: "Windows",
+        action: () => openWindow("organizations", "Organizations"),
+      },
+      {
         id: "win-usage",
         title: "Ouvrir Usage & Quotas",
         subtitle: "Tokens observés, coûts estimés et fenêtres de quota",

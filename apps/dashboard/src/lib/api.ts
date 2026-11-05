@@ -1029,6 +1029,21 @@ export interface UsageQuotaAccountDto {
   exhausted: boolean;
 }
 
+export interface OrganizationDto {
+  id: string;
+  slug: string;
+  name: string;
+  mode: "LOCAL" | "HOSTED";
+  role: string;
+}
+
+export interface OrganizationMemberDto {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
+
 export interface McpTokenDto {
   id: string;
   name: string;
@@ -1617,6 +1632,22 @@ export class DashboardApi {
     providerQuota: null;
   }> {
     return this.#get(`/api/v1/usage?days=${days}&offset=${offset}`);
+  }
+
+  organizations(): Promise<{ organizations: OrganizationDto[] }> {
+    return this.#get("/api/v1/organizations");
+  }
+
+  createOrganization(input: { name: string; slug: string }): Promise<unknown> {
+    return this.#request("POST", "/api/v1/organizations", input);
+  }
+
+  organizationMembers(id: string): Promise<{ members: OrganizationMemberDto[] }> {
+    return this.#get(`/api/v1/organizations/${encodeURIComponent(id)}/members`);
+  }
+
+  addOrganizationMember(id: string, input: { email: string; role: string }): Promise<unknown> {
+    return this.#request("POST", `/api/v1/organizations/${encodeURIComponent(id)}/members`, input);
   }
 
   mcpTokens(): Promise<{ tokens: McpTokenDto[]; availableScopes: string[] }> {
