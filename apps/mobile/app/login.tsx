@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useNexus } from "../lib/nexus.js";
@@ -23,6 +23,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const passwordInput = useRef<TextInput>(null);
 
   // Probing first turns "wrong address" into a message at the right moment,
   // rather than a failed password attempt.
@@ -55,6 +56,7 @@ export default function LoginScreen() {
   }
 
   const submit = async () => {
+    if (busy || email.trim().length === 0 || password.length === 0) return;
     setBusy(true);
     setError(undefined);
 
@@ -103,10 +105,14 @@ export default function LoginScreen() {
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
+        returnKeyType="next"
+        onSubmitEditing={() => passwordInput.current?.focus()}
+        submitBehavior="submit"
         accessibilityLabel="Email address"
       />
 
       <TextInput
+        ref={passwordInput}
         style={styles.input}
         value={password}
         onChangeText={setPassword}
@@ -114,6 +120,8 @@ export default function LoginScreen() {
         placeholderTextColor={theme.color.textFaint}
         secureTextEntry
         autoComplete="current-password"
+        returnKeyType="go"
+        onSubmitEditing={() => void submit()}
         accessibilityLabel="Password"
       />
 
