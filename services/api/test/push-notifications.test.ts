@@ -29,7 +29,7 @@ describe("PushNotificationService", () => {
     expect(fetchFn).toHaveBeenCalledOnce();
     const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://exp.host/--/api/v2/push/send");
-    const body = String(init.body);
+    const body = init.body as string;
     expect(JSON.parse(body)).toEqual([
       {
         to: "ExponentPushToken[a]",
