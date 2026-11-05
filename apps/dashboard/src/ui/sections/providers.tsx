@@ -10,7 +10,10 @@ export function Providers({ api }: { api: DashboardApi }) {
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const installed = (connections.data?.connections ?? []).filter(
-    (entry) => entry.observation !== null && entry.observation.state !== "not_installed",
+    (entry) =>
+      entry.observation !== null &&
+      entry.observation.state !== "not_installed" &&
+      entry.observation.state !== "error",
   );
 
   const detect = async () => {
@@ -128,6 +131,9 @@ export function Providers({ api }: { api: DashboardApi }) {
                           {entry.observation === null
                             ? tr("Not checked", "Non vérifié")
                             : entry.observation.state}
+                          {entry.observation?.userMessage == null ? null : (
+                            <div className="muted">{entry.observation.userMessage}</div>
+                          )}
                         </td>
                         <td className="mono">
                           {entry.observation?.version ?? tr("Unavailable", "Indisponible")}
