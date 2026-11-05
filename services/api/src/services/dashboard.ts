@@ -3,6 +3,8 @@ import { projectAgentRun, type AgentRunView, type ProjectableRun } from "./obser
 import type { ServiceContainer } from "./container.js";
 import type { MissionSnapshot, MissionTask } from "@nexus/mission-control-client";
 import { missionOwnerPrefix } from "./acp-orchestrator.js";
+import { checkDatabase } from "@nexus/database";
+import { checkRedis } from "../lib/redis.js";
 
 /**
  * Supervision dashboard.
@@ -27,12 +29,15 @@ import { missionOwnerPrefix } from "./acp-orchestrator.js";
  * it makes people look for failures elsewhere.
  */
 
-export type HealthLevel = "ok" | "degraded" | "down" | "unconfigured";
+export type HealthStatus = "healthy" | "degraded" | "unavailable" | "unknown";
+export type HealthLevel = "ok" | "degraded" | "down" | "unconfigured" | HealthStatus;
 
 export interface SubsystemHealth {
   name: string;
   level: HealthLevel;
+  status: HealthStatus;
   detail: string;
+  latencyMs?: number | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,7 +234,7 @@ export class DashboardService {
         eventsRetained: this.#services.securityLog.size,
         byKind: this.#services.securityLog.countByKind(),
       },
-      health: this.health(devices),
+      health: await this.health(devices),
       recentActivity: this.#recentActivity(plans, runs),
     };
   }
@@ -237,30 +242,187 @@ export class DashboardService {
   /**
    * Subsystem health.
    *
-   * `unconfigured` is a distinct level in its own right, separate from `down`.
-   * An MCP server that has never been plugged in is not broken, and displaying
-   * it in red would prompt investigations into an incident that does not exist.
+   * Executes real non-destructive healthchecks with timeouts against configured dependencies
+   * (PostgreSQL, Redis, Mission Engine, MCP). Uses four consistent states:
+   * healthy, degraded, unavailable, unknown.
    */
-  health(devices: readonly Device[]): SubsystemHealth[] {
+  async health(devices: readonly Device[]): Promise<SubsystemHealth[]> {
     const workers = devices.filter((device) => canAcceptTasks(device.role));
     const connected = workers.filter((device) => this.#services.gateway.isConnected(device.id));
+
+    const timeout = <T>(promise: Promise<T>, ms: number, fallback: string): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${fallback}`)), ms),
+        ),
+      ]);
+
+    // 1. Database active check
+    let dbHealth: SubsystemHealth;
+    if (this.#services.prisma === undefined) {
+      dbHealth = {
+        name: "Database",
+        level: "unconfigured",
+        status: "unknown",
+        detail: "in-memory mock store",
+        latencyMs: null,
+      };
+    } else {
+      try {
+        const res = await timeout(
+          checkDatabase(this.#services.prisma),
+          1500,
+          "Database probe timed out",
+        );
+        if (res.status === "up") {
+          const lat = res.latencyMs ?? 0;
+          if (lat > 500) {
+            dbHealth = {
+              name: "Database",
+              level: "degraded",
+              status: "degraded",
+              detail: `PostgreSQL active with high latency (${lat}ms)`,
+              latencyMs: lat,
+            };
+          } else {
+            dbHealth = {
+              name: "Database",
+              level: "ok",
+              status: "healthy",
+              detail: `PostgreSQL persistent store active (${lat}ms)`,
+              latencyMs: lat,
+            };
+          }
+        } else {
+          dbHealth = {
+            name: "Database",
+            level: "down",
+            status: "unavailable",
+            detail: `PostgreSQL error: ${res.error ?? "unavailable"}`,
+            latencyMs: res.latencyMs ?? null,
+          };
+        }
+      } catch (err) {
+        dbHealth = {
+          name: "Database",
+          level: "down",
+          status: "unavailable",
+          detail: `PostgreSQL unreachable: ${err instanceof Error ? err.message : String(err)}`,
+          latencyMs: null,
+        };
+      }
+    }
+
+    // 2. Redis active check
+    let redisHealth: SubsystemHealth;
+    if (this.#services.redis === undefined) {
+      redisHealth = {
+        name: "Redis",
+        level: "unconfigured",
+        status: "unknown",
+        detail: "in-memory cache/queues (no Redis configured)",
+        latencyMs: null,
+      };
+    } else {
+      try {
+        const res = await timeout(checkRedis(this.#services.redis), 1500, "Redis probe timed out");
+        if (res.status === "up") {
+          const lat = res.latencyMs ?? 0;
+          if (lat > 250) {
+            redisHealth = {
+              name: "Redis",
+              level: "degraded",
+              status: "degraded",
+              detail: `Redis active with high latency (${lat}ms)`,
+              latencyMs: lat,
+            };
+          } else {
+            redisHealth = {
+              name: "Redis",
+              level: "ok",
+              status: "healthy",
+              detail: `Redis responsive (${lat}ms)`,
+              latencyMs: lat,
+            };
+          }
+        } else {
+          redisHealth = {
+            name: "Redis",
+            level: "down",
+            status: "unavailable",
+            detail: `Redis error: ${res.error ?? "unavailable"}`,
+            latencyMs: res.latencyMs ?? null,
+          };
+        }
+      } catch (err) {
+        redisHealth = {
+          name: "Redis",
+          level: "down",
+          status: "unavailable",
+          detail: `Redis unreachable: ${err instanceof Error ? err.message : String(err)}`,
+          latencyMs: null,
+        };
+      }
+    }
+
+    // 3. Mission Engine check
+    const mcHealth = await this.#missionEngineHealth(timeout);
+
+    // 4. Provider check
+    let providerHealth: SubsystemHealth;
+    const hasRuntime =
+      this.#services.llmRuntime !== undefined ||
+      this.#services.freeLlm !== undefined ||
+      this.#services.llmProvider !== undefined;
+    if (!hasRuntime) {
+      providerHealth = {
+        name: "Providers",
+        level: "unconfigured",
+        status: "unknown",
+        detail: "no LLM provider configured",
+      };
+    } else {
+      providerHealth = {
+        name: "Providers",
+        level: "ok",
+        status: "healthy",
+        detail:
+          this.#services.llmRuntime !== undefined
+            ? "unified model router active"
+            : "local heuristics fallback",
+      };
+    }
+
+    // 5. Workers health
+    const workerLevel =
+      workers.length === 0
+        ? "unconfigured"
+        : connected.length === 0
+          ? "down"
+          : connected.length < workers.length
+            ? "degraded"
+            : "ok";
+    const workerStatus: HealthStatus =
+      workers.length === 0
+        ? "unknown"
+        : connected.length === 0
+          ? "unavailable"
+          : connected.length < workers.length
+            ? "degraded"
+            : "healthy";
 
     const entries: SubsystemHealth[] = [
       {
         name: "API",
         level: "ok",
+        status: "healthy",
         detail: `version ${this.#apiVersion}`,
       },
       {
         name: "Workers",
-        level:
-          workers.length === 0
-            ? "unconfigured"
-            : connected.length === 0
-              ? "down"
-              : connected.length < workers.length
-                ? "degraded"
-                : "ok",
+        level: workerLevel,
+        status: workerStatus,
         detail:
           workers.length === 0
             ? "no paired workers"
@@ -269,35 +431,19 @@ export class DashboardService {
       {
         name: "Real-time clients",
         level: this.#services.router.connectedDeviceIds.length === 0 ? "degraded" : "ok",
+        status: this.#services.router.connectedDeviceIds.length === 0 ? "degraded" : "healthy",
         detail: `${String(this.#services.router.connectedDeviceIds.length)} client(s) attached`,
       },
-      {
-        name: "Database",
-        level: this.#services.prisma !== undefined ? "ok" : "unconfigured",
-        detail:
-          this.#services.prisma !== undefined
-            ? "PostgreSQL persistent store active"
-            : "in-memory mock store",
-      },
-      {
-        name: "Providers",
-        level:
-          this.#services.llmRuntime !== undefined ||
-          this.#services.freeLlm !== undefined ||
-          this.#services.llmProvider !== undefined
-            ? "ok"
-            : "unconfigured",
-        detail:
-          this.#services.llmRuntime !== undefined
-            ? "unified model router active"
-            : "local heuristics fallback",
-      },
-      this.#missionEngineHealth(),
+      dbHealth,
+      redisHealth,
+      providerHealth,
+      mcHealth,
       this.#mcpHealth(),
       this.#browserHealth(),
       {
         name: "Memory",
         level: "ok",
+        status: "healthy",
         detail: "in-memory store",
       },
     ];
@@ -305,27 +451,71 @@ export class DashboardService {
     return entries;
   }
 
-  #missionEngineHealth(): SubsystemHealth {
+  async #missionEngineHealth(
+    timeout: <T>(p: Promise<T>, ms: number, fallback: string) => Promise<T>,
+  ): Promise<SubsystemHealth> {
     const mc = this.#services.missionControl;
     if (mc === undefined) {
-      return { name: "Mission Engine", level: "unconfigured", detail: "port 18100 unconfigured" };
+      return {
+        name: "Mission Engine",
+        level: "unconfigured",
+        status: "unknown",
+        detail: "port 18100 unconfigured",
+      };
     }
-    return { name: "Mission Engine", level: "ok", detail: "configured on port 18100" };
+    try {
+      await timeout(mc.health(), 1500, "Mission Engine health probe timed out");
+      return {
+        name: "Mission Engine",
+        level: "ok",
+        status: "healthy",
+        detail: "configured on port 18100",
+      };
+    } catch (err) {
+      return {
+        name: "Mission Engine",
+        level: "down",
+        status: "unavailable",
+        detail: `Mission Engine unreachable: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
 
   #mcpHealth(): SubsystemHealth {
     const manager = this.#services.mcp;
     if (manager === undefined) {
-      return { name: "MCP", level: "unconfigured", detail: "no MCP servers configured" };
+      return {
+        name: "MCP",
+        level: "unconfigured",
+        status: "unknown",
+        detail: "no MCP servers configured",
+      };
     }
 
     const servers = manager.health();
     const connected = servers.filter((server) => server.status === "connected").length;
 
+    const level =
+      servers.length === 0
+        ? "unconfigured"
+        : connected === servers.length
+          ? "ok"
+          : connected === 0
+            ? "down"
+            : "degraded";
+    const status: HealthStatus =
+      servers.length === 0
+        ? "unknown"
+        : connected === servers.length
+          ? "healthy"
+          : connected === 0
+            ? "unavailable"
+            : "degraded";
+
     return {
       name: "MCP",
-      level:
-        servers.length === 0 ? "unconfigured" : connected === servers.length ? "ok" : "degraded",
+      level,
+      status,
       detail: `${String(connected)}/${String(servers.length)} server(s) connected`,
     };
   }
@@ -335,6 +525,7 @@ export class DashboardService {
       return {
         name: "Browser",
         level: "ok",
+        status: "healthy",
         detail: "connected local Chromium harness (native mode)",
       };
     }
@@ -342,13 +533,16 @@ export class DashboardService {
       return {
         name: "Browser Use",
         level: "unconfigured",
+        status: "unknown",
         detail: "browser worker not configured",
       };
     }
-    // The probe is asynchronous and the worker can be slow: the actual state is
-    // returned by the dedicated section, which queries it. Here we only indicate that
-    // it is wired — misrepresenting its health would be worse than saying nothing.
-    return { name: "Browser Use", level: "ok", detail: "configured; see dedicated section" };
+    return {
+      name: "Browser Use",
+      level: "ok",
+      status: "healthy",
+      detail: "configured; see dedicated section",
+    };
   }
 
   #recentActivity(

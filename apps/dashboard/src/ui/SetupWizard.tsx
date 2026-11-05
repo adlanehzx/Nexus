@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
+import {
+  executeSmokeTest,
+  SMOKE_TEST_STEP_NAMES,
+  type SmokeTestExecutionResult,
+} from "../lib/smoke-test.js";
 import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
@@ -82,18 +87,29 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
   const [browserSuccessMsg, setBrowserSuccessMsg] = useState<string | null>(null);
 
   // Step 5: Smoke test & Onboarding tour
-  const [smokeTestStatus, setSmokeTestStatus] = useState<"idle" | "running" | "success">("idle");
-  const [smokeTestStep, setSmokeTestStep] = useState<number>(0);
+  const [smokeTestStatus, setSmokeTestStatus] = useState<"idle" | "running" | "success" | "failed">(
+    "idle",
+  );
+  const [smokeTestResult, setSmokeTestResult] = useState<SmokeTestExecutionResult | null>(null);
 
   const runSmokeTest = async (): Promise<void> => {
     setSmokeTestStatus("running");
-    setSmokeTestStep(1);
-    await new Promise((r) => setTimeout(r, 300));
-    setSmokeTestStep(2);
-    await new Promise((r) => setTimeout(r, 300));
-    setSmokeTestStep(3);
-    await new Promise((r) => setTimeout(r, 300));
-    setSmokeTestStatus("success");
+    try {
+      const res = await executeSmokeTest(api, session);
+      setSmokeTestResult(res);
+      setSmokeTestStatus(res.overallStatus === "passed" ? "success" : "failed");
+    } catch (cause) {
+      setSmokeTestStatus("failed");
+      setSmokeTestResult({
+        overallStatus: "failed",
+        traceId: `smoke-err-${Date.now()}`,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        totalDurationMs: 0,
+        steps: [],
+        error: cause instanceof Error ? cause.message : "Fatal error executing smoke test",
+      });
+    }
   };
 
   const goToStep = useCallback((next: WizardStep) => {
@@ -1348,50 +1364,104 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
 
               {smokeTestStatus !== "idle" && (
                 <div style={{ marginTop: "1rem", fontSize: "0.85rem" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      alignItems: "center",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    <span className={`state-pill ${smokeTestStep >= 1 ? "good" : "neutral"}`}>
-                      {smokeTestStep >= 1 ? "✓" : "1"}
-                    </span>
-                    <span>
-                      {tr(
-                        "LLM Provider Routing & Budget Check",
-                        "Routage fournisseur LLM & budget",
-                      )}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      alignItems: "center",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    <span className={`state-pill ${smokeTestStep >= 2 ? "good" : "neutral"}`}>
-                      {smokeTestStep >= 2 ? "✓" : "2"}
-                    </span>
-                    <span>
-                      {tr(
-                        "Context Retrieval & MCP Isolation Guard",
-                        "Récupération du contexte & sécurité MCP",
-                      )}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <span className={`state-pill ${smokeTestStep >= 3 ? "good" : "neutral"}`}>
-                      {smokeTestStep >= 3 ? "✓" : "3"}
-                    </span>
-                    <span>
-                      {tr("Synthesis & Task Delivery", "Synthèse & validation de la tâche")}
-                    </span>
-                  </div>
+                  {smokeTestResult !== null && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.75rem",
+                        padding: "0.5rem 0.75rem",
+                        borderRadius: "4px",
+                        background:
+                          smokeTestResult.overallStatus === "passed"
+                            ? "rgba(34, 197, 94, 0.1)"
+                            : "rgba(239, 68, 68, 0.1)",
+                        border:
+                          smokeTestResult.overallStatus === "passed"
+                            ? "1px solid var(--ok, #22c55e)"
+                            : "1px solid var(--danger, #ef4444)",
+                      }}
+                    >
+                      <div>
+                        <strong>
+                          {smokeTestResult.overallStatus === "passed"
+                            ? tr("Smoke test passed", "Test rapide réussi")
+                            : tr("Smoke test failed", "Échec du test rapide")}
+                        </strong>
+                        <span className="muted" style={{ marginLeft: "8px" }}>
+                          ({smokeTestResult.totalDurationMs} ms)
+                        </span>
+                      </div>
+                      <code style={{ fontSize: "0.75rem" }}>{smokeTestResult.traceId}</code>
+                    </div>
+                  )}
+
+                  {smokeTestResult?.steps.map((s) => {
+                    const pillClass =
+                      s.status === "passed"
+                        ? "good"
+                        : s.status === "failed"
+                          ? "danger"
+                          : s.status === "blocked"
+                            ? "warning"
+                            : "neutral";
+                    const symbol =
+                      s.status === "passed"
+                        ? "✓"
+                        : s.status === "failed"
+                          ? "✗"
+                          : s.status === "blocked"
+                            ? "⊘"
+                            : "–";
+                    return (
+                      <div
+                        key={s.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "8px",
+                          padding: "4px 0",
+                          borderBottom: "1px dashed rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                          <span className={`state-pill ${pillClass}`}>{symbol}</span>
+                          <div>
+                            <div>
+                              <strong>
+                                {SMOKE_TEST_STEP_NAMES[s.id]?.[locale === "fr" ? "fr" : "en"] ||
+                                  s.name}
+                              </strong>
+                              <span
+                                className="muted"
+                                style={{ marginLeft: "8px", fontSize: "0.75rem" }}
+                              >
+                                {s.durationMs} ms
+                              </span>
+                            </div>
+                            {s.error && (
+                              <div style={{ color: "var(--danger, #ef4444)", marginTop: "2px" }}>
+                                {s.error}
+                              </div>
+                            )}
+                            {s.details && (
+                              <div
+                                className="muted"
+                                style={{ fontSize: "0.75rem", marginTop: "2px" }}
+                              >
+                                {s.details}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="muted mono" style={{ fontSize: "0.7rem" }}>
+                          {s.status.toUpperCase()}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

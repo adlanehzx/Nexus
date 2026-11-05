@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import type { Redis } from "ioredis";
 import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
 import {
   InMemoryMissionGrantRegistry,
@@ -133,6 +134,7 @@ export interface ServiceContainerOptions {
   tokenPrivateKeyPem: string;
   now?: () => Date;
   prisma?: PrismaClient;
+  redis?: Redis;
 
   /** Replaceable: Prisma persistence plugs in here without altering routes. */
   users?: UserStore;
@@ -343,11 +345,13 @@ export class ServiceContainer {
   readonly tenantPlatform: TenantPlatformService | undefined;
   readonly tenantRealtime: TenantRealtimeHub;
   readonly tenantSecurity: TenantSecurityService | undefined;
+  readonly redis: Redis | undefined;
 
   readonly #now: () => Date;
   readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
+    this.redis = options.redis;
     this.acpWorkspaceRoot = options.acpWorkspaceRoot;
     this.llmProvider = options.llmProvider;
     this.freeLlm = options.freeLlmProvider;

@@ -74,4 +74,10 @@ describe("Quota & Telemetry Provenance Contracts (Mission B)", () => {
     expect(isQuotaAlertTriggered(21, 20)).toBe(false);
     expect(isQuotaAlertTriggered(null, 20)).toBe(false);
   });
+
+  it("handles providers that do not return metrics honestly without guessing", () => {
+    expect(formatCountdown(null)).toBe("Unavailable");
+    expect(isQuotaAlertTriggered(null, 25)).toBe(false);
+    expect(getProvenanceBadge("unavailable").label).toBe("Unavailable");
+  });
 });

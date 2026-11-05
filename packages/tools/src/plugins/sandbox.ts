@@ -74,7 +74,18 @@ export class PluginSandbox {
     const inRealm = (value: unknown) =>
       `Object.freeze(JSON.parse(${JSON.stringify(JSON.stringify(value))}))`;
     vm.runInContext(
-      `var input = ${inRealm(input)}; var secrets = ${inRealm({ ...context.injectedSecrets })};`,
+      `
+      delete Object.prototype.constructor;
+      delete Function.prototype.constructor;
+      delete Array.prototype.constructor;
+      delete String.prototype.constructor;
+      delete Number.prototype.constructor;
+      delete Boolean.prototype.constructor;
+      delete Promise.prototype.constructor;
+      try { delete Function; } catch (_) {}
+      try { delete eval; } catch (_) {}
+      var input = ${inRealm(input)}; var secrets = ${inRealm({ ...context.injectedSecrets })};
+      `,
       vmContext,
     );
 

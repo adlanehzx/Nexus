@@ -299,14 +299,25 @@ describe("overview", () => {
     expect(data.workers.connected).toBe(0);
   });
 
-  it("distinguishes unconfigured from broken", async () => {
+  it("distinguishes unconfigured from broken with 4 standardized states", async () => {
     const response = await get("/api/v1/dashboard/overview", admin);
-    const health = response.json<{ data: { health: { name: string; level: string }[] } }>().data
-      .health;
+    const health = response.json<{
+      data: { health: { name: string; level: string; status?: string }[] };
+    }>().data.health;
 
     expect(health.find((entry) => entry.name === "MCP")?.level).toBe("unconfigured");
+    expect(health.find((entry) => entry.name === "MCP")?.status).toBe("unknown");
     expect(health.find((entry) => entry.name === "Browser Use")?.level).toBe("unconfigured");
+    expect(health.find((entry) => entry.name === "Browser Use")?.status).toBe("unknown");
     expect(health.find((entry) => entry.name === "API")?.level).toBe("ok");
+    expect(health.find((entry) => entry.name === "API")?.status).toBe("healthy");
+
+    const validStates = ["healthy", "degraded", "unavailable", "unknown"];
+    for (const h of health) {
+      if (h.status !== undefined) {
+        expect(validStates).toContain(h.status);
+      }
+    }
   });
 
   it("blends recent activities from all sources", async () => {
@@ -523,6 +534,40 @@ describe("infrastructure sections", () => {
       "osint.relation.add",
     ]);
     expect(tools.every((tool) => tool.allowed)).toBe(true);
+  });
+
+  it("strictly rejects SSRF target URLs when configuring remote MCP server", async () => {
+    const maliciousPayload = {
+      name: "evil-mcp",
+      transport: "http",
+      url: "http://169.254.169.254/latest/meta-data",
+      enabled: true,
+      defaultPermissions: [],
+      defaultRisk: "MEDIUM",
+      toolPolicies: {},
+      connectTimeoutMs: 5000,
+      requestTimeoutMs: 10000,
+      autoReconnect: false,
+      maxReconnectAttempts: 1,
+      reconnectInitialDelayMs: 500,
+      reconnectMaxDelayMs: 1000,
+      circuitBreakerThreshold: 5,
+      circuitBreakerResetMs: 60000,
+      exposeResources: false,
+      headers: {},
+      headerRefs: {},
+    };
+
+    const response = await harness.app.inject({
+      method: "PUT",
+      url: "/api/v1/dashboard/mcp/servers/evil-mcp",
+      headers: admin.authorization,
+      payload: maliciousPayload,
+    });
+
+    // Should fail with 400 ValidationError
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("VALIDATION_ERROR");
   });
 });
 

@@ -4,9 +4,10 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 import { ConflictError, NotFoundError } from "../../services/stores.js";
-import { DependencyError } from "@nexus/shared";
+import { DependencyError, ValidationError } from "@nexus/shared";
 import { BrowserWorkerClient } from "@nexus/browser-client";
 import {
+  assertSafeRemoteUrl,
   installCatalogServer,
   listMcpCatalog,
   mcpServerConfigSchema,
@@ -59,8 +60,10 @@ const browserConfigurationSchema = z.discriminatedUnion("mode", [
 
 const healthSchema = z.object({
   name: z.string(),
-  level: z.enum(["ok", "degraded", "down", "unconfigured"]),
+  level: z.enum(["ok", "degraded", "down", "unconfigured", "healthy", "unavailable", "unknown"]),
+  status: z.enum(["healthy", "degraded", "unavailable", "unknown"]).optional(),
   detail: z.string(),
+  latencyMs: z.number().nullable().optional(),
 });
 
 const deviceViewSchema = z.object({
@@ -639,12 +642,26 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
       },
     },
     async (request) => {
+      const config = withoutInlineSecrets(request.body);
+      if (config.transport === "http" || config.transport === "sse") {
+        try {
+          await assertSafeRemoteUrl(config.url);
+        } catch (err) {
+          throw new ValidationError({
+            message: `SSRF protection blocked target URL: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      }
+      if (request.params.name !== request.body.name) {
+        throw new ValidationError({ message: "Inconsistent MCP name." });
+      }
+
       const store = app.services.runtimeConfiguration;
       const manager = app.services.mcp;
-      if (store === undefined || manager === undefined) throw new Error("MCP is not manageable.");
-      if (request.params.name !== request.body.name) throw new Error("Inconsistent MCP name.");
+      if (store === undefined || manager === undefined) {
+        throw new DependencyError({ message: "MCP is not manageable." });
+      }
 
-      const config = withoutInlineSecrets(request.body);
       const current = await store.loadMcp();
       const next = [...current.filter((item) => item.name !== config.name), config];
       await store.saveMcp(next);

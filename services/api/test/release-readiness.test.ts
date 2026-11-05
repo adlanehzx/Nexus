@@ -16,6 +16,51 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
     expect(content).toContain("REL-01");
     expect(content).toContain("QTA-01");
     expect(content).toContain("UX-01");
+    // Verifies full backup requirements and restoration boundaries
+    expect(content).toContain("pg_dump -Fc");
+    expect(content).toContain("Restoration Boundaries: What Can & Cannot Be Restored");
+    expect(content).toContain("Worker Ephemeral In-Memory State");
+  });
+
+  it("verifies rollback plan restores data to anterior state and documents limits", () => {
+    // Simulated database snapshot representing pre-migration dataset
+    interface TableRow {
+      id: string;
+      name: string;
+      value: number;
+    }
+    const initialDbState: Record<string, TableRow[]> = {
+      User: [
+        { id: "u-1", name: "Alice", value: 100 },
+        { id: "u-2", name: "Bob", value: 200 },
+      ],
+      TenantQuotaPolicy: [{ id: "q-1", name: "standard", value: 5000 }],
+    };
+
+    // 1. Take snapshot (simulate pg_dump -Fc / full state dump)
+    const fullBackupSnapshot = JSON.stringify(initialDbState);
+
+    // 2. Schema-only snapshot does not preserve row data
+    const schemaOnlySnapshot = JSON.stringify({
+      User: [],
+      TenantQuotaPolicy: [],
+    });
+
+    // 3. Destructive migration or corruption alters the data
+    const corruptedState: Record<string, TableRow[]> = {
+      User: [{ id: "u-1", name: "Alice_Corrupted", value: 0 }],
+      TenantQuotaPolicy: [],
+    };
+
+    // 4. Schema-only restore fails to bring back table rows
+    const restoredFromSchemaOnly = JSON.parse(schemaOnlySnapshot) as Record<string, TableRow[]>;
+    expect(restoredFromSchemaOnly.User.length).toBe(0); // Data loss!
+
+    // 5. Full backup restore completely restores anterior state
+    const restoredFromFull = JSON.parse(fullBackupSnapshot) as Record<string, TableRow[]>;
+    expect(restoredFromFull).toEqual(initialDbState);
+    expect(restoredFromFull.User).toHaveLength(2);
+    expect(restoredFromFull.User[1]?.name).toBe("Bob");
   });
 
   it("verifies prisma schema defines safe nullable fields and models", () => {

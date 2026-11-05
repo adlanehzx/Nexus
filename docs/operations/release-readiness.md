@@ -26,7 +26,10 @@ NEXUS artifacts must pass automated build verification across all production dep
 2. **Column additions must be nullable** or have a deterministic static default value.
 3. **Indices must be created concurrently** on high-traffic tables to prevent locking.
 
-### 2.2 Reversible Migration Runbook
+### 2.2 Reversible Migration & Full Backup Protocol
+
+> [!CAUTION]
+> A schema-only dump (`pg_dump --schema-only`) **NEVER** constitutes a valid backup. Migrations frequently mutate, backfill, or drop table data. All pre-migration snapshots MUST capture complete database state (schema, row data, sequences, indices, and constraints).
 
 Before applying any migration to staging or production:
 
@@ -34,8 +37,12 @@ Before applying any migration to staging or production:
 # 1. Inspect migration status and drift
 pnpm --filter @nexus/database prisma migrate status
 
-# 2. Generate a baseline snapshot
-pg_dump --schema-only "$DATABASE_URL" > /backup/schema_pre_migration.sql
+# 2. Generate a COMPLETE pre-migration database snapshot (Schema + Full Data)
+# Custom compressed format (-Fc) preserves blobs, sequences, and parallel restore capability
+pg_dump -Fc --clean --if-exists --no-owner --no-privileges "$DATABASE_URL" > /backup/nexus_db_full_pre_migration_$(date +%Y%m%d_%H%M%S).dump
+
+# Plaintext SQL dump fallback
+pg_dump --clean --if-exists --inserts "$DATABASE_URL" > /backup/nexus_db_full_pre_migration.sql
 
 # 3. Apply pending migrations
 pnpm --filter @nexus/database prisma migrate deploy
@@ -48,17 +55,35 @@ SELECT 1 FROM "Device" LIMIT 1;
 SQL
 ```
 
-### 2.3 Rollback Procedure
+### 2.3 Comprehensive Rollback Procedure & Restoration Boundaries
 
-If a database migration causes errors:
+If a database migration causes errors or regression:
 
 1. Revert application code container to previous release tag immediately (`NEXUS_IMAGE_TAG=v1.0.x-previous`).
-2. If schema rollback is required:
+2. Restore complete database state from the pre-migration snapshot:
    ```bash
-   # Restore pre-migration schema state from snapshot
-   psql "$DATABASE_URL" < /backup/schema_pre_migration.sql
+   # Terminate active backend database connections
+   psql "$DATABASE_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"
+
+   # Full restoration from compressed binary dump
+   pg_restore --clean --if-exists --no-owner --no-privileges -d "$DATABASE_URL" /backup/nexus_db_full_pre_migration_*.dump
+
+   # Alternatively from plain SQL:
+   # psql "$DATABASE_URL" < /backup/nexus_db_full_pre_migration.sql
+
+   # Synchronize Prisma migration history metadata
    pnpm --filter @nexus/database prisma migrate resolve --rolled-back "<migration_name>"
    ```
+
+### 2.4 Restoration Boundaries: What Can & Cannot Be Restored
+
+| Asset Category                                                                                 | Restorable via DB Rollback | Recovery Strategy & Invariants                                                                                                                                                          |
+| :--------------------------------------------------------------------------------------------- | :------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Relational Data** (Users, Devices, Worktree metadata, Tasks, BillingUsage, Quotas)           |          **YES**           | 100% recovered from the `/backup/*.dump` snapshot.                                                                                                                                      |
+| **Database Sequences & Relational Constraints**                                                |          **YES**           | Restored by `pg_restore --clean`.                                                                                                                                                       |
+| **Worker Ephemeral In-Memory State** (Active WebSocket frames, live step progress)             |           **NO**           | In-flight worker memory cannot be restored. Disconnected workers automatically fail over and pending tasks are re-queued according to REL-04.                                           |
+| **Physical Worktree Files on Worker Disks** (`packages/vcs` file trees)                        |           **NO**           | Git worktree directories on physical hosts are detached from PostgreSQL. Rollback scripts must execute `git reset --hard` or prune abandoned worktrees via `pnpm nexus worktree prune`. |
+| **External Side-Effects & Third-Party APIs** (LinkedIn posts, external webhooks, email alerts) |           **NO**           | Upstream external actions cannot be rolled back via database restore. Idempotency keys prevent duplicate submission upon restart.                                                       |
 
 ---
 
