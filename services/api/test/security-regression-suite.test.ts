@@ -187,7 +187,12 @@ describe("SEC-12: Unauthenticated Endpoint Gate", () => {
     });
     expect([200, 503]).toContain(health.statusCode);
 
-    const protectedUrls = ["/api/v1/tasks", "/api/v1/devices", "/api/v1/worktrees", "/api/v1/usage"];
+    const protectedUrls = [
+      "/api/v1/tasks",
+      "/api/v1/devices",
+      "/api/v1/worktrees",
+      "/api/v1/usage",
+    ];
     for (const url of protectedUrls) {
       const res = await harness.app.inject({
         method: "GET",
@@ -210,11 +215,16 @@ describe("SEC-13: Sandbox Isolation & Host Escape Prevention", () => {
 
     for (const code of maliciousPayloads) {
       await expect(
-        sandbox.executeToolHandler("test_tool", code, {}, {
-          pluginId: "evil-plugin",
-          injectedSecrets: {},
-          allowedEgress: [],
-        }),
+        sandbox.executeToolHandler(
+          "test_tool",
+          code,
+          {},
+          {
+            pluginId: "evil-plugin",
+            injectedSecrets: {},
+            allowedEgress: [],
+          },
+        ),
       ).rejects.toThrow();
     }
   });

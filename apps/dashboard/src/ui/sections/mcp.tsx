@@ -322,7 +322,15 @@ export function Mcp({ api }: { api: DashboardApi }) {
         <h3>{tr("Add or Replace an MCP Server", "Ajouter ou remplacer un serveur MCP")}</h3>
 
         {/* Quick Presets Bar */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.2rem", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+            marginBottom: "1.2rem",
+            alignItems: "center",
+          }}
+        >
           <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>
             {tr("One-Click Presets:", "Préconfigurations en 1 clic :")}
           </span>
@@ -367,19 +375,40 @@ export function Mcp({ api }: { api: DashboardApi }) {
               lineHeight: "1.5",
             }}
           >
-            <h4>{tr("How to Add and Secure MCP Servers", "Comment ajouter et sécuriser les serveurs MCP")}</h4>
+            <h4>
+              {tr(
+                "How to Add and Secure MCP Servers",
+                "Comment ajouter et sécuriser les serveurs MCP",
+              )}
+            </h4>
             <ul style={{ paddingLeft: "1.2rem", marginTop: "0.5rem" }}>
               <li>
-                <strong>stdio</strong>: {tr("Spawns a local sandboxed subprocess. Use `npx` or binary path.", "Lance un sous-processus local isolé. Utilisez `npx` ou le chemin du binaire.")}
+                <strong>stdio</strong>:{" "}
+                {tr(
+                  "Spawns a local sandboxed subprocess. Use `npx` or binary path.",
+                  "Lance un sous-processus local isolé. Utilisez `npx` ou le chemin du binaire.",
+                )}
               </li>
               <li>
-                <strong>HTTP / SSE</strong>: {tr("Connects to a remote server. Enforces network isolation and blocks loopback/SSRF targets.", "Se connecte à un serveur distant. Applique l'isolation réseau et bloque le loopback/SSRF.")}
+                <strong>HTTP / SSE</strong>:{" "}
+                {tr(
+                  "Connects to a remote server. Enforces network isolation and blocks loopback/SSRF targets.",
+                  "Se connecte à un serveur distant. Applique l'isolation réseau et bloque le loopback/SSRF.",
+                )}
               </li>
               <li>
-                <strong>envRefs / headerRefs</strong>: {tr("Maps vault keys (e.g. `vault://nexus/api-key`) without storing plaintext credentials.", "Associe des clés de coffre-fort (ex: `vault://nexus/api-key`) sans stocker de clés en clair.")}
+                <strong>envRefs / headerRefs</strong>:{" "}
+                {tr(
+                  "Maps vault keys (e.g. `vault://nexus/api-key`) without storing plaintext credentials.",
+                  "Associe des clés de coffre-fort (ex: `vault://nexus/api-key`) sans stocker de clés en clair.",
+                )}
               </li>
               <li>
-                <strong>Per-Tool Safeguards</strong>: {tr("Each server tool is monitored with latency metrics and guarded by circuit breakers.", "Chaque outil est supervisé avec latence et protégé par disjoncteur.")}
+                <strong>Per-Tool Safeguards</strong>:{" "}
+                {tr(
+                  "Each server tool is monitored with latency metrics and guarded by circuit breakers.",
+                  "Chaque outil est supervisé avec latence et protégé par disjoncteur.",
+                )}
               </li>
             </ul>
           </div>

@@ -117,7 +117,10 @@ export function Observability({ api }: { api: DashboardApi }) {
         </button>
         {lastPingMs !== null && (
           <span className="muted" style={{ fontSize: "0.85rem" }}>
-            {tr(`Round-trip ping: ${String(lastPingMs)} ms`, `Ping aller-retour : ${String(lastPingMs)} ms`)}
+            {tr(
+              `Round-trip ping: ${String(lastPingMs)} ms`,
+              `Ping aller-retour : ${String(lastPingMs)} ms`,
+            )}
           </span>
         )}
       </div>
@@ -167,7 +170,9 @@ export function Observability({ api }: { api: DashboardApi }) {
 
                 return (
                   <tr key={entry.name} data-health={entry.name}>
-                    <td><strong>{entry.name}</strong></td>
+                    <td>
+                      <strong>{entry.name}</strong>
+                    </td>
                     <td>
                       <State tone={HEALTH_TONES[entry.level]} label={entry.level} />
                     </td>
@@ -187,8 +192,21 @@ export function Observability({ api }: { api: DashboardApi }) {
 
       {/* Actionable troubleshooting guides */}
       {showGuides && (
-        <div className="resolution-guides-card" style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid var(--border-subtle, #333)", borderRadius: "6px" }}>
-          <h3>{tr("Troubleshooting & Resolution Instructions", "Instructions de dépannage & résolution")}</h3>
+        <div
+          className="resolution-guides-card"
+          style={{
+            marginTop: "1.5rem",
+            padding: "1rem",
+            border: "1px solid var(--border-subtle, #333)",
+            borderRadius: "6px",
+          }}
+        >
+          <h3>
+            {tr(
+              "Troubleshooting & Resolution Instructions",
+              "Instructions de dépannage & résolution",
+            )}
+          </h3>
           <p className="muted" style={{ fontSize: "0.85rem", marginBottom: "1rem" }}>
             {tr(
               "Non-destructive actions and instructions to recover degraded or unavailable subsystems.",
@@ -272,8 +290,14 @@ export function Observability({ api }: { api: DashboardApi }) {
       </form>
       <p className="muted">
         {search.length > 0
-          ? tr("All levels for this search (secrets redacted).", "Tous les niveaux pour cette recherche (secrets masqués).")
-          : tr("Recent warnings and errors (secrets redacted).", "Avertissements et erreurs récents (secrets masqués).")}
+          ? tr(
+              "All levels for this search (secrets redacted).",
+              "Tous les niveaux pour cette recherche (secrets masqués).",
+            )
+          : tr(
+              "Recent warnings and errors (secrets redacted).",
+              "Avertissements et erreurs récents (secrets masqués).",
+            )}
       </p>
       <Section state={logs}>
         {(data) =>

@@ -311,7 +311,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
                 return (
                   <tr key={account.id}>
-                    <td><strong>{account.provider}</strong></td>
+                    <td>
+                      <strong>{account.provider}</strong>
+                    </td>
                     <td>{account.name}</td>
                     <td>{account.authStatus}</td>
                     <td>

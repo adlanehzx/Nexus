@@ -39,11 +39,7 @@ describe("usage presentation", () => {
   });
 });
 
-import {
-  formatCountdown,
-  getProvenanceBadge,
-  isQuotaAlertTriggered,
-} from "../src/lib/usage.js";
+import { formatCountdown, getProvenanceBadge, isQuotaAlertTriggered } from "../src/lib/usage.js";
 
 describe("Quota & Telemetry Provenance Contracts (Mission B)", () => {
   it("formats countdown durations correctly", () => {

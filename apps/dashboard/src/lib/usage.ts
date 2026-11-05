@@ -98,11 +98,7 @@ export function usageCsv(buckets: readonly UsageBucketDto[]): string {
  * local Agent Core observations, theoretical catalog estimates, and unavailable metrics.
  */
 export type TelemetryProvenance =
-  | "official"
-  | "provider_reported"
-  | "locally_observed"
-  | "estimated"
-  | "unavailable";
+  "official" | "provider_reported" | "locally_observed" | "estimated" | "unavailable";
 
 export interface ProvenanceBadge {
   label: string;
