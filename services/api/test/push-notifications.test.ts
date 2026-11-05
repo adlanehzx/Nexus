@@ -137,17 +137,15 @@ describe("push token routes", () => {
     // A stranger naming this device at logout does not unregister it.
     await harness.app.inject({
       method: "POST",
-      url: "/api/v1/auth/logout",
+      url: `/api/v1/auth/logout?deviceId=${device.id}`,
       headers: other.authorization,
-      payload: { deviceId: device.id },
     });
     await expect(store.listForDevices([device.id])).resolves.toHaveLength(1);
 
     await harness.app.inject({
       method: "POST",
-      url: "/api/v1/auth/logout",
+      url: `/api/v1/auth/logout?deviceId=${device.id}`,
       headers: owner.authorization,
-      payload: { deviceId: device.id },
     });
     await expect(store.listForDevices([device.id])).resolves.toEqual([]);
 

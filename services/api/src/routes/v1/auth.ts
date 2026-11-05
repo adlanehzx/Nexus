@@ -134,14 +134,15 @@ export const authRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         tags: ["auth"],
         summary: "Closes current session",
         // A session does not record its device. The client names it so that this phone
-        // stops receiving pushes for an account it just left.
-        body: z.object({ deviceId: z.string().min(1).optional() }).optional(),
+        // stops receiving pushes for an account it just left. A query parameter, because
+        // existing clients send no body at all and that must keep closing the session.
+        querystring: z.object({ deviceId: z.string().min(1).optional() }),
         response: { 200: okSchema(z.object({ closed: z.boolean() })) },
       },
     },
     async (request) => {
       const { sessionId, userId } = currentUser(request);
-      const deviceId = request.body?.deviceId;
+      const { deviceId } = request.query;
       if (deviceId !== undefined) {
         const device = await app.services.deviceRegistry.getDevice(deviceId);
         if (device?.userId === userId) await app.services.push.unregister(device.id);
