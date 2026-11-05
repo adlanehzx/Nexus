@@ -3,6 +3,7 @@ import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { DependencyError } from "@nexus/shared";
 import { NotFoundError } from "../../services/stores.js";
 import { organizationRoleSchema, identityProtocolSchema } from "../../services/tenant-platform.js";
 
@@ -18,7 +19,8 @@ export const organizationRoutes: FastifyPluginCallback = (fastify, _options, don
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const service = app.services.tenantPlatform;
   const requireService = () => {
-    if (service === undefined) throw new Error("Hosted organization services are not configured.");
+    if (service === undefined)
+      throw new DependencyError({ message: "Hosted organization services are not configured." });
     return service;
   };
 

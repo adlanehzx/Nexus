@@ -95,10 +95,11 @@ export class PrismaConversationStore implements ConversationStore {
 
   async listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>> {
     const where = { conversationId };
+    const direction = page.order ?? "asc";
     const [records, total] = await Promise.all([
       this.#prisma.message.findMany({
         where,
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        orderBy: [{ createdAt: direction }, { id: direction }],
         take: page.limit + 1,
         ...(page.cursor === undefined ? {} : { cursor: { id: page.cursor }, skip: 1 }),
       }),

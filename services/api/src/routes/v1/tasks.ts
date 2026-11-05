@@ -1,13 +1,14 @@
 import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { AuthorizationError } from "@nexus/shared";
+import { AuthorizationError, DependencyError } from "@nexus/shared";
 import { riskLevelSchema } from "@nexus/tools";
 import { createTaskPlan, type TaskStepInput } from "@nexus/devices";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
 import { TaskPlanner } from "../../services/task-planner.js";
+import { taskViewSchema } from "./dashboard.js";
 
 /**
  * Task plans, executions, confirmations.
@@ -181,6 +182,26 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
     },
   );
 
+  app.get(
+    "/tasks",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["tasks"],
+        summary: "Tasks of the signed-in account",
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+        response: { 200: okSchema(z.object({ tasks: z.array(taskViewSchema) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      return ok(
+        { tasks: await app.services.dashboard.listTasks(userId, request.query.limit) },
+        request.id,
+      );
+    },
+  );
+
   app.post(
     "/tasks/instruct",
     {
@@ -202,7 +223,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       const originClientDeviceId = request.body.originClientDeviceId;
 
       if (!app.services.llmProvider) {
-        throw new Error("LLMProvider service is not configured");
+        throw new DependencyError({ message: "LLMProvider service is not configured" });
       }
 
       app.services.pause.assertRunning();
@@ -353,6 +374,49 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
 
 export const confirmationRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/confirmations",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["confirmations"],
+        summary: "Lets a client that was offline discover requests awaiting its owner",
+        querystring: z.object({ status: z.literal("pending") }),
+        response: {
+          200: okSchema(
+            z.array(
+              z.object({
+                id: z.string(),
+                taskId: z.string(),
+                capability: z.string(),
+                action: z.string(),
+                description: z.string(),
+                riskLevel: z.string(),
+                expiresAt: z.date(),
+              }),
+            ),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const pending = await app.services.confirmations.listPendingForUser(userId);
+      return ok(
+        pending.map((confirmation) => ({
+          id: confirmation.id,
+          taskId: confirmation.runId,
+          capability: confirmation.tool,
+          action: confirmation.action,
+          description: confirmation.description,
+          riskLevel: confirmation.riskLevel,
+          expiresAt: confirmation.expiresAt,
+        })),
+        request.id,
+      );
+    },
+  );
 
   app.get(
     "/confirmations/:confirmationId",

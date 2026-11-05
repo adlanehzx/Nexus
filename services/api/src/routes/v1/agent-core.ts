@@ -9,6 +9,7 @@ import {
   currentUser,
 } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { agentRunSchema } from "./dashboard.js";
 import { ConflictError, NotFoundError, type ConversationStore } from "../../services/stores.js";
 import { AuthenticationError, DependencyError } from "@nexus/shared";
 import type { IssuedMissionGrant } from "../../services/mission-grants.js";
@@ -86,6 +87,26 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
           assertion: exchanged.token,
           expiresAt: exchanged.expiresAt.toISOString(),
         },
+        request.id,
+      );
+    },
+  );
+
+  app.get(
+    "/agent-core/runs",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["agent-core"],
+        summary: "Runs of the signed-in account",
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+        response: { 200: okSchema(z.object({ runs: z.array(agentRunSchema) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      return ok(
+        { runs: await app.services.dashboard.listAgentRuns(userId, request.query.limit) },
         request.id,
       );
     },

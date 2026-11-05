@@ -320,7 +320,8 @@ export class InMemoryConversationStore implements ConversationStore {
 
   listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>> {
     const all = this.#messages.get(conversationId) ?? [];
-    return Promise.resolve(paginate(all, page, (message) => message.id));
+    const ordered = page.order === "desc" ? [...all].reverse() : all;
+    return Promise.resolve(paginate(ordered, page, (message) => message.id));
   }
 }
 
@@ -419,6 +420,8 @@ export interface PageRequest {
   /** Identifier after which to resume. Omitted = from the beginning. */
   cursor?: string | undefined;
   limit: number;
+  /** Oldest first unless stated. Messages only. */
+  order?: "asc" | "desc" | undefined;
 }
 
 export interface Page<T> {
