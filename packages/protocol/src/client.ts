@@ -292,6 +292,10 @@ export function clientEnvelope<T extends ServerToClientType>(
 /** Translates internal NexusEvents into client-facing WebSocket frames. */
 export const EVENT_TO_CLIENT_MESSAGE: Record<string, ServerToClientType | undefined> = {
   "agent.started": SERVER_TO_CLIENT.agentStarted,
+  "message.delta": SERVER_TO_CLIENT.messageDelta,
+  "tool.started": SERVER_TO_CLIENT.toolStarted,
+  "tool.progress": SERVER_TO_CLIENT.toolProgress,
+  "tool.completed": SERVER_TO_CLIENT.toolCompleted,
   "agent.progress": SERVER_TO_CLIENT.agentProgress,
   "task.created": SERVER_TO_CLIENT.taskCreated,
   "task.progress": SERVER_TO_CLIENT.taskProgress,

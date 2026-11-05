@@ -57,6 +57,9 @@ export interface EmitInput {
   payload: Record<string, unknown>;
 }
 
+/** Worthless once late: history holds the final text, so these are never queued for later. */
+const EPHEMERAL_EVENT_TYPES: ReadonlySet<string> = new Set(["message.delta", "tool.progress"]);
+
 export class EventRouter {
   readonly #registry: DeviceRegistry;
   readonly #connections = new Map<string, ClientConnection>();
@@ -132,8 +135,10 @@ export class EventRouter {
     for (const device of targets) {
       const connection = this.#connections.get(device.id);
       if (connection === undefined) {
-        this.#enqueue(device.id, event);
-        queuedFor.push(device.id);
+        if (!EPHEMERAL_EVENT_TYPES.has(event.type)) {
+          this.#enqueue(device.id, event);
+          queuedFor.push(device.id);
+        }
         continue;
       }
 
@@ -142,8 +147,10 @@ export class EventRouter {
         deliveredTo.push(device.id);
       } catch {
         this.detach(device.id);
-        this.#enqueue(device.id, event);
-        queuedFor.push(device.id);
+        if (!EPHEMERAL_EVENT_TYPES.has(event.type)) {
+          this.#enqueue(device.id, event);
+          queuedFor.push(device.id);
+        }
       }
     }
 

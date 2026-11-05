@@ -94,6 +94,7 @@ import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
 import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
+import { AgentRealtimeBridge } from "./agent-realtime.js";
 import {
   InMemoryMcpAccessStore,
   PrismaMcpAccessStore,
@@ -604,7 +605,13 @@ export class ServiceContainer {
             confirmations: this.confirmations,
             context: this.context,
             store: this.runStore,
+            policy: { streamResponses: true },
           });
+    if (this.agentCore !== undefined) {
+      this.agentCore.on(
+        new AgentRealtimeBridge({ router: this.router, store: this.runStore }).handle,
+      );
+    }
     this.mcp = options.mcp;
     this.browser = undefined;
     this.browserSessionManager = undefined;

@@ -153,7 +153,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         content: request.body.message,
         originClientDeviceId: null,
       });
-      await persistResponse(app.services.conversations, conversation.id, result.record.response);
+      await persistResponse(
+        app.services.conversations,
+        conversation.id,
+        result.record.response,
+        result.record.runId,
+      );
       return ok(present(result), request.id);
     },
   );
@@ -299,7 +304,12 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         content: request.body.instruction,
         originClientDeviceId: null,
       });
-      await persistResponse(app.services.conversations, conversation.id, result.record.response);
+      await persistResponse(
+        app.services.conversations,
+        conversation.id,
+        result.record.response,
+        result.record.runId,
+      );
       // Rotation is calculated after work, not before: if the run fails,
       // there is no justification for issuing another grant.
       const renewed = await app.services.missionGrants.renewById(mission.grantId);
@@ -449,6 +459,7 @@ export const agentCoreRoutes: FastifyPluginCallback = (fastify, _options, done) 
         app.services.conversations,
         result.record.conversationId,
         result.record.response,
+        result.record.runId,
       );
       return ok(present(result), request.id);
     },
@@ -549,9 +560,12 @@ async function persistResponse(
   conversations: ConversationStore,
   conversationId: string,
   response: string | null,
+  runId: string,
 ): Promise<void> {
   if (response === null) return;
   await conversations.appendMessage({
+    // The id it was streamed under, so history replaces the streamed copy.
+    id: runId,
     conversationId,
     role: "assistant",
     content: response,

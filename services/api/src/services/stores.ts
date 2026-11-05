@@ -255,7 +255,8 @@ export interface ConversationStore {
   get(id: string): Promise<Conversation | undefined>;
   listByUser(userId: string, page: PageRequest): Promise<Page<Conversation>>;
   archive(id: string): Promise<Conversation>;
-  appendMessage(input: Omit<Message, "id" | "createdAt">): Promise<Message>;
+  /** `id` is generated unless given: a streamed message keeps the id clients already hold. */
+  appendMessage(input: Omit<Message, "id" | "createdAt"> & { id?: string }): Promise<Message>;
   listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>>;
 }
 
@@ -307,11 +308,11 @@ export class InMemoryConversationStore implements ConversationStore {
     return Promise.resolve({ ...archived });
   }
 
-  appendMessage(input: Omit<Message, "id" | "createdAt">): Promise<Message> {
+  appendMessage(input: Omit<Message, "id" | "createdAt"> & { id?: string }): Promise<Message> {
     const conversation = this.#conversations.get(input.conversationId);
     if (conversation === undefined) throw new NotFoundError("Conversation", input.conversationId);
 
-    const message: Message = { ...input, id: uuidv7(), createdAt: this.#now() };
+    const message: Message = { ...input, id: input.id ?? uuidv7(), createdAt: this.#now() };
     this.#messages.get(input.conversationId)?.push(message);
     this.#conversations.set(conversation.id, { ...conversation, updatedAt: message.createdAt });
 

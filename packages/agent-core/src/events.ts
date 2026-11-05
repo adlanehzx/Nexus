@@ -12,6 +12,7 @@ export type AgentEvent =
   | { type: "run.started"; runId: string; conversationId: string; at: string }
   | { type: "iteration.started"; runId: string; iteration: number; at: string }
   | { type: "llm.completed"; runId: string; iteration: number; usage: TokenUsage; at: string }
+  | { type: "agent.delta"; runId: string; delta: string; at: string }
   | { type: "agent.message"; runId: string; text: string; at: string }
   | {
       type: "tool.started";

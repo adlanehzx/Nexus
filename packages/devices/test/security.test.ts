@@ -260,8 +260,10 @@ describe("event contract", () => {
       "agent",
       "confirmation",
       "device",
+      "message",
       "notification",
       "task",
+      "tool",
       "worker",
     ]);
   });
