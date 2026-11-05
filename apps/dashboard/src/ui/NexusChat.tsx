@@ -349,27 +349,6 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
     return (
       <div className="chat-text">
         <div>{mission.response}</div>
-        <div
-          style={{
-            marginTop: "0.6rem",
-            display: "flex",
-            gap: "0.75rem",
-            alignItems: "center",
-            fontSize: "0.72rem",
-            borderTop: "1px dashed rgba(255,255,255,0.1)",
-            paddingTop: "0.4rem",
-          }}
-        >
-          <span style={{ color: "var(--accent, #00f0ff)" }}>
-            💾 {tr("Checkpoint captured", "Checkpoint sauvegardé")}
-          </span>
-          <a
-            href="#vcs-worktrees"
-            style={{ color: "var(--text-muted, #8b949e)", textDecoration: "underline" }}
-          >
-            {tr("View VCS & Rollbacks →", "Gérer les worktrees & rollbacks →")}
-          </a>
-        </div>
       </div>
     );
   }

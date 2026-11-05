@@ -283,7 +283,7 @@ export class AcpOrchestrator {
       this.#missionControl.settings(),
     ]);
     if (!health.worker_enabled || health.profiles.length === 0) {
-      throw new Error("The ACP engine has no active profiles.");
+      throw new DependencyError({ message: "The ACP engine has no active profiles." });
     }
 
     const missionKey = randomUUID();
