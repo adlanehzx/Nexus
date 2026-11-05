@@ -129,6 +129,17 @@ export default function ChatScreen() {
 
   const listen = useListenControls();
 
+  // A worker named by a task may have joined after the fleet was last read.
+  const missingWorker = state.tasks.some(
+    (task) =>
+      task.workerDeviceId !== null &&
+      !state.devices.some((device) => device.id === task.workerDeviceId),
+  );
+  const { refreshDevices } = nexus;
+  useEffect(() => {
+    if (missingWorker) void refreshDevices().catch(() => undefined);
+  }, [missingWorker, refreshDevices]);
+
   const blocker = sendBlocker(nexus.sendMode, {
     online: state.online,
     realtime: state.connection === "connected",

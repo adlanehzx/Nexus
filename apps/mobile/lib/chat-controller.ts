@@ -138,6 +138,8 @@ export class ChatController {
     const text = rawText.trim();
     if (text.length === 0) return true;
 
+    // A new attempt: the previous failure no longer describes what is happening.
+    this.#options.dispatch({ kind: "clearError" });
     const localId = this.#showLocally(text);
 
     try {
