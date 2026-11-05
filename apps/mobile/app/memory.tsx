@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import type { ApiMemory } from "@nexus/client-core";
+import { KeyboardAware } from "../components/keyboard-aware.js";
 import { useNexus } from "../lib/nexus.js";
 import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 
@@ -139,7 +140,7 @@ export default function MemoryScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAware style={styles.screen}>
       <View style={styles.tabs}>
         <Tabs active={tab} onChange={setTab} />
       </View>
@@ -213,7 +214,7 @@ export default function MemoryScreen() {
           }
         />
       )}
-    </View>
+    </KeyboardAware>
   );
 }
 

@@ -16,26 +16,6 @@
     "reason": "Career client answers from a local cache for most reads, so several ready server routes have no caller yet. Lot 7.2 wires the eight that exist and lot 7.3 the rest; this entry shrinks as it goes."
   },
   {
-    "route": "POST /api/v1/agent-core/runs",
-    "reason": "Direct Agent Core execution API. The Python Mission Engine calls the mission-runs and grant routes; this one has no client yet and is kept for the Agent Core path reviewed in lot 6."
-  },
-  {
-    "route": "* /api/v1/agent-core/runs/:p*",
-    "reason": "Same Agent Core execution path: run status, cancellation and confirmation. No in-repo caller until lot 6 decides whether the direct API stays."
-  },
-  {
-    "route": "GET /api/v1/users/me",
-    "reason": "Clients trust the login payload and never re-read identity. Lot 9.5 makes them re-query so a permission change applies to a live session; this entry goes with it."
-  },
-  {
-    "route": "GET /api/v1/users/me/permissions",
-    "reason": "Same as GET /users/me: unused until lot 9.5 re-queries permissions instead of trusting the login payload."
-  },
-  {
-    "route": "POST /api/v1/auth/logout-all",
-    "reason": "No 'sign out everywhere' control exists yet. Lot 9.5 adds it."
-  },
-  {
     "route": "GET /api/v1/tools",
     "reason": "Second tool catalogue, derived from device capabilities rather than the registry. Nothing renders it; lot 3.1 decides whether it merges with GET /dashboard/tools or goes."
   },
@@ -52,24 +32,12 @@
     "reason": "Dashboard chat keeps no history, so it never fetches a conversation. Lot 9.2 wires persistence using the route the desktop app already calls."
   },
   {
-    "route": "POST /api/v1/conversations/:p/archive",
-    "reason": "Archiving is unexposed. Lot 9.5 adds the control."
-  },
-  {
     "route": "GET /api/v1/devices/:p",
     "reason": "Device detail is served by GET /dashboard/devices/:id for the admin view. Kept as the canonical resource for paired clients."
   },
   {
     "route": "POST /api/v1/devices/:p/challenge",
     "reason": "REST twin of the WebSocket challenge in the worker handshake, which is the path all four workers actually use. Kept for clients that cannot hold a socket; do not unify without a protocol version bump."
-  },
-  {
-    "route": "GET /api/v1/dashboard/devices/:p",
-    "reason": "Device detail panel reads the list endpoint. Kept addressable for deep links."
-  },
-  {
-    "route": "GET /api/v1/dashboard/runs/:p",
-    "reason": "Run detail is rendered from the list payload. Kept addressable for deep links."
   },
   {
     "route": "* /api/v1/mission-control/paper*",
@@ -124,16 +92,8 @@
     "reason": "Template route for the per-step pause and resume pair that lot 2 removed from the UI. Lot 5.4 replaces it with DAG-level pause, which the data model supports."
   },
   {
-    "route": "POST /api/v1/mission-control/schedules/:p/:p",
-    "reason": "Registered by a loop over ['pause','resume'], so the declared path ends in a parameter where callers use the literal action. Both are called from the dashboard; the checker compares paths and cannot match a generated segment."
-  },
-  {
     "route": "GET /api/v1/providers/capabilities",
     "reason": "Unified provider capabilities endpoint. Kept as the direct canonical capabilities route alongside the /api/v1/providers alias used by the UI."
-  },
-  {
-    "route": "GET /api/v1/providers/models",
-    "reason": "Global model catalog across all providers. The dashboard accesses models per-provider via /api/v1/providers/:provider/models; kept for cross-provider model queries."
   },
   {
     "route": "POST /api/v1/checkpoints",
@@ -152,23 +112,11 @@
     "reason": "PR architectural review guide creation and publication endpoint. Written by reviewing subagents during synthesis turns."
   },
   {
-    "route": "GET /api/v1/agent-core/runs",
-    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
-  },
-  {
     "route": "GET /api/v1/confirmations",
-    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
+    "reason": "Contract offered to the mobile app, which does not call it yet."
   },
   {
     "route": "GET /api/v1/agent-core/models",
-    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
-  },
-  {
-    "route": "POST /api/v1/devices/:p/push-token",
-    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
-  },
-  {
-    "route": "DELETE /api/v1/devices/:p/push-token",
-    "reason": "Called by the mobile app on feat/mobile-finalization, which is not merged yet. Remove this entry when it is."
+    "reason": "Contract offered to the mobile app, which does not call it yet."
   }
 ]
