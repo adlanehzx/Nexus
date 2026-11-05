@@ -1,3 +1,4 @@
+import "./web-crypto.js";
 import {
   createContext,
   useCallback,
