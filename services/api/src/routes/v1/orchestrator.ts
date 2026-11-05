@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { FastifyPluginCallback } from "fastify";
+import type { FastifyInstance, FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
@@ -95,30 +95,34 @@ const runtimeSettingsViewSchema = z.object({
   synthesis_priority: z.array(z.string().min(1)).min(1).max(20),
 });
 
+/** Undefined when no Mission Engine is configured. Shared with the MCP endpoint. */
+export function buildAcpOrchestrator(app: FastifyInstance): AcpOrchestrator | undefined {
+  const missionControl = app.services.missionControl;
+  if (missionControl === undefined) return undefined;
+  return new AcpOrchestrator({
+    missionControl,
+    context: app.services.context,
+    // The grant service signs **and** registers: the orchestrator only
+    // receives the ability to issue mission scopes.
+    grants: app.services.missionGrants,
+    agentRouter: app.services.agentRouter,
+    sharedArtifacts: app.services.sharedArtifacts,
+    agentCollaboration: app.services.agentCollaboration,
+    ...(app.services.acpWorkspaceRoot === undefined
+      ? {}
+      : { workspaceRoot: app.services.acpWorkspaceRoot }),
+    onDegraded: ({ reason, cause }) =>
+      app.log.warn({ err: cause, event: "mission.degraded", reason }, reason),
+    ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
+  });
+}
+
 export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
   const missionControl = app.services.missionControl;
   const providerAccounts = app.services.providerAccounts;
   const agentRouter = app.services.agentRouter;
-  const orchestrator =
-    missionControl === undefined
-      ? undefined
-      : new AcpOrchestrator({
-          missionControl,
-          context: app.services.context,
-          // The grant service signs **and** registers: the orchestrator only
-          // receives the ability to issue mission scopes.
-          grants: app.services.missionGrants,
-          agentRouter,
-          sharedArtifacts: app.services.sharedArtifacts,
-          agentCollaboration: app.services.agentCollaboration,
-          ...(app.services.acpWorkspaceRoot === undefined
-            ? {}
-            : { workspaceRoot: app.services.acpWorkspaceRoot }),
-          onDegraded: ({ reason, cause }) =>
-            app.log.warn({ err: cause, event: "mission.degraded", reason }, reason),
-          ...(app.services.llmProvider === undefined ? {} : { llm: app.services.llmProvider }),
-        });
+  const orchestrator = buildAcpOrchestrator(app);
 
   app.get(
     "/orchestrator/settings",

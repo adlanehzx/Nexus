@@ -59,12 +59,12 @@ export const NEXUS_EXPOSED_MCP_TOOLS: readonly McpServerToolDefinition[] = [
   },
   {
     name: "nexus_get_usage_metrics",
-    description: "Retrieve token consumption and equivalent API cost analytics.",
+    description: "Retrieve observed token consumption per day and model for this account.",
     requiredScope: "metrics:read",
     inputSchema: {
       type: "object",
       properties: {
-        provider: { type: "string" },
+        days: { type: "number", default: 30 },
       },
     },
   },

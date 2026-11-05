@@ -94,6 +94,11 @@ import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
 import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
+import {
+  InMemoryMcpAccessStore,
+  PrismaMcpAccessStore,
+  type McpAccessStore,
+} from "./mcp-gateway.js";
 import type { LinkedInIntegrationService } from "./linkedin-integration.js";
 import { OsintService } from "./osint-service.js";
 import { registerToolDomains } from "./tool-registration.js";
@@ -284,6 +289,7 @@ export class ServiceContainer {
   // an invented store would not have been.
   readonly toolRegistry: ToolRegistry;
   readonly runStore: QueryableAgentRunStore;
+  readonly mcpAccessStore: McpAccessStore;
   readonly telemetry: NexusTelemetry;
   readonly agentRunClaims: AgentRunClaimStore;
   readonly missionGrants: MissionGrantService;
@@ -563,6 +569,11 @@ export class ServiceContainer {
     // ── Observability ─────────────────────────────────────────────────────
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.telemetry = options.telemetry ?? new NexusTelemetry();
+    this.mcpAccessStore =
+      options.prisma === undefined
+        ? new InMemoryMcpAccessStore()
+        : new PrismaMcpAccessStore(options.prisma);
+
     this.runStore = new ObservableAgentRunStore(
       options.runStore ?? new InMemoryAgentRunStore(),
       this.telemetry,

@@ -979,6 +979,9 @@ importers:
         specifier: 4.5.4
         version: 4.5.4
     devDependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@4.5.4)
       '@nexus/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core

@@ -1029,6 +1029,26 @@ export interface UsageQuotaAccountDto {
   exhausted: boolean;
 }
 
+export interface McpTokenDto {
+  id: string;
+  name: string;
+  scopes: string[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface McpActivityDto {
+  id: string;
+  tokenId: string;
+  tool: string;
+  outcome: string;
+  errorCode: string | null;
+  durationMs: number;
+  createdAt: string;
+}
+
 export class DashboardApi {
   readonly #session: SessionManager;
 
@@ -1597,6 +1617,32 @@ export class DashboardApi {
     providerQuota: null;
   }> {
     return this.#get(`/api/v1/usage?days=${days}&offset=${offset}`);
+  }
+
+  mcpTokens(): Promise<{ tokens: McpTokenDto[]; availableScopes: string[] }> {
+    return this.#get("/api/v1/mcp/tokens");
+  }
+
+  createMcpToken(input: {
+    name: string;
+    scopes: string[];
+    expiresInDays: number;
+  }): Promise<{ token: string; record: McpTokenDto }> {
+    return this.#request("POST", "/api/v1/mcp/tokens", input);
+  }
+
+  revokeMcpToken(id: string): Promise<{ revoked: true }> {
+    return this.#request("DELETE", `/api/v1/mcp/tokens/${encodeURIComponent(id)}`);
+  }
+
+  mcpActivity(): Promise<{ activity: McpActivityDto[] }> {
+    return this.#get("/api/v1/mcp/activity");
+  }
+
+  mcpExposedTools(): Promise<{
+    tools: { name: string; description: string; requiredScope: string }[];
+  }> {
+    return this.#get("/api/v1/mcp/tools");
   }
 
   usageSummary(days = 30): Promise<UsageSummaryDto> {
