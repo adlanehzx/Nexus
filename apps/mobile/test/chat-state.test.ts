@@ -124,7 +124,7 @@ describe("reduceMobile", () => {
 });
 
 describe("sendBlocker", () => {
-  const ready = { text: "hi", online: true, realtime: true, devicePending: false };
+  const ready = { online: true, realtime: true, devicePending: false };
 
   it("blocks everything offline", () => {
     expect(sendBlocker("chat", { ...ready, online: false })).toMatch(/offline/);
@@ -139,9 +139,5 @@ describe("sendBlocker", () => {
     expect(sendBlocker("action", { ...ready, devicePending: true })).toMatch(/Approve/);
     expect(sendBlocker("action", { ...ready, realtime: false })).toMatch(/live connection/);
     expect(sendBlocker("action", ready)).toBeUndefined();
-  });
-
-  it("enforces the planner's length limit", () => {
-    expect(sendBlocker("action", { ...ready, text: "x".repeat(2_001) })).toMatch(/2000/);
   });
 });

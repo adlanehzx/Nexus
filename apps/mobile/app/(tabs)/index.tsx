@@ -19,7 +19,7 @@ import {
   type ToolCallView,
 } from "@nexus/client-core";
 import { useNexus } from "../../lib/nexus.js";
-import { sendBlocker, type SendMode } from "../../lib/chat-state.js";
+import { sendBlocker, TASK_INSTRUCTION_MAX_CHARS, type SendMode } from "../../lib/chat-state.js";
 import type { OrchestratedMission } from "../../lib/api-types.js";
 import { Composer } from "../../components/composer.js";
 import {
@@ -130,7 +130,6 @@ export default function ChatScreen() {
   const listen = useListenControls();
 
   const blocker = sendBlocker(nexus.sendMode, {
-    text: "",
     online: state.online,
     realtime: state.connection === "connected",
     devicePending: nexus.devicePending,
@@ -274,6 +273,7 @@ export default function ChatScreen() {
         voiceState={nexus.voiceState}
         partialTranscript={nexus.partialTranscript}
         microphoneAvailable={microphoneAvailable}
+        maxLength={nexus.sendMode === "action" ? TASK_INSTRUCTION_MAX_CHARS : 32_000}
         busy={chat.running && chat.activeRunId !== null}
         onCancelResponse={() => {
           void nexus.stopRun();

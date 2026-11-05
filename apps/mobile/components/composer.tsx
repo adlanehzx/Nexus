@@ -25,6 +25,8 @@ export interface ComposerProps {
   onCancelResponse?: () => void;
   /** False if microphone is unavailable on device. */
   microphoneAvailable: boolean;
+  /** What the route behind the current mode accepts. */
+  maxLength?: number;
 }
 
 export function Composer(props: ComposerProps) {
@@ -74,7 +76,7 @@ export function Composer(props: ComposerProps) {
           placeholderTextColor={theme.color.textFaint}
           editable={props.enabled && !listening}
           multiline
-          maxLength={4_000}
+          maxLength={props.maxLength ?? 4_000}
           onSubmitEditing={submit}
           accessibilityLabel="Message for NEXUS"
         />

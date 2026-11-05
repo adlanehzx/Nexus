@@ -102,15 +102,12 @@ export const TASK_INSTRUCTION_MAX_CHARS = 2_000;
 /** Why this mode cannot send right now, or `undefined` when it can. */
 export function sendBlocker(
   mode: SendMode,
-  context: { text: string; online: boolean; realtime: boolean; devicePending: boolean },
+  context: { online: boolean; realtime: boolean; devicePending: boolean },
 ): string | undefined {
   if (!context.online) return "You are offline.";
   if (mode === "action") {
     if (context.devicePending) return "Approve this device before running actions.";
     if (!context.realtime) return "Actions need the live connection to NEXUS.";
-    if (context.text.length > TASK_INSTRUCTION_MAX_CHARS) {
-      return `Actions are limited to ${TASK_INSTRUCTION_MAX_CHARS} characters.`;
-    }
   }
   return undefined;
 }
