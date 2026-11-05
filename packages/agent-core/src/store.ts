@@ -51,6 +51,24 @@ export class InMemoryAgentRunStore implements AgentRunStore {
     return Promise.resolve([...this.#states.values()].map((state) => structuredClone(state)));
   }
 
+  async listForUser(
+    userId: string,
+    since: Date,
+    offset: number,
+    limit: number,
+  ): Promise<AgentState[]> {
+    return (await this.listAll())
+      .filter(
+        ({ record }) => record.userId === userId && Date.parse(record.startTime) >= since.getTime(),
+      )
+      .sort(
+        (a, b) =>
+          b.record.startTime.localeCompare(a.record.startTime) ||
+          b.record.runId.localeCompare(a.record.runId),
+      )
+      .slice(offset, offset + limit);
+  }
+
   get size(): number {
     return this.#states.size;
   }

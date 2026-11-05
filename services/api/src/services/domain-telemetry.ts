@@ -191,6 +191,7 @@ export class NexusTelemetry {
 
 interface ListableAgentRunStore extends AgentRunStore {
   listAll(): Promise<AgentState[]>;
+  listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]>;
 }
 
 export class ObservableAgentRunStore implements ListableAgentRunStore {
@@ -217,6 +218,10 @@ export class ObservableAgentRunStore implements ListableAgentRunStore {
 
   listByStatus(status: AgentState["record"]["status"]): Promise<AgentState[]> {
     return this.#delegate.listByStatus(status);
+  }
+
+  listForUser(userId: string, since: Date, offset: number, limit: number): Promise<AgentState[]> {
+    return this.#delegate.listForUser(userId, since, offset, limit);
   }
 
   listAll(): Promise<AgentState[]> {

@@ -1545,8 +1545,12 @@ export class DashboardApi {
     );
   }
 
-  usage(): Promise<{
+  usage(
+    days = 30,
+    offset = 0,
+  ): Promise<{
     source: "agent_run_records";
+    nextOffset: number | null;
     days: number;
     runs: {
       runId: string;
@@ -1561,7 +1565,7 @@ export class DashboardApi {
     billedCostUsd: null;
     providerQuota: null;
   }> {
-    return this.#get("/api/v1/usage");
+    return this.#get(`/api/v1/usage?days=${days}&offset=${offset}`);
   }
 
   quotaForecast(): Promise<{ forecasts: QuotaForecastDto[] }> {

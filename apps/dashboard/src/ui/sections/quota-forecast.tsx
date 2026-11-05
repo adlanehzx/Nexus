@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
 import { Bar, Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
@@ -9,11 +10,28 @@ import { useI18n } from "../i18n/index.js";
 export function QuotaForecast({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const state = useSection(() => api.quotaForecast());
-  const usage = useSection(() => api.usage());
+  const [days, setDays] = useState(30);
+  const [offset, setOffset] = useState(0);
+  const usage = useSection(() => api.usage(days, offset), [api, days, offset]);
 
   return (
     <div className="content">
-      <h2>{tr("Observed usage — last 30 days", "Consommation observée — 30 derniers jours")}</h2>
+      <h2>{tr("Observed usage", "Consommation observée")}</h2>
+      <label>
+        {tr("Period", "Période")}
+        <select
+          value={days}
+          onChange={(event) => {
+            setDays(Number(event.target.value));
+            setOffset(0);
+          }}
+        >
+          <option value={1}>{tr("24 hours", "24 heures")}</option>
+          <option value={7}>{tr("7 days", "7 jours")}</option>
+          <option value={30}>{tr("30 days", "30 jours")}</option>
+          <option value={90}>{tr("90 days", "90 jours")}</option>
+        </select>
+      </label>
       <p>
         {tr(
           "Agent Core runs for your account. Provider subscription quotas and billed costs are unavailable here.",
@@ -58,6 +76,22 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
           )
         }
       </Section>
+      <nav aria-label={tr("Usage pages", "Pages de consommation")}>
+        <button
+          disabled={usage.loading || offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - 50))}
+        >
+          {tr("Previous", "Précédent")}
+        </button>
+        <button
+          disabled={usage.loading || usage.error !== undefined || usage.data?.nextOffset == null}
+          onClick={() => {
+            if (usage.data?.nextOffset != null) setOffset(usage.data.nextOffset);
+          }}
+        >
+          {tr("Next", "Suivant")}
+        </button>
+      </nav>
       <Section state={state}>
         {(data) =>
           data.forecasts.length === 0 ? (

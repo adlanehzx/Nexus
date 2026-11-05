@@ -84,3 +84,9 @@ The existing quota forecast screen now also displays observed runs, model, date 
 Validation: 7 usage API/package tests passed, including anonymous access and forged tenant query rejection; API wiring check passed. API and dashboard TypeScript checks passed. Browser E2E and PostgreSQL restart validation for this new endpoint have not been performed. The API tests use the existing test harness and are not proof of production persistence.
 
 Remaining work for this slice: database-side scoped projection/pagination (current implementation follows the existing dashboard's listAll then owner-filter pattern), aggregate graphs, explicit primary navigation, collector/account attribution, exports, period controls, durable integration test and browser evidence. Usage & Quotas remains partially_integrated.
+
+## Iteration 3 — scoped usage queries and PostgreSQL evidence
+
+Usage reads now filter user and period inside Prisma, with a bounded page size and deterministic ordering. The existing quota screen supports periods and previous/next pages. The response retains its existing shape and adds nullable `nextOffset`.
+
+Executed: 27 persistence tests against disposable PostgreSQL; authenticated Fastify usage test backed by real Prisma, including two-account isolation and exclusion of private response text; 7 usage tests; API/dashboard type checks and targeted lint. These tests do not exercise a browser or an actual provider. A new service instance reads the persisted run; this is not a crash/restart mission test.

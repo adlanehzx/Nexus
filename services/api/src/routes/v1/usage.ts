@@ -12,13 +12,18 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
       schema: {
         tags: ["usage"],
         querystring: z
-          .object({ days: z.coerce.number().int().min(1).max(366).default(30) })
+          .object({
+            days: z.coerce.number().int().min(1).max(366).default(30),
+            offset: z.coerce.number().int().min(0).max(100000).default(0),
+            limit: z.coerce.number().int().min(1).max(100).default(50),
+          })
           .strict(),
         response: {
           200: okSchema(
             z.object({
               source: z.literal("agent_run_records"),
               days: z.number(),
+              nextOffset: z.number().nullable(),
               runs: z.array(
                 z.object({
                   runId: z.string(),
@@ -41,8 +46,14 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     async (request, reply) => {
       const { userId } = currentUser(request);
       const cutoff = Date.now() - request.query.days * 86_400_000;
-      const runs = (await app.services.runStore.listAll())
-        .filter(({ record }) => record.userId === userId && Date.parse(record.startTime) >= cutoff)
+      const page = await app.services.runStore.listForUser(
+        userId,
+        new Date(cutoff),
+        request.query.offset,
+        request.query.limit + 1,
+      );
+      const runs = page
+        .slice(0, request.query.limit)
         .map(({ record }) => ({
           runId: record.runId,
           model: record.model,
@@ -59,6 +70,8 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
           {
             source: "agent_run_records" as const,
             days: request.query.days,
+            nextOffset:
+              page.length > request.query.limit ? request.query.offset + request.query.limit : null,
             runs,
             billedCostUsd: null,
             providerQuota: null,

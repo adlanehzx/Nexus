@@ -53,6 +53,21 @@ export class PrismaAgentRunStore implements QueryableAgentRunStore {
     return rows.map((row) => row.state as unknown as AgentState);
   }
 
+  async listForUser(
+    userId: string,
+    since: Date,
+    offset: number,
+    limit: number,
+  ): Promise<AgentState[]> {
+    const rows = await this.#prisma.agentRunSnapshot.findMany({
+      where: { userId, startTime: { gte: since } },
+      orderBy: [{ startTime: "desc" }, { id: "desc" }],
+      skip: offset,
+      take: limit,
+    });
+    return rows.map((row) => row.state as unknown as AgentState);
+  }
+
   async listAll(): Promise<AgentState[]> {
     const rows = await this.#prisma.agentRunSnapshot.findMany({
       orderBy: { startTime: "desc" },
