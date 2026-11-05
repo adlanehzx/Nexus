@@ -381,9 +381,25 @@ export class KeyringVault implements SecretVault {
  * Secret Service is available. Values are encrypted independently with AES-256-GCM;
  * only ciphertext, nonces and authentication tags reach the runtime volume.
  */
+function unseal(
+  key: Buffer,
+  name: string,
+  sealed: { iv: string; ciphertext: string; tag: string },
+): string {
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(sealed.iv, "base64"));
+  decipher.setAAD(Buffer.from(name, "utf8"));
+  decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(sealed.ciphertext, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
 export class EncryptedFileVault implements SecretVault {
   readonly #store: RuntimeConfigurationStore;
   readonly #key: Buffer;
+  /** Key of secrets sealed before HKDF. Read only: every write uses `#key`. */
+  readonly #legacyKey: Buffer;
 
   constructor(store: RuntimeConfigurationStore, masterSecret: string) {
     if (masterSecret.trim().length < 32) {
@@ -399,6 +415,7 @@ export class EncryptedFileVault implements SecretVault {
       32,
     );
     this.#key = Buffer.from(derivedKey);
+    this.#legacyKey = createHash("sha256").update(masterSecret, "utf8").digest();
   }
 
   async list(): Promise<string[]> {
@@ -426,13 +443,15 @@ export class EncryptedFileVault implements SecretVault {
     const key = referenceName(ref);
     const sealed = (await this.#store.loadEncryptedSecrets()).secrets[key];
     if (sealed === undefined) return undefined;
-    const decipher = createDecipheriv("aes-256-gcm", this.#key, Buffer.from(sealed.iv, "base64"));
-    decipher.setAAD(Buffer.from(key, "utf8"));
-    decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(sealed.ciphertext, "base64")),
-      decipher.final(),
-    ]).toString("utf8");
+    try {
+      return unseal(this.#key, key, sealed);
+    } catch {
+      // Sealed before HKDF. Without this, upgrading would lose every stored secret.
+      // Authenticated decryption still rejects anything the master key did not seal.
+      const value = unseal(this.#legacyKey, key, sealed);
+      await this.set(key, value);
+      return value;
+    }
   }
 
   async delete(name: string): Promise<void> {

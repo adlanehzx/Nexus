@@ -99,7 +99,10 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
           workspaceRoot: z.string().min(1),
           branchName: z
             .string()
-            .regex(/^[a-zA-Z0-9][a-zA-Z0-9_\-\.\/]{0,100}$/, "Invalid branch name: cannot start with '-'"),
+            .regex(
+              /^[a-zA-Z0-9][a-zA-Z0-9_\-\.\/]{0,100}$/,
+              "Invalid branch name: cannot start with '-'",
+            ),
           baseBranch: z
             .string()
             .regex(/^[a-zA-Z0-9][a-zA-Z0-9_\-\.\/]{0,100}$/, "Invalid base branch")
