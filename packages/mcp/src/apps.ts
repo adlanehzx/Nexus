@@ -61,7 +61,7 @@ export class McpAppEngine {
 
     const contentSecurityPolicy = cspDirectives.join("; ");
 
-    // SEC-06: Sanitize HTML against base redirection, clickjacking, and plugin tags
+    // SEC-06: Strip tags that can move the page elsewhere, frame content, or load plugins
     const sanitizedHtml = descriptor.entryHtml
       .replace(/<base\b[^>]*>/gi, "")
       .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?(?:refresh|set-cookie)["']?[^>]*>/gi, "")
