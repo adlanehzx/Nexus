@@ -76,7 +76,9 @@ export const satelliteRoutes: FastifyPluginCallback = (fastify, _options, done) 
       if (!requireSatellite(request.params.deviceId, request.headers.authorization)) {
         return reply.code(401).send({ error: "unauthorized" });
       }
-      app.satellites.acceptResult(request.body);
+      if (!app.satellites.acceptResult(request.params.deviceId, request.body)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
       return reply.code(202).send({ accepted: true });
     },
   );
@@ -114,6 +116,25 @@ export const satelliteRoutes: FastifyPluginCallback = (fastify, _options, done) 
         request.body.idempotencyKey,
       );
       return reply.code(202).send(ok(item, request.id));
+    },
+  );
+
+  app.get(
+    "/satellites/:deviceId/commands/:correlationId",
+    {
+      preHandler: app.requireUser,
+      schema: { params: deviceParams.extend({ correlationId: z.string().uuid() }) },
+    },
+    async (request, reply) => {
+      if (!app.satellites.isOwnedBy(request.params.deviceId, currentUser(request).userId)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
+      const status = app.satellites.commandStatus(
+        request.params.deviceId,
+        request.params.correlationId,
+      );
+      if (!status) return reply.code(404).send({ error: "not_found" });
+      return reply.send(ok(status, request.id));
     },
   );
 

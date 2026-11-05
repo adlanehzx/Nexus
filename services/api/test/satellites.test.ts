@@ -87,7 +87,30 @@ describe("ESP32 satellite gateway", () => {
       },
     });
     expect(result.statusCode).toBe(202);
-    expect(satellites.result(command.correlationId)?.ok).toBe(true);
+    expect(satellites.result(DEVICE_ID, command.correlationId)?.ok).toBe(true);
+    const status = await api.app.inject({
+      method: "GET",
+      url: `/api/v1/satellites/${DEVICE_ID}/commands/${command.correlationId}`,
+      headers: account.authorization,
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().data).toMatchObject({ state: "completed", result: { ok: true } });
+    expect(
+      satellites.acceptResult("other-device", {
+        v: 1,
+        type: "command.result",
+        correlationId: command.correlationId,
+        ok: false,
+        status: 1,
+      }),
+    ).toBe(false);
+    const other = await createAccount(api, "result-other@example.test");
+    const hidden = await api.app.inject({
+      method: "GET",
+      url: `/api/v1/satellites/${DEVICE_ID}/commands/${command.correlationId}`,
+      headers: other.authorization,
+    });
+    expect(hidden.statusCode).toBe(404);
   });
 
   it("hides satellites and rejects cross-account commands, including unassigned devices", async () => {
