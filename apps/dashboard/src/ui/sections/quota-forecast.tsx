@@ -2,13 +2,11 @@ import { useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
 import {
   formatCountdown,
-  getProvenanceBadge,
   groupUsage,
   isQuotaAlertTriggered,
   usageCsv,
   usagePeriod,
   usageTotals,
-  type TelemetryProvenance,
   type UsageGranularity,
 } from "../../lib/usage.js";
 import { Bar, Empty, Metric, Section, State, Table, useSection } from "../parts.js";

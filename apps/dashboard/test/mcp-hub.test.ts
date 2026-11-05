@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MCP_PRESETS, isForbiddenRemoteUrl } from "../src/ui/sections/mcp.js";
+import { MCP_PRESETS, isForbiddenRemoteUrl } from "../src/lib/mcp.js";
 
 describe("MCP Management Hub Contracts (Mission C)", () => {
   it("blocks dangerous local and metadata destinations via SSRF filter", () => {

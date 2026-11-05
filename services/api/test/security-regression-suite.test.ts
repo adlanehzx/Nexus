@@ -11,7 +11,6 @@ import {
   registerDevice,
   type Account,
   type ApiHarness,
-  type RegisteredDevice,
 } from "./harness.js";
 
 /**
@@ -24,7 +23,6 @@ import {
 let harness: ApiHarness;
 let account: Account;
 let otherAccount: Account;
-let portable: RegisteredDevice;
 let satellites: SatelliteService;
 let owners: Record<string, string>;
 let sequence = 0;
@@ -52,7 +50,7 @@ beforeEach(async () => {
   // Satellite belongs to account
   owners[SATELLITE_ID] = account.userId;
 
-  portable = await registerDevice(harness, account, {
+  await registerDevice(harness, account, {
     name: "Auditor Laptop",
     role: "BOTH",
     permissions: ["filesystem.read", "terminal.execute"],
