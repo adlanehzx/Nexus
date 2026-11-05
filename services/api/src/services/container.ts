@@ -467,6 +467,27 @@ export class ServiceContainer {
     this.supervisor = new TaskSupervisor({
       coordinator: this.coordinator,
       notifications: this.notifications,
+      reportFailure: async (plan) => {
+        // The announcement comes first and does not depend on the save: the likeliest
+        // cause of this path is a storage failure, which the save would hit again.
+        const announced = this.router.emit({
+          type: "task.failed",
+          userId: plan.userId,
+          correlationId: plan.correlationId,
+          originClientDeviceId: plan.originClientDeviceId,
+          payload: {
+            taskId: plan.id,
+            code: "TASK_EXECUTION_FAILED",
+            message: "The task could not be executed.",
+          },
+        });
+        const saved = this.taskStore.save({
+          ...plan,
+          status: "failed",
+          completedAt: now().toISOString(),
+        });
+        await Promise.all([announced, saved]);
+      },
       ...(options.onTaskError === undefined ? {} : { onError: options.onTaskError }),
     });
 

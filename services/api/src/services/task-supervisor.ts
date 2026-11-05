@@ -30,12 +30,15 @@ interface Running {
 export interface TaskSupervisorOptions {
   coordinator: TaskCoordinator;
   notifications: NotificationService;
+  /** Records and announces a plan whose execution broke outside its own steps. */
+  reportFailure: (plan: TaskPlan) => Promise<void>;
   onError?: (error: unknown, taskId: string) => void;
 }
 
 export class TaskSupervisor {
   readonly #coordinator: TaskCoordinator;
   readonly #notifications: NotificationService;
+  readonly #reportFailure: (plan: TaskPlan) => Promise<void>;
   readonly #onError: ((error: unknown, taskId: string) => void) | undefined;
 
   readonly #running = new Map<string, Running>();
@@ -43,6 +46,7 @@ export class TaskSupervisor {
   constructor(options: TaskSupervisorOptions) {
     this.#coordinator = options.coordinator;
     this.#notifications = options.notifications;
+    this.#reportFailure = options.reportFailure;
     this.#onError = options.onError;
   }
 
@@ -83,8 +87,12 @@ export class TaskSupervisor {
           originClientDeviceId: executed.originClientDeviceId,
         });
       })
-      .catch((cause: unknown) => {
+      .catch(async (cause: unknown) => {
+        // The client was told 202. Without this, it would wait for a task that is gone.
         this.#onError?.(cause, plan.id);
+        await this.#reportFailure(plan).catch((reportCause: unknown) => {
+          this.#onError?.(reportCause, plan.id);
+        });
       })
       .finally(() => {
         this.#running.delete(plan.id);

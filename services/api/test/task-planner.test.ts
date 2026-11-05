@@ -89,7 +89,11 @@ describe("TaskPlanner", () => {
     });
 
     expect(planInput.steps).toHaveLength(2);
-    expect(planInput.steps[1]!.dependsOn).toEqual(["step-1"]);
+    // The model's labels are replaced by generated UUIDs, with dependencies following them.
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    expect(planInput.steps[0]!.id).toMatch(uuid);
+    expect(planInput.steps[1]!.id).toMatch(uuid);
+    expect(planInput.steps[1]!.dependsOn).toEqual([planInput.steps[0]!.id]);
     expect(planInput.steps[0]!.riskLevel).toBe("HIGH"); // Explicit check of riskLevel
     expect(planInput.steps[1]!.riskLevel).toBe("LOW");
   });

@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { LLMProvider, LlmMessage } from "@nexus/llm";
 import { riskLevelSchema } from "@nexus/tools";
-import type { CreateTaskPlanInput, TaskStepInput } from "@nexus/devices";
+import { assignStepIds, type CreateTaskPlanInput, type TaskStepInput } from "@nexus/devices";
 
 export const llmTaskStepSchema = z.object({
-  id: z.string().describe("Unique identifier of the step (e.g. 'step-1')"),
+  id: z.string().describe("Label of the step within this plan (e.g. 'step-1')"),
   description: z.string().describe("Clear description of the action to perform"),
   requiredCapabilities: z
     .array(z.string())
@@ -102,7 +102,7 @@ ABSOLUTE RULES:
       );
     }
 
-    const steps: TaskStepInput[] = result.steps.map((s) => ({
+    const labelled: TaskStepInput[] = result.steps.map((s) => ({
       id: s.id,
       description: s.description,
       requiredCapabilities: s.requiredCapabilities,
@@ -111,6 +111,12 @@ ABSOLUTE RULES:
       dependsOn: s.dependsOn,
       riskLevel: s.riskLevel,
     }));
+    let steps: TaskStepInput[];
+    try {
+      steps = assignStepIds(labelled);
+    } catch (err) {
+      throw new TaskPlannerError(err instanceof Error ? err.message : String(err));
+    }
 
     return {
       planInput: {

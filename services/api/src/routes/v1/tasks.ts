@@ -3,7 +3,7 @@ import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { AuthorizationError, DependencyError } from "@nexus/shared";
 import { riskLevelSchema } from "@nexus/tools";
-import { createTaskPlan, type TaskStepInput } from "@nexus/devices";
+import { assignStepIds, createTaskPlan, type TaskStepInput } from "@nexus/devices";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
@@ -171,8 +171,10 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         ...(request.body.conversationId === undefined
           ? {}
           : { conversationId: request.body.conversationId }),
-        steps: request.body.steps as TaskStepInput[],
+        steps: assignStepIds(request.body.steps as TaskStepInput[]),
       });
+      // Saved before answering: a plan that cannot be stored must not be reported as accepted.
+      await app.services.taskStore.save(plan);
 
       // Execution is not awaited: a plan may take minutes, and an HTTP request
       // waiting for it would time out. The client tracks progress via the real-time channel.
@@ -249,6 +251,8 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       await authorize(userId, originClientDeviceId, capabilities);
 
       const plan = createTaskPlan(planInput);
+      // Saved before answering: a plan that cannot be stored must not be reported as accepted.
+      await app.services.taskStore.save(plan);
       app.services.supervisor.start(plan, availableCapabilities);
 
       return reply.code(202).send(ok(presentPlan(plan), request.id));
