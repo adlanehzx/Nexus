@@ -155,7 +155,7 @@ export function onNotificationTapped(open: (route: Href) => void): () => void {
       const route = response.notification.request.content.data?.route;
       // A notification only ever opens a screen of this app, never an outside address.
       if (typeof route === "string" && route.startsWith("/") && !route.startsWith("//")) {
-        open(route as Href);
+        open(route);
       }
     });
     return () => {
