@@ -7,6 +7,13 @@ a release if the shape below is kept, unless noted.
 
 Owner: backend. Status as of branch `feat/mobile-finalization`.
 
+## Status against `feat/full-product-integration`
+
+Checked on an Android emulator against a local merge of that branch at `b6b3161`, with a sandboxed
+worker and a stub LLM, and `CORS_ORIGINS` not listing the core: entries 13 and 14, Linux file paths
+and plans using `step-1` work. Later commits on that branch (model choice, push) were not checked
+here. None of this is on `master` yet, so the entries below stay valid until it merges.
+
 ## Priority 1: blocks a stated objective
 
 ### 13. The realtime socket refuses the mobile app's `Origin`
@@ -191,3 +198,38 @@ missing, stops retrying and goes offline without dispatching an error. On Hermes
 
 **Contract:** catch only `NotAuthenticatedError` there. Let any other error reach `#scheduleReconnect`
 or dispatch `CLIENT_HANDSHAKE_FAILED`, and correct the comment.
+
+### 15. Cancel does not stop a step that is running
+
+Reproduced with a 60 s command: it ran to the end after Cancel, its step finished `succeeded`, and
+the task was then marked `cancelled`. The client therefore reports a cancellation that stopped
+nothing. `DeviceCoordinator` reads `options.signal` only at the top of its loop.
+
+**Today:** the app shows the state the core reports.
+
+**Contract:** an abort during `dispatch` calls `transport.cancel`, the worker kills the process and
+the step ends `cancelled`. If the step really completed, the final state says so.
+
+### 16. Cancel has no effect while a confirmation is pending
+
+`await #confirm` does not watch the signal, so the task waits until the confirmation expires.
+
+**Today:** Cancel on such a task rejects the confirmation, which stops it.
+
+**Contract:** race the confirmation against the signal.
+
+### 17. Command output is unavailable
+
+`GET /tasks/:id/executions` returns `input` and `error` but no output, so no client can show what a
+command produced.
+
+**Today:** the task card shows status and duration only.
+
+**Contract:** a bounded `output`, redacted under the audit policy, at least for the task's owner.
+
+### 18. No running state for a step
+
+During execution the step stays `pending` and the app received no running state, so the card reads
+"queued" while the command runs.
+
+**Contract:** emit `task.progress` when a step starts, or expose the step's real status.
