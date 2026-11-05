@@ -60,6 +60,7 @@ const Workers = lazySection("Workers");
 const VcsWorktrees = lazySection("VcsWorktrees");
 const Providers = lazySection("Providers");
 const Organizations = lazySection("Organizations");
+const Observability = lazySection("Observability");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -153,6 +154,12 @@ export const SETTINGS_CATEGORIES = [
         icon: "memory",
       },
       { id: "logs" as const, label: "Journaux système", labelEn: "Diagnostic Logs", icon: "logs" },
+      {
+        id: "observability" as const,
+        label: "Observabilité",
+        labelEn: "Observability",
+        icon: "logs",
+      },
       {
         id: "notifications" as const,
         label: "Notifications",
@@ -323,6 +330,10 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
   "communication-graph": {
     title: "Agent communication graph",
     description: "Inter-agent message topologies, communication volume, and latency.",
+  },
+  observability: {
+    title: "Observability",
+    description: "Service health, mission engine, MCP servers, recent errors and incident lookup.",
   },
   organizations: {
     title: "Organizations",
@@ -970,6 +981,8 @@ function renderSection(
       return <Memory api={api} />;
     case "organizations":
       return <Organizations api={api} />;
+    case "observability":
+      return <Observability api={api} />;
     case "notifications":
       return <Notifications api={api} />;
     case "security":

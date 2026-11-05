@@ -191,6 +191,13 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("mission-control", "Mission Control"),
       },
       {
+        id: "win-observability",
+        title: "Ouvrir Observability (observabilité)",
+        subtitle: "Santé des services, erreurs récentes, recherche par correlationId",
+        category: "Windows",
+        action: () => openWindow("observability", "Observability"),
+      },
+      {
         id: "win-usage",
         title: "Ouvrir Usage & Quotas",
         subtitle: "Tokens observés, coûts estimés et fenêtres de quota",

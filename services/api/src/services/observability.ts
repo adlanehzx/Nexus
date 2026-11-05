@@ -116,7 +116,10 @@ export class LogBuffer {
     const matching = this.#entries.filter((entry) => {
       if (SEVERITY[entry.level] < minimum) return false;
       if (needle === undefined) return true;
-      return entry.message.toLowerCase().includes(needle);
+      return (
+        entry.message.toLowerCase().includes(needle) ||
+        entry.correlationId?.toLowerCase().includes(needle) === true
+      );
     });
 
     return matching.slice(-(filter.limit ?? 100)).reverse();
