@@ -145,11 +145,11 @@ All ten browser tests passed together on `e09811d`. Only the logout fix `6f1a327
 ### Known gaps
 
 - Orchestration: `InMemory*` transactional classes in agent-core are still unused by production. Durability relies on the Mission Engine's own store. Competing workers and a crash during a running agent were not exercised in E2E.
-- Providers: no real authenticated session, handshake or model call. On this host, Codex and Claude probes time out because their mise shims hang with the probe's minimal environment; no single variable fixed it. The screen reports the timeout.
+- Providers: `claude auth status` and `codex login status` give the real sign-in state, locally and without quota, and one real conversation passed through the ACP runner with Claude Code, on 2026-11-05, in an empty workspace, with the account owner's approval (`services/agent/test/real-agent.smoke.test.ts`, adapter `claude-agent-acp@0.63.0`). It proves that runner path only: no chat, mission or worker was involved, and Codex was not exercised. `ProviderHub` sessions remain a facade; the working path is the ACP runner in `services/agent`. Antigravity has no observed status command and stays unknown. A lapsed session has not been observed, so none is ever reported. On hosts with mise wrappers, set `NEXUS_PROBE_ENV_ALLOWLIST=__MISE_DIFF`, otherwise the wrapper re-launches itself until the probe times out.
 - Usage: no provider, account, quota or billed-cost collectors, and no multi-account filter or comparator. Provider quota fields stay unavailable until something reports them.
 - MCP: no catalogue or install flow, no interactive tool tester, no resources and prompts view. `nexus_trigger_mission` has no extra human confirmation beyond the scope and the engine's own permissions.
 - Multi-tenant: workspaces, projects and environments have no UI. Provider credentials and jobs were not audited for tenant boundaries.
-- Sessions and handoffs: `NativeSessionManager` has no production caller, and the chat's engine selector still has hard-coded labels.
+- Sessions and handoffs: `NativeSessionManager` has no production caller. The chat has no provider selector; its former buttons changed nothing and were removed.
 - Confirmations remain in memory, so pending ones are lost on restart. Satellite command queues too.
 - Streaming: text a model writes before a tool call is streamed but not persisted, so it disappears when history reloads.
 - Push: tested against a fake provider only. No message went through Expo.
