@@ -179,7 +179,7 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {state.lastError !== null && (
+      {state.lastError !== null && (state.online || state.lastError.code !== "CONNECTION_LOST") && (
         <View style={styles.errorHolder}>
           <ErrorBanner
             message={state.lastError.message}

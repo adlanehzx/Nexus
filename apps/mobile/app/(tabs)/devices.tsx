@@ -163,7 +163,10 @@ export default function DevicesScreen() {
 }
 
 function DeviceCard({ device }: { device: ApiDevice }) {
-  const self = device.id === useNexus().session.deviceId;
+  const nexus = useNexus();
+  const self = device.id === nexus.session.deviceId;
+  // The core tracks presence for workers only. This phone knows its own connection.
+  const online = device.status === "ONLINE" || (self && nexus.state.connection === "connected");
   const battery = device.health.batteryPercent;
   const load = `${String(device.health.activeTasks)}/${String(device.health.maxConcurrentTasks)} tasks`;
   return (
@@ -173,11 +176,11 @@ function DeviceCard({ device }: { device: ApiDevice }) {
         detail={[
           load,
           battery === undefined ? null : `${String(battery)}% battery`,
-          device.status === "ONLINE" ? null : `seen ${formatRelative(device.lastSeenAt)}`,
+          online ? null : `seen ${formatRelative(device.lastSeenAt)}`,
         ]
           .filter((part) => part !== null)
           .join(" · ")}
-        trailing={<Badge status={device.status} />}
+        trailing={<Badge status={online ? "ONLINE" : device.status} />}
         onPress={() => {
           router.push(`/device/${device.id}`);
         }}
