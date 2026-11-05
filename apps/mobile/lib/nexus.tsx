@@ -143,6 +143,9 @@ export function NexusProvider({
       http: new TimeoutHttpClient(backendHttpUrl(serverUrl)),
       storage: new KeychainStorage(),
       onSignedOut: () => {
+        // The core refused the session: nothing of this account stays on screen or open.
+        clearResourceCache();
+        services.current?.realtime.stop("session ended");
         setAuthenticated(false);
         setDeviceTrust("unknown");
         dispatch({ kind: "reset" });
@@ -294,7 +297,10 @@ export function NexusProvider({
   }, [api, controller]);
 
   useEffect(() => {
-    if (state.connection === "connected") resynchronize();
+    if (state.connection !== "connected") return;
+    resynchronize();
+    // "Retrying in 4 s" must not outlive the outage it describes.
+    if (stateRef.current.lastError?.code === "CONNECTION_LOST") dispatch({ kind: "clearError" });
   }, [state.connection, resynchronize]);
 
   // Returning to the foreground: the OS may have killed the socket silently.
