@@ -322,7 +322,12 @@ export interface SpatialStoreState {
   isPaletteOpen: boolean;
 }
 
-const DEFAULT_CAMERA: CameraState = { x: 0, y: 0, zoom: 1.0 };
+/** Starts below the shell's bars, which float above the canvas. */
+const DEFAULT_CAMERA: CameraState = { x: 0, y: 40, zoom: 1.0 };
+
+/** Height covered by the top and hint bars, and the gap kept around a new window. */
+const SHELL_CHROME_HEIGHT = 70;
+const WINDOW_MARGIN = 16;
 
 export function useSpatialStore() {
   const [activeSpace, setActiveSpaceState] = useState<NativeSpaceId>("command");
@@ -436,7 +441,7 @@ export function useSpatialStore() {
   );
 
   const resetCamera = useCallback(() => {
-    setCamera({ x: 0, y: 0, zoom: 1.0 });
+    setCamera({ ...DEFAULT_CAMERA });
   }, [setCamera]);
 
   const fitAll = useCallback(() => {
@@ -581,15 +586,28 @@ export function useSpatialStore() {
     ) => {
       const space = targetSpace ?? activeSpace;
       const id = `${space}-${type}-${Date.now().toString(36)}`;
+      // Placed in what the user is looking at, whatever the camera and screen size.
+      const camera = camerasPerSpace[space] ?? DEFAULT_CAMERA;
+      const viewWidth = window.innerWidth / camera.zoom;
+      const viewHeight = (window.innerHeight - SHELL_CHROME_HEIGHT) / camera.zoom;
+      const width = Math.min(720, viewWidth - 2 * WINDOW_MARGIN);
+      const height = Math.min(520, viewHeight - 2 * WINDOW_MARGIN);
+      const cascade = Math.random() * 40;
       const newWin: SpatialWindow = {
         id,
         title,
         spaceId: space,
         type,
-        x: 80 + Math.random() * 60,
-        y: 80 + Math.random() * 60,
-        width: 720,
-        height: 520,
+        x:
+          -camera.x / camera.zoom +
+          WINDOW_MARGIN +
+          Math.min(cascade, viewWidth - width - 2 * WINDOW_MARGIN),
+        y:
+          (SHELL_CHROME_HEIGHT - camera.y) / camera.zoom +
+          WINDOW_MARGIN +
+          Math.min(cascade, viewHeight - height - 2 * WINDOW_MARGIN),
+        width,
+        height,
         zIndex: 20,
         isMinimized: false,
         isMaximized: false,
@@ -607,7 +625,7 @@ export function useSpatialStore() {
       }
       setFocusedWindowId(id);
     },
-    [activeSpace],
+    [activeSpace, camerasPerSpace],
   );
 
   const tileWindows = useCallback(

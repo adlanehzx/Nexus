@@ -177,6 +177,13 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("connections", "Connexions CLIs"),
       },
       {
+        id: "win-usage",
+        title: "Ouvrir Usage & Quotas",
+        subtitle: "Tokens observés, coûts estimés et fenêtres de quota",
+        category: "Windows",
+        action: () => openWindow("quota-forecast", "Usage & Quotas"),
+      },
+      {
         id: "win-mcp",
         title: "Ouvrir Serveurs MCP",
         subtitle: "Protocole Model Context",
