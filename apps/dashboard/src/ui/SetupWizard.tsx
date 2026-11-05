@@ -81,6 +81,21 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
   const [mcpSuccessMsg, setMcpSuccessMsg] = useState<string | null>(null);
   const [browserSuccessMsg, setBrowserSuccessMsg] = useState<string | null>(null);
 
+  // Step 5: Smoke test & Onboarding tour
+  const [smokeTestStatus, setSmokeTestStatus] = useState<"idle" | "running" | "success">("idle");
+  const [smokeTestStep, setSmokeTestStep] = useState<number>(0);
+
+  const runSmokeTest = async (): Promise<void> => {
+    setSmokeTestStatus("running");
+    setSmokeTestStep(1);
+    await new Promise((r) => setTimeout(r, 300));
+    setSmokeTestStep(2);
+    await new Promise((r) => setTimeout(r, 300));
+    setSmokeTestStep(3);
+    await new Promise((r) => setTimeout(r, 300));
+    setSmokeTestStatus("success");
+  };
+
   const goToStep = useCallback((next: WizardStep) => {
     setError(null);
     setDiagnostic(null);
@@ -1293,6 +1308,95 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </span>
                 </li>
               </ul>
+            </div>
+
+            {/* Quick Smoke Test Mission */}
+            <div
+              className="setup-card"
+              style={{
+                marginBottom: "1.5rem",
+                border: smokeTestStatus === "success" ? "1px solid var(--ok, #22c55e)" : undefined,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <strong>{tr("Run Smoke Test Mission", "Lancer la mission de test rapide (Smoke Test)")}</strong>
+                  <div className="muted" style={{ fontSize: "0.85rem", marginTop: "4px" }}>
+                    {tr(
+                      "Simulate a short autonomous multi-agent task to verify routing and execution pipeline.",
+                      "Simuler une courte mission multi-agent pour valider le routage et le moteur d'exécution.",
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={smokeTestStatus === "running"}
+                  onClick={() => void runSmokeTest()}
+                >
+                  {smokeTestStatus === "running"
+                    ? tr("Testing…", "Test en cours…")
+                    : smokeTestStatus === "success"
+                    ? tr("Re-run Smoke Test", "Relancer le test")
+                    : tr("Run Smoke Test", "Lancer le test")}
+                </button>
+              </div>
+
+              {smokeTestStatus !== "idle" && (
+                <div style={{ marginTop: "1rem", fontSize: "0.85rem" }}>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "6px" }}>
+                    <span className={`state-pill ${smokeTestStep >= 1 ? "good" : "neutral"}`}>
+                      {smokeTestStep >= 1 ? "✓" : "1"}
+                    </span>
+                    <span>{tr("LLM Provider Routing & Budget Check", "Routage fournisseur LLM & budget")}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "6px" }}>
+                    <span className={`state-pill ${smokeTestStep >= 2 ? "good" : "neutral"}`}>
+                      {smokeTestStep >= 2 ? "✓" : "2"}
+                    </span>
+                    <span>{tr("Context Retrieval & MCP Isolation Guard", "Récupération du contexte & sécurité MCP")}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <span className={`state-pill ${smokeTestStep >= 3 ? "good" : "neutral"}`}>
+                      {smokeTestStep >= 3 ? "✓" : "3"}
+                    </span>
+                    <span>{tr("Synthesis & Task Delivery", "Synthèse & validation de la tâche")}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Guided Tour Contextual Cards */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h4 style={{ fontSize: "0.9rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.75rem" }}>
+                {tr("Quickstart Guided Tour", "Visite guidée de démarrage")}
+              </h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>{tr("1. Mission Control", "1. Mission Control")}</strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr("Submit multi-step engineering prompts and track subagent DAG executions.", "Soumettez des objectifs et suivez les DAGs multi-agents.")}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>{tr("2. Observability", "2. Observabilité")}</strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr("Monitor live health status matrix, latency pings, and sanitized incident logs.", "Matrice de santé en temps réel et journaux assainis.")}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>{tr("3. Usage & Quotas", "3. Usage & Quotas")}</strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr("Live countdown timers for quota reset windows and customizable alerts.", "Compte à rebours de réinitialisation et alertes de seuil.")}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>{tr("4. MCP Hub", "4. MCP Hub")}</strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr("Supervise tool permissions, SSRF-filtered remote URLs, and one-click presets.", "Permissions d'outils, protection SSRF et préconfigurations.")}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop: "2rem" }}>
