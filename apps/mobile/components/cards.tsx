@@ -29,7 +29,7 @@ export function MessageBubble({ message }: { message: MessageView }) {
   return (
     <View style={[styles.bubbleRow, mine ? styles.rowRight : styles.rowLeft]}>
       <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-        <Text style={styles.bubbleText}>{message.content}</Text>
+        <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{message.content}</Text>
 
         {/* Streaming cursor */}
         {message.streaming && <Text style={styles.cursor}>▌</Text>}
@@ -326,6 +326,7 @@ const makeStyles = (theme: Theme) =>
     bubbleMine: { backgroundColor: theme.color.accent },
     bubbleTheirs: { backgroundColor: theme.color.surfaceRaised },
     bubbleText: { color: theme.color.text, fontSize: 16, lineHeight: 22 },
+    bubbleTextMine: { color: theme.color.textOnAccent },
     cursor: { color: theme.color.textMuted, fontSize: 14 },
 
     card: {
