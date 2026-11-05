@@ -184,6 +184,13 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("organizations", "Organizations"),
       },
       {
+        id: "win-mission-control",
+        title: "Ouvrir Mission Control",
+        subtitle: "Missions, planifications et état du moteur",
+        category: "Windows",
+        action: () => openWindow("mission-control", "Mission Control"),
+      },
+      {
         id: "win-usage",
         title: "Ouvrir Usage & Quotas",
         subtitle: "Tokens observés, coûts estimés et fenêtres de quota",

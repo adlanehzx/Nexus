@@ -10,6 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${NEXUS_E2E_STATE_DIR:-/tmp/nexus-e2e-stack}"
 API_PORT="${NEXUS_E2E_API_PORT:-3107}"
 DASHBOARD_PORT="${NEXUS_E2E_DASHBOARD_PORT:-5277}"
+ENGINE_PORT="${NEXUS_E2E_ENGINE_PORT:-18107}"
 PG=nexus-integration-pg
 REDIS=nexus-integration-redis
 PG_PASSWORD=nexus-test
@@ -26,6 +27,7 @@ stop_service() {
 down() {
   stop_service api
   stop_service dashboard
+  stop_service engine
   docker rm -f "$PG" "$REDIS" >/dev/null 2>&1 || true
 }
 
@@ -39,11 +41,34 @@ ensure_container() {
   fi
 }
 
+ensure_signing_key() {
+  [[ -f "$STATE_DIR/signing.pem" ]] || openssl genpkey -algorithm ed25519 -out "$STATE_DIR/signing.pem" 2>/dev/null
+  openssl pkey -in "$STATE_DIR/signing.pem" -pubout -out "$STATE_DIR/signing.pub.pem" 2>/dev/null
+}
+
+start_engine() {
+  stop_service engine
+  mkdir -p "$STATE_DIR/engine"
+  [[ -f "$STATE_DIR/engine/profiles.json" ]] || echo '{"claude":"claude","codex":"codex"}' >"$STATE_DIR/engine/profiles.json"
+  (
+    cd "$ROOT/services/mission-engine"
+    NEXUS_ENGINE_PORT="$ENGINE_PORT" NEXUS_ENGINE_DATABASE="$STATE_DIR/engine/engine.db" \
+      NEXUS_ENGINE_API_PUBLIC_KEY_FILE="$STATE_DIR/signing.pub.pem" \
+      NEXUS_ENGINE_PROFILES_FILE="$STATE_DIR/engine/profiles.json" \
+      NEXUS_ENGINE_RUNTIME_SETTINGS_FILE="$STATE_DIR/engine/runtime-settings.json" \
+      NEXUS_ENGINE_SCHEDULER_ENABLED=true NEXUS_ENGINE_WORKER_ENABLED=false \
+      nohup setsid .venv/bin/nexus-mission-engine >"$STATE_DIR/engine.log" 2>&1 &
+    echo $! >"$STATE_DIR/engine.pid"
+  )
+}
+
 start_api() {
   stop_service api
   (
     cd "$ROOT/services/api"
     DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL" API_HOST=127.0.0.1 API_PORT="$API_PORT" \
+      AUTH_SIGNING_KEY="$(cat "$STATE_DIR/signing.pem")" \
+      MISSION_CONTROL_URL="http://127.0.0.1:$ENGINE_PORT" \
       METRICS_ENABLED=false MEMORY_EMBEDDING_BACKEND=hash \
       NEXUS_RUNTIME_CONFIG_DIR="$STATE_DIR/runtime" NEXUS_OBSERVABILITY_DIR="$STATE_DIR/observability" \
       CORS_ORIGINS="http://127.0.0.1:$DASHBOARD_PORT" \
@@ -81,8 +106,12 @@ up() {
   DATABASE_URL="postgresql://postgres:$PG_PASSWORD@127.0.0.1:$(published_port "$PG" 5432/tcp)/postgres"
   REDIS_URL="redis://127.0.0.1:$(published_port "$REDIS" 6379/tcp)"
   (cd "$ROOT" && DATABASE_URL="$DATABASE_URL" pnpm --filter @nexus/database exec prisma migrate deploy >"$STATE_DIR/migrate.log" 2>&1)
+  ensure_signing_key
+  (cd "$ROOT/services/mission-engine" && uv sync --quiet)
+  start_engine
   start_api
   start_dashboard
+  wait_for "http://127.0.0.1:$ENGINE_PORT/v1/health/live"
   wait_for "http://127.0.0.1:$API_PORT/health"
   wait_for "http://127.0.0.1:$DASHBOARD_PORT/"
   echo "API: http://127.0.0.1:$API_PORT  Dashboard: http://127.0.0.1:$DASHBOARD_PORT"
@@ -90,6 +119,7 @@ up() {
 
 case "${1:-up}" in
   up) up ;;
+  restart-engine) start_engine; wait_for "http://127.0.0.1:$ENGINE_PORT/v1/health/live" ;;
   down) down ;;
-  *) echo "Usage: $0 up|down" >&2; exit 2 ;;
+  *) echo "Usage: $0 up|down|restart-engine" >&2; exit 2 ;;
 esac
