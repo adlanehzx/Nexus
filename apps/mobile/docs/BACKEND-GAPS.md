@@ -9,6 +9,23 @@ Owner: backend. Status as of branch `feat/mobile-finalization`.
 
 ## Priority 1: blocks a stated objective
 
+### 13. The realtime socket refuses the mobile app's `Origin`
+
+Verified on an Android emulator against a running core: `GET /ws/client` answers 403 unless the
+core's own address is listed in `CORS_ORIGINS`. React Native always sends an `Origin` header built
+from the socket's address (`http://host:port` or `https://host`). On Android it can be replaced but
+not removed (`WebSocketModule.getDefaultOrigin`). `services/api/src/ws/routes.ts` accepts only a
+missing origin or a listed one. Without realtime the app has no live state, no confirmations and no
+action mode.
+
+**Today:** the app states which origin to allow and keeps retrying. Listing the core's public
+address in `CORS_ORIGINS` is a complete workaround, verified on the emulator. It belongs in the
+deployment configuration of any instance that serves mobile clients.
+
+**Contract:** in `verifyClient`, also accept an `Origin` whose host and port equal the request's
+`Host` header, and keep rejecting every other unlisted origin. A same-origin socket is not a
+cross-site hijack, so the protection is unchanged. `verifyClient` receives `req` for this.
+
 ### 1. Reply streaming
 
 `SERVER_TO_CLIENT.messageDelta` exists, and the client store renders it, but
@@ -162,3 +179,15 @@ on mobile.
 
 **Contract:** expose peer sync from a separate entry point (`@nexus/client-core/peer-sync`), or take a
 crypto port like the other platform dependencies. The shim can then be removed.
+
+### 14. The realtime handshake reports every failure as a missing session
+
+`RealtimeClient.#connect` catches anything thrown while sending the handshake, assumes the token is
+missing, stops retrying and goes offline without dispatching an error. On Hermes this hid a missing
+`globalThis.crypto` behind a permanent "Connecting" state. The comment in
+`packages/shared/src/ids.ts` also says Hermes provides that API; it does not in this app.
+
+**Today:** `lib/web-crypto.ts` installs the source, so the path is no longer reached this way.
+
+**Contract:** catch only `NotAuthenticatedError` there. Let any other error reach `#scheduleReconnect`
+or dispatch `CLIENT_HANDSHAKE_FAILED`, and correct the comment.

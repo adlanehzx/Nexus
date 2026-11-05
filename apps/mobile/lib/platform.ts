@@ -105,6 +105,17 @@ export class TimeoutHttpClient implements HttpClient {
  * React Native provides `WebSocket`. The auth token is sent in the initial frame,
  * not in the URL, to prevent leaking credentials in proxy logs or connection histories.
  */
+/**
+ * Explains a refused handshake. React Native always sends an `Origin` header
+ * built from the socket's own address, and the core's origin check is the only
+ * thing that answers 403 before authentication.
+ */
+export function describeSocketClose(reason: string, socketUrl: string): string {
+  if (!reason.includes("403")) return reason;
+  const origin = socketUrl.replace(/^ws/, "http").replace(/^(https?:\/\/[^/]+).*$/, "$1");
+  return `the core does not allow ${origin}: add it to CORS_ORIGINS on the server`;
+}
+
 export class NativeSocket implements SocketTransport {
   #socket: WebSocket | undefined;
   #state: SocketState = "idle";
@@ -149,7 +160,7 @@ export class NativeSocket implements SocketTransport {
       socket.onclose = (event: { reason?: string; code?: number }) => {
         if (this.#socket !== socket) return;
         this.#state = "closed";
-        this.#onClose?.(event.reason ?? "socket closed", event.code);
+        this.#onClose?.(describeSocketClose(event.reason ?? "socket closed", url), event.code);
       };
     });
   }

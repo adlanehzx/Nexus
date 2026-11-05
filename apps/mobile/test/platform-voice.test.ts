@@ -18,6 +18,7 @@ vi.mock("@react-native-community/netinfo", () => ({
 }));
 
 import {
+  describeSocketClose,
   ExpoTextToSpeech,
   NativeSpeechToText,
   NativeSocket,
@@ -191,5 +192,27 @@ describe("NativeSocket", () => {
 
     created[1]?.onclose?.({ reason: "dropped", code: 1006 });
     expect(closes).toEqual(["dropped"]);
+  });
+});
+
+describe("describeSocketClose", () => {
+  it("names the origin to allow when the handshake is refused", () => {
+    expect(
+      describeSocketClose(
+        "Expected HTTP 101 response but was '403 Forbidden'",
+        "wss://nexus.example.com/ws/client",
+      ),
+    ).toBe(
+      "the core does not allow https://nexus.example.com: add it to CORS_ORIGINS on the server",
+    );
+    expect(describeSocketClose("HTTP 403", "ws://10.0.2.2:3910/ws/client")).toContain(
+      "http://10.0.2.2:3910",
+    );
+  });
+
+  it("leaves other close reasons untouched", () => {
+    expect(describeSocketClose("socket closed", "wss://nexus.example.com/ws/client")).toBe(
+      "socket closed",
+    );
   });
 });
