@@ -3,7 +3,7 @@
 Starting commit: `03ca98e14640830ebb566e5a12cf91e622f34503` (master).
 Branch: `feat/full-product-integration`.
 
-This is an initial differential audit, not a release certification. No browser E2E scenario has been executed for this work yet. Existing green CI results do not certify the newly requested product journeys.
+This report is not a release certification. The current status is the section "Status on 2026-11-05" at the end; the earlier sections are kept as the history of each iteration, and the "E2E evidence ledger" and matrices above it are superseded.
 
 ## Initial traceability matrix
 
@@ -107,3 +107,62 @@ Validation: all 4 satellite route tests passed, including cross-account infrared
 - API type checking, targeted lint and API wiring passed. `/usage` is unchanged. Token streaming and push notifications remain unfinished.
 
 New contract details for mobile coordination: the satellite result endpoint uses the exact requested envelope, and the new optional package subpath is `@nexus/client-core/mobile`. No mobile files were changed and no branch was merged.
+
+## Status on 2026-11-05
+
+Statuses describe what was run. Scenario data for Usage is a labelled database fixture, because no model provider was available to E2E: it proves database → API → screen, not that a provider reported the counters.
+
+### Browser scenarios
+
+Run with Playwright against a real API, dashboard and Mission Engine on disposable PostgreSQL and Redis (`apps/dashboard/e2e`).
+
+| Scenario           | Result  | What was observed                                                                                                                     |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| A Providers        | PASS    | Screen matches the server's real host detection. No authenticated provider session was created.                                       |
+| B Usage            | PASS    | Own runs only, unknown cost shown as unavailable, CSV export. Fixture data.                                                           |
+| C MCP              | PASS    | Token created in the UI drives real tools, scope denial recorded, revocation cuts access. Official SDK client covered in API tests.   |
+| D Missions restart | PASS    | SIGKILL of the engine: shown as unreachable; queued mission and schedule intact and not resubmitted. No running agent or two workers. |
+| E Handoff          | BLOCKED | Not run: needs authenticated providers. No handoff UI was built.                                                                      |
+| F Organizations    | PASS    | Interface and API isolation, role escalation refused, audit events written. WebSocket isolation not part of this scenario.            |
+| G Observability    | PASS    | Controlled 404 found from its correlation id; plain account refused.                                                                  |
+| H Responsive       | PASS    | Three screens at 390, 820, 1280 and 1920 px. Only those screens.                                                                      |
+
+Each scenario passed when last run; they were not all re-run together on the final commit.
+
+### Matrix
+
+| Module         | Backend              | Persistence          | API                  | UI                   | E2E     | Final status         |
+| -------------- | -------------------- | -------------------- | -------------------- | -------------------- | ------- | -------------------- |
+| Orchestration  | partially_integrated | partially_integrated | operational          | partially_integrated | PASS    | partially_integrated |
+| Providers      | partially_integrated | partially_integrated | operational          | partially_integrated | PASS    | partially_integrated |
+| Sessions       | partially_integrated | missing              | partially_integrated | missing              | BLOCKED | partially_integrated |
+| Handoffs       | partially_integrated | missing              | partially_integrated | missing              | BLOCKED | partially_integrated |
+| Usage & Quotas | partially_integrated | operational          | operational          | operational          | PASS    | partially_integrated |
+| MCP            | operational          | operational          | operational          | partially_integrated | PASS    | partially_integrated |
+| Multi-tenant   | partially_integrated | operational          | partially_integrated | partially_integrated | PASS    | partially_integrated |
+| Observability  | partially_integrated | partially_integrated | operational          | operational          | PASS    | partially_integrated |
+
+### Known gaps
+
+- Orchestration: `InMemory*` transactional classes in agent-core are still unused by production. Durability relies on the Mission Engine's own store. Competing workers and a crash during a running agent were not exercised in E2E.
+- Providers: no real authenticated session, handshake or model call. On this host, Codex and Claude probes time out because their mise shims hang with the probe's minimal environment; no single variable fixed it. The screen reports the timeout.
+- Usage: no provider, account, quota or billed-cost collectors, and no multi-account filter or comparator. Provider quota fields stay unavailable until something reports them.
+- MCP: no catalogue or install flow, no interactive tool tester, no resources and prompts view. `nexus_trigger_mission` has no extra human confirmation beyond the scope and the engine's own permissions.
+- Multi-tenant: workspaces, projects and environments have no UI. Provider credentials and jobs were not audited for tenant boundaries.
+- Sessions and handoffs: `NativeSessionManager` has no production caller, and the chat's engine selector still has hard-coded labels.
+- Confirmations remain in memory, so pending ones are lost on restart. Satellite command queues too.
+- Streaming: text a model writes before a tool call is streamed but not persisted, so it disappears when history reloads.
+- Push: tested against a fake provider only. No message went through Expo.
+- Voice routes (mobile gap 10) were not built.
+
+### Commands
+
+```
+scripts/e2e-stack.sh up
+pnpm --filter @nexus/dashboard exec playwright test
+scripts/e2e-stack.sh down
+```
+
+### Rollback
+
+Nothing is merged or deployed. Before merging, drop the branch. After merging, revert its commits; migrations `20261105140000_mcp_access` and `20261105160000_push_tokens` only add tables, which can be dropped once unused. Satellites need `SATELLITE_OWNERS_JSON`, or user control stays refused.
