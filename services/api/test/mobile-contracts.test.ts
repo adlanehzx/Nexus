@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assignStepIds, createTaskPlan } from "@nexus/devices";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
 /** Contracts the mobile app depends on: docs in apps/mobile/docs/BACKEND-GAPS.md. */
@@ -132,5 +133,48 @@ describe("mobile API contracts", () => {
       });
       expect(instruct.statusCode).toBe(503);
     });
+  });
+});
+
+describe("a task that breaks after its 202", () => {
+  it("emits task.failed and shows as failed in the list", async () => {
+    const harness = await makeApi();
+    try {
+      const account = await createAccount(harness, "broken-task@example.test");
+      const services = harness.app.services;
+      const emitted: { type: string; payload: unknown }[] = [];
+      const emit = services.router.emit.bind(services.router);
+      vi.spyOn(services.router, "emit").mockImplementation((input) => {
+        emitted.push(input);
+        return emit(input);
+      });
+      vi.spyOn(services.coordinator, "execute").mockRejectedValue(new Error("storage down"));
+
+      const plan = createTaskPlan({
+        userId: account.userId,
+        title: "breaks",
+        originClientDeviceId: "device",
+        correlationId: "correlation",
+        steps: assignStepIds([
+          { id: "step-1", description: "a", requiredCapabilities: ["x"], tool: "t" },
+        ]),
+      });
+      await services.taskStore.save(plan);
+      services.supervisor.start(plan, []);
+
+      await vi.waitFor(() => {
+        expect(emitted.map((event) => event.type)).toContain("task.failed");
+      });
+      await vi.waitFor(async () => {
+        const stored = await services.taskStore.get(plan.id);
+        expect(stored?.status).toBe("failed");
+      });
+      const failed = emitted.find((event) => event.type === "task.failed");
+      expect(failed?.payload).toMatchObject({ taskId: plan.id, code: "TASK_EXECUTION_FAILED" });
+      // What broke stays in the logs; the client gets no internal detail.
+      expect(JSON.stringify(failed?.payload)).not.toContain("storage down");
+    } finally {
+      await harness.close();
+    }
   });
 });
