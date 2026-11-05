@@ -1,17 +1,9 @@
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useNexus } from "../lib/nexus.js";
 import { failureMessage } from "../lib/errors.js";
+import { KeyboardForm } from "../components/keyboard-aware.js";
 import { ServerSetup } from "../components/server-setup.js";
 import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
 import { NexusOrb } from "../components/nexus-orb.js";
@@ -79,10 +71,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardForm style={styles.screen} contentStyle={styles.content}>
       <View style={styles.orb}>
         <NexusOrb state={busy ? "executing" : "idle"} size={132} />
       </View>
@@ -142,15 +131,14 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>Sign in</Text>
         )}
       </Pressable>
-    </KeyboardAvoidingView>
+    </KeyboardForm>
   );
 }
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: theme.color.background,
+    screen: { backgroundColor: theme.color.background },
+    content: {
       padding: theme.space(8),
       justifyContent: "center",
       gap: theme.space(5),

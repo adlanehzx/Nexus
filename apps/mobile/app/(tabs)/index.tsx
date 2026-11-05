@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -22,6 +21,7 @@ import { useNexus } from "../../lib/nexus.js";
 import { sendBlocker, TASK_INSTRUCTION_MAX_CHARS, type SendMode } from "../../lib/chat-state.js";
 import type { OrchestratedMission } from "../../lib/api-types.js";
 import { Composer } from "../../components/composer.js";
+import { KeyboardAware } from "../../components/keyboard-aware.js";
 import {
   ConfirmationCard,
   ConnectionBanner,
@@ -157,11 +157,7 @@ export default function ChatScreen() {
   }, [navigation, nexus.newConversation]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
-    >
+    <KeyboardAware style={styles.screen}>
       <ConnectionBanner connection={state.connection} online={state.online} />
       <DeviceTrustBanner />
 
@@ -283,7 +279,7 @@ export default function ChatScreen() {
         onStopListening={listen.stop}
         onCancelListening={listen.cancel}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAware>
   );
 }
 

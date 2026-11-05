@@ -10,6 +10,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { KeyboardAware } from "./keyboard-aware.js";
 import type { Failure } from "../lib/errors.js";
 import { statusTone, type Tone } from "../lib/format.js";
 import type { Resource } from "../lib/use-resource.js";
@@ -326,29 +327,38 @@ export function ResourceScreen<T>({
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={resource.refreshing}
-          onRefresh={() => void resource.reload()}
-          tintColor={theme.color.textMuted}
-        />
-      }
-    >
-      {resource.failure === undefined ? null : <StaleNotice failure={resource.failure} />}
-      {children(resource.data)}
-    </ScrollView>
+    <KeyboardAware>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={resource.refreshing}
+            onRefresh={() => void resource.reload()}
+            tintColor={theme.color.textMuted}
+          />
+        }
+      >
+        {resource.failure === undefined ? null : <StaleNotice failure={resource.failure} />}
+        {children(resource.data)}
+      </ScrollView>
+    </KeyboardAware>
   );
 }
 
 export function ScreenScroll({ children }: { children: ReactNode }) {
   const styles = useThemedStyles(makeStyles);
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {children}
-    </ScrollView>
+    <KeyboardAware>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAware>
   );
 }
 

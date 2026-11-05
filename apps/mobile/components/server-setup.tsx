@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useServer } from "../lib/server.js";
 import { type Theme, useTheme, useThemedStyles } from "../theme/index.js";
+import { KeyboardForm } from "./keyboard-aware.js";
 import { NexusOrb } from "./nexus-orb.js";
 
 /**
@@ -32,7 +33,7 @@ export function ServerSetup({ initial, onDone }: { initial?: string; onDone?: ()
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardForm style={styles.screen} contentStyle={styles.content}>
       <View style={styles.orb}>
         <NexusOrb state={busy ? "executing" : "idle"} size={110} />
       </View>
@@ -72,15 +73,14 @@ export function ServerSetup({ initial, onDone }: { initial?: string; onDone?: ()
           <Text style={styles.buttonText}>Continue</Text>
         )}
       </Pressable>
-    </View>
+    </KeyboardForm>
   );
 }
 
 const makeStyles = (theme: Theme) =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: theme.color.background,
+    screen: { backgroundColor: theme.color.background },
+    content: {
       padding: theme.space(8),
       justifyContent: "center",
       gap: theme.space(5),
