@@ -4,6 +4,7 @@ import { LINKEDIN_SCOPES, linkedInTokensSchema, type LinkedInTokens } from "./ty
 interface PendingAuthorization {
   expiresAt: number;
   redirectUri: string;
+  userId?: string | undefined;
 }
 
 /** Short-lived, single-use OAuth state storage. Secrets and authorization codes are never stored. */
@@ -15,10 +16,16 @@ export class LinkedInOAuthStateStore {
     this.#ttlMs = ttlMs;
   }
 
-  create(redirectUri: string, now = Date.now()): string {
-    this.#prune(now);
+  create(redirectUri: string, userIdOrNow?: string | number, now = Date.now()): string {
+    const userId = typeof userIdOrNow === "string" ? userIdOrNow : undefined;
+    const currentTime = typeof userIdOrNow === "number" ? userIdOrNow : now;
+    this.#prune(currentTime);
     const state = randomBytes(32).toString("base64url");
-    this.#pending.set(state, { redirectUri, expiresAt: now + this.#ttlMs });
+    this.#pending.set(state, {
+      redirectUri,
+      userId,
+      expiresAt: currentTime + this.#ttlMs,
+    });
     return state;
   }
 
