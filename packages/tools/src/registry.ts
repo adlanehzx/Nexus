@@ -39,14 +39,14 @@ export class ToolRegistry {
     return this.#tools.has(name);
   }
 
-  get(name: string): ToolDefinition<never, unknown> | undefined {
-    return this.#tools.get(name);
+  get<I = never, O = unknown>(name: string): ToolDefinition<I, O> | undefined {
+    return this.#tools.get(name) as unknown as ToolDefinition<I, O> | undefined;
   }
 
-  require(name: string): ToolDefinition<never, unknown> {
+  require<I = never, O = unknown>(name: string): ToolDefinition<I, O> {
     const tool = this.#tools.get(name);
     if (!tool) throw new ToolNotFoundError(name);
-    return tool;
+    return tool as unknown as ToolDefinition<I, O>;
   }
 
   list(): ToolDefinition<never, unknown>[] {

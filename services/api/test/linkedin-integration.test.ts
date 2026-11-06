@@ -153,7 +153,7 @@ describe("LinkedIn integration service", () => {
 
     await service.initialize();
 
-    const publishTool = registry.require("linkedin.post.publish");
+    const publishTool = registry.require<Record<string, unknown>>("linkedin.post.publish");
     expect(publishTool.requiresConfirmation).toBe(true);
 
     const makeContext = (userId: string) => ({

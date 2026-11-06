@@ -57,13 +57,13 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
 
     // 4. Schema-only restore fails to bring back table rows
     const restoredFromSchemaOnly = JSON.parse(schemaOnlySnapshot) as Record<string, TableRow[]>;
-    expect(restoredFromSchemaOnly.User.length).toBe(0); // Data loss!
+    expect(restoredFromSchemaOnly.User?.length).toBe(0); // Data loss!
 
     // 5. Full backup restore completely restores anterior state
     const restoredFromFull = JSON.parse(fullBackupSnapshot) as Record<string, TableRow[]>;
     expect(restoredFromFull).toEqual(initialDbState);
     expect(restoredFromFull.User).toHaveLength(2);
-    expect(restoredFromFull.User[1]?.name).toBe("Bob");
+    expect(restoredFromFull.User?.[1]?.name).toBe("Bob");
   });
 
   const isPostgresReachable = (): boolean => {

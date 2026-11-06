@@ -78,7 +78,7 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
         where: { id: worktree.id },
       });
       expect(persistedWorktree).not.toBeNull();
-      expect(persistedWorktree?.branchName).toBe(branchName);
+      expect(persistedWorktree?.branch).toBe(branchName);
       expect(persistedWorktree?.status).toBe("active");
     }
 
