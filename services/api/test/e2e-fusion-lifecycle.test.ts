@@ -67,9 +67,9 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
 
     expect(createWorktreeRes.statusCode).toBe(201);
     const { worktree } = createWorktreeRes.json<{
-      worktree: { id: string; branchName: string; path: string; status: string };
+      worktree: { id: string; branch: string; path: string; status: string };
     }>();
-    expect(worktree.branchName).toBe(branchName);
+    expect(worktree.branch).toBe(branchName);
     expect(worktree.status).toBe("active");
 
     // 2. Verify PostgreSQL worktree persistence
