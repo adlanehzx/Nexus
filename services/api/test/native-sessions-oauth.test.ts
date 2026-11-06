@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { OAuthFlowService } from "../src/services/oauth-flow.js";
-import { NativeSessionManager, ApprovalDerivationError } from "../src/services/native-session.js";
+import {
+  NativeSessionManager,
+  ApprovalDerivationError,
+  computePayloadHash,
+} from "../src/services/native-session.js";
 
 describe("Accounts, OAuth and Native Sessions (LOT D)", () => {
   describe("OAuth PKCE & Device Authorization Flows", () => {
@@ -136,6 +140,59 @@ describe("Accounts, OAuth and Native Sessions (LOT D)", () => {
           },
         });
       }).not.toThrow();
+    });
+
+    it("ensures distinct hashes for __proto__, constructor and prototype payloads (SEC-02)", () => {
+      const sessionManager = new NativeSessionManager();
+
+      const basePayload = JSON.parse('{"action":"execute"}');
+      const protoPayload = JSON.parse('{"action":"execute","__proto__":{"privileged":true}}');
+      const constructorPayload = JSON.parse('{"action":"execute","constructor":{"name":"admin"}}');
+      const prototypePayload = JSON.parse('{"action":"execute","prototype":{"poison":true}}');
+
+      const hashBase = computePayloadHash(basePayload);
+      const hashProto = computePayloadHash(protoPayload);
+      const hashConstructor = computePayloadHash(constructorPayload);
+      const hashPrototype = computePayloadHash(prototypePayload);
+
+      // Empreintes distinctes obligatoires
+      expect(hashBase).not.toBe(hashProto);
+      expect(hashBase).not.toBe(hashConstructor);
+      expect(hashBase).not.toBe(hashPrototype);
+      expect(hashProto).not.toBe(hashConstructor);
+
+      // Verify NativeSessionManager blocks execution when payload has __proto__ injected
+      sessionManager.registerApproval("call-exec-1", "runner", basePayload);
+
+      expect(() => {
+        sessionManager.consumeApproval("call-exec-1", "runner", protoPayload);
+      }).toThrow(ApprovalDerivationError);
+
+      expect(() => {
+        sessionManager.consumeApproval("call-exec-1", "runner", constructorPayload);
+      }).toThrow(ApprovalDerivationError);
+
+      // Original base succeeds
+      expect(() => {
+        sessionManager.consumeApproval("call-exec-1", "runner", basePayload);
+      }).not.toThrow();
+    });
+
+    it("verifies order invariance, nested arrays and rejection of invalid types", () => {
+      // Order invariance
+      const objA = { b: 2, a: 1, c: [3, 2, 1] };
+      const objB = { a: 1, c: [3, 2, 1], b: 2 };
+      expect(computePayloadHash(objA)).toBe(computePayloadHash(objB));
+
+      // Rejection of non-serializable / non-finite values
+      expect(() => computePayloadHash({ num: NaN })).toThrow(ApprovalDerivationError);
+      expect(() => computePayloadHash({ num: Infinity })).toThrow(ApprovalDerivationError);
+      expect(() => computePayloadHash({ fn: () => 1 })).toThrow(ApprovalDerivationError);
+
+      // Circular reference rejection
+      const circular: Record<string, unknown> = { a: 1 };
+      circular.self = circular;
+      expect(() => computePayloadHash(circular)).toThrow(ApprovalDerivationError);
     });
   });
 });

@@ -191,6 +191,7 @@ export async function buildApp(options: BuildAppOptions) {
     new ServiceContainer({
       tokenPrivateKeyPem: config.AUTH_SIGNING_KEY,
       prisma,
+      redis,
       onTaskError: (error, taskId) => {
         logger.error({ err: error, taskId }, "plan execution aborted");
       },

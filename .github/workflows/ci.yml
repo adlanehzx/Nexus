@@ -350,6 +350,12 @@ jobs:
       - name: Apply migrations
         run: pnpm --filter @nexus/database exec prisma migrate deploy
 
+      - name: Verify release readiness PostgreSQL backup and restore
+        env:
+          DATABASE_URL: postgresql://nexus:nexus@127.0.0.1:5432/nexus_backup?schema=public
+          REQUIRE_POSTGRES_RESTORE: "true"
+        run: pnpm --filter @nexus/api test test/release-readiness.test.ts
+
       - name: Create backup
         run: pnpm nexus backup --passphrase "${{ github.sha }}"
 

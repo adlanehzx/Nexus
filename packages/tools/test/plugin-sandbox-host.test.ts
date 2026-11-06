@@ -64,4 +64,19 @@ describe("plugin sandbox and its host", () => {
       parts: "[1]",
     });
   });
+
+  it("prototype constructors are completely neutralized inside realm", async () => {
+    const outcome = await run(`
+      var objCtor = typeof ({})[${CONSTRUCTOR}];
+      var arrCtor = typeof [][${CONSTRUCTOR}];
+      var fnCtor = typeof (() => {})[${CONSTRUCTOR}];
+      result = { objCtor, arrCtor, fnCtor };
+    `);
+
+    expect(outcome).toEqual({
+      objCtor: "undefined",
+      arrCtor: "undefined",
+      fnCtor: "undefined",
+    });
+  });
 });

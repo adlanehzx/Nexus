@@ -37,26 +37,76 @@ export class ApprovalDerivationError extends Error {
   }
 }
 
-function canonicalize(value: unknown): unknown {
-  if (value === null || typeof value !== "object") {
-    return value;
+export function canonicalizeToJson(value: unknown, seen = new Set<unknown>()): string {
+  if (value === null) {
+    return "null";
   }
-  if (Array.isArray(value)) {
-    return value.map(canonicalize);
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
   }
-  const sorted: Record<string, unknown> = {};
-  for (const key of Object.keys(value).sort()) {
-    sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new ApprovalDerivationError(
+        "Non-finite numbers (NaN/Infinity) are not allowed in approval payload",
+      );
+    }
+    return Object.is(value, -0) ? "0" : value.toString();
   }
-  return sorted;
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value !== "object") {
+    throw new ApprovalDerivationError(`Unsupported value type: ${typeof value}`);
+  }
+
+  if (seen.has(value)) {
+    throw new ApprovalDerivationError("Circular reference detected in approval payload");
+  }
+  seen.add(value);
+
+  try {
+    if (Array.isArray(value)) {
+      const parts = value.map((item) => canonicalizeToJson(item, seen));
+      return `[${parts.join(",")}]`;
+    }
+
+    // Reject objects with custom prototype chains to prevent prototype pollution bypasses
+    const proto: unknown = Object.getPrototypeOf(value);
+    if (proto !== null && proto !== Object.prototype) {
+      throw new ApprovalDerivationError(
+        "Objects with custom prototype chains are not permitted in approval payloads",
+      );
+    }
+
+    // Retrieve all own property names, including __proto__, constructor, prototype
+    const keys = Object.getOwnPropertyNames(value).sort();
+    const parts: string[] = [];
+
+    for (const key of keys) {
+      const desc = Object.getOwnPropertyDescriptor(value, key);
+      if (!desc || desc.get !== undefined || desc.set !== undefined) {
+        throw new ApprovalDerivationError(
+          `Accessor properties on '${key}' are not permitted in approval payload`,
+        );
+      }
+      if (desc.value === undefined) {
+        throw new ApprovalDerivationError(
+          `Undefined property value for '${key}' is not allowed in canonical JSON`,
+        );
+      }
+      const valStr = canonicalizeToJson(desc.value, seen);
+      parts.push(`${JSON.stringify(key)}:${valStr}`);
+    }
+
+    return `{${parts.join(",")}}`;
+  } finally {
+    seen.delete(value);
+  }
 }
 
 export function computePayloadHash(payload: unknown): string {
-  const normalized = canonicalize(payload);
-  const json = JSON.stringify(normalized);
-  return createHash("sha256")
-    .update(json ?? "null")
-    .digest("hex");
+  const json = canonicalizeToJson(payload);
+  return createHash("sha256").update(json).digest("hex");
 }
 
 export class NativeSessionManager {

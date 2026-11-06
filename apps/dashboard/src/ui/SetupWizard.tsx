@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
+import {
+  executeSmokeTest,
+  SMOKE_TEST_STEP_NAMES,
+  type SmokeTestExecutionResult,
+} from "../lib/smoke-test.js";
 import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
@@ -8,18 +13,24 @@ import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { IconCheck } from "./icons.js";
 import { NexusLogo } from "./NexusLogo.js";
 
-type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
+export type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
 
-interface SetupWizardProps {
+export interface SetupWizardProps {
   session: SessionManager;
   api: DashboardApi;
   onComplete: () => void;
   onSwitchToLogin: () => void;
 }
 
-const STEP_ORDER: WizardStep[] = ["prerequisites", "admin", "agents", "capabilities", "complete"];
+export const STEP_ORDER: readonly WizardStep[] = [
+  "prerequisites",
+  "admin",
+  "agents",
+  "capabilities",
+  "complete",
+];
 
-const STEP_TITLES: Record<WizardStep, string> = {
+export const STEP_TITLES: Record<WizardStep, string> = {
   prerequisites: "1. System Readiness",
   admin: "2. Admin Account",
   agents: "3. Connect Agents",
@@ -27,13 +38,27 @@ const STEP_TITLES: Record<WizardStep, string> = {
   complete: "5. Ready to Launch",
 };
 
-const STEP_TITLES_FR: Record<WizardStep, string> = {
+export const STEP_TITLES_FR: Record<WizardStep, string> = {
   prerequisites: "1. Prérequis Système",
   admin: "2. Compte Administrateur",
   agents: "3. Connexion Agents",
   capabilities: "4. Capacités Optionnelles",
   complete: "5. Prêt au Lancement",
 };
+
+export function getStepIndex(step: WizardStep): number {
+  const idx = STEP_ORDER.indexOf(step);
+  return idx >= 0 ? idx : 0;
+}
+
+export function getStepProgress(step: WizardStep): number {
+  const idx = getStepIndex(step);
+  return Math.round((idx / (STEP_ORDER.length - 1)) * 100);
+}
+
+export function isStepOptional(step: WizardStep): boolean {
+  return step === "capabilities";
+}
 
 export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: SetupWizardProps) {
   const { tr, locale } = useI18n();
@@ -80,6 +105,37 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
   const [mcpServerArgs, setMcpServerArgs] = useState("");
   const [mcpSuccessMsg, setMcpSuccessMsg] = useState<string | null>(null);
   const [browserSuccessMsg, setBrowserSuccessMsg] = useState<string | null>(null);
+
+  // Step 5: Smoke test & Onboarding tour
+  const [smokeTestStatus, setSmokeTestStatus] = useState<"idle" | "running" | "success" | "failed">(
+    "idle",
+  );
+  const [smokeTestResult, setSmokeTestResult] = useState<SmokeTestExecutionResult | null>(null);
+  const [testLevel, setTestLevel] = useState<1 | 2>(1);
+  const [llmConsentGiven, setLlmConsentGiven] = useState(false);
+
+  const runSmokeTest = async (): Promise<void> => {
+    setSmokeTestStatus("running");
+    try {
+      const res = await executeSmokeTest(api, session, {
+        level: testLevel,
+        allowBillableRequests: testLevel === 2 ? llmConsentGiven : false,
+      });
+      setSmokeTestResult(res);
+      setSmokeTestStatus(res.overallStatus === "passed" ? "success" : "failed");
+    } catch (cause) {
+      setSmokeTestStatus("failed");
+      setSmokeTestResult({
+        overallStatus: "failed",
+        traceId: `smoke-err-${Date.now()}`,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        totalDurationMs: 0,
+        steps: [],
+        error: cause instanceof Error ? cause.message : "Fatal error executing smoke test",
+      });
+    }
+  };
 
   const goToStep = useCallback((next: WizardStep) => {
     setError(null);
@@ -1293,6 +1349,331 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </span>
                 </li>
               </ul>
+            </div>
+
+            {/* Quick Smoke Test Mission */}
+            <div
+              className="setup-card"
+              style={{
+                marginBottom: "1.5rem",
+                border: smokeTestStatus === "success" ? "1px solid var(--ok, #22c55e)" : undefined,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "1rem",
+                }}
+              >
+                <div>
+                  <strong>
+                    {tr("Run Smoke Test Mission", "Lancer la mission de test rapide (Smoke Test)")}
+                  </strong>
+                  <div className="muted" style={{ fontSize: "0.85rem", marginTop: "4px" }}>
+                    {tr(
+                      "Verify system health and routing pipeline prior to launching operations.",
+                      "Valider la santé système et le pipeline de routage avant le démarrage opérationnel.",
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary compact"
+                  disabled={smokeTestStatus === "running" || (testLevel === 2 && !llmConsentGiven)}
+                  onClick={() => void runSmokeTest()}
+                >
+                  {smokeTestStatus === "running"
+                    ? tr("Testing…", "Test en cours…")
+                    : smokeTestStatus === "success"
+                      ? tr("Re-run Smoke Test", "Relancer le test")
+                      : tr("Run Smoke Test", "Lancer le test")}
+                </button>
+              </div>
+
+              {/* Tier Selection */}
+              <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="smokeTestTier"
+                    value="1"
+                    checked={testLevel === 1}
+                    onChange={() => setTestLevel(1)}
+                  />
+                  <span>
+                    <strong>
+                      {tr("Level 1: Zero-Cost Diagnostic", "Niveau 1 : Diagnostic sans coût")}
+                    </strong>
+                    {" — "}
+                    <span className="muted">
+                      {tr(
+                        "Checks backend health, session, provider reachability and sandbox without billable API calls.",
+                        "Vérifie la disponibilité backend, la session, le fournisseur et le bac à sable sans appel LLM payant.",
+                      )}
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="smokeTestTier"
+                    value="2"
+                    checked={testLevel === 2}
+                    onChange={() => setTestLevel(2)}
+                  />
+                  <span>
+                    <strong>
+                      {tr("Level 2: Full Agent Core Run", "Niveau 2 : Test Agent Core complet")}
+                    </strong>
+                    {" — "}
+                    <span className="muted">
+                      {tr(
+                        "Executes a real Agent Core conversation run using active model (~100 tokens).",
+                        "Exécute une vraie requête Agent Core avec le modèle configuré (~100 jetons).",
+                      )}
+                    </span>
+                  </span>
+                </label>
+
+                {testLevel === 2 && (
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(234, 179, 8, 0.1)",
+                      border: "1px solid rgba(234, 179, 8, 0.3)",
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "var(--warning, #eab308)",
+                        fontWeight: 600,
+                        marginBottom: "4px",
+                      }}
+                    >
+                      {tr(
+                        "Notice: Billable API Consumption",
+                        "Avertissement : Consommation API payante",
+                      )}
+                    </div>
+                    <div className="muted" style={{ marginBottom: "8px" }}>
+                      {tr(
+                        "Level 2 invokes your configured LLM provider directly. Depending on your provider agreement, this will consume API credits (estimated usage: ~100 tokens).",
+                        "Le Niveau 2 sollicite directement votre fournisseur LLM configuré. Selon votre abonnement ou clé API, cela consommera des crédits réels (consommation estimée : ~100 jetons).",
+                      )}
+                    </div>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={llmConsentGiven}
+                        onChange={(e) => setLlmConsentGiven(e.target.checked)}
+                      />
+                      <span>
+                        {tr(
+                          "I understand and explicitly authorize a real billable LLM test run.",
+                          "Je comprends et autorise expressément l'exécution d'un test LLM réel avec consommation de jetons.",
+                        )}
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {smokeTestStatus !== "idle" && (
+                <div style={{ marginTop: "1rem", fontSize: "0.85rem" }}>
+                  {smokeTestResult !== null && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.75rem",
+                        padding: "0.5rem 0.75rem",
+                        borderRadius: "4px",
+                        background:
+                          smokeTestResult.overallStatus === "passed"
+                            ? "rgba(34, 197, 94, 0.1)"
+                            : "rgba(239, 68, 68, 0.1)",
+                        border:
+                          smokeTestResult.overallStatus === "passed"
+                            ? "1px solid var(--ok, #22c55e)"
+                            : "1px solid var(--danger, #ef4444)",
+                      }}
+                    >
+                      <div>
+                        <strong>
+                          {smokeTestResult.overallStatus === "passed"
+                            ? tr("Smoke test passed", "Test rapide réussi")
+                            : tr("Smoke test failed", "Échec du test rapide")}
+                        </strong>
+                        <span className="muted" style={{ marginLeft: "8px" }}>
+                          ({smokeTestResult.totalDurationMs} ms)
+                        </span>
+                      </div>
+                      <code style={{ fontSize: "0.75rem" }}>{smokeTestResult.traceId}</code>
+                    </div>
+                  )}
+
+                  {smokeTestResult?.steps.map((s) => {
+                    const pillClass =
+                      s.status === "passed"
+                        ? "good"
+                        : s.status === "failed"
+                          ? "danger"
+                          : s.status === "blocked"
+                            ? "warning"
+                            : "neutral";
+                    const symbol =
+                      s.status === "passed"
+                        ? "✓"
+                        : s.status === "failed"
+                          ? "✗"
+                          : s.status === "blocked"
+                            ? "⊘"
+                            : "–";
+                    return (
+                      <div
+                        key={s.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "8px",
+                          padding: "4px 0",
+                          borderBottom: "1px dashed rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                          <span className={`state-pill ${pillClass}`}>{symbol}</span>
+                          <div>
+                            <div>
+                              <strong>
+                                {SMOKE_TEST_STEP_NAMES[s.id]?.[locale === "fr" ? "fr" : "en"] ||
+                                  s.name}
+                              </strong>
+                              <span
+                                className="muted"
+                                style={{ marginLeft: "8px", fontSize: "0.75rem" }}
+                              >
+                                {s.durationMs} ms
+                              </span>
+                            </div>
+                            {s.error && (
+                              <div style={{ color: "var(--danger, #ef4444)", marginTop: "2px" }}>
+                                {s.error}
+                              </div>
+                            )}
+                            {s.details && (
+                              <div
+                                className="muted"
+                                style={{ fontSize: "0.75rem", marginTop: "2px" }}
+                              >
+                                {s.details}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <span className="muted mono" style={{ fontSize: "0.7rem" }}>
+                          {s.status.toUpperCase()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Guided Tour Contextual Cards */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h4
+                style={{
+                  fontSize: "0.9rem",
+                  color: "var(--muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                {tr("Quickstart Guided Tour", "Visite guidée de démarrage")}
+              </h4>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>
+                    {tr("1. Mission Control", "1. Mission Control")}
+                  </strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr(
+                      "Submit multi-step engineering prompts and track subagent DAG executions.",
+                      "Soumettez des objectifs et suivez les DAGs multi-agents.",
+                    )}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>
+                    {tr("2. Observability", "2. Observabilité")}
+                  </strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr(
+                      "Monitor live health status matrix, latency pings, and sanitized incident logs.",
+                      "Matrice de santé en temps réel et journaux assainis.",
+                    )}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>
+                    {tr("3. Usage & Quotas", "3. Usage & Quotas")}
+                  </strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr(
+                      "Live countdown timers for quota reset windows and customizable alerts.",
+                      "Compte à rebours de réinitialisation et alertes de seuil.",
+                    )}
+                  </p>
+                </div>
+                <div className="setup-card" style={{ padding: "0.75rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>{tr("4. MCP Hub", "4. MCP Hub")}</strong>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
+                    {tr(
+                      "Supervise tool permissions, SSRF-filtered remote URLs, and one-click presets.",
+                      "Permissions d'outils, protection SSRF et préconfigurations.",
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop: "2rem" }}>

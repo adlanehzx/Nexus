@@ -1884,6 +1884,63 @@ export class DashboardApi {
     });
   }
 
+  createConversation(
+    input: { title?: string | undefined } = {},
+  ): Promise<{ id: string; title: string }> {
+    const trimmedTitle = input.title?.trim();
+    return this.#request<{ id: string; title: string }>("POST", "/api/v1/conversations", {
+      title:
+        trimmedTitle !== undefined && trimmedTitle.length > 0 ? trimmedTitle : "New Conversation",
+    });
+  }
+
+  createAgentRun(input: {
+    conversationId: string;
+    prompt: string;
+    model?: string | undefined;
+    provider?: string | undefined;
+  }): Promise<{ id: string; status: string; output?: string | undefined }> {
+    return this.#request<{
+      runId: string;
+      conversationId: string;
+      status: string;
+      response: string | null;
+      stopReason: string | null;
+      usage?: { inputTokens: number; outputTokens: number };
+    }>("POST", "/api/v1/agent-core/runs", {
+      conversationId: input.conversationId,
+      message: input.prompt,
+      ...(input.model !== undefined && input.model.length > 0 ? { model: input.model } : {}),
+    }).then((payload) => ({
+      id: payload.runId,
+      status: payload.status,
+      output: payload.response ?? undefined,
+    }));
+  }
+
+  getAgentRun(id: string): Promise<{ id: string; status: string; output?: string | undefined }> {
+    return this.#get<{ runs: { runId: string; status: string; response?: string | null }[] }>(
+      "/api/v1/agent-core/runs?limit=100",
+    ).then((res) => {
+      const match = res.runs.find((r) => r.runId === id);
+      if (!match) {
+        throw new Error(`Agent run ${id} not found`);
+      }
+      return {
+        id: match.runId,
+        status: match.status,
+        output: match.response ?? undefined,
+      };
+    });
+  }
+
+  archiveConversation(conversationId: string): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/archive`,
+    );
+  }
+
   async #get<T>(path: string): Promise<T> {
     return this.#request("GET", path);
   }

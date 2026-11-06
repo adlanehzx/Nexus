@@ -8,6 +8,7 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**", "test/**/*.pg.test.ts"],
     // API tests share an injected Fastify server: isolate per file.
     pool: "forks",
+    maxWorkers: 2,
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],

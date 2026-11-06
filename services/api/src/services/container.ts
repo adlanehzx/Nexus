@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import type { Redis } from "ioredis";
 import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
 import {
   InMemoryMissionGrantRegistry,
@@ -133,6 +134,7 @@ export interface ServiceContainerOptions {
   tokenPrivateKeyPem: string;
   now?: () => Date;
   prisma?: PrismaClient;
+  redis?: Redis;
 
   /** Replaceable: Prisma persistence plugs in here without altering routes. */
   users?: UserStore;
@@ -339,19 +341,23 @@ export class ServiceContainer {
   /** Secret-free local connection catalogue and safe diagnostic probes. */
   readonly connections: ConnectionCatalogService;
   /** Hosted organization services. Undefined keeps personal mode dependency-free. */
+  readonly prisma: PrismaClient | undefined;
   readonly tenantPlatform: TenantPlatformService | undefined;
   readonly tenantRealtime: TenantRealtimeHub;
   readonly tenantSecurity: TenantSecurityService | undefined;
+  readonly redis: Redis | undefined;
 
   readonly #now: () => Date;
   readonly #browserToolNames = new Set<string>();
 
   constructor(options: ServiceContainerOptions) {
+    this.redis = options.redis;
     this.acpWorkspaceRoot = options.acpWorkspaceRoot;
     this.llmProvider = options.llmProvider;
     this.freeLlm = options.freeLlmProvider;
     this.llmRuntime = options.llmRuntimeProvider;
     this.connections = options.connectionManager ?? new LocalConnectionManager();
+    this.prisma = options.prisma;
     this.tenantPlatform =
       options.prisma === undefined ? undefined : new TenantPlatformService(options.prisma);
     this.tenantRealtime = new TenantRealtimeHub();
