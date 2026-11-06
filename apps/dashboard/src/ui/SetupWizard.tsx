@@ -111,11 +111,16 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
     "idle",
   );
   const [smokeTestResult, setSmokeTestResult] = useState<SmokeTestExecutionResult | null>(null);
+  const [testLevel, setTestLevel] = useState<1 | 2>(1);
+  const [llmConsentGiven, setLlmConsentGiven] = useState(false);
 
   const runSmokeTest = async (): Promise<void> => {
     setSmokeTestStatus("running");
     try {
-      const res = await executeSmokeTest(api, session);
+      const res = await executeSmokeTest(api, session, {
+        level: testLevel,
+        allowBillableRequests: testLevel === 2 ? llmConsentGiven : false,
+      });
       setSmokeTestResult(res);
       setSmokeTestStatus(res.overallStatus === "passed" ? "success" : "failed");
     } catch (cause) {
@@ -1355,7 +1360,12 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               }}
             >
               <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: "1rem",
+                }}
               >
                 <div>
                   <strong>
@@ -1363,15 +1373,15 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   </strong>
                   <div className="muted" style={{ fontSize: "0.85rem", marginTop: "4px" }}>
                     {tr(
-                      "Simulate a short autonomous multi-agent task to verify routing and execution pipeline.",
-                      "Simuler une courte mission multi-agent pour valider le routage et le moteur d'exécution.",
+                      "Verify system health and routing pipeline prior to launching operations.",
+                      "Valider la santé système et le pipeline de routage avant le démarrage opérationnel.",
                     )}
                   </div>
                 </div>
                 <button
                   type="button"
                   className="button secondary compact"
-                  disabled={smokeTestStatus === "running"}
+                  disabled={smokeTestStatus === "running" || (testLevel === 2 && !llmConsentGiven)}
                   onClick={() => void runSmokeTest()}
                 >
                   {smokeTestStatus === "running"
@@ -1380,6 +1390,121 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       ? tr("Re-run Smoke Test", "Relancer le test")
                       : tr("Run Smoke Test", "Lancer le test")}
                 </button>
+              </div>
+
+              {/* Tier Selection */}
+              <div style={{ marginTop: "1rem", display: "grid", gap: "0.5rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="smokeTestTier"
+                    value="1"
+                    checked={testLevel === 1}
+                    onChange={() => setTestLevel(1)}
+                  />
+                  <span>
+                    <strong>
+                      {tr("Level 1: Zero-Cost Diagnostic", "Niveau 1 : Diagnostic sans coût")}
+                    </strong>
+                    {" — "}
+                    <span className="muted">
+                      {tr(
+                        "Checks backend health, session, provider reachability and sandbox without billable API calls.",
+                        "Vérifie la disponibilité backend, la session, le fournisseur et le bac à sable sans appel LLM payant.",
+                      )}
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="smokeTestTier"
+                    value="2"
+                    checked={testLevel === 2}
+                    onChange={() => setTestLevel(2)}
+                  />
+                  <span>
+                    <strong>
+                      {tr("Level 2: Full Agent Core Run", "Niveau 2 : Test Agent Core complet")}
+                    </strong>
+                    {" — "}
+                    <span className="muted">
+                      {tr(
+                        "Executes a real Agent Core conversation run using active model (~100 tokens).",
+                        "Exécute une vraie requête Agent Core avec le modèle configuré (~100 jetons).",
+                      )}
+                    </span>
+                  </span>
+                </label>
+
+                {testLevel === 2 && (
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(234, 179, 8, 0.1)",
+                      border: "1px solid rgba(234, 179, 8, 0.3)",
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "var(--warning, #eab308)",
+                        fontWeight: 600,
+                        marginBottom: "4px",
+                      }}
+                    >
+                      {tr(
+                        "Notice: Billable API Consumption",
+                        "Avertissement : Consommation API payante",
+                      )}
+                    </div>
+                    <div className="muted" style={{ marginBottom: "8px" }}>
+                      {tr(
+                        "Level 2 invokes your configured LLM provider directly. Depending on your provider agreement, this will consume API credits (estimated usage: ~100 tokens).",
+                        "Le Niveau 2 sollicite directement votre fournisseur LLM configuré. Selon votre abonnement ou clé API, cela consommera des crédits réels (consommation estimée : ~100 jetons).",
+                      )}
+                    </div>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={llmConsentGiven}
+                        onChange={(e) => setLlmConsentGiven(e.target.checked)}
+                      />
+                      <span>
+                        {tr(
+                          "I understand and explicitly authorize a real billable LLM test run.",
+                          "Je comprends et autorise expressément l'exécution d'un test LLM réel avec consommation de jetons.",
+                        )}
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {smokeTestStatus !== "idle" && (

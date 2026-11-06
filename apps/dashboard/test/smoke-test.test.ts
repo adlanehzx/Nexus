@@ -53,6 +53,8 @@ function createMockApi() {
     output: "Deterministic probe ok",
   });
 
+  const archiveConversation = vi.fn().mockResolvedValue(undefined);
+
   const api: SmokeTestApi = {
     connections,
     testConnection,
@@ -60,6 +62,7 @@ function createMockApi() {
     createConversation,
     createAgentRun,
     getAgentRun,
+    archiveConversation,
   };
 
   return {
@@ -71,6 +74,7 @@ function createMockApi() {
       createConversation,
       createAgentRun,
       getAgentRun,
+      archiveConversation,
     },
   };
 }
@@ -183,5 +187,72 @@ describe("Dashboard Smoke Test Engine", () => {
     expect(result.steps[6]?.id).toBe("agent_core_run");
     expect(result.steps[6]?.status).toBe("skipped");
     expect(mocks.createAgentRun).not.toHaveBeenCalled();
+  });
+
+  it("fails step 7 if Agent Core run produces empty output instead of falling back to fake string", async () => {
+    const { api, mocks } = createMockApi();
+    mocks.createAgentRun.mockResolvedValueOnce({
+      id: "run-empty-output",
+      status: "succeeded",
+      output: "", // Empty output!
+    });
+    const session = createMockSession("ok", true);
+
+    const result = await executeSmokeTest(api, session, {
+      level: 2,
+      allowBillableRequests: true,
+    });
+
+    expect(result.overallStatus).toBe("failed");
+    expect(result.steps[6]?.id).toBe("agent_core_run");
+    expect(result.steps[6]?.status).toBe("failed");
+    expect(result.steps[6]?.error).toContain("empty or missing response payload");
+    expect(mocks.archiveConversation).toHaveBeenCalledWith("conv-smoke-test-123");
+  });
+
+  it("fails step 7 if Agent Core run ends in failed status", async () => {
+    const { api, mocks } = createMockApi();
+    mocks.createAgentRun.mockResolvedValueOnce({
+      id: "run-failed",
+      status: "failed",
+      output: undefined,
+    });
+    const session = createMockSession("ok", true);
+
+    const result = await executeSmokeTest(api, session, {
+      level: 2,
+      allowBillableRequests: true,
+    });
+
+    expect(result.overallStatus).toBe("failed");
+    expect(result.steps[6]?.id).toBe("agent_core_run");
+    expect(result.steps[6]?.status).toBe("failed");
+    expect(result.steps[6]?.error).toContain("terminal succeeded state");
+    expect(mocks.archiveConversation).toHaveBeenCalledWith("conv-smoke-test-123");
+  });
+
+  it("polls for terminal succeeded state when run starts in running state", async () => {
+    const { api, mocks } = createMockApi();
+    mocks.createAgentRun.mockResolvedValueOnce({
+      id: "run-polling",
+      status: "running",
+    });
+    mocks.getAgentRun.mockResolvedValueOnce({
+      id: "run-polling",
+      status: "succeeded",
+      output: "Poll completed with actual LLM generation",
+    });
+    const session = createMockSession("ok", true);
+
+    const result = await executeSmokeTest(api, session, {
+      level: 2,
+      allowBillableRequests: true,
+    });
+
+    expect(result.overallStatus).toBe("passed");
+    expect(result.steps[6]?.status).toBe("passed");
+    expect(result.proof?.controlledResult).toBe("Poll completed with actual LLM generation");
+    expect(mocks.getAgentRun).toHaveBeenCalledWith("run-polling");
+    expect(mocks.archiveConversation).toHaveBeenCalledWith("conv-smoke-test-123");
   });
 });
