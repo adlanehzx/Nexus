@@ -193,7 +193,20 @@ describe("LinkedIn integration service", () => {
     expect(outboundCalls).toHaveLength(2);
     expect(outboundCalls[1]?.token).toBe("Bearer token-bob-BBB");
 
-    // 3. Unauthenticated / anonymous user MUST be blocked with zero outbound calls
+    // 3. Charlie (no token) executes -> clean error, NO leakage of Alice or Bob's tokens
+    await expect(
+      publishTool.execute(
+        {
+          authorUrn: "urn:li:person:charlie789",
+          text: "Charlie attempt",
+          visibility: "PUBLIC",
+        },
+        makeContext("charlie"),
+      ),
+    ).rejects.toThrow(/not connected for user 'charlie'/i);
+    expect(outboundCalls).toHaveLength(2); // No new request sent
+
+    // 4. Anonymous / unauthenticated user MUST be rejected immediately
     await expect(
       publishTool.execute(
         {
@@ -203,14 +216,23 @@ describe("LinkedIn integration service", () => {
         },
         makeContext(""),
       ),
-    ).rejects.toThrow(/unauthenticated/i);
+    ).rejects.toThrow(/unauthenticated user/i);
 
-    expect(outboundCalls).toHaveLength(2); // No new request sent
+    await expect(
+      publishTool.execute(
+        {
+          authorUrn: "urn:li:person:anon",
+          text: "Malicious post",
+          visibility: "PUBLIC",
+        },
+        makeContext("anonymous"),
+      ),
+    ).rejects.toThrow(/unauthenticated user/i);
+    expect(outboundCalls).toHaveLength(2);
 
-    // 4. Disconnect Alice -> Only Alice is disconnected, Bob remains active
+    // 5. Disconnect Alice -> Only Alice is disconnected, Bob remains active
     await service.disconnect("alice");
 
-    // Alice execution fails with zero outbound requests
     await expect(
       publishTool.execute(
         {
@@ -220,9 +242,8 @@ describe("LinkedIn integration service", () => {
         },
         makeContext("alice"),
       ),
-    ).rejects.toThrow(/not connected/i);
-
-    expect(outboundCalls).toHaveLength(2); // Still no new request sent
+    ).rejects.toThrow(/not connected for user 'alice'/i);
+    expect(outboundCalls).toHaveLength(2);
 
     // Bob still works perfectly with Token B
     await publishTool.execute(
@@ -233,8 +254,81 @@ describe("LinkedIn integration service", () => {
       },
       makeContext("bob"),
     );
-
     expect(outboundCalls).toHaveLength(3);
     expect(outboundCalls[2]?.token).toBe("Bearer token-bob-BBB");
+
+    // 6. OAuth state replay / cross-user completion: Bob cannot complete Alice's OAuth state
+    const aliceOauth = await service.start(
+      {
+        clientId: "client-id",
+        clientSecretRef: "vault://nexus/linkedin-client-secret",
+        tokenRef: "vault://nexus/linkedin-token",
+        redirectUri: "http://localhost:3000/api/v1/linkedin/oauth/callback",
+      },
+      "alice",
+    );
+    const aliceState = new URL(aliceOauth.authorizationUrl).searchParams.get("state")!;
+
+    await expect(
+      service.complete({ code: "code-for-alice", state: aliceState }, "bob"),
+    ).rejects.toThrow(/mismatch/i);
+
+    // 7. Altered redirect_uri during exchange: MUST reject
+    const testOauth = await service.start(
+      {
+        clientId: "client-id",
+        clientSecretRef: "vault://nexus/linkedin-client-secret",
+        tokenRef: "vault://nexus/linkedin-token",
+        redirectUri: "http://localhost:3000/api/v1/linkedin/oauth/callback",
+      },
+      "alice",
+    );
+    const testState = new URL(testOauth.authorizationUrl).searchParams.get("state")!;
+    // Alter config redirectUri behind the back of the pending state
+    await service.start(
+      {
+        clientId: "client-id",
+        clientSecretRef: "vault://nexus/linkedin-client-secret",
+        tokenRef: "vault://nexus/linkedin-token",
+        redirectUri: "https://attacker.example.com/oauth/callback",
+      },
+      "alice",
+    );
+    await expect(
+      service.complete({ code: "code-test", state: testState }, "alice"),
+    ).rejects.toThrow(/configuration changed/i);
+
+    // 8. Concurrent executions of Alice (reconnected) and Bob: Zero token cross-talk
+    secrets.set(
+      "linkedin-token/alice",
+      JSON.stringify({ accessToken: "token-alice-RECONNECTED", expiresAt: Date.now() + 3_600_000 }),
+    );
+
+    const concurrentResults = await Promise.all([
+      publishTool.execute(
+        { authorUrn: "urn:li:person:alice123", text: "Alice Concurrent 1", visibility: "PUBLIC" },
+        makeContext("alice"),
+      ),
+      publishTool.execute(
+        { authorUrn: "urn:li:person:bob456", text: "Bob Concurrent 1", visibility: "PUBLIC" },
+        makeContext("bob"),
+      ),
+      publishTool.execute(
+        { authorUrn: "urn:li:person:alice123", text: "Alice Concurrent 2", visibility: "PUBLIC" },
+        makeContext("alice"),
+      ),
+      publishTool.execute(
+        { authorUrn: "urn:li:person:bob456", text: "Bob Concurrent 2", visibility: "PUBLIC" },
+        makeContext("bob"),
+      ),
+    ]);
+    expect(concurrentResults).toHaveLength(4);
+
+    // Verify all 4 calls strictly matched the respective user tokens
+    const recentCalls = outboundCalls.slice(-4);
+    expect(recentCalls[0]?.token).toBe("Bearer token-alice-RECONNECTED");
+    expect(recentCalls[1]?.token).toBe("Bearer token-bob-BBB");
+    expect(recentCalls[2]?.token).toBe("Bearer token-alice-RECONNECTED");
+    expect(recentCalls[3]?.token).toBe("Bearer token-bob-BBB");
   });
 });

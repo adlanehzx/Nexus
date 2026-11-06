@@ -53,21 +53,19 @@ export class LinkedInIntegrationService {
       return { configured: false, connected: false, tools: [] };
     }
     const baseKey = config.tokenRef.replace("vault://nexus/", "");
-    const userKey = userId ? `${baseKey}/${userId}` : baseKey;
-    let raw = await this.#vault.get(userKey);
-    if (raw === undefined && userId) {
-      raw = await this.#vault.get(baseKey);
-    }
+    const raw = userId
+      ? await this.#vault.get(`${baseKey}/${userId}`)
+      : await this.#vault.get(baseKey);
     const connected = raw !== undefined;
     return { configured: true, connected, tools: connected ? [...TOOL_NAMES] : [] };
   }
 
   async start(
     config: LinkedInRuntimeConfig,
-    _userId?: string,
+    userId?: string,
   ): Promise<{ authorizationUrl: string }> {
     await this.#runtime.saveLinkedIn(config);
-    const state = this.#states.create(config.redirectUri);
+    const state = this.#states.create(config.redirectUri, userId);
     return {
       authorizationUrl: buildLinkedInAuthorizationUrl({
         clientId: config.clientId,
@@ -80,6 +78,12 @@ export class LinkedInIntegrationService {
   async complete(input: { code: string; state: string }, userId?: string): Promise<string> {
     const pending = this.#states.consume(input.state);
     if (pending === undefined) throw new Error("Invalid or expired LinkedIn OAuth state.");
+    if (pending.userId && userId && pending.userId !== userId) {
+      throw new Error(
+        "OAuth state user mismatch: callback cannot be completed on behalf of a different user.",
+      );
+    }
+    const targetUserId = userId ?? pending.userId;
     const config = await this.#runtime.loadLinkedIn();
     if (config?.redirectUri !== pending.redirectUri) {
       throw new Error("LinkedIn OAuth configuration changed during authorization.");
@@ -95,10 +99,8 @@ export class LinkedInIntegrationService {
     });
     const baseKey = config.tokenRef.replace("vault://nexus/", "");
     const serializedTokens = JSON.stringify(tokens);
-    if (userId) {
-      await this.#vault.set(`${baseKey}/${userId}`, serializedTokens);
-    }
-    await this.#vault.set(baseKey, serializedTokens);
+    const targetKey = targetUserId ? `${baseKey}/${targetUserId}` : baseKey;
+    await this.#vault.set(targetKey, serializedTokens);
     this.#registerTools();
     return new URL("/settings?linkedin=connected", config.redirectUri).toString();
   }
@@ -142,10 +144,8 @@ export class LinkedInIntegrationService {
       throw new Error("LinkedIn integration is not configured on this system.");
     }
     const baseKey = config.tokenRef.replace("vault://nexus/", "");
-    // Strictly isolate: lookup tokens belonging to context.userId
-    let raw = await this.#vault.get(`${baseKey}/${context.userId}`);
-    // In single-tenant mode without per-user keys, check baseKey
-    raw ??= await this.#vault.get(baseKey);
+    // Strictly isolate: lookup tokens belonging to context.userId only. ZERO global fallback.
+    const raw = await this.#vault.get(`${baseKey}/${context.userId}`);
     if (raw === undefined) {
       throw new Error(`LinkedIn is not connected for user '${context.userId}'.`);
     }
