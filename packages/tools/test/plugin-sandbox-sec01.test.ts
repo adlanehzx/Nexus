@@ -155,7 +155,7 @@ describe("SEC-01: Subprocess Process-Isolated Plugin Sandbox", () => {
     const code = `
       result = {
         passwd: probe.readHostFile("/etc/passwd"),
-        vault: probe.readHostFile("/home/adlane/.nexus/vault.json")
+        vault: probe.readHostFile("/home/nexus/.nexus/vault.json")
       };
     `;
 
