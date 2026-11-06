@@ -161,14 +161,22 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
         execSync(`pg_restore -d "${targetDbUrlStr}" "${dumpFile}"`, { stdio: "pipe" });
 
         // 4. Verify table row counts match between source and restored
+        const tableCheck = execSync(
+          `psql "${sourceDbUrl}" -t -c "SELECT to_regclass('public.users');"`,
+          { stdio: "pipe" },
+        )
+          .toString()
+          .trim();
+        const tableName =
+          tableCheck && tableCheck !== "" && tableCheck !== "null" ? "users" : "User";
         const sourceCounts = execSync(
-          `psql "${sourceDbUrl}" -t -c "SELECT count(*) FROM \\"User\\";"`,
+          `psql "${sourceDbUrl}" -t -c "SELECT count(*) FROM \\"${tableName}\\";"`,
           { stdio: "pipe" },
         )
           .toString()
           .trim();
         const restoredCounts = execSync(
-          `psql "${targetDbUrlStr}" -t -c "SELECT count(*) FROM \\"User\\";"`,
+          `psql "${targetDbUrlStr}" -t -c "SELECT count(*) FROM \\"${tableName}\\";"`,
           { stdio: "pipe" },
         )
           .toString()
