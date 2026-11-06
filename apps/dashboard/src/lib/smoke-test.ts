@@ -525,7 +525,11 @@ export async function executeSmokeTest(
             error: `Agent Core execution did not reach terminal succeeded state (received status: ${run.status})`,
             traceId,
           });
-        } else if (!run.output || typeof run.output !== "string" || run.output.trim().length === 0) {
+        } else if (
+          !run.output ||
+          typeof run.output !== "string" ||
+          run.output.trim().length === 0
+        ) {
           // Reject empty output or fake fallback
           steps.push({
             id: "agent_core_run",

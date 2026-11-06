@@ -66,9 +66,31 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
     expect(restoredFromFull.User?.[1]?.name).toBe("Bob");
   });
 
+  const libpqUrl = (databaseUrl: string): string => {
+    try {
+      const url = new URL(databaseUrl);
+      const allowed = new Set([
+        "sslmode",
+        "sslrootcert",
+        "sslcert",
+        "sslkey",
+        "application_name",
+        "connect_timeout",
+        "options",
+      ]);
+      for (const key of [...url.searchParams.keys()]) {
+        if (!allowed.has(key)) url.searchParams.delete(key);
+      }
+      return url.toString();
+    } catch {
+      return databaseUrl;
+    }
+  };
+
   const isPostgresReachable = (): boolean => {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) return false;
+    const rawUrl = process.env.DATABASE_URL;
+    if (!rawUrl) return false;
+    const dbUrl = libpqUrl(rawUrl);
     try {
       const res = execSync(`psql "${dbUrl}" -t -c "SELECT 1;"`, { stdio: "pipe" });
       return res.toString().trim() === "1";
@@ -112,13 +134,14 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
         }
       }
 
-      const sourceDbUrl = process.env.DATABASE_URL!;
+      const rawSourceDbUrl = process.env.DATABASE_URL!;
+      const sourceDbUrl = libpqUrl(rawSourceDbUrl);
       const tempDir = mkdtempSync(join(tmpdir(), "nexus-pg-restore-"));
       const dumpFile = join(tempDir, "backup.dump");
       const tempDbName = `nexus_restore_test_${Date.now()}`;
       const targetDbUrl = new URL(sourceDbUrl);
       targetDbUrl.pathname = `/${tempDbName}`;
-      const targetDbUrlStr = targetDbUrl.toString();
+      const targetDbUrlStr = libpqUrl(targetDbUrl.toString());
 
       try {
         // 1. Export custom-format archive using pg_dump -Fc

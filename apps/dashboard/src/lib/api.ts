@@ -1889,7 +1889,8 @@ export class DashboardApi {
   ): Promise<{ id: string; title: string }> {
     const trimmedTitle = input.title?.trim();
     return this.#request<{ id: string; title: string }>("POST", "/api/v1/conversations", {
-      title: trimmedTitle !== undefined && trimmedTitle.length > 0 ? trimmedTitle : "New Conversation",
+      title:
+        trimmedTitle !== undefined && trimmedTitle.length > 0 ? trimmedTitle : "New Conversation",
     });
   }
 
