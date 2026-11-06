@@ -4,6 +4,7 @@ import {
   createSafeMcpFetch,
   isPrivateOrReservedIp,
   parseIpv4ToNumber,
+  type SafeMcpFetchOptions,
 } from "../src/ssrf.js";
 import { McpSecurityError } from "../src/errors.js";
 
@@ -89,22 +90,32 @@ describe("MCP SSRF Policy", () => {
   });
 
   it("rejects HTTP redirects to private or cloud metadata IPs", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (url) => {
-      if (String(url).includes("redirector")) {
-        return new Response(null, {
-          status: 302,
-          headers: { location: "http://169.254.169.254/latest/meta-data/" },
-        });
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation((url) => {
+      const urlStr =
+        typeof url === "string"
+          ? url
+          : url instanceof URL
+            ? url.href
+            : typeof (url as { url?: unknown }).url === "string"
+              ? (url as { url: string }).url
+              : "";
+      if (urlStr.includes("redirector")) {
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { location: "http://169.254.169.254/latest/meta-data/" },
+          }),
+        );
       }
-      return new Response("ok", { status: 200 });
+      return Promise.resolve(new Response("ok", { status: 200 }));
     });
 
     const safeFetch = createSafeMcpFetch({
       serverName: "test-server",
       fetchFn: fetchMock,
       skipDnsResolution: true,
-      dnsLookup: async () => [{ address: "93.184.216.34", family: 4 }],
-    } as unknown as import("../src/ssrf.js").SafeMcpFetchOptions);
+      dnsLookup: () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
+    } as unknown as SafeMcpFetchOptions);
 
     await expect(safeFetch("http://redirector.example.com/start")).rejects.toThrow(
       McpSecurityError,
@@ -120,16 +131,16 @@ describe("MCP SSRF Policy", () => {
   it("simulates and blocks DNS rebinding attack (first resolution public, subsequent private)", async () => {
     let callCount = 0;
     // Attacker DNS server: first answer is benign public IP, second answer is localhost
-    const rebindLookup = async () => {
+    const rebindLookup = () => {
       callCount++;
       if (callCount === 1) {
-        return [{ address: "93.184.216.34", family: 4 }];
+        return Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
       }
-      return [{ address: "127.0.0.1", family: 4 }];
+      return Promise.resolve([{ address: "127.0.0.1", family: 4 }]);
     };
 
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => {
-      return new Response("ok", { status: 200 });
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => {
+      return Promise.resolve(new Response("ok", { status: 200 }));
     });
 
     const safeFetch = createSafeMcpFetch({
@@ -146,18 +157,42 @@ describe("MCP SSRF Policy", () => {
     await expect(safeFetch("http://rebind.attacker.com/data")).rejects.toThrow(McpSecurityError);
   });
 
+  it("rejects DNS answers responding with multiple addresses where one is forbidden", async () => {
+    const multiIpLookup = () => {
+      return Promise.resolve([
+        { address: "93.184.216.34", family: 4 },
+        { address: "10.0.0.1", family: 4 },
+      ]);
+    };
+
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => {
+      return Promise.resolve(new Response("ok", { status: 200 }));
+    });
+
+    const safeFetch = createSafeMcpFetch({
+      serverName: "multi-ip-test",
+      fetchFn: fetchMock,
+      dnsLookup: multiIpLookup,
+    });
+
+    await expect(safeFetch("http://mixed-dns.attacker.com/data")).rejects.toThrow(McpSecurityError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("preserves normal operation for legitimate remote MCP servers", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => {
-      return new Response(JSON.stringify({ result: "mcp-ready" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => {
+      return Promise.resolve(
+        new Response(JSON.stringify({ result: "mcp-ready" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     });
 
     const safeFetch = createSafeMcpFetch({
       serverName: "prod-server",
       fetchFn: fetchMock,
-      dnsLookup: async () => [{ address: "93.184.216.34", family: 4 }],
+      dnsLookup: () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
     });
 
     const res = await safeFetch("https://api.github.com/mcp/sse");

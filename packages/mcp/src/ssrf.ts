@@ -194,6 +194,12 @@ export async function assertSafeRemoteUrl(rawUrl: string, options?: SsrCheckOpti
       try {
         const lookupFn = options?.dnsLookup ?? (async (h) => lookup(h, { all: true }));
         const addresses = await lookupFn(hostname);
+        if (!addresses || addresses.length === 0) {
+          throw new McpSecurityError(
+            serverName,
+            `DNS resolution returned no addresses for host "${hostname}".`,
+          );
+        }
         for (const addr of addresses) {
           if (isPrivateOrReservedIp(addr.address)) {
             throw new McpSecurityError(
@@ -224,13 +230,153 @@ export interface SafeMcpFetchOptions {
 }
 
 /**
+ * Low-level HTTP/HTTPS request executor with socket-level IP pinning and TLS SNI preservation.
+ * Guarantees zero TOCTOU: DNS resolution happens directly in the socket lookup callback,
+ * and the connection is pinned exclusively to the validated public IP address.
+ */
+async function executePinnedRequest(
+  targetUrl: URL,
+  init?: RequestInit,
+  options?: SafeMcpFetchOptions,
+): Promise<Response> {
+  const isHttps = targetUrl.protocol === "https:";
+  const clientModule = isHttps ? await import("node:https") : await import("node:http");
+  const { Readable } = await import("node:stream");
+  const defaultPort = isHttps ? 443 : 80;
+  const port = targetUrl.port ? parseInt(targetUrl.port, 10) : defaultPort;
+
+  const pinnedLookup = (
+    host: string,
+    _lookupOpts: unknown,
+    cb: (err: Error | null, address: string, family: number) => void,
+  ) => {
+    if (isPrivateOrReservedIp(host) && !options?.allowLocalhost) {
+      cb(
+        new McpSecurityError(
+          options?.serverName ?? "remote",
+          `Direct private IP address "${host}" is forbidden for remote MCP servers.`,
+        ),
+        "",
+        4,
+      );
+      return;
+    }
+
+    const resolvePromise = options?.dnsLookup
+      ? options.dnsLookup(host)
+      : lookup(host, { all: true });
+
+    Promise.resolve(resolvePromise)
+      .then((records) => {
+        const addresses = Array.isArray(records) ? records : [records];
+        if (!addresses || addresses.length === 0) {
+          throw new McpSecurityError(
+            options?.serverName ?? "remote",
+            `DNS resolution returned no addresses for host "${host}".`,
+          );
+        }
+
+        // DNS responding with multiple addresses where one is forbidden: fail closed
+        for (const record of addresses) {
+          if (isPrivateOrReservedIp(record.address) && !options?.allowLocalhost) {
+            throw new McpSecurityError(
+              options?.serverName ?? "remote",
+              `Host "${host}" resolves to private/reserved IP "${record.address}". Blocked by SSRF policy.`,
+            );
+          }
+        }
+
+        const chosen = addresses[0]!;
+        cb(null, chosen.address, chosen.family);
+      })
+      .catch((err) => {
+        cb(err instanceof Error ? err : new Error(String(err)), "", 4);
+      });
+  };
+
+  const headers: Record<string, string> = {};
+  if (init?.headers) {
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((val, key) => {
+        headers[key] = val;
+      });
+    } else if (Array.isArray(init.headers)) {
+      for (const [k, v] of init.headers) {
+        headers[k] = v;
+      }
+    } else {
+      Object.assign(headers, init.headers);
+    }
+  }
+
+  headers.host = targetUrl.host;
+
+  return new Promise<Response>((resolvePromise, rejectPromise) => {
+    const req = clientModule.request(
+      {
+        protocol: targetUrl.protocol,
+        host: targetUrl.hostname,
+        port,
+        path: `${targetUrl.pathname}${targetUrl.search}`,
+        method: init?.method ?? "GET",
+        headers,
+        lookup: pinnedLookup,
+        servername: targetUrl.hostname,
+      },
+      (res) => {
+        const webStream = Readable.toWeb(res) as ReadableStream<Uint8Array>;
+        const responseHeaders = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) {
+          if (v !== undefined) {
+            if (Array.isArray(v)) {
+              for (const item of v) responseHeaders.append(k, item);
+            } else {
+              responseHeaders.set(k, v);
+            }
+          }
+        }
+
+        const webResponse = new Response(webStream, {
+          status: res.statusCode ?? 200,
+          statusText: res.statusMessage ?? "",
+          headers: responseHeaders,
+        });
+
+        resolvePromise(webResponse);
+      },
+    );
+
+    req.on("error", (err) => {
+      rejectPromise(err);
+    });
+
+    if (init?.signal) {
+      if (init.signal.aborted) {
+        req.destroy(new Error("Aborted"));
+        return;
+      }
+      init.signal.addEventListener("abort", () => {
+        req.destroy(new Error("Aborted"));
+      });
+    }
+
+    if (init?.body) {
+      if (typeof init.body === "string" || Buffer.isBuffer(init.body)) {
+        req.write(init.body);
+      }
+    }
+
+    req.end();
+  });
+}
+
+/**
  * Creates an SSRF-safe fetch wrapper:
  * - Validates target URL and every redirect destination.
- * - Protects against DNS rebinding and TOCTOU.
+ * - Protects against DNS rebinding and TOCTOU via socket-level IP pinning.
  * - Rejects private/reserved IPs on any hop.
  */
 export function createSafeMcpFetch(options: SafeMcpFetchOptions): typeof fetch {
-  const baseFetch = options.fetchFn ?? fetch;
   const maxRedirects = options.maxRedirects ?? 5;
 
   return async (input, init) => {
@@ -240,16 +386,18 @@ export function createSafeMcpFetch(options: SafeMcpFetchOptions): typeof fetch {
     let redirectsCount = 0;
 
     while (true) {
-      await assertSafeRemoteUrl(currentUrl, {
+      const validatedUrl = await assertSafeRemoteUrl(currentUrl, {
         serverName: options.serverName,
         dnsLookup: options.dnsLookup,
         allowLocalhost: options.allowLocalhost,
       });
 
-      const response = await baseFetch(currentUrl, {
-        ...init,
-        redirect: "manual",
-      });
+      const response = options.fetchFn
+        ? await options.fetchFn(currentUrl, {
+            ...init,
+            redirect: "manual",
+          })
+        : await executePinnedRequest(validatedUrl, init, options);
 
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get("location");
