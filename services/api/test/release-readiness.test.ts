@@ -77,13 +77,48 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
     }
   };
 
-  it.skipIf(!isPostgresReachable())(
+  const hasPgTools = (): boolean => {
+    try {
+      execSync("pg_dump --version", { stdio: "pipe" });
+      execSync("pg_restore --version", { stdio: "pipe" });
+      execSync("psql --version", { stdio: "pipe" });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const requirePostgresRestore = process.env.REQUIRE_POSTGRES_RESTORE === "true";
+  const canRunRestore = isPostgresReachable() && hasPgTools();
+
+  it.skipIf(!requirePostgresRestore && !canRunRestore)(
     "performs real PostgreSQL pg_dump -Fc and pg_restore against isolated database, validating rows, constraints, and sequences",
     () => {
+      if (requirePostgresRestore) {
+        if (!process.env.DATABASE_URL) {
+          throw new Error(
+            "REQUIRE_POSTGRES_RESTORE is set to 'true', but DATABASE_URL environment variable is not defined.",
+          );
+        }
+        if (!hasPgTools()) {
+          throw new Error(
+            "REQUIRE_POSTGRES_RESTORE is set to 'true', but pg_dump, pg_restore, or psql utilities are missing or not in PATH.",
+          );
+        }
+        if (!isPostgresReachable()) {
+          throw new Error(
+            `REQUIRE_POSTGRES_RESTORE is set to 'true', but PostgreSQL database at ${process.env.DATABASE_URL} is not reachable.`,
+          );
+        }
+      }
+
       const sourceDbUrl = process.env.DATABASE_URL!;
       const tempDir = mkdtempSync(join(tmpdir(), "nexus-pg-restore-"));
       const dumpFile = join(tempDir, "backup.dump");
       const tempDbName = `nexus_restore_test_${Date.now()}`;
+      const targetDbUrl = new URL(sourceDbUrl);
+      targetDbUrl.pathname = `/${tempDbName}`;
+      const targetDbUrlStr = targetDbUrl.toString();
 
       try {
         // 1. Export custom-format archive using pg_dump -Fc
@@ -91,10 +126,16 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
         expect(fs.existsSync(dumpFile)).toBe(true);
 
         // 2. Create isolated target database
-        execSync(`createdb "${tempDbName}"`, { stdio: "pipe" });
+        try {
+          execSync(`psql "${sourceDbUrl}" -c "CREATE DATABASE \\"${tempDbName}\\";"`, {
+            stdio: "pipe",
+          });
+        } catch {
+          execSync(`createdb "${tempDbName}"`, { stdio: "pipe" });
+        }
 
         // 3. Restore archive to isolated database
-        execSync(`pg_restore -d "${tempDbName}" "${dumpFile}"`, { stdio: "pipe" });
+        execSync(`pg_restore -d "${targetDbUrlStr}" "${dumpFile}"`, { stdio: "pipe" });
 
         // 4. Verify table row counts match between source and restored
         const sourceCounts = execSync(
@@ -104,7 +145,7 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
           .toString()
           .trim();
         const restoredCounts = execSync(
-          `psql "${tempDbName}" -t -c "SELECT count(*) FROM \\"User\\";"`,
+          `psql "${targetDbUrlStr}" -t -c "SELECT count(*) FROM \\"User\\";"`,
           { stdio: "pipe" },
         )
           .toString()
@@ -119,7 +160,7 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
           .toString()
           .trim();
         const restoredConstraints = execSync(
-          `psql "${tempDbName}" -t -c "SELECT count(*) FROM information_schema.table_constraints WHERE table_schema = 'public';"`,
+          `psql "${targetDbUrlStr}" -t -c "SELECT count(*) FROM information_schema.table_constraints WHERE table_schema = 'public';"`,
           { stdio: "pipe" },
         )
           .toString()
@@ -127,9 +168,16 @@ describe("Release Readiness & Operational Runbooks (Mission E)", () => {
         expect(restoredConstraints).toBe(sourceConstraints);
       } finally {
         try {
-          execSync(`dropdb --if-exists "${tempDbName}"`, { stdio: "pipe" });
+          execSync(
+            `psql "${sourceDbUrl}" -c "DROP DATABASE IF EXISTS \\"${tempDbName}\\" WITH (FORCE);"`,
+            { stdio: "pipe" },
+          );
         } catch {
-          // ignore drop errors in test teardown
+          try {
+            execSync(`dropdb --if-exists "${tempDbName}"`, { stdio: "pipe" });
+          } catch {
+            // ignore drop errors in test teardown
+          }
         }
         rmSync(tempDir, { recursive: true, force: true });
       }
