@@ -326,9 +326,16 @@ describe("LinkedIn integration service", () => {
 
     // Verify all 4 calls strictly matched the respective user tokens
     const recentCalls = outboundCalls.slice(-4);
-    expect(recentCalls[0]?.token).toBe("Bearer token-alice-RECONNECTED");
-    expect(recentCalls[1]?.token).toBe("Bearer token-bob-BBB");
-    expect(recentCalls[2]?.token).toBe("Bearer token-alice-RECONNECTED");
-    expect(recentCalls[3]?.token).toBe("Bearer token-bob-BBB");
+    expect(recentCalls).toHaveLength(4);
+    const aliceCalls = recentCalls.filter((c) => c.body.includes("alice123"));
+    const bobCalls = recentCalls.filter((c) => c.body.includes("bob456"));
+    expect(aliceCalls).toHaveLength(2);
+    expect(bobCalls).toHaveLength(2);
+    for (const call of aliceCalls) {
+      expect(call.token).toBe("Bearer token-alice-RECONNECTED");
+    }
+    for (const call of bobCalls) {
+      expect(call.token).toBe("Bearer token-bob-BBB");
+    }
   });
 });
