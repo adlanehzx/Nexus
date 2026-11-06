@@ -6,6 +6,7 @@ import {
   isStepOptional,
   type WizardStep,
 } from "../src/ui/SetupWizard.js";
+import type { ConnectionCatalogEntry } from "../src/lib/api.js";
 import type { MinimalSession, SmokeTestApi } from "../src/lib/smoke-test.js";
 
 describe("SetupWizard navigation & progression logic", () => {
@@ -62,7 +63,7 @@ describe("SetupWizard navigation & progression logic", () => {
                 authStatus: "authenticated",
                 adapter: { availability: "available" },
               },
-            },
+            } as unknown as ConnectionCatalogEntry,
           ],
         }),
       testConnection: (providerId: string) =>
@@ -75,7 +76,7 @@ describe("SetupWizard navigation & progression logic", () => {
             authStatus: "authenticated",
             userMessage: "Connection validated",
           },
-        }),
+        } as unknown as ConnectionCatalogEntry),
       tools: () =>
         Promise.resolve({
           tools: [{ name: "terminal.execute" }, { name: "file.read" }],

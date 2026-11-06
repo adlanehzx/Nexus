@@ -28,14 +28,14 @@ export interface SmokeTestExecutionOptions {
 }
 
 export interface SmokeTestProof {
-  conversationId?: string;
-  runId?: string;
+  conversationId?: string | undefined;
+  runId?: string | undefined;
   traceId: string;
-  provider?: string;
-  model?: string;
+  provider?: string | undefined;
+  model?: string | undefined;
   durationMs: number;
   status: string;
-  controlledResult?: string;
+  controlledResult?: string | undefined;
 }
 
 export interface SmokeTestExecutionResult {
@@ -45,12 +45,15 @@ export interface SmokeTestExecutionResult {
   completedAt: string;
   totalDurationMs: number;
   steps: SmokeTestStepResult[];
-  error?: string | null;
-  proof?: SmokeTestProof;
+  error?: string | null | undefined;
+  proof?: SmokeTestProof | undefined;
 }
 
 export interface MinimalSession {
-  checkReadiness(): Promise<{ status: "ok" | "degraded" | "down"; diagnostic?: string }>;
+  checkReadiness(): Promise<{
+    status: "ok" | "degraded" | "down";
+    diagnostic?: string | undefined;
+  }>;
   isAuthenticated: boolean;
   ensureActiveSession?(): Promise<unknown>;
 }
@@ -58,15 +61,16 @@ export interface MinimalSession {
 export interface SmokeTestApi {
   connections(): Promise<{ connections: ConnectionCatalogEntry[] }>;
   testConnection(providerId: string): Promise<ConnectionCatalogEntry>;
-  tools(): Promise<{ tools: { name: string; description?: string }[] }>;
-  createConversation?(input: { title?: string }): Promise<{ id: string }>;
+  tools(): Promise<{ tools: { name: string; description?: string | undefined }[] }>;
+  createConversation?(input: { title?: string | undefined }): Promise<{ id: string }>;
   createAgentRun?(input: {
     conversationId: string;
     prompt: string;
-    model?: string;
-    provider?: string;
-  }): Promise<{ id: string; status: string; output?: string }>;
-  getAgentRun?(id: string): Promise<{ id: string; status: string; output?: string }>;
+    model?: string | undefined;
+    provider?: string | undefined;
+  }): Promise<{ id: string; status: string; output?: string | undefined }>;
+  getAgentRun?(id: string): Promise<{ id: string; status: string; output?: string | undefined }>;
+  archiveConversation?(conversationId: string): Promise<unknown>;
 }
 
 export const SMOKE_TEST_STEP_NAMES: Record<SmokeTestStepId, { en: string; fr: string }> = {
@@ -272,17 +276,30 @@ export async function executeSmokeTest(
           });
           isBlocked = true;
         } else {
-          usableProvider =
+          const matched =
             available.find((c) => c.providerId === options.selectedProviderId) ?? available[0];
-          steps.push({
-            id: "provider_availability",
-            name: SMOKE_TEST_STEP_NAMES.provider_availability.en,
-            status: "passed",
-            durationMs: elapsed,
-            error: null,
-            traceId,
-            details: `Selected provider: ${usableProvider.displayName} (${usableProvider.providerId})`,
-          });
+          if (!matched) {
+            steps.push({
+              id: "provider_availability",
+              name: SMOKE_TEST_STEP_NAMES.provider_availability.en,
+              status: "failed",
+              durationMs: elapsed,
+              error: "No operational or authenticated provider configured. At least 1 required.",
+              traceId,
+            });
+            isBlocked = true;
+          } else {
+            usableProvider = matched;
+            steps.push({
+              id: "provider_availability",
+              name: SMOKE_TEST_STEP_NAMES.provider_availability.en,
+              status: "passed",
+              durationMs: elapsed,
+              error: null,
+              traceId,
+              details: `Selected provider: ${matched.displayName} (${matched.providerId})`,
+            });
+          }
         }
       } catch (cause) {
         const elapsed = Math.round(performance.now() - stepStart);
@@ -471,34 +488,74 @@ export async function executeSmokeTest(
         traceId,
       });
     } else {
+      let createdConvId: string | undefined;
       try {
         const conv = await api.createConversation({ title: "Smoke Test Validation Run" });
-        const run = await api.createAgentRun({
+        createdConvId = conv.id;
+        let run = await api.createAgentRun({
           conversationId: conv.id,
           prompt: "PING: Respond with PONG_OK and system timestamp",
           provider: usableProvider.providerId,
         });
 
-        const elapsed = Math.round(performance.now() - stepStart);
-        proof = {
-          conversationId: conv.id,
-          runId: run.id,
-          traceId,
-          provider: usableProvider.providerId,
-          durationMs: elapsed,
-          status: run.status,
-          controlledResult: run.output ?? "PONG_OK",
-        };
+        // If status is non-terminal, poll with backoff
+        if (
+          (run.status === "running" || run.status === "pending") &&
+          typeof api.getAgentRun === "function"
+        ) {
+          const pollStart = Date.now();
+          while (
+            (run.status === "running" || run.status === "pending") &&
+            Date.now() - pollStart < 15000
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            run = await api.getAgentRun(run.id);
+          }
+        }
 
-        steps.push({
-          id: "agent_core_run",
-          name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
-          status: "passed",
-          durationMs: elapsed,
-          error: null,
-          traceId,
-          details: `Agent run completed: id=${run.id}, status=${run.status}`,
-        });
+        const elapsed = Math.round(performance.now() - stepStart);
+
+        // Strict verification: terminal status must be "succeeded" (or "completed")
+        if (run.status !== "succeeded" && run.status !== "completed") {
+          steps.push({
+            id: "agent_core_run",
+            name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+            status: "failed",
+            durationMs: elapsed,
+            error: `Agent Core execution did not reach terminal succeeded state (received status: ${run.status})`,
+            traceId,
+          });
+        } else if (!run.output || typeof run.output !== "string" || run.output.trim().length === 0) {
+          // Reject empty output or fake fallback
+          steps.push({
+            id: "agent_core_run",
+            name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+            status: "failed",
+            durationMs: elapsed,
+            error: "Agent Core execution finished but produced empty or missing response payload",
+            traceId,
+          });
+        } else {
+          proof = {
+            conversationId: conv.id,
+            runId: run.id,
+            traceId,
+            provider: usableProvider.providerId,
+            durationMs: elapsed,
+            status: run.status,
+            controlledResult: run.output,
+          };
+
+          steps.push({
+            id: "agent_core_run",
+            name: SMOKE_TEST_STEP_NAMES.agent_core_run.en,
+            status: "passed",
+            durationMs: elapsed,
+            error: null,
+            traceId,
+            details: `Agent run completed: id=${run.id}, status=${run.status}`,
+          });
+        }
       } catch (cause) {
         const elapsed = Math.round(performance.now() - stepStart);
         steps.push({
@@ -509,6 +566,12 @@ export async function executeSmokeTest(
           error: cause instanceof Error ? cause.message : "Agent Core execution failed",
           traceId,
         });
+      } finally {
+        if (createdConvId && typeof api.archiveConversation === "function") {
+          await api.archiveConversation(createdConvId).catch((_cleanupErr: unknown) => {
+            void _cleanupErr;
+          });
+        }
       }
     }
   }
