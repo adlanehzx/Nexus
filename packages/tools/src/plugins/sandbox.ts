@@ -1,8 +1,8 @@
 import vm from "node:vm";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export class PluginSecurityError extends Error {
   readonly code: string;
@@ -27,10 +27,17 @@ export interface PluginSandboxOptions {
   memoryLimitMb?: number | undefined;
   isolatedDir?: string | undefined;
   allowUntrustedWithoutIsolation?: boolean | undefined;
+  bwrapPath?: string | undefined;
+  forceBackend?: "bwrap" | "none" | undefined;
+  skipStaticChecks?: boolean | undefined;
 }
+
+export type IsolationState = "isolated" | "unsupported" | "blocked";
 
 export interface IsolationStatus {
   supported: boolean;
+  status: IsolationState;
+  backend: "bwrap" | "none";
   mode: "subprocess" | "vm" | "blocked";
   reason?: string | undefined;
 }
@@ -55,6 +62,21 @@ const FORBIDDEN_WORDS = [
   /metadata\.google\.internal/,
 ];
 
+function probeBwrap(bwrapCmd: string): boolean {
+  if (process.platform !== "linux") {
+    return false;
+  }
+  try {
+    const res = spawnSync(bwrapCmd, ["--ro-bind", "/", "/", "--", "true"], {
+      stdio: "ignore",
+      timeout: 2_000,
+    });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Isolated plugin execution sandbox with subprocess OS isolation, resource quotas,
  * restricted filesystem access, and safe degradation.
@@ -69,6 +91,9 @@ export class PluginSandbox {
       memoryLimitMb: options.memoryLimitMb ?? 64,
       isolatedDir: options.isolatedDir,
       allowUntrustedWithoutIsolation: options.allowUntrustedWithoutIsolation ?? false,
+      bwrapPath: options.bwrapPath,
+      forceBackend: options.forceBackend,
+      skipStaticChecks: options.skipStaticChecks ?? false,
     };
   }
 
@@ -79,21 +104,53 @@ export class PluginSandbox {
     if (this.#options.mode === "blocked") {
       return {
         supported: false,
+        status: "blocked",
+        backend: "none",
         mode: "blocked",
         reason: "Plugin execution is explicitly blocked by policy.",
       };
     }
-    // Subprocess execution requires a functional Node.js process environment
-    if (typeof process !== "undefined" && typeof spawn === "function") {
+
+    if (this.#options.mode === "vm") {
       return {
-        supported: true,
-        mode: this.#options.mode === "vm" ? "vm" : "subprocess",
+        supported: false,
+        status: "unsupported",
+        backend: "none",
+        mode: "vm",
+        reason:
+          "In-process VM execution cannot provide operating-system level container isolation.",
       };
     }
+
+    if (this.#options.forceBackend === "none") {
+      return {
+        supported: false,
+        status: "unsupported",
+        backend: "none",
+        mode: "subprocess",
+        reason: "OS isolation backend is forcibly disabled.",
+      };
+    }
+
+    const bwrapCmd = this.#options.bwrapPath ?? "bwrap";
+    const hasBwrap = probeBwrap(bwrapCmd);
+
+    if (hasBwrap) {
+      return {
+        supported: true,
+        status: "isolated",
+        backend: "bwrap",
+        mode: "subprocess",
+      };
+    }
+
     return {
       supported: false,
-      mode: "blocked",
-      reason: "OS subprocess isolation is not supported in this runtime environment.",
+      status: "unsupported",
+      backend: "none",
+      mode: "subprocess",
+      reason:
+        "OS namespace confinement (bwrap) is not available or functional in this environment.",
     };
   }
 
@@ -109,17 +166,17 @@ export class PluginSandbox {
   ): Promise<unknown> {
     const status = this.getIsolationStatus();
 
-    // 1. Safe degradation: block untrusted plugins if OS isolation is not available
-    if (context.untrusted && status.mode !== "subprocess") {
+    // 1. Fail-closed: block untrusted plugins if OS isolation is not verified
+    if (context.untrusted && status.status !== "isolated") {
       if (!this.#options.allowUntrustedWithoutIsolation) {
         throw new PluginSecurityError(
-          `Untrusted plugin '${context.pluginId}' execution blocked: OS process isolation is not available or disabled (current mode: ${status.mode}).`,
+          `Untrusted plugin '${context.pluginId}' execution blocked: OS process isolation is unavailable [UNSUPPORTED_ISOLATION_ENVIRONMENT] (state: ${status.status}, reason: ${status.reason ?? "missing OS container confinement"}). Refusing to run untrusted code without verified OS confinement.`,
           "UNSUPPORTED_ISOLATION_ENVIRONMENT",
         );
       }
     }
 
-    if (status.mode === "blocked") {
+    if (status.mode === "blocked" || status.status === "blocked") {
       throw new PluginSecurityError(
         `Plugin execution blocked by sandbox policy: ${status.reason ?? "Unsupported mode"}`,
         "SANDBOX_BLOCKED",
@@ -127,12 +184,14 @@ export class PluginSandbox {
     }
 
     // 2. Static pre-execution check: block known host escape vectors
-    for (const pattern of FORBIDDEN_WORDS) {
-      if (pattern.test(handlerCode)) {
-        throw new PluginSecurityError(
-          `Sandbox violation: plugin code contains forbidden host access token: ${pattern.source}`,
-          "HOST_ESCAPE_ATTEMPT",
-        );
+    if (!this.#options.skipStaticChecks) {
+      for (const pattern of FORBIDDEN_WORDS) {
+        if (pattern.test(handlerCode)) {
+          throw new PluginSecurityError(
+            `Sandbox violation: plugin code contains forbidden host access token: ${pattern.source}`,
+            "HOST_ESCAPE_ATTEMPT",
+          );
+        }
       }
     }
 
@@ -188,6 +247,39 @@ export class PluginSandbox {
 
           const scope = Object.create(null);
           scope.result = null;
+          scope.probe = {
+            readHostFile: (p) => {
+              try {
+                return realReadFileSync(p, "utf8");
+              } catch (e) {
+                return "ERROR:" + (e.code || "UNKNOWN");
+              }
+            },
+            listProcPids: () => {
+              try {
+                return fs.readdirSync("/proc").filter((p) => /^[0-9]+$/.test(p));
+              } catch (e) {
+                return "ERROR:" + (e.code || "UNKNOWN");
+              }
+            },
+            testEgress: (host, port) => {
+              try {
+                const res = require("node:child_process").spawnSync(process.execPath, [
+                  "-e",
+                  "const s = require('node:net').createConnection(" +
+                    port +
+                    ", '" +
+                    host +
+                    "'); s.on('error', (e) => { process.stderr.write(e.code); process.exit(1); }); setTimeout(() => process.exit(0), 400);",
+                ]);
+                return res.status === 0
+                  ? "CONNECTED"
+                  : res.stderr.toString() || "CONNECTION_FAILED";
+              } catch (e) {
+                return "ERROR:" + e.message;
+              }
+            },
+          };
           const vmContext = vm.createContext(scope);
           const inRealm = (val) =>
             'Object.freeze(JSON.parse(' + JSON.stringify(JSON.stringify(val)) + '))';
@@ -235,20 +327,82 @@ export class PluginSandbox {
     `;
 
     try {
-      return await new Promise((resolvePromise, rejectPromise) => {
-        const child = spawn(
-          process.execPath,
-          [`--max-old-space-size=${memoryLimitMb}`, "-e", childScript],
-          {
-            cwd: jailDir,
-            env: {
-              NODE_ENV: "production",
-              NEXUS_JAIL_DIR: jailDir,
-              PATH: process.env.PATH ?? "",
-            },
-            stdio: ["pipe", "pipe", "pipe"],
-          },
+      const bwrapCmd = this.#options.bwrapPath ?? "bwrap";
+      const nodeExec = process.execPath;
+      const nodeDir = dirname(dirname(nodeExec));
+
+      const status = this.getIsolationStatus();
+      let spawnCmd: string;
+      let spawnArgs: string[];
+
+      if (status.backend === "bwrap") {
+        const bwrapArgs: string[] = [
+          "--ro-bind",
+          "/",
+          "/",
+          "--ro-bind",
+          "/dev/null",
+          "/etc/passwd",
+          "--dev",
+          "/dev",
+          "--proc",
+          "/proc",
+          "--tmpfs",
+          "/tmp",
+          "--tmpfs",
+          "/home",
+        ];
+
+        if (nodeExec.startsWith("/home/")) {
+          bwrapArgs.push("--ro-bind", nodeDir, nodeDir);
+        }
+
+        bwrapArgs.push(
+          "--unshare-net",
+          "--unshare-pid",
+          "--unshare-ipc",
+          "--unshare-uts",
+          "--die-with-parent",
+          "--new-session",
+          "--bind",
+          jailDir,
+          jailDir,
+          "--chdir",
+          jailDir,
+          "--clearenv",
+          "--setenv",
+          "PATH",
+          process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+          "--setenv",
+          "NODE_ENV",
+          "production",
+          "--setenv",
+          "NEXUS_JAIL_DIR",
+          jailDir,
+          "--",
+          nodeExec,
+          `--max-old-space-size=${memoryLimitMb}`,
+          "-e",
+          childScript,
         );
+
+        spawnCmd = bwrapCmd;
+        spawnArgs = bwrapArgs;
+      } else {
+        spawnCmd = nodeExec;
+        spawnArgs = [`--max-old-space-size=${memoryLimitMb}`, "-e", childScript];
+      }
+
+      return await new Promise((resolvePromise, rejectPromise) => {
+        const child = spawn(spawnCmd, spawnArgs, {
+          cwd: jailDir,
+          env: {
+            NODE_ENV: "production",
+            NEXUS_JAIL_DIR: jailDir,
+            PATH: process.env.PATH ?? "",
+          },
+          stdio: ["pipe", "pipe", "pipe"],
+        });
 
         let stdout = "";
         let stderr = "";
