@@ -357,7 +357,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
         // Broadcast test chime across all online satellites
         const onlineSats = fleet.filter((s) => s.online);
         await Promise.all(
-          onlineSats.map((s) => api.testSatelliteVoiceSpeaker(s.deviceId, 70)),
+          onlineSats.map((s) => api.testSatelliteVoiceSpeaker(s.deviceId, "speaker")),
         );
         setModeNotice(
           tr(
@@ -717,10 +717,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       <span>{tr("Pairing Ticket Active", "Jeton d'appairage actif")}</span>
                     </div>
                     <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
-                      <strong>{tr("Device ID:", "ID Appareil :")}</strong> {pairingTicket.deviceId}
+                      <strong>{tr("Device ID:", "ID Appareil :")}</strong> {pairingDeviceId}
                     </p>
                     <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
-                      <strong>{tr("Ticket ID:", "ID Jeton :")}</strong> {pairingTicket.ticketId}
+                      <strong>{tr("Ticket ID:", "ID Jeton :")}</strong> {pairingTicket.id}
                     </p>
                     <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
                       <strong>{tr("Expires at:", "Expire a :")}</strong>{" "}
@@ -849,7 +849,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       className="button compact secondary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        satsInRoom.forEach((s) => void executeCommand(s.deviceId, "ping"));
+                        satsInRoom.forEach((s) => void executeCommand(s.deviceId, "system.ping"));
                       }}
                     >
                       <IconRadio size={12} />
@@ -860,7 +860,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       className="button compact secondary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        satsInRoom.forEach((s) => void executeCommand(s.deviceId, "test-voice", { volume: 75 }));
+                        satsInRoom.forEach((s) => void executeCommand(s.deviceId, "system.diagnostics", { target: "audio" }));
                       }}
                     >
                       <IconVolume size={12} />
@@ -890,19 +890,17 @@ export function Domotique({ api }: { api: DashboardApi }) {
         </div>
 
         {filteredSatellites.length === 0 ? (
-          <Empty
-            text={
-              selectedRoom === "all"
-                ? tr(
-                    "No ESP32 satellites connected yet. Click 'Pair New Satellite' to provision a node.",
-                    "Aucun satellite ESP32 connecte pour l'instant. Cliquez sur 'Appairer un satellite' pour provisionner un module.",
-                  )
-                : tr(
-                    `No satellites found in room '${selectedRoom}'.`,
-                    `Aucun satellite trouve dans la piece '${selectedRoom}'.`,
-                  )
-            }
-          />
+          <Empty>
+            {selectedRoom === "all"
+              ? tr(
+                  "No ESP32 satellites connected yet. Click 'Pair New Satellite' to provision a node.",
+                  "Aucun satellite ESP32 connecte pour l'instant. Cliquez sur 'Appairer un satellite' pour provisionner un module.",
+                )
+              : tr(
+                  `No satellites found in room '${selectedRoom}'.`,
+                  `Aucun satellite trouve dans la piece '${selectedRoom}'.`,
+                )}
+          </Empty>
         ) : (
           <div
             style={{
@@ -1097,7 +1095,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                           color: mic.muted ? "#f59e0b" : "currentColor",
                         }}
                         disabled={!sat.online || isBusy}
-                        onClick={() => void executeCommand(sat.deviceId, "set-privacy", { muted: !mic.muted })}
+                        onClick={() => void executeCommand(sat.deviceId, "audio.privacy", { muted: !mic.muted })}
                         title={
                           mic.muted
                             ? tr("Microphone is MUTED. Click to activate.", "Microphone COUPE. Cliquer pour activer.")
@@ -1138,7 +1136,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       type="button"
                       className="button compact secondary"
                       disabled={!sat.online || isBusy}
-                      onClick={() => void executeCommand(sat.deviceId, "ping")}
+                      onClick={() => void executeCommand(sat.deviceId, "system.ping")}
                       title={tr("Send low-latency ping", "Envoyer un ping")}
                     >
                       <IconRadio size={14} />
@@ -1149,8 +1147,8 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       className="button compact secondary"
                       disabled={!sat.online || isBusy}
                       onClick={() =>
-                        void executeCommand(sat.deviceId, "test-voice", {
-                          volume: speaker.volume ?? 80,
+                        void executeCommand(sat.deviceId, "system.diagnostics", {
+                          target: "audio",
                         })
                       }
                       title={tr("Play voice chime test", "Tester le haut-parleur")}
@@ -1162,7 +1160,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       type="button"
                       className="button compact secondary"
                       disabled={!sat.online || isBusy}
-                      onClick={() => void executeCommand(sat.deviceId, "identify")}
+                      onClick={() => void executeCommand(sat.deviceId, "led.set", { pattern: "blink" })}
                       title={tr("Blink LED on device", "Faire clignoter la LED")}
                     >
                       <IconHardware size={14} />

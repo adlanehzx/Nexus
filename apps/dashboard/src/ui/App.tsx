@@ -313,10 +313,6 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     description: "Operational state of NEXUS at a glance.",
   },
   devices: { title: "Devices", description: "Paired machines, trust levels, and permissions." },
-  satellites: {
-    title: "Satellites",
-    description: "ESP32 hardware satellites, acoustic monitoring, room telemetry, and command bus.",
-  },
   workers: { title: "Workers", description: "Available capacity to execute tasks." },
   tasks: { title: "Tasks", description: "Work queue, dependencies, and results." },
   runs: { title: "Agent runs", description: "Execution traces and pending confirmations." },
