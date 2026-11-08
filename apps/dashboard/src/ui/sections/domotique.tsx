@@ -8,8 +8,7 @@ import type {
   SatelliteCommandResult,
   SatelliteView,
 } from "../../lib/api.js";
-import { formatAge } from "../../lib/format.js";
-import { Empty, Metric, Section, State, Table, useSection } from "../parts.js";
+import { Empty, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 import {
   IconBattery,
@@ -165,7 +164,7 @@ function extractRoom(sat: SatelliteView): string {
 }
 
 export function Domotique({ api }: { api: DashboardApi }) {
-  const { tr, locale } = useI18n();
+  const { tr } = useI18n();
   const state = useSection(() => api.satellites());
 
   // Domotique global mode state

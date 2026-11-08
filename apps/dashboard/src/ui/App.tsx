@@ -47,7 +47,6 @@ const UsageLimits = lazySection("UsageLimits");
 const UsageCosts = lazySection("UsageCosts");
 const UsageTokens = lazySection("UsageTokens");
 const Providers = lazySection("Providers");
-const Satellites = lazySection("Satellites");
 const Domotique = lazySection("Domotique");
 
 function backendUrl(): string {
