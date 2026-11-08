@@ -39,7 +39,8 @@ export type WindowContentType =
   | "observability"
   | "career-education"
   | "trading-lab"
-  | "osint";
+  | "osint"
+  | "domotique";
 
 export interface CameraState {
   x: number;

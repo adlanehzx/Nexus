@@ -57,6 +57,7 @@ const Providers = lazySection("Providers");
 const Organizations = lazySection("Organizations");
 const Observability = lazySection("Observability");
 const TradingLab = lazySection("TradingLab");
+const Domotique = lazySection("Domotique");
 const Marketplace = lazySection("Marketplace");
 const Notifications = lazySection("Notifications");
 
@@ -177,6 +178,8 @@ function renderWindowContent(
       return <TradingLab api={api} />;
     case "osint":
       return <OsintWorkspace api={api} onOpenMissions={() => onNavigate("mission-control")} />;
+    case "domotique":
+      return <Domotique api={api} />;
     default:
       return (
         <div style={{ padding: "20px", color: "var(--sp-text-muted)" }}>

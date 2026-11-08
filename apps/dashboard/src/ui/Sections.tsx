@@ -36,3 +36,4 @@ export * from "./sections/workers.js";
 export * from "./sections/vcs-worktrees.js";
 export * from "./sections/providers.js";
 export * from "./sections/satellites.js";
+export * from "./sections/domotique.js";

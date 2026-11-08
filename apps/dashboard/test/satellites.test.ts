@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DashboardApi } from "../src/lib/api.js";
+import { isLabSection } from "../src/ui/App.js";
 import {
   IconBattery,
   IconBatteryCharging,
   IconHardware,
+  IconHome,
   IconMic,
   IconMicOff,
   IconRadio,
@@ -15,10 +17,14 @@ import {
   IconWifi,
 } from "../src/ui/icons.js";
 
-describe("ESP32 Satellites Management & Monitoring UI (Lot 11.2)", () => {
+describe("ESP32 Satellites Management & Monitoring UI (Lot 11.2 & Lab Domotique)", () => {
   it("enforces strict prohibition of Unicode emojis in UI code and icons", () => {
     const satellitesSource = readFileSync(
       resolve(__dirname, "../src/ui/sections/satellites.tsx"),
+      "utf8",
+    );
+    const domotiqueSource = readFileSync(
+      resolve(__dirname, "../src/ui/sections/domotique.tsx"),
       "utf8",
     );
     const iconsSource = readFileSync(resolve(__dirname, "../src/ui/icons.tsx"), "utf8");
@@ -27,11 +33,18 @@ describe("ESP32 Satellites Management & Monitoring UI (Lot 11.2)", () => {
     const emojiRegex = /\p{Extended_Pictographic}/u;
 
     expect(emojiRegex.test(satellitesSource)).toBe(false);
+    expect(emojiRegex.test(domotiqueSource)).toBe(false);
     expect(emojiRegex.test(iconsSource)).toBe(false);
   });
 
-  it("exports all pure vector SVG icons required for satellite telemetry", () => {
+  it("classifies domotique and satellites as Lab sections", () => {
+    expect(isLabSection("domotique")).toBe(true);
+    expect(isLabSection("satellites")).toBe(true);
+  });
+
+  it("exports all pure vector SVG icons required for domotique & satellite telemetry", () => {
     const icons = [
+      IconHome,
       IconWifi,
       IconBattery,
       IconBatteryCharging,

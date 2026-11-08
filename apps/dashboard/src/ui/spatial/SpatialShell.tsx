@@ -164,6 +164,13 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("osint", "OSINT Intelligence"),
       },
       {
+        id: "win-domotique",
+        title: "Ouvrir Domotique & Satellites",
+        subtitle: "Contrôle domotique et flotte de satellites ESP32",
+        category: "Windows",
+        action: () => openWindow("domotique", "Domotique & Satellites"),
+      },
+      {
         id: "win-agents",
         title: "Ouvrir Agents & Quotas",
         subtitle: "Gestion des agents autonomes et quotas",
