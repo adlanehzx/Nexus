@@ -48,6 +48,7 @@ const UsageCosts = lazySection("UsageCosts");
 const UsageTokens = lazySection("UsageTokens");
 const Providers = lazySection("Providers");
 const Satellites = lazySection("Satellites");
+const Domotique = lazySection("Domotique");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -128,12 +129,6 @@ export const SETTINGS_CATEGORIES = [
         icon: "devices",
       },
       {
-        id: "satellites" as const,
-        label: "Satellites ESP32",
-        labelEn: "ESP32 Satellites",
-        icon: "satellites",
-      },
-      {
         id: "mcp" as const,
         label: "Serveurs MCP & Outils",
         labelEn: "MCP Servers & Tools",
@@ -189,6 +184,8 @@ export type SectionId =
   | "career-education"
   | "trading-lab"
   | "osint"
+  | "domotique"
+  | "satellites"
   | "quota-forecast"
   | "usage-limits"
   | "usage-costs"
@@ -202,6 +199,8 @@ const SECTION_IDS = new Set<SectionId>([
   "career-education",
   "trading-lab",
   "osint",
+  "domotique",
+  "satellites",
   "quota-forecast",
   "usage-limits",
   "usage-costs",
@@ -210,7 +209,13 @@ const SECTION_IDS = new Set<SectionId>([
 ]);
 
 export function isLabSection(id: SectionId): boolean {
-  return id === "career-education" || id === "trading-lab" || id === "osint";
+  return (
+    id === "career-education" ||
+    id === "trading-lab" ||
+    id === "osint" ||
+    id === "domotique" ||
+    id === "satellites"
+  );
 }
 
 export function isUsageSection(id: SectionId): boolean {
@@ -228,16 +233,28 @@ export function isSettingsSection(id: SectionId): boolean {
 
 function sectionFromHash(): SectionId {
   const candidate = window.location.hash.replace(/^#\/?/, "") as SectionId;
+  if (candidate === "satellites") return "domotique";
   return SECTION_IDS.has(candidate) ? candidate : "chat";
 }
 
 const PAGE_META: Record<string, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
+  domotique: {
+    title: "Domotique & Satellites",
+    description:
+      "Supervision domotique, contrôle des pièces de vie, télémétrie acoustique et flotte de satellites vocaux ESP32.",
+  },
+  satellites: {
+    title: "Domotique & Satellites",
+    description:
+      "Supervision domotique, contrôle des pièces de vie, télémétrie acoustique et flotte de satellites vocaux ESP32.",
+  },
   "career-education": {
     title: "Career & Education",
     description:
       "Long-term planning, multi-track discovery, tailored application preparation, and confirmed actions.",
   },
+
   "trading-lab": {
     title: "Trading Lab",
     description: "Paper portfolios, research markets, and risk experiments without real money.",
@@ -471,7 +488,7 @@ function AppContent() {
       if (isEditingText()) return;
 
       const digit = getDigitFromEvent(e);
-      if (digit !== null && digit >= 1 && digit <= 6) {
+      if (digit !== null && digit >= 1 && digit <= 7) {
         e.preventDefault();
         e.stopPropagation();
         const sectionMap: Record<number, SectionId> = {
@@ -480,7 +497,8 @@ function AppContent() {
           3: "career-education",
           4: "trading-lab",
           5: "osint",
-          6: "settings",
+          6: "domotique",
+          7: "settings",
         };
         const target = sectionMap[digit];
         if (target) navigate(target);
@@ -665,6 +683,13 @@ function AppContent() {
           {rootMode === "lab" && (
             <div className="nav-group nav-lab">
               <NavItem
+                id="domotique"
+                label={locale === "fr" ? "Domotique & Satellites" : "Smart Home & Satellites"}
+                icon="domotique"
+                current={section === "satellites" ? "domotique" : section}
+                onSelect={navigate}
+              />
+              <NavItem
                 id="trading-lab"
                 label={t("nav.items.trading-lab") || "Trading Lab"}
                 icon="trading"
@@ -687,6 +712,7 @@ function AppContent() {
               />
             </div>
           )}
+
 
           {rootMode === "usage" && (
             <div className="nav-group nav-usage">
@@ -976,8 +1002,9 @@ function renderSection(
       return <Settings api={api} defaultTab="backup" hideTopTabs={true} />;
     case "devices":
       return <Devices api={api} />;
+    case "domotique":
     case "satellites":
-      return <Satellites api={api} />;
+      return <Domotique api={api} />;
     case "mcp":
       return <Mcp api={api} />;
     case "browser":
@@ -1041,6 +1068,8 @@ function NavIcon({ name }: { name: string }) {
     runs: "m8 5 11 7-11 7V5Z",
     missions: "M12 3v4m0 10v4M3 12h4m10 0h4m-6-3a4 4 0 1 1-6 6 4 4 0 0 1 6-6Z",
     devices: "M7 3h10v18H7V3Zm3 15h4",
+    domotique:
+      "M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z",
     satellites:
       "M4 10a7.5 7.5 0 0 0 10 10M4 6a11.5 11.5 0 0 0 14 14M4 2a15.5 15.5 0 0 0 18 18M4 20a2 2 0 1 0 0 .01",
     workers: "M4 7h16v10H4V7Zm4 14v-4m8 4v-4M9 11h.01M13 11h3",
