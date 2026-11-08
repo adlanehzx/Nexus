@@ -305,6 +305,20 @@ describe("E2E 4 — iPhone runs execution on laptop", () => {
     // The result is indeed what machine produced, recorded centrally.
     const executions = await fleet.harness.services.taskStore.listExecutions(plan.id);
     expect(executions[0]?.result).toMatchObject({ exitCode: 0 });
+
+    // History serialization must retain the process output used by the dashboard.
+    const history = await fleet.harness.app.inject({
+      method: "GET",
+      url: `/api/v1/tasks/${plan.id}/executions`,
+      headers: fleet.account.authorization,
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().data[0]).toMatchObject({
+      id: executions[0]?.id,
+      attempt: 1,
+      result: executions[0]?.result,
+    });
+    expect(history.json().meta).toMatchObject({ total: 1, nextCursor: null });
   });
 
   it("laptop is both client and worker simultaneously", () => {

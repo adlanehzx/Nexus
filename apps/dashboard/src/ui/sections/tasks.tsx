@@ -1,7 +1,8 @@
 import { useState } from "react";
-import type { DashboardApi, TaskDetail } from "../../lib/api.js";
+import type { DashboardApi, TaskDetail, TaskExecution } from "../../lib/api.js";
 import { failedSteps, formatAge, formatDuration, selectedWorkers } from "../../lib/format.js";
 import { Bar, Empty, Section, State, Table, useSection } from "../parts.js";
+import { IconCheck, IconClock, IconStop, IconWarning, IconRefresh } from "../icons.js";
 import { useI18n } from "../i18n/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,7 +44,17 @@ export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?:
                     style={{ cursor: "pointer" }}
                   >
                     <td>
-                      {task.title}
+                      <button
+                        type="button"
+                        className="button compact"
+                        aria-expanded={selected === task.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelected(task.id === selected ? null : task.id);
+                        }}
+                      >
+                        {task.title}
+                      </button>
                       <div className="muted mono">
                         {task.source.toUpperCase()} · {task.correlationId}
                       </div>
@@ -106,7 +117,9 @@ export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?:
                 ))}
               </Table>
 
-              {selected === null ? null : <TaskDetailView api={api} taskId={selected} />}
+              {selected === null ? null : (
+                <TaskDetailView key={selected} api={api} taskId={selected} />
+              )}
             </>
           )
         }
@@ -183,41 +196,47 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
             ))}
           </Table>
 
-          <h3>{tr("Execution Log", "Journal d'Exécution")}</h3>
-          {task.executions.length === 0 ? (
-            <Empty>{tr("No recorded executions.", "Aucune exécution enregistrée.")}</Empty>
+          {task.source === "device" ? (
+            <TaskExecutionHistory api={api} taskId={taskId} />
           ) : (
-            <Table
-              head={[
-                tr("Step", "Étape"),
-                tr("Worker", "Agent"),
-                tr("Status", "Statut"),
-                tr("Duration", "Durée"),
-                tr("Result", "Résultat"),
-                tr("Error", "Erreur"),
-              ]}
-            >
-              {task.executions.map((execution) => (
-                <tr key={execution.id}>
-                  <td className="mono">{execution.stepId}</td>
-                  <td>{execution.deviceName ?? execution.deviceId.slice(0, 8)}</td>
-                  <td>
-                    <State tone={taskTone(execution.status)} label={execution.status} />
-                  </td>
-                  <td className="muted">{formatDuration(execution.durationMs)}</td>
-                  <td className="mono muted">
-                    {execution.result === null
-                      ? "—"
-                      : JSON.stringify(execution.result).slice(0, 120)}
-                  </td>
-                  <td className="muted">
-                    {execution.error === null
-                      ? "—"
-                      : `${execution.error.code} — ${execution.error.message}`}
-                  </td>
-                </tr>
-              ))}
-            </Table>
+            <>
+              <h3>{tr("Execution Log", "Journal d'Exécution")}</h3>
+              {task.executions.length === 0 ? (
+                <Empty>{tr("No recorded executions.", "Aucune exécution enregistrée.")}</Empty>
+              ) : (
+                <Table
+                  head={[
+                    tr("Step", "Étape"),
+                    tr("Worker", "Agent"),
+                    tr("Status", "Statut"),
+                    tr("Duration", "Durée"),
+                    tr("Result", "Résultat"),
+                    tr("Error", "Erreur"),
+                  ]}
+                >
+                  {task.executions.map((execution) => (
+                    <tr key={execution.id}>
+                      <td className="mono">{execution.stepId}</td>
+                      <td>{execution.deviceName ?? execution.deviceId.slice(0, 8)}</td>
+                      <td>
+                        <State tone={taskTone(execution.status)} label={execution.status} />
+                      </td>
+                      <td className="muted">{formatDuration(execution.durationMs)}</td>
+                      <td className="mono muted">
+                        {execution.result === null
+                          ? "—"
+                          : JSON.stringify(execution.result).slice(0, 120)}
+                      </td>
+                      <td className="muted">
+                        {execution.error === null
+                          ? "—"
+                          : `${execution.error.code} — ${execution.error.message}`}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
+              )}
+            </>
           )}
 
           {failedSteps(task).length === 0 ? null : (
@@ -237,5 +256,155 @@ function TaskDetailView({ api, taskId }: { api: DashboardApi; taskId: string }) 
         </>
       )}
     </Section>
+  );
+}
+
+function TaskExecutionHistory({ api, taskId }: { api: DashboardApi; taskId: string }) {
+  const { tr } = useI18n();
+  const [cursors, setCursors] = useState<string[]>([]);
+  const cursor = cursors.at(-1);
+  const state = useSection(() => api.taskExecutions(taskId, cursor), [taskId, cursor]);
+
+  return (
+    <section
+      aria-busy={state.loading}
+      aria-label={tr("Execution history", "Historique des exécutions")}
+    >
+      <h3>{tr("Execution history", "Historique des exécutions")}</h3>
+      <button className="button" type="button" disabled={state.loading} onClick={state.reload}>
+        <IconRefresh /> {tr("Refresh", "Actualiser")}
+      </button>
+      <Section state={state}>
+        {(page) => (
+          <>
+            <p className="muted">
+              {tr("Total runs", "Nombre d'exécutions")}: {page.meta.total}
+            </p>
+            {page.data.length === 0 ? (
+              <Empty>{tr("No recorded executions.", "Aucune exécution enregistrée.")}</Empty>
+            ) : (
+              page.data.map((execution) => (
+                <ExecutionInspection key={execution.id} execution={execution} />
+              ))
+            )}
+            <nav aria-label={tr("Execution pages", "Pages des exécutions")}>
+              <button
+                className="button"
+                type="button"
+                disabled={state.loading || cursors.length === 0}
+                onClick={() => setCursors((previous) => previous.slice(0, -1))}
+              >
+                {tr("Previous", "Précédent")}
+              </button>
+              <span className="muted">
+                {" "}
+                {tr("Page", "Page")} {cursors.length + 1}{" "}
+              </span>
+              <button
+                className="button"
+                type="button"
+                disabled={state.loading || page.meta.nextCursor === null}
+                onClick={() => {
+                  const next = page.meta.nextCursor;
+                  if (next !== null) setCursors((previous) => [...previous, next]);
+                }}
+              >
+                {tr("Next", "Suivant")}
+              </button>
+            </nav>
+          </>
+        )}
+      </Section>
+    </section>
+  );
+}
+
+/** Results vary by tool; absence of process output must not imply a successful exit. */
+export function ExecutionInspection({ execution }: { execution: TaskExecution }) {
+  const { tr } = useI18n();
+  const result =
+    execution.result !== null && typeof execution.result === "object"
+      ? (execution.result as Record<string, unknown>)
+      : {};
+  const exitCode =
+    typeof result.exitCode === "number"
+      ? String(result.exitCode)
+      : tr("Not available", "Indisponible");
+  const StatusIcon =
+    execution.status === "succeeded"
+      ? IconCheck
+      : execution.status === "failed"
+        ? IconWarning
+        : execution.status === "cancelled"
+          ? IconStop
+          : IconClock;
+  const timestamp = (value: string | null) =>
+    value === null ? tr("Not completed", "Non terminée") : <time dateTime={value}>{value}</time>;
+
+  return (
+    <details className="card">
+      <summary>
+        <span
+          className={`state-pill ${execution.status === "running" ? "running" : taskTone(execution.status)}`}
+        >
+          <StatusIcon /> {execution.status}
+        </span>{" "}
+        <span className="mono">{execution.id}</span> {tr("Attempt", "Tentative")}{" "}
+        {execution.attempt} ({formatDuration(execution.durationMs)})
+      </summary>
+      <dl>
+        <dt>{tr("Step", "Étape")}</dt>
+        <dd className="mono">{execution.stepId}</dd>
+        <dt>{tr("Worker", "Agent")}</dt>
+        <dd className="mono">{execution.deviceId}</dd>
+        <dt>{tr("Started", "Début")}</dt>
+        <dd>{timestamp(execution.startedAt)}</dd>
+        <dt>{tr("Completed", "Fin")}</dt>
+        <dd>{timestamp(execution.completedAt)}</dd>
+        <dt>{tr("Duration", "Durée")}</dt>
+        <dd>{formatDuration(execution.durationMs)}</dd>
+        <dt>{tr("Exit code", "Code de sortie")}</dt>
+        <dd>{exitCode}</dd>
+      </dl>
+      {execution.error === null ? null : (
+        <p className="banner error">
+          {execution.error.code}: {execution.error.message}
+        </p>
+      )}
+      {(["stdout", "stderr"] as const).map((stream) => (
+        <section key={stream} aria-label={stream}>
+          <h4>{stream}</h4>
+          <pre
+            className="mono"
+            tabIndex={0}
+            style={{
+              maxHeight: "24rem",
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {typeof result[stream] === "string" && result[stream].length > 0
+              ? result[stream]
+              : tr("No output recorded.", "Aucune sortie enregistrée.")}
+          </pre>
+        </section>
+      ))}
+      <details>
+        <summary>{tr("Input and full result", "Entrée et résultat complet")}</summary>
+        <pre
+          className="mono"
+          tabIndex={0}
+          style={{
+            maxHeight: "24rem",
+            overflow: "auto",
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {JSON.stringify({ input: execution.input, result: execution.result }, null, 2)}
+        </pre>
+      </details>
+    </details>
   );
 }
