@@ -571,3 +571,112 @@ export function IconSnowflake({ size = 16, color, style, className }: IconProps)
     </svg>
   );
 }
+
+export function IconWifi({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+      <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+      <line x1="12" y1="20" x2="12.01" y2="20" />
+    </svg>
+  );
+}
+
+export function IconBattery({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="2" y="7" width="16" height="10" rx="2" ry="2" />
+      <line x1="22" y1="11" x2="22" y2="13" />
+    </svg>
+  );
+}
+
+export function IconBatteryCharging({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19" />
+      <line x1="23" y1="11" x2="23" y2="13" />
+      <polyline points="11 6 7 12 13 12 9 18" />
+    </svg>
+  );
+}
+
+export function IconMic({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+export function IconMicOff({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+export function IconVolume({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+    </svg>
+  );
+}
+
+export function IconVolumeX({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <line x1="23" y1="9" x2="17" y2="15" />
+      <line x1="17" y1="9" x2="23" y2="15" />
+    </svg>
+  );
+}
+
+export function IconSatellite({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M4 10a7.5 7.5 0 0 0 10 10" />
+      <path d="M4 6a11.5 11.5 0 0 0 14 14" />
+      <path d="M4 2a15.5 15.5 0 0 0 18 18" />
+      <circle cx="4" cy="20" r="2" />
+    </svg>
+  );
+}
+
+export function IconHardware({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <line x1="9" y1="1" x2="9" y2="4" />
+      <line x1="15" y1="1" x2="15" y2="4" />
+      <line x1="9" y1="20" x2="9" y2="23" />
+      <line x1="15" y1="20" x2="15" y2="23" />
+      <line x1="20" y1="9" x2="23" y2="9" />
+      <line x1="20" y1="14" x2="23" y2="14" />
+      <line x1="1" y1="9" x2="4" y2="9" />
+      <line x1="1" y1="14" x2="4" y2="14" />
+    </svg>
+  );
+}
+
+export function IconRadio({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <circle cx="12" cy="12" r="2" />
+      <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
+    </svg>
+  );
+}
