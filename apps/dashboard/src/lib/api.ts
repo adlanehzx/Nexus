@@ -2398,12 +2398,12 @@ export class DashboardApi {
     return this.#request("GET", path);
   }
 
-  /** A list response keeps its cursor, which `#request` would unwrap away. */
+  /** A list response keeps its cursor, which unwrapping `data` would throw away. */
   async #page<T>(path: string): Promise<CursorPage<T>> {
-    const body = (await this.#send("GET", path)) as {
+    const body = await this.#request<{
       data?: unknown;
       meta?: { nextCursor?: string | null; total?: number };
-    } | null;
+    } | null>("GET", path, undefined, false);
     const items = Array.isArray(body?.data) ? (body.data as T[]) : [];
     return {
       items,
@@ -2450,24 +2450,6 @@ export class DashboardApi {
     }
 
     return responseBody as T;
-  }
-
-  async #send(
-    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-    path: string,
-    body?: unknown,
-  ): Promise<unknown> {
-    const response = await this.#session.authorizedRequest({ method, path, body });
-
-    if (response.status === 403) {
-      throw new ForbiddenError("This section is not accessible with this account.");
-    }
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(messageOf(response.body));
-    }
-
-    return response.body;
   }
 }
 
