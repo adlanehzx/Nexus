@@ -7,6 +7,10 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { DependencyError } from "@nexus/shared";
 import {
   addPaperQuoteSchema,
+  placePaperOrderSchema,
+  paperOrderResultSchema,
+  paperSettlementSchema,
+  settlePaperMarketSchema,
   auditVerificationSchema,
   createPaperAccountSchema,
   createPaperMarketSchema,
@@ -316,6 +320,48 @@ export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, d
     async (request) =>
       ok(
         await required(app.services.missionControl).addPaperQuote(request.params.id, request.body),
+        request.id,
+      ),
+  );
+
+  app.post(
+    "/mission-control/paper/orders",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["mission-control"],
+        body: placePaperOrderSchema,
+        headers: z.object({ "idempotency-key": z.string().min(1).max(128) }),
+        response: { 200: okSchema(paperOrderResultSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await required(app.services.missionControl).placePaperOrder(
+          request.body,
+          request.headers["idempotency-key"],
+        ),
+        request.id,
+      ),
+  );
+
+  app.post(
+    "/mission-control/paper/markets/:id/settle",
+    {
+      preHandler: app.requireAdmin,
+      schema: {
+        tags: ["mission-control"],
+        params: idParams,
+        body: settlePaperMarketSchema,
+        response: { 200: okSchema(paperSettlementSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await required(app.services.missionControl).settlePaperMarket(
+          request.params.id,
+          request.body.winning_outcome,
+        ),
         request.id,
       ),
   );

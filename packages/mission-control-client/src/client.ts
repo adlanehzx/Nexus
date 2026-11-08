@@ -2,6 +2,13 @@ import { AppError, type AppErrorOptions } from "@nexus/shared";
 import type { z } from "zod";
 import {
   addPaperQuoteSchema,
+  placePaperOrderSchema,
+  paperOrderResultSchema,
+  paperSettlementSchema,
+  settlePaperMarketSchema,
+  type PlacePaperOrder,
+  type PaperOrderResult,
+  type PaperSettlement,
   agentRegistrySchema,
   auditVerificationSchema,
   createPaperAccountSchema,
@@ -126,6 +133,16 @@ export interface MissionControlPort {
     input: UpdateAgentHealth,
     signal?: AbortSignal,
   ): Promise<AgentRegistry>;
+  placePaperOrder(
+    input: PlacePaperOrder,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<PaperOrderResult>;
+  settlePaperMarket(
+    id: string,
+    outcome: "yes" | "no",
+    signal?: AbortSignal,
+  ): Promise<PaperSettlement>;
   verifyAudit(signal?: AbortSignal): Promise<AuditVerification>;
   createPaperAccount(input: CreatePaperAccount, signal?: AbortSignal): Promise<PaperAccount>;
   getPaperAccount(id: string, signal?: AbortSignal): Promise<PaperAccount>;
@@ -429,6 +446,37 @@ export class MissionControlClient implements MissionControlPort {
       `/v1/paper/markets/${encodeURIComponent(marketId)}/quotes`,
       paperQuoteSchema,
       body,
+      signal,
+    );
+  }
+
+  placePaperOrder(
+    input: PlacePaperOrder,
+    idempotencyKey: string,
+    signal?: AbortSignal,
+  ): Promise<PaperOrderResult> {
+    if (!idempotencyKey || idempotencyKey.length > 128)
+      throw new TypeError("Invalid idempotency key");
+    return this.#request(
+      "POST",
+      "/v1/paper/orders",
+      paperOrderResultSchema,
+      placePaperOrderSchema.parse(input),
+      signal,
+      { "idempotency-key": idempotencyKey },
+    );
+  }
+
+  settlePaperMarket(
+    id: string,
+    outcome: "yes" | "no",
+    signal?: AbortSignal,
+  ): Promise<PaperSettlement> {
+    return this.#request(
+      "POST",
+      `/v1/paper/markets/${encodeURIComponent(id)}/settle`,
+      paperSettlementSchema,
+      settlePaperMarketSchema.parse({ winning_outcome: outcome }),
       signal,
     );
   }

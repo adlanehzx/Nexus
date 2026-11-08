@@ -428,3 +428,42 @@ export type CreatePaperAccount = z.input<typeof createPaperAccountSchema>;
 export type CreatePaperMarket = z.infer<typeof createPaperMarketSchema>;
 export type AddPaperQuote = z.infer<typeof addPaperQuoteSchema>;
 export type SubmitResearchMission = z.infer<typeof submitResearchMissionSchema>;
+
+export const placePaperOrderSchema = z.object({
+  account_id: identifier,
+  market_id: identifier,
+  model_probability: z
+    .string()
+    .regex(/^(0\.\d+|1(?:\.0+)?)$/)
+    .refine((v) => Number(v) > 0 && Number(v) < 1),
+  confidence: z
+    .string()
+    .regex(/^(0\.\d+|1(?:\.0+)?)$/)
+    .refine((v) => Number(v) > 0 && Number(v) <= 1),
+});
+export const paperOrderResultSchema = z.union([
+  z.object({
+    filled: z.literal(false),
+    risk_decision_id: identifier,
+    stake_cents: z.number().int().nonnegative(),
+    reasons: z.array(z.string()),
+  }),
+  z
+    .object({
+      id: identifier,
+      outcome: z.enum(["yes", "no"]),
+      stake_cents: z.number().int().nonnegative(),
+      filled: z.literal(true).optional(),
+    })
+    .passthrough(),
+]);
+export const settlePaperMarketSchema = z.object({ winning_outcome: z.enum(["yes", "no"]) });
+export const paperSettlementSchema = z.object({
+  market_id: identifier,
+  winning_outcome: z.enum(["yes", "no"]),
+  orders_settled: z.number().int().nonnegative().optional(),
+  replayed: z.boolean(),
+});
+export type PlacePaperOrder = z.infer<typeof placePaperOrderSchema>;
+export type PaperOrderResult = z.infer<typeof paperOrderResultSchema>;
+export type PaperSettlement = z.infer<typeof paperSettlementSchema>;
