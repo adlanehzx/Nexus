@@ -22,7 +22,9 @@ describe("MCP OAuth Endpoints", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ data: { providers: { id: string; name: string; connected: boolean }[] } }>();
+    const body = response.json<{
+      data: { providers: { id: string; name: string; connected: boolean }[] };
+    }>();
     expect(body.data.providers.length).toBeGreaterThanOrEqual(4);
 
     const github = body.data.providers.find((p) => p.id === "github");
@@ -42,7 +44,9 @@ describe("MCP OAuth Endpoints", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ data: { authorizationUrl: string; state: string; providerId: string } }>();
+    const body = response.json<{
+      data: { authorizationUrl: string; state: string; providerId: string };
+    }>();
     expect(body.data.providerId).toBe("github");
     expect(body.data.authorizationUrl).toContain("https://github.com/login/oauth/authorize");
     expect(body.data.authorizationUrl).toContain("test-github-client-id");

@@ -61,7 +61,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
       }
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : tr("Failed to initiate OAuth flow.", "Échec du démarrage du flux OAuth."),
+        err instanceof Error
+          ? err.message
+          : tr("Failed to initiate OAuth flow.", "Échec du démarrage du flux OAuth."),
       );
     } finally {
       setBusy(false);
@@ -112,7 +114,8 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
         state: authState,
       };
       if (manualClientId.trim().length > 0) callbackPayload.clientId = manualClientId.trim();
-      if (manualClientSecret.trim().length > 0) callbackPayload.clientSecret = manualClientSecret.trim();
+      if (manualClientSecret.trim().length > 0)
+        callbackPayload.clientSecret = manualClientSecret.trim();
 
       await api.mcpOAuthCallback(callbackPayload);
 
@@ -126,7 +129,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
       providersState.reload();
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : tr("Authorization code exchange failed.", "Échec de l'échange du code d'autorisation."),
+        err instanceof Error
+          ? err.message
+          : tr("Authorization code exchange failed.", "Échec de l'échange du code d'autorisation."),
       );
     } finally {
       setBusy(false);
@@ -150,13 +155,13 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
     setStatusMessage(null);
     try {
       await api.mcpOAuthDisconnect(provider.id);
-      setStatusMessage(
-        tr(`${provider.name} disconnected.`, `${provider.name} déconnecté.`),
-      );
+      setStatusMessage(tr(`${provider.name} disconnected.`, `${provider.name} déconnecté.`));
       providersState.reload();
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : tr("Failed to disconnect provider.", "Échec de la déconnexion."),
+        err instanceof Error
+          ? err.message
+          : tr("Failed to disconnect provider.", "Échec de la déconnexion."),
       );
     } finally {
       setBusy(false);
@@ -187,11 +192,23 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
       <section className="settings-panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: "1.2rem", color: "var(--nx-signal, #00f0ff)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "1.2rem",
+                color: "var(--nx-signal, #00f0ff)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
               <IconBolt size={18} color="var(--nx-signal, #00f0ff)" />
               {tr("OAuth 2.0 PKCE Integrations", "Intégrations OAuth 2.0 PKCE")}
             </h3>
-            <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.88rem", maxWidth: "780px" }}>
+            <p
+              className="muted"
+              style={{ margin: "6px 0 0", fontSize: "0.88rem", maxWidth: "780px" }}
+            >
               {tr(
                 "Connect external MCP services (GitHub, Slack, Google Drive, Linear, Notion) with 1-click OAuth like Claude Desktop and OpenAI Codex. Credentials are exchanged via RFC 7636 PKCE S256 and sealed in the NEXUS AES-256 Vault.",
                 "Connectez des services MCP externes (GitHub, Slack, Google Drive, Linear, Notion) en 1 clic OAuth comme Claude Desktop et OpenAI Codex. Les identifiants sont échangés via RFC 7636 PKCE S256 et scellés dans le coffre AES-256 de NEXUS.",
@@ -206,7 +223,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
             style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
           >
             <IconRefresh size={13} />
-            {providersState.loading ? tr("Loading...", "Chargement...") : tr("Refresh", "Actualiser")}
+            {providersState.loading
+              ? tr("Loading...", "Chargement...")
+              : tr("Refresh", "Actualiser")}
           </button>
         </div>
 
@@ -253,7 +272,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
             >
               {/* Card Header */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                  }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                     <div
                       style={{
@@ -271,7 +297,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     </div>
                     <div>
                       <h4 style={{ margin: 0, fontSize: "1.05rem" }}>{p.name}</h4>
-                      <span className="muted" style={{ fontSize: "0.75rem" }}>MCP Turnkey Server</span>
+                      <span className="muted" style={{ fontSize: "0.75rem" }}>
+                        MCP Turnkey Server
+                      </span>
                     </div>
                   </div>
 
@@ -284,7 +312,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                       fontWeight: 600,
                       padding: "3px 8px",
                       borderRadius: "12px",
-                      background: isConnected ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                      background: isConnected
+                        ? "rgba(16, 185, 129, 0.15)"
+                        : "rgba(255, 255, 255, 0.05)",
                       color: isConnected ? "#10b981" : "var(--nx-muted, #8b949e)",
                       border: `1px solid ${isConnected ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.1)"}`,
                     }}
@@ -303,23 +333,53 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 </div>
 
                 {/* Description */}
-                <p style={{ fontSize: "0.85rem", color: "var(--nx-text-subtle, #a0aec0)", margin: "0.5rem 0 1rem", lineHeight: "1.4" }}>
+                <p
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "var(--nx-text-subtle, #a0aec0)",
+                    margin: "0.5rem 0 1rem",
+                    lineHeight: "1.4",
+                  }}
+                >
                   {p.description}
                 </p>
 
                 {/* Details / Vault Reference */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "0.75rem", marginBottom: "1rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.4rem",
+                    fontSize: "0.75rem",
+                    marginBottom: "1rem",
+                  }}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span className="muted">{tr("Vault Secret Ref:", "Réf secret coffre :")}</span>
-                    <code style={{ fontSize: "0.75rem", color: "var(--nx-signal, #00f0ff)" }}>{p.vaultRef}</code>
+                    <code style={{ fontSize: "0.75rem", color: "var(--nx-signal, #00f0ff)" }}>
+                      {p.vaultRef}
+                    </code>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span className="muted">{tr("Security Protocol:", "Protocole sécurité :")}</span>
-                    <span style={{ color: "#a78bfa" }}>{p.supportsPkce ? "RFC 7636 PKCE (S256)" : "OAuth 2.0 Bearer"}</span>
+                    <span className="muted">
+                      {tr("Security Protocol:", "Protocole sécurité :")}
+                    </span>
+                    <span style={{ color: "#a78bfa" }}>
+                      {p.supportsPkce ? "RFC 7636 PKCE (S256)" : "OAuth 2.0 Bearer"}
+                    </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span className="muted">{tr("Environment Setup:", "Configuration .env :")}</span>
-                    <span style={{ color: p.clientIdConfigured ? "#10b981" : "#eab308", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                    <span className="muted">
+                      {tr("Environment Setup:", "Configuration .env :")}
+                    </span>
+                    <span
+                      style={{
+                        color: p.clientIdConfigured ? "#10b981" : "#eab308",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                      }}
+                    >
                       {p.clientIdConfigured ? (
                         <>
                           <IconCheck size={12} color="#10b981" />
@@ -412,7 +472,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.2rem",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                 <div
                   style={{
@@ -440,7 +507,12 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 className="button compact"
                 type="button"
                 onClick={resetModal}
-                style={{ padding: "4px 8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                style={{
+                  padding: "4px 8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
                 aria-label="Close"
               >
                 <IconClose size={14} />
@@ -485,7 +557,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <span className="muted" style={{ fontSize: "0.8rem" }}>
                     {tr("Popup blocked or closed?", "Fenêtre fermée ou bloquée ?")}
                   </span>
@@ -494,15 +568,32 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     target={`nexus_oauth_${selectedProvider.id}`}
                     rel="noreferrer"
                     className="button compact secondary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem" }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      fontSize: "0.78rem",
+                    }}
                   >
                     <IconExternalLink size={12} />
                     {tr("Reopen Authorization Window", "Rouvrir la fenêtre")}
                   </a>
                 </div>
 
-                <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "0.85rem" }}>
-                  <span>{tr("Authorization Code or Callback URL", "Code d'autorisation ou URL de rappel")}</span>
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.4rem",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <span>
+                    {tr(
+                      "Authorization Code or Callback URL",
+                      "Code d'autorisation ou URL de rappel",
+                    )}
+                  </span>
                   <input
                     type="text"
                     placeholder="Paste code or entire redirect URL (e.g. http://127.0.0.1:8080/api/v1/mcp/oauth/callback?code=...)"
@@ -520,7 +611,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   />
                 </label>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "0.5rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
                   <button className="button" type="button" onClick={resetModal}>
                     {tr("Cancel", "Annuler")}
                   </button>
@@ -532,7 +630,12 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                   >
                     <IconCheck size={14} />
-                    {busy ? tr("Exchanging PKCE Code...", "Échange du code PKCE...") : tr("Complete Connection & Save to Vault", "Finaliser la connexion & sceller dans le coffre")}
+                    {busy
+                      ? tr("Exchanging PKCE Code...", "Échange du code PKCE...")
+                      : tr(
+                          "Complete Connection & Save to Vault",
+                          "Finaliser la connexion & sceller dans le coffre",
+                        )}
                   </button>
                 </div>
               </div>
@@ -546,7 +649,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   )}
                 </p>
 
-                <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", fontSize: "0.85rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.3rem",
+                    fontSize: "0.85rem",
+                  }}
+                >
                   <span>{tr("OAuth Client ID", "Client ID OAuth")}</span>
                   <input
                     type="text"
@@ -564,7 +674,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 </label>
 
                 {!selectedProvider.supportsPkce && (
-                  <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", fontSize: "0.85rem" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.3rem",
+                      fontSize: "0.85rem",
+                    }}
+                  >
                     <span>{tr("OAuth Client Secret", "Client Secret OAuth")}</span>
                     <input
                       type="password"
@@ -582,7 +699,14 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   </label>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "0.5rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
                   <button className="button" type="button" onClick={resetModal}>
                     {tr("Cancel", "Annuler")}
                   </button>
@@ -594,7 +718,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                   >
                     <IconExternalLink size={14} />
-                    {busy ? tr("Generating PKCE...", "Génération PKCE...") : tr("Launch Authorization Window", "Lancer la fenêtre d'autorisation")}
+                    {busy
+                      ? tr("Generating PKCE...", "Génération PKCE...")
+                      : tr("Launch Authorization Window", "Lancer la fenêtre d'autorisation")}
                   </button>
                 </div>
               </div>

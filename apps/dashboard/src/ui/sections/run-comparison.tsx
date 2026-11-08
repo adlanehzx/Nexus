@@ -74,9 +74,22 @@ export function RunComparison({ api }: { api: DashboardApi }) {
             </Empty>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "12px",
+                }}
+              >
                 <div className="card" style={{ padding: "12px 16px" }}>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
                     {tr(
                       `Duration Delta (${comparison.diffSummary.fasterRunId} faster)`,
                       `Écart de durée (${comparison.diffSummary.fasterRunId} plus rapide)`,
@@ -88,19 +101,41 @@ export function RunComparison({ api }: { api: DashboardApi }) {
                 </div>
 
                 <div className="card" style={{ padding: "12px 16px" }}>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
                     {tr("Token Delta (B - A)", "Écart de jetons (B - A)")}
                   </div>
                   <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
-                    {comparison.diffSummary.tokenDelta > 0 ? "+" : ""}{comparison.diffSummary.tokenDelta.toLocaleString()}
+                    {comparison.diffSummary.tokenDelta > 0 ? "+" : ""}
+                    {comparison.diffSummary.tokenDelta.toLocaleString()}
                   </div>
                 </div>
 
                 <div className="card" style={{ padding: "12px 16px" }}>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
                     {tr("Cheaper Run", "Exécution plus économique")}
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: "var(--color-success, #00e676)" }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                      marginTop: "4px",
+                      color: "var(--color-success, #00e676)",
+                    }}
+                  >
                     {comparison.diffSummary.cheaperRunId}
                   </div>
                 </div>

@@ -54,18 +54,41 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(dag) => (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "12px",
+              }}
+            >
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Active Task", "Tâche active")}
                 </div>
-                <div className="mono" style={{ fontWeight: 600, fontSize: "1rem", marginTop: "4px" }}>
+                <div
+                  className="mono"
+                  style={{ fontWeight: 600, fontSize: "1rem", marginTop: "4px" }}
+                >
                   {dag.taskId}
                 </div>
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Total DAG Steps", "Étapes DAG totales")}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -73,10 +96,29 @@ export function DagDebugger({ api }: { api: DashboardApi }) {
                 </div>
               </div>
 
-              <div className="card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: dag.isPaused ? "var(--color-warning, #ffb300)" : "var(--color-success, #00e676)" }} />
+              <div
+                className="card"
+                style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px" }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    backgroundColor: dag.isPaused
+                      ? "var(--color-warning, #ffb300)"
+                      : "var(--color-success, #00e676)",
+                  }}
+                />
                 <div>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
                     {tr("Pipeline State", "État du pipeline")}
                   </div>
                   <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>

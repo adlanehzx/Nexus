@@ -54,8 +54,7 @@ export function Overview({ api }: { api: DashboardApi }) {
                           {tr("Cluster Workers", "Workers Connectés")}
                         </div>
                         <div className="cyber-hud-stat-value">
-                          {formatCount(data.workers.connected)}{" "}
-                          {tr("active nodes", "nœuds actifs")}
+                          {formatCount(data.workers.connected)} {tr("active nodes", "nœuds actifs")}
                         </div>
                       </div>
                       <div className="cyber-hud-stat">
@@ -74,15 +73,23 @@ export function Overview({ api }: { api: DashboardApi }) {
                       style={{ alignItems: "flex-end", textAlign: "right" }}
                     >
                       <div className="cyber-hud-stat">
-                        <div className="cyber-hud-stat-label" style={{ justifyContent: "flex-end" }}>
+                        <div
+                          className="cyber-hud-stat-label"
+                          style={{ justifyContent: "flex-end" }}
+                        >
                           {tr("Cluster Health", "Santé du Cluster")}
                         </div>
                         <div className="cyber-hud-stat-value">
-                          {isHealthy ? tr("ALL SERVICES NOMINAL", "TOUS SERVICES NOMINAUX") : tr("SERVICES DEGRADED", "SERVICES DÉGRADÉS")}
+                          {isHealthy
+                            ? tr("ALL SERVICES NOMINAL", "TOUS SERVICES NOMINAUX")
+                            : tr("SERVICES DEGRADED", "SERVICES DÉGRADÉS")}
                         </div>
                       </div>
                       <div className="cyber-hud-stat">
-                        <div className="cyber-hud-stat-label" style={{ justifyContent: "flex-end" }}>
+                        <div
+                          className="cyber-hud-stat-label"
+                          style={{ justifyContent: "flex-end" }}
+                        >
                           {tr("Security Policy", "Politique de Sécurité")}
                         </div>
                         <div className="cyber-hud-stat-value">
@@ -161,7 +168,11 @@ export function Overview({ api }: { api: DashboardApi }) {
 
               <h3>{tr("Subsystem Health", "Santé des Sous-systèmes")}</h3>
               <Table
-                head={[tr("Subsystem", "Sous-système"), tr("State", "État"), tr("Detail", "Détail")]}
+                head={[
+                  tr("Subsystem", "Sous-système"),
+                  tr("State", "État"),
+                  tr("Detail", "Détail"),
+                ]}
               >
                 {data.health.map((entry) => (
                   <tr key={entry.name}>
@@ -221,8 +232,13 @@ export function Overview({ api }: { api: DashboardApi }) {
                     </svg>
                     <span style={{ fontWeight: 600, fontSize: "1rem" }}>
                       {tr("Tasks & Queue", "Tâches & File d'attente")}{" "}
-                      <span style={{ color: data.tasks.running > 0 ? "var(--nx-accent, #64ffda)" : "inherit" }}>
-                        ({data.tasks.running} {tr("running", "en cours")} / {data.tasks.total} {tr("total", "total")})
+                      <span
+                        style={{
+                          color: data.tasks.running > 0 ? "var(--nx-accent, #64ffda)" : "inherit",
+                        }}
+                      >
+                        ({data.tasks.running} {tr("running", "en cours")} / {data.tasks.total}{" "}
+                        {tr("total", "total")})
                       </span>
                     </span>
                   </div>
@@ -289,7 +305,13 @@ export function Overview({ api }: { api: DashboardApi }) {
                     {sorted.length === 0 ? (
                       <Empty>{tr("Nothing to report.", "Rien à signaler.")}</Empty>
                     ) : (
-                      <Table head={[tr("When", "Quand"), tr("Source", "Source"), tr("Event", "Événement")]}>
+                      <Table
+                        head={[
+                          tr("When", "Quand"),
+                          tr("Source", "Source"),
+                          tr("Event", "Événement"),
+                        ]}
+                      >
                         {sorted.map((entry, index) => (
                           <tr key={`${entry.at}-${String(index)}`}>
                             <td className="muted">{formatAge(entry.at)}</td>

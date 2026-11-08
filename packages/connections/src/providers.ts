@@ -190,7 +190,6 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
   },
 };
 
-
 /**
  * `agy models`, observed on 1.5.2 signed in and signed out.
  *

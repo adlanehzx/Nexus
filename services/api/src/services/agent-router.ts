@@ -494,8 +494,9 @@ export class AgentRouter {
     if (this.#providerAccounts !== undefined) {
       const accounts = await this.#providerAccounts.listAccounts();
       const matched =
-        accounts.find((a) => a.id === agentKey || a.profileKey === agentKey || a.id.startsWith(agentKey)) ??
-        accounts.find((a) => a.provider === provider);
+        accounts.find(
+          (a) => a.id === agentKey || a.profileKey === agentKey || a.id.startsWith(agentKey),
+        ) ?? accounts.find((a) => a.provider === provider);
       if (matched !== undefined) {
         await this.#providerAccounts.recordOutcome(matched.id, {
           success: outcome.success,

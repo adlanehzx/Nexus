@@ -42,7 +42,10 @@ export function Runs({ api, embedded = false }: { api: DashboardApi; embedded?: 
   };
 
   return (
-    <div className={embedded ? undefined : "content"} style={embedded ? { marginTop: "0.5rem" } : undefined}>
+    <div
+      className={embedded ? undefined : "content"}
+      style={embedded ? { marginTop: "0.5rem" } : undefined}
+    >
       {embedded ? null : (
         <p className="muted" style={{ marginTop: 0 }}>
           {tr(
@@ -55,9 +58,23 @@ export function Runs({ api, embedded = false }: { api: DashboardApi; embedded?: 
       <Section state={observability}>
         {(summary) => (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "1rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "12px",
+                marginBottom: "1rem",
+              }}
+            >
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Analyzed Runs", "Exécutions analysées")}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -66,7 +83,14 @@ export function Runs({ api, embedded = false }: { api: DashboardApi; embedded?: 
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Fallback Rate", "Taux de secours")}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -75,28 +99,71 @@ export function Runs({ api, embedded = false }: { api: DashboardApi; embedded?: 
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Tool Errors", "Erreurs d'outils")}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: summary.rates.toolError > 0.1 ? "var(--color-error, #ff5252)" : "inherit" }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    marginTop: "4px",
+                    color:
+                      summary.rates.toolError > 0.1 ? "var(--color-error, #ff5252)" : "inherit",
+                  }}
+                >
                   {asPercent(summary.rates.toolError)}
                 </div>
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Failed Runs", "Exécutions échouées")}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: summary.rates.runError > 0 ? "var(--color-warning, #ffb300)" : "inherit" }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    marginTop: "4px",
+                    color: summary.rates.runError > 0 ? "var(--color-warning, #ffb300)" : "inherit",
+                  }}
+                >
                   {asPercent(summary.rates.runError)}
                 </div>
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Equiv. API Cost", "Coût API équiv.")}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: "var(--color-accent, #00e5ff)" }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    marginTop: "4px",
+                    color: "var(--color-accent, #00e5ff)",
+                  }}
+                >
                   {formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
                 </div>
               </div>

@@ -39,7 +39,8 @@ export class McpOAuthService {
     this.#vault = options.vault;
     this.#runtime = options.runtimeConfiguration;
     this.#mcpManager = options.mcpManager;
-    this.#stateStore = options.stateStore ?? new SingleUseOAuthStateStore({ defaultTtlMs: 15 * 60 * 1000 });
+    this.#stateStore =
+      options.stateStore ?? new SingleUseOAuthStateStore({ defaultTtlMs: 15 * 60 * 1000 });
   }
 
   async listProviders(): Promise<McpOAuthProviderStatus[]> {

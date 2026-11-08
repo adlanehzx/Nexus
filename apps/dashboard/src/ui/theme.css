@@ -564,7 +564,10 @@ samp {
   border-radius: var(--nx-radius-sm, 6px);
   color: var(--nx-text-muted, #71717a);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
   outline: none;
 }
 
@@ -615,7 +618,10 @@ samp {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0.12s;
   z-index: 9999;
 }
 
@@ -631,7 +637,10 @@ samp {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0.12s;
   z-index: 9999;
 }
 
@@ -2613,7 +2622,9 @@ tbody tr:last-child td {
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
   white-space: nowrap;
 }
 
@@ -4456,12 +4467,14 @@ tbody tr:last-child td {
   color: #c084fc;
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
-.model-badge.codex, .model-badge.openai {
+.model-badge.codex,
+.model-badge.openai {
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
-.model-badge.antigravity, .model-badge.gemini {
+.model-badge.antigravity,
+.model-badge.gemini {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.3);
@@ -4555,7 +4568,9 @@ tbody tr:last-child td {
   border-radius: var(--nx-radius-sm, 6px);
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 .quota-filter-item select:hover {
   border-color: var(--nx-accent-line, #38bdf8);
@@ -4584,7 +4599,10 @@ tbody tr:last-child td {
   border: 1px solid var(--nx-line, rgba(255, 255, 255, 0.08));
   border-radius: var(--nx-radius-md, 8px);
   overflow: hidden;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .quota-metric-card:hover {
   transform: translateY(-1px);
@@ -4600,12 +4618,24 @@ tbody tr:last-child td {
   width: 3px;
   background: var(--card-accent, #38bdf8);
 }
-.quota-metric-card.accent-runs { --card-accent: #38bdf8; }
-.quota-metric-card.accent-in { --card-accent: #60a5fa; }
-.quota-metric-card.accent-out { --card-accent: #a855f7; }
-.quota-metric-card.accent-cache { --card-accent: #10b981; }
-.quota-metric-card.accent-cost { --card-accent: #f59e0b; }
-.quota-metric-card.accent-billed { --card-accent: #34d399; }
+.quota-metric-card.accent-runs {
+  --card-accent: #38bdf8;
+}
+.quota-metric-card.accent-in {
+  --card-accent: #60a5fa;
+}
+.quota-metric-card.accent-out {
+  --card-accent: #a855f7;
+}
+.quota-metric-card.accent-cache {
+  --card-accent: #10b981;
+}
+.quota-metric-card.accent-cost {
+  --card-accent: #f59e0b;
+}
+.quota-metric-card.accent-billed {
+  --card-accent: #34d399;
+}
 
 .quota-metric-header {
   display: flex;
@@ -4688,7 +4718,10 @@ tbody tr:last-child td {
   width: 100%;
   border-radius: 4px 4px 0 0;
   background: linear-gradient(180deg, var(--nx-accent, #38bdf8) 0%, rgba(56, 189, 248, 0.35) 100%);
-  transition: height 0.3s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    height 0.3s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .quota-chart-col:hover .quota-chart-bar-fill {
   background: linear-gradient(180deg, #67e8f9 0%, rgba(56, 189, 248, 0.6) 100%);
@@ -4845,4 +4878,3 @@ tbody tr:last-child td {
   height: 10px;
   border-radius: 50%;
 }
-

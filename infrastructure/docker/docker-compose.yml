@@ -157,14 +157,14 @@ services:
       - /usr/bin/tailscale:/usr/local/bin/tailscale:ro
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
       # Host ACP agent CLIs & session configs for presence and status detection
-      - ${CLAUDE_BIN_PATH:-/home/adlane/.local/share/mise/installs/claude/latest/claude}:/usr/local/bin/claude:ro
-      - ${CODEX_BIN_PATH:-/home/adlane/.local/share/mise/installs/codex/latest/bin/codex}:/usr/local/bin/codex:ro
-      - ${AGY_BIN_PATH:-/home/adlane/.local/bin/agy}:/usr/local/bin/agy:ro
-      - ${CLAUDE_CONFIG_DIR:-/home/adlane/.claude}:/home/node/.claude:ro
-      - ${CLAUDE_CONFIG_FILE:-/home/adlane/.claude.json}:/home/node/.claude.json:ro
-      - ${CODEX_CONFIG_DIR:-/home/adlane/.codex}:/home/node/.codex:ro
-      - ${GEMINI_CONFIG_DIR:-/home/adlane/.gemini}:/home/node/.gemini:ro
-      - ${NEXUS_SESSIONS_DIR:-/home/adlane/.nexus}:/home/node/.nexus
+      - ${CLAUDE_BIN_PATH:-/home/node/.local/share/mise/installs/claude/latest/claude}:/usr/local/bin/claude:ro
+      - ${CODEX_BIN_PATH:-/home/node/.local/share/mise/installs/codex/latest/bin/codex}:/usr/local/bin/codex:ro
+      - ${AGY_BIN_PATH:-/home/node/.local/bin/agy}:/usr/local/bin/agy:ro
+      - ${CLAUDE_CONFIG_DIR:-/home/node/.claude}:/home/node/.claude:ro
+      - ${CLAUDE_CONFIG_FILE:-/home/node/.claude.json}:/home/node/.claude.json:ro
+      - ${CODEX_CONFIG_DIR:-/home/node/.codex}:/home/node/.codex:ro
+      - ${GEMINI_CONFIG_DIR:-/home/node/.gemini}:/home/node/.gemini:ro
+      - ${NEXUS_SESSIONS_DIR:-/home/node/.nexus}:/home/node/.nexus
       - ../../services/api/dist:/app/dist:ro
       - ../../packages/agent-core/dist:/app/node_modules/@nexus/agent-core/dist:ro
       - ../../packages/mcp/dist:/app/node_modules/.pnpm/@nexus+mcp@file+packages+mcp_supports-color@8.1.1/node_modules/@nexus/mcp/dist:ro

@@ -316,12 +316,7 @@ export function Settings({
       )}
 
       {/* Tab 4: Backup & Restore */}
-      {activeTab === "backup" && (
-        <BackupRestorePanel
-          api={api}
-          onReloadAll={reloadAll}
-        />
-      )}
+      {activeTab === "backup" && <BackupRestorePanel api={api} onReloadAll={reloadAll} />}
     </div>
   );
 }

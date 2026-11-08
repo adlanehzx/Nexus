@@ -39,9 +39,22 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(graph) => (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "12px",
+              }}
+            >
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Active Agents", "Agents actifs")}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -50,7 +63,14 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Inter-agent Channels", "Canaux de communication inter-agents")}
                 </div>
                 <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -59,10 +79,24 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
               </div>
 
               <div className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
                   {tr("Total Messages Exchanged", "Total des messages échangés")}
                 </div>
-                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: "var(--color-accent, #00e5ff)" }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    marginTop: "4px",
+                    color: "var(--color-accent, #00e5ff)",
+                  }}
+                >
                   {graph.edges.reduce((sum, e) => sum + e.messageCount, 0).toLocaleString()}
                 </div>
               </div>

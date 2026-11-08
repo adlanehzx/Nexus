@@ -319,16 +319,13 @@ export const mcpRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       if (!app.services.mcpOAuth) {
         throw new Error("MCP OAuth service is not enabled.");
       }
-      const result = await app.services.mcpOAuth.completeAuthorization(
-        request.body.providerId,
-        {
-          code: request.body.code,
-          state: request.body.state,
-          clientId: request.body.clientId,
-          clientSecret: request.body.clientSecret,
-          redirectUri: request.body.redirectUri,
-        },
-      );
+      const result = await app.services.mcpOAuth.completeAuthorization(request.body.providerId, {
+        code: request.body.code,
+        state: request.body.state,
+        clientId: request.body.clientId,
+        clientSecret: request.body.clientSecret,
+        redirectUri: request.body.redirectUri,
+      });
       return ok(result, request.id);
     },
   );

@@ -140,8 +140,8 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
       while (i < lines.length) {
         const currentLine = lines[i]?.trim() ?? "";
         const match = ordered
-          ? (/^\d+\.\s+(.+)$/.exec(currentLine))
-          : (/^[-*+]\s+(.+)$/.exec(currentLine));
+          ? /^\d+\.\s+(.+)$/.exec(currentLine)
+          : /^[-*+]\s+(.+)$/.exec(currentLine);
         if (match?.[1]) {
           items.push(match[1]);
           i++;

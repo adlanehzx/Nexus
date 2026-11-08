@@ -354,7 +354,10 @@ export function Mcp({ api }: { api: DashboardApi }) {
           }
         >
           <IconBolt size={14} style={{ marginRight: "0.4rem" }} />
-          {tr("OAuth Integrations (Claude & Codex Style)", "Intégrations OAuth (Style Claude & Codex)")}
+          {tr(
+            "OAuth Integrations (Claude & Codex Style)",
+            "Intégrations OAuth (Style Claude & Codex)",
+          )}
         </button>
         <button
           type="button"
@@ -630,9 +633,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                 <select
                   className="field"
                   value={transport}
-                  onChange={(event) =>
-                    setTransport(event.target.value as "stdio" | "http" | "sse")
-                  }
+                  onChange={(event) => setTransport(event.target.value as "stdio" | "http" | "sse")}
                 >
                   <option value="stdio">stdio</option>
                   <option value="http">HTTP</option>

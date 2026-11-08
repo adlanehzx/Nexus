@@ -32,7 +32,12 @@ function renderModelBadge(model: string) {
   let cls = "default";
   if (lower.includes("claude") || lower.includes("opus") || lower.includes("sonnet")) {
     cls = "claude";
-  } else if (lower.includes("codex") || lower.includes("gpt") || lower.includes("o3") || lower.includes("o1")) {
+  } else if (
+    lower.includes("codex") ||
+    lower.includes("gpt") ||
+    lower.includes("o3") ||
+    lower.includes("o1")
+  ) {
     cls = "codex";
   } else if (lower.includes("antigravity") || lower.includes("gemini") || lower.includes("agy")) {
     cls = "antigravity";
@@ -47,7 +52,9 @@ function renderMiniGauge(percent: number | null, fallbackLabel: string) {
   const color = percent > 50 ? "#22c55e" : percent > 20 ? "#eab308" : "#ef4444";
   return (
     <div className="mini-gauge-container">
-      <span className="mono" style={{ minWidth: "38px" }}>{percent} %</span>
+      <span className="mono" style={{ minWidth: "38px" }}>
+        {percent} %
+      </span>
       <div className="mini-gauge">
         <div
           className="mini-gauge-fill"
@@ -74,11 +81,24 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
   return (
     <div className="content">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1rem",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center" }}>
           <h2 style={{ margin: 0 }}>{tr("Usage & Quotas", "Usage & Quotas")}</h2>
           <span className="quota-header-badge">
-            <span className="badge ok" style={{ width: 6, height: 6, margin: 0 }} aria-hidden="true" />
+            <span
+              className="badge ok"
+              style={{ width: 6, height: 6, margin: 0 }}
+              aria-hidden="true"
+            />
             {tr("Active Telemetry", "Télémétrie Active")}
           </span>
         </div>
@@ -190,7 +210,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-in">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Input tokens", "Tokens entrants")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Input tokens", "Tokens entrants")}
+                    </span>
                     <span className="quota-metric-badge">Prompt</span>
                   </div>
                   <div className="quota-metric-val">{totals.inputTokens.toLocaleString()}</div>
@@ -198,7 +220,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-out">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Output tokens", "Tokens sortants")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Output tokens", "Tokens sortants")}
+                    </span>
                     <span className="quota-metric-badge">Completion</span>
                   </div>
                   <div className="quota-metric-val">{totals.outputTokens.toLocaleString()}</div>
@@ -214,7 +238,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-cost">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Estimated API cost", "Coût API estimé")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Estimated API cost", "Coût API estimé")}
+                    </span>
                     <span className="quota-metric-badge">Tarif list</span>
                   </div>
                   <div className="quota-metric-val">
@@ -237,7 +263,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
 
               <div className="quota-chart-card">
                 <div className="quota-chart-header">
-                  <h3 className="quota-chart-title">{tr("Tokens per period", "Tokens par période")}</h3>
+                  <h3 className="quota-chart-title">
+                    {tr("Tokens per period", "Tokens par période")}
+                  </h3>
                   <span className="quota-chart-summary">
                     <strong>{totalTokens.toLocaleString()}</strong>{" "}
                     {tr("total tokens", "tokens au total")}
@@ -328,7 +356,9 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
               {tr("Detailed Run History", "Historique détaillé des exécutions")}
             </span>
             <span className="quota-accordion-badge">
-              {usage.data?.runs ? `${usage.data.runs.length} ${tr("runs", "runs")}` : tr("Runs", "Runs")}
+              {usage.data?.runs
+                ? `${usage.data.runs.length} ${tr("runs", "runs")}`
+                : tr("Runs", "Runs")}
             </span>
           </div>
         </button>
@@ -338,7 +368,12 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
             <Section state={usage}>
               {({ runs }) =>
                 runs.length === 0 ? (
-                  <Empty>{tr("No observed runs in this window.", "Aucune exécution observée sur cette fenêtre.")}</Empty>
+                  <Empty>
+                    {tr(
+                      "No observed runs in this window.",
+                      "Aucune exécution observée sur cette fenêtre.",
+                    )}
+                  </Empty>
                 ) : (
                   <>
                     <Table
@@ -424,11 +459,26 @@ export function UsageLimits({ api }: { api: DashboardApi }) {
 
   return (
     <div className="content">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1rem",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>{tr("Provider Limits & Resets", "Limites & Réinitialisations Fournisseurs")}</h2>
+          <h2 style={{ margin: 0 }}>
+            {tr("Provider Limits & Resets", "Limites & Réinitialisations Fournisseurs")}
+          </h2>
           <span className="quota-header-badge">
-            <span className="badge ok" style={{ width: 6, height: 6, margin: 0 }} aria-hidden="true" />
+            <span
+              className="badge ok"
+              style={{ width: 6, height: 6, margin: 0 }}
+              aria-hidden="true"
+            />
             {tr("Active Windows", "Fenêtres Actives")}
           </span>
         </div>
@@ -509,7 +559,10 @@ export function UsageLimits({ api }: { api: DashboardApi }) {
                       )}
                     </td>
                     <td>
-                      {renderMiniGauge(account.remainingWeekPercent, tr("Standard Plan", "Forfait Standard"))}
+                      {renderMiniGauge(
+                        account.remainingWeekPercent,
+                        tr("Standard Plan", "Forfait Standard"),
+                      )}
                     </td>
                     <td>
                       {account.resetsWeekAt === null ? (
@@ -588,7 +641,11 @@ export function UsageLimits({ api }: { api: DashboardApi }) {
                                 ? "down"
                                 : "ok"
                         }
-                        label={f.confidence === "unknown" ? tr("CLI ACTIVE", "CLI ACTIF") : f.confidence.toUpperCase()}
+                        label={
+                          f.confidence === "unknown"
+                            ? tr("CLI ACTIVE", "CLI ACTIF")
+                            : f.confidence.toUpperCase()
+                        }
                       />
                       {f.confidence === "unknown" && f.unknownReason ? (
                         <div className="muted" style={{ fontSize: "0.75rem", marginTop: "2px" }}>
@@ -614,11 +671,26 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
 
   return (
     <div className="content">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.2rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1.2rem",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>{tr("Cost & Billing Breakdown", "Analyse des Coûts & Facturation")}</h2>
+          <h2 style={{ margin: 0 }}>
+            {tr("Cost & Billing Breakdown", "Analyse des Coûts & Facturation")}
+          </h2>
           <span className="quota-header-badge">
-            <span className="badge ok" style={{ width: 6, height: 6, margin: 0 }} aria-hidden="true" />
+            <span
+              className="badge ok"
+              style={{ width: 6, height: 6, margin: 0 }}
+              aria-hidden="true"
+            />
             {tr("T3 Code Pricing Model", "Modèle Tarifaire T3 Code")}
           </span>
         </div>
@@ -660,17 +732,21 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
               <div className="quota-metrics-grid" style={{ marginBottom: "1.5rem" }}>
                 <div className="quota-metric-card accent-cost">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Total Estimated Cost", "Coût Total Estimé")}</span>
-                    <span className="quota-metric-badge">{days} {tr("Days", "Jours")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Total Estimated Cost", "Coût Total Estimé")}
+                    </span>
+                    <span className="quota-metric-badge">
+                      {days} {tr("Days", "Jours")}
+                    </span>
                   </div>
-                  <div className="quota-metric-val">
-                    ${totalCost.toFixed(4)}
-                  </div>
+                  <div className="quota-metric-val">${totalCost.toFixed(4)}</div>
                 </div>
 
                 <div className="quota-metric-card accent-cache">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Prompt Cache Savings", "Économies Cache Prompt")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Prompt Cache Savings", "Économies Cache Prompt")}
+                    </span>
                     <span className="quota-metric-badge">-90% API</span>
                   </div>
                   <div className="quota-metric-val" style={{ color: "#22c55e" }}>
@@ -680,7 +756,9 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-runs">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Avg Cost / Run", "Coût Moyen / Exécution")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Avg Cost / Run", "Coût Moyen / Exécution")}
+                    </span>
                     <span className="quota-metric-badge">Run Avg</span>
                   </div>
                   <div className="quota-metric-val">
@@ -714,7 +792,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                   const mIn = t.inputTokens ?? 0;
                   const mCache = t.cacheReadTokens ?? 0;
                   const cacheTotal = mIn + mCache;
-                  const cacheRatio = cacheTotal > 0 ? ((mCache / cacheTotal) * 100).toFixed(1) : "0.0";
+                  const cacheRatio =
+                    cacheTotal > 0 ? ((mCache / cacheTotal) * 100).toFixed(1) : "0.0";
                   const modelCost = t.estimatedApiCostUsd ?? 0;
                   return (
                     <tr key={key}>
@@ -723,7 +802,10 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                       <td className="mono">{number(mIn)}</td>
                       <td className="mono">{number(t.outputTokens)}</td>
                       <td className="mono">{cacheRatio} %</td>
-                      <td className="mono" style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}>
+                      <td
+                        className="mono"
+                        style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}
+                      >
                         ${modelCost.toFixed(4)}
                       </td>
                     </tr>
@@ -733,32 +815,96 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
 
               <div className="usage-panel" style={{ marginTop: "1.5rem" }}>
                 <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem" }}>
-                  {tr("T3 Code Engine Rate Card Reference", "Barème de Référence des Moteurs T3 Code")}
+                  {tr(
+                    "T3 Code Engine Rate Card Reference",
+                    "Barème de Référence des Moteurs T3 Code",
+                  )}
                 </h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginTop: "0.75rem" }}>
-                  <div style={{ padding: "0.75rem", borderRadius: "6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "1rem",
+                    marginTop: "0.75rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.7 / Opus 5</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Prompt: $15.00 / 1M</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Output: $75.00 / 1M</div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>Cache Read: $3.75 / 1M</div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Prompt: $15.00 / 1M
+                    </div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Output: $75.00 / 1M
+                    </div>
+                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
+                      Cache Read: $3.75 / 1M
+                    </div>
                   </div>
-                  <div style={{ padding: "0.75rem", borderRadius: "6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.5 Sonnet</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Prompt: $3.00 / 1M</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Output: $15.00 / 1M</div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>Cache Read: $0.30 / 1M</div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Prompt: $3.00 / 1M
+                    </div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Output: $15.00 / 1M
+                    </div>
+                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
+                      Cache Read: $0.30 / 1M
+                    </div>
                   </div>
-                  <div style={{ padding: "0.75rem", borderRadius: "6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>GPT-5 / Codex / Sol</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Prompt: $2.50 / 1M</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Output: $10.00 / 1M</div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>Cache Read: $1.25 / 1M</div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Prompt: $2.50 / 1M
+                    </div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Output: $10.00 / 1M
+                    </div>
+                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
+                      Cache Read: $1.25 / 1M
+                    </div>
                   </div>
-                  <div style={{ padding: "0.75rem", borderRadius: "6px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>Antigravity / Gemini 3.8</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Prompt: $0.15 / 1M</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>Output: $0.60 / 1M</div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>Cache Read: $0.04 / 1M</div>
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                      Antigravity / Gemini 3.8
+                    </div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Prompt: $0.15 / 1M
+                    </div>
+                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
+                      Output: $0.60 / 1M
+                    </div>
+                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
+                      Cache Read: $0.04 / 1M
+                    </div>
                   </div>
                 </div>
               </div>
@@ -777,11 +923,24 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
 
   return (
     <div className="content">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1.2rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1.2rem",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center" }}>
           <h2 style={{ margin: 0 }}>{tr("Granular Token Stream", "Flux Détaillé des Tokens")}</h2>
           <span className="quota-header-badge">
-            <span className="badge ok" style={{ width: 6, height: 6, margin: 0 }} aria-hidden="true" />
+            <span
+              className="badge ok"
+              style={{ width: 6, height: 6, margin: 0 }}
+              aria-hidden="true"
+            />
             {tr("T3 Code Telemetry Live", "Télémétrie T3 Code en Direct")}
           </span>
         </div>
@@ -821,7 +980,10 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
           const cachePct = totalTokens > 0 ? ((cacheRead / totalTokens) * 100).toFixed(1) : "0.0";
 
           const models = groupUsage(buckets, (b) => b.model).sort(
-            (a, b) => ((b.totals.inputTokens ?? 0) + (b.totals.outputTokens ?? 0)) - ((a.totals.inputTokens ?? 0) + (a.totals.outputTokens ?? 0)),
+            (a, b) =>
+              (b.totals.inputTokens ?? 0) +
+              (b.totals.outputTokens ?? 0) -
+              ((a.totals.inputTokens ?? 0) + (a.totals.outputTokens ?? 0)),
           );
 
           return (
@@ -829,7 +991,9 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
               <div className="quota-metrics-grid" style={{ marginBottom: "1.5rem" }}>
                 <div className="quota-metric-card accent-runs">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Total Processed Tokens", "Total Tokens Traités")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Total Processed Tokens", "Total Tokens Traités")}
+                    </span>
                     <span className="quota-metric-badge">All Streams</span>
                   </div>
                   <div className="quota-metric-val">{number(totalTokens)}</div>
@@ -837,7 +1001,9 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-in">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Prompt Context", "Contexte Entrant")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Prompt Context", "Contexte Entrant")}
+                    </span>
                     <span className="quota-metric-badge">{inPct} %</span>
                   </div>
                   <div className="quota-metric-val">{number(inTok)}</div>
@@ -845,7 +1011,9 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-out">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Model Output", "Production Modèle")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Model Output", "Production Modèle")}
+                    </span>
                     <span className="quota-metric-badge">{outPct} %</span>
                   </div>
                   <div className="quota-metric-val">{number(outTok)}</div>
@@ -853,7 +1021,9 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-cache">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Cached Context", "Lecture Cache")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Cached Context", "Lecture Cache")}
+                    </span>
                     <span className="quota-metric-badge">{cachePct} %</span>
                   </div>
                   <div className="quota-metric-val">{number(cacheRead)}</div>
@@ -861,18 +1031,26 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
 
                 <div className="quota-metric-card accent-cost">
                   <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Cache Hit Ratio", "Taux de Cache")}</span>
+                    <span className="quota-metric-title">
+                      {tr("Cache Hit Ratio", "Taux de Cache")}
+                    </span>
                     <span className="quota-metric-badge">Optimized</span>
                   </div>
                   <div className="quota-metric-val">
-                    {inTok + cacheRead > 0 ? (((cacheRead) / (inTok + cacheRead)) * 100).toFixed(1) : "0.0"} %
+                    {inTok + cacheRead > 0
+                      ? ((cacheRead / (inTok + cacheRead)) * 100).toFixed(1)
+                      : "0.0"}{" "}
+                    %
                   </div>
                 </div>
               </div>
 
               <div className="usage-panel">
                 <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem" }}>
-                  {tr("Token Flow Distribution (T3 Code HUD)", "Distribution des Flux de Tokens (T3 Code HUD)")}
+                  {tr(
+                    "Token Flow Distribution (T3 Code HUD)",
+                    "Distribution des Flux de Tokens (T3 Code HUD)",
+                  )}
                 </h4>
                 <div className="usage-stacked-bar">
                   <div
@@ -894,15 +1072,24 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
                 <div className="usage-legend-row">
                   <div className="usage-legend-item">
                     <span className="usage-legend-dot" style={{ background: "#38bdf8" }} />
-                    <span>{tr("Prompt Input", "Contexte Entrant")}: <strong>{inPct} %</strong> ({number(inTok)})</span>
+                    <span>
+                      {tr("Prompt Input", "Contexte Entrant")}: <strong>{inPct} %</strong> (
+                      {number(inTok)})
+                    </span>
                   </div>
                   <div className="usage-legend-item">
                     <span className="usage-legend-dot" style={{ background: "#a855f7" }} />
-                    <span>{tr("Generated Completion", "Génération Modèle")}: <strong>{outPct} %</strong> ({number(outTok)})</span>
+                    <span>
+                      {tr("Generated Completion", "Génération Modèle")}: <strong>{outPct} %</strong>{" "}
+                      ({number(outTok)})
+                    </span>
                   </div>
                   <div className="usage-legend-item">
                     <span className="usage-legend-dot" style={{ background: "#10b981" }} />
-                    <span>{tr("Cached Context Read", "Cache Lu (RAM)")}: <strong>{cachePct} %</strong> ({number(cacheRead)})</span>
+                    <span>
+                      {tr("Cached Context Read", "Cache Lu (RAM)")}: <strong>{cachePct} %</strong> (
+                      {number(cacheRead)})
+                    </span>
                   </div>
                 </div>
               </div>
@@ -930,7 +1117,10 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
                       <td className="mono">{number(mIn)}</td>
                       <td className="mono">{number(mOut)}</td>
                       <td className="mono">{number(mCache)}</td>
-                      <td className="mono" style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}>
+                      <td
+                        className="mono"
+                        style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}
+                      >
                         {number(mTotal)}
                       </td>
                     </tr>

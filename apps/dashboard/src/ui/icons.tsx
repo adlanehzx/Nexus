@@ -320,7 +320,12 @@ export function IconArrowRight({ size = 16, color, style, className }: IconProps
 
 export function IconAnthropic({ size = 16, color, style, className }: IconProps) {
   return (
-    <svg {...baseProps(size, color, style, className)} viewBox="0 0 24 24" fill={color ?? "currentColor"} stroke="none">
+    <svg
+      {...baseProps(size, color, style, className)}
+      viewBox="0 0 24 24"
+      fill={color ?? "currentColor"}
+      stroke="none"
+    >
       <path d="M13.83 3.5h3.42L24 20.5h-3.42l-1.89-4.82h-7.38L9.42 20.5H6L13.83 3.5zm2.5 10.63-2.5-6.52-2.5 6.52h5z" />
       <path d="M4.62 3.5H8.1L3.48 20.5H0L4.62 3.5z" />
     </svg>
@@ -329,7 +334,13 @@ export function IconAnthropic({ size = 16, color, style, className }: IconProps)
 
 export function IconOpenAI({ size = 16, color, style, className }: IconProps) {
   return (
-    <svg {...baseProps(size, color, style, className)} viewBox="0 0 24 24" fill="none" stroke={color ?? "currentColor"} strokeWidth={1.8}>
+    <svg
+      {...baseProps(size, color, style, className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color ?? "currentColor"}
+      strokeWidth={1.8}
+    >
       <path d="M12 2a4.5 4.5 0 0 1 4.24 3.02l.2.6a4.5 4.5 0 0 1 2.38 5.48l-.34.7a4.5 4.5 0 0 1-.2 5.98l-.66.52a4.5 4.5 0 0 1-5.38 2.6l-.74-.26a4.5 4.5 0 0 1-5.96-2.38l-.2-.62a4.5 4.5 0 0 1-.74-5.92l.48-.68a4.5 4.5 0 0 1 2.64-5.36l.72.26A4.5 4.5 0 0 1 12 2Z" />
       <circle cx="12" cy="12" r="2.8" />
     </svg>
@@ -338,7 +349,12 @@ export function IconOpenAI({ size = 16, color, style, className }: IconProps) {
 
 export function IconGemini({ size = 16, color, style, className }: IconProps) {
   return (
-    <svg {...baseProps(size, color, style, className)} viewBox="0 0 24 24" fill={color ?? "currentColor"} stroke="none">
+    <svg
+      {...baseProps(size, color, style, className)}
+      viewBox="0 0 24 24"
+      fill={color ?? "currentColor"}
+      stroke="none"
+    >
       <path d="M12 1C12 7.075 7.075 12 1 12c6.075 0 11 4.925 11 11 0-6.075 4.925-11 11-11-6.075 0-11-4.925-11-11Z" />
     </svg>
   );
@@ -346,7 +362,13 @@ export function IconGemini({ size = 16, color, style, className }: IconProps) {
 
 export function IconNvidia({ size = 16, color, style, className }: IconProps) {
   return (
-    <svg {...baseProps(size, color, style, className)} viewBox="0 0 24 24" fill="none" stroke={color ?? "currentColor"} strokeWidth={1.8}>
+    <svg
+      {...baseProps(size, color, style, className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color ?? "currentColor"}
+      strokeWidth={1.8}
+    >
       <path d="M4 12c0-4.42 3.58-8 8-8s8 3.58 8 8-3.58 8-8 8-8-3.58-8-8Z" />
       <path d="M7.5 12c0-2.49 2.01-4.5 4.5-4.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5" />
       <circle cx="12" cy="12" r="1.8" fill={color ?? "currentColor"} />
@@ -407,7 +429,13 @@ export function IconGitHub({ size = 16, color, style, className }: IconProps) {
       viewBox="0 0 24 24"
       fill="currentColor"
       className={`cyber-svg-icon ${className ?? ""}`.trim()}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, color: color ?? "currentColor", ...style }}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        color: color ?? "currentColor",
+        ...style,
+      }}
       aria-hidden="true"
     >
       <path
@@ -427,7 +455,13 @@ export function IconSlack({ size = 16, color, style, className }: IconProps) {
       viewBox="0 0 24 24"
       fill="currentColor"
       className={`cyber-svg-icon ${className ?? ""}`.trim()}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, color: color ?? "currentColor", ...style }}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        color: color ?? "currentColor",
+        ...style,
+      }}
       aria-hidden="true"
     >
       <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
@@ -443,7 +477,13 @@ export function IconGoogleDrive({ size = 16, color, style, className }: IconProp
       viewBox="0 0 24 24"
       fill="currentColor"
       className={`cyber-svg-icon ${className ?? ""}`.trim()}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, color: color ?? "currentColor", ...style }}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        color: color ?? "currentColor",
+        ...style,
+      }}
       aria-hidden="true"
     >
       <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm3.14 0l6.56 11.5H4.14l3.14-5.5h6.29l-2.72-6zM15.43 8.5l5.14 9H7.43l3.43-6h8.57z" />
@@ -459,7 +499,13 @@ export function IconLinear({ size = 16, color, style, className }: IconProps) {
       viewBox="0 0 24 24"
       fill="currentColor"
       className={`cyber-svg-icon ${className ?? ""}`.trim()}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, color: color ?? "currentColor", ...style }}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        color: color ?? "currentColor",
+        ...style,
+      }}
       aria-hidden="true"
     >
       <path d="M3.5 12a8.5 8.5 0 1 1 17 0 8.5 8.5 0 0 1-17 0zm8.5-6.5a6.5 6.5 0 0 0-4.6 11.1l11.1-11.1A6.47 6.47 0 0 0 12 5.5z" />
@@ -475,7 +521,13 @@ export function IconNotion({ size = 16, color, style, className }: IconProps) {
       viewBox="0 0 24 24"
       fill="currentColor"
       className={`cyber-svg-icon ${className ?? ""}`.trim()}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, color: color ?? "currentColor", ...style }}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        flexShrink: 0,
+        color: color ?? "currentColor",
+        ...style,
+      }}
       aria-hidden="true"
     >
       <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l11.144-.654c1.12-.093 1.4.28 1.12 1.213l-2.054 11.95c-.187 1.027-.746 1.4-1.773 1.493l-11.75.654c-1.027.093-1.4-.28-1.214-1.307l2.1-13.815zm3.64 3.734l-1.4 8.775 3.36-.187 1.027-6.254 3.733 6.067 2.8-.187 1.4-8.774-3.08.187-.933 6.067-3.92-5.88z" />

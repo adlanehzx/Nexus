@@ -291,14 +291,7 @@ export class AcpOrchestrator {
       profile?: string | undefined;
       model?: string | undefined;
       reasoningEffort?:
-        | "minimal"
-        | "low"
-        | "medium"
-        | "high"
-        | "xhigh"
-        | "max"
-        | "ultra"
-        | undefined;
+        "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | undefined;
     },
   ): Promise<OrchestratedMission> {
     const [health, settings] = await Promise.all([
@@ -481,29 +474,13 @@ export class AcpOrchestrator {
       clean.includes("correction")
     )
       return "code";
-    if (
-      clean.includes("review") ||
-      clean.includes("critique") ||
-      clean.includes("quality")
-    )
+    if (clean.includes("review") || clean.includes("critique") || clean.includes("quality"))
       return "review";
-    if (
-      clean.includes("research") ||
-      clean.includes("search") ||
-      clean.includes("fact")
-    )
+    if (clean.includes("research") || clean.includes("search") || clean.includes("fact"))
       return "research";
-    if (
-      clean.includes("browser") ||
-      clean.includes("web") ||
-      clean.includes("navigate")
-    )
+    if (clean.includes("browser") || clean.includes("web") || clean.includes("navigate"))
       return "browser";
-    if (
-      clean.includes("synthesis") ||
-      clean.includes("summary") ||
-      clean.includes("final")
-    )
+    if (clean.includes("synthesis") || clean.includes("summary") || clean.includes("final"))
       return "synthesis";
     return "general";
   }
@@ -532,14 +509,7 @@ export class AcpOrchestrator {
       profile?: string | undefined;
       model?: string | undefined;
       reasoningEffort?:
-        | "minimal"
-        | "low"
-        | "medium"
-        | "high"
-        | "xhigh"
-        | "max"
-        | "ultra"
-        | undefined;
+        "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra" | undefined;
     },
   ): Promise<z.infer<typeof plannedMissionSchema>> {
     if (options?.profile && profiles.includes(options.profile)) {
@@ -900,7 +870,8 @@ export function missionTaskToAgentState(
 
   let model = task.profile_key;
   const instructionStr = typeof task.instruction === "string" ? task.instruction : "";
-  const errorStr = typeof task.error === "string" ? task.error : task.error ? JSON.stringify(task.error) : null;
+  const errorStr =
+    typeof task.error === "string" ? task.error : task.error ? JSON.stringify(task.error) : null;
   const lowerResp = (responseText ?? "").toLowerCase();
   const lowerInst = instructionStr.toLowerCase();
 

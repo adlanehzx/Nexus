@@ -415,11 +415,25 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
                     <span>
                       <strong>{tr("Clean", "Propre")}:</strong>{" "}
                       {inspectedStatus.status.clean ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: "#22c55e" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            color: "#22c55e",
+                          }}
+                        >
                           <IconCheck size={14} color="#22c55e" /> {tr("Yes", "Oui")}
                         </span>
                       ) : (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: "#f59e0b" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            color: "#f59e0b",
+                          }}
+                        >
                           <IconWarning size={14} color="#f59e0b" /> {tr("Modified", "Modifié")}
                         </span>
                       )}
@@ -569,7 +583,12 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
                     >
                       <h4>
                         {tr("Turn Diff Inspection", "Inspection du Diff de Tour")} : Turn #
-                        {activeDiff.fromTurnCount} <IconArrowRight size={13} style={{ display: "inline-block", verticalAlign: "middle" }} /> #{activeDiff.toTurnCount}
+                        {activeDiff.fromTurnCount}{" "}
+                        <IconArrowRight
+                          size={13}
+                          style={{ display: "inline-block", verticalAlign: "middle" }}
+                        />{" "}
+                        #{activeDiff.toTurnCount}
                       </h4>
                       <button
                         type="button"
@@ -731,7 +750,13 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
                           }}
                         >
                           {link.watched ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                              }}
+                            >
                               <IconEye size={13} />
                               {tr("Watching", "Surveillé")}
                             </span>

@@ -54,7 +54,6 @@ export function resolveAntigravityTokenPath(
     const t3Dirs = [
       join(home, ".t3", "userdata", "providers", "antigravity"),
       "/home/node/.t3/userdata/providers/antigravity",
-      "/home/adlane/.t3/userdata/providers/antigravity",
     ];
     for (const d of t3Dirs) {
       if (existsSync(d)) {
@@ -78,7 +77,9 @@ export function resolveAntigravityTokenPath(
   return null;
 }
 
-export async function fetchAntigravityQuotas(tokenPath: string): Promise<ProviderAccountQuotas | null> {
+export async function fetchAntigravityQuotas(
+  tokenPath: string,
+): Promise<ProviderAccountQuotas | null> {
   if (!existsSync(tokenPath)) return null;
   let token: TokenFileData;
   try {
@@ -160,9 +161,7 @@ export async function fetchAntigravityQuotas(tokenPath: string): Promise<Provide
       best5h !== null ? best5h.fraction : bestWeek !== null ? bestWeek.fraction : 1;
     const resolved5hReset =
       best5h?.resetTime ??
-      (bestWeek?.resetTime
-        ? new Date(Date.now() + 5 * 3600 * 1000).toISOString()
-        : null);
+      (bestWeek?.resetTime ? new Date(Date.now() + 5 * 3600 * 1000).toISOString() : null);
 
     return {
       remaining5hPercent: Math.max(0, Math.min(100, Math.round(resolved5hFraction * 100))),
@@ -191,7 +190,6 @@ export function probeClaudeAuth(account: ProviderAccount, sessionsDir?: string):
     candidates.push(
       join(home, ".claude", ".credentials.json"),
       "/home/node/.claude/.credentials.json",
-      "/home/adlane/.claude/.credentials.json",
     );
   }
   for (const c of candidates) {
@@ -225,10 +223,8 @@ export function probeCodexAuth(account: ProviderAccount, sessionsDir?: string): 
     candidates.push(
       join(home, ".codex", "auth.json"),
       "/home/node/.codex/auth.json",
-      "/home/adlane/.codex/auth.json",
       join(home, ".codex", "config.toml"),
       "/home/node/.codex/config.toml",
-      "/home/adlane/.codex/config.toml",
     );
   }
   for (const c of candidates) {
@@ -245,7 +241,11 @@ export function probeCodexAuth(account: ProviderAccount, sessionsDir?: string): 
           }
         } else if (c.endsWith(".toml")) {
           const content = readFileSync(c, "utf8");
-          if (content.includes("model") || content.includes("chatgpt") || content.includes("openai")) {
+          if (
+            content.includes("model") ||
+            content.includes("chatgpt") ||
+            content.includes("openai")
+          ) {
             return "authenticated";
           }
         }
@@ -282,16 +282,23 @@ export function estimateObservedQuotas(
   const limit7d = provider === "claude" ? 1_200_000 : 1_500_000;
 
   const remaining5hPercent = Math.max(0, Math.min(100, Math.round((1 - tokens5h / limit5h) * 100)));
-  const remainingWeekPercent = Math.max(0, Math.min(100, Math.round((1 - tokens7d / limit7d) * 100)));
+  const remainingWeekPercent = Math.max(
+    0,
+    Math.min(100, Math.round((1 - tokens7d / limit7d) * 100)),
+  );
 
   const resets5hAt =
     runs5h.length > 0
-      ? new Date(Math.min(...runs5h.map((r) => new Date(r.startTime).getTime())) + fiveHoursMs).toISOString()
+      ? new Date(
+          Math.min(...runs5h.map((r) => new Date(r.startTime).getTime())) + fiveHoursMs,
+        ).toISOString()
       : new Date(nowMs + fiveHoursMs).toISOString();
 
   const resetsWeekAt =
     runs7d.length > 0
-      ? new Date(Math.min(...runs7d.map((r) => new Date(r.startTime).getTime())) + sevenDaysMs).toISOString()
+      ? new Date(
+          Math.min(...runs7d.map((r) => new Date(r.startTime).getTime())) + sevenDaysMs,
+        ).toISOString()
       : new Date(nowMs + sevenDaysMs).toISOString();
 
   return {

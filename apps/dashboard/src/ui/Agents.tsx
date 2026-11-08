@@ -143,11 +143,12 @@ export function Agents({ api }: { api: DashboardApi }) {
             ? tr("Session Expired", "Session expirée")
             : res.authStatus === "unauthenticated"
               ? tr("Not Logged In", "Non connecté")
-              : tr("Unverified (Awaiting first execution)", "Non vérifié (En attente d'une première mission)");
+              : tr(
+                  "Unverified (Awaiting first execution)",
+                  "Non vérifié (En attente d'une première mission)",
+                );
 
-      setAccountFeedback(
-        `${tr("Identity", "Identité")} "${res.name ?? res.id}" : ${statusLabel}`,
-      );
+      setAccountFeedback(`${tr("Identity", "Identité")} "${res.name ?? res.id}" : ${statusLabel}`);
       refreshAccounts();
     } catch (err) {
       setAccountFeedback(

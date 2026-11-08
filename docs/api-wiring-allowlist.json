@@ -118,5 +118,9 @@
   {
     "route": "GET /api/v1/agent-core/models",
     "reason": "Contract offered to the mobile app, which does not call it yet."
+  },
+  {
+    "route": "GET /api/v1/linkedin/oauth/callback",
+    "reason": "OAuth redirect callback invoked by LinkedIn authorization server during code exchange in the user browser."
   }
 ]

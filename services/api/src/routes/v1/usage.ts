@@ -62,7 +62,11 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     async (request, reply) => {
       const { userId } = currentUser(request);
       if (app.services.missionControl && app.services.runStore) {
-        await syncUserMissionsToRunStore(userId, app.services.missionControl, app.services.runStore);
+        await syncUserMissionsToRunStore(
+          userId,
+          app.services.missionControl,
+          app.services.runStore,
+        );
       }
       const cutoff = Date.now() - request.query.days * 86_400_000;
       const page = await app.services.runStore.listForUser(
@@ -136,7 +140,11 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     async (request) => {
       const { userId } = currentUser(request);
       if (app.services.missionControl && app.services.runStore) {
-        await syncUserMissionsToRunStore(userId, app.services.missionControl, app.services.runStore);
+        await syncUserMissionsToRunStore(
+          userId,
+          app.services.missionControl,
+          app.services.runStore,
+        );
       }
       const since = new Date(Date.now() - request.query.days * 86_400_000);
       const buckets = await app.services.runStore.summarizeForUser(userId, since);

@@ -253,10 +253,14 @@ export class PricingCatalog {
     for (const [key, tier] of this.tiers.entries()) {
       if (key.toLowerCase() === lower) return tier;
     }
-    if (lower.includes("opus")) return this.tiers.get("claude-opus-5") ?? this.tiers.get("claude-opus-4-6-thinking");
-    if (lower.includes("claude") || lower.includes("sonnet")) return this.tiers.get("claude-sonnet-4-6");
-    if (lower.includes("gemini") || lower.includes("antigravity") || lower.includes("agy")) return this.tiers.get("gemini-3.8-flash-high");
-    if (lower.includes("codex") || lower.includes("gpt")) return this.tiers.get("codex-app-server-default") ?? this.tiers.get("gpt-4o");
+    if (lower.includes("opus"))
+      return this.tiers.get("claude-opus-5") ?? this.tiers.get("claude-opus-4-6-thinking");
+    if (lower.includes("claude") || lower.includes("sonnet"))
+      return this.tiers.get("claude-sonnet-4-6");
+    if (lower.includes("gemini") || lower.includes("antigravity") || lower.includes("agy"))
+      return this.tiers.get("gemini-3.8-flash-high");
+    if (lower.includes("codex") || lower.includes("gpt"))
+      return this.tiers.get("codex-app-server-default") ?? this.tiers.get("gpt-4o");
     return undefined;
   }
 

@@ -120,8 +120,18 @@ export const SETTINGS_CATEGORIES = [
     labelEn: "Capabilities & Tools",
     icon: "devices",
     items: [
-      { id: "devices" as const, label: "Appareils & Réseau", labelEn: "Devices & Network", icon: "devices" },
-      { id: "mcp" as const, label: "Serveurs MCP & Outils", labelEn: "MCP Servers & Tools", icon: "mcp" },
+      {
+        id: "devices" as const,
+        label: "Appareils & Réseau",
+        labelEn: "Devices & Network",
+        icon: "devices",
+      },
+      {
+        id: "mcp" as const,
+        label: "Serveurs MCP & Outils",
+        labelEn: "MCP Servers & Tools",
+        icon: "mcp",
+      },
       { id: "browser" as const, label: "Navigateur Web", labelEn: "Web Browser", icon: "browser" },
     ],
   },
@@ -713,7 +723,11 @@ function AppContent() {
                       id={item.id}
                       label={locale === "fr" ? item.label : item.labelEn}
                       icon={item.icon}
-                      current={section === "settings" && item.id === "settings-preferences" ? item.id : section}
+                      current={
+                        section === "settings" && item.id === "settings-preferences"
+                          ? item.id
+                          : section
+                      }
                       onSelect={navigate}
                     />
                   ))}
@@ -997,21 +1011,18 @@ function NavIcon({ name }: { name: string }) {
     trading: "M4 18 9 13l3 3 7-9m-5 0h5v5",
     osint: "M11 4a7 7 0 1 0 5 12l4 4m-9-12v6m-3-3h6",
     lab: "M10 2v7.5L4.5 19.5A2 2 0 0 0 6.2 22h11.6a2 2 0 0 0 1.7-2.5L14 9.5V2M8.5 2h7M7 16h10",
-    usage: "M12 14.5l3.5-3.5M3.34 18a10 10 0 1 1 17.32 0M12 4v2M5.64 7.64l1.41 1.41M18.36 7.64l-1.41 1.41",
+    usage:
+      "M12 14.5l3.5-3.5M3.34 18a10 10 0 1 1 17.32 0M12 4v2M5.64 7.64l1.41 1.41M18.36 7.64l-1.41 1.41",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
     setup:
       "M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
-    shortcuts:
-      "M2 4h20v16H2V4Zm4 4h.01M10 4h.01M14 4h.01M6 12h.01M10 12h.01M14 12h.01M6 16h12",
-    secrets:
-      "M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 0-6 6m2 2 2-2",
-    backup:
-      "M4 4h16v16H4V4Zm4 0v4h8V4M6 14h12",
-    engine:
-      "M4 4h16v16H4V4Zm5 5h6v6H9V9Zm-5 3h2m14 0h2M12 4v2m0 14v2",
+    shortcuts: "M2 4h20v16H2V4Zm4 4h.01M10 4h.01M14 4h.01M6 12h.01M10 12h.01M14 12h.01M6 16h12",
+    secrets: "M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 0-6 6m2 2 2-2",
+    backup: "M4 4h16v16H4V4Zm4 0v4h8V4M6 14h12",
+    engine: "M4 4h16v16H4V4Zm5 5h6v6H9V9Zm-5 3h2m14 0h2M12 4v2m0 14v2",
     overview: "M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
     tasks: "m5 12 4 4L19 6M5 5h7M5 20h14",
     runs: "m8 5 11 7-11 7V5Z",

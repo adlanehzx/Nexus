@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ForbiddenError, type ConnectionCatalogEntry, type DashboardApi, type PairingTicket } from "../lib/api.js";
+import {
+  ForbiddenError,
+  type ConnectionCatalogEntry,
+  type DashboardApi,
+  type PairingTicket,
+} from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import {
   executeSmokeTest,
@@ -759,127 +764,130 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </div>
             ) : (
               <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
-              <form
-                className="login-form"
-                onSubmit={(e) => void handleRegisterAdmin(e)}
-                style={{ gap: "1.25rem" }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.25rem",
-                  }}
+                <form
+                  className="login-form"
+                  onSubmit={(e) => void handleRegisterAdmin(e)}
+                  style={{ gap: "1.25rem" }}
                 >
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Full Name", "Nom complet")}
-                    </span>
-                    <input
-                      className="field"
-                      type="text"
-                      placeholder={tr("Lead Engineer", "Ingénieur Principal")}
-                      required
-                      value={adminName}
-                      onChange={(e) => setAdminName(e.target.value)}
-                    />
-                  </label>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "1.25rem",
+                    }}
+                  >
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Full Name", "Nom complet")}
+                      </span>
+                      <input
+                        className="field"
+                        type="text"
+                        placeholder={tr("Lead Engineer", "Ingénieur Principal")}
+                        required
+                        value={adminName}
+                        onChange={(e) => setAdminName(e.target.value)}
+                      />
+                    </label>
 
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Administrator Email", "E-mail administrateur")}
-                    </span>
-                    <input
-                      className="field"
-                      type="email"
-                      autoComplete="username"
-                      placeholder="admin@example.com"
-                      required
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                    />
-                  </label>
-                </div>
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Administrator Email", "E-mail administrateur")}
+                      </span>
+                      <input
+                        className="field"
+                        type="email"
+                        autoComplete="username"
+                        placeholder="admin@example.com"
+                        required
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                      />
+                    </label>
+                  </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.25rem",
-                  }}
-                >
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "1.25rem",
+                    }}
+                  >
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr(
+                          "Password (minimum 12 characters)",
+                          "Mot de passe (minimum 12 caractères)",
+                        )}
+                      </span>
+                      <input
+                        className="field"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••••••"
+                        required
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                      />
+                    </label>
+
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Confirm Password", "Confirmer le mot de passe")}
+                      </span>
+                      <input
+                        className="field"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••••••"
+                        required
+                        value={adminConfirm}
+                        onChange={(e) => setAdminConfirm(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "1rem",
+                      marginTop: "1.5rem",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => goToStep("prerequisites")}
+                    >
+                      {tr("Back", "Retour")}
+                    </button>
+                    <button
+                      type="submit"
+                      className="button primary login-submit"
+                      disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
+                      style={{ flex: 1, minWidth: "220px" }}
+                    >
+                      {busy
+                        ? tr("Creating Account…", "Création du compte…")
+                        : tr(
+                            "Create Administrator & Continue",
+                            "Créer l'administrateur & Continuer",
+                          )}
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: "1rem", textAlign: "center" }}>
+                    <button type="button" className="button compact" onClick={onSwitchToLogin}>
                       {tr(
-                        "Password (minimum 12 characters)",
-                        "Mot de passe (minimum 12 caractères)",
+                        "Instance already initialized? Sign in directly",
+                        "Instance déjà initialisée ? Se connecter directement",
                       )}
-                    </span>
-                    <input
-                      className="field"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••••••"
-                      required
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Confirm Password", "Confirmer le mot de passe")}
-                    </span>
-                    <input
-                      className="field"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••••••"
-                      required
-                      value={adminConfirm}
-                      onChange={(e) => setAdminConfirm(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "1rem",
-                    marginTop: "1.5rem",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={() => goToStep("prerequisites")}
-                  >
-                    {tr("Back", "Retour")}
-                  </button>
-                  <button
-                    type="submit"
-                    className="button primary login-submit"
-                    disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
-                    style={{ flex: 1, minWidth: "220px" }}
-                  >
-                    {busy
-                      ? tr("Creating Account…", "Création du compte…")
-                      : tr("Create Administrator & Continue", "Créer l'administrateur & Continuer")}
-                  </button>
-                </div>
-
-                <div style={{ marginTop: "1rem", textAlign: "center" }}>
-                  <button type="button" className="button compact" onClick={onSwitchToLogin}>
-                    {tr(
-                      "Instance already initialized? Sign in directly",
-                      "Instance déjà initialisée ? Se connecter directement",
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
+                    </button>
+                  </div>
+                </form>
+              </div>
             )}
           </div>
         )}

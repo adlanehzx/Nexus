@@ -265,8 +265,12 @@ export function Providers({ api }: { api: DashboardApi }) {
                         padding: "2px 8px",
                         borderRadius: "12px",
                         fontSize: "0.75rem",
-                        background: p.capabilities.streaming ? "rgba(0, 230, 118, 0.12)" : "rgba(255, 255, 255, 0.05)",
-                        color: p.capabilities.streaming ? "var(--color-success, #00e676)" : "var(--color-muted, #888)",
+                        background: p.capabilities.streaming
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.streaming
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
                       }}
                     >
                       ● {tr("Streaming", "Streaming")}
@@ -280,8 +284,12 @@ export function Providers({ api }: { api: DashboardApi }) {
                         padding: "2px 8px",
                         borderRadius: "12px",
                         fontSize: "0.75rem",
-                        background: p.capabilities.toolCall ? "rgba(0, 230, 118, 0.12)" : "rgba(255, 255, 255, 0.05)",
-                        color: p.capabilities.toolCall ? "var(--color-success, #00e676)" : "var(--color-muted, #888)",
+                        background: p.capabilities.toolCall
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.toolCall
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
                       }}
                     >
                       ● {tr("Tools", "Outils")}
@@ -295,8 +303,12 @@ export function Providers({ api }: { api: DashboardApi }) {
                         padding: "2px 8px",
                         borderRadius: "12px",
                         fontSize: "0.75rem",
-                        background: p.capabilities.checkpointRollback ? "rgba(0, 230, 118, 0.12)" : "rgba(255, 255, 255, 0.05)",
-                        color: p.capabilities.checkpointRollback ? "var(--color-success, #00e676)" : "var(--color-muted, #888)",
+                        background: p.capabilities.checkpointRollback
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.checkpointRollback
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
                       }}
                     >
                       ● {tr("Checkpoints", "Points d'arrêt")}
@@ -345,7 +357,10 @@ export function Providers({ api }: { api: DashboardApi }) {
               {testResult && (
                 <div style={{ marginTop: "0.75rem" }}>
                   {testResult.valid ? (
-                    <span className="pnl-positive" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                    <span
+                      className="pnl-positive"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
                       <IconCheck size={15} color="#22c55e" />
                       {tr(
                         "Credentials are valid and ready for mission execution.",
@@ -353,7 +368,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                       )}
                     </span>
                   ) : (
-                    <span className="pnl-negative" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                    <span
+                      className="pnl-negative"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
                       <IconClose size={15} color="#ef4444" />
                       {tr(
                         `Validation failed: ${testResult.error ?? "Invalid key"}`,

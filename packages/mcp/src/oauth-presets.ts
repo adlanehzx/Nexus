@@ -24,7 +24,8 @@ export const MCP_OAUTH_PRESETS: readonly McpOAuthProviderPreset[] = [
   {
     id: "github",
     name: "GitHub",
-    description: "Access repositories, pull requests, issues, and code search with OAuth authentication.",
+    description:
+      "Access repositories, pull requests, issues, and code search with OAuth authentication.",
     authorizationEndpoint: "https://github.com/login/oauth/authorize",
     tokenEndpoint: "https://github.com/login/oauth/access_token",
     defaultScopes: ["repo", "read:user", "user:email"],
@@ -61,7 +62,8 @@ export const MCP_OAUTH_PRESETS: readonly McpOAuthProviderPreset[] = [
   {
     id: "slack",
     name: "Slack",
-    description: "Collaborative channels, thread discussions, message posting, and automated notifications.",
+    description:
+      "Collaborative channels, thread discussions, message posting, and automated notifications.",
     authorizationEndpoint: "https://slack.com/oauth/v2/authorize",
     tokenEndpoint: "https://slack.com/api/oauth.v2.access",
     defaultScopes: ["channels:read", "channels:history", "chat:write", "users:read"],
@@ -156,7 +158,8 @@ export const MCP_OAUTH_PRESETS: readonly McpOAuthProviderPreset[] = [
   {
     id: "notion",
     name: "Notion",
-    description: "Connect documentation workspaces, team wikis, knowledge databases, and page trees.",
+    description:
+      "Connect documentation workspaces, team wikis, knowledge databases, and page trees.",
     authorizationEndpoint: "https://api.notion.com/v1/oauth/authorize",
     tokenEndpoint: "https://api.notion.com/v1/oauth/token",
     defaultScopes: [],

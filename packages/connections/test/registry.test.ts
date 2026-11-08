@@ -187,7 +187,8 @@ describe("built-in providers", () => {
 describe("session status of real CLIs", () => {
   it("reads agy models status as observed", () => {
     const models = "Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)";
-    const notLoggedIn = "Fetching available models...\nError: Please sign in to view available models.";
+    const notLoggedIn =
+      "Fetching available models...\nError: Please sign in to view available models.";
 
     expect(parseAgyAuthStatus({ exitCode: 0, stdout: models })).toEqual({
       authenticated: true,

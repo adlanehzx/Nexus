@@ -155,23 +155,38 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
         const supportedOptions = new Set(
           session.newSessionResponse.configOptions?.map((option) => option.id) ?? [],
         );
-        const modelConfig = session.newSessionResponse.configOptions?.find((option) => option.id === "model");
+        const modelConfig = session.newSessionResponse.configOptions?.find(
+          (option) => option.id === "model",
+        );
         if (modelConfig && dynamicModel) {
-          const allowedValues = extractOptionValues("options" in modelConfig ? modelConfig.options : []);
+          const allowedValues = extractOptionValues(
+            "options" in modelConfig ? modelConfig.options : [],
+          );
           let targetValue = dynamicModel;
           if (allowedValues.length > 0 && !allowedValues.includes(targetValue)) {
             const norm = targetValue.toLowerCase();
             if (norm.includes("sonnet") && allowedValues.includes("sonnet")) {
               targetValue = "sonnet";
-            } else if (norm.includes("opus") && !norm.includes("1m") && allowedValues.includes("opus")) {
+            } else if (
+              norm.includes("opus") &&
+              !norm.includes("1m") &&
+              allowedValues.includes("opus")
+            ) {
               targetValue = "opus";
-            } else if (norm.includes("opus") && norm.includes("1m") && allowedValues.includes("opus[1m]")) {
+            } else if (
+              norm.includes("opus") &&
+              norm.includes("1m") &&
+              allowedValues.includes("opus[1m]")
+            ) {
               targetValue = "opus[1m]";
             } else if (norm.includes("haiku") && allowedValues.includes("haiku")) {
               targetValue = "haiku";
             } else if (norm.includes("fable") && allowedValues.includes("claude-fable-5[1m]")) {
               targetValue = "claude-fable-5[1m]";
-            } else if ((norm.includes("astra") || norm.includes("o1") || norm.includes("o3")) && allowedValues.includes("gpt-6-astra")) {
+            } else if (
+              (norm.includes("astra") || norm.includes("o1") || norm.includes("o3")) &&
+              allowedValues.includes("gpt-6-astra")
+            ) {
               targetValue = "gpt-6-astra";
             } else if (norm.includes("sol") && allowedValues.includes("gpt-5.6-sol")) {
               targetValue = "gpt-5.6-sol";
@@ -202,7 +217,9 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
           if (reasoningOption) {
             let effortValue = dynamicEffort;
             if (effortValue === "minimal") effortValue = "low";
-            const allowedEfforts = extractOptionValues("options" in reasoningOption ? reasoningOption.options : []);
+            const allowedEfforts = extractOptionValues(
+              "options" in reasoningOption ? reasoningOption.options : [],
+            );
             if (allowedEfforts.length === 0 || allowedEfforts.includes(effortValue)) {
               configuredOptions[reasoningOption.id] = effortValue;
             }

@@ -88,27 +88,86 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                 </div>
               ) : null}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginBottom: "1rem" }}>
-                <div className="card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: data.configured ? "var(--color-success, #00e676)" : "var(--color-muted, #757575)" }} />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div
+                  className="card"
+                  style={{
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: data.configured
+                        ? "var(--color-success, #00e676)"
+                        : "var(--color-muted, #757575)",
+                    }}
+                  />
                   <div>
-                    <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--color-muted, #888)",
+                      }}
+                    >
                       {tr("Engine Config", "Config Moteur")}
                     </div>
                     <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
-                      {data.configured ? tr("Configured", "Configuré") : tr("Not configured", "Non configuré")}
+                      {data.configured
+                        ? tr("Configured", "Configuré")
+                        : tr("Not configured", "Non configuré")}
                     </div>
                   </div>
                 </div>
 
-                <div className="card" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: data.reachable ? "var(--color-success, #00e676)" : "var(--color-error, #ff5252)" }} />
+                <div
+                  className="card"
+                  style={{
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: data.reachable
+                        ? "var(--color-success, #00e676)"
+                        : "var(--color-error, #ff5252)",
+                    }}
+                  />
                   <div>
-                    <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--color-muted, #888)",
+                      }}
+                    >
                       {tr("ACP Engine Status", "État Moteur ACP")}
                     </div>
                     <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
-                      {data.reachable ? tr("Online & Connected", "En ligne & Connecté") : tr("Unreachable", "Inaccessible")}
+                      {data.reachable
+                        ? tr("Online & Connected", "En ligne & Connecté")
+                        : tr("Unreachable", "Inaccessible")}
                     </div>
                   </div>
                 </div>
@@ -116,7 +175,14 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                 {isTrading ? (
                   <>
                     <div className="card" style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
                         {tr("paper cash", "liquidités papier")}
                       </div>
                       <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -124,7 +190,14 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       </div>
                     </div>
                     <div className="card" style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
                         {tr("paper exposure", "exposition papier")}
                       </div>
                       <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -135,15 +208,40 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                 ) : (
                   <>
                     <div className="card" style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
                         {tr("Workers", "Agents")}
                       </div>
-                      <div style={{ fontWeight: 600, fontSize: "1rem", marginTop: "4px", color: data.health?.worker_enabled ? "var(--color-success, #00e676)" : "var(--color-muted, #888)" }}>
-                        {data.health?.worker_enabled ? tr("Active", "Actif") : tr("Inactive", "Inactif")}
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "1rem",
+                          marginTop: "4px",
+                          color: data.health?.worker_enabled
+                            ? "var(--color-success, #00e676)"
+                            : "var(--color-muted, #888)",
+                        }}
+                      >
+                        {data.health?.worker_enabled
+                          ? tr("Active", "Actif")
+                          : tr("Inactive", "Inactif")}
                       </div>
                     </div>
                     <div className="card" style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
                         {tr("Concurrency", "Concurrence")}
                       </div>
                       <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
@@ -151,20 +249,50 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       </div>
                     </div>
                     <div className="card" style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
                         {tr("Audit Chain", "Chaîne d'audit")}
                       </div>
-                      <div style={{ fontWeight: 600, fontSize: "1rem", marginTop: "4px", color: data.audit?.valid ? "var(--color-success, #00e676)" : "var(--color-warning, #ffb300)" }}>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "1rem",
+                          marginTop: "4px",
+                          color: data.audit?.valid
+                            ? "var(--color-success, #00e676)"
+                            : "var(--color-warning, #ffb300)",
+                        }}
+                      >
                         {data.audit?.valid ? tr("Valid", "Valide") : tr("Checking", "En cours")}
                       </div>
                     </div>
                   </>
                 )}
                 <div className="card" style={{ padding: "12px 16px" }}>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
                     {tr("Active Missions", "Missions actives")}
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: activeRuns > 0 ? "var(--color-accent, #00e5ff)" : "inherit" }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                      marginTop: "4px",
+                      color: activeRuns > 0 ? "var(--color-accent, #00e5ff)" : "inherit",
+                    }}
+                  >
                     {formatCount(activeRuns)}
                   </div>
                 </div>
@@ -536,8 +664,23 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                   )}
 
                   <details className="card" style={{ marginTop: "1.5rem" }}>
-                    <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "1rem", userSelect: "none", padding: "4px 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <IconBarChart size={18} color="var(--nx-accent-line, #38bdf8)" /> {tr("Agent Execution Traces & Tool Audit", "Historique & Traçabilité des exécutions d'agents")}
+                    <summary
+                      style={{
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "1rem",
+                        userSelect: "none",
+                        padding: "4px 0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <IconBarChart size={18} color="var(--nx-accent-line, #38bdf8)" />{" "}
+                      {tr(
+                        "Agent Execution Traces & Tool Audit",
+                        "Historique & Traçabilité des exécutions d'agents",
+                      )}
                     </summary>
                     <Runs api={api} embedded />
                   </details>

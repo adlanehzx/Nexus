@@ -33,7 +33,10 @@ export interface EngineOption {
   models: { id: string; label: string }[];
 }
 
-function modelsForAgent(profileId: string, modelName?: string | null): { id: string; label: string }[] {
+function modelsForAgent(
+  profileId: string,
+  modelName?: string | null,
+): { id: string; label: string }[] {
   const norm = profileId.toLowerCase();
   const defModel = modelName ? modelName.toLowerCase() : "";
 
@@ -62,8 +65,8 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
         label: isGpt6Default
           ? `Auto (${modelName ?? "GPT-6-Astra"} - Par défaut)`
           : isSolDefault
-          ? `Auto (${modelName ?? "GPT-5.6-Sol"} - Par défaut)`
-          : `Auto (${modelName ?? "Codex"} - Par défaut)`,
+            ? `Auto (${modelName ?? "GPT-5.6-Sol"} - Par défaut)`
+            : `Auto (${modelName ?? "Codex"} - Par défaut)`,
       },
       { id: "gpt-6-astra", label: "GPT-6-Astra (Frontier intelligence)" },
       { id: "gpt-5.6-sol", label: "GPT-5.6-Sol (Modèle de travail standard)" },
@@ -90,7 +93,10 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
   if (norm.includes("cursor")) {
     return [
       { id: "auto", label: `Auto (${modelName ?? "Cursor Fast"} - Par défaut)` },
-      { id: modelName ?? "cursor-fast", label: modelName ? `${modelName} (Défini)` : "Cursor Fast" },
+      {
+        id: modelName ?? "cursor-fast",
+        label: modelName ? `${modelName} (Défini)` : "Cursor Fast",
+      },
     ];
   }
   return [
@@ -99,7 +105,10 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
   ];
 }
 
-function effortsForAgent(profileId: string): { id: "auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"; label: string }[] {
+function effortsForAgent(profileId: string): {
+  id: "auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+  label: string;
+}[] {
   const norm = profileId.toLowerCase();
   if (norm.includes("codex") || norm.includes("openai")) {
     return [
@@ -141,7 +150,12 @@ function getEngineIcon(engineId: string, size = 14) {
   if (norm.includes("codex") || norm.includes("openai") || norm.includes("gpt")) {
     return <IconOpenAI size={size} color="#10b981" />;
   }
-  if (norm.includes("gemini") || norm.includes("antigravity") || norm.includes("agy") || norm.includes("deepmind")) {
+  if (
+    norm.includes("gemini") ||
+    norm.includes("antigravity") ||
+    norm.includes("agy") ||
+    norm.includes("deepmind")
+  ) {
     return <IconGemini size={size} color="#38bdf8" />;
   }
   if (norm.includes("freellm") || norm.includes("nvidia")) {
@@ -184,7 +198,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
   ]);
   const [selectedEngine, setSelectedEngine] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<string>("auto");
-  const [reasoningEffort, setReasoningEffort] = useState<"auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra">("auto");
+  const [reasoningEffort, setReasoningEffort] = useState<
+    "auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra"
+  >("auto");
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const configPanelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -233,7 +249,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           id: "auto",
           label: tr("Auto (NEXUS Orchestrator)", "Auto (Orchestrateur NEXUS)"),
           category: "auto",
-          models: [{ id: "auto", label: tr("Auto (Intelligent Router)", "Auto (Routeur Intelligent)") }],
+          models: [
+            { id: "auto", label: tr("Auto (Intelligent Router)", "Auto (Routeur Intelligent)") },
+          ],
         },
       ];
 
@@ -312,7 +330,10 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           models: [
             { id: free.model || "auto", label: `${free.model || "auto"} (Défaut Free)` },
             { id: "meta/llama-3.1-70b-instruct", label: "meta/llama-3.1-70b-instruct" },
-            { id: "mistralai/mistral-large-2-instruct", label: "mistralai/mistral-large-2-instruct" },
+            {
+              id: "mistralai/mistral-large-2-instruct",
+              label: "mistralai/mistral-large-2-instruct",
+            },
             { id: "deepseek-ai/deepseek-r1", label: "deepseek-ai/deepseek-r1" },
           ],
         });
@@ -549,9 +570,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           <article key={message.id} className={`chat-message ${message.role}`}>
             {message.role === "user" ? (
               <>
-                <div className="chat-role">
-                  {locale === "fr" ? "Vous" : "You"}
-                </div>
+                <div className="chat-role">{locale === "fr" ? "Vous" : "You"}</div>
                 <div className="chat-text">
                   <ChatMessageContent content={message.text} />
                 </div>
@@ -629,13 +648,14 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                 e.stopPropagation();
                 setIsConfigOpen((v) => !v);
               }}
-              title={tr("Configure Engine, Model and Effort", "Configurer le moteur, le modèle et l'effort")}
+              title={tr(
+                "Configure Engine, Model and Effort",
+                "Configurer le moteur, le modèle et l'effort",
+              )}
               aria-expanded={isConfigOpen}
             >
               <span className="t3-pill-icon">{getEngineIcon(selectedEngine, 13)}</span>
-              <span className="t3-pill-label">
-                {activeEngine?.label ?? tr("Auto", "Auto")}
-              </span>
+              <span className="t3-pill-label">{activeEngine?.label ?? tr("Auto", "Auto")}</span>
               {selectedModel !== "auto" && (
                 <>
                   <span className="t3-pill-sep">·</span>
@@ -645,10 +665,18 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               {reasoningEffort !== "auto" && (
                 <>
                   <span className="t3-pill-sep">·</span>
-                  <span className="t3-pill-sub">{tr("Effort:", "Effort :")} {reasoningEffort}</span>
+                  <span className="t3-pill-sub">
+                    {tr("Effort:", "Effort :")} {reasoningEffort}
+                  </span>
                 </>
               )}
-              <svg className={`t3-pill-arrow ${isConfigOpen ? "open" : ""}`} viewBox="0 0 16 16" width="10" height="10" fill="currentColor">
+              <svg
+                className={`t3-pill-arrow ${isConfigOpen ? "open" : ""}`}
+                viewBox="0 0 16 16"
+                width="10"
+                height="10"
+                fill="currentColor"
+              >
                 <path d="m4 6 4 4 4-4" />
               </svg>
             </button>
@@ -657,7 +685,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             {isConfigOpen && (
               <div className="t3-config-popover" ref={configPanelRef}>
                 <div className="t3-popover-header">
-                  <span className="t3-popover-title">{tr("Configuration de l'IA", "AI Engine & Model")}</span>
+                  <span className="t3-popover-title">
+                    {tr("Configuration de l'IA", "AI Engine & Model")}
+                  </span>
                   <button
                     type="button"
                     className="t3-popover-close"
@@ -710,7 +740,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                               <span className="t3-option-badge">{badgeText}</span>
-                              {isSelected && <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />}
+                              {isSelected && (
+                                <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />
+                              )}
                             </div>
                           </button>
                         );
@@ -740,13 +772,20 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                             >
                               <div className="t3-option-left">
                                 <span className="t3-option-icon">
-                                  <IconBrain size={13} color={isSelected ? "var(--nx-accent-line, #38bdf8)" : "#94a3b8"} />
+                                  <IconBrain
+                                    size={13}
+                                    color={
+                                      isSelected ? "var(--nx-accent-line, #38bdf8)" : "#94a3b8"
+                                    }
+                                  />
                                 </span>
                                 <div className="t3-option-text">
                                   <span className="t3-option-name">{m.label}</span>
                                 </div>
                               </div>
-                              {isSelected && <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />}
+                              {isSelected && (
+                                <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />
+                              )}
                             </button>
                           );
                         })}
@@ -785,9 +824,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           </div>
 
           <div className="composer-actions">
-            <span className="composer-hint">
-              {tr("Enter ↵ to send", "Entrée ↵ pour envoyer")}
-            </span>
+            <span className="composer-hint">{tr("Enter ↵ to send", "Entrée ↵ pour envoyer")}</span>
             <button
               type="submit"
               className="composer-send-btn"
@@ -795,7 +832,16 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               aria-label={t("chat.send")}
             >
               <span>{t("chat.send")}</span>
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                viewBox="0 0 16 16"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M8 12V4M4 8l4-4 4 4" />
               </svg>
             </button>

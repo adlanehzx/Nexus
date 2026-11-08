@@ -317,9 +317,12 @@ describe("Provider multi-account management", () => {
     // Mock global fetch for Google OAuth & Cloud Code quota endpoint
     const originalFetch = globalThis.fetch;
     const fakeFetch = (input: unknown): Promise<Response> => {
-      const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      const urlStr =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
       if (urlStr.includes("oauth2.googleapis.com")) {
-        return Promise.resolve(new Response(JSON.stringify({ access_token: "mock_access_token" }), { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify({ access_token: "mock_access_token" }), { status: 200 }),
+        );
       }
       if (urlStr.includes("retrieveUserQuotaSummary")) {
         return Promise.resolve(
