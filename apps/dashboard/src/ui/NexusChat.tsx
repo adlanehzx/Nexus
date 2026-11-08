@@ -43,8 +43,8 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
       {
         id: "auto",
         label: isOpusDefault
-          ? `Auto (${modelName || "Claude Opus"} - Par défaut)`
-          : `Auto (${modelName || "Claude Sonnet"} - Par défaut)`,
+          ? `Auto (${modelName ?? "Claude Opus"} - Par défaut)`
+          : `Auto (${modelName ?? "Claude Sonnet"} - Par défaut)`,
       },
       { id: "opus", label: "Claude Opus (Complexe & approfondi)" },
       { id: "sonnet", label: "Claude Sonnet (Défaut standard)" },
@@ -60,10 +60,10 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
       {
         id: "auto",
         label: isGpt6Default
-          ? `Auto (${modelName || "GPT-6-Astra"} - Par défaut)`
+          ? `Auto (${modelName ?? "GPT-6-Astra"} - Par défaut)`
           : isSolDefault
-          ? `Auto (${modelName || "GPT-5.6-Sol"} - Par défaut)`
-          : `Auto (${modelName || "Codex"} - Par défaut)`,
+          ? `Auto (${modelName ?? "GPT-5.6-Sol"} - Par défaut)`
+          : `Auto (${modelName ?? "Codex"} - Par défaut)`,
       },
       { id: "gpt-6-astra", label: "GPT-6-Astra (Frontier intelligence)" },
       { id: "gpt-5.6-sol", label: "GPT-5.6-Sol (Modèle de travail standard)" },
@@ -73,7 +73,7 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
   }
   if (norm.includes("gemini") || norm.includes("antigravity") || norm.includes("agy")) {
     return [
-      { id: "auto", label: `Auto (${modelName || "Gemini 3.8 Flash High"} - Par défaut)` },
+      { id: "auto", label: `Auto (${modelName ?? "Gemini 3.8 Flash High"} - Par défaut)` },
       { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash High (Défaut)" },
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Raisonnement profond)" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Rapide)" },
@@ -81,7 +81,7 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
   }
   if (norm.includes("grok")) {
     return [
-      { id: "auto", label: `Auto (${modelName || "Grok 3"} - Par défaut)` },
+      { id: "auto", label: `Auto (${modelName ?? "Grok 3"} - Par défaut)` },
       { id: "grok-3", label: "Grok 3 (Deep Thinking)" },
       { id: "grok-2", label: "Grok 2" },
       { id: "grok-beta", label: "Grok Beta" },
@@ -89,13 +89,13 @@ function modelsForAgent(profileId: string, modelName?: string | null): { id: str
   }
   if (norm.includes("cursor")) {
     return [
-      { id: "auto", label: `Auto (${modelName || "Cursor Fast"} - Par défaut)` },
-      { id: modelName || "cursor-fast", label: modelName ? `${modelName} (Défini)` : "Cursor Fast" },
+      { id: "auto", label: `Auto (${modelName ?? "Cursor Fast"} - Par défaut)` },
+      { id: modelName ?? "cursor-fast", label: modelName ? `${modelName} (Défini)` : "Cursor Fast" },
     ];
   }
   return [
-    { id: "auto", label: `Auto (${modelName || "Défaut agent"})` },
-    { id: modelName || "default", label: modelName || "Modèle par défaut" },
+    { id: "auto", label: `Auto (${modelName ?? "Défaut agent"})` },
+    { id: modelName ?? "default", label: modelName ?? "Modèle par défaut" },
   ];
 }
 
@@ -196,10 +196,10 @@ export function NexusChat({ api }: { api: DashboardApi }) {
       const path = typeof e.composedPath === "function" ? e.composedPath() : [];
       const target = e.target as Node;
       const inPanel =
-        (configPanelRef.current && path.includes(configPanelRef.current)) ||
+        (configPanelRef.current && path.includes(configPanelRef.current)) ??
         configPanelRef.current?.contains(target);
       const inButton =
-        (buttonRef.current && path.includes(buttonRef.current)) ||
+        (buttonRef.current && path.includes(buttonRef.current)) ??
         buttonRef.current?.contains(target);
 
       if (!inPanel && !inButton) {
@@ -221,7 +221,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([
+    void Promise.allSettled([
       api.agents(),
       api.llmEngines(),
       api.freeLlmStatus(),
@@ -242,7 +242,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         for (const profile of agentsRes.value.available) {
           options.push({
             id: `acp:${profile.id}`,
-            label: `${profile.name || profile.id} [${profile.model || "défaut"}]`,
+            label: `${profile.name ?? profile.id} [${profile.model ?? "défaut"}]`,
             category: "acp",
             profileKey: profile.id,
             models: modelsForAgent(profile.id, profile.model),
@@ -568,7 +568,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                       </span>
                     )}
                   </div>
-                  {(message.mission?.response || message.text) && (
+                  {(message.mission?.response ?? message.text) && (
                     <CopyButton text={message.mission?.response ?? message.text} />
                   )}
                 </div>
@@ -634,12 +634,12 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             >
               <span className="t3-pill-icon">{getEngineIcon(selectedEngine, 13)}</span>
               <span className="t3-pill-label">
-                {activeEngine?.label || tr("Auto", "Auto")}
+                {activeEngine?.label ?? tr("Auto", "Auto")}
               </span>
               {selectedModel !== "auto" && (
                 <>
                   <span className="t3-pill-sep">·</span>
-                  <span className="t3-pill-sub">{activeModel?.label || selectedModel}</span>
+                  <span className="t3-pill-sub">{activeModel?.label ?? selectedModel}</span>
                 </>
               )}
               {reasoningEffort !== "auto" && (
@@ -760,7 +760,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                       <span>▾ {tr("Effort:", "Effort :")}</span>
                     </div>
                     <div className="t3-effort-group">
-                      {effortsForAgent(activeEngine?.profileKey || selectedEngine).map((eff) => {
+                      {effortsForAgent(activeEngine?.profileKey ?? selectedEngine).map((eff) => {
                         const isEffortActive = reasoningEffort === eff.id;
                         return (
                           <button

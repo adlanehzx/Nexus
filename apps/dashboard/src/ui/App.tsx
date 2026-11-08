@@ -559,8 +559,8 @@ function AppContent() {
     );
   }
 
-  const metaTitle = t(`meta.${section}.title`) || PAGE_META[section]?.title || section;
-  const metaDescription = t(`meta.${section}.description`) || PAGE_META[section]?.description || "";
+  const metaTitle = t(`meta.${section}.title`) ?? PAGE_META[section]?.title ?? section;
+  const metaDescription = t(`meta.${section}.description`) ?? PAGE_META[section]?.description ?? "";
 
   return (
     <div className="app">

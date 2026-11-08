@@ -316,39 +316,42 @@ describe("Provider multi-account management", () => {
 
     // Mock global fetch for Google OAuth & Cloud Code quota endpoint
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: any, init?: any) => {
-      const urlStr = String(url);
+    const fakeFetch = (input: unknown): Promise<Response> => {
+      const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
       if (urlStr.includes("oauth2.googleapis.com")) {
-        return new Response(JSON.stringify({ access_token: "mock_access_token" }), { status: 200 });
+        return Promise.resolve(new Response(JSON.stringify({ access_token: "mock_access_token" }), { status: 200 }));
       }
       if (urlStr.includes("retrieveUserQuotaSummary")) {
-        return new Response(
-          JSON.stringify({
-            groups: [
-              {
-                displayName: "Gemini Models",
-                buckets: [
-                  {
-                    bucketId: "gemini-5h",
-                    window: "5h",
-                    remainingFraction: 0.65,
-                    resetTime: "2026-11-07T14:00:00Z",
-                  },
-                  {
-                    bucketId: "gemini-weekly",
-                    window: "weekly",
-                    remainingFraction: 0.9,
-                    resetTime: "2026-11-14T10:00:00Z",
-                  },
-                ],
-              },
-            ],
-          }),
-          { status: 200 },
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              groups: [
+                {
+                  displayName: "Gemini Models",
+                  buckets: [
+                    {
+                      bucketId: "gemini-5h",
+                      window: "5h",
+                      remainingFraction: 0.65,
+                      resetTime: "2026-11-07T14:00:00Z",
+                    },
+                    {
+                      bucketId: "gemini-weekly",
+                      window: "weekly",
+                      remainingFraction: 0.9,
+                      resetTime: "2026-11-14T10:00:00Z",
+                    },
+                  ],
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
         );
       }
-      return originalFetch(url, init);
-    }) as typeof fetch;
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    };
+    globalThis.fetch = fakeFetch;
 
     try {
       const probed = await service.probeAuth("antigravity-personnel");

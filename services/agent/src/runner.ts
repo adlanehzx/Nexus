@@ -140,14 +140,14 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
         let dynamicModel: string | undefined = profile.model;
         let dynamicEffort: string | undefined = profile.reasoning_effort;
 
-        const modelMatch = cleanPrompt.match(/\[Model Target:\s*([^\]]+)\]/i);
-        if (modelMatch && modelMatch[1]) {
+        const modelMatch = /\[Model Target:\s*([^\]]+)\]/i.exec(cleanPrompt);
+        if (modelMatch?.[1]) {
           dynamicModel = modelMatch[1].trim();
           cleanPrompt = cleanPrompt.replace(/\[Model Target:\s*[^\]]+\]/gi, "").trim();
         }
 
-        const effortMatch = cleanPrompt.match(/\[Reasoning Effort:\s*([^\]]+)\]/i);
-        if (effortMatch && effortMatch[1]) {
+        const effortMatch = /\[Reasoning Effort:\s*([^\]]+)\]/i.exec(cleanPrompt);
+        if (effortMatch?.[1]) {
           dynamicEffort = effortMatch[1].trim();
           cleanPrompt = cleanPrompt.replace(/\[Reasoning Effort:\s*[^\]]+\]/gi, "").trim();
         }

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { McpOAuthService } from "../src/services/mcp-oauth.js";
+import type { McpManager } from "@nexus/mcp";
 import { SingleUseOAuthStateStore } from "@nexus/mcp";
+import type { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 
 describe("McpOAuthService", () => {
   it("lists all turnkey OAuth MCP providers with connection status", async () => {
@@ -17,7 +19,7 @@ describe("McpOAuthService", () => {
     const mockRuntime = {
       loadMcp: vi.fn().mockResolvedValue([{ name: "github" }]),
       saveMcp: vi.fn().mockResolvedValue(undefined),
-    } as any;
+    } as unknown as RuntimeConfigurationStore;
 
     const service = new McpOAuthService({
       vault: mockVault,
@@ -56,21 +58,24 @@ describe("McpOAuthService", () => {
   });
 
   it("disconnects and clears vault secrets and runtime config", async () => {
+    const deleteVaultFn = vi.fn().mockResolvedValue(undefined);
     const mockVault = {
       list: vi.fn().mockResolvedValue([]),
       set: vi.fn().mockResolvedValue(undefined),
       get: vi.fn().mockResolvedValue(undefined),
-      delete: vi.fn().mockResolvedValue(undefined),
+      delete: deleteVaultFn,
     };
 
+    const saveMcpFn = vi.fn().mockResolvedValue(undefined);
     const mockRuntime = {
       loadMcp: vi.fn().mockResolvedValue([{ name: "github" }, { name: "other" }]),
-      saveMcp: vi.fn().mockResolvedValue(undefined),
-    } as any;
+      saveMcp: saveMcpFn,
+    } as unknown as RuntimeConfigurationStore;
 
+    const removeServerFn = vi.fn().mockResolvedValue(true);
     const mockMcpManager = {
-      removeServer: vi.fn().mockResolvedValue(true),
-    } as any;
+      removeServer: removeServerFn,
+    } as unknown as McpManager;
 
     const service = new McpOAuthService({
       vault: mockVault,
@@ -80,8 +85,8 @@ describe("McpOAuthService", () => {
 
     const res = await service.disconnect("github");
     expect(res.success).toBe(true);
-    expect(mockVault.delete).toHaveBeenCalledWith("mcp-github-token");
-    expect(mockRuntime.saveMcp).toHaveBeenCalledWith([{ name: "other" }]);
-    expect(mockMcpManager.removeServer).toHaveBeenCalledWith("github");
+    expect(deleteVaultFn).toHaveBeenCalledWith("mcp-github-token");
+    expect(saveMcpFn).toHaveBeenCalledWith([{ name: "other" }]);
+    expect(removeServerFn).toHaveBeenCalledWith("github");
   });
 });

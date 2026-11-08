@@ -78,7 +78,7 @@ export class McpOAuthService {
     );
   }
 
-  async startAuthorization(
+  startAuthorization(
     providerId: string,
     options?: {
       clientId?: string | undefined;
@@ -88,17 +88,19 @@ export class McpOAuthService {
   ): Promise<{ authorizationUrl: string; state: string; providerId: string }> {
     const preset = findMcpOAuthPreset(providerId);
     if (!preset) {
-      throw new Error(`Unsupported MCP OAuth provider: ${providerId}`);
+      return Promise.reject(new Error(`Unsupported MCP OAuth provider: ${providerId}`));
     }
 
-    const clientId = options?.clientId || this.#resolveEnvClientId(preset.id);
+    const clientId = options?.clientId ?? this.#resolveEnvClientId(preset.id);
     if (!clientId || clientId.trim().length === 0) {
-      throw new Error(
-        `OAuth Client ID is required for ${preset.name}. Provide it or configure ${this.#envPrefix(preset.id)}_CLIENT_ID.`,
+      return Promise.reject(
+        new Error(
+          `OAuth Client ID is required for ${preset.name}. Provide it or configure ${this.#envPrefix(preset.id)}_CLIENT_ID.`,
+        ),
       );
     }
 
-    const redirectUri = options?.redirectUri || "http://127.0.0.1:8080/api/v1/mcp/oauth/callback";
+    const redirectUri = options?.redirectUri ?? "http://127.0.0.1:8080/api/v1/mcp/oauth/callback";
 
     const { url, state } = buildMcpAuthorizationUrl({
       authorizationEndpoint: preset.authorizationEndpoint,
@@ -109,11 +111,11 @@ export class McpOAuthService {
       stateStore: this.#stateStore,
     });
 
-    return {
+    return Promise.resolve({
       authorizationUrl: url,
       state,
       providerId: preset.id,
-    };
+    });
   }
 
   async completeAuthorization(
@@ -131,12 +133,12 @@ export class McpOAuthService {
       throw new Error(`Unsupported MCP OAuth provider: ${providerId}`);
     }
 
-    const clientId = options.clientId || this.#resolveEnvClientId(preset.id);
+    const clientId = options.clientId ?? this.#resolveEnvClientId(preset.id);
     if (!clientId) {
       throw new Error(`OAuth Client ID is required for token exchange (${preset.name}).`);
     }
 
-    const clientSecret = options.clientSecret || this.#resolveEnvClientSecret(preset.id);
+    const clientSecret = options.clientSecret ?? this.#resolveEnvClientSecret(preset.id);
 
     const tokens = await exchangeMcpAuthorizationCode({
       tokenEndpoint: preset.tokenEndpoint,
@@ -230,8 +232,8 @@ export class McpOAuthService {
   #resolveEnvClientId(id: string): string | undefined {
     const prefix = this.#envPrefix(id);
     return (
-      process.env[`NEXUS_MCP_${prefix}_CLIENT_ID`] ||
-      process.env[`NEXUS_${prefix}_CLIENT_ID`] ||
+      process.env[`NEXUS_MCP_${prefix}_CLIENT_ID`] ??
+      process.env[`NEXUS_${prefix}_CLIENT_ID`] ??
       process.env[`${prefix}_CLIENT_ID`]
     );
   }
@@ -239,8 +241,8 @@ export class McpOAuthService {
   #resolveEnvClientSecret(id: string): string | undefined {
     const prefix = this.#envPrefix(id);
     return (
-      process.env[`NEXUS_MCP_${prefix}_CLIENT_SECRET`] ||
-      process.env[`NEXUS_${prefix}_CLIENT_SECRET`] ||
+      process.env[`NEXUS_MCP_${prefix}_CLIENT_SECRET`] ??
+      process.env[`NEXUS_${prefix}_CLIENT_SECRET`] ??
       process.env[`${prefix}_CLIENT_SECRET`]
     );
   }

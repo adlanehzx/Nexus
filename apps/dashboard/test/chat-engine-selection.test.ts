@@ -7,7 +7,12 @@ describe("NexusChat engine & model options", () => {
   });
 
   it("passes profile, model, and reasoningEffort to /orchestrator/messages when provided", async () => {
-    let capturedBody: any = null;
+    let capturedBody: {
+      message?: string;
+      profile?: string;
+      model?: string;
+      reasoningEffort?: string;
+    } | null = null;
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string | URL, init?: RequestInit) => {
@@ -65,14 +70,20 @@ describe("NexusChat engine & model options", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody.message).toBe("Diagnose performance bottleneck");
-    expect(capturedBody.profile).toBe("claude-code");
-    expect(capturedBody.model).toBe("claude-3-7-sonnet");
-    expect(capturedBody.reasoningEffort).toBe("high");
+    const body = capturedBody!;
+    expect(body.message).toBe("Diagnose performance bottleneck");
+    expect(body.profile).toBe("claude-code");
+    expect(body.model).toBe("claude-3-7-sonnet");
+    expect(body.reasoningEffort).toBe("high");
   });
 
   it("omits profile, model, and reasoningEffort when auto mode is selected", async () => {
-    let capturedBody: any = null;
+    let capturedBody: {
+      message?: string;
+      profile?: string;
+      model?: string;
+      reasoningEffort?: string;
+    } | null = null;
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string | URL, init?: RequestInit) => {
@@ -126,9 +137,10 @@ describe("NexusChat engine & model options", () => {
     await api.sendToNexus("Auto routed message");
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody.message).toBe("Auto routed message");
-    expect(capturedBody.profile).toBeUndefined();
-    expect(capturedBody.model).toBeUndefined();
-    expect(capturedBody.reasoningEffort).toBeUndefined();
+    const body = capturedBody!;
+    expect(body.message).toBe("Auto routed message");
+    expect(body.profile).toBeUndefined();
+    expect(body.model).toBeUndefined();
+    expect(body.reasoningEffort).toBeUndefined();
   });
 });

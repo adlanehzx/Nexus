@@ -141,7 +141,7 @@ describe("MCP OAuth with PKCE and Single-use State", () => {
     const config = github?.createServerConfig();
     expect(config?.name).toBe("github");
     expect(config?.transport).toBe("stdio");
-    if (config && config.transport === "stdio") {
+    if (config?.transport === "stdio") {
       expect(config.envRefs.GITHUB_PERSONAL_ACCESS_TOKEN).toBe("vault://nexus/mcp-github-token");
     }
   });

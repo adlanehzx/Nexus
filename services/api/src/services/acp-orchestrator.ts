@@ -653,7 +653,7 @@ async function ensureFinalSynthesis(
   // If a specific agent was selected and it's a direct single task, execute it directly
   // as the final task without an unnecessary second pass or language forced to English.
   const single = planned[0];
-  if (preferredProfile && planned.length === 1 && single !== undefined && single.key === "investigate") {
+  if (preferredProfile && planned.length === 1 && single?.key === "investigate") {
     const fallbacks = await router.fallbackOrderFor(single.profile, profiles, single.instruction);
     return [
       {
@@ -900,7 +900,7 @@ export function missionTaskToAgentState(
 
   let model = task.profile_key;
   const instructionStr = typeof task.instruction === "string" ? task.instruction : "";
-  const errorStr = typeof task.error === "string" ? task.error : task.error ? String(task.error) : null;
+  const errorStr = typeof task.error === "string" ? task.error : task.error ? JSON.stringify(task.error) : null;
   const lowerResp = (responseText ?? "").toLowerCase();
   const lowerInst = instructionStr.toLowerCase();
 

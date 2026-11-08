@@ -25,7 +25,7 @@ interface QuotaBucket {
 }
 
 interface QuotaSummaryResponse {
-  groups?: Array<{ displayName?: string; buckets?: QuotaBucket[] }>;
+  groups?: { displayName?: string; buckets?: QuotaBucket[] }[];
   buckets?: QuotaBucket[];
 }
 
@@ -127,9 +127,9 @@ export async function fetchAntigravityQuotas(tokenPath: string): Promise<Provide
         });
         if (!qRes.ok) continue;
         const data = (await qRes.json()) as QuotaSummaryResponse;
-        const buckets = (data.groups || [])
-          .flatMap((g) => g.buckets || [])
-          .concat(data.buckets || []);
+        const buckets = (data.groups ?? [])
+          .flatMap((g) => g.buckets ?? [])
+          .concat(data.buckets ?? []);
 
         for (const b of buckets) {
           if (typeof b.remainingFraction !== "number") continue;
@@ -259,7 +259,7 @@ export function probeCodexAuth(account: ProviderAccount, sessionsDir?: string): 
 
 export function estimateObservedQuotas(
   provider: string,
-  runs: Array<{ startTime: string; inputTokens: number; outputTokens: number }>,
+  runs: { startTime: string; inputTokens: number; outputTokens: number }[],
   now: Date,
 ): ProviderAccountQuotas {
   const nowMs = now.getTime();
@@ -284,21 +284,15 @@ export function estimateObservedQuotas(
   const remaining5hPercent = Math.max(0, Math.min(100, Math.round((1 - tokens5h / limit5h) * 100)));
   const remainingWeekPercent = Math.max(0, Math.min(100, Math.round((1 - tokens7d / limit7d) * 100)));
 
-  let resets5hAt: string | null = null;
-  if (runs5h.length > 0) {
-    const earliest5h = Math.min(...runs5h.map((r) => new Date(r.startTime).getTime()));
-    resets5hAt = new Date(earliest5h + fiveHoursMs).toISOString();
-  } else {
-    resets5hAt = new Date(nowMs + fiveHoursMs).toISOString();
-  }
+  const resets5hAt =
+    runs5h.length > 0
+      ? new Date(Math.min(...runs5h.map((r) => new Date(r.startTime).getTime())) + fiveHoursMs).toISOString()
+      : new Date(nowMs + fiveHoursMs).toISOString();
 
-  let resetsWeekAt: string | null = null;
-  if (runs7d.length > 0) {
-    const earliest7d = Math.min(...runs7d.map((r) => new Date(r.startTime).getTime()));
-    resetsWeekAt = new Date(earliest7d + sevenDaysMs).toISOString();
-  } else {
-    resetsWeekAt = new Date(nowMs + sevenDaysMs).toISOString();
-  }
+  const resetsWeekAt =
+    runs7d.length > 0
+      ? new Date(Math.min(...runs7d.map((r) => new Date(r.startTime).getTime())) + sevenDaysMs).toISOString()
+      : new Date(nowMs + sevenDaysMs).toISOString();
 
   return {
     remaining5hPercent,
@@ -399,14 +393,14 @@ export type UpdateProviderAccountInput = z.infer<typeof updateProviderAccountSch
 
 export interface RunUsageStore {
   listAll(): Promise<
-    Array<{
+    {
       record: {
         model?: string | null;
         requestedModel?: string | null;
         startTime: string;
         usage: { inputTokens: number; outputTokens: number };
       };
-    }>
+    }[]
   >;
 }
 
@@ -662,13 +656,13 @@ export class ProviderAccountService {
             : probeCodexAuth(acc, this.#sessionsDir);
 
         if (auth === "authenticated") {
-          let quotas = acc.quotas;
+          let quotas: ProviderAccountQuotas;
           if (this.#runStore) {
             const allStates = await this.#runStore.listAll().catch(() => []);
             const matchingRuns = allStates
               .filter((st) => {
-                const m = (st.record.model || "").toLowerCase();
-                const p = (st.record.requestedModel || "").toLowerCase();
+                const m = (st.record.model ?? "").toLowerCase();
+                const p = (st.record.requestedModel ?? "").toLowerCase();
                 return (
                   m.includes(acc.provider) ||
                   p.includes(acc.provider) ||

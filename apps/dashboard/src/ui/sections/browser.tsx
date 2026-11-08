@@ -208,7 +208,7 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
           </svg>
           {tr("Engine Diagnostics & Health", "Diagnostics & Santé du Moteur")}
         </h4>
-        <span className="mono">{String(health)}</span>
+        <span className="mono">{JSON.stringify(health)}</span>
       </section>
     );
   }

@@ -67,8 +67,8 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
     }
 
     // 3. Headings
-    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
-    if (headingMatch && headingMatch[1] && headingMatch[2]) {
+    const headingMatch = /^(#{1,4})\s+(.+)$/.exec(line);
+    if (headingMatch?.[1] && headingMatch[2]) {
       const level = headingMatch[1].length as 1 | 2 | 3 | 4;
       blocks.push({ type: "heading", level, text: headingMatch[2] });
       i++;
@@ -140,9 +140,9 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
       while (i < lines.length) {
         const currentLine = lines[i]?.trim() ?? "";
         const match = ordered
-          ? currentLine.match(/^\d+\.\s+(.+)$/)
-          : currentLine.match(/^[-*+]\s+(.+)$/);
-        if (match && match[1]) {
+          ? (/^\d+\.\s+(.+)$/.exec(currentLine))
+          : (/^[-*+]\s+(.+)$/.exec(currentLine));
+        if (match?.[1]) {
           items.push(match[1]);
           i++;
         } else if (currentLine.length === 0) {
@@ -335,8 +335,8 @@ export function InlineContent({ text }: { text: string }): ReactNode {
 
   while (remaining.length > 0) {
     // 1. Markdown link: [label](url)
-    const linkMatch = remaining.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/);
-    if (linkMatch && linkMatch[1] && linkMatch[2]) {
+    const linkMatch = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/.exec(remaining);
+    if (linkMatch?.[1] && linkMatch[2]) {
       parts.push(
         <a
           key={`l-${keyIndex++}`}
@@ -353,7 +353,7 @@ export function InlineContent({ text }: { text: string }): ReactNode {
     }
 
     // 2. Bare URL: https://...
-    const urlMatch = remaining.match(/^https?:\/\/[^\s<>)"]+/);
+    const urlMatch = /^https?:\/\/[^\s<>)"]+/.exec(remaining);
     if (urlMatch) {
       const url = urlMatch[0];
       parts.push(
@@ -372,8 +372,8 @@ export function InlineContent({ text }: { text: string }): ReactNode {
     }
 
     // 3. Inline code: `code`
-    const codeMatch = remaining.match(/^`([^`]+)`/);
-    if (codeMatch && codeMatch[1]) {
+    const codeMatch = /^`([^`]+)`/.exec(remaining);
+    if (codeMatch?.[1]) {
       parts.push(
         <code key={`c-${keyIndex++}`} className="chat-inline-code">
           {codeMatch[1]}
@@ -384,16 +384,16 @@ export function InlineContent({ text }: { text: string }): ReactNode {
     }
 
     // 4. Bold: **text**
-    const boldMatch = remaining.match(/^\*\*([^*]+)\*\*/);
-    if (boldMatch && boldMatch[1]) {
+    const boldMatch = /^\*\*([^*]+)\*\*/.exec(remaining);
+    if (boldMatch?.[1]) {
       parts.push(<strong key={`b-${keyIndex++}`}>{boldMatch[1]}</strong>);
       remaining = remaining.slice(boldMatch[0].length);
       continue;
     }
 
     // 5. Italic: *text*
-    const italicMatch = remaining.match(/^\*([^*]+)\*/);
-    if (italicMatch && italicMatch[1]) {
+    const italicMatch = /^\*([^*]+)\*/.exec(remaining);
+    if (italicMatch?.[1]) {
       parts.push(<em key={`i-${keyIndex++}`}>{italicMatch[1]}</em>);
       remaining = remaining.slice(italicMatch[0].length);
       continue;

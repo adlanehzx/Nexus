@@ -93,10 +93,10 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
       if (codeToUse.includes("code=")) {
         try {
           const parsed = new URL(codeToUse);
-          codeToUse = parsed.searchParams.get("code") || codeToUse;
+          codeToUse = parsed.searchParams.get("code") ?? codeToUse;
         } catch {
           const match = /[?&]code=([^&]+)/.exec(codeToUse);
-          if (match && match[1]) codeToUse = match[1];
+          if (match?.[1]) codeToUse = match[1];
         }
       }
 

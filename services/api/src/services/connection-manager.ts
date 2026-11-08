@@ -91,7 +91,9 @@ export class LocalConnectionManager implements ConnectionCatalogService {
     });
 
     if (process.env.NODE_ENV !== "test") {
-      void this.detectAll().catch(() => {});
+      void this.detectAll().catch(() => {
+        // Non-blocking detection on startup
+      });
     }
   }
 
