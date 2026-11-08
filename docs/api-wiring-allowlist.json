@@ -56,14 +56,6 @@
     "reason": "Research run detail, unexposed until lot 12.2."
   },
   {
-    "route": "* /api/v1/orchestrator/accounts/:p/enable",
-    "reason": "Provider account enable/disable has no control; the UI only offers cooldown. Lot 6.2 adds per-agent pause and emergency stop and will use these."
-  },
-  {
-    "route": "* /api/v1/orchestrator/accounts/:p/disable",
-    "reason": "See the enable route: unexposed until lot 6.2."
-  },
-  {
     "route": "PATCH /api/v1/orchestrator/agents/:p/health",
     "reason": "Agent health is reported by the engine, not pushed from a client. Kept for operator correction."
   },
