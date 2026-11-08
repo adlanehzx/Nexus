@@ -117,15 +117,33 @@ function IconDatabase() {
   );
 }
 
-export function Settings({ api }: { api: DashboardApi }) {
+export function Settings({
+  api,
+  defaultTab = "preferences",
+  hideTopTabs = false,
+}: {
+  api: DashboardApi;
+  defaultTab?: SettingsTab;
+  hideTopTabs?: boolean;
+}) {
   const { locale, t, tr } = useI18n();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("preferences");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
 
-  const state = useSection(() => api.runtimeSettings());
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab]);
+
   const secrets = useSection(() => api.secrets());
-  const linkedin = useSection(() => api.linkedInStatus());
   const freeLlm = useSection(() => api.freeLlmStatus());
   const llmEngines = useSection(() => api.llmEngines());
+
+  const reloadAll = () => {
+    secrets.reload();
+    freeLlm.reload();
+    llmEngines.reload();
+  };
 
   return (
     <div className="content settings-page">
@@ -138,135 +156,137 @@ export function Settings({ api }: { api: DashboardApi }) {
               : "Interface preferences, multi-agent engine configuration and secrets management."}
           </p>
         </div>
-        <button className="button" type="button" onClick={state.reload}>
+        <button className="button" type="button" onClick={reloadAll}>
           {t("common.actions.refresh")}
         </button>
       </div>
 
       {/* Tabs navigation */}
-      <div
-        className="settings-tabs"
-        role="tablist"
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
-          paddingBottom: "0.75rem",
-          marginBottom: "1.75rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "preferences"}
-          className={`button ${activeTab === "preferences" ? "primary" : ""}`}
-          onClick={() => setActiveTab("preferences")}
+      {!hideTopTabs && (
+        <div
+          className="settings-tabs"
+          role="tablist"
           style={{
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            ...(activeTab === "preferences"
-              ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
-                }
-              : {}),
+            display: "flex",
+            gap: "0.5rem",
+            borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
+            paddingBottom: "0.75rem",
+            marginBottom: "1.75rem",
+            flexWrap: "wrap",
           }}
         >
-          <IconPreferences />
-          {tr("Preferences", "Préférences")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "shortcuts"}
-          className={`button ${activeTab === "shortcuts" ? "primary" : ""}`}
-          onClick={() => setActiveTab("shortcuts")}
-          style={{
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            ...(activeTab === "shortcuts"
-              ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
-                }
-              : {}),
-          }}
-        >
-          <IconKeyboard />
-          {tr("Keybindings", "Raccourcis")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "engine"}
-          className={`button ${activeTab === "engine" ? "primary" : ""}`}
-          onClick={() => setActiveTab("engine")}
-          style={{
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            ...(activeTab === "engine"
-              ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
-                }
-              : {}),
-          }}
-        >
-          <IconCpu />
-          {tr("Engine & LLMs", "Moteur & LLM")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "secrets"}
-          className={`button ${activeTab === "secrets" ? "primary" : ""}`}
-          onClick={() => setActiveTab("secrets")}
-          style={{
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            ...(activeTab === "secrets"
-              ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
-                }
-              : {}),
-          }}
-        >
-          <IconKey />
-          {tr("Secrets & Access", "Secrets & Accès")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "backup"}
-          className={`button ${activeTab === "backup" ? "primary" : ""}`}
-          onClick={() => setActiveTab("backup")}
-          style={{
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            ...(activeTab === "backup"
-              ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
-                }
-              : {}),
-          }}
-        >
-          <IconDatabase />
-          {tr("Backup & Restore", "Sauvegarde & Restauration")}
-        </button>
-      </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "preferences"}
+            className={`button ${activeTab === "preferences" ? "primary" : ""}`}
+            onClick={() => setActiveTab("preferences")}
+            style={{
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              ...(activeTab === "preferences"
+                ? {
+                    borderColor: "var(--nx-signal, #00f0ff)",
+                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                    color: "var(--nx-signal, #00f0ff)",
+                  }
+                : {}),
+            }}
+          >
+            <IconPreferences />
+            {tr("Preferences", "Préférences")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "shortcuts"}
+            className={`button ${activeTab === "shortcuts" ? "primary" : ""}`}
+            onClick={() => setActiveTab("shortcuts")}
+            style={{
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              ...(activeTab === "shortcuts"
+                ? {
+                    borderColor: "var(--nx-signal, #00f0ff)",
+                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                    color: "var(--nx-signal, #00f0ff)",
+                  }
+                : {}),
+            }}
+          >
+            <IconKeyboard />
+            {tr("Keybindings", "Raccourcis")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "engine"}
+            className={`button ${activeTab === "engine" ? "primary" : ""}`}
+            onClick={() => setActiveTab("engine")}
+            style={{
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              ...(activeTab === "engine"
+                ? {
+                    borderColor: "var(--nx-signal, #00f0ff)",
+                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                    color: "var(--nx-signal, #00f0ff)",
+                  }
+                : {}),
+            }}
+          >
+            <IconCpu />
+            {tr("Engine & LLMs", "Moteur & LLM")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "secrets"}
+            className={`button ${activeTab === "secrets" ? "primary" : ""}`}
+            onClick={() => setActiveTab("secrets")}
+            style={{
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              ...(activeTab === "secrets"
+                ? {
+                    borderColor: "var(--nx-signal, #00f0ff)",
+                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                    color: "var(--nx-signal, #00f0ff)",
+                  }
+                : {}),
+            }}
+          >
+            <IconKey />
+            {tr("Secrets & Access", "Secrets & Accès")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "backup"}
+            className={`button ${activeTab === "backup" ? "primary" : ""}`}
+            onClick={() => setActiveTab("backup")}
+            style={{
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              ...(activeTab === "backup"
+                ? {
+                    borderColor: "var(--nx-signal, #00f0ff)",
+                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                    color: "var(--nx-signal, #00f0ff)",
+                  }
+                : {}),
+            }}
+          >
+            <IconDatabase />
+            {tr("Backup & Restore", "Sauvegarde & Restauration")}
+          </button>
+        </div>
+      )}
 
       {/* Tab 1: Preferences (OS, Lighting Mode, Language, Color Themes) */}
       {activeTab === "preferences" && <PreferencesPanel />}
@@ -277,9 +297,6 @@ export function Settings({ api }: { api: DashboardApi }) {
       {/* Tab 2: Multi-agent Engine & LLMs */}
       {activeTab === "engine" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <Section state={state}>
-            {(data) => <SettingsForm api={api} initial={data} reload={state.reload} />}
-          </Section>
           <Section state={freeLlm}>
             {(data) => <FreeLlmForm api={api} status={data} reload={freeLlm.reload} />}
           </Section>
@@ -295,9 +312,6 @@ export function Settings({ api }: { api: DashboardApi }) {
           <Section state={secrets}>
             {(data) => <SecretsForm api={api} names={data.names} reload={secrets.reload} />}
           </Section>
-          <Section state={linkedin}>
-            {(data) => <LinkedInForm api={api} status={data} reload={linkedin.reload} />}
-          </Section>
         </div>
       )}
 
@@ -305,10 +319,7 @@ export function Settings({ api }: { api: DashboardApi }) {
       {activeTab === "backup" && (
         <BackupRestorePanel
           api={api}
-          onReloadAll={() => {
-            state.reload();
-            secrets.reload();
-          }}
+          onReloadAll={reloadAll}
         />
       )}
     </div>
@@ -950,126 +961,6 @@ function FreeLlmForm({
   );
 }
 
-function LinkedInForm({
-  api,
-  status,
-  reload,
-}: {
-  api: DashboardApi;
-  status: { configured: boolean; connected: boolean; tools: string[] };
-  reload: () => void;
-}) {
-  const { tr } = useI18n();
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const redirectUri = `${window.location.origin}/api/v1/linkedin/oauth/callback`;
-
-  return (
-    <section className="settings-panel">
-      <h3>{tr("LinkedIn · Official API", "LinkedIn · API officielle")}</h3>
-      <p className="muted">
-        {tr(
-          "Connect through LinkedIn OAuth. NEXUS can publish and comment only after your explicit confirmation. It never scrapes or automates the LinkedIn interface.",
-          "Connexion via OAuth LinkedIn. NEXUS publie et commente uniquement après confirmation explicite. Aucun scraping ni automatisation d'interface.",
-        )}
-      </p>
-      <p className={status.connected ? "banner success" : "banner"}>
-        {status.connected
-          ? `${tr("Connected", "Connecté")} · ${status.tools.length} ${tr("official tools active", "outils officiels actifs")}`
-          : status.configured
-            ? tr("Configured, authorization required", "Configuré, autorisation requise")
-            : tr("Not configured", "Non configuré")}
-      </p>
-      {!status.connected ? (
-        <>
-          <div className="settings-grid">
-            <label>
-              {tr("LinkedIn application Client ID", "ID client de l'application LinkedIn")}
-              <input
-                className="field mono"
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-              />
-            </label>
-            <label>
-              {tr("LinkedIn application Client Secret", "Secret client de l'application LinkedIn")}
-              <input
-                className="field mono"
-                type="password"
-                autoComplete="new-password"
-                value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
-              />
-            </label>
-            <label className="settings-wide">
-              {tr("Authorized redirect URL", "URL de redirection autorisée")}
-              <input className="field mono" readOnly value={redirectUri} />
-            </label>
-          </div>
-          <div className="settings-actions">
-            <button
-              className="button primary"
-              type="button"
-              disabled={busy || clientId.trim() === "" || clientSecret.length < 4}
-              onClick={() => {
-                setBusy(true);
-                setError(null);
-                void api
-                  .saveSecret("linkedin-client-secret", clientSecret)
-                  .then(() =>
-                    api.startLinkedInOAuth({
-                      clientId: clientId.trim(),
-                      clientSecretRef: "vault://nexus/linkedin-client-secret",
-                      tokenRef: "vault://nexus/linkedin-token",
-                      redirectUri,
-                    }),
-                  )
-                  .then(({ authorizationUrl }) => {
-                    window.location.assign(authorizationUrl);
-                  })
-                  .catch((cause: unknown) => {
-                    setBusy(false);
-                    setError(
-                      cause instanceof Error
-                        ? cause.message
-                        : tr("LinkedIn connection failed.", "Échec de la connexion LinkedIn."),
-                    );
-                  });
-              }}
-            >
-              {busy
-                ? tr("Opening LinkedIn…", "Ouverture de LinkedIn…")
-                : tr("Connect LinkedIn", "Connecter LinkedIn")}
-            </button>
-          </div>
-        </>
-      ) : (
-        <button
-          className="button danger"
-          type="button"
-          onClick={() =>
-            void api
-              .disconnectLinkedIn()
-              .then(reload)
-              .catch((cause: unknown) =>
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : tr("Disconnect failed.", "Échec de la déconnexion."),
-                ),
-              )
-          }
-        >
-          {tr("Disconnect LinkedIn", "Déconnecter LinkedIn")}
-        </button>
-      )}
-      {error === null ? null : <p className="banner error">{error}</p>}
-    </section>
-  );
-}
-
 function BackupRestorePanel({ api, onReloadAll }: { api: DashboardApi; onReloadAll: () => void }) {
   const { tr } = useI18n();
   const [busy, setBusy] = useState(false);
@@ -1329,183 +1220,6 @@ function SecretsForm({
           ))}
         </ul>
       )}
-      {message === null ? null : <p className="banner success">{message}</p>}
-      {error === null ? null : <p className="banner error">{error}</p>}
-    </section>
-  );
-}
-
-function SettingsForm({
-  api,
-  initial,
-  reload,
-}: {
-  api: DashboardApi;
-  initial: RuntimeSettings;
-  reload: () => void;
-}) {
-  const { tr } = useI18n();
-  const [value, setValue] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const number = (
-    key: keyof Pick<
-      RuntimeSettings,
-      "task_timeout_seconds" | "max_attempts" | "retry_delay_seconds" | "context_budget_chars"
-    >,
-    next: string,
-  ): void => {
-    setValue((current) => ({ ...current, [key]: Number(next) }));
-  };
-  const priorities = (
-    key: keyof Pick<
-      RuntimeSettings,
-      "research_priority" | "review_priority" | "synthesis_priority"
-    >,
-    next: string,
-  ): void => {
-    setValue((current) => ({
-      ...current,
-      [key]: next
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    }));
-  };
-
-  return (
-    <section className="settings-panel" style={{ marginTop: 0 }}>
-      <div className="settings-grid">
-        <label>
-          {tr("Max task timeout · seconds", "Délai max d'une tâche · secondes")}
-          <input
-            className="field"
-            type="number"
-            min={10}
-            max={86400}
-            value={value.task_timeout_seconds}
-            onChange={(event) => number("task_timeout_seconds", event.target.value)}
-          />
-        </label>
-        <label>
-          {tr("Max attempts", "Nombre max de tentatives")}
-          <input
-            className="field"
-            type="number"
-            min={1}
-            max={10}
-            value={value.max_attempts}
-            onChange={(event) => number("max_attempts", event.target.value)}
-          />
-        </label>
-        <label>
-          {tr("Retry delay · seconds", "Délai de réessai · secondes")}
-          <input
-            className="field"
-            type="number"
-            min={1}
-            max={3600}
-            value={value.retry_delay_seconds}
-            onChange={(event) => number("retry_delay_seconds", event.target.value)}
-          />
-        </label>
-        <label>
-          {tr("Context budget · characters", "Budget de contexte · caractères")}
-          <input
-            className="field"
-            type="number"
-            min={4000}
-            max={400000}
-            value={value.context_budget_chars}
-            onChange={(event) => number("context_budget_chars", event.target.value)}
-          />
-        </label>
-        <label className="settings-wide check-label">
-          <input
-            type="checkbox"
-            checked={value.quality_review}
-            onChange={(event) =>
-              setValue((current) => ({ ...current, quality_review: event.target.checked }))
-            }
-          />
-          {tr(
-            "Add an independent quality review before final synthesis",
-            "Ajouter une revue qualité indépendante avant la synthèse finale",
-          )}
-        </label>
-        <label className="settings-wide">
-          {tr(
-            "Research priority · comma-separated profiles",
-            "Priorité de recherche · profils séparés par virgules",
-          )}
-          <input
-            className="field mono"
-            value={value.research_priority.join(", ")}
-            onChange={(event) => priorities("research_priority", event.target.value)}
-          />
-        </label>
-        <label className="settings-wide">
-          {tr("Critical review priority", "Priorité de revue critique")}
-          <input
-            className="field mono"
-            value={value.review_priority.join(", ")}
-            onChange={(event) => priorities("review_priority", event.target.value)}
-          />
-        </label>
-        <label className="settings-wide">
-          {tr("Final synthesis priority", "Priorité de synthèse finale")}
-          <input
-            className="field mono"
-            value={value.synthesis_priority.join(", ")}
-            onChange={(event) => priorities("synthesis_priority", event.target.value)}
-          />
-        </label>
-        <div className="settings-wide policy-box">
-          <strong>{tr("Non-disableable guardrails", "Garde-fous non désactivables")}</strong>
-          <span className="muted">
-            {tr(
-              "ACP execution restricted to workspace, pathless deletion rejected, secrets excluded from API responses, live trading disabled, and administrator authentication mandatory.",
-              "Exécution ACP restreinte à l'espace de travail, suppressions relatives rejetées, secrets exclus des réponses API, trading réel désactivé et authentification administrateur obligatoire.",
-            )}
-          </span>
-        </div>
-      </div>
-      <div className="settings-actions">
-        <button
-          className="button primary"
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError(null);
-            setMessage(null);
-            void api
-              .updateRuntimeSettings(value)
-              .then((saved) => {
-                setValue(saved);
-                setMessage(
-                  tr(
-                    "Settings saved and applied to upcoming missions.",
-                    "Paramètres enregistrés et appliqués aux prochaines missions.",
-                  ),
-                );
-                reload();
-              })
-              .catch((cause: unknown) =>
-                setError(
-                  cause instanceof Error
-                    ? cause.message
-                    : tr("Unable to save settings.", "Impossible d'enregistrer les paramètres."),
-                ),
-              )
-              .finally(() => setBusy(false));
-          }}
-        >
-          {busy ? tr("Saving…", "Enregistrement…") : tr("Save", "Enregistrer")}
-        </button>
-      </div>
       {message === null ? null : <p className="banner success">{message}</p>}
       {error === null ? null : <p className="banner error">{error}</p>}
     </section>

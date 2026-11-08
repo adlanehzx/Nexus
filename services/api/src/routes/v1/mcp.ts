@@ -213,6 +213,153 @@ export const mcpRoutes: FastifyPluginCallback = (fastify, _options, done) => {
     ok({ tools: NEXUS_EXPOSED_MCP_TOOLS }, request.id),
   );
 
+  app.get(
+    "/mcp/oauth/providers",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["mcp"],
+        summary: "Lists all available turnkey OAuth MCP providers with connection status",
+        response: {
+          200: okSchema(
+            z.object({
+              providers: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  description: z.string(),
+                  icon: z.string(),
+                  docUrl: z.string(),
+                  defaultScopes: z.array(z.string()),
+                  supportsPkce: z.boolean(),
+                  connected: z.boolean(),
+                  activeInRuntime: z.boolean(),
+                  clientIdConfigured: z.boolean(),
+                  vaultRef: z.string(),
+                }),
+              ),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (!app.services.mcpOAuth) {
+        return ok({ providers: [] }, request.id);
+      }
+      const providers = await app.services.mcpOAuth.listProviders();
+      return ok({ providers }, request.id);
+    },
+  );
+
+  app.post(
+    "/mcp/oauth/authorize",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["mcp"],
+        summary: "Starts OAuth PKCE flow for an MCP provider",
+        body: z.object({
+          providerId: z.string(),
+          clientId: z.string().optional(),
+          redirectUri: z.string().optional(),
+          scopes: z.array(z.string()).optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              authorizationUrl: z.string(),
+              state: z.string(),
+              providerId: z.string(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (!app.services.mcpOAuth) {
+        throw new Error("MCP OAuth service is not enabled.");
+      }
+      const result = await app.services.mcpOAuth.startAuthorization(request.body.providerId, {
+        clientId: request.body.clientId,
+        redirectUri: request.body.redirectUri,
+        scopes: request.body.scopes,
+      });
+      return ok(result, request.id);
+    },
+  );
+
+  app.post(
+    "/mcp/oauth/callback",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["mcp"],
+        summary: "Completes OAuth authorization code exchange and mounts the MCP server",
+        body: z.object({
+          providerId: z.string(),
+          code: z.string(),
+          state: z.string(),
+          clientId: z.string().optional(),
+          clientSecret: z.string().optional(),
+          redirectUri: z.string().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              success: z.boolean(),
+              providerId: z.string(),
+              connected: z.boolean(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (!app.services.mcpOAuth) {
+        throw new Error("MCP OAuth service is not enabled.");
+      }
+      const result = await app.services.mcpOAuth.completeAuthorization(
+        request.body.providerId,
+        {
+          code: request.body.code,
+          state: request.body.state,
+          clientId: request.body.clientId,
+          clientSecret: request.body.clientSecret,
+          redirectUri: request.body.redirectUri,
+        },
+      );
+      return ok(result, request.id);
+    },
+  );
+
+  app.delete(
+    "/mcp/oauth/:providerId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["mcp"],
+        summary: "Disconnects an OAuth MCP server and revokes its tokens from vault",
+        params: z.object({ providerId: z.string() }),
+        response: {
+          200: okSchema(
+            z.object({
+              success: z.boolean(),
+              providerId: z.string(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      if (!app.services.mcpOAuth) {
+        throw new Error("MCP OAuth service is not enabled.");
+      }
+      const result = await app.services.mcpOAuth.disconnect(request.params.providerId);
+      return ok(result, request.id);
+    },
+  );
+
   app.get("/mcp", { schema: { tags: ["mcp"], hide: true } }, refuseMethod);
   app.delete("/mcp", { schema: { tags: ["mcp"], hide: true } }, refuseMethod);
 

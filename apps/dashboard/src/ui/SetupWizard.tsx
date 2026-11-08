@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
+import { ForbiddenError, type ConnectionCatalogEntry, type DashboardApi, type PairingTicket } from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import {
   executeSmokeTest,
@@ -10,7 +10,7 @@ import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
-import { IconCheck } from "./icons.js";
+import { IconCheck, IconClose, IconWarning } from "./icons.js";
 import { NexusLogo } from "./NexusLogo.js";
 
 export type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
@@ -276,7 +276,17 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
       const result = await api.detectConnections();
       setConnections(result.connections);
     } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Agent detection failed.";
+      const isForbidden =
+        cause instanceof ForbiddenError ||
+        (cause instanceof Error && cause.message.includes("not accessible"));
+      const msg = isForbidden
+        ? tr(
+            "This section requires an administrator account. Please sign in with the administrator user.",
+            "Cette section nécessite un compte administrateur. Veuillez vous connecter avec le compte administrateur.",
+          )
+        : cause instanceof Error
+          ? cause.message
+          : "Agent detection failed.";
       setError(msg);
       setDiagnostic(
         JSON.stringify(
@@ -375,16 +385,36 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         await api.testBrowser();
         setBrowserSuccessMsg("Local browser harness configured and verified.");
       } else {
+        try {
+          await api.saveSecret("browser-worker-token", "auto-generated-remote-token");
+        } catch {
+          // Ignore if vault already has secret or cannot overwrite
+        }
         await api.configureBrowser({
           enabled: true,
           mode: "remote-worker",
           baseUrl: remoteWorkerUrl,
           tokenRef: "vault://nexus/browser-worker-token",
         });
-        setBrowserSuccessMsg("Remote browser worker saved.");
+        setBrowserSuccessMsg(
+          tr(
+            "Remote browser worker saved. Connect the remote daemon to start routing.",
+            "Nœud de travail distant enregistré. Démarrez le démon distant pour router.",
+          ),
+        );
       }
     } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Failed to configure browser.";
+      const isForbidden =
+        cause instanceof ForbiddenError ||
+        (cause instanceof Error && cause.message.includes("not accessible"));
+      const msg = isForbidden
+        ? tr(
+            "This configuration requires an administrator account. Please sign in with the administrator user.",
+            "Cette configuration nécessite un compte administrateur. Veuillez vous connecter avec le compte administrateur.",
+          )
+        : cause instanceof Error
+          ? cause.message
+          : "Failed to configure browser.";
       setError(msg);
     } finally {
       setBusy(false);
@@ -644,9 +674,23 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 type="button"
                 className="button primary"
                 disabled={busy || readiness?.status === "down"}
-                onClick={() => goToStep("admin")}
+                onClick={() => {
+                  if (alreadyInitialized) {
+                    if (session.isAuthenticated) {
+                      goToStep("agents");
+                    } else {
+                      onSwitchToLogin();
+                    }
+                  } else {
+                    goToStep("admin");
+                  }
+                }}
               >
-                {tr("Continue to Account Setup", "Continuer vers la configuration")}
+                {alreadyInitialized
+                  ? session.isAuthenticated
+                    ? tr("Continue Configuration", "Continuer la configuration")
+                    : tr("Sign In as Administrator", "Se connecter en tant qu'administrateur")
+                  : tr("Continue to Account Setup", "Continuer vers la configuration")}
               </button>
               <button
                 type="button"
@@ -673,7 +717,48 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </p>
             </div>
 
-            <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
+            {alreadyInitialized ? (
+              <div
+                className="setup-card"
+                style={{
+                  border: "1px solid var(--accent, #00f0ff)",
+                  background: "rgba(0, 240, 255, 0.05)",
+                  padding: "1.75rem",
+                  marginBottom: "1.25rem",
+                  borderRadius: "8px",
+                }}
+              >
+                <h3 style={{ color: "var(--accent, #00f0ff)", margin: "0 0 0.5rem" }}>
+                  {tr("Instance already initialized", "Instance déjà initialisée")}
+                </h3>
+                <p
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--nx-text-primary, #e6edf3)",
+                    margin: "0 0 1.25rem",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  {tr(
+                    "An administrator account already exists on this NEXUS instance. Creating another account here would create an unprivileged user without administrative authority. Please sign in with the administrator account to configure the instance.",
+                    "Un compte administrateur existe déjà sur cette instance NEXUS. Créer un autre compte ici produira un utilisateur sans privilèges administrateur (bloquant la détection d'agents et le navigateur). Veuillez vous connecter avec le compte administrateur existant.",
+                  )}
+                </p>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button type="button" className="button primary" onClick={onSwitchToLogin}>
+                    {tr("Sign In Directly", "Se connecter directement")}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => goToStep("prerequisites")}
+                  >
+                    {tr("Back to Prerequisites", "Retour aux prérequis")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
               <form
                 className="login-form"
                 onSubmit={(e) => void handleRegisterAdmin(e)}
@@ -795,6 +880,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 </div>
               </form>
             </div>
+            )}
           </div>
         )}
 
@@ -1552,13 +1638,15 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                             ? "warning"
                             : "neutral";
                     const symbol =
-                      s.status === "passed"
-                        ? "✓"
-                        : s.status === "failed"
-                          ? "✗"
-                          : s.status === "blocked"
-                            ? "⊘"
-                            : "–";
+                      s.status === "passed" ? (
+                        <IconCheck size={11} />
+                      ) : s.status === "failed" ? (
+                        <IconClose size={11} />
+                      ) : s.status === "blocked" ? (
+                        <IconWarning size={11} />
+                      ) : (
+                        "–"
+                      );
                     return (
                       <div
                         key={s.id}

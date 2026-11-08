@@ -3,6 +3,8 @@ import type { DashboardApi, McpConfiguration } from "../../lib/api.js";
 import { MCP_PRESETS, isForbiddenRemoteUrl } from "../../lib/mcp.js";
 import { Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
+import { IconBolt } from "../icons.js";
+import { McpOAuthIntegrations } from "./mcp-oauth.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. MCP
@@ -228,6 +230,7 @@ function McpExternalAccess({ api }: { api: DashboardApi }) {
 export function Mcp({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const state = useSection(() => api.mcp());
+  const [activeTab, setActiveTab] = useState<"oauth" | "servers" | "external">("oauth");
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<"stdio" | "http" | "sse">("stdio");
   const [target, setTarget] = useState("");
@@ -290,6 +293,11 @@ export function Mcp({ api }: { api: DashboardApi }) {
       circuitBreakerThreshold: 5,
       circuitBreakerResetMs: 60_000,
       exposeResources: true,
+      sandbox: {
+        enabled: false,
+        engine: "none" as const,
+        allowNetwork: true,
+      },
     };
     const config: McpConfiguration =
       transport === "stdio"
@@ -317,259 +325,365 @@ export function Mcp({ api }: { api: DashboardApi }) {
     <div className="content">
       {message === null ? null : <p className="banner success">{message}</p>}
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
-      <McpExternalAccess api={api} />
-      <section className="settings-panel">
-        <h3>{tr("Add or Replace an MCP Server", "Ajouter ou remplacer un serveur MCP")}</h3>
 
-        {/* Quick Presets Bar */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.5rem",
-            marginBottom: "1.2rem",
-            alignItems: "center",
-          }}
+      {/* Tabs */}
+      <div
+        role="tablist"
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
+          paddingBottom: "0.75rem",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "oauth"}
+          className={`button ${activeTab === "oauth" ? "primary" : ""}`}
+          onClick={() => setActiveTab("oauth")}
+          style={
+            activeTab === "oauth"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}
+          }
         >
-          <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>
-            {tr("One-Click Presets:", "Préconfigurations en 1 clic :")}
-          </span>
-          {MCP_PRESETS.map((preset) => (
-            <button
-              key={preset.name}
-              className="button compact secondary"
-              type="button"
-              onClick={() => {
-                setName(preset.name);
-                setTransport(preset.transport);
-                setTarget(preset.target);
-                setArgs(preset.args);
-                setSecretRefs(preset.secretRefs ?? "");
+          <IconBolt size={14} style={{ marginRight: "0.4rem" }} />
+          {tr("OAuth Integrations (Claude & Codex Style)", "Intégrations OAuth (Style Claude & Codex)")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "servers"}
+          className={`button ${activeTab === "servers" ? "primary" : ""}`}
+          onClick={() => setActiveTab("servers")}
+          style={
+            activeTab === "servers"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}
+          }
+        >
+          {tr("Custom MCP Servers", "Serveurs MCP personnalisés")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "external"}
+          className={`button ${activeTab === "external" ? "primary" : ""}`}
+          onClick={() => setActiveTab("external")}
+          style={
+            activeTab === "external"
+              ? {
+                  borderColor: "var(--nx-signal, #00f0ff)",
+                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
+                  color: "var(--nx-signal, #00f0ff)",
+                }
+              : {}
+          }
+        >
+          {tr("External Access & Tokens", "Connexions & Jetons Externes")}
+        </button>
+      </div>
+
+      {activeTab === "oauth" ? (
+        <McpOAuthIntegrations api={api} />
+      ) : activeTab === "external" ? (
+        <McpExternalAccess api={api} />
+      ) : (
+        <>
+          {/* Configured MCP Servers list */}
+          <section className="settings-panel">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
               }}
-              title={preset.description}
             >
-              {preset.label}
-            </button>
-          ))}
-          <button
-            className="button compact"
-            type="button"
-            onClick={() => setShowGuide((prev) => !prev)}
-          >
-            {showGuide
-              ? tr("Hide Documentation", "Masquer la documentation")
-              : tr("Show MCP Guide", "Afficher guide MCP")}
-          </button>
-        </div>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  {tr("Configured MCP Servers", "Serveurs MCP configurés")}
+                </h3>
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.85rem" }}>
+                  {tr(
+                    "Integrations supplying specialized tools and live data sources to your agents.",
+                    "Intégrations fournissant des outils spécialisés et des sources de données à vos agents.",
+                  )}
+                </p>
+              </div>
+              <button className="button compact" type="button" onClick={() => state.reload()}>
+                {tr("Refresh", "Actualiser")}
+              </button>
+            </div>
+            <Section state={state}>
+              {(data) =>
+                data.configurations.length === 0 ? (
+                  <Empty>{tr("No MCP servers configured.", "Aucun serveur MCP configuré.")}</Empty>
+                ) : (
+                  <Table
+                    head={[
+                      tr("Server", "Serveur"),
+                      tr("State", "État"),
+                      tr("Tools", "Outils"),
+                      tr("Failures", "Échecs"),
+                      tr("Reconnects", "Reconnexions"),
+                      tr("Circuit", "Disjoncteur"),
+                      tr("Last error", "Dernière erreur"),
+                      tr("Actions", "Actions"),
+                    ]}
+                  >
+                    {data.servers.map((server) => (
+                      <tr key={server.name}>
+                        <td>
+                          {server.name}
+                          {server.serverInfo === null ? null : (
+                            <div className="muted mono">
+                              {server.serverInfo.name} {server.serverInfo.version}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <State
+                            tone={server.status === "connected" ? "ok" : "down"}
+                            label={server.status}
+                          />
+                        </td>
+                        <td>{server.toolCount}</td>
+                        <td>{server.consecutiveFailures}</td>
+                        <td>{server.reconnectAttempts}</td>
+                        <td className="muted">
+                          {server.circuitOpenUntil === null
+                            ? tr("closed", "fermé")
+                            : `${tr("open until", "ouvert jusqu'à")} ${server.circuitOpenUntil}`}
+                        </td>
+                        <td className="muted">{server.lastError ?? "—"}</td>
+                        <td>
+                          <button
+                            className="button compact"
+                            type="button"
+                            onClick={() =>
+                              act(
+                                () => api.reconnectMcp(server.name),
+                                tr(`${server.name} reconnected.`, `${server.name} reconnecté.`),
+                              )
+                            }
+                          >
+                            {tr("Reconnect", "Reconnecter")}
+                          </button>{" "}
+                          <button
+                            className="button compact danger"
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  tr(
+                                    `Delete server ${server.name}?`,
+                                    `Supprimer le serveur ${server.name} ?`,
+                                  ),
+                                )
+                              )
+                                act(
+                                  () => api.removeMcp(server.name),
+                                  tr(`${server.name} deleted.`, `${server.name} supprimé.`),
+                                );
+                            }}
+                          >
+                            {tr("Delete", "Supprimer")}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                )
+              }
+            </Section>
+          </section>
 
-        {/* Documentation & Guidance Accordion */}
-        {showGuide && (
-          <div
-            style={{
-              padding: "1rem",
-              marginBottom: "1.2rem",
-              background: "rgba(255, 255, 255, 0.03)",
-              border: "1px solid var(--border-subtle, #333)",
-              borderRadius: "6px",
-              fontSize: "0.85rem",
-              lineHeight: "1.5",
-            }}
-          >
-            <h4>
-              {tr(
-                "How to Add and Secure MCP Servers",
-                "Comment ajouter et sécuriser les serveurs MCP",
-              )}
-            </h4>
-            <ul style={{ paddingLeft: "1.2rem", marginTop: "0.5rem" }}>
-              <li>
-                <strong>stdio</strong>:{" "}
-                {tr(
-                  "Spawns a local sandboxed subprocess. Use `npx` or binary path.",
-                  "Lance un sous-processus local isolé. Utilisez `npx` ou le chemin du binaire.",
-                )}
-              </li>
-              <li>
-                <strong>HTTP / SSE</strong>:{" "}
-                {tr(
-                  "Connects to a remote server. Enforces network isolation and blocks loopback/SSRF targets.",
-                  "Se connecte à un serveur distant. Applique l'isolation réseau et bloque le loopback/SSRF.",
-                )}
-              </li>
-              <li>
-                <strong>envRefs / headerRefs</strong>:{" "}
-                {tr(
-                  "Maps vault keys (e.g. `vault://nexus/api-key`) without storing plaintext credentials.",
-                  "Associe des clés de coffre-fort (ex: `vault://nexus/api-key`) sans stocker de clés en clair.",
-                )}
-              </li>
-              <li>
-                <strong>Per-Tool Safeguards</strong>:{" "}
-                {tr(
-                  "Each server tool is monitored with latency metrics and guarded by circuit breakers.",
-                  "Chaque outil est supervisé avec latence et protégé par disjoncteur.",
-                )}
-              </li>
-            </ul>
-          </div>
-        )}
+          {/* Add or Replace MCP Server */}
+          <section className="settings-panel">
+            <h3>{tr("Add or Replace an MCP Server", "Ajouter ou remplacer un serveur MCP")}</h3>
 
-        {ssrfWarning && (
-          <div className="banner error" role="alert" style={{ marginBottom: "1rem" }}>
-            {tr(
-              "Security warning: Remote MCP servers cannot connect to localhost, loopback (127.0.0.1), or private cloud metadata (169.254.169.254).",
-              "Avertissement de sécurité : Les serveurs MCP distants ne peuvent pas se connecter à localhost, loopback ou métadonnées cloud privées.",
-            )}
-          </div>
-        )}
-
-        <div className="settings-grid">
-          <label>
-            {tr("Name", "Nom")}
-            <input
-              className="field mono"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="filesystem"
-            />
-          </label>
-          <label>
-            {tr("Transport", "Transport")}
-            <select
-              className="field"
-              value={transport}
-              onChange={(event) => setTransport(event.target.value as "stdio" | "http" | "sse")}
+            {/* Quick Presets Bar */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+                marginBottom: "1.2rem",
+                alignItems: "center",
+              }}
             >
-              <option value="stdio">stdio</option>
-              <option value="http">HTTP</option>
-              <option value="sse">SSE</option>
-            </select>
-          </label>
-          <label className="settings-wide">
-            {transport === "stdio" ? tr("Command", "Commande") : "URL"}
-            <input
-              className="field mono"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              placeholder={transport === "stdio" ? "npx" : "https://…"}
-            />
-          </label>
-          {transport === "stdio" ? (
-            <label className="settings-wide">
-              {tr("Arguments · one per line", "Arguments · un par ligne")}
-              <textarea
-                className="field mono"
-                rows={3}
-                value={args}
-                onChange={(event) => setArgs(event.target.value)}
-              />
-            </label>
-          ) : null}
-          <label className="settings-wide">
-            {transport === "stdio" ? "envRefs" : "headerRefs"} ·{" "}
-            {tr("JSON to vault://nexus/…", "JSON vers vault://nexus/…")}
-            <textarea
-              className="field mono"
-              rows={3}
-              value={secretRefs}
-              onChange={(event) => setSecretRefs(event.target.value)}
-              placeholder={'{"TOKEN":"vault://nexus/mcp-token"}'}
-            />
-          </label>
-        </div>
-        <div className="settings-actions">
-          <button
-            className="button primary"
-            type="button"
-            disabled={name === "" || target === ""}
-            onClick={save}
-          >
-            {tr("Save and connect", "Enregistrer et connecter")}
-          </button>
-        </div>
-      </section>
-      <Section state={state}>
-        {(data) =>
-          data.configurations.length === 0 ? (
-            <Empty>{tr("No MCP servers configured.", "Aucun serveur MCP configuré.")}</Empty>
-          ) : (
-            <Table
-              head={[
-                tr("Server", "Serveur"),
-                tr("State", "État"),
-                tr("Tools", "Outils"),
-                tr("Failures", "Échecs"),
-                tr("Reconnects", "Reconnexions"),
-                tr("Circuit", "Disjoncteur"),
-                tr("Last error", "Dernière erreur"),
-                tr("Actions", "Actions"),
-              ]}
-            >
-              {data.servers.map((server) => (
-                <tr key={server.name}>
-                  <td>
-                    {server.name}
-                    {server.serverInfo === null ? null : (
-                      <div className="muted mono">
-                        {server.serverInfo.name} {server.serverInfo.version}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <State
-                      tone={server.status === "connected" ? "ok" : "down"}
-                      label={server.status}
-                    />
-                  </td>
-                  <td>{server.toolCount}</td>
-                  <td>{server.consecutiveFailures}</td>
-                  <td>{server.reconnectAttempts}</td>
-                  <td className="muted">
-                    {server.circuitOpenUntil === null
-                      ? tr("closed", "fermé")
-                      : `${tr("open until", "ouvert jusqu'à")} ${server.circuitOpenUntil}`}
-                  </td>
-                  <td className="muted">{server.lastError ?? "—"}</td>
-                  <td>
-                    <button
-                      className="button compact"
-                      type="button"
-                      onClick={() =>
-                        act(
-                          () => api.reconnectMcp(server.name),
-                          tr(`${server.name} reconnected.`, `${server.name} reconnecté.`),
-                        )
-                      }
-                    >
-                      {tr("Reconnect", "Reconnecter")}
-                    </button>{" "}
-                    <button
-                      className="button compact danger"
-                      type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            tr(
-                              `Delete server ${server.name}?`,
-                              `Supprimer le serveur ${server.name} ?`,
-                            ),
-                          )
-                        )
-                          act(
-                            () => api.removeMcp(server.name),
-                            tr(`${server.name} deleted.`, `${server.name} supprimé.`),
-                          );
-                      }}
-                    >
-                      {tr("Delete", "Supprimer")}
-                    </button>
-                  </td>
-                </tr>
+              <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>
+                {tr("One-Click Presets:", "Préconfigurations en 1 clic :")}
+              </span>
+              {MCP_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  className="button compact secondary"
+                  type="button"
+                  onClick={() => {
+                    setName(preset.name);
+                    setTransport(preset.transport);
+                    setTarget(preset.target);
+                    setArgs(preset.args);
+                    setSecretRefs(preset.secretRefs ?? "");
+                  }}
+                  title={preset.description}
+                >
+                  {preset.label}
+                </button>
               ))}
-            </Table>
-          )
-        }
-      </Section>
+              <button
+                className="button compact"
+                type="button"
+                onClick={() => setShowGuide((prev) => !prev)}
+              >
+                {showGuide
+                  ? tr("Hide Documentation", "Masquer la documentation")
+                  : tr("Show MCP Guide", "Afficher guide MCP")}
+              </button>
+            </div>
+
+            {/* Documentation & Guidance Accordion */}
+            {showGuide && (
+              <div
+                style={{
+                  padding: "1rem",
+                  marginBottom: "1.2rem",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--border-subtle, #333)",
+                  borderRadius: "6px",
+                  fontSize: "0.85rem",
+                  lineHeight: "1.5",
+                }}
+              >
+                <h4>
+                  {tr(
+                    "How to Add and Secure MCP Servers",
+                    "Comment ajouter et sécuriser les serveurs MCP",
+                  )}
+                </h4>
+                <ul style={{ paddingLeft: "1.2rem", marginTop: "0.5rem" }}>
+                  <li>
+                    <strong>stdio</strong>:{" "}
+                    {tr(
+                      "Spawns a local sandboxed subprocess. Use `npx` or binary path.",
+                      "Lance un sous-processus local isolé. Utilisez `npx` ou le chemin du binaire.",
+                    )}
+                  </li>
+                  <li>
+                    <strong>HTTP / SSE</strong>:{" "}
+                    {tr(
+                      "Connects to a remote server. Enforces network isolation and blocks loopback/SSRF targets.",
+                      "Se connecte à un serveur distant. Applique l'isolation réseau et bloque le loopback/SSRF.",
+                    )}
+                  </li>
+                  <li>
+                    <strong>envRefs / headerRefs</strong>:{" "}
+                    {tr(
+                      "Maps vault keys (e.g. `vault://nexus/api-key`) without storing plaintext credentials.",
+                      "Associe des clés de coffre-fort (ex: `vault://nexus/api-key`) sans stocker de clés en clair.",
+                    )}
+                  </li>
+                  <li>
+                    <strong>Per-Tool Safeguards</strong>:{" "}
+                    {tr(
+                      "Each server tool is monitored with latency metrics and guarded by circuit breakers.",
+                      "Chaque outil est supervisé avec latence et protégé par disjoncteur.",
+                    )}
+                  </li>
+                </ul>
+              </div>
+            )}
+
+            {ssrfWarning && (
+              <div className="banner error" role="alert" style={{ marginBottom: "1rem" }}>
+                {tr(
+                  "Security warning: Remote MCP servers cannot connect to localhost, loopback (127.0.0.1), or private cloud metadata (169.254.169.254).",
+                  "Avertissement de sécurité : Les serveurs MCP distants ne peuvent pas se connecter à localhost, loopback ou métadonnées cloud privées.",
+                )}
+              </div>
+            )}
+
+            <div className="settings-grid">
+              <label>
+                {tr("Name", "Nom")}
+                <input
+                  className="field mono"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="filesystem"
+                />
+              </label>
+              <label>
+                {tr("Transport", "Transport")}
+                <select
+                  className="field"
+                  value={transport}
+                  onChange={(event) =>
+                    setTransport(event.target.value as "stdio" | "http" | "sse")
+                  }
+                >
+                  <option value="stdio">stdio</option>
+                  <option value="http">HTTP</option>
+                  <option value="sse">SSE</option>
+                </select>
+              </label>
+              <label className="settings-wide">
+                {transport === "stdio" ? tr("Command", "Commande") : "URL"}
+                <input
+                  className="field mono"
+                  value={target}
+                  onChange={(event) => setTarget(event.target.value)}
+                  placeholder={transport === "stdio" ? "npx" : "https://…"}
+                />
+              </label>
+              {transport === "stdio" ? (
+                <label className="settings-wide">
+                  {tr("Arguments · one per line", "Arguments · un par ligne")}
+                  <textarea
+                    className="field mono"
+                    rows={3}
+                    value={args}
+                    onChange={(event) => setArgs(event.target.value)}
+                  />
+                </label>
+              ) : null}
+              <label className="settings-wide">
+                {transport === "stdio" ? "envRefs" : "headerRefs"} ·{" "}
+                {tr("JSON to vault://nexus/…", "JSON vers vault://nexus/…")}
+                <textarea
+                  className="field mono"
+                  rows={3}
+                  value={secretRefs}
+                  onChange={(event) => setSecretRefs(event.target.value)}
+                  placeholder={'{"TOKEN":"vault://nexus/mcp-token"}'}
+                />
+              </label>
+            </div>
+            <div className="settings-actions">
+              <button
+                className="button primary"
+                type="button"
+                disabled={name === "" || target === ""}
+                onClick={save}
+              >
+                {tr("Save and connect", "Enregistrer et connecter")}
+              </button>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

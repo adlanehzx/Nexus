@@ -3,8 +3,10 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { DependencyError } from "@nexus/shared";
+import type { AgentState, AgentStatus } from "@nexus/agent-core";
 import type { LLMProvider, LlmMessage } from "@nexus/llm";
 import type { ContextAssembler } from "@nexus/memory";
+import type { QueryableAgentRunStore } from "./container.js";
 import type {
   MissionControlPort,
   MissionSnapshot,
@@ -12,7 +14,7 @@ import type {
   RuntimeSettings,
   SubmitMission,
 } from "@nexus/mission-control-client";
-import { AgentRouter } from "./agent-router.js";
+import { AgentRouter, type TaskCategory } from "./agent-router.js";
 import { SharedArtifactStore, type SharedArtifactRecord } from "./shared-artifacts.js";
 import {
   AgentCollaborationService,
@@ -119,6 +121,8 @@ export class AcpOrchestrator {
   readonly #workspaceRoot: string;
   readonly #grants: MissionGrantIssuer | undefined;
   readonly #router: AgentRouter;
+  readonly #runStore: QueryableAgentRunStore | undefined;
+  readonly #syncedTaskKeys = new Set<string>();
   readonly #sharedArtifacts: SharedArtifactStore;
   readonly #agentCollaboration: AgentCollaborationService;
   readonly #onDegraded: ((event: { reason: string; cause: unknown }) => void) | undefined;
@@ -128,6 +132,7 @@ export class AcpOrchestrator {
     llm?: LLMProvider;
     context?: ContextAssembler;
     workspaceRoot?: string;
+    runStore?: QueryableAgentRunStore;
     /**
      * Signed owner identity issuer.
      *
@@ -154,6 +159,7 @@ export class AcpOrchestrator {
     this.#llm = options.llm;
     this.#context = options.context;
     this.#grants = options.grants;
+    this.#runStore = options.runStore;
     this.#workspaceRoot = options.workspaceRoot ?? resolve(process.cwd(), ".nexus-workspaces");
     this.#onDegraded = options.onDegraded;
     this.#router = options.agentRouter ?? new AgentRouter();
@@ -277,7 +283,24 @@ export class AcpOrchestrator {
     return coordinator?.replay(sessionId);
   }
 
-  async submit(userId: string, objective: string, timezone = "UTC"): Promise<OrchestratedMission> {
+  async submit(
+    userId: string,
+    objective: string,
+    timezone = "UTC",
+    options?: {
+      profile?: string | undefined;
+      model?: string | undefined;
+      reasoningEffort?:
+        | "minimal"
+        | "low"
+        | "medium"
+        | "high"
+        | "xhigh"
+        | "max"
+        | "ultra"
+        | undefined;
+    },
+  ): Promise<OrchestratedMission> {
     const [health, settings] = await Promise.all([
       this.#missionControl.health(),
       this.#missionControl.settings(),
@@ -328,6 +351,7 @@ export class AcpOrchestrator {
       settings,
       memoryContext,
       timezone,
+      options,
     );
     const tasks = await ensureFinalSynthesis(
       planned.tasks,
@@ -336,6 +360,7 @@ export class AcpOrchestrator {
       settings,
       this.#router,
       memoryContext,
+      options?.profile,
     );
     const externalKey = `${missionOwnerPrefix(userId)}-${missionKey}`;
     if (planned.schedule.kind !== "immediate") {
@@ -414,7 +439,73 @@ export class AcpOrchestrator {
   async status(userId: string, missionId: string): Promise<OrchestratedMission | undefined> {
     const mission = await this.#missionControl.getMission(missionId);
     if (!mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) return undefined;
+    await this.syncMissionOutcomes([mission]);
     return presentMission(mission);
+  }
+
+  async syncMissionOutcomes(missions?: MissionSnapshot[], userId?: string): Promise<void> {
+    const list = missions ?? (await this.#missionControl.listMissions(50).catch(() => []));
+    for (const mission of list) {
+      const ownerId = userId ?? (mission as { owner_user_id?: string }).owner_user_id;
+      for (const task of mission.tasks) {
+        const syncKey = `${mission.id}:${task.task_key}:${task.state}`;
+        if (this.#syncedTaskKeys.has(syncKey)) continue;
+        if (task.state === "succeeded" || task.state === "failed") {
+          this.#syncedTaskKeys.add(syncKey);
+          const success = task.state === "succeeded";
+          const category = this.#classifyTaskCategory(task.task_key);
+          await this.#router.recordOutcome(task.profile_key, category, {
+            success,
+            durationMs: 10_000,
+            errorCategory: task.error ? "unknown" : undefined,
+          });
+          if (this.#runStore && ownerId) {
+            try {
+              const state = missionTaskToAgentState(mission, task, ownerId);
+              await this.#runStore.save(state);
+            } catch {
+              // Telemetry save non-blocking
+            }
+          }
+        }
+      }
+    }
+  }
+
+  #classifyTaskCategory(taskKey: string): TaskCategory {
+    const clean = taskKey.toLowerCase();
+    if (
+      clean.includes("code") ||
+      clean.includes("script") ||
+      clean.includes("build") ||
+      clean.includes("correction")
+    )
+      return "code";
+    if (
+      clean.includes("review") ||
+      clean.includes("critique") ||
+      clean.includes("quality")
+    )
+      return "review";
+    if (
+      clean.includes("research") ||
+      clean.includes("search") ||
+      clean.includes("fact")
+    )
+      return "research";
+    if (
+      clean.includes("browser") ||
+      clean.includes("web") ||
+      clean.includes("navigate")
+    )
+      return "browser";
+    if (
+      clean.includes("synthesis") ||
+      clean.includes("summary") ||
+      clean.includes("final")
+    )
+      return "synthesis";
+    return "general";
   }
 
   async #advancedCoordinator(
@@ -437,7 +528,43 @@ export class AcpOrchestrator {
     settings: RuntimeSettings,
     memoryContext: string,
     timezone: string,
+    options?: {
+      profile?: string | undefined;
+      model?: string | undefined;
+      reasoningEffort?:
+        | "minimal"
+        | "low"
+        | "medium"
+        | "high"
+        | "xhigh"
+        | "max"
+        | "ultra"
+        | undefined;
+    },
   ): Promise<z.infer<typeof plannedMissionSchema>> {
+    if (options?.profile && profiles.includes(options.profile)) {
+      const selectedProfile = options.profile;
+      let taskInstruction = objective;
+      if (options.model) {
+        taskInstruction += `\n\n[Model Target: ${options.model}]`;
+      }
+      if (options.reasoningEffort) {
+        taskInstruction += `\n[Reasoning Effort: ${options.reasoningEffort}]`;
+      }
+      return {
+        title: objective.slice(0, 80),
+        schedule: { kind: "immediate" },
+        tasks: [
+          {
+            key: "investigate",
+            profile: selectedProfile,
+            depends_on: [],
+            instruction: taskInstruction,
+          },
+        ],
+      };
+    }
+
     if (this.#llm === undefined) return fallbackPlan(objective, profiles, settings, this.#router);
 
     const ranked = await this.#router.rankProfiles(profiles, objective);
@@ -519,16 +646,41 @@ async function ensureFinalSynthesis(
   settings: RuntimeSettings,
   router: AgentRouter,
   memoryContext = "",
+  preferredProfile?: string,
 ): Promise<MissionTaskInput[]> {
   validatePlan(planned, profiles);
+
+  // If a specific agent was selected and it's a direct single task, execute it directly
+  // as the final task without an unnecessary second pass or language forced to English.
+  const single = planned[0];
+  if (preferredProfile && planned.length === 1 && single !== undefined && single.key === "investigate") {
+    const fallbacks = await router.fallbackOrderFor(single.profile, profiles, single.instruction);
+    return [
+      {
+        key: "nexus_final_synthesis",
+        profile: single.profile,
+        depends_on: [],
+        fallback_profiles: fallbacks,
+        timeout_seconds: settings.task_timeout_seconds,
+        max_attempts: Math.min(settings.max_attempts, 1 + fallbacks.length),
+        retry_delay_seconds: settings.retry_delay_seconds,
+        context_budget_chars: settings.context_budget_chars,
+        instruction: appendUserContext(single.instruction, memoryContext),
+      },
+    ];
+  }
+
   const dependencies = new Set(planned.flatMap((task) => task.depends_on));
   const leaves = planned.filter((task) => !dependencies.has(task.key)).map((task) => task.key);
 
-  const finalProfile = await router.bestProfileFor(
-    profiles,
-    "Final synthesis and clear response",
-    preferred(profiles, settings.synthesis_priority),
-  );
+  const finalProfile =
+    preferredProfile && profiles.includes(preferredProfile)
+      ? preferredProfile
+      : await router.bestProfileFor(
+          profiles,
+          "Final synthesis and clear response",
+          preferred(profiles, settings.synthesis_priority),
+        );
 
   const executionTasks: MissionTaskInput[] = await Promise.all(
     planned.map(async (task) => {
@@ -590,7 +742,7 @@ async function ensureFinalSynthesis(
       retry_delay_seconds: settings.retry_delay_seconds,
       context_budget_chars: Math.max(settings.context_budget_chars, 80_000),
       instruction: appendUserContext(
-        `You are the NEXUS final synthesizer. Directly address the initial mission below in English. Verified results from other agents are injected after this instruction. Compare them, resolve contradictions, do not invent unproven success, and deliver a clear, actionable response.\n\nINITIAL MISSION:\n${objective}`,
+        `You are the NEXUS final synthesizer. Directly address the initial mission below in the exact same language as the request (French if in French, English if in English). Verified results from other agents are injected after this instruction. Compare them, resolve contradictions, do not invent unproven success, and deliver a clear, actionable response.\n\nINITIAL MISSION:\n${objective}`,
         memoryContext,
       ),
     },
@@ -715,4 +867,163 @@ function responseFrom(raw: string | null | undefined): string | null {
     return null;
   }
   return null;
+}
+
+export function missionTaskToAgentState(
+  mission: MissionSnapshot,
+  task: MissionSnapshot["tasks"][number],
+  userId: string,
+): AgentState {
+  let responseText: string | null = null;
+  let explicitInputTokens: number | undefined;
+  let explicitOutputTokens: number | undefined;
+
+  if (task.result_json) {
+    try {
+      const parsed = JSON.parse(task.result_json) as Record<string, unknown>;
+      if (typeof parsed?.response === "string") {
+        responseText = parsed.response;
+      } else if (typeof parsed?.output === "string") {
+        responseText = parsed.output;
+      }
+      const usage = parsed?.usage as { inputTokens?: number; outputTokens?: number } | undefined;
+      if (typeof usage?.inputTokens === "number") {
+        explicitInputTokens = usage.inputTokens;
+      }
+      if (typeof usage?.outputTokens === "number") {
+        explicitOutputTokens = usage.outputTokens;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let model = task.profile_key;
+  const instructionStr = typeof task.instruction === "string" ? task.instruction : "";
+  const errorStr = typeof task.error === "string" ? task.error : task.error ? String(task.error) : null;
+  const lowerResp = (responseText ?? "").toLowerCase();
+  const lowerInst = instructionStr.toLowerCase();
+
+  if (task.profile_key === "claude") {
+    if (lowerResp.includes("opus-5") || lowerInst.includes("opus-5")) {
+      model = "claude-opus-5";
+    } else if (lowerResp.includes("opus")) {
+      model = "claude-opus-4-6-thinking";
+    } else if (lowerResp.includes("sonnet")) {
+      model = "claude-sonnet-4-6";
+    } else {
+      model = "claude-opus-5";
+    }
+  } else if (task.profile_key === "codex") {
+    if (lowerResp.includes("gpt-5") || lowerInst.includes("gpt-5")) {
+      model = "gpt-5";
+    } else if (lowerResp.includes("o3-mini")) {
+      model = "o3-mini";
+    } else {
+      model = "codex-app-server-default";
+    }
+  } else if (task.profile_key === "antigravity" || task.profile_key === "agy2") {
+    model = "gemini-3.8-flash-high";
+  }
+
+  const inputLen = instructionStr.length;
+  const outputLen = responseText ? responseText.length : 0;
+
+  const inputTokens = explicitInputTokens ?? Math.max(1, Math.round(inputLen / 3.8) + 120);
+  const outputTokens = explicitOutputTokens ?? Math.max(1, Math.round(outputLen / 3.8));
+
+  const status: AgentStatus =
+    task.state === "succeeded"
+      ? "completed"
+      : task.state === "failed"
+        ? "failed"
+        : task.state === "running"
+          ? "running"
+          : task.state === "cancelled"
+            ? "cancelled"
+            : "pending";
+
+  const attempt = task.attempts?.[task.attempts.length - 1];
+  const startTime = task.attempts?.[0]?.started_at ?? task.created_at ?? new Date().toISOString();
+  const endTime = attempt?.finished_at ?? task.updated_at ?? null;
+
+  return {
+    record: {
+      runId: task.id,
+      userId,
+      conversationId: attempt?.conversation_id ?? mission.id,
+      correlationId: mission.id,
+      startTime,
+      endTime,
+      status,
+      stopReason:
+        status === "completed" ? "final_answer" : status === "failed" ? "internal_error" : null,
+      iterations: task.attempts?.length || 1,
+      toolsUsed: [],
+      errors: errorStr
+        ? [{ at: endTime ?? startTime, code: "task_error", message: errorStr, iteration: 1 }]
+        : [],
+      usage: {
+        inputTokens,
+        outputTokens,
+      },
+      model,
+      requestedModel: task.profile_key,
+      response: responseText,
+      missionExternalKey: mission.external_key,
+    },
+    messages: [],
+    contextSnapshot: null,
+    pendingConfirmation: null,
+    consecutiveToolFailures: 0,
+    toolCallCount: 0,
+    callSignatures: [],
+    deadlineAt: 0,
+    suspendedAt: null,
+  };
+}
+
+export async function syncUserMissionsToRunStore(
+  userId: string,
+  missionControl: MissionControlPort,
+  runStore: QueryableAgentRunStore,
+): Promise<void> {
+  const prefix = missionOwnerPrefix(userId);
+  const seenTaskIds = new Set<string>();
+
+  // Fetch user-prefixed missions
+  const userMissions = await missionControl.listMissions(100, `${prefix}-`).catch(() => []);
+  for (const mission of userMissions) {
+    const effectiveUserId = (mission as { owner_user_id?: string }).owner_user_id ?? userId;
+    for (const task of mission.tasks) {
+      if (task.state === "succeeded" || task.state === "failed") {
+        seenTaskIds.add(task.id);
+        try {
+          const state = missionTaskToAgentState(mission, task, effectiveUserId);
+          await runStore.save(state);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  // Also query broader missions to catch any owned by this user
+  const allMissions = await missionControl.listMissions(100).catch(() => []);
+  for (const mission of allMissions) {
+    const ownerId = (mission as { owner_user_id?: string }).owner_user_id;
+    if (ownerId === userId || mission.external_key.startsWith(`${prefix}-`)) {
+      for (const task of mission.tasks) {
+        if (!seenTaskIds.has(task.id) && (task.state === "succeeded" || task.state === "failed")) {
+          seenTaskIds.add(task.id);
+          try {
+            const state = missionTaskToAgentState(mission, task, userId);
+            await runStore.save(state);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+  }
 }

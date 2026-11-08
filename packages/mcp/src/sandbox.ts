@@ -186,6 +186,15 @@ export class McpSandboxManager {
 
     // 3. Bubblewrap engine (unprivileged Linux user namespace)
     if (sandbox.engine === "bwrap") {
+      const caps = options?.capabilities ?? probeHostSandboxCapabilities();
+      if (!caps.bwrap && options?.bwrapPath === undefined) {
+        return {
+          command: config.command,
+          args: config.args,
+          env,
+        };
+      }
+
       const bwrapCmd = options?.bwrapPath ?? "bwrap";
       const bwrapArgs: string[] = [];
 

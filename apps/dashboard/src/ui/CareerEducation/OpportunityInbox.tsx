@@ -6,7 +6,7 @@ import type {
   MonitoredSource,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
-import { IconSearch, IconWarning, IconStar } from "../icons.js";
+import { IconSearch, IconWarning, IconStar, IconRefresh } from "../icons.js";
 
 interface OpportunityInboxProps {
   opportunities: Opportunity[];
@@ -176,7 +176,7 @@ export function OpportunityInbox({
                 )
               }
             >
-              ↻
+              <IconRefresh size={13} />
             </button>
           </div>
         ))}

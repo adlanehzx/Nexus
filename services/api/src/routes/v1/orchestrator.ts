@@ -102,6 +102,7 @@ export function buildAcpOrchestrator(app: FastifyInstance): AcpOrchestrator | un
   if (missionControl === undefined) return undefined;
   return new AcpOrchestrator({
     missionControl,
+    runStore: app.services.runStore,
     context: app.services.context,
     // The grant service signs **and** registers: the orchestrator only
     // receives the ability to issue mission scopes.
@@ -168,6 +169,11 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
         body: z.object({
           message: z.string().trim().min(1).max(32_000),
           timezone: z.string().trim().min(1).max(100).default("UTC"),
+          profile: z.string().trim().min(1).max(128).optional(),
+          model: z.string().trim().min(1).max(128).optional(),
+          reasoningEffort: z
+            .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
+            .optional(),
         }),
         response: { 202: okSchema(missionViewSchema) },
       },
@@ -184,6 +190,11 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
         userId,
         request.body.message,
         request.body.timezone,
+        {
+          profile: request.body.profile,
+          model: request.body.model,
+          reasoningEffort: request.body.reasoningEffort,
+        },
       );
       return reply.code(202).send(ok(mission, request.id));
     },
@@ -299,6 +310,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     async (request) => {
       if (missionControl === undefined)
         throw new DependencyError({ message: "ACP engine is not configured." });
+      await orchestrator?.syncMissionOutcomes();
       return ok(await missionControl.agents(), request.id);
     },
   );
@@ -492,6 +504,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (providerAccounts === undefined) {
         throw new Error("Provider accounts manager is not configured.");
       }
+      await orchestrator?.syncMissionOutcomes();
       const tested = await providerAccounts.probeAuth(request.params.id);
       if (tested === undefined) throw new NotFoundError("ProviderAccount", request.params.id);
       return ok(tested, request.id);
@@ -596,6 +609,7 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       },
     },
     async (request) => {
+      await orchestrator?.syncMissionOutcomes();
       const health = missionControl ? await missionControl.health() : { profiles: [] };
       const defaultProfiles = providerAccounts
         ? (await providerAccounts.listAccounts()).map((a) => a.id)

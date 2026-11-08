@@ -21,6 +21,7 @@ import { TailscaleDiscoveryService } from "./services/tailscale-discovery.js";
 import { initializeTelemetry } from "./services/telemetry-runtime.js";
 import { NexusTelemetry } from "./services/domain-telemetry.js";
 import { LinkedInIntegrationService } from "./services/linkedin-integration.js";
+import { McpOAuthService } from "./services/mcp-oauth.js";
 import { FreeLlmRuntimeProvider } from "./services/freelm-runtime.js";
 import { UnifiedLlmRuntimeProvider } from "./services/llm-runtime.js";
 
@@ -34,6 +35,10 @@ import { UnifiedLlmRuntimeProvider } from "./services/llm-runtime.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 loadDotEnv(resolve(here, "../../../.env"));
+loadDotEnv(resolve(here, "../../.env"));
+loadDotEnv(resolve(here, "../.env"));
+loadDotEnv(resolve(process.cwd(), ".env"));
+loadDotEnv("/var/lib/nexus/runtime-config/.env");
 
 // An invalid configuration must prevent boot, not yield an obscure error
 // on the first request. It is therefore resolved before anything else.
@@ -122,6 +127,11 @@ const mcp = new McpManager({
   registry: toolRegistry,
   configs: await runtimeConfiguration.loadMcp(),
   resolveSecret: (reference) => vault.get(reference),
+});
+const mcpOAuth = new McpOAuthService({
+  vault,
+  runtimeConfiguration,
+  mcpManager: mcp,
 });
 const browserConfiguration = await runtimeConfiguration.loadBrowser();
 const browserToken =
@@ -222,6 +232,7 @@ const services = new ServiceContainer({
   apiVersion: config.API_VERSION,
   toolRegistry,
   mcp,
+  mcpOAuth,
   runtimeConfiguration,
   vault,
   ...(browser === undefined ? {} : { browser }),

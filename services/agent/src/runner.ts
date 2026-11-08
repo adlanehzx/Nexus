@@ -74,6 +74,21 @@ function terminate(child: ChildProcessWithoutNullStreams): void {
   force.unref();
 }
 
+function extractOptionValues(options: unknown): string[] {
+  if (!Array.isArray(options)) return [];
+  const result: string[] = [];
+  for (const item of options) {
+    if (typeof item === "object" && item !== null) {
+      if ("value" in item && typeof (item as { value: unknown }).value === "string") {
+        result.push((item as { value: string }).value);
+      } else if ("options" in item && Array.isArray((item as { options: unknown }).options)) {
+        result.push(...extractOptionValues((item as { options: unknown }).options));
+      }
+    }
+  }
+  return result;
+}
+
 export async function runAcp(request: RunRequest): Promise<RunResult> {
   const workspace = await realpath(request.cwd);
   const profile = await loadProfile(request.registryPath, request.profile);
@@ -121,36 +136,94 @@ export async function runAcp(request: RunRequest): Promise<RunResult> {
         clientInfo: { name: "nexus-acp-runtime", version: "1.0.0" },
       });
       return context.buildSession(workspace).withSession(async (session) => {
+        let cleanPrompt = request.prompt;
+        let dynamicModel: string | undefined = profile.model;
+        let dynamicEffort: string | undefined = profile.reasoning_effort;
+
+        const modelMatch = cleanPrompt.match(/\[Model Target:\s*([^\]]+)\]/i);
+        if (modelMatch && modelMatch[1]) {
+          dynamicModel = modelMatch[1].trim();
+          cleanPrompt = cleanPrompt.replace(/\[Model Target:\s*[^\]]+\]/gi, "").trim();
+        }
+
+        const effortMatch = cleanPrompt.match(/\[Reasoning Effort:\s*([^\]]+)\]/i);
+        if (effortMatch && effortMatch[1]) {
+          dynamicEffort = effortMatch[1].trim();
+          cleanPrompt = cleanPrompt.replace(/\[Reasoning Effort:\s*[^\]]+\]/gi, "").trim();
+        }
+
         const supportedOptions = new Set(
           session.newSessionResponse.configOptions?.map((option) => option.id) ?? [],
         );
-        const supportsModel = supportedOptions.has("model");
-        if (profile.model !== undefined && supportsModel === true) {
-          await context.request(acp.methods.agent.session.setConfigOption, {
-            sessionId: session.sessionId,
-            configId: "model",
-            value: profile.model,
-          });
+        const modelConfig = session.newSessionResponse.configOptions?.find((option) => option.id === "model");
+        if (modelConfig && dynamicModel) {
+          const allowedValues = extractOptionValues("options" in modelConfig ? modelConfig.options : []);
+          let targetValue = dynamicModel;
+          if (allowedValues.length > 0 && !allowedValues.includes(targetValue)) {
+            const norm = targetValue.toLowerCase();
+            if (norm.includes("sonnet") && allowedValues.includes("sonnet")) {
+              targetValue = "sonnet";
+            } else if (norm.includes("opus") && !norm.includes("1m") && allowedValues.includes("opus")) {
+              targetValue = "opus";
+            } else if (norm.includes("opus") && norm.includes("1m") && allowedValues.includes("opus[1m]")) {
+              targetValue = "opus[1m]";
+            } else if (norm.includes("haiku") && allowedValues.includes("haiku")) {
+              targetValue = "haiku";
+            } else if (norm.includes("fable") && allowedValues.includes("claude-fable-5[1m]")) {
+              targetValue = "claude-fable-5[1m]";
+            } else if ((norm.includes("astra") || norm.includes("o1") || norm.includes("o3")) && allowedValues.includes("gpt-6-astra")) {
+              targetValue = "gpt-6-astra";
+            } else if (norm.includes("sol") && allowedValues.includes("gpt-5.6-sol")) {
+              targetValue = "gpt-5.6-sol";
+            } else if (norm.includes("terra") && allowedValues.includes("gpt-5.6-terra")) {
+              targetValue = "gpt-5.6-terra";
+            } else if (norm.includes("luna") && allowedValues.includes("gpt-5.6-luna")) {
+              targetValue = "gpt-5.6-luna";
+            }
+          }
+          if (allowedValues.length === 0 || allowedValues.includes(targetValue)) {
+            try {
+              await context.request(acp.methods.agent.session.setConfigOption, {
+                sessionId: session.sessionId,
+                configId: "model",
+                value: targetValue,
+              });
+            } catch {
+              // Ignore if agent rejects specific model value
+            }
+          }
         }
+
         const configuredOptions = { ...profile.config_options };
-        if (profile.reasoning_effort !== undefined) {
-          const reasoningId = ["reasoning_effort", "reasoning", "thought_level"].find((id) =>
-            supportedOptions.has(id),
+        if (dynamicEffort !== undefined && dynamicEffort !== "auto") {
+          const reasoningOption = session.newSessionResponse.configOptions?.find((option) =>
+            ["reasoning_effort", "effort", "reasoning", "thought_level"].includes(option.id),
           );
-          if (reasoningId !== undefined) configuredOptions[reasoningId] = profile.reasoning_effort;
+          if (reasoningOption) {
+            let effortValue = dynamicEffort;
+            if (effortValue === "minimal") effortValue = "low";
+            const allowedEfforts = extractOptionValues("options" in reasoningOption ? reasoningOption.options : []);
+            if (allowedEfforts.length === 0 || allowedEfforts.includes(effortValue)) {
+              configuredOptions[reasoningOption.id] = effortValue;
+            }
+          }
         }
         for (const [configId, value] of Object.entries(configuredOptions)) {
           if (!supportedOptions.has(configId)) continue;
-          await context.request(acp.methods.agent.session.setConfigOption, {
-            sessionId: session.sessionId,
-            configId,
-            value,
-          });
+          try {
+            await context.request(acp.methods.agent.session.setConfigOption, {
+              sessionId: session.sessionId,
+              configId,
+              value,
+            });
+          } catch {
+            // Ignore if option fails
+          }
         }
         const prompt =
           profile.system_prompt === undefined
-            ? request.prompt
-            : `${profile.system_prompt.trim()}\n\nUser mission:\n${request.prompt}`;
+            ? cleanPrompt
+            : `${profile.system_prompt.trim()}\n\nUser mission:\n${cleanPrompt}`;
         void session.prompt(prompt);
         let response = "";
         for (;;) {

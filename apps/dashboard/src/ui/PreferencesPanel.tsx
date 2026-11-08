@@ -424,7 +424,7 @@ export function PreferencesPanel() {
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "flex-start",
+                alignItems: "center",
                 marginBottom: "0.5rem",
               }}
             >
@@ -459,20 +459,15 @@ export function PreferencesPanel() {
               style={{
                 fontSize: "0.85rem",
                 color: "var(--nx-text-muted, #95a3ba)",
-                margin: "0 0 0.75rem 0",
+                margin: 0,
                 lineHeight: 1.4,
               }}
             >
               {tr(
-                "Continuous 2D workspace with Hyprland tiling, pan/zoom camera, interactive minimap, and multi-agent spaces.",
-                "Espace continu 2D avec tiling Hyprland, caméra pan/zoom, minimap radar interactive et 5 espaces de travail connectés.",
+                "Continuous 2D workspace with tiling agent windows and spatial canvas navigation.",
+                "Espace 2D continu avec fenêtres multi-agents tuilées et navigation spatiale.",
               )}
             </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.75rem" }}>
-              <span className="badge ok">Tiling & Float</span>
-              <span className="badge">Caméra 2D</span>
-              <span className="badge">Ctrl+K Palette</span>
-            </div>
           </div>
 
           {/* Classic Dashboard Card */}
@@ -499,7 +494,7 @@ export function PreferencesPanel() {
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "flex-start",
+                alignItems: "center",
                 marginBottom: "0.5rem",
               }}
             >
@@ -534,19 +529,15 @@ export function PreferencesPanel() {
               style={{
                 fontSize: "0.85rem",
                 color: "var(--nx-text-muted, #95a3ba)",
-                margin: "0 0 0.75rem 0",
+                margin: 0,
                 lineHeight: 1.4,
               }}
             >
               {tr(
-                "Standard modular web dashboard with sidebar navigation, grouped sections, and traditional responsive layout.",
-                "Dashboard web modulaire standard avec barre de navigation latérale, sections thématiques et disposition responsive.",
+                "Standard modular web dashboard with sidebar navigation and grouped categories.",
+                "Dashboard web modulaire standard avec barre latérale et navigation par catégories.",
               )}
             </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.75rem" }}>
-              <span className="badge">Barre latérale</span>
-              <span className="badge">Vue modulaire</span>
-            </div>
           </div>
         </div>
       </div>

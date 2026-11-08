@@ -8,7 +8,7 @@ import { useI18n } from "../i18n/index.js";
 // 5. Agent Runs
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function Runs({ api }: { api: DashboardApi }) {
+export function Runs({ api, embedded = false }: { api: DashboardApi; embedded?: boolean }) {
   const { tr } = useI18n();
   const state = useSection(() => api.runs());
   const observability = useSection(() => api.observability());
@@ -42,39 +42,64 @@ export function Runs({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <div className="content">
-      <p className="muted" style={{ marginTop: 0 }}>
-        {tr(
-          "Status, actions, tools, progress, results, errors, and metrics. The model's reasoning is not exposed — the server does not transmit it.",
-          "Statut, actions, outils, progression, résultats, erreurs et métriques. Le raisonnement interne n'est pas exposé — le serveur ne le transmet pas.",
-        )}
-      </p>
+    <div className={embedded ? undefined : "content"} style={embedded ? { marginTop: "0.5rem" } : undefined}>
+      {embedded ? null : (
+        <p className="muted" style={{ marginTop: 0 }}>
+          {tr(
+            "Status, actions, tools, progress, results, errors, and metrics.",
+            "Statut, actions, outils, progression, résultats, erreurs et métriques.",
+          )}
+        </p>
+      )}
 
       <Section state={observability}>
         {(summary) => (
           <>
-            <div className="metrics">
-              <Metric
-                value={formatCount(summary.totals.runs)}
-                label={tr("analyzed runs", "exécutions analysées")}
-              />
-              <Metric
-                value={asPercent(summary.rates.fallback)}
-                label={tr("fallback rate", "taux de secours")}
-              />
-              <Metric
-                value={asPercent(summary.rates.toolError)}
-                label={tr("tool errors", "erreurs d'outils")}
-                alert={summary.rates.toolError > 0.1}
-              />
-              <Metric
-                value={asPercent(summary.rates.runError)}
-                label={tr("failed runs", "exécutions échouées")}
-              />
-              <Metric
-                value={formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
-                label={tr("equivalent API cost", "coût API équivalent")}
-              />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "1rem" }}>
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  {tr("Analyzed Runs", "Exécutions analysées")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                  {formatCount(summary.totals.runs)}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  {tr("Fallback Rate", "Taux de secours")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                  {asPercent(summary.rates.fallback)}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  {tr("Tool Errors", "Erreurs d'outils")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: summary.rates.toolError > 0.1 ? "var(--color-error, #ff5252)" : "inherit" }}>
+                  {asPercent(summary.rates.toolError)}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  {tr("Failed Runs", "Exécutions échouées")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: summary.rates.runError > 0 ? "var(--color-warning, #ffb300)" : "inherit" }}>
+                  {asPercent(summary.rates.runError)}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-muted, #888)" }}>
+                  {tr("Equiv. API Cost", "Coût API équiv.")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px", color: "var(--color-accent, #00e5ff)" }}>
+                  {formatEstimatedCost(summary.totals.estimatedApiEquivalentCostUsd)}
+                </div>
+              </div>
             </div>
             {summary.agents.length === 0 ? null : (
               <Table
@@ -274,5 +299,5 @@ function asPercent(rate: number): string {
 }
 
 function formatEstimatedCost(cost: number | null): string {
-  return cost === null ? "not configured" : `${cost.toFixed(4)} $`;
+  return cost === null ? "—" : `${cost.toFixed(4)} $`;
 }

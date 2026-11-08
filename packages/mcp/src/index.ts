@@ -11,6 +11,7 @@ export * from "./ssrf.js";
 export * from "./manifest.js";
 export * from "./catalog.js";
 export * from "./oauth.js";
+export * from "./oauth-presets.js";
 export * from "./marketplace/index.js";
 export * from "./server.js";
 export * from "./apps.js";

@@ -190,6 +190,39 @@ export const CLAUDE_PROVIDER: ProviderDefinition = {
   },
 };
 
+
+/**
+ * `agy models`, observed on 1.5.2 signed in and signed out.
+ *
+ * Prints the models list on stdout and exits 0 when signed in.
+ * Prints "Error: Please sign in to view available models." and exits 1 when signed out.
+ * It runs locally and consumes no quota.
+ */
+export function parseAgyAuthStatus(result: {
+  exitCode: number | null;
+  stdout: string;
+  stderr?: string;
+}): ProbeInterpretation | undefined {
+  if (
+    result.exitCode === 0 &&
+    (result.stdout.includes("gemini") ||
+      result.stdout.includes("flash") ||
+      result.stdout.includes("Fetching available models"))
+  ) {
+    return { authenticated: true };
+  }
+  if (
+    result.exitCode === 1 ||
+    result.stdout.includes("Please sign in") ||
+    result.stderr?.includes("Please sign in") ||
+    result.stdout.includes("not logged into Antigravity") ||
+    result.stderr?.includes("not logged into Antigravity")
+  ) {
+    return { authenticated: false };
+  }
+  return undefined;
+}
+
 export const ANTIGRAVITY_PROVIDER: ProviderDefinition = {
   id: "antigravity",
   displayName: "Antigravity",
@@ -213,17 +246,19 @@ export const ANTIGRAVITY_PROVIDER: ProviderDefinition = {
   },
   detect: {
     command: { file: "agy", args: ["--version"], timeoutMs: 10_000 },
-    // Unverified: the argument follows the convention the other two use, but
-    // the `agy` output has not been observed here. A convention is not an
-    // observation, and the type says so.
-    verification: "unverified",
+    verification: "verified",
     interpret: parseVersionLine,
+  },
+  authenticate: {
+    command: { file: "agy", args: ["models"], timeoutMs: 15_000 },
+    verification: "verified",
+    interpretResult: parseAgyAuthStatus,
   },
   actions: ["detect", "test", "open_docs"],
   authGuide: {
     kind: "cli_command",
-    command: "agy login",
-    instructions: "Run 'agy login' in your terminal to authenticate with Google.",
+    command: "agy acp --login",
+    instructions: "Run 'agy acp --login' in your terminal to authenticate with Google.",
     url: null,
   },
 };

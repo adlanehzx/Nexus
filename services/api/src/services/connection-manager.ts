@@ -89,6 +89,10 @@ export class LocalConnectionManager implements ConnectionCatalogService {
       // names before any child process receives this ambient environment.
       env: process.env,
     });
+
+    if (process.env.NODE_ENV !== "test") {
+      void this.detectAll().catch(() => {});
+    }
   }
 
   list(): ConnectionCatalogEntry[] {

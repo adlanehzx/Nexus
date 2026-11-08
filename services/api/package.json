@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Network boundary: REST v1, WebSocket gateway and authentication",
   "main": "./dist/server.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/server.ts",

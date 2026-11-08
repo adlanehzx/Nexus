@@ -29,6 +29,42 @@ export interface TokenBreakdown {
 export const CANONICAL_PRICING_CATALOG_V2026: readonly ModelPricingTier[] = [
   // Anthropic Claude
   {
+    modelId: "claude-opus-5",
+    provider: "claude",
+    inputPerMillionUsd: 15.0,
+    outputPerMillionUsd: 75.0,
+    cacheReadPerMillionUsd: 1.5,
+    cacheWritePerMillionUsd: 18.75,
+    reasoningPerMillionUsd: 75.0,
+  },
+  {
+    modelId: "claude",
+    provider: "claude",
+    inputPerMillionUsd: 3.0,
+    outputPerMillionUsd: 15.0,
+    cacheReadPerMillionUsd: 0.3,
+    cacheWritePerMillionUsd: 3.75,
+    reasoningPerMillionUsd: 15.0,
+  },
+  {
+    modelId: "claude-sonnet-4-6",
+    provider: "claude",
+    inputPerMillionUsd: 3.0,
+    outputPerMillionUsd: 15.0,
+    cacheReadPerMillionUsd: 0.3,
+    cacheWritePerMillionUsd: 3.75,
+    reasoningPerMillionUsd: 15.0,
+  },
+  {
+    modelId: "claude-opus-4-6-thinking",
+    provider: "claude",
+    inputPerMillionUsd: 15.0,
+    outputPerMillionUsd: 75.0,
+    cacheReadPerMillionUsd: 1.5,
+    cacheWritePerMillionUsd: 18.75,
+    reasoningPerMillionUsd: 75.0,
+  },
+  {
     modelId: "claude-3-7-sonnet-20250219",
     provider: "claude",
     inputPerMillionUsd: 3.0,
@@ -55,12 +91,33 @@ export const CANONICAL_PRICING_CATALOG_V2026: readonly ModelPricingTier[] = [
   },
   // OpenAI & Codex
   {
+    modelId: "gpt-5",
+    provider: "openai",
+    inputPerMillionUsd: 2.5,
+    outputPerMillionUsd: 10.0,
+    cacheReadPerMillionUsd: 1.25,
+  },
+  {
+    modelId: "codex",
+    provider: "codex",
+    inputPerMillionUsd: 2.5,
+    outputPerMillionUsd: 10.0,
+  },
+  {
     modelId: "o3-mini",
     provider: "openai",
     inputPerMillionUsd: 1.1,
     outputPerMillionUsd: 4.4,
     cacheReadPerMillionUsd: 0.55,
     reasoningPerMillionUsd: 4.4,
+  },
+  {
+    modelId: "o1",
+    provider: "openai",
+    inputPerMillionUsd: 15.0,
+    outputPerMillionUsd: 60.0,
+    cacheReadPerMillionUsd: 7.5,
+    reasoningPerMillionUsd: 60.0,
   },
   {
     modelId: "gpt-4o",
@@ -70,12 +127,78 @@ export const CANONICAL_PRICING_CATALOG_V2026: readonly ModelPricingTier[] = [
     cacheReadPerMillionUsd: 1.25,
   },
   {
+    modelId: "gpt-4o-mini",
+    provider: "openai",
+    inputPerMillionUsd: 0.15,
+    outputPerMillionUsd: 0.6,
+    cacheReadPerMillionUsd: 0.075,
+  },
+  {
     modelId: "codex-app-server-default",
     provider: "codex",
     inputPerMillionUsd: 2.5,
     outputPerMillionUsd: 10.0,
   },
   // Google Antigravity (Gemini)
+  {
+    modelId: "antigravity",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.15,
+    outputPerMillionUsd: 0.6,
+    cacheReadPerMillionUsd: 0.0375,
+  },
+  {
+    modelId: "agy2",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.15,
+    outputPerMillionUsd: 0.6,
+    cacheReadPerMillionUsd: 0.0375,
+  },
+  {
+    modelId: "gemini-3.8-flash-high",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.15,
+    outputPerMillionUsd: 0.6,
+    cacheReadPerMillionUsd: 0.0375,
+  },
+  {
+    modelId: "gemini-3.8-flash-medium",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.1,
+    outputPerMillionUsd: 0.4,
+    cacheReadPerMillionUsd: 0.025,
+  },
+  {
+    modelId: "gemini-3.8-flash-low",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.075,
+    outputPerMillionUsd: 0.3,
+    cacheReadPerMillionUsd: 0.018,
+  },
+  {
+    modelId: "claude-sonnet-4-6",
+    provider: "antigravity",
+    inputPerMillionUsd: 3.0,
+    outputPerMillionUsd: 15.0,
+    cacheReadPerMillionUsd: 0.3,
+    cacheWritePerMillionUsd: 3.75,
+    reasoningPerMillionUsd: 15.0,
+  },
+  {
+    modelId: "claude-opus-4-6-thinking",
+    provider: "antigravity",
+    inputPerMillionUsd: 15.0,
+    outputPerMillionUsd: 75.0,
+    cacheReadPerMillionUsd: 1.5,
+    cacheWritePerMillionUsd: 18.75,
+    reasoningPerMillionUsd: 75.0,
+  },
+  {
+    modelId: "gpt-oss-120b-medium",
+    provider: "antigravity",
+    inputPerMillionUsd: 0.35,
+    outputPerMillionUsd: 1.4,
+  },
   {
     modelId: "gemini-2.5-pro",
     provider: "antigravity",
@@ -123,7 +246,18 @@ export class PricingCatalog {
   }
 
   getPricing(modelId: string): ModelPricingTier | undefined {
-    return this.tiers.get(modelId);
+    if (!modelId) return undefined;
+    const direct = this.tiers.get(modelId);
+    if (direct) return direct;
+    const lower = modelId.toLowerCase();
+    for (const [key, tier] of this.tiers.entries()) {
+      if (key.toLowerCase() === lower) return tier;
+    }
+    if (lower.includes("opus")) return this.tiers.get("claude-opus-5") ?? this.tiers.get("claude-opus-4-6-thinking");
+    if (lower.includes("claude") || lower.includes("sonnet")) return this.tiers.get("claude-sonnet-4-6");
+    if (lower.includes("gemini") || lower.includes("antigravity") || lower.includes("agy")) return this.tiers.get("gemini-3.8-flash-high");
+    if (lower.includes("codex") || lower.includes("gpt")) return this.tiers.get("codex-app-server-default") ?? this.tiers.get("gpt-4o");
+    return undefined;
   }
 
   calculateCostUsd(modelId: string, tokens: TokenBreakdown): number {

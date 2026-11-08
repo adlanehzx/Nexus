@@ -8,6 +8,7 @@ import { generateSigningKeyPair, SCRYPT_FAST } from "@nexus/auth";
 import { InMemoryCredentialProvider, type Device, type DeviceRole } from "@nexus/devices";
 import { buildApp, type NexusApp } from "../src/app.js";
 import { ServiceContainer } from "../src/services/container.js";
+import { McpOAuthService } from "../src/services/mcp-oauth.js";
 import { PrismaAgentRunStore } from "../src/services/persistence/prisma-agent-run-store.js";
 import { PrismaUserStore } from "../src/services/persistence/prisma-user-store.js";
 import { PrismaSessionStore } from "../src/services/persistence/prisma-session-store.js";
@@ -64,6 +65,7 @@ import type { MissionControlPort } from "@nexus/mission-control-client";
 import type { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 import type { ConnectionCatalogService } from "../src/services/connection-manager.js";
 import type { SatelliteService } from "../src/services/satellite-service.js";
+import type { ProviderAccountService } from "../src/services/provider-accounts.js";
 
 export async function makeApi(
   options: {
@@ -71,6 +73,7 @@ export async function makeApi(
     llmProvider?: LLMProvider;
     missionControl?: MissionControlPort;
     runtimeConfiguration?: RuntimeConfigurationStore;
+    providerAccounts?: ProviderAccountService;
     connectionManager?: ConnectionCatalogService;
     publicApiUrl?: string;
     expectedWorkerVersion?: string;
@@ -99,6 +102,9 @@ export async function makeApi(
     ...(options.runtimeConfiguration === undefined
       ? {}
       : { runtimeConfiguration: options.runtimeConfiguration }),
+    ...(options.providerAccounts === undefined
+      ? {}
+      : { providerAccounts: options.providerAccounts }),
     ...(options.connectionManager === undefined
       ? {}
       : { connectionManager: options.connectionManager }),
@@ -106,6 +112,7 @@ export async function makeApi(
     ...(options.expectedWorkerVersion === undefined
       ? {}
       : { expectedWorkerVersion: options.expectedWorkerVersion }),
+    mcpOAuth: new McpOAuthService({}),
     // Scrypt cost is deliberate in production; paying it on each test
     // would make the suite unusable, and a slow suite ends up skipped.
     // Parameters are encoded in the hash: nothing else changes.

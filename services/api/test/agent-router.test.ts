@@ -18,7 +18,10 @@ describe("Intelligent Agent Routing", () => {
   beforeEach(async () => {
     configDir = await mkdtemp(join(tmpdir(), "nexus-test-router-"));
     const runtimeConfiguration = new RuntimeConfigurationStore(configDir);
-    accountsService = new ProviderAccountService({ runtimeConfiguration });
+    accountsService = new ProviderAccountService({
+      runtimeConfiguration,
+      sessionsDir: join(configDir, "sessions"),
+    });
     router = new AgentRouter({
       runtimeConfiguration,
       providerAccounts: accountsService,

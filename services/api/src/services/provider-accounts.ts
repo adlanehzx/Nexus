@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -6,6 +7,307 @@ import { ConflictError } from "./stores.js";
 
 export const authStatusSchema = z.enum(["authenticated", "unauthenticated", "expired", "unknown"]);
 export type AuthStatus = z.infer<typeof authStatusSchema>;
+
+interface TokenFileData {
+  client_id?: string;
+  client_secret?: string;
+  refresh_token?: string;
+  project_id?: string;
+}
+
+interface QuotaBucket {
+  bucketId?: string;
+  window?: string;
+  displayName?: string;
+  description?: string;
+  resetTime?: string;
+  remainingFraction?: number;
+}
+
+interface QuotaSummaryResponse {
+  groups?: Array<{ displayName?: string; buckets?: QuotaBucket[] }>;
+  buckets?: QuotaBucket[];
+}
+
+export function resolveAntigravityTokenPath(
+  account: ProviderAccount,
+  sessionsDir?: string,
+): string | null {
+  const candidates: string[] = [];
+
+  if (account.sessionDir && existsSync(account.sessionDir)) {
+    candidates.push(
+      join(account.sessionDir, "acp_token.json"),
+      join(account.sessionDir, "antigravity-acp", "acp_token.json"),
+    );
+  }
+
+  if (sessionsDir && existsSync(sessionsDir)) {
+    candidates.push(
+      join(sessionsDir, account.id, "acp_token.json"),
+      join(sessionsDir, account.id, "antigravity-acp", "acp_token.json"),
+    );
+  }
+
+  if (!sessionsDir) {
+    const home = homedir();
+    const t3Dirs = [
+      join(home, ".t3", "userdata", "providers", "antigravity"),
+      "/home/node/.t3/userdata/providers/antigravity",
+      "/home/adlane/.t3/userdata/providers/antigravity",
+    ];
+    for (const d of t3Dirs) {
+      if (existsSync(d)) {
+        try {
+          const instances = readdirSync(d, { withFileTypes: true });
+          for (const inst of instances) {
+            if (inst.isDirectory()) {
+              candidates.push(join(d, inst.name, "antigravity-acp", "acp_token.json"));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+export async function fetchAntigravityQuotas(tokenPath: string): Promise<ProviderAccountQuotas | null> {
+  if (!existsSync(tokenPath)) return null;
+  let token: TokenFileData;
+  try {
+    token = JSON.parse(readFileSync(tokenPath, "utf8")) as TokenFileData;
+  } catch {
+    return null;
+  }
+  if (!token.client_id || !token.refresh_token) return null;
+
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: token.client_id,
+        client_secret: token.client_secret ?? "",
+        refresh_token: token.refresh_token,
+        grant_type: "refresh_token",
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const oauth = (await res.json()) as { access_token?: string };
+    if (!oauth.access_token) return null;
+
+    const endpoints = [
+      "https://daily-cloudcode-pa.googleapis.com",
+      "https://cloudcode-pa.googleapis.com",
+    ];
+
+    let best5h: { fraction: number; resetTime?: string | undefined } | null = null;
+    let bestWeek: { fraction: number; resetTime?: string | undefined } | null = null;
+
+    for (const ep of endpoints) {
+      try {
+        const qRes = await fetch(`${ep}/v1internal:retrieveUserQuotaSummary`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${oauth.access_token}`,
+            "User-Agent":
+              "antigravity/hub/2.24.0 (aidev_client; os_type=linux; arch=x64; cl=963137146)",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(token.project_id ? { project: token.project_id } : {}),
+          signal: AbortSignal.timeout(6000),
+        });
+        if (!qRes.ok) continue;
+        const data = (await qRes.json()) as QuotaSummaryResponse;
+        const buckets = (data.groups || [])
+          .flatMap((g) => g.buckets || [])
+          .concat(data.buckets || []);
+
+        for (const b of buckets) {
+          if (typeof b.remainingFraction !== "number") continue;
+          if (b.window === "5h" || b.bucketId?.endsWith("-5h")) {
+            if (best5h === null || b.remainingFraction < best5h.fraction) {
+              best5h = {
+                fraction: b.remainingFraction,
+                ...(b.resetTime !== undefined ? { resetTime: b.resetTime } : {}),
+              };
+            }
+          } else if (b.window === "weekly" || b.bucketId?.endsWith("-weekly")) {
+            if (bestWeek === null || b.remainingFraction < bestWeek.fraction) {
+              bestWeek = {
+                fraction: b.remainingFraction,
+                ...(b.resetTime !== undefined ? { resetTime: b.resetTime } : {}),
+              };
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (best5h === null && bestWeek === null) return null;
+
+    const resolved5hFraction =
+      best5h !== null ? best5h.fraction : bestWeek !== null ? bestWeek.fraction : 1;
+    const resolved5hReset =
+      best5h?.resetTime ??
+      (bestWeek?.resetTime
+        ? new Date(Date.now() + 5 * 3600 * 1000).toISOString()
+        : null);
+
+    return {
+      remaining5hPercent: Math.max(0, Math.min(100, Math.round(resolved5hFraction * 100))),
+      resets5hAt: resolved5hReset,
+      remainingWeekPercent:
+        bestWeek !== null ? Math.max(0, Math.min(100, Math.round(bestWeek.fraction * 100))) : null,
+      resetsWeekAt: bestWeek?.resetTime ?? null,
+      exhausted:
+        (best5h !== null && best5h.fraction <= 0) || (bestWeek !== null && bestWeek.fraction <= 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function probeClaudeAuth(account: ProviderAccount, sessionsDir?: string): AuthStatus {
+  const candidates: string[] = [];
+  if (account.sessionDir && existsSync(account.sessionDir)) {
+    candidates.push(
+      join(account.sessionDir, ".credentials.json"),
+      join(account.sessionDir, ".claude", ".credentials.json"),
+    );
+  }
+  if (!sessionsDir) {
+    const home = homedir();
+    candidates.push(
+      join(home, ".claude", ".credentials.json"),
+      "/home/node/.claude/.credentials.json",
+      "/home/adlane/.claude/.credentials.json",
+    );
+  }
+  for (const c of candidates) {
+    if (existsSync(c)) {
+      try {
+        const creds = JSON.parse(readFileSync(c, "utf8")) as {
+          claudeAiOauth?: { accessToken?: string };
+        };
+        if (creds.claudeAiOauth?.accessToken) {
+          return "authenticated";
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return account.authStatus;
+}
+
+export function probeCodexAuth(account: ProviderAccount, sessionsDir?: string): AuthStatus {
+  const candidates: string[] = [];
+  if (account.sessionDir && existsSync(account.sessionDir)) {
+    candidates.push(
+      join(account.sessionDir, "auth.json"),
+      join(account.sessionDir, ".codex", "auth.json"),
+      join(account.sessionDir, "config.toml"),
+    );
+  }
+  if (!sessionsDir) {
+    const home = homedir();
+    candidates.push(
+      join(home, ".codex", "auth.json"),
+      "/home/node/.codex/auth.json",
+      "/home/adlane/.codex/auth.json",
+      join(home, ".codex", "config.toml"),
+      "/home/node/.codex/config.toml",
+      "/home/adlane/.codex/config.toml",
+    );
+  }
+  for (const c of candidates) {
+    if (existsSync(c)) {
+      try {
+        if (c.endsWith(".json")) {
+          const creds = JSON.parse(readFileSync(c, "utf8")) as {
+            tokens?: { access_token?: string };
+            OPENAI_API_KEY?: string;
+            auth_mode?: string;
+          };
+          if (creds.tokens?.access_token || creds.OPENAI_API_KEY || creds.auth_mode === "chatgpt") {
+            return "authenticated";
+          }
+        } else if (c.endsWith(".toml")) {
+          const content = readFileSync(c, "utf8");
+          if (content.includes("model") || content.includes("chatgpt") || content.includes("openai")) {
+            return "authenticated";
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return account.authStatus;
+}
+
+export function estimateObservedQuotas(
+  provider: string,
+  runs: Array<{ startTime: string; inputTokens: number; outputTokens: number }>,
+  now: Date,
+): ProviderAccountQuotas {
+  const nowMs = now.getTime();
+  const fiveHoursMs = 5 * 3600 * 1000;
+  const sevenDaysMs = 7 * 24 * 3600 * 1000;
+
+  const runs5h = runs.filter((r) => {
+    const t = new Date(r.startTime).getTime();
+    return !Number.isNaN(t) && nowMs - t <= fiveHoursMs && nowMs >= t;
+  });
+  const runs7d = runs.filter((r) => {
+    const t = new Date(r.startTime).getTime();
+    return !Number.isNaN(t) && nowMs - t <= sevenDaysMs && nowMs >= t;
+  });
+
+  const tokens5h = runs5h.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+  const tokens7d = runs7d.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+
+  const limit5h = provider === "claude" ? 250_000 : 300_000;
+  const limit7d = provider === "claude" ? 1_200_000 : 1_500_000;
+
+  const remaining5hPercent = Math.max(0, Math.min(100, Math.round((1 - tokens5h / limit5h) * 100)));
+  const remainingWeekPercent = Math.max(0, Math.min(100, Math.round((1 - tokens7d / limit7d) * 100)));
+
+  let resets5hAt: string | null = null;
+  if (runs5h.length > 0) {
+    const earliest5h = Math.min(...runs5h.map((r) => new Date(r.startTime).getTime()));
+    resets5hAt = new Date(earliest5h + fiveHoursMs).toISOString();
+  } else {
+    resets5hAt = new Date(nowMs + fiveHoursMs).toISOString();
+  }
+
+  let resetsWeekAt: string | null = null;
+  if (runs7d.length > 0) {
+    const earliest7d = Math.min(...runs7d.map((r) => new Date(r.startTime).getTime()));
+    resetsWeekAt = new Date(earliest7d + sevenDaysMs).toISOString();
+  } else {
+    resetsWeekAt = new Date(nowMs + sevenDaysMs).toISOString();
+  }
+
+  return {
+    remaining5hPercent,
+    remainingWeekPercent,
+    resets5hAt,
+    resetsWeekAt,
+    exhausted: remaining5hPercent <= 0 || remainingWeekPercent <= 0,
+  };
+}
 
 export const providerAccountQuotasSchema = z.object({
   remaining5hPercent: z.number().int().min(0).max(100).nullable().default(null),
@@ -95,24 +397,43 @@ export const updateProviderAccountSchema = z.object({
 });
 export type UpdateProviderAccountInput = z.infer<typeof updateProviderAccountSchema>;
 
+export interface RunUsageStore {
+  listAll(): Promise<
+    Array<{
+      record: {
+        model?: string | null;
+        requestedModel?: string | null;
+        startTime: string;
+        usage: { inputTokens: number; outputTokens: number };
+      };
+    }>
+  >;
+}
+
 export interface ProviderAccountServiceOptions {
   runtimeConfiguration: RuntimeConfigurationStore;
+  sessionsDir?: string;
+  runStore?: RunUsageStore;
   now?: () => Date;
 }
 
 export class ProviderAccountService {
   readonly #config: RuntimeConfigurationStore;
+  readonly #sessionsDir: string | undefined;
+  readonly #runStore: RunUsageStore | undefined;
   readonly #now: () => Date;
 
   constructor(options: ProviderAccountServiceOptions) {
     this.#config = options.runtimeConfiguration;
+    this.#sessionsDir = options.sessionsDir;
+    this.#runStore = options.runStore;
     this.#now = options.now ?? (() => new Date());
   }
 
   /** Initialize with default accounts if the file does not exist yet. */
   defaultAccounts(): ProviderAccount[] {
     const timestamp = this.#now().toISOString();
-    const baseDir = join(homedir(), ".nexus", "agents", "sessions");
+    const baseDir = this.#sessionsDir ?? join(homedir(), ".nexus", "agents", "sessions");
     return [
       {
         id: "antigravity-personnel",
@@ -223,6 +544,79 @@ export class ProviderAccountService {
     const now = this.#now();
     let updated = false;
 
+    // Dynamically discover accounts from session directories in ~/.nexus/agents/sessions/*
+    const baseDir = this.#sessionsDir ?? join(homedir(), ".nexus", "agents", "sessions");
+    if (existsSync(baseDir)) {
+      try {
+        const entries = readdirSync(baseDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const sessionId = entry.name;
+          if (!/^[a-z][a-z0-9_-]{0,63}$/.test(sessionId)) continue;
+
+          // Check if already registered
+          if (accounts.some((acc) => acc.id === sessionId)) continue;
+
+          // Infer provider from directory name prefix
+          let provider = "antigravity";
+          let profileKey = "antigravity";
+          if (sessionId.startsWith("claude")) {
+            provider = "claude";
+            profileKey = "claude";
+          } else if (sessionId.startsWith("codex")) {
+            provider = "codex";
+            profileKey = "default";
+          } else if (sessionId.startsWith("agy") || sessionId.startsWith("antigravity")) {
+            provider = "antigravity";
+            profileKey = "antigravity";
+          }
+
+          const discoveredName = sessionId
+            .split(/[-_]/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+
+          const newAccount: ProviderAccount = {
+            id: sessionId,
+            provider,
+            name: discoveredName,
+            profileKey,
+            sessionDir: join(baseDir, sessionId),
+            env: {},
+            authStatus: "unknown",
+            lastCheckedAt: null,
+            quotas: {
+              remaining5hPercent: null,
+              remainingWeekPercent: null,
+              resets5hAt: null,
+              resetsWeekAt: null,
+              exhausted: false,
+            },
+            cooldown: { active: false, until: null, reason: null },
+            priority: 1,
+            reliability: {
+              score: 1.0,
+              totalRuns: 0,
+              successCount: 0,
+              failureCount: 0,
+              consecutiveFailures: 0,
+              lastErrorCategory: null,
+              lastErrorAt: null,
+            },
+            metadata: { discovered: true },
+            enabled: true,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          };
+
+          accounts.push(newAccount);
+          updated = true;
+        }
+      } catch {
+        // Ignore filesystem read errors during discovery
+      }
+    }
+
     // Automatically clean up expired cooldowns
     const refreshed = accounts.map((account) => {
       if (account.cooldown.active && account.cooldown.until !== null) {
@@ -237,6 +631,76 @@ export class ProviderAccountService {
       }
       return account;
     });
+
+    // Automatically probe and update quotas and auth status if never probed or older than 60s
+    for (let i = 0; i < refreshed.length; i++) {
+      const acc = refreshed[i];
+      if (!acc) continue;
+      const needsCheck =
+        acc.lastCheckedAt === null ||
+        acc.quotas.remaining5hPercent === null ||
+        now.getTime() - new Date(acc.lastCheckedAt).getTime() > 60_000;
+      if (needsCheck && acc.provider === "antigravity") {
+        const tokenPath = resolveAntigravityTokenPath(acc, this.#sessionsDir);
+        if (tokenPath) {
+          const probedQuotas = await fetchAntigravityQuotas(tokenPath);
+          if (probedQuotas) {
+            refreshed[i] = {
+              ...acc,
+              quotas: probedQuotas,
+              authStatus: "authenticated",
+              lastCheckedAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+            };
+            updated = true;
+          }
+        }
+      } else if (needsCheck && (acc.provider === "claude" || acc.provider === "codex")) {
+        const auth =
+          acc.provider === "claude"
+            ? probeClaudeAuth(acc, this.#sessionsDir)
+            : probeCodexAuth(acc, this.#sessionsDir);
+
+        if (auth === "authenticated") {
+          let quotas = acc.quotas;
+          if (this.#runStore) {
+            const allStates = await this.#runStore.listAll().catch(() => []);
+            const matchingRuns = allStates
+              .filter((st) => {
+                const m = (st.record.model || "").toLowerCase();
+                const p = (st.record.requestedModel || "").toLowerCase();
+                return (
+                  m.includes(acc.provider) ||
+                  p.includes(acc.provider) ||
+                  (acc.provider === "codex" && (m.includes("gpt") || m.includes("openai")))
+                );
+              })
+              .map((st) => ({
+                startTime: st.record.startTime,
+                inputTokens: st.record.usage?.inputTokens ?? 0,
+                outputTokens: st.record.usage?.outputTokens ?? 0,
+              }));
+            quotas = estimateObservedQuotas(acc.provider, matchingRuns, now);
+          } else {
+            quotas = {
+              remaining5hPercent: 100,
+              remainingWeekPercent: 100,
+              resets5hAt: new Date(now.getTime() + 5 * 3600 * 1000).toISOString(),
+              resetsWeekAt: new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString(),
+              exhausted: false,
+            };
+          }
+          refreshed[i] = {
+            ...acc,
+            authStatus: "authenticated",
+            quotas,
+            lastCheckedAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          };
+          updated = true;
+        }
+      }
+    }
 
     if (updated) {
       await this.#config.saveProviderAccounts(refreshed);
@@ -488,9 +952,25 @@ export class ProviderAccountService {
     const existing = accounts[index];
     if (existing === undefined) return undefined;
 
-    // probeAuth must never promote an authentication status without evidence.
     const nowIso = this.#now().toISOString();
     let authStatus: AuthStatus = existing.authStatus;
+    let quotas: ProviderAccountQuotas = existing.quotas;
+
+    if (existing.provider === "antigravity") {
+      const tokenPath = resolveAntigravityTokenPath(existing, this.#sessionsDir);
+      if (tokenPath) {
+        const probed = await fetchAntigravityQuotas(tokenPath);
+        if (probed) {
+          quotas = probed;
+          authStatus = "authenticated";
+        }
+      }
+    } else if (existing.provider === "claude") {
+      const detected = probeClaudeAuth(existing, this.#sessionsDir);
+      if (detected === "authenticated") {
+        authStatus = "authenticated";
+      }
+    }
 
     if (existing.reliability.lastErrorCategory === "auth_required") {
       authStatus = "expired";
@@ -506,6 +986,7 @@ export class ProviderAccountService {
     const updated: ProviderAccount = {
       ...existing,
       authStatus,
+      quotas,
       lastCheckedAt: nowIso,
       updatedAt: nowIso,
     };

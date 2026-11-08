@@ -7,6 +7,7 @@ import {
   resetAllKeybindings,
 } from "./spatial/keybindingStore.js";
 import { getDigitFromEvent } from "./spatial/keyboardUtils.js";
+import { IconRefresh } from "./icons.js";
 
 export function KeybindingsPanel() {
   const { locale, tr } = useI18n();
@@ -308,7 +309,7 @@ export function KeybindingsPanel() {
                         title={tr("Rétablir la touche par défaut", "Reset to default")}
                         onClick={() => handleResetOne(item.id)}
                       >
-                        ↺
+                        <IconRefresh size={11} />
                       </button>
                     )}
                   </>

@@ -127,4 +127,22 @@ describe("MCP OAuth with PKCE and Single-use State", () => {
     expect(vaultRecords["vault:mcp:box-mcp:access_token"]).toBe("vault-access-token-999");
     expect(vaultRecords["vault:mcp:box-mcp:refresh_token"]).toBe("vault-refresh-token-888");
   });
+
+  it("provides turnkey presets for standard OAuth MCP providers (GitHub, Slack, Google)", async () => {
+    const { MCP_OAUTH_PRESETS, findMcpOAuthPreset } = await import("../src/oauth-presets.js");
+    expect(MCP_OAUTH_PRESETS.length).toBeGreaterThanOrEqual(4);
+
+    const github = findMcpOAuthPreset("github");
+    expect(github).toBeDefined();
+    expect(github?.authorizationEndpoint).toContain("github.com");
+    expect(github?.supportsPkce).toBe(true);
+    expect(github?.defaultScopes).toContain("repo");
+
+    const config = github?.createServerConfig();
+    expect(config?.name).toBe("github");
+    expect(config?.transport).toBe("stdio");
+    if (config && config.transport === "stdio") {
+      expect(config.envRefs.GITHUB_PERSONAL_ACCESS_TOKEN).toBe("vault://nexus/mcp-github-token");
+    }
+  });
 });

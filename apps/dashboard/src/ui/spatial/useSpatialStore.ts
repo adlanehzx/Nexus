@@ -294,7 +294,7 @@ export const INITIAL_WINDOWS_PER_SPACE: Record<NativeSpaceId, SpatialWindow[]> =
     },
     {
       id: "mem-sec-1",
-      title: "Sécurité & Garde-fous",
+      title: "Audit & Sécurité",
       spaceId: "memory",
       type: "security",
       x: 880,

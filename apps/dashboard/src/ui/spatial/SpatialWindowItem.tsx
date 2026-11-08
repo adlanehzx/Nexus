@@ -4,6 +4,7 @@
 
 import React, { useState, useRef, useCallback } from "react";
 import type { SpatialWindow, CameraState } from "./types.js";
+import { IconClose, IconPin, IconKanban, IconMaximize, IconMinimize } from "../icons.js";
 
 interface SpatialWindowItemProps {
   window: SpatialWindow;
@@ -168,7 +169,7 @@ export function SpatialWindowItem({
               onToggleFloating();
             }}
           >
-            <span style={{ fontSize: "11px" }}>{win.isFloating ? "⎈" : "⌗"}</span>
+            {win.isFloating ? <IconPin size={11} /> : <IconKanban size={11} />}
           </button>
           <button
             type="button"
@@ -179,7 +180,9 @@ export function SpatialWindowItem({
               onToggleMinimize();
             }}
           >
-            <span>_</span>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M3 11h10v2H3z" />
+            </svg>
           </button>
           <button
             type="button"
@@ -190,7 +193,7 @@ export function SpatialWindowItem({
               onToggleMaximize();
             }}
           >
-            <span>{win.isMaximized ? "❐" : "□"}</span>
+            {win.isMaximized ? <IconMinimize size={10} /> : <IconMaximize size={10} />}
           </button>
           <button
             type="button"
@@ -201,7 +204,7 @@ export function SpatialWindowItem({
               onClose();
             }}
           >
-            <span>✕</span>
+            <IconClose size={11} />
           </button>
         </div>
       </div>
