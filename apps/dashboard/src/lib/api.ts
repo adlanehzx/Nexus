@@ -237,6 +237,25 @@ export interface TaskRow {
   source: "device" | "acp";
 }
 
+export interface TaskExecution {
+  id: string;
+  stepId: string;
+  deviceId: string;
+  attempt: number;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  input: unknown;
+  result: unknown;
+  error: { code: string; message: string } | null;
+}
+
+export interface TaskExecutionPage {
+  data: TaskExecution[];
+  meta: { nextCursor: string | null; total: number };
+}
+
 export interface TaskDetail extends TaskRow {
   executions: {
     id: string;
@@ -1156,6 +1175,17 @@ export class DashboardApi {
     return this.#get(`/api/v1/dashboard/tasks/${taskId}`);
   }
 
+  taskExecutions(taskId: string, cursor?: string): Promise<TaskExecutionPage> {
+    const query = new URLSearchParams({ limit: "25" });
+    if (cursor !== undefined) query.set("cursor", cursor);
+    return this.#request(
+      "GET",
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/executions?${query.toString()}`,
+      undefined,
+      false,
+    );
+  }
+
   cancelTask(taskId: string): Promise<{ cancelled: boolean }> {
     return this.#request("POST", `/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
       reason: "cancelled from NEXUS supervision",
@@ -2071,8 +2101,13 @@ export class DashboardApi {
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
-    headers?: Record<string, string>,
+    headersOrUnwrap?: Record<string, string> | boolean,
+    unwrapParam = true,
   ): Promise<T> {
+    const headers =
+      typeof headersOrUnwrap === "object" && headersOrUnwrap !== null ? headersOrUnwrap : undefined;
+    const unwrap = typeof headersOrUnwrap === "boolean" ? headersOrUnwrap : unwrapParam;
+
     const response = await this.#session.authorizedRequest({
       method,
       path,
@@ -2090,6 +2125,7 @@ export class DashboardApi {
 
     const responseBody = response.body as { data?: T } | T;
     if (
+      unwrap &&
       responseBody !== null &&
       typeof responseBody === "object" &&
       "data" in responseBody &&

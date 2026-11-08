@@ -20,10 +20,6 @@
     "reason": "Second tool catalogue, derived from device capabilities rather than the registry. Nothing renders it; lot 3.1 decides whether it merges with GET /dashboard/tools or goes."
   },
   {
-    "route": "GET /api/v1/tasks/:p/executions",
-    "reason": "Task execution history has no screen. Lot 9.5 adds one."
-  },
-  {
     "route": "GET /api/v1/confirmations/:p",
     "reason": "Confirmation detail is read through the task and mission views instead. Kept as the addressable resource behind POST /confirmations/:id/respond, which is called."
   },
