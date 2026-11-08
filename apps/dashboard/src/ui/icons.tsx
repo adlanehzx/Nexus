@@ -534,3 +534,20 @@ export function IconNotion({ size = 16, color, style, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconJob({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="3" y="7" width="18" height="14" rx="2" />
+      <path d="M8 7V3h8v4M3 12h18M10 12v3h4v-3" />
+    </svg>
+  );
+}
+
+export function IconEducation({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="m2 8 10-5 10 5-10 5-10-5ZM6 10v7c4 3 8 3 12 0v-7M22 8v9" />
+    </svg>
+  );
+}

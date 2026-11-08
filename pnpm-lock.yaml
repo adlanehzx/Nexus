@@ -51,6 +51,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@nexus/career':
+        specifier: workspace:*
+        version: link:../../packages/career
       '@nexus/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
