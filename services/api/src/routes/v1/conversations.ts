@@ -108,6 +108,55 @@ export const conversationRoutes: FastifyPluginCallback = (fastify, _options, don
     },
   );
 
+  app.patch(
+    "/conversations/:conversationId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["conversations"],
+        summary: "Renames a conversation",
+        params: z.object({ conversationId: z.string().min(1) }),
+        // Trimmed before the length check: a title of spaces is no title.
+        body: z.object({ title: z.string().trim().min(1).max(200) }),
+        response: { 200: okSchema(conversationSchema) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      await load(request.params.conversationId, userId);
+
+      return ok(
+        await app.services.conversations.rename(request.params.conversationId, request.body.title),
+        request.id,
+      );
+    },
+  );
+
+  app.delete(
+    "/conversations/:conversationId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["conversations"],
+        summary: "Deletes a conversation and its messages",
+        params: z.object({ conversationId: z.string().min(1) }),
+        response: { 200: okSchema(z.object({ deleted: z.literal(true) })) },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const { conversationId } = request.params;
+      await load(conversationId, userId);
+
+      await app.services.conversations.remove(conversationId);
+      // Working notes are keyed by conversation and would otherwise outlive it
+      // until their TTL: a deleted conversation leaves nothing behind to assemble.
+      app.services.shortTerm.clear(conversationId);
+
+      return ok({ deleted: true as const }, request.id);
+    },
+  );
+
   app.post(
     "/conversations/:conversationId/archive",
     {

@@ -63,6 +63,59 @@ export class PrismaConversationStore implements ConversationStore {
     );
   }
 
+  async rename(id: string, title: string): Promise<Conversation> {
+    const existing = await this.#prisma.conversation.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (existing === null) throw new NotFoundError("Conversation", id);
+    return presentConversation(
+      await this.#prisma.conversation.update({ where: { id }, data: { title } }),
+    );
+  }
+
+  async remove(id: string): Promise<void> {
+    // Messages go with it: their foreign key is `ON DELETE CASCADE`.
+    // `deleteMany` reports a missing row as a count instead of a driver error.
+    const { count } = await this.#prisma.conversation.deleteMany({ where: { id } });
+    if (count === 0) throw new NotFoundError("Conversation", id);
+  }
+
+  async appendMessageOnce(input: Omit<Message, "createdAt">): Promise<Message | undefined> {
+    const existing = await this.#prisma.conversation.findUnique({
+      where: { id: input.conversationId },
+      select: { id: true },
+    });
+    if (existing === null) throw new NotFoundError("Conversation", input.conversationId);
+
+    const createdAt = new Date();
+    return this.#prisma.$transaction(async (transaction) => {
+      // `ON CONFLICT DO NOTHING` on the primary key: the insert itself decides,
+      // so two concurrent writers of the same reply cannot both succeed.
+      const { count } = await transaction.message.createMany({
+        data: [
+          {
+            id: input.id,
+            conversationId: input.conversationId,
+            role: input.role.toUpperCase() as StoredRole,
+            content: [{ type: "text", text: input.content }],
+            contentText: input.content,
+            originClientDeviceId: input.originClientDeviceId,
+            createdAt,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (count === 0) return undefined;
+
+      await transaction.conversation.update({
+        where: { id: input.conversationId },
+        data: { lastMessageAt: createdAt },
+      });
+      return { ...input, createdAt };
+    });
+  }
+
   async appendMessage(
     input: Omit<Message, "id" | "createdAt"> & { id?: string },
   ): Promise<Message> {

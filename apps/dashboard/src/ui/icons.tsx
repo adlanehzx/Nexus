@@ -411,6 +411,45 @@ export function IconCopy({ size = 16, color, style, className }: IconProps) {
   );
 }
 
+export function IconPlus({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+export function IconTrash({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
+
+/** A speech bubble: one conversation. */
+export function IconMessage({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  );
+}
+
+/** A panel with its left column marked: shows or hides a side panel. */
+export function IconSidebar({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="9" y1="4" x2="9" y2="20" />
+    </svg>
+  );
+}
+
 export function IconExternalLink({ size = 16, color, style, className }: IconProps) {
   return (
     <svg {...baseProps(size, color, style, className)} viewBox="0 0 24 24">

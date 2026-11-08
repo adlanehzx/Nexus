@@ -397,3 +397,137 @@ describe("NEXUS orchestrator facade", () => {
     expect(engine.updateSettings).toHaveBeenCalledWith(settings);
   });
 });
+
+describe("conversation transcript of a chat mission", () => {
+  async function createConversation(owner: Account) {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/conversations",
+      headers: owner.authorization,
+      payload: { title: "Repository review" },
+    });
+    return response.json<{ data: { id: string } }>().data.id;
+  }
+
+  async function transcript(conversationId: string) {
+    const page = await harness.services.conversations.listMessages(conversationId, { limit: 100 });
+    return page.items.map(({ id, role, content }) => ({ id, role, content }));
+  }
+
+  it("records the prompt at dispatch and the answer once, when a status read observes it", async () => {
+    const conversationId = await createConversation(account);
+
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Review the repository.", conversationId },
+    });
+    expect(created.statusCode).toBe(202);
+    expect(await transcript(conversationId)).toEqual([
+      expect.objectContaining({ role: "user", content: "Review the repository." }),
+    ]);
+
+    // Overlapping polls, as an interval timer produces when the engine is slow.
+    const reads = await Promise.all(
+      [1, 2, 3].map(() =>
+        harness.app.inject({
+          method: "GET",
+          url: `/api/v1/orchestrator/missions/${missionId}?conversationId=${conversationId}`,
+          headers: account.authorization,
+        }),
+      ),
+    );
+    expect(reads.map((read) => read.statusCode)).toEqual([200, 200, 200]);
+
+    const messages = await transcript(conversationId);
+    expect(messages).toHaveLength(2);
+    // Keyed by the mission: the client recognises the reply it was tracking.
+    expect(messages[1]).toEqual({
+      id: missionId,
+      role: "assistant",
+      content: "Verified final response",
+    });
+  });
+
+  it("records nothing for the reply while the mission has not answered", async () => {
+    const conversationId = await createConversation(account);
+    await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Review the repository.", conversationId },
+    });
+    const running = await engine.getMission();
+    engine.getMission.mockResolvedValueOnce({
+      ...running,
+      state: "running",
+      // A task result without a `response` yet: the synthesis has not answered.
+      tasks: running.tasks.map((task) => ({ ...task, state: "running", result_json: "{}" })),
+    });
+
+    const read = await harness.app.inject({
+      method: "GET",
+      url: `/api/v1/orchestrator/missions/${missionId}?conversationId=${conversationId}`,
+      headers: account.authorization,
+    });
+
+    expect(read.statusCode).toBe(200);
+    expect(read.json<{ data: { response: string | null } }>().data.response).toBeNull();
+    expect((await transcript(conversationId)).map((message) => message.role)).toEqual(["user"]);
+  });
+
+  it("refuses another user's conversation before any mission is dispatched", async () => {
+    const other = await createAccount(harness, "other-orchestrator@example.org");
+    const foreign = await createConversation(other);
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Write into their history.", conversationId: foreign },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(engine.submitMission).not.toHaveBeenCalled();
+    expect(await transcript(foreign)).toEqual([]);
+  });
+
+  it("refuses to record a reply into another user's conversation", async () => {
+    await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Review the repository." },
+    });
+    const other = await createAccount(harness, "other-orchestrator@example.org");
+    const foreign = await createConversation(other);
+
+    const read = await harness.app.inject({
+      method: "GET",
+      url: `/api/v1/orchestrator/missions/${missionId}?conversationId=${foreign}`,
+      headers: account.authorization,
+    });
+
+    expect(read.statusCode).toBe(403);
+    expect(await transcript(foreign)).toEqual([]);
+  });
+
+  it("keeps a mission without a conversation out of every transcript", async () => {
+    const conversationId = await createConversation(account);
+    await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "One-off question." },
+    });
+    const read = await harness.app.inject({
+      method: "GET",
+      url: `/api/v1/orchestrator/missions/${missionId}`,
+      headers: account.authorization,
+    });
+
+    expect(read.statusCode).toBe(200);
+    expect(await transcript(conversationId)).toEqual([]);
+  });
+});

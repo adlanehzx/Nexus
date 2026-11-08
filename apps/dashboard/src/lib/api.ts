@@ -566,6 +566,45 @@ export interface OrchestratedMission {
   error: string | null;
 }
 
+export interface SendToNexusOptions {
+  profile?: string;
+  model?: string;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+  /** Records the exchange in this conversation, server-side. */
+  conversationId?: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  /** `ACTIVE` or `ARCHIVED`; archived conversations stay out of the chat history. */
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A chat turn as stored: the text that was said, nothing of how it was produced. */
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  role: string;
+  content: string;
+  originClientDeviceId: string | null;
+  createdAt: string;
+}
+
+export interface CursorRequest {
+  cursor?: string | undefined;
+  limit?: number;
+}
+
+export interface CursorPage<T> {
+  items: T[];
+  /** Pass back as `cursor` for the next page; `null` at the end of the list. */
+  nextCursor: string | null;
+  total: number;
+}
+
 export interface AgentRegistry {
   worker_enabled: boolean;
   configured: {
@@ -1541,20 +1580,20 @@ export class DashboardApi {
     return this.#get(`/api/v1/mission-control/schedules/${encodeURIComponent(id)}/runs?limit=100`);
   }
 
-  sendToNexus(
-    message: string,
-    options?: {
-      profile?: string;
-      model?: string;
-      reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
-    },
-  ): Promise<OrchestratedMission> {
+  /**
+   * Dispatches a chat mission.
+   *
+   * With `conversationId`, the server records the prompt in that conversation;
+   * the reply follows when `nexusMission` observes it with the same id.
+   */
+  sendToNexus(message: string, options?: SendToNexusOptions): Promise<OrchestratedMission> {
     return this.#request("POST", "/api/v1/orchestrator/messages", {
       message,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       ...(options?.profile ? { profile: options.profile } : {}),
       ...(options?.model ? { model: options.model } : {}),
       ...(options?.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
+      ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
     });
   }
 
@@ -1625,8 +1664,14 @@ export class DashboardApi {
     return this.#get(`/api/v1/osint/cases/${encodeURIComponent(caseId)}/report?format=${format}`);
   }
 
-  nexusMission(missionId: string): Promise<OrchestratedMission> {
-    return this.#get(`/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`);
+  /** With `conversationId`, a reply this read observes is recorded in that conversation. */
+  nexusMission(missionId: string, conversationId?: string): Promise<OrchestratedMission> {
+    const path = `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`;
+    return this.#get(
+      conversationId === undefined
+        ? path
+        : `${path}?conversationId=${encodeURIComponent(conversationId)}`,
+    );
   }
 
   agents(): Promise<AgentRegistry> {
@@ -2200,14 +2245,43 @@ export class DashboardApi {
     });
   }
 
-  createConversation(
-    input: { title?: string | undefined } = {},
-  ): Promise<{ id: string; title: string }> {
+  /** Conversations of the signed-in account, most recently updated first. */
+  conversations(page: CursorRequest = {}): Promise<CursorPage<ConversationSummary>> {
+    return this.#page(`/api/v1/conversations?${cursorQuery(page)}`);
+  }
+
+  conversation(conversationId: string): Promise<ConversationSummary> {
+    return this.#get(`/api/v1/conversations/${encodeURIComponent(conversationId)}`);
+  }
+
+  /** `order: "desc"` pages back from the newest message, which is what a chat opens on. */
+  conversationMessages(
+    conversationId: string,
+    page: CursorRequest & { order?: "asc" | "desc" } = {},
+  ): Promise<CursorPage<ConversationMessage>> {
+    const order = page.order === undefined ? "" : `&order=${page.order}`;
+    return this.#page(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/messages?${cursorQuery(page)}${order}`,
+    );
+  }
+
+  createConversation(input: { title?: string | undefined } = {}): Promise<ConversationSummary> {
     const trimmedTitle = input.title?.trim();
-    return this.#request<{ id: string; title: string }>("POST", "/api/v1/conversations", {
+    return this.#request<ConversationSummary>("POST", "/api/v1/conversations", {
       title:
         trimmedTitle !== undefined && trimmedTitle.length > 0 ? trimmedTitle : "New Conversation",
     });
+  }
+
+  renameConversation(conversationId: string, title: string): Promise<ConversationSummary> {
+    return this.#request("PATCH", `/api/v1/conversations/${encodeURIComponent(conversationId)}`, {
+      title,
+    });
+  }
+
+  /** Irreversible: the transcript goes with it. Archival is the reversible option. */
+  deleteConversation(conversationId: string): Promise<{ deleted: true }> {
+    return this.#request("DELETE", `/api/v1/conversations/${encodeURIComponent(conversationId)}`);
   }
 
   createAgentRun(input: {
@@ -2324,6 +2398,20 @@ export class DashboardApi {
     return this.#request("GET", path);
   }
 
+  /** A list response keeps its cursor, which `#request` would unwrap away. */
+  async #page<T>(path: string): Promise<CursorPage<T>> {
+    const body = (await this.#send("GET", path)) as {
+      data?: unknown;
+      meta?: { nextCursor?: string | null; total?: number };
+    } | null;
+    const items = Array.isArray(body?.data) ? (body.data as T[]) : [];
+    return {
+      items,
+      nextCursor: body?.meta?.nextCursor ?? null,
+      total: body?.meta?.total ?? items.length,
+    };
+  }
+
   async #request<T>(
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
@@ -2363,6 +2451,30 @@ export class DashboardApi {
 
     return responseBody as T;
   }
+
+  async #send(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> {
+    const response = await this.#session.authorizedRequest({ method, path, body });
+
+    if (response.status === 403) {
+      throw new ForbiddenError("This section is not accessible with this account.");
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(messageOf(response.body));
+    }
+
+    return response.body;
+  }
+}
+
+function cursorQuery(page: CursorRequest): string {
+  const query = new URLSearchParams({ limit: String(page.limit ?? 30) });
+  if (page.cursor !== undefined) query.set("cursor", page.cursor);
+  return query.toString();
 }
 
 function messageOf(body: unknown): string {

@@ -11,6 +11,8 @@ import { PrismaMissionGrantRegistry } from "../src/services/persistence/prisma-m
 import { PrismaScheduleGrantRegistry } from "../src/services/persistence/prisma-schedule-grant-registry.js";
 import { PrismaDeviceCredentialStore } from "../src/services/persistence/prisma-device-credential-store.js";
 import { PrismaCareerStore } from "../src/services/persistence/prisma-career-store.js";
+import { PrismaConversationStore } from "../src/services/persistence/prisma-conversation-store.js";
+import { NotFoundError } from "../src/services/stores.js";
 
 /**
  * Prisma stores against real PostgreSQL.
@@ -84,6 +86,7 @@ afterAll(async () => {
   await prisma.missionGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.scheduleGrant.deleteMany({ where: { userId: ownerId } });
   await prisma.agentRunSnapshot.deleteMany({ where: { userId: ownerId } });
+  await prisma.conversation.deleteMany({ where: { userId: ownerId } });
   await prisma.deviceCredential.deleteMany({ where: { deviceId } });
   await prisma.deviceCapability.deleteMany({ where: { deviceId } });
   await prisma.device.deleteMany({ where: { id: deviceId } });
@@ -130,6 +133,65 @@ function plan(overrides: Partial<TaskPlan> = {}): TaskPlan {
     ...overrides,
   };
 }
+
+describe("PrismaConversationStore on PostgreSQL", () => {
+  it("renames, then deletes a conversation together with its transcript", async () => {
+    const store = new PrismaConversationStore(prisma);
+    const conversation = await store.create({ userId: ownerId, title: "Draft" });
+    await store.appendMessage({
+      conversationId: conversation.id,
+      role: "user",
+      content: "Plan the release.",
+      originClientDeviceId: null,
+    });
+
+    expect((await store.rename(conversation.id, "Release plan")).title).toBe("Release plan");
+    expect((await store.get(conversation.id))?.title).toBe("Release plan");
+
+    await store.remove(conversation.id);
+    expect(await store.get(conversation.id)).toBeUndefined();
+    // The foreign key cascades: no message outlives its conversation.
+    expect(await prisma.message.count({ where: { conversationId: conversation.id } })).toBe(0);
+    await expect(store.remove(conversation.id)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(store.rename(conversation.id, "Gone")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("writes a reply under a chosen id once, however many writers race", async () => {
+    const store = new PrismaConversationStore(prisma);
+    const conversation = await store.create({ userId: ownerId, title: "Replies" });
+    const reply = {
+      id: randomUUID(),
+      conversationId: conversation.id,
+      role: "assistant" as const,
+      content: "Release plan: freeze Monday, ship Thursday.",
+      originClientDeviceId: null,
+    };
+
+    const written = await Promise.all([1, 2, 3, 4].map(() => store.appendMessageOnce(reply)));
+
+    expect(written.filter((message) => message !== undefined)).toHaveLength(1);
+    const page = await store.listMessages(conversation.id, { limit: 10 });
+    expect(page.items.map(({ id, role, content }) => ({ id, role, content }))).toEqual([
+      { id: reply.id, role: "assistant", content: reply.content },
+    ]);
+    // The winning write also stamped the conversation's activity.
+    const row = await prisma.conversation.findUnique({ where: { id: conversation.id } });
+    expect(row?.lastMessageAt).not.toBeNull();
+  });
+
+  it("refuses a reply for a conversation that does not exist", async () => {
+    const store = new PrismaConversationStore(prisma);
+    await expect(
+      store.appendMessageOnce({
+        id: randomUUID(),
+        conversationId: randomUUID(),
+        role: "assistant",
+        content: "Nowhere to go.",
+        originClientDeviceId: null,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
 
 describe("PrismaDeviceStore on PostgreSQL", () => {
   it("keeps live authentication in memory and resets it for a new process", async () => {
