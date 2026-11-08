@@ -42,14 +42,7 @@ interface CommandExecutionRecord {
   elapsedMs?: number;
 }
 
-const DEFAULT_ROOMS = [
-  "Salon",
-  "Bureau",
-  "Cuisine",
-  "Chambre",
-  "Entrée",
-  "Atelier",
-];
+const DEFAULT_ROOMS = ["Salon", "Bureau", "Cuisine", "Chambre", "Entrée", "Atelier"];
 
 type DomotiqueMode = "normal" | "silence" | "nuit" | "intercom";
 
@@ -333,9 +326,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
     try {
       if (mode === "silence" || mode === "nuit") {
         // Mute privacy on all satellites
-        await Promise.all(
-          fleet.map((s) => api.setSatellitePrivacy(s.deviceId, true)),
-        );
+        await Promise.all(fleet.map((s) => api.setSatellitePrivacy(s.deviceId, true)));
         setModeNotice(
           tr(
             "Privacy mode active: Microphones muted on all home satellites.",
@@ -344,9 +335,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
         );
       } else if (mode === "normal") {
         // Unmute privacy on all satellites
-        await Promise.all(
-          fleet.map((s) => api.setSatellitePrivacy(s.deviceId, false)),
-        );
+        await Promise.all(fleet.map((s) => api.setSatellitePrivacy(s.deviceId, false)));
         setModeNotice(
           tr(
             "Normal mode active: Voice satellites ready for interaction.",
@@ -401,9 +390,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
   const activeRooms = Array.from(roomsMap.keys());
   const filteredSatellites =
-    selectedRoom === "all"
-      ? fleet
-      : fleet.filter((s) => extractRoom(s) === selectedRoom);
+    selectedRoom === "all" ? fleet : fleet.filter((s) => extractRoom(s) === selectedRoom);
 
   const totalSatellites = fleet.length;
   const onlineCount = fleet.filter((s) => s.online).length;
@@ -423,9 +410,22 @@ export function Domotique({ api }: { api: DashboardApi }) {
     <div className="content">
       {actionError && <p className="banner error">{actionError}</p>}
       {modeNotice && (
-        <div className="banner" style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          className="banner"
+          style={{
+            background: "rgba(56, 189, 248, 0.1)",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <span>{modeNotice}</span>
-          <button type="button" className="button compact secondary" onClick={() => setModeNotice(null)}>
+          <button
+            type="button"
+            className="button compact secondary"
+            onClick={() => setModeNotice(null)}
+          >
             <IconClose size={14} />
           </button>
         </div>
@@ -435,7 +435,14 @@ export function Domotique({ api }: { api: DashboardApi }) {
       <section className="card" aria-labelledby="domotique-title">
         <div className="pairing-heading">
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginBottom: "0.25rem",
+              }}
+            >
               <IconHome size={22} color="var(--accent, #6366f1)" />
               <span className="eyebrow" style={{ margin: 0 }}>
                 {tr("NEXUS SMART HOME LAB", "LABORATOIRE DOMOTIQUE NEXUS")}
@@ -495,7 +502,15 @@ export function Domotique({ api }: { api: DashboardApi }) {
           }}
         >
           <div>
-            <span style={{ fontSize: "0.85rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--nx-text-muted, #71717a)" }}>
+            <span
+              style={{
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                color: "var(--nx-text-muted, #71717a)",
+              }}
+            >
               {tr("Smart Home Operating Mode", "Mode de fonctionnement domotique")}
             </span>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
@@ -511,7 +526,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 type="button"
                 className={`button compact ${domotiqueMode === "silence" ? "primary" : "secondary"}`}
                 onClick={() => void handleApplyDomotiqueMode("silence")}
-                title={tr("Mute microphones across all rooms", "Couper les micros de toutes les pièces")}
+                title={tr(
+                  "Mute microphones across all rooms",
+                  "Couper les micros de toutes les pièces",
+                )}
               >
                 <IconMicOff size={14} />
                 <span>{tr("Silence / Privacy", "Silence / Privé")}</span>
@@ -520,7 +538,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 type="button"
                 className={`button compact ${domotiqueMode === "nuit" ? "primary" : "secondary"}`}
                 onClick={() => void handleApplyDomotiqueMode("nuit")}
-                title={tr("Night mode: privacy and reduced audio volume", "Mode nuit : confidentialité et volume discret")}
+                title={tr(
+                  "Night mode: privacy and reduced audio volume",
+                  "Mode nuit : confidentialité et volume discret",
+                )}
               >
                 <IconVolumeX size={14} />
                 <span>{tr("Night Mode", "Mode Nuit")}</span>
@@ -529,7 +550,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 type="button"
                 className={`button compact ${domotiqueMode === "intercom" ? "primary" : "secondary"}`}
                 onClick={() => void handleApplyDomotiqueMode("intercom")}
-                title={tr("Broadcast chime across all online satellites", "Diffuser un signal audio sur tous les satellites")}
+                title={tr(
+                  "Broadcast chime across all online satellites",
+                  "Diffuser un signal audio sur tous les satellites",
+                )}
               >
                 <IconVolume size={14} />
                 <span>{tr("Broadcast Intercom", "Diffusion Intercom")}</span>
@@ -543,7 +567,14 @@ export function Domotique({ api }: { api: DashboardApi }) {
               <span className="muted" style={{ fontSize: "0.75rem", display: "block" }}>
                 {tr("Active Satellites", "Satellites actifs")}
               </span>
-              <span style={{ fontSize: "1.25rem", fontWeight: 700, color: onlineCount > 0 ? "var(--nx-accent-line, #38bdf8)" : "var(--nx-text-muted)" }}>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 700,
+                  color:
+                    onlineCount > 0 ? "var(--nx-accent-line, #38bdf8)" : "var(--nx-text-muted)",
+                }}
+              >
                 {onlineCount} / {totalSatellites}
               </span>
             </div>
@@ -551,7 +582,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
               <span className="muted" style={{ fontSize: "0.75rem", display: "block" }}>
                 {tr("Microphones Listening", "Micros à l'écoute")}
               </span>
-              <span style={{ fontSize: "1.25rem", fontWeight: 700, color: micActiveCount > 0 ? "#10b981" : "#f59e0b" }}>
+              <span
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 700,
+                  color: micActiveCount > 0 ? "#10b981" : "#f59e0b",
+                }}
+              >
                 {micActiveCount}
               </span>
             </div>
@@ -560,7 +597,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 <span className="muted" style={{ fontSize: "0.75rem", display: "block" }}>
                   {tr("Avg Battery", "Batterie moy.")}
                 </span>
-                <span style={{ fontSize: "1.25rem", fontWeight: 700, color: avgBattery > 20 ? "var(--nx-text, #f4f4f5)" : "#ef4444" }}>
+                <span
+                  style={{
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: avgBattery > 20 ? "var(--nx-text, #f4f4f5)" : "#ef4444",
+                  }}
+                >
                   {avgBattery}%
                 </span>
               </div>
@@ -689,7 +732,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                 }}
               >
-                <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "center" }}
+                >
                   {qrSvg && (
                     <div
                       style={{
@@ -727,7 +772,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       {new Date(pairingTicket.expiresAt).toLocaleTimeString()}
                     </p>
                     <div style={{ marginTop: "0.75rem" }}>
-                      <label style={{ display: "block", fontSize: "0.8rem", color: "var(--muted)" }}>
+                      <label
+                        style={{ display: "block", fontSize: "0.8rem", color: "var(--muted)" }}
+                      >
                         {tr("Provisioning Payload (JSON)", "Payload de provisionnement (JSON)")}
                       </label>
                       <pre
@@ -752,13 +799,23 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
       {/* Smart Home Zones Grid */}
       <section className="card" style={{ marginTop: "1rem" }} aria-labelledby="rooms-title">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+          }}
+        >
           <div>
             <h3 id="rooms-title" style={{ margin: 0 }}>
               {tr("Rooms & Living Zones", "Pièces & Zones de vie")}
             </h3>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-              {tr("Overview of audio satellites and automation coverage by room.", "État de couverture acoustique et domotique par zone.")}
+              {tr(
+                "Overview of audio satellites and automation coverage by room.",
+                "État de couverture acoustique et domotique par zone.",
+              )}
             </p>
           </div>
           <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -782,7 +839,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: "1rem",
+          }}
+        >
           {activeRooms.map((room) => {
             const satsInRoom = roomsMap.get(room) ?? [];
             const onlineInRoom = satsInRoom.filter((s) => s.online).length;
@@ -795,13 +858,22 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 className="card"
                 style={{
                   background: isSelected ? "rgba(99, 102, 241, 0.08)" : "rgba(255, 255, 255, 0.02)",
-                  border: isSelected ? "1px solid var(--accent, #6366f1)" : "1px solid var(--nx-line, rgba(255, 255, 255, 0.08))",
+                  border: isSelected
+                    ? "1px solid var(--accent, #6366f1)"
+                    : "1px solid var(--nx-line, rgba(255, 255, 255, 0.08))",
                   padding: "1rem",
                   cursor: "pointer",
                 }}
                 onClick={() => setSelectedRoom(isSelected ? "all" : room)}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "0.75rem",
+                  }}
+                >
                   <div>
                     <h4 style={{ margin: 0, fontSize: "1.05rem" }}>{room}</h4>
                     <span className="muted" style={{ fontSize: "0.8rem" }}>
@@ -818,23 +890,38 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       fontSize: "0.75rem",
                       padding: "0.2rem 0.5rem",
                       borderRadius: "999px",
-                      background: onlineInRoom > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                      background:
+                        onlineInRoom > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
                       color: onlineInRoom > 0 ? "#10b981" : "var(--nx-text-muted)",
                     }}
                   >
                     <IconSatellite size={12} />
-                    <span>{onlineInRoom > 0 ? tr("Covered", "Couvert") : tr("Inactive", "Inactif")}</span>
+                    <span>
+                      {onlineInRoom > 0 ? tr("Covered", "Couvert") : tr("Inactive", "Inactif")}
+                    </span>
                   </span>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--nx-text-muted)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.75rem",
+                    alignItems: "center",
+                    fontSize: "0.8rem",
+                    color: "var(--nx-text-muted)",
+                  }}
+                >
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
                     {anyMicMuted ? (
                       <IconMicOff size={14} color="#f59e0b" />
                     ) : (
                       <IconMic size={14} color="#10b981" />
                     )}
-                    <span>{anyMicMuted ? tr("Mic Muted", "Micro muet") : tr("Mic Active", "Micro actif")}</span>
+                    <span>
+                      {anyMicMuted
+                        ? tr("Mic Muted", "Micro muet")
+                        : tr("Mic Active", "Micro actif")}
+                    </span>
                   </span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
                     <IconVolume size={14} />
@@ -843,7 +930,15 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 </div>
 
                 {satsInRoom.length > 0 && (
-                  <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", gap: "0.5rem" }}>
+                  <div
+                    style={{
+                      marginTop: "0.75rem",
+                      paddingTop: "0.75rem",
+                      borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+                      display: "flex",
+                      gap: "0.5rem",
+                    }}
+                  >
                     <button
                       type="button"
                       className="button compact secondary"
@@ -860,7 +955,12 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       className="button compact secondary"
                       onClick={(e) => {
                         e.stopPropagation();
-                        satsInRoom.forEach((s) => void executeCommand(s.deviceId, "system.diagnostics", { target: "audio" }));
+                        satsInRoom.forEach(
+                          (s) =>
+                            void executeCommand(s.deviceId, "system.diagnostics", {
+                              target: "audio",
+                            }),
+                        );
                       }}
                     >
                       <IconVolume size={12} />
@@ -876,15 +976,28 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
       {/* Satellites ESP32 Hardware Fleet Section */}
       <section className="card" style={{ marginTop: "1rem" }} aria-labelledby="fleet-title">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+          }}
+        >
           <div>
             <h3 id="fleet-title" style={{ margin: 0 }}>
               {tr("ESP32 Hardware Satellites Fleet", "Flotte des Satellites ESP32")}
             </h3>
             <p className="muted" style={{ margin: "0.25rem 0 0" }}>
               {selectedRoom === "all"
-                ? tr("Displaying all provisioned ESP32 audio nodes.", "Affichage de tous les modules audio ESP32 provisionnés.")
-                : tr(`Filtering for room: ${selectedRoom}`, `Filtré pour la pièce : ${selectedRoom}`)}
+                ? tr(
+                    "Displaying all provisioned ESP32 audio nodes.",
+                    "Affichage de tous les modules audio ESP32 provisionnés.",
+                  )
+                : tr(
+                    `Filtering for room: ${selectedRoom}`,
+                    `Filtré pour la pièce : ${selectedRoom}`,
+                  )}
             </p>
           </div>
         </div>
@@ -984,7 +1097,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                             background: sat.online ? "#10b981" : "#ef4444",
                           }}
                         />
-                        <span>{sat.online ? tr("ONLINE", "EN LIGNE") : tr("OFFLINE", "HORS LIGNE")}</span>
+                        <span>
+                          {sat.online ? tr("ONLINE", "EN LIGNE") : tr("OFFLINE", "HORS LIGNE")}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -1095,14 +1210,26 @@ export function Domotique({ api }: { api: DashboardApi }) {
                           color: mic.muted ? "#f59e0b" : "currentColor",
                         }}
                         disabled={!sat.online || isBusy}
-                        onClick={() => void executeCommand(sat.deviceId, "audio.privacy", { muted: !mic.muted })}
+                        onClick={() =>
+                          void executeCommand(sat.deviceId, "audio.privacy", { muted: !mic.muted })
+                        }
                         title={
                           mic.muted
-                            ? tr("Microphone is MUTED. Click to activate.", "Microphone COUPE. Cliquer pour activer.")
-                            : tr("Microphone is ACTIVE. Click to mute.", "Microphone ACTIF. Cliquer pour couper.")
+                            ? tr(
+                                "Microphone is MUTED. Click to activate.",
+                                "Microphone COUPE. Cliquer pour activer.",
+                              )
+                            : tr(
+                                "Microphone is ACTIVE. Click to mute.",
+                                "Microphone ACTIF. Cliquer pour couper.",
+                              )
                         }
                       >
-                        {mic.muted ? <IconMicOff size={14} color="#f59e0b" /> : <IconMic size={14} color="#10b981" />}
+                        {mic.muted ? (
+                          <IconMicOff size={14} color="#f59e0b" />
+                        ) : (
+                          <IconMic size={14} color="#10b981" />
+                        )}
                         <span>{mic.muted ? tr("Muted", "Coupe") : tr("Active", "Actif")}</span>
                       </button>
 
@@ -1160,7 +1287,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                       type="button"
                       className="button compact secondary"
                       disabled={!sat.online || isBusy}
-                      onClick={() => void executeCommand(sat.deviceId, "led.set", { pattern: "blink" })}
+                      onClick={() =>
+                        void executeCommand(sat.deviceId, "led.set", { pattern: "blink" })
+                      }
                       title={tr("Blink LED on device", "Faire clignoter la LED")}
                     >
                       <IconHardware size={14} />
@@ -1270,4 +1399,3 @@ export function Domotique({ api }: { api: DashboardApi }) {
     </div>
   );
 }
-

@@ -708,7 +708,6 @@ function AppContent() {
             </div>
           )}
 
-
           {rootMode === "usage" && (
             <div className="nav-group nav-usage">
               <NavItem
@@ -1063,8 +1062,7 @@ function NavIcon({ name }: { name: string }) {
     runs: "m8 5 11 7-11 7V5Z",
     missions: "M12 3v4m0 10v4M3 12h4m10 0h4m-6-3a4 4 0 1 1-6 6 4 4 0 0 1 6-6Z",
     devices: "M7 3h10v18H7V3Zm3 15h4",
-    domotique:
-      "M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z",
+    domotique: "M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z",
     satellites:
       "M4 10a7.5 7.5 0 0 0 10 10M4 6a11.5 11.5 0 0 0 14 14M4 2a15.5 15.5 0 0 0 18 18M4 20a2 2 0 1 0 0 .01",
     workers: "M4 7h16v10H4V7Zm4 14v-4m8 4v-4M9 11h.01M13 11h3",
