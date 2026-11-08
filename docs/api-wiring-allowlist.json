@@ -80,10 +80,6 @@
     "reason": "Confirmation detail is read through the task and mission views instead. Kept as the addressable resource behind POST /confirmations/:id/respond, which is called."
   },
   {
-    "route": "GET /api/v1/conversations/:p",
-    "reason": "Dashboard chat keeps no history, so it never fetches a conversation. Lot 9.2 wires persistence using the route the desktop app already calls."
-  },
-  {
     "route": "GET /api/v1/devices/:p",
     "reason": "Device detail is served by GET /dashboard/devices/:id for the admin view. Kept as the canonical resource for paired clients."
   },

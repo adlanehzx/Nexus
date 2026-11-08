@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { DashboardApi, OrchestratedMission, SendToNexusOptions } from "../lib/api.js";
+import { ConversationHistory, readChatLocation, writeChatLocation } from "../lib/conversations.js";
 import { useI18n } from "./i18n/index.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
 import {
@@ -15,15 +16,14 @@ import {
   IconCheck,
   IconClose,
   IconCopy,
+  IconRefresh,
 } from "./icons.js";
 import { ChatMessageContent } from "./ChatMessageContent.js";
+import { ConversationSidebar } from "./ConversationSidebar.js";
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  mission?: OrchestratedMission;
-}
+/** Below this width the history floats over the chat instead of sitting beside it. */
+const HISTORY_OVERLAY_BELOW = 760;
+const HISTORY_COLLAPSED_KEY = "nexus.chat.historyCollapsed";
 
 export interface EngineOption {
   id: string;
@@ -169,23 +169,34 @@ function getEngineIcon(engineId: string, size = 14) {
 
 export function NexusChat({ api }: { api: DashboardApi }) {
   const { t, locale, tr } = useI18n();
-  const restoredMission = readMissionFromUrl();
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    restoredMission === null
-      ? []
-      : [
-          {
-            id: restoredMission,
-            role: "assistant",
-            text: "",
-            mission: pendingMission(restoredMission),
-          },
-        ],
+  // The page link names the conversation and the mission in flight, so a
+  // reload lands back where it was. Reading it here is free of side effects.
+  const history = useMemo(
+    () => new ConversationHistory(api, readChatLocation(window.location.href)),
+    [api],
   );
+  // Same snapshot for a static render: the store holds no browser-only state.
+  const chat = useSyncExternalStore(history.subscribe, history.getSnapshot, history.getSnapshot);
   const [draft, setDraft] = useState("");
-  const [activeMission, setActiveMission] = useState<string | null>(restoredMission);
-  const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [historyOverlay, setHistoryOverlay] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [dockedCollapsed, setDockedCollapsed] = useState(readHistoryCollapsed);
+  const historyCollapsed = historyOverlay ? !overlayOpen : dockedCollapsed;
+  const missionInFlight = chat.tracked !== null;
+  const activeConversation = chat.conversations.find(
+    (conversation) => conversation.id === chat.activeId,
+  );
+  // Empty while a conversation opened from a link is still loading.
+  const activeTitle =
+    chat.activeId === null
+      ? tr("New conversation", "Nouvelle conversation")
+      : activeConversation === undefined
+        ? ""
+        : activeConversation.title.trim().length > 0
+          ? activeConversation.title
+          : tr("Untitled conversation", "Conversation sans titre");
 
   // Dynamic Engine, Model & Effort selection states
   const [engineOptions, setEngineOptions] = useState<EngineOption[]>([
@@ -358,85 +369,100 @@ export function NexusChat({ api }: { api: DashboardApi }) {
   };
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    void history.start();
+  }, [history]);
+
+  // The link follows the chat: conversation open, mission in flight.
+  const trackedMissionId = chat.tracked?.missionId ?? null;
+  useEffect(() => {
+    const next = writeChatLocation(window.location.href, {
+      conversationId: chat.activeId,
+      missionId: trackedMissionId,
+    });
+    if (next !== window.location.href) window.history.replaceState(window.history.state, "", next);
+  }, [chat.activeId, trackedMissionId]);
+
+  // Polling also runs while another conversation is open: the reply is recorded
+  // in its own conversation whichever one is on screen.
+  useEffect(() => {
+    if (trackedMissionId === null) return;
+    const timer = window.setInterval(() => void history.pollTracked(), 2_000);
+    return () => window.clearInterval(timer);
+  }, [history, trackedMissionId]);
+
+  // The panel docks or floats with the room the chat actually has: a spatial
+  // window can be narrow on a wide screen, so the viewport alone would lie.
+  // Measured once before the first paint, so a phone never flashes the docked panel.
+  useLayoutEffect(() => {
+    const element = shellRef.current;
+    if (element === null) return;
+    setHistoryOverlay(element.getBoundingClientRect().width < HISTORY_OVERLAY_BELOW);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? element.clientWidth;
+      setHistoryOverlay(width < HISTORY_OVERLAY_BELOW);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
-    const missionId = activeMission;
-    if (missionId === null) return;
-    const timer = window.setInterval(() => {
-      void api
-        .nexusMission(missionId)
-        .then((mission) => {
-          setMessages((current) =>
-            current.map((message) =>
-              message.mission?.missionId === missionId ? { ...message, mission } : message,
-            ),
-          );
-          if (
-            mission.state === "succeeded" ||
-            mission.state === "failed" ||
-            mission.error !== null
-          ) {
-            setActiveMission(null);
-          }
-        })
-        .catch((cause: unknown) => {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : tr("Mission tracking unavailable.", "Suivi de mission impossible."),
-          );
-          setActiveMission(null);
-        });
-    }, 2_000);
-    return () => window.clearInterval(timer);
-  }, [activeMission, api, tr]);
+    if (!historyOverlay || !overlayOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOverlayOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [historyOverlay, overlayOpen]);
+
+  // Follows the newest turn and its progress; loading earlier turns above
+  // must not yank the reader to the bottom.
+  const lastEntry = chat.entries.at(-1);
+  const scrollKey = [
+    chat.activeId ?? "new",
+    lastEntry?.id ?? "",
+    lastEntry?.mission?.state ?? "",
+    String(lastEntry?.mission?.completedTasks ?? ""),
+    lastEntry?.mission?.response === null ? "" : "answered",
+  ].join(":");
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [scrollKey]);
+
+  const toggleHistory = () => {
+    if (historyOverlay) {
+      setOverlayOpen((open) => !open);
+      return;
+    }
+    const next = !dockedCollapsed;
+    setDockedCollapsed(next);
+    writeHistoryCollapsed(next);
+  };
+
+  const openConversation = (conversationId: string | null) => {
+    if (historyOverlay) setOverlayOpen(false);
+    void history.open(conversationId);
+  };
 
   const submit = (): void => {
     const text = draft.trim();
-    if (text.length === 0 || activeMission !== null) return;
+    if (text.length === 0 || missionInFlight || chat.sending) return;
     setDraft("");
-    setError(null);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text }]);
 
     const engine = engineOptions.find((e) => e.id === selectedEngine);
-    const options: {
-      profile?: string;
-      model?: string;
-      reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
-    } = {};
+    const options: Omit<SendToNexusOptions, "conversationId"> = {};
     if (engine?.profileKey) options.profile = engine.profileKey;
     if (selectedModel && selectedModel !== "auto") options.model = selectedModel;
     if (reasoningEffort !== "auto") options.reasoningEffort = reasoningEffort;
 
-    void api
-      .sendToNexus(text, options)
-      .then((mission) => {
-        setMessages((current) => [
-          ...current,
-          { id: crypto.randomUUID(), role: "assistant", text: "", mission },
-        ]);
-        if (mission.state === "scheduled" || mission.response !== null) return;
-        const url = new URL(window.location.href);
-        url.searchParams.set("mission", mission.missionId);
-        window.history.replaceState(null, "", url);
-        setActiveMission(mission.missionId);
-      })
-      .catch((cause: unknown) => {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : tr("NEXUS could not start the mission.", "NEXUS n'a pas pu démarrer la mission."),
-        );
-      });
+    void history.send(text, options);
   };
 
   const activeEngine = engineOptions.find((e) => e.id === selectedEngine);
   const currentModels = activeEngine?.models ?? [];
   const activeModel = currentModels.find((m) => m.id === selectedModel);
 
-  return (
+  const conversation = (
     <section className="nexus-chat">
       {/* Top Futuristic Cockpit Telemetry Strip */}
       <div
@@ -453,6 +479,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <span className="radar-pulse-ring" />
           <span
+            className="chat-cockpit-label"
             style={{
               fontFamily: "var(--nx-font-mono, monospace)",
               fontSize: "0.75rem",
@@ -468,8 +495,11 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             )}
           </span>
         </div>
+        <span className="chat-active-title" title={activeTitle}>
+          {activeTitle}
+        </span>
         <div>
-          {activeMission !== null ? (
+          {missionInFlight ? (
             <span className="hud-telemetry-badge" style={{ borderColor: "var(--accent, #00f0ff)" }}>
               <span className="hud-audio-bars">
                 <span className="hud-audio-bar" />
@@ -489,8 +519,46 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         </div>
       </div>
 
-      <div className="chat-feed" aria-live="polite">
-        {messages.length === 0 ? (
+      <div className="chat-feed" aria-live="polite" aria-busy={chat.transcriptStatus === "loading"}>
+        {chat.earlierCursor === null ? null : (
+          <div className="chat-earlier">
+            <button
+              type="button"
+              className="chat-earlier-btn"
+              onClick={() => void history.loadEarlier()}
+              disabled={chat.loadingEarlier}
+            >
+              {chat.loadingEarlier
+                ? tr("Loading…", "Chargement…")
+                : tr("Load earlier messages", "Charger les messages précédents")}
+            </button>
+          </div>
+        )}
+        {chat.transcriptStatus === "loading" ? (
+          <div
+            className="loading-state chat-transcript-loading"
+            role="status"
+            aria-label={tr("Loading conversation", "Chargement de la conversation")}
+          >
+            <span />
+            <span />
+            <span />
+          </div>
+        ) : null}
+        {chat.transcriptStatus === "error" ? (
+          <div className="chat-error chat-transcript-error" role="alert">
+            <span>{chat.transcriptError}</span>
+            <button
+              type="button"
+              className="chat-earlier-btn"
+              onClick={() => void history.open(chat.activeId)}
+            >
+              <IconRefresh size={12} />
+              <span>{tr("Retry", "Réessayer")}</span>
+            </button>
+          </div>
+        ) : null}
+        {chat.entries.length === 0 && chat.transcriptStatus === "ready" ? (
           <div className="chat-welcome">
             <div
               className="nexus-mark"
@@ -566,7 +634,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             </div>
           </div>
         ) : null}
-        {messages.map((message) => (
+        {chat.entries.map((message) => (
           <article key={message.id} className={`chat-message ${message.role}`}>
             {message.role === "user" ? (
               <>
@@ -602,7 +670,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             )}
           </article>
         ))}
-        {error !== null ? <div className="chat-error">{error}</div> : null}
+        {chat.error !== null ? <div className="chat-error">{chat.error}</div> : null}
         <div ref={endRef} />
       </div>
 
@@ -617,9 +685,9 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         <textarea
           aria-label="Mission for NEXUS"
           value={draft}
-          disabled={activeMission !== null}
+          disabled={missionInFlight}
           placeholder={
-            activeMission === null
+            !missionInFlight
               ? t("chat.inputPlaceholder")
               : locale === "fr"
                 ? "Les agents travaillent…"
@@ -828,7 +896,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             <button
               type="submit"
               className="composer-send-btn"
-              disabled={activeMission !== null || draft.trim().length === 0}
+              disabled={missionInFlight || chat.sending || draft.trim().length === 0}
               aria-label={t("chat.send")}
             >
               <span>{t("chat.send")}</span>
@@ -850,31 +918,57 @@ export function NexusChat({ api }: { api: DashboardApi }) {
       </form>
     </section>
   );
+
+  return (
+    <div
+      ref={shellRef}
+      className={`nexus-chat-shell${historyOverlay ? " history-overlay" : ""}${historyCollapsed ? " history-collapsed" : ""}`}
+    >
+      <ConversationSidebar
+        conversations={chat.conversations}
+        activeId={chat.activeId}
+        busyId={chat.tracked?.conversationId ?? null}
+        status={chat.listStatus}
+        error={chat.listError}
+        hasMore={chat.listCursor !== null}
+        collapsed={historyCollapsed}
+        overlay={historyOverlay}
+        onToggle={toggleHistory}
+        onNew={() => openConversation(null)}
+        onSelect={openConversation}
+        onRename={(conversationId, title) => history.rename(conversationId, title)}
+        onDelete={(conversationId) => history.remove(conversationId)}
+        onLoadMore={() => void history.loadMore()}
+        onRetry={() => void history.refresh()}
+      />
+      {historyOverlay && overlayOpen ? (
+        <button
+          type="button"
+          className="chat-history-scrim"
+          aria-label={tr("Close conversation history", "Fermer l'historique des conversations")}
+          onClick={() => setOverlayOpen(false)}
+        />
+      ) : null}
+      <div className="chat-main">{conversation}</div>
+    </div>
+  );
 }
 
-function readMissionFromUrl(): string | null {
-  const url = new URL(window.location.href);
-  let value = url.searchParams.get("mission");
-  if (!value && url.hash.includes("?")) {
-    const hashQuery = url.hash.split("?")[1];
-    if (hashQuery) {
-      value = new URLSearchParams(hashQuery).get("mission");
-    }
+/** Per tab, like the session itself: nothing here writes to permanent browser storage. */
+function readHistoryCollapsed(): boolean {
+  try {
+    return window.sessionStorage.getItem(HISTORY_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
   }
-  return value !== null && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
 }
 
-function pendingMission(missionId: string): OrchestratedMission {
-  return {
-    missionId,
-    title: "NEXUS Mission",
-    state: "pending",
-    profiles: [],
-    completedTasks: 0,
-    totalTasks: 1,
-    response: null,
-    error: null,
-  };
+function writeHistoryCollapsed(collapsed: boolean): void {
+  try {
+    window.sessionStorage.setItem(HISTORY_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Storage unavailable: the choice lasts until the next reload.
+  }
 }
 
 function CopyButton({ text }: { text: string }) {

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { FastifyInstance, FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { currentUser } from "../../plugins/authentication.js";
+import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
-import { AcpOrchestrator } from "../../services/acp-orchestrator.js";
+import { AcpOrchestrator, type OrchestratedMission } from "../../services/acp-orchestrator.js";
 import { DependencyError } from "@nexus/shared";
-import { NotFoundError } from "../../services/stores.js";
+import { NotFoundError, type ConversationStore } from "../../services/stores.js";
 import {
   createProviderAccountSchema,
   providerAccountSchema,
@@ -174,6 +174,14 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           reasoningEffort: z
             .enum(["minimal", "low", "medium", "high", "xhigh", "max", "ultra"])
             .optional(),
+          /**
+           * Conversation the exchange belongs to.
+           *
+           * When given, the server records the prompt there and, once the mission
+           * answers, the answer too. A client writes what the user said and never
+           * what NEXUS said: the reply comes from the mission, not the request body.
+           */
+          conversationId: z.string().uuid().optional(),
         }),
         response: { 202: okSchema(missionViewSchema) },
       },
@@ -186,6 +194,12 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (orchestrator === undefined)
         throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
+      const { conversationId } = request.body;
+      // Ownership is settled before dispatch, for the same reason as the pause:
+      // a mission must not start for a conversation the caller cannot write to.
+      if (conversationId !== undefined) {
+        await loadOwnedConversation(app.services.conversations, conversationId, userId);
+      }
       const mission = await orchestrator.submit(
         userId,
         request.body.message,
@@ -196,6 +210,17 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
           reasoningEffort: request.body.reasoningEffort,
         },
       );
+      if (conversationId !== undefined) {
+        await app.services.conversations.appendMessage({
+          conversationId,
+          role: "user",
+          content: request.body.message,
+          originClientDeviceId: null,
+        });
+        // A scheduled mission answers at once (its schedule), so its reply is
+        // final here; a running one gets its reply when a status read observes it.
+        await recordMissionReply(app.services.conversations, conversationId, mission);
+      }
       return reply.code(202).send(ok(mission, request.id));
     },
   );
@@ -285,6 +310,17 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       schema: {
         tags: ["orchestrator"],
         params: z.object({ missionId: z.string().uuid() }),
+        querystring: z.object({
+          /**
+           * Conversation to record the answer in, when this read observes one.
+           *
+           * The status read is already where mission outcomes are synchronised
+           * into NEXUS (`syncMissionOutcomes`); the transcript is one more of
+           * them. The write is keyed by mission and happens at most once, so
+           * repeating the read changes nothing.
+           */
+          conversationId: z.string().uuid().optional(),
+        }),
         response: { 200: okSchema(missionViewSchema) },
       },
     },
@@ -292,8 +328,15 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
       if (orchestrator === undefined)
         throw new DependencyError({ message: "ACP engine is not configured." });
       const { userId } = currentUser(request);
+      const { conversationId } = request.query;
+      if (conversationId !== undefined) {
+        await loadOwnedConversation(app.services.conversations, conversationId, userId);
+      }
       const mission = await orchestrator.status(userId, request.params.missionId);
       if (mission === undefined) throw new NotFoundError("Mission", request.params.missionId);
+      if (conversationId !== undefined) {
+        await recordMissionReply(app.services.conversations, conversationId, mission);
+      }
       return ok(mission, request.id);
     },
   );
@@ -948,3 +991,36 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
 
   done();
 };
+
+/** A conversation id from the request is a claim until ownership is checked. */
+async function loadOwnedConversation(
+  conversations: ConversationStore,
+  conversationId: string,
+  userId: string,
+): Promise<void> {
+  const conversation = await conversations.get(conversationId);
+  if (conversation === undefined) throw new NotFoundError("Conversation", conversationId);
+  assertOwnedBy(conversation.userId, userId, "Conversation");
+}
+
+/**
+ * Writes a mission's answer into its conversation, once.
+ *
+ * The message takes the mission id — the id the client already tracks — so a
+ * later read observing the same answer finds it stored and writes nothing. Only
+ * an answer is recorded: a failure is a mission status, not something NEXUS said.
+ */
+async function recordMissionReply(
+  conversations: ConversationStore,
+  conversationId: string,
+  mission: OrchestratedMission,
+): Promise<void> {
+  if (mission.response === null) return;
+  await conversations.appendMessageOnce({
+    id: mission.missionId,
+    conversationId,
+    role: "assistant",
+    content: mission.response,
+    originClientDeviceId: null,
+  });
+}

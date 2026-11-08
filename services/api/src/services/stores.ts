@@ -255,8 +255,25 @@ export interface ConversationStore {
   get(id: string): Promise<Conversation | undefined>;
   listByUser(userId: string, page: PageRequest): Promise<Page<Conversation>>;
   archive(id: string): Promise<Conversation>;
+  /** Ownership is the caller's to check, as for every other write on this port. */
+  rename(id: string, title: string): Promise<Conversation>;
+  /**
+   * Deletes a conversation together with its transcript.
+   *
+   * Removal, not archival: a conversation the user deletes must not survive as
+   * rows nobody can see. Archival remains the reversible option.
+   */
+  remove(id: string): Promise<void>;
   /** `id` is generated unless given: a streamed message keeps the id clients already hold. */
   appendMessage(input: Omit<Message, "id" | "createdAt"> & { id?: string }): Promise<Message>;
+  /**
+   * Appends a message under an id the caller chose, at most once.
+   *
+   * `undefined` when that id is already stored. A reply that two overlapping
+   * status reads both observe is written a single time, and there is no
+   * read-then-write window between them in which both could see it missing.
+   */
+  appendMessageOnce(input: Omit<Message, "createdAt">): Promise<Message | undefined>;
   listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>>;
 }
 
@@ -308,6 +325,23 @@ export class InMemoryConversationStore implements ConversationStore {
     return Promise.resolve({ ...archived });
   }
 
+  rename(id: string, title: string): Promise<Conversation> {
+    const conversation = this.#conversations.get(id);
+    if (conversation === undefined) throw new NotFoundError("Conversation", id);
+
+    // `updatedAt` moves, as it does in PostgreSQL where the column is `@updatedAt`:
+    // both implementations must order the list the same way.
+    const renamed: Conversation = { ...conversation, title, updatedAt: this.#now() };
+    this.#conversations.set(id, renamed);
+    return Promise.resolve({ ...renamed });
+  }
+
+  remove(id: string): Promise<void> {
+    if (!this.#conversations.delete(id)) throw new NotFoundError("Conversation", id);
+    this.#messages.delete(id);
+    return Promise.resolve();
+  }
+
   appendMessage(input: Omit<Message, "id" | "createdAt"> & { id?: string }): Promise<Message> {
     const conversation = this.#conversations.get(input.conversationId);
     if (conversation === undefined) throw new NotFoundError("Conversation", input.conversationId);
@@ -317,6 +351,16 @@ export class InMemoryConversationStore implements ConversationStore {
     this.#conversations.set(conversation.id, { ...conversation, updatedAt: message.createdAt });
 
     return Promise.resolve({ ...message });
+  }
+
+  appendMessageOnce(input: Omit<Message, "createdAt">): Promise<Message | undefined> {
+    // Message ids are unique across conversations, as the primary key is in
+    // PostgreSQL. Check and write happen in one synchronous step: nothing can
+    // interleave between them.
+    for (const messages of this.#messages.values()) {
+      if (messages.some((message) => message.id === input.id)) return Promise.resolve(undefined);
+    }
+    return this.appendMessage(input);
   }
 
   listMessages(conversationId: string, page: PageRequest): Promise<Page<Message>> {
