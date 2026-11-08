@@ -47,6 +47,7 @@ const UsageLimits = lazySection("UsageLimits");
 const UsageCosts = lazySection("UsageCosts");
 const UsageTokens = lazySection("UsageTokens");
 const Providers = lazySection("Providers");
+const Satellites = lazySection("Satellites");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -125,6 +126,12 @@ export const SETTINGS_CATEGORIES = [
         label: "Appareils & Réseau",
         labelEn: "Devices & Network",
         icon: "devices",
+      },
+      {
+        id: "satellites" as const,
+        label: "Satellites ESP32",
+        labelEn: "ESP32 Satellites",
+        icon: "satellites",
       },
       {
         id: "mcp" as const,
@@ -290,6 +297,10 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     description: "Operational state of NEXUS at a glance.",
   },
   devices: { title: "Devices", description: "Paired machines, trust levels, and permissions." },
+  satellites: {
+    title: "Satellites",
+    description: "ESP32 hardware satellites, acoustic monitoring, room telemetry, and command bus.",
+  },
   workers: { title: "Workers", description: "Available capacity to execute tasks." },
   tasks: { title: "Tasks", description: "Work queue, dependencies, and results." },
   runs: { title: "Agent runs", description: "Execution traces and pending confirmations." },
@@ -965,6 +976,8 @@ function renderSection(
       return <Settings api={api} defaultTab="backup" hideTopTabs={true} />;
     case "devices":
       return <Devices api={api} />;
+    case "satellites":
+      return <Satellites api={api} />;
     case "mcp":
       return <Mcp api={api} />;
     case "browser":
@@ -1028,6 +1041,8 @@ function NavIcon({ name }: { name: string }) {
     runs: "m8 5 11 7-11 7V5Z",
     missions: "M12 3v4m0 10v4M3 12h4m10 0h4m-6-3a4 4 0 1 1-6 6 4 4 0 0 1 6-6Z",
     devices: "M7 3h10v18H7V3Zm3 15h4",
+    satellites:
+      "M4 10a7.5 7.5 0 0 0 10 10M4 6a11.5 11.5 0 0 0 14 14M4 2a15.5 15.5 0 0 0 18 18M4 20a2 2 0 1 0 0 .01",
     workers: "M4 7h16v10H4V7Zm4 14v-4m8 4v-4M9 11h.01M13 11h3",
     tools: "m14 6 4-3 3 3-3 4m-4-4-9 9v4h4l9-9",
     mcp: "M8 6h8M8 12h8M8 18h8M5 6h.01M5 12h.01M5 18h.01",
