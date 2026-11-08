@@ -333,6 +333,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
               durationMs: z.number().nullable(),
               /** Redacted arguments. The execution log is an audit trail. */
               input: z.unknown(),
+              result: z.unknown().nullable(),
               error: z.object({ code: z.string(), message: z.string() }).nullable(),
             }),
           ),
@@ -358,6 +359,7 @@ export const taskRoutes: FastifyPluginCallback = (fastify, _options, done) => {
           completedAt: execution.completedAt,
           durationMs: execution.durationMs,
           input: execution.input,
+          result: execution.result,
           error:
             execution.error === null
               ? null
