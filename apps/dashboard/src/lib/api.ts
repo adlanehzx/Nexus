@@ -1077,6 +1077,85 @@ export interface UnifiedModelDto {
   maxOutputTokens?: number;
 }
 
+export type SatelliteCommandName =
+  | "system.ping"
+  | "system.diagnostics"
+  | "system.capabilities"
+  | "led.set"
+  | "audio.privacy"
+  | "infrared.transmit";
+
+export interface SatelliteHealth {
+  batteryLevel?: number;
+  batteryPercent?: number;
+  onBattery?: boolean;
+  batteryVoltage?: number;
+  charging?: boolean;
+  firmwareVersion?: string;
+  firmware?: string;
+  wifiRssi?: number;
+  rssi?: number;
+  wifiSsid?: string;
+  uptimeMs?: number;
+  freeHeap?: number;
+  room?: string;
+  microphone?:
+    | {
+        active?: boolean;
+        status?: "active" | "muted" | "idle" | "error";
+        gain?: number;
+        sampleRate?: number;
+      }
+    | boolean;
+  speaker?:
+    | {
+        active?: boolean;
+        status?: "active" | "idle" | "muted" | "error";
+        volume?: number;
+      }
+    | boolean;
+  [key: string]: unknown;
+}
+
+export interface SatelliteCapability {
+  name: string;
+  operational?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SatelliteView {
+  deviceId: string;
+  name: string;
+  health: SatelliteHealth;
+  capabilities: SatelliteCapability[];
+  lastSeenAt: string;
+  online: boolean;
+}
+
+export interface SatelliteCommandAccepted {
+  v: 1;
+  type: "command";
+  correlationId: string;
+  command: SatelliteCommandName;
+  params: Record<string, unknown>;
+  ts: number;
+}
+
+export interface SatelliteCommandResult {
+  v: 1;
+  type: "command.result";
+  correlationId: string;
+  ok: boolean;
+  status: number;
+  message?: string;
+  data?: unknown;
+}
+
+export interface SatelliteCommandStatusResponse {
+  state: "queued" | "delivered" | "completed";
+  result: SatelliteCommandResult | null;
+}
+
 export class ForbiddenError extends Error {
   readonly code = "DASHBOARD_FORBIDDEN";
 }
@@ -2176,6 +2255,69 @@ export class DashboardApi {
       "POST",
       `/api/v1/conversations/${encodeURIComponent(conversationId)}/archive`,
     );
+  }
+
+  satellites(): Promise<{ satellites: SatelliteView[] }> {
+    return this.#get("/api/v1/satellites");
+  }
+
+  sendSatelliteCommand(
+    deviceId: string,
+    command: SatelliteCommandName,
+    params: Record<string, unknown> = {},
+    idempotencyKey?: string,
+  ): Promise<SatelliteCommandAccepted> {
+    return this.#request("POST", `/api/v1/satellites/${encodeURIComponent(deviceId)}/commands`, {
+      command,
+      params,
+      ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
+    });
+  }
+
+  satelliteCommandStatus(
+    deviceId: string,
+    correlationId: string,
+  ): Promise<SatelliteCommandStatusResponse> {
+    return this.#get(
+      `/api/v1/satellites/${encodeURIComponent(deviceId)}/commands/${encodeURIComponent(correlationId)}`,
+    );
+  }
+
+  pingSatellite(deviceId: string): Promise<SatelliteCommandAccepted> {
+    return this.sendSatelliteCommand(deviceId, "system.ping", {});
+  }
+
+  testSatelliteVoiceSpeaker(
+    deviceId: string,
+    target: "speaker" | "microphone" | "both" = "both",
+  ): Promise<SatelliteCommandAccepted> {
+    return this.sendSatelliteCommand(deviceId, "system.diagnostics", {
+      target,
+      test: "audio",
+      timestamp: Date.now(),
+    });
+  }
+
+  setSatellitePrivacy(deviceId: string, muted: boolean): Promise<SatelliteCommandAccepted> {
+    return this.sendSatelliteCommand(deviceId, "audio.privacy", { muted });
+  }
+
+  registerSatellite(input: {
+    deviceId: string;
+    name: string;
+    room?: string;
+  }): Promise<{ ticket: PairingTicket; provisioningPayload: string }> {
+    const label = `satellite:${input.deviceId}:${input.room ?? input.name}`;
+    return this.createPairingTicket(label).then((ticket) => ({
+      ticket,
+      provisioningPayload: JSON.stringify({
+        deviceId: input.deviceId,
+        name: input.name,
+        room: input.room ?? input.name,
+        token: ticket.token,
+        apiUrl: ticket.payload,
+      }),
+    }));
   }
 
   async #get<T>(path: string): Promise<T> {

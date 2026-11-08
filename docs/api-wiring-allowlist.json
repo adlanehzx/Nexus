@@ -4,8 +4,16 @@
     "reason": "Unversioned liveness probe. Called by the Compose healthcheck and the Kubernetes liveness probe, which scripts/check-api-wiring.mjs does not scan because they live in YAML."
   },
   {
-    "route": "* /api/v1/satellites*",
-    "reason": "Hardware contract for ESP32 satellites, frozen and documented. The firmware lives outside this repository, so there is no in-repo caller by design. Lot 11.2 adds the dashboard screen; lot 11.3 publishes the contract."
+    "route": "POST /api/v1/satellites/:p/heartbeat",
+    "reason": "Hardware contract for ESP32 satellites. Heartbeat emitted by physical ESP32 satellites over Wi-Fi. The firmware lives outside this repository; the dashboard consumes GET /api/v1/satellites (Lot 11.2)."
+  },
+  {
+    "route": "GET /api/v1/satellites/:p/commands/next",
+    "reason": "Hardware contract for ESP32 satellites. Polled by physical ESP32 satellite devices to fetch queued commands enqueued by the dashboard (Lot 11.2)."
+  },
+  {
+    "route": "POST /api/v1/satellites/:p/commands/result",
+    "reason": "Hardware contract for ESP32 satellites. Submitted by physical ESP32 satellite devices upon command execution. Status is checked by the dashboard (Lot 11.2)."
   },
   {
     "route": "* /api/v1/organizations*",
