@@ -1582,6 +1582,14 @@ export class DashboardApi {
     );
   }
 
+  enableProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/enable`);
+  }
+
+  disableProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/disable`);
+  }
+
   deleteProviderAccount(id: string): Promise<{ deleted: boolean }> {
     return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
   }
