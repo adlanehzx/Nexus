@@ -8,14 +8,14 @@ import { useI18n } from "../i18n/index.js";
 // 4. Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function Tasks({ api }: { api: DashboardApi }) {
+export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?: boolean }) {
   const { tr } = useI18n();
   const state = useSection(() => api.tasks());
   const [selected, setSelected] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  return (
-    <div className="content">
+  const inner = (
+    <>
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) =>
@@ -111,8 +111,10 @@ export function Tasks({ api }: { api: DashboardApi }) {
           )
         }
       </Section>
-    </div>
+    </>
   );
+
+  return embedded ? inner : <div className="content">{inner}</div>;
 }
 
 function taskTone(status: string): string {

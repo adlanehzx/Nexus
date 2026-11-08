@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DashboardApi, UnifiedModelDto, UnifiedProviderDto } from "../../lib/api.js";
 import { Empty, Metric, Section, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
+import { IconCheck, IconClose } from "../icons.js";
 
 export function Providers({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
@@ -28,6 +29,15 @@ export function Providers({ api }: { api: DashboardApi }) {
       setDetecting(false);
     }
   };
+
+  useEffect(() => {
+    if (connections.data?.connections && connections.data.connections.length > 0) {
+      const allUnchecked = connections.data.connections.every((c) => c.observation === null);
+      if (allUnchecked && !detecting) {
+        void detect();
+      }
+    }
+  }, [connections.data]);
 
   const [selectedProvider, setSelectedProvider] = useState<string>("claude");
   const modelsState = useSection(
@@ -165,7 +175,7 @@ export function Providers({ api }: { api: DashboardApi }) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
                 gap: "1rem",
                 marginBottom: "1.5rem",
               }}
@@ -182,6 +192,12 @@ export function Providers({ api }: { api: DashboardApi }) {
                         ? "2px solid var(--accent-color, #00d2ff)"
                         : "1px solid var(--border-color, #2a2e39)",
                     borderRadius: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    minWidth: 0,
+                    overflow: "hidden",
+                    background: selectedProvider === p.id ? "rgba(0, 210, 255, 0.05)" : undefined,
                   }}
                   onClick={() => {
                     setSelectedProvider(p.id);
@@ -193,23 +209,110 @@ export function Providers({ api }: { api: DashboardApi }) {
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
-                      alignItems: "center",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                      marginBottom: "0.75rem",
+                      minWidth: 0,
                     }}
                   >
-                    <h4>{p.displayName}</h4>
-                    <span className="badge">{p.id.toUpperCase()}</span>
+                    <h4
+                      style={{
+                        margin: 0,
+                        fontSize: "0.95rem",
+                        fontWeight: 600,
+                        lineHeight: 1.35,
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      {p.displayName}
+                    </h4>
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        fontSize: "0.65rem",
+                        padding: "2px 6px",
+                        letterSpacing: "0.05em",
+                        borderRadius: "4px",
+                        background: "var(--color-bg-subtle, rgba(255, 255, 255, 0.08))",
+                        color: "var(--color-muted, #aaa)",
+                        fontWeight: 600,
+                        border: "1px solid var(--border-color, #333)",
+                      }}
+                    >
+                      {p.id.toUpperCase()}
+                    </span>
                   </div>
-                  <div style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>
-                    <div>
-                      ⚡ <strong>Streaming:</strong> {p.capabilities.streaming ? "Oui" : "Non"}
-                    </div>
-                    <div>
-                      🛠️ <strong>Tool Calling:</strong> {p.capabilities.toolCall ? "Oui" : "Non"}
-                    </div>
-                    <div>
-                      ⏪ <strong>Checkpoints:</strong>{" "}
-                      {p.capabilities.checkpointRollback ? "Oui" : "Non"}
-                    </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                      fontSize: "0.8rem",
+                      marginTop: "auto",
+                      paddingTop: "0.6rem",
+                      borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.06))",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        background: p.capabilities.streaming
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.streaming
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
+                      }}
+                    >
+                      ● {tr("Streaming", "Streaming")}
+                    </span>
+
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        background: p.capabilities.toolCall
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.toolCall
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
+                      }}
+                    >
+                      ● {tr("Tools", "Outils")}
+                    </span>
+
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        background: p.capabilities.checkpointRollback
+                          ? "rgba(0, 230, 118, 0.12)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        color: p.capabilities.checkpointRollback
+                          ? "var(--color-success, #00e676)"
+                          : "var(--color-muted, #888)",
+                      }}
+                    >
+                      ● {tr("Checkpoints", "Points d'arrêt")}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -254,16 +357,22 @@ export function Providers({ api }: { api: DashboardApi }) {
               {testResult && (
                 <div style={{ marginTop: "0.75rem" }}>
                   {testResult.valid ? (
-                    <span className="pnl-positive">
-                      ✅{" "}
+                    <span
+                      className="pnl-positive"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
+                      <IconCheck size={15} color="#22c55e" />
                       {tr(
                         "Credentials are valid and ready for mission execution.",
                         "Identifiants valides et prêts pour l'exécution de missions.",
                       )}
                     </span>
                   ) : (
-                    <span className="pnl-negative">
-                      ❌{" "}
+                    <span
+                      className="pnl-negative"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
+                      <IconClose size={15} color="#ef4444" />
                       {tr(
                         `Validation failed: ${testResult.error ?? "Invalid key"}`,
                         `Échec de validation : ${testResult.error ?? "Clé invalide"}`,

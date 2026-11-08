@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
-import { Empty, Metric, Section, State, Table, useSection } from "../parts.js";
+import { Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,22 +39,67 @@ export function CommunicationGraph({ api }: { api: DashboardApi }) {
       <Section state={state}>
         {(graph) => (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <div className="metrics">
-              <Metric
-                value={String(graph.nodes.length)}
-                label={tr("active agents", "agents actifs")}
-              />
-              <Metric
-                value={String(graph.edges.length)}
-                label={tr(
-                  "inter-agent communication channels",
-                  "canaux de communication inter-agents",
-                )}
-              />
-              <Metric
-                value={String(graph.edges.reduce((sum, e) => sum + e.messageCount, 0))}
-                label={tr("total messages exchanged", "total des messages échangés")}
-              />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "12px",
+              }}
+            >
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
+                  {tr("Active Agents", "Agents actifs")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                  {graph.nodes.length}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
+                  {tr("Inter-agent Channels", "Canaux de communication inter-agents")}
+                </div>
+                <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                  {graph.edges.length}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "12px 16px" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "var(--color-muted, #888)",
+                  }}
+                >
+                  {tr("Total Messages Exchanged", "Total des messages échangés")}
+                </div>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    marginTop: "4px",
+                    color: "var(--color-accent, #00e5ff)",
+                  }}
+                >
+                  {graph.edges.reduce((sum, e) => sum + e.messageCount, 0).toLocaleString()}
+                </div>
+              </div>
             </div>
 
             <section className="card">

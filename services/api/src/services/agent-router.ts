@@ -246,10 +246,12 @@ export class AgentRouter {
       let unavailabilityReason: string | undefined;
 
       // Determine provider (e.g. "claude-review" -> "claude", "antigravity" -> "antigravity")
-      const provider = this.#resolveProvider(key);
+      const provider = this.resolveProvider(key);
       const baseAffinity = BASE_AFFINITIES[provider] ?? BASE_AFFINITIES.claude;
       const agentStats = stats[key] ?? stats[provider];
-      const account = accounts.find((a) => a.id === key || a.provider === provider);
+      const account =
+        accounts.find((a) => a.id === key || a.profileKey === key || a.id.startsWith(key)) ??
+        accounts.find((a) => a.provider === provider);
 
       // 1. Intrinsic compatibility + historical learning
       let S_compat = baseAffinity?.[classification.primaryCategory] ?? 80;
@@ -424,7 +426,7 @@ export class AgentRouter {
     },
   ): Promise<void> {
     const stats = await this.loadStats();
-    const provider = this.#resolveProvider(agentKey);
+    const provider = this.resolveProvider(agentKey);
 
     const nowIso = this.#now().toISOString();
     const current = stats[agentKey] ?? {
@@ -488,6 +490,20 @@ export class AgentRouter {
     }
 
     await this.saveStats(stats);
+
+    if (this.#providerAccounts !== undefined) {
+      const accounts = await this.#providerAccounts.listAccounts();
+      const matched =
+        accounts.find(
+          (a) => a.id === agentKey || a.profileKey === agentKey || a.id.startsWith(agentKey),
+        ) ?? accounts.find((a) => a.provider === provider);
+      if (matched !== undefined) {
+        await this.#providerAccounts.recordOutcome(matched.id, {
+          success: outcome.success,
+          errorCategory: outcome.errorCategory,
+        });
+      }
+    }
   }
 
   /**
@@ -500,10 +516,12 @@ export class AgentRouter {
     const matrix: RoutingMatrixItem[] = [];
 
     for (const key of profiles) {
-      const provider = this.#resolveProvider(key);
+      const provider = this.resolveProvider(key);
       const baseAffinity = BASE_AFFINITIES[provider] ?? BASE_AFFINITIES.claude;
       const agentStats = stats[key] ?? stats[provider];
-      const account = accounts.find((a) => a.id === key || a.provider === provider);
+      const account =
+        accounts.find((a) => a.id === key || a.profileKey === key || a.id.startsWith(key)) ??
+        accounts.find((a) => a.provider === provider);
 
       const categoryScores: Record<TaskCategory, number> = {
         code: baseAffinity?.code ?? 70,
@@ -555,7 +573,7 @@ export class AgentRouter {
     await this.saveStats({});
   }
 
-  #resolveProvider(profileKey: string): string {
+  resolveProvider(profileKey: string): string {
     const clean = profileKey.toLowerCase();
     if (clean.includes("claude")) return "claude";
     if (clean.includes("antigravity") || clean.includes("gemini") || clean.includes("agy"))

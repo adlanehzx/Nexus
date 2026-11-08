@@ -4,18 +4,20 @@ import { z } from "zod";
 import { PricingCatalog, type RunUsageBucket } from "@nexus/agent-core";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { syncUserMissionsToRunStore } from "../../services/acp-orchestrator.js";
 
 const pricing = new PricingCatalog();
 
-/** API-equivalent list price. Never a billed amount; null when the model has no known price. */
-function estimateApiCostUsd(bucket: RunUsageBucket): number | null {
-  if (pricing.getPricing(bucket.model) === undefined) return null;
-  return pricing.calculateCostUsd(bucket.model, {
+/** API-equivalent list price. Never a billed amount; calculates deterministic cost from pricing catalog. */
+function estimateApiCostUsd(bucket: RunUsageBucket): number {
+  const tier = pricing.getPricing(bucket.model);
+  const cost = pricing.calculateCostUsd(tier ? tier.modelId : bucket.model, {
     inputTokens: bucket.inputTokens,
     outputTokens: bucket.outputTokens,
     ...(bucket.cacheReadTokens === null ? {} : { cachedReadTokens: bucket.cacheReadTokens }),
     ...(bucket.cacheWriteTokens === null ? {} : { cachedWriteTokens: bucket.cacheWriteTokens }),
   });
+  return Number(cost.toFixed(4));
 }
 
 export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
@@ -59,6 +61,13 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     },
     async (request, reply) => {
       const { userId } = currentUser(request);
+      if (app.services.missionControl && app.services.runStore) {
+        await syncUserMissionsToRunStore(
+          userId,
+          app.services.missionControl,
+          app.services.runStore,
+        );
+      }
       const cutoff = Date.now() - request.query.days * 86_400_000;
       const page = await app.services.runStore.listForUser(
         userId,
@@ -130,6 +139,13 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
     },
     async (request) => {
       const { userId } = currentUser(request);
+      if (app.services.missionControl && app.services.runStore) {
+        await syncUserMissionsToRunStore(
+          userId,
+          app.services.missionControl,
+          app.services.runStore,
+        );
+      }
       const since = new Date(Date.now() - request.query.days * 86_400_000);
       const buckets = await app.services.runStore.summarizeForUser(userId, since);
       return ok(

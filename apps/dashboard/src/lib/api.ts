@@ -332,6 +332,12 @@ export type McpConfiguration = {
   circuitBreakerThreshold: number;
   circuitBreakerResetMs: number;
   exposeResources: boolean;
+  sandbox?: {
+    enabled: boolean;
+    engine: "bwrap" | "docker" | "none";
+    allowNetwork?: boolean;
+    readOnlyRoot?: boolean;
+  };
 } & (
   | {
       transport: "stdio";
@@ -348,6 +354,20 @@ export type McpConfiguration = {
       headerRefs: Record<string, string>;
     }
 );
+
+export interface McpOAuthProviderDto {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  docUrl: string;
+  defaultScopes: string[];
+  supportsPkce: boolean;
+  connected: boolean;
+  activeInRuntime: boolean;
+  clientIdConfigured: boolean;
+  vaultRef: string;
+}
 
 export interface BrowserSection {
   configured: boolean;
@@ -1300,10 +1320,20 @@ export class DashboardApi {
     return this.#get(`/api/v1/mission-control/schedules/${encodeURIComponent(id)}/runs?limit=100`);
   }
 
-  sendToNexus(message: string): Promise<OrchestratedMission> {
+  sendToNexus(
+    message: string,
+    options?: {
+      profile?: string;
+      model?: string;
+      reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+    },
+  ): Promise<OrchestratedMission> {
     return this.#request("POST", "/api/v1/orchestrator/messages", {
       message,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      ...(options?.profile ? { profile: options.profile } : {}),
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
     });
   }
 
@@ -1674,6 +1704,34 @@ export class DashboardApi {
     tools: { name: string; description: string; requiredScope: string }[];
   }> {
     return this.#get("/api/v1/mcp/tools");
+  }
+
+  mcpOAuthProviders(): Promise<{ providers: McpOAuthProviderDto[] }> {
+    return this.#get("/api/v1/mcp/oauth/providers");
+  }
+
+  mcpOAuthAuthorize(input: {
+    providerId: string;
+    clientId?: string;
+    redirectUri?: string;
+    scopes?: string[];
+  }): Promise<{ authorizationUrl: string; state: string; providerId: string }> {
+    return this.#request("POST", "/api/v1/mcp/oauth/authorize", input);
+  }
+
+  mcpOAuthCallback(input: {
+    providerId: string;
+    code: string;
+    state: string;
+    clientId?: string;
+    clientSecret?: string;
+    redirectUri?: string;
+  }): Promise<{ success: boolean; providerId: string; connected: boolean }> {
+    return this.#request("POST", "/api/v1/mcp/oauth/callback", input);
+  }
+
+  mcpOAuthDisconnect(providerId: string): Promise<{ success: boolean; providerId: string }> {
+    return this.#request("DELETE", `/api/v1/mcp/oauth/${encodeURIComponent(providerId)}`);
   }
 
   usageSummary(days = 30): Promise<UsageSummaryDto> {

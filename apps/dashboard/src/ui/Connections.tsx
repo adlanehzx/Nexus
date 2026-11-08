@@ -40,6 +40,15 @@ export function Connections({ api }: { api: DashboardApi }) {
     }
   };
 
+  useEffect(() => {
+    if (connections && connections.length > 0) {
+      const allUnchecked = connections.every((c) => c.observation === null);
+      if (allUnchecked && busy === null) {
+        void scan();
+      }
+    }
+  }, [connections]);
+
   const test = async (providerId: string): Promise<void> => {
     setBusy(providerId);
     setError(null);

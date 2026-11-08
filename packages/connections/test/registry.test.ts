@@ -5,6 +5,7 @@ import {
   CLAUDE_PROVIDER,
   CODEX_PROVIDER,
   createBuiltInRegistry,
+  parseAgyAuthStatus,
   parseClaudeAuthStatus,
   parseCodexLoginStatus,
   parseVersionLine,
@@ -51,9 +52,9 @@ describe("provider registry", () => {
   });
 
   it("refuses a probe a provider does not declare", () => {
-    // No built-in provider declares a session probe in this batch; asking for
-    // one must be a refusal, not an invented command.
-    expect(() => createBuiltInRegistry().probeFor("antigravity", "authenticate")).toThrow(
+    const { authenticate: _unused, ...antigravityWithoutAuth } = ANTIGRAVITY_PROVIDER;
+    const withoutAuth = new ProviderRegistry([antigravityWithoutAuth]);
+    expect(() => withoutAuth.probeFor("antigravity", "authenticate")).toThrow(
       UnsupportedProbeError,
     );
   });
@@ -172,7 +173,11 @@ describe("built-in providers", () => {
 
   it("declares a session probe only for CLIs whose real output was observed", () => {
     const withProbe = BUILT_IN_PROVIDERS.filter((provider) => provider.authenticate !== undefined);
-    expect(withProbe.map((provider) => provider.id).sort()).toEqual(["claude", "codex"]);
+    expect(withProbe.map((provider) => provider.id).sort()).toEqual([
+      "antigravity",
+      "claude",
+      "codex",
+    ]);
     for (const provider of withProbe) {
       expect(provider.authenticate?.verification).toBe("verified");
     }
@@ -180,6 +185,19 @@ describe("built-in providers", () => {
 });
 
 describe("session status of real CLIs", () => {
+  it("reads agy models status as observed", () => {
+    const models = "Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)";
+    const notLoggedIn =
+      "Fetching available models...\nError: Please sign in to view available models.";
+
+    expect(parseAgyAuthStatus({ exitCode: 0, stdout: models })).toEqual({
+      authenticated: true,
+    });
+    expect(parseAgyAuthStatus({ exitCode: 1, stdout: notLoggedIn })).toEqual({
+      authenticated: false,
+    });
+  });
+
   it("reads claude auth status as observed", () => {
     const signedIn = JSON.stringify({ loggedIn: true, email: "someone@example.test" });
     const signedOut = JSON.stringify({ loggedIn: false, authMethod: "none" });

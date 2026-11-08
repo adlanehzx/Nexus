@@ -136,6 +136,17 @@ services:
       BROWSER_WORKER_TOKEN: ${BROWSER_WORKER_TOKEN:-}
       SEARXNG_URL: ${SEARXNG_URL:-http://127.0.0.1:18080}
       SEARXNG_TIMEOUT_MS: ${SEARXNG_TIMEOUT_MS:-15000}
+      # MCP OAuth Turnkey Credentials (Claude Desktop / Codex style)
+      NEXUS_MCP_GITHUB_CLIENT_ID: ${NEXUS_MCP_GITHUB_CLIENT_ID:-}
+      NEXUS_MCP_GITHUB_CLIENT_SECRET: ${NEXUS_MCP_GITHUB_CLIENT_SECRET:-}
+      NEXUS_MCP_SLACK_CLIENT_ID: ${NEXUS_MCP_SLACK_CLIENT_ID:-}
+      NEXUS_MCP_SLACK_CLIENT_SECRET: ${NEXUS_MCP_SLACK_CLIENT_SECRET:-}
+      NEXUS_MCP_GOOGLE_DRIVE_CLIENT_ID: ${NEXUS_MCP_GOOGLE_DRIVE_CLIENT_ID:-}
+      NEXUS_MCP_GOOGLE_DRIVE_CLIENT_SECRET: ${NEXUS_MCP_GOOGLE_DRIVE_CLIENT_SECRET:-}
+      NEXUS_MCP_LINEAR_CLIENT_ID: ${NEXUS_MCP_LINEAR_CLIENT_ID:-}
+      NEXUS_MCP_LINEAR_CLIENT_SECRET: ${NEXUS_MCP_LINEAR_CLIENT_SECRET:-}
+      NEXUS_MCP_NOTION_CLIENT_ID: ${NEXUS_MCP_NOTION_CLIENT_ID:-}
+      NEXUS_MCP_NOTION_CLIENT_SECRET: ${NEXUS_MCP_NOTION_CLIENT_SECRET:-}
     network_mode: host
     volumes:
       - ${NEXUS_ACP_WORKSPACE_HOST_DIR:-/var/lib/nexus/workspaces}:${NEXUS_ACP_WORKSPACE_HOST_DIR:-/var/lib/nexus/workspaces}
@@ -143,6 +154,20 @@ services:
       - nexus-runtime-config:/var/lib/nexus/runtime-config
       - nexus-artifacts:/var/lib/nexus/artifacts
       - nexus-observability:/var/lib/nexus/observability
+      - /usr/bin/tailscale:/usr/local/bin/tailscale:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+      # Host ACP agent CLIs & session configs for presence and status detection
+      - ${CLAUDE_BIN_PATH:-/home/node/.local/share/mise/installs/claude/latest/claude}:/usr/local/bin/claude:ro
+      - ${CODEX_BIN_PATH:-/home/node/.local/share/mise/installs/codex/latest/bin/codex}:/usr/local/bin/codex:ro
+      - ${AGY_BIN_PATH:-/home/node/.local/bin/agy}:/usr/local/bin/agy:ro
+      - ${CLAUDE_CONFIG_DIR:-/home/node/.claude}:/home/node/.claude:ro
+      - ${CLAUDE_CONFIG_FILE:-/home/node/.claude.json}:/home/node/.claude.json:ro
+      - ${CODEX_CONFIG_DIR:-/home/node/.codex}:/home/node/.codex:ro
+      - ${GEMINI_CONFIG_DIR:-/home/node/.gemini}:/home/node/.gemini:ro
+      - ${NEXUS_SESSIONS_DIR:-/home/node/.nexus}:/home/node/.nexus
+      - ../../services/api/dist:/app/dist:ro
+      - ../../packages/agent-core/dist:/app/node_modules/@nexus/agent-core/dist:ro
+      - ../../packages/mcp/dist:/app/node_modules/.pnpm/@nexus+mcp@file+packages+mcp_supports-color@8.1.1/node_modules/@nexus/mcp/dist:ro
     healthcheck:
       test:
         [
@@ -157,8 +182,8 @@ services:
       start_period: 10s
     read_only: true
     tmpfs:
-      - /tmp:size=256m,mode=1777
-      - /home/node:size=128m,mode=0700,uid=1000,gid=1000
+      - /tmp:size=512m,mode=1777,exec
+      - /home/node:size=512m,mode=0700,uid=1000,gid=1000,exec
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     # Graceful shutdown includes safety margin beyond timeout.
@@ -186,6 +211,8 @@ services:
       retries: 5
       start_period: 5s
     read_only: true
+    volumes:
+      - ../../apps/dashboard/dist:/usr/share/nginx/html:ro
     tmpfs:
       - /tmp:size=16m,mode=1777
       - /etc/nginx/conf.d:size=1m,mode=0755,uid=101,gid=101

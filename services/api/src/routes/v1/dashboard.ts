@@ -1407,7 +1407,7 @@ export const dashboardRoutes: FastifyPluginCallback = (fastify, _options, done) 
               currentUsage: remaining === null ? 0 : 100 - remaining,
               hardLimit: remaining === null ? null : 100,
               estimatedDepletionDate: null,
-              confidence: remaining === null ? ("unknown" as const) : ("low" as const),
+              confidence: remaining === null ? ("unknown" as const) : ("high" as const),
               ...(remaining === null
                 ? { unknownReason: "The provider CLI has not exposed official quota data." }
                 : {}),

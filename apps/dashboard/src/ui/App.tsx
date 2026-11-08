@@ -6,7 +6,7 @@ import { ThemeToggle } from "./ThemeToggle.js";
 import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
-import { IconStop } from "./icons.js";
+import { IconLab, IconSettings, IconStop, IconUsage } from "./icons.js";
 import { NexusLogo } from "./NexusLogo.js";
 import { SpatialShell, useSpatialStore } from "./spatial/index.js";
 import { getDigitFromEvent, isEditingText } from "./spatial/keyboardUtils.js";
@@ -18,9 +18,6 @@ const CareerEducation = lazy(() =>
   import("./CareerEducation/index.js").then(({ CareerEducation: component }) => ({
     default: component,
   })),
-);
-const Connections = lazy(() =>
-  import("./Connections.js").then(({ Connections: component }) => ({ default: component })),
 );
 const NexusChat = lazy(() =>
   import("./NexusChat.js").then(({ NexusChat: component }) => ({ default: component })),
@@ -38,11 +35,7 @@ const sectionModule = () => import("./Sections.js");
 const lazySection = <K extends keyof Awaited<ReturnType<typeof sectionModule>>>(name: K) =>
   lazy(() => sectionModule().then((module) => ({ default: module[name] })));
 const Browser = lazySection("Browser");
-const CommunicationGraph = lazySection("CommunicationGraph");
-const DagDebugger = lazySection("DagDebugger");
 const Devices = lazySection("Devices");
-const Logs = lazySection("Logs");
-const Marketplace = lazySection("Marketplace");
 const Mcp = lazySection("Mcp");
 const Memory = lazySection("Memory");
 const MissionControl = lazySection("MissionControl");
@@ -50,17 +43,10 @@ const TradingLab = lazySection("TradingLab");
 const Notifications = lazySection("Notifications");
 const Overview = lazySection("Overview");
 const QuotaForecast = lazySection("QuotaForecast");
-const RunComparison = lazySection("RunComparison");
-const Runs = lazySection("Runs");
-const Security = lazySection("Security");
-const Tasks = lazySection("Tasks");
-const Tools = lazySection("Tools");
-const VisualControl = lazySection("VisualControl");
-const Workers = lazySection("Workers");
-const VcsWorktrees = lazySection("VcsWorktrees");
+const UsageLimits = lazySection("UsageLimits");
+const UsageCosts = lazySection("UsageCosts");
+const UsageTokens = lazySection("UsageTokens");
 const Providers = lazySection("Providers");
-const Organizations = lazySection("Organizations");
-const Observability = lazySection("Observability");
 
 function backendUrl(): string {
   const injected = (import.meta as { env?: { VITE_NEXUS_URL?: string; PROD?: boolean } }).env;
@@ -71,94 +57,95 @@ function backendUrl(): string {
 
 export const SETTINGS_CATEGORIES = [
   {
-    id: "general-ai",
-    label: "Général & IA",
-    labelEn: "General & AI",
+    id: "system-preferences",
+    label: "Interface & Préférences",
+    labelEn: "UI & Preferences",
     icon: "settings",
     items: [
       {
-        id: "settings" as const,
-        label: "Paramètres généraux",
-        labelEn: "General Settings",
+        id: "settings-preferences" as const,
+        label: "Préférences & Thèmes",
+        labelEn: "Preferences & Themes",
         icon: "settings",
       },
       {
+        id: "settings-shortcuts" as const,
+        label: "Raccourcis Clavier",
+        labelEn: "Keybindings",
+        icon: "shortcuts",
+      },
+      {
+        id: "settings-secrets" as const,
+        label: "Clés API & Secrets",
+        labelEn: "API Keys & Secrets",
+        icon: "secrets",
+      },
+      {
+        id: "settings-backup" as const,
+        label: "Sauvegarde & Restauration",
+        labelEn: "Backup & Restore",
+        icon: "backup",
+      },
+    ],
+  },
+  {
+    id: "ai-engines",
+    label: "Intelligence Artificielle",
+    labelEn: "Artificial Intelligence",
+    icon: "agents",
+    items: [
+      {
         id: "providers" as const,
-        label: "Fournisseurs de modèles",
-        labelEn: "Model Providers",
+        label: "Fournisseurs & CLIs",
+        labelEn: "Providers & CLIs",
         icon: "agents",
       },
       {
         id: "agents" as const,
-        label: "Agents & Quotas",
-        labelEn: "Agents & Quotas",
+        label: "Agents & Profils",
+        labelEn: "Agents & Profiles",
         icon: "agents",
       },
       {
-        id: "connections" as const,
-        label: "Connexions CLIs",
-        labelEn: "CLI Connections",
-        icon: "connections",
+        id: "settings-engine" as const,
+        label: "Moteurs & Modèles LLM",
+        labelEn: "LLM Engines & Routing",
+        icon: "engine",
       },
     ],
   },
   {
-    id: "vcs-code",
-    label: "Code & VCS",
-    labelEn: "Code & VCS",
-    icon: "tools",
-    items: [
-      {
-        id: "vcs-worktrees" as const,
-        label: "VCS & Worktrees",
-        labelEn: "VCS & Worktrees",
-        icon: "tools",
-      },
-    ],
-  },
-  {
-    id: "infrastructure",
-    label: "Infrastructure",
-    labelEn: "Infrastructure",
+    id: "capabilities-devices",
+    label: "Capacités & Outils",
+    labelEn: "Capabilities & Tools",
     icon: "devices",
     items: [
-      { id: "devices" as const, label: "Appareils", labelEn: "Devices", icon: "devices" },
-      { id: "workers" as const, label: "Workers", labelEn: "Workers", icon: "workers" },
-      { id: "tools" as const, label: "Outils", labelEn: "Tools", icon: "tools" },
-      { id: "mcp" as const, label: "Serveurs MCP", labelEn: "MCP Servers", icon: "mcp" },
-      { id: "browser" as const, label: "Navigateur", labelEn: "Browser", icon: "browser" },
+      {
+        id: "devices" as const,
+        label: "Appareils & Réseau",
+        labelEn: "Devices & Network",
+        icon: "devices",
+      },
+      {
+        id: "mcp" as const,
+        label: "Serveurs MCP & Outils",
+        labelEn: "MCP Servers & Tools",
+        icon: "mcp",
+      },
+      { id: "browser" as const, label: "Navigateur Web", labelEn: "Web Browser", icon: "browser" },
     ],
   },
   {
-    id: "governance",
-    label: "Sécurité & Données",
-    labelEn: "Security & Data",
-    icon: "security",
+    id: "privacy-governance",
+    label: "Données & Automatisation",
+    labelEn: "Data & Automation",
+    icon: "memory",
     items: [
-      {
-        id: "security" as const,
-        label: "Sécurité & Garde-fous",
-        labelEn: "Security & Guardrails",
-        icon: "security",
-      },
-      {
-        id: "organizations" as const,
-        label: "Organisations",
-        labelEn: "Organizations",
-        icon: "security",
-      },
       {
         id: "memory" as const,
         label: "Mémoire sémantique",
         labelEn: "Semantic Memory",
         icon: "memory",
-      },
-      { id: "logs" as const, label: "Journaux système", labelEn: "Diagnostic Logs", icon: "logs" },
-      {
-        id: "observability" as const,
-        label: "Observabilité",
-        labelEn: "Observability",
-        icon: "logs",
       },
       {
         id: "notifications" as const,
@@ -166,62 +153,11 @@ export const SETTINGS_CATEGORIES = [
         labelEn: "Notifications",
         icon: "notifications",
       },
-    ],
-  },
-  {
-    id: "diagnostics",
-    label: "Diagnostics & Outils",
-    labelEn: "Diagnostics & Tools",
-    icon: "tasks",
-    items: [
-      { id: "runs" as const, label: "Exécutions d'agents", labelEn: "Agent Runs", icon: "runs" },
       {
         id: "mission-control" as const,
-        label: "Missions ACP",
-        labelEn: "ACP Missions",
+        label: "Missions & Planifications",
+        labelEn: "Missions & Schedules",
         icon: "missions",
-      },
-      {
-        id: "dag-debugger" as const,
-        label: "Débogueur DAG",
-        labelEn: "DAG Debugger",
-        icon: "tasks",
-      },
-      {
-        id: "run-comparison" as const,
-        label: "Comparaison de runs",
-        labelEn: "Run Comparison",
-        icon: "runs",
-      },
-      {
-        id: "visual-control" as const,
-        label: "Contrôle visuel",
-        labelEn: "Visual Control",
-        icon: "browser",
-      },
-      {
-        id: "communication-graph" as const,
-        label: "Comms agents",
-        labelEn: "Agent Comms",
-        icon: "agents",
-      },
-      {
-        id: "quota-forecast" as const,
-        label: "Usage & Quotas",
-        labelEn: "Usage & Quotas",
-        icon: "overview",
-      },
-      {
-        id: "marketplace" as const,
-        label: "Place de marché",
-        labelEn: "Marketplace",
-        icon: "tools",
-      },
-      {
-        id: "setup" as const,
-        label: "Assistant d'installation",
-        labelEn: "Setup Wizard",
-        icon: "setup",
       },
     ],
   },
@@ -242,26 +178,53 @@ export type SectionId =
   | "chat"
   | "overview"
   | "tasks"
+  | "settings"
   | "career-education"
   | "trading-lab"
-  | "osint";
+  | "osint"
+  | "quota-forecast"
+  | "usage-limits"
+  | "usage-costs"
+  | "usage-tokens";
 
 const SECTION_IDS = new Set<SectionId>([
   "chat",
   "overview",
   "tasks",
+  "settings",
   "career-education",
   "trading-lab",
   "osint",
+  "quota-forecast",
+  "usage-limits",
+  "usage-costs",
+  "usage-tokens",
   ...ALL_SETTINGS_IDS,
 ]);
+
+export function isLabSection(id: SectionId): boolean {
+  return id === "career-education" || id === "trading-lab" || id === "osint";
+}
+
+export function isUsageSection(id: SectionId): boolean {
+  return (
+    id === "quota-forecast" ||
+    id === "usage-limits" ||
+    id === "usage-costs" ||
+    id === "usage-tokens"
+  );
+}
+
+export function isSettingsSection(id: SectionId): boolean {
+  return isSettingsSubSection(id) || id === "settings" || String(id).startsWith("settings-");
+}
 
 function sectionFromHash(): SectionId {
   const candidate = window.location.hash.replace(/^#\/?/, "") as SectionId;
   return SECTION_IDS.has(candidate) ? candidate : "chat";
 }
 
-const PAGE_META: Record<SectionId, { title: string; description: string }> = {
+const PAGE_META: Record<string, { title: string; description: string }> = {
   chat: { title: "Chat", description: "Assign a mission, NEXUS orchestrates the rest." },
   "career-education": {
     title: "Career & Education",
@@ -286,6 +249,42 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     description: "Discover local agent CLIs without importing their credentials.",
   },
   settings: { title: "Settings", description: "Persistent rules of the multi-agent engine." },
+  "settings-preferences": {
+    title: "Preferences & Themes",
+    description: "Visual appearance, light/dark mode, language, and desktop interface options.",
+  },
+  "settings-shortcuts": {
+    title: "Keybindings",
+    description: "Configurable keyboard shortcuts and productivity hotkeys.",
+  },
+  "settings-engine": {
+    title: "LLM Engines & Routing",
+    description: "Configure local models, fallback chains, and external API providers.",
+  },
+  "settings-secrets": {
+    title: "API Keys & Secrets",
+    description: "Encrypted credentials, provider access tokens, and environment secrets.",
+  },
+  "settings-backup": {
+    title: "Backup & Restore",
+    description: "Snapshot configurations, export state, and restore previous checkpoints.",
+  },
+  "quota-forecast": {
+    title: "Usage & Overview",
+    description: "Real-time token telemetry, consumption trends, and cost analytics.",
+  },
+  "usage-limits": {
+    title: "Limits & Resets",
+    description: "Capacity gauges, sliding 5-hour windows, and weekly refresh countdowns.",
+  },
+  "usage-costs": {
+    title: "Cost Breakdown",
+    description: "T3 Code style cost breakdown by model, provider tier, and cache utilization.",
+  },
+  "usage-tokens": {
+    title: "Token Stream & Metrics",
+    description: "Granular prompt, completion, cache read/write token distributions.",
+  },
   overview: {
     title: "Overview",
     description: "Operational state of NEXUS at a glance.",
@@ -339,10 +338,6 @@ const PAGE_META: Record<SectionId, { title: string; description: string }> = {
     title: "Organizations",
     description: "Organizations you belong to, their members and roles.",
   },
-  "quota-forecast": {
-    title: "Usage & Quotas",
-    description: "Observed tokens, estimated API costs, exports, and provider quota windows.",
-  },
   "vcs-worktrees": {
     title: "VCS & Worktrees",
     description: "Git worktrees, per-turn checkpoints, safe atomic rollbacks, and PR reviews.",
@@ -363,7 +358,7 @@ export function App() {
 }
 
 function AppContent() {
-  const { t, tr } = useI18n();
+  const { t, tr, locale } = useI18n();
   const [authenticated, setAuthenticated] = useState(false);
   const [restoringSession, setRestoringSession] = useState(true);
   const session = useMemo(() => createSession(backendUrl(), () => setAuthenticated(false)), []);
@@ -371,9 +366,13 @@ function AppContent() {
   const [section, setSection] = useState<SectionId>(sectionFromHash);
   const [refreshKey, setRefreshKey] = useState(0);
   const [systemPause, setSystemPause] = useState<SystemPauseState | null>(null);
-  const [expandedNavGroups, setExpandedNavGroups] = useState<ReadonlySet<string>>(
-    () => new Set(["Workspaces"]),
-  );
+
+  const rootMode: "supervision" | "lab" | "usage" | "settings" = useMemo(() => {
+    if (isLabSection(section)) return "lab";
+    if (isUsageSection(section)) return "usage";
+    if (isSettingsSection(section)) return "settings";
+    return "supervision";
+  }, [section]);
 
   const spatialStore = useSpatialStore();
   const [viewMode, setViewMode] = useState<"spatial" | "classic">(() => {
@@ -425,15 +424,6 @@ function AppContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (section === "career-education" || section === "trading-lab" || section === "osint") {
-      setExpandedNavGroups((current) => {
-        if (current.has("Workspaces")) return current;
-        return new Set([...current, "Workspaces"]);
-      });
-    }
-  }, [section]);
-
   // Classic Dashboard Keyboard Shortcuts (Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
   useEffect(() => {
     if (!authenticated || viewMode !== "classic") return;
@@ -470,17 +460,16 @@ function AppContent() {
       if (isEditingText()) return;
 
       const digit = getDigitFromEvent(e);
-      if (digit !== null && digit >= 1 && digit <= 7) {
+      if (digit !== null && digit >= 1 && digit <= 6) {
         e.preventDefault();
         e.stopPropagation();
         const sectionMap: Record<number, SectionId> = {
           1: "chat",
           2: "overview",
-          3: "tasks",
-          4: "career-education",
-          5: "trading-lab",
-          6: "osint",
-          7: "settings",
+          3: "career-education",
+          4: "trading-lab",
+          5: "osint",
+          6: "settings",
         };
         const target = sectionMap[digit];
         if (target) navigate(target);
@@ -580,91 +569,212 @@ function AppContent() {
     );
   }
 
-  const metaTitle = t(`meta.${section}.title`) || PAGE_META[section]?.title || section;
-  const metaDescription = t(`meta.${section}.description`) || PAGE_META[section]?.description || "";
+  const metaTitle = t(`meta.${section}.title`) ?? PAGE_META[section]?.title ?? section;
+  const metaDescription = t(`meta.${section}.description`) ?? PAGE_META[section]?.description ?? "";
 
   return (
     <div className="app">
       <aside className="sidebar">
-        <button className="nexus-home" type="button" onClick={() => navigate("chat")}>
-          <NexusLogo size={32} />
-          <span>
-            <strong>NEXUS</strong>
-            <small>{t("nav.groups.supervision")}</small>
-          </span>
-        </button>
-        <nav className="navigation" aria-label="Main navigation">
-          <div className="nav-group nav-primary">
-            <NavItem
-              id="chat"
-              label={t("nav.items.chat") || "Chat"}
-              icon="chat"
-              current={section}
-              onSelect={navigate}
-            />
-            <NavItem
-              id="overview"
-              label={t("nav.items.overview") || "Overview"}
-              icon="overview"
-              current={section}
-              onSelect={navigate}
-            />
-            <NavItem
-              id="tasks"
-              label={t("nav.items.tasks") || "Tasks"}
-              icon="tasks"
-              current={section}
-              onSelect={navigate}
-            />
+        {/* Top Header / Mode Switcher */}
+        {rootMode === "supervision" ? (
+          <button className="nexus-home" type="button" onClick={() => navigate("chat")}>
+            <NexusLogo size={32} />
+            <span>
+              <strong>NEXUS</strong>
+              <small>{t("nav.groups.supervision")}</small>
+            </span>
+          </button>
+        ) : (
+          <div className="sidebar-mode-header">
+            <button
+              className="sidebar-back-btn"
+              type="button"
+              onClick={() => navigate("chat")}
+              title={tr("Back to Supervisor", "Retour au Superviseur")}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              <span>{tr("Supervisor", "Superviseur")}</span>
+            </button>
+            <div className="sidebar-mode-badge">
+              {rootMode === "lab" && (
+                <>
+                  <IconLab size={15} />
+                  <span>{tr("LABORATORY", "LABORATOIRE")}</span>
+                </>
+              )}
+              {rootMode === "usage" && (
+                <>
+                  <IconUsage size={15} />
+                  <span>{tr("USAGE & TELEMETRY", "USAGE & TÉLÉMÉTRIE")}</span>
+                </>
+              )}
+              {rootMode === "settings" && (
+                <>
+                  <IconSettings size={15} />
+                  <span>{tr("SETTINGS", "PARAMÈTRES")}</span>
+                </>
+              )}
+            </div>
           </div>
-          <NavGroup
-            label={t("nav.groups.workspaces")}
-            expanded={expandedNavGroups.has("Workspaces")}
-            onToggle={() =>
-              setExpandedNavGroups((current) => toggleSetValue(current, "Workspaces"))
-            }
-          >
-            <NavItem
-              id="career-education"
-              label={t("nav.items.career-education") || "Career"}
-              icon="career"
-              current={section}
-              onSelect={navigate}
-            />
-            <NavItem
-              id="trading-lab"
-              label={t("nav.items.trading-lab") || "Trading Lab"}
-              icon="trading"
-              current={section}
-              onSelect={navigate}
-            />
-            <NavItem
-              id="osint"
-              label={t("nav.items.osint") || "OSINT"}
-              icon="osint"
-              current={section}
-              onSelect={navigate}
-            />
-          </NavGroup>
-          <div
-            className="nav-group nav-settings-entry"
-            style={{ marginTop: "auto", paddingTop: "0.5rem" }}
-          >
-            <NavItem
-              id="settings"
-              label={t("nav.items.settings") || "Settings"}
-              icon="settings"
-              current={isSettingsSubSection(section) ? "settings" : section}
-              onSelect={navigate}
-            />
-          </div>
+        )}
+
+        {/* Dynamic Navigation for the active mode */}
+        <nav className={`navigation navigation-${rootMode}`} aria-label={`${rootMode} navigation`}>
+          {rootMode === "supervision" && (
+            <div className="nav-group nav-primary">
+              <NavItem
+                id="chat"
+                label={t("nav.items.chat") || "Chat"}
+                icon="chat"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="overview"
+                label={t("nav.items.overview") || "Overview"}
+                icon="overview"
+                current={section}
+                onSelect={navigate}
+              />
+            </div>
+          )}
+
+          {rootMode === "lab" && (
+            <div className="nav-group nav-lab">
+              <NavItem
+                id="trading-lab"
+                label={t("nav.items.trading-lab") || "Trading Lab"}
+                icon="trading"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="osint"
+                label={t("nav.items.osint") || "Espace OSINT"}
+                icon="osint"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="career-education"
+                label={t("nav.items.career-education") || "Carrière & Éducation"}
+                icon="career"
+                current={section}
+                onSelect={navigate}
+              />
+            </div>
+          )}
+
+          {rootMode === "usage" && (
+            <div className="nav-group nav-usage">
+              <NavItem
+                id="quota-forecast"
+                label={tr("Usage & Overview", "Vue d'ensemble & Quotas")}
+                icon="overview"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="usage-limits"
+                label={tr("Limits & Resets", "Limites & Resets (%)")}
+                icon="usage"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="usage-costs"
+                label={tr("Cost & Billing", "Coûts & Facturation")}
+                icon="secrets"
+                current={section}
+                onSelect={navigate}
+              />
+              <NavItem
+                id="usage-tokens"
+                label={tr("Token Breakdown", "Détail des Tokens")}
+                icon="engine"
+                current={section}
+                onSelect={navigate}
+              />
+            </div>
+          )}
+
+          {rootMode === "settings" && (
+            <div className="nav-group nav-settings-categories">
+              {SETTINGS_CATEGORIES.map((cat) => (
+                <div key={cat.id} className="nav-settings-cat-group">
+                  <div className="nav-settings-cat-title">
+                    {locale === "fr" ? cat.label : cat.labelEn}
+                  </div>
+                  {cat.items.map((item) => (
+                    <NavItem
+                      key={item.id}
+                      id={item.id}
+                      label={locale === "fr" ? item.label : item.labelEn}
+                      icon={item.icon}
+                      current={
+                        section === "settings" && item.id === "settings-preferences"
+                          ? item.id
+                          : section
+                      }
+                      onSelect={navigate}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </nav>
-        <div className="sidebar-footer">
-          <span className="system-dot" aria-hidden="true" />
-          <span>
-            <strong>{tr("Local system", "Système local")}</strong>
-            <small>{t("common.states.connected")}</small>
-          </span>
+
+        {/* Bottom Quick Dock: Lab, Usage, Settings (Discreet T3 Code style) */}
+        <div className="sidebar-bottom-dock">
+          <div className="sidebar-dock-group">
+            <button
+              type="button"
+              className={`sidebar-dock-btn ${rootMode === "lab" ? "active" : ""}`}
+              onClick={() => navigate(isLabSection(section) ? section : "trading-lab")}
+              data-tooltip={tr("Workspaces Lab", "Lab Espaces")}
+              aria-label={tr("Workspaces Lab", "Lab Espaces")}
+              aria-current={rootMode === "lab" ? "page" : undefined}
+            >
+              <IconLab size={16} />
+            </button>
+
+            <button
+              type="button"
+              className={`sidebar-dock-btn ${rootMode === "usage" ? "active" : ""}`}
+              onClick={() => navigate(isUsageSection(section) ? section : "quota-forecast")}
+              data-tooltip={tr("Usage & Quotas", "Usage & Quotas")}
+              aria-label={tr("Usage & Quotas", "Usage & Quotas")}
+              aria-current={rootMode === "usage" ? "page" : undefined}
+            >
+              <IconUsage size={16} />
+            </button>
+          </div>
+
+          <div className="sidebar-dock-spacer" />
+
+          <button
+            type="button"
+            className={`sidebar-dock-btn ${rootMode === "settings" ? "active" : ""}`}
+            onClick={() => navigate(isSettingsSection(section) ? section : "settings-preferences")}
+            data-tooltip={tr("Settings", "Paramètres")}
+            aria-label={tr("Settings", "Paramètres")}
+            aria-current={rootMode === "settings" ? "page" : undefined}
+          >
+            <IconSettings size={16} />
+          </button>
         </div>
       </aside>
 
@@ -673,14 +783,13 @@ function AppContent() {
           <div>
             <div className="eyebrow">
               NEXUS /{" "}
-              {isSettingsSubSection(section)
-                ? tr("SETTINGS", "PARAMÈTRES")
-                : section === "chat" ||
-                    section === "career-education" ||
-                    section === "trading-lab" ||
-                    section === "osint"
-                  ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
-                  : tr("SUPERVISION", "SUPERVISION")}
+              {rootMode === "usage"
+                ? tr("USAGE & QUOTAS", "USAGE & QUOTAS")
+                : rootMode === "settings"
+                  ? tr("SETTINGS", "PARAMÈTRES")
+                  : rootMode === "lab"
+                    ? tr("WORKSPACE", "ESPACE DE TRAVAIL")
+                    : tr("SUPERVISION", "SUPERVISION")}
             </div>
             <h1>
               <CyberRetypeTitle text={metaTitle} />
@@ -785,9 +894,6 @@ function AppContent() {
         )}
         <Suspense fallback={<SectionLoading />}>
           <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
-            {isSettingsSubSection(section) && (
-              <SettingsHubNav currentSection={section} navigate={navigate} />
-            )}
             {renderSection(section, api, session, navigate)}
           </div>
         </Suspense>
@@ -816,119 +922,6 @@ function SectionLoading() {
   );
 }
 
-function toggleSetValue(current: ReadonlySet<string>, value: string): ReadonlySet<string> {
-  const next = new Set(current);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-  return next;
-}
-
-function NavGroup({
-  label,
-  expanded,
-  onToggle,
-  children,
-}: {
-  label: string;
-  expanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  const regionId = `nav-${label.toLowerCase().replaceAll(" ", "-")}`;
-  return (
-    <div className={`nav-group ${expanded ? "expanded" : "collapsed"}`}>
-      <button
-        type="button"
-        className="nav-group-toggle"
-        aria-expanded={expanded}
-        aria-controls={regionId}
-        onClick={onToggle}
-      >
-        <span>{label}</span>
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m5 6 3 3 3-3" />
-        </svg>
-      </button>
-      <div className="nav-group-items" id={regionId}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function SettingsHubNav({
-  currentSection,
-  navigate,
-}: {
-  currentSection: SectionId;
-  navigate: (next: SectionId) => void;
-}) {
-  const { locale, t } = useI18n();
-
-  const currentCategory = useMemo(() => {
-    return (
-      SETTINGS_CATEGORIES.find((cat) => cat.items.some((item) => item.id === currentSection)) ??
-      SETTINGS_CATEGORIES[0]
-    );
-  }, [currentSection]);
-
-  const [activeCategoryId, setActiveCategoryId] = useState<string>(currentCategory.id);
-
-  useEffect(() => {
-    setActiveCategoryId(currentCategory.id);
-  }, [currentCategory.id]);
-
-  const activeCategory =
-    SETTINGS_CATEGORIES.find((cat) => cat.id === activeCategoryId) ?? SETTINGS_CATEGORIES[0];
-
-  return (
-    <nav className="settings-hub-nav" aria-label="Settings sub-navigation">
-      <div className="settings-categories-strip" role="tablist" aria-label="Settings categories">
-        {SETTINGS_CATEGORIES.map((cat) => {
-          const isActive = cat.id === activeCategoryId;
-          const label = locale === "fr" ? cat.label : cat.labelEn;
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`settings-category-btn ${isActive ? "active" : ""}`}
-              onClick={() => {
-                setActiveCategoryId(cat.id);
-                if (!cat.items.some((item) => item.id === currentSection)) {
-                  navigate(cat.items[0].id);
-                }
-              }}
-            >
-              <span>{label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="settings-subitems-strip" role="group" aria-label="Settings items">
-        {activeCategory.items.map((item) => {
-          const isActive = item.id === currentSection;
-          const translated = t(`nav.items.${item.id}`);
-          const fallback = locale === "fr" ? item.label : item.labelEn;
-          const displayLabel = translated || fallback;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`settings-subitem-pill ${isActive ? "active" : ""}`}
-              onClick={() => navigate(item.id)}
-            >
-              <span>{displayLabel}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 function renderSection(
   section: SectionId,
   api: DashboardApi,
@@ -936,75 +929,52 @@ function renderSection(
   navigate: (next: SectionId) => void,
 ) {
   switch (section) {
-    case "setup":
-      return (
-        <SetupWizard
-          session={session}
-          api={api}
-          onComplete={() => navigate("chat")}
-          onSwitchToLogin={() => navigate("chat")}
-        />
-      );
     case "chat":
       return <NexusChat api={api} />;
     case "career-education":
       return <CareerEducation client={createCareerEducationClient(session)} />;
+    case "trading-lab":
+      return <TradingLab api={api} />;
     case "osint":
       return <OsintWorkspace api={api} onOpenMissions={() => navigate("mission-control")} />;
+    case "overview":
+    case "tasks":
+      return <Overview api={api} />;
+    case "quota-forecast":
+      return <QuotaForecast api={api} />;
+    case "usage-limits":
+      return <UsageLimits api={api} />;
+    case "usage-costs":
+      return <UsageCosts api={api} />;
+    case "usage-tokens":
+      return <UsageTokens api={api} />;
+    case "providers":
+      return <Providers api={api} />;
     case "agents":
       return <Agents api={api} />;
-    case "connections":
-      return <Connections api={api} />;
     case "settings":
-      return <Settings api={api} />;
-    case "overview":
-      return <Overview api={api} />;
+    case "settings-preferences":
+      return <Settings api={api} defaultTab="preferences" hideTopTabs={true} />;
+    case "settings-shortcuts":
+      return <Settings api={api} defaultTab="shortcuts" hideTopTabs={true} />;
+    case "settings-engine":
+      return <Settings api={api} defaultTab="engine" hideTopTabs={true} />;
+    case "settings-secrets":
+      return <Settings api={api} defaultTab="secrets" hideTopTabs={true} />;
+    case "settings-backup":
+      return <Settings api={api} defaultTab="backup" hideTopTabs={true} />;
     case "devices":
       return <Devices api={api} />;
-    case "workers":
-      return <Workers api={api} />;
-    case "tasks":
-      return <Tasks api={api} />;
-    case "runs":
-      return <Runs api={api} />;
-    case "tools":
-      return <Tools api={api} />;
     case "mcp":
       return <Mcp api={api} />;
     case "browser":
       return <Browser api={api} />;
-    case "mission-control":
-      return <MissionControl api={api} />;
-    case "trading-lab":
-      return <TradingLab api={api} />;
     case "memory":
       return <Memory api={api} />;
-    case "organizations":
-      return <Organizations api={api} />;
-    case "observability":
-      return <Observability api={api} />;
     case "notifications":
       return <Notifications api={api} />;
-    case "security":
-      return <Security api={api} />;
-    case "logs":
-      return <Logs api={api} />;
-    case "dag-debugger":
-      return <DagDebugger api={api} />;
-    case "run-comparison":
-      return <RunComparison api={api} />;
-    case "marketplace":
-      return <Marketplace api={api} />;
-    case "visual-control":
-      return <VisualControl api={api} />;
-    case "communication-graph":
-      return <CommunicationGraph api={api} />;
-    case "quota-forecast":
-      return <QuotaForecast api={api} />;
-    case "vcs-worktrees":
-      return <VcsWorktrees api={api} />;
-    case "providers":
-      return <Providers api={api} />;
+    case "mission-control":
+      return <MissionControl api={api} />;
   }
 }
 
@@ -1040,12 +1010,19 @@ function NavIcon({ name }: { name: string }) {
     career: "M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5",
     trading: "M4 18 9 13l3 3 7-9m-5 0h5v5",
     osint: "M11 4a7 7 0 1 0 5 12l4 4m-9-12v6m-3-3h6",
+    lab: "M10 2v7.5L4.5 19.5A2 2 0 0 0 6.2 22h11.6a2 2 0 0 0 1.7-2.5L14 9.5V2M8.5 2h7M7 16h10",
+    usage:
+      "M12 14.5l3.5-3.5M3.34 18a10 10 0 1 1 17.32 0M12 4v2M5.64 7.64l1.41 1.41M18.36 7.64l-1.41 1.41",
     agents: "M16 18a4 4 0 0 0-8 0m10-7a3 3 0 1 1-6 0m-7 7a3 3 0 0 1 3-3m8 0a3 3 0 0 1 3 3",
     connections: "M8 12h8m-6-4 4 4-4 4M5 5h14v14H5V5Z",
     setup:
       "M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83",
     settings:
       "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4",
+    shortcuts: "M2 4h20v16H2V4Zm4 4h.01M10 4h.01M14 4h.01M6 12h.01M10 12h.01M14 12h.01M6 16h12",
+    secrets: "M15 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 0-6 6m2 2 2-2",
+    backup: "M4 4h16v16H4V4Zm4 0v4h8V4M6 14h12",
+    engine: "M4 4h16v16H4V4Zm5 5h6v6H9V9Zm-5 3h2m14 0h2M12 4v2m0 14v2",
     overview: "M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
     tasks: "m5 12 4 4L19 6M5 5h7M5 20h14",
     runs: "m8 5 11 7-11 7V5Z",

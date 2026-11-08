@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
 import { formatDuration } from "../../lib/format.js";
-import { Empty, Metric, Section, useSection } from "../parts.js";
+import { Empty, Section, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,22 +74,71 @@ export function RunComparison({ api }: { api: DashboardApi }) {
             </Empty>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div className="metrics">
-                <Metric
-                  value={`${formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}`}
-                  label={tr(
-                    `duration delta (${comparison.diffSummary.fasterRunId} faster)`,
-                    `écart de durée (${comparison.diffSummary.fasterRunId} plus rapide)`,
-                  )}
-                />
-                <Metric
-                  value={`${comparison.diffSummary.tokenDelta > 0 ? "+" : ""}${String(comparison.diffSummary.tokenDelta)}`}
-                  label={tr("token delta (B - A)", "écart de jetons (B - A)")}
-                />
-                <Metric
-                  value={comparison.diffSummary.cheaperRunId}
-                  label={tr("cheaper run", "exécution la plus économique")}
-                />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
+                    {tr(
+                      `Duration Delta (${comparison.diffSummary.fasterRunId} faster)`,
+                      `Écart de durée (${comparison.diffSummary.fasterRunId} plus rapide)`,
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                    {formatDuration(Math.abs(comparison.diffSummary.durationDeltaMs))}
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
+                    {tr("Token Delta (B - A)", "Écart de jetons (B - A)")}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                    {comparison.diffSummary.tokenDelta > 0 ? "+" : ""}
+                    {comparison.diffSummary.tokenDelta.toLocaleString()}
+                  </div>
+                </div>
+
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
+                    {tr("Cheaper Run", "Exécution plus économique")}
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                      marginTop: "4px",
+                      color: "var(--color-success, #00e676)",
+                    }}
+                  >
+                    {comparison.diffSummary.cheaperRunId}
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>

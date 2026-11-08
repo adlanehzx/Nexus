@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionCatalogEntry, DashboardApi, PairingTicket } from "../lib/api.js";
+import {
+  ForbiddenError,
+  type ConnectionCatalogEntry,
+  type DashboardApi,
+  type PairingTicket,
+} from "../lib/api.js";
 import { classifyConnection } from "../lib/format.js";
 import {
   executeSmokeTest,
@@ -10,7 +15,7 @@ import type { ServerReadiness, SessionManager } from "@nexus/client-core";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
-import { IconCheck } from "./icons.js";
+import { IconCheck, IconClose, IconWarning } from "./icons.js";
 import { NexusLogo } from "./NexusLogo.js";
 
 export type WizardStep = "prerequisites" | "admin" | "agents" | "capabilities" | "complete";
@@ -276,7 +281,17 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
       const result = await api.detectConnections();
       setConnections(result.connections);
     } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Agent detection failed.";
+      const isForbidden =
+        cause instanceof ForbiddenError ||
+        (cause instanceof Error && cause.message.includes("not accessible"));
+      const msg = isForbidden
+        ? tr(
+            "This section requires an administrator account. Please sign in with the administrator user.",
+            "Cette section nécessite un compte administrateur. Veuillez vous connecter avec le compte administrateur.",
+          )
+        : cause instanceof Error
+          ? cause.message
+          : "Agent detection failed.";
       setError(msg);
       setDiagnostic(
         JSON.stringify(
@@ -375,16 +390,36 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         await api.testBrowser();
         setBrowserSuccessMsg("Local browser harness configured and verified.");
       } else {
+        try {
+          await api.saveSecret("browser-worker-token", "auto-generated-remote-token");
+        } catch {
+          // Ignore if vault already has secret or cannot overwrite
+        }
         await api.configureBrowser({
           enabled: true,
           mode: "remote-worker",
           baseUrl: remoteWorkerUrl,
           tokenRef: "vault://nexus/browser-worker-token",
         });
-        setBrowserSuccessMsg("Remote browser worker saved.");
+        setBrowserSuccessMsg(
+          tr(
+            "Remote browser worker saved. Connect the remote daemon to start routing.",
+            "Nœud de travail distant enregistré. Démarrez le démon distant pour router.",
+          ),
+        );
       }
     } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Failed to configure browser.";
+      const isForbidden =
+        cause instanceof ForbiddenError ||
+        (cause instanceof Error && cause.message.includes("not accessible"));
+      const msg = isForbidden
+        ? tr(
+            "This configuration requires an administrator account. Please sign in with the administrator user.",
+            "Cette configuration nécessite un compte administrateur. Veuillez vous connecter avec le compte administrateur.",
+          )
+        : cause instanceof Error
+          ? cause.message
+          : "Failed to configure browser.";
       setError(msg);
     } finally {
       setBusy(false);
@@ -644,9 +679,23 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 type="button"
                 className="button primary"
                 disabled={busy || readiness?.status === "down"}
-                onClick={() => goToStep("admin")}
+                onClick={() => {
+                  if (alreadyInitialized) {
+                    if (session.isAuthenticated) {
+                      goToStep("agents");
+                    } else {
+                      onSwitchToLogin();
+                    }
+                  } else {
+                    goToStep("admin");
+                  }
+                }}
               >
-                {tr("Continue to Account Setup", "Continuer vers la configuration")}
+                {alreadyInitialized
+                  ? session.isAuthenticated
+                    ? tr("Continue Configuration", "Continuer la configuration")
+                    : tr("Sign In as Administrator", "Se connecter en tant qu'administrateur")
+                  : tr("Continue to Account Setup", "Continuer vers la configuration")}
               </button>
               <button
                 type="button"
@@ -673,128 +722,173 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </p>
             </div>
 
-            <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
-              <form
-                className="login-form"
-                onSubmit={(e) => void handleRegisterAdmin(e)}
-                style={{ gap: "1.25rem" }}
+            {alreadyInitialized ? (
+              <div
+                className="setup-card"
+                style={{
+                  border: "1px solid var(--accent, #00f0ff)",
+                  background: "rgba(0, 240, 255, 0.05)",
+                  padding: "1.75rem",
+                  marginBottom: "1.25rem",
+                  borderRadius: "8px",
+                }}
               >
-                <div
+                <h3 style={{ color: "var(--accent, #00f0ff)", margin: "0 0 0.5rem" }}>
+                  {tr("Instance already initialized", "Instance déjà initialisée")}
+                </h3>
+                <p
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.25rem",
+                    fontSize: "0.9rem",
+                    color: "var(--nx-text-primary, #e6edf3)",
+                    margin: "0 0 1.25rem",
+                    lineHeight: "1.5",
                   }}
                 >
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Full Name", "Nom complet")}
-                    </span>
-                    <input
-                      className="field"
-                      type="text"
-                      placeholder={tr("Lead Engineer", "Ingénieur Principal")}
-                      required
-                      value={adminName}
-                      onChange={(e) => setAdminName(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Administrator Email", "E-mail administrateur")}
-                    </span>
-                    <input
-                      className="field"
-                      type="email"
-                      autoComplete="username"
-                      placeholder="admin@example.com"
-                      required
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: "1.25rem",
-                  }}
-                >
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr(
-                        "Password (minimum 12 characters)",
-                        "Mot de passe (minimum 12 caractères)",
-                      )}
-                    </span>
-                    <input
-                      className="field"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••••••"
-                      required
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                    />
-                  </label>
-
-                  <label>
-                    <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
-                      {tr("Confirm Password", "Confirmer le mot de passe")}
-                    </span>
-                    <input
-                      className="field"
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="••••••••••••"
-                      required
-                      value={adminConfirm}
-                      onChange={(e) => setAdminConfirm(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "1rem",
-                    marginTop: "1.5rem",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
+                  {tr(
+                    "An administrator account already exists on this NEXUS instance. Creating another account here would create an unprivileged user without administrative authority. Please sign in with the administrator account to configure the instance.",
+                    "Un compte administrateur existe déjà sur cette instance NEXUS. Créer un autre compte ici produira un utilisateur sans privilèges administrateur (bloquant la détection d'agents et le navigateur). Veuillez vous connecter avec le compte administrateur existant.",
+                  )}
+                </p>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button type="button" className="button primary" onClick={onSwitchToLogin}>
+                    {tr("Sign In Directly", "Se connecter directement")}
+                  </button>
                   <button
                     type="button"
                     className="button secondary"
                     onClick={() => goToStep("prerequisites")}
                   >
-                    {tr("Back", "Retour")}
+                    {tr("Back to Prerequisites", "Retour aux prérequis")}
                   </button>
-                  <button
-                    type="submit"
-                    className="button primary login-submit"
-                    disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
-                    style={{ flex: 1, minWidth: "220px" }}
+                </div>
+              </div>
+            ) : (
+              <div className="setup-card" style={{ padding: "2rem clamp(1.25rem, 3vw, 2.25rem)" }}>
+                <form
+                  className="login-form"
+                  onSubmit={(e) => void handleRegisterAdmin(e)}
+                  style={{ gap: "1.25rem" }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "1.25rem",
+                    }}
                   >
-                    {busy
-                      ? tr("Creating Account…", "Création du compte…")
-                      : tr("Create Administrator & Continue", "Créer l'administrateur & Continuer")}
-                  </button>
-                </div>
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Full Name", "Nom complet")}
+                      </span>
+                      <input
+                        className="field"
+                        type="text"
+                        placeholder={tr("Lead Engineer", "Ingénieur Principal")}
+                        required
+                        value={adminName}
+                        onChange={(e) => setAdminName(e.target.value)}
+                      />
+                    </label>
 
-                <div style={{ marginTop: "1rem", textAlign: "center" }}>
-                  <button type="button" className="button compact" onClick={onSwitchToLogin}>
-                    {tr(
-                      "Instance already initialized? Sign in directly",
-                      "Instance déjà initialisée ? Se connecter directement",
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Administrator Email", "E-mail administrateur")}
+                      </span>
+                      <input
+                        className="field"
+                        type="email"
+                        autoComplete="username"
+                        placeholder="admin@example.com"
+                        required
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                      gap: "1.25rem",
+                    }}
+                  >
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr(
+                          "Password (minimum 12 characters)",
+                          "Mot de passe (minimum 12 caractères)",
+                        )}
+                      </span>
+                      <input
+                        className="field"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••••••"
+                        required
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                      />
+                    </label>
+
+                    <label>
+                      <span style={{ fontWeight: 600, color: "var(--nx-text)" }}>
+                        {tr("Confirm Password", "Confirmer le mot de passe")}
+                      </span>
+                      <input
+                        className="field"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••••••"
+                        required
+                        value={adminConfirm}
+                        onChange={(e) => setAdminConfirm(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "1rem",
+                      marginTop: "1.5rem",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => goToStep("prerequisites")}
+                    >
+                      {tr("Back", "Retour")}
+                    </button>
+                    <button
+                      type="submit"
+                      className="button primary login-submit"
+                      disabled={busy || !adminEmail.trim() || adminPassword.length < 12}
+                      style={{ flex: 1, minWidth: "220px" }}
+                    >
+                      {busy
+                        ? tr("Creating Account…", "Création du compte…")
+                        : tr(
+                            "Create Administrator & Continue",
+                            "Créer l'administrateur & Continuer",
+                          )}
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: "1rem", textAlign: "center" }}>
+                    <button type="button" className="button compact" onClick={onSwitchToLogin}>
+                      {tr(
+                        "Instance already initialized? Sign in directly",
+                        "Instance déjà initialisée ? Se connecter directement",
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         )}
 
@@ -1552,13 +1646,15 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                             ? "warning"
                             : "neutral";
                     const symbol =
-                      s.status === "passed"
-                        ? "✓"
-                        : s.status === "failed"
-                          ? "✗"
-                          : s.status === "blocked"
-                            ? "⊘"
-                            : "–";
+                      s.status === "passed" ? (
+                        <IconCheck size={11} />
+                      ) : s.status === "failed" ? (
+                        <IconClose size={11} />
+                      ) : s.status === "blocked" ? (
+                        <IconWarning size={11} />
+                      ) : (
+                        "–"
+                      );
                     return (
                       <div
                         key={s.id}

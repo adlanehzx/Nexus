@@ -1,21 +1,27 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { RuntimeConfigurationStore } from "../src/services/runtime-configuration.js";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
-import type { ProviderAccount } from "../src/services/provider-accounts.js";
+import { ProviderAccountService, type ProviderAccount } from "../src/services/provider-accounts.js";
 
 describe("Provider multi-account management", () => {
   let harness: ApiHarness;
   let admin: Account;
   let membre: Account;
   let configDir: string;
+  let sessionsDir: string;
 
   beforeEach(async () => {
     configDir = await mkdtemp(join(tmpdir(), "nexus-test-accounts-"));
+    sessionsDir = await mkdtemp(join(tmpdir(), "nexus-test-sessions-"));
     const runtimeConfiguration = new RuntimeConfigurationStore(configDir);
-    harness = await makeApi({ runtimeConfiguration });
+    const providerAccounts = new ProviderAccountService({
+      runtimeConfiguration,
+      sessionsDir,
+    });
+    harness = await makeApi({ runtimeConfiguration, providerAccounts });
     admin = await createAccount(harness, "admin@nexus.local");
     membre = await createAccount(harness, "membre@nexus.local");
   });
@@ -23,6 +29,7 @@ describe("Provider multi-account management", () => {
   afterEach(async () => {
     await harness.close();
     await rm(configDir, { recursive: true, force: true });
+    await rm(sessionsDir, { recursive: true, force: true });
   });
 
   it("generates default accounts and returns them to administrator", async () => {
@@ -287,5 +294,78 @@ describe("Provider multi-account management", () => {
     // Selection automatically switches to antigravity-secondaire
     selected = await service.selectAccount("antigravity");
     expect(selected?.id).toBe("antigravity-secondaire");
+  });
+
+  it("probes antigravity quotas and auth when acp_token.json is present in session directory", async () => {
+    const service = harness.services.providerAccounts;
+    expect(service).toBeDefined();
+    if (!service) return;
+
+    // Create session directory with mock acp_token.json
+    const agySessionDir = join(sessionsDir, "antigravity-personnel");
+    await mkdir(agySessionDir, { recursive: true });
+    await writeFile(
+      join(agySessionDir, "acp_token.json"),
+      JSON.stringify({
+        client_id: "mock_client",
+        client_secret: "mock_secret",
+        refresh_token: "mock_refresh",
+      }),
+      "utf8",
+    );
+
+    // Mock global fetch for Google OAuth & Cloud Code quota endpoint
+    const originalFetch = globalThis.fetch;
+    const fakeFetch = (input: unknown): Promise<Response> => {
+      const urlStr =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      if (urlStr.includes("oauth2.googleapis.com")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ access_token: "mock_access_token" }), { status: 200 }),
+        );
+      }
+      if (urlStr.includes("retrieveUserQuotaSummary")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              groups: [
+                {
+                  displayName: "Gemini Models",
+                  buckets: [
+                    {
+                      bucketId: "gemini-5h",
+                      window: "5h",
+                      remainingFraction: 0.65,
+                      resetTime: "2026-11-07T14:00:00Z",
+                    },
+                    {
+                      bucketId: "gemini-weekly",
+                      window: "weekly",
+                      remainingFraction: 0.9,
+                      resetTime: "2026-11-14T10:00:00Z",
+                    },
+                  ],
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    };
+    globalThis.fetch = fakeFetch;
+
+    try {
+      const probed = await service.probeAuth("antigravity-personnel");
+      expect(probed?.authStatus).toBe("authenticated");
+      expect(probed?.quotas.remaining5hPercent).toBe(65);
+      expect(probed?.quotas.remainingWeekPercent).toBe(90);
+      expect(probed?.quotas.resets5hAt).toBe("2026-11-07T14:00:00Z");
+      expect(probed?.quotas.resetsWeekAt).toBe("2026-11-14T10:00:00Z");
+      expect(probed?.quotas.exhausted).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

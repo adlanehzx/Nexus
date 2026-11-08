@@ -136,12 +136,19 @@ export function Agents({ api }: { api: DashboardApi }) {
     setAccountFeedback(null);
     try {
       const res = await api.testProviderAccount(id);
-      setAccountFeedback(
-        tr(
-          `Identity "${res.id}" tested: status "${res.authStatus}"`,
-          `Identité "${res.id}" testée : statut "${res.authStatus}"`,
-        ),
-      );
+      const statusLabel =
+        res.authStatus === "authenticated"
+          ? tr("Authenticated & Active", "Authentifié & Actif")
+          : res.authStatus === "expired"
+            ? tr("Session Expired", "Session expirée")
+            : res.authStatus === "unauthenticated"
+              ? tr("Not Logged In", "Non connecté")
+              : tr(
+                  "Unverified (Awaiting first execution)",
+                  "Non vérifié (En attente d'une première mission)",
+                );
+
+      setAccountFeedback(`${tr("Identity", "Identité")} "${res.name ?? res.id}" : ${statusLabel}`);
       refreshAccounts();
     } catch (err) {
       setAccountFeedback(

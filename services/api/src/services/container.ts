@@ -47,6 +47,7 @@ import {
   type RunUsageBucket,
 } from "@nexus/agent-core";
 import type { McpManager } from "@nexus/mcp";
+import type { McpOAuthService } from "./mcp-oauth.js";
 import {
   createBrowserTools,
   createNativeBrowserTools,
@@ -223,6 +224,8 @@ export interface ServiceContainerOptions {
   toolRegistry?: ToolRegistry;
   /** MCP manager. Omitted = no server configured, and reported as such. */
   mcp?: McpManager;
+  /** MCP OAuth Gateway service for turnkey provider authorizations. */
+  mcpOAuth?: McpOAuthService;
   /** Browser worker client. Omitted = unconfigured. */
   browser?: BrowserWorkerClient;
   /** Native browser session manager (browser-harness). */
@@ -231,6 +234,8 @@ export interface ServiceContainerOptions {
   notificationDispatcher?: NotificationDispatcher;
   /** Runtime configuration store, stored locally without plaintext secrets. */
   runtimeConfiguration?: RuntimeConfigurationStore;
+  /** Injectable provider account service. */
+  providerAccounts?: ProviderAccountService;
   /** Keyring vault backed by Linux session keyring. */
   vault?: SecretVault;
   /** NEXUS ACP/paper-trading engine client. */
@@ -317,6 +322,8 @@ export class ServiceContainer {
 
   /** MCP manager, when present. `undefined` = unconfigured. */
   readonly mcp: McpManager | undefined;
+  /** MCP OAuth Gateway service. */
+  readonly mcpOAuth: McpOAuthService | undefined;
   /** Browser worker client, when present. */
   browser: BrowserWorkerClient | undefined;
   /** Local native browser session manager. */
@@ -670,6 +677,7 @@ export class ServiceContainer {
       );
     }
     this.mcp = options.mcp;
+    this.mcpOAuth = options.mcpOAuth;
     this.browser = undefined;
     this.browserSessionManager = undefined;
     if (options.browserSessionManager !== undefined) {
@@ -679,12 +687,14 @@ export class ServiceContainer {
     }
     this.runtimeConfiguration = options.runtimeConfiguration;
     this.providerAccounts =
-      options.runtimeConfiguration === undefined
+      options.providerAccounts ??
+      (options.runtimeConfiguration === undefined
         ? undefined
         : new ProviderAccountService({
             runtimeConfiguration: options.runtimeConfiguration,
+            runStore: this.runStore,
             now,
-          });
+          }));
     this.agentRouter = new AgentRouter({
       runtimeConfiguration: options.runtimeConfiguration,
       providerAccounts: this.providerAccounts,

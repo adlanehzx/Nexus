@@ -13,6 +13,7 @@ import type { CommandPaletteItem, NativeSpaceId } from "./types.js";
 import { PRESET_LAYOUTS, analyzeIntentForAssistLayout } from "./AdaptiveLayoutEngine.js";
 import { NexusLogo } from "../NexusLogo.js";
 import type { DashboardApi } from "../../lib/api.js";
+import { IconMaximize, IconRefresh, IconMap } from "../icons.js";
 
 interface SpatialShellProps {
   store: SpatialStore;
@@ -191,13 +192,6 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         action: () => openWindow("mission-control", "Mission Control"),
       },
       {
-        id: "win-observability",
-        title: "Ouvrir Observability (observabilité)",
-        subtitle: "Santé des services, erreurs récentes, recherche par correlationId",
-        category: "Windows",
-        action: () => openWindow("observability", "Observability"),
-      },
-      {
         id: "win-usage",
         title: "Ouvrir Usage & Quotas",
         subtitle: "Tokens observés, coûts estimés et fenêtres de quota",
@@ -231,13 +225,6 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
         subtitle: "Processus et machines distribuées",
         category: "Windows",
         action: () => openWindow("workers", "Workers Distribués"),
-      },
-      {
-        id: "win-security",
-        title: "Ouvrir Sécurité & Garde-fous",
-        subtitle: "Audits et politiques d'accès",
-        category: "Windows",
-        action: () => openWindow("security", "Sécurité & Audit"),
       },
       {
         id: "win-logs",
@@ -454,7 +441,7 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
               title="Ajuster la vue (Fit All)"
               onClick={fitAll}
             >
-              ⛶
+              <IconMaximize size={13} />
             </button>
             <button
               type="button"
@@ -462,7 +449,7 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
               title="Réinitialiser la caméra"
               onClick={resetCamera}
             >
-              ↺
+              <IconRefresh size={13} />
             </button>
           </div>
 
@@ -480,7 +467,7 @@ export function SpatialShell({ store, api, session, onToggleClassicView }: Spati
             onClick={() => setShowMinimap(!showMinimap)}
             title="Basculer la minicarte"
           >
-            🗺
+            <IconMap size={14} />
           </button>
 
           {/* Layout Mode Selector (Manual / Assist) */}

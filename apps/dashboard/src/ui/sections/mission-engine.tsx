@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { DashboardApi, MissionCollaborationDto, ScheduleRun } from "../../lib/api.js";
 import { formatAge, formatCount, formatDuration } from "../../lib/format.js";
-import { Empty, Metric, Section, State, Table, useSection } from "../parts.js";
+import { Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
+import { Runs } from "./runs.js";
+import { IconBarChart } from "../icons.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEXUS Mission Engine
@@ -86,65 +88,214 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                 </div>
               ) : null}
 
-              <div className="metrics">
-                <Metric
-                  value={data.configured ? tr("yes", "oui") : tr("no", "non")}
-                  label={tr("configured", "configuré")}
-                />
-                <Metric
-                  value={
-                    data.reachable
-                      ? tr("reachable", "accessible")
-                      : tr("unreachable", "inaccessible")
-                  }
-                  label={tr("ACP engine", "moteur ACP")}
-                  alert={data.configured && !data.reachable}
-                />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div
+                  className="card"
+                  style={{
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: data.configured
+                        ? "var(--color-success, #00e676)"
+                        : "var(--color-muted, #757575)",
+                    }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--color-muted, #888)",
+                      }}
+                    >
+                      {tr("Engine Config", "Config Moteur")}
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+                      {data.configured
+                        ? tr("Configured", "Configuré")
+                        : tr("Not configured", "Non configuré")}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="card"
+                  style={{
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      backgroundColor: data.reachable
+                        ? "var(--color-success, #00e676)"
+                        : "var(--color-error, #ff5252)",
+                    }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--color-muted, #888)",
+                      }}
+                    >
+                      {tr("ACP Engine Status", "État Moteur ACP")}
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+                      {data.reachable
+                        ? tr("Online & Connected", "En ligne & Connecté")
+                        : tr("Unreachable", "Inaccessible")}
+                    </div>
+                  </div>
+                </div>
+
                 {isTrading ? (
                   <>
-                    <Metric
-                      value={`${(cash / 100).toFixed(2)} €`}
-                      label={tr("paper cash", "liquidités papier")}
-                    />
-                    <Metric
-                      value={`${(exposure / 100).toFixed(2)} €`}
-                      label={tr("paper exposure", "exposition papier")}
-                    />
+                    <div className="card" style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
+                        {tr("paper cash", "liquidités papier")}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                        {(cash / 100).toFixed(2)} €
+                      </div>
+                    </div>
+                    <div className="card" style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
+                        {tr("paper exposure", "exposition papier")}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                        {(exposure / 100).toFixed(2)} €
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <Metric
-                      value={
-                        data.health?.worker_enabled === true
-                          ? tr("active", "actif")
-                          : tr("stopped", "arrêté")
-                      }
-                      label={tr("workers", "agents")}
-                      alert={data.configured && data.health?.worker_enabled !== true}
-                    />
-                    <Metric
-                      value={String(data.health?.worker_concurrency ?? 0)}
-                      label={tr("concurrency", "concurrence")}
-                    />
-                    <Metric
-                      value={
-                        data.audit?.valid === true
-                          ? tr("valid", "valide")
-                          : tr("invalid", "invalide")
-                      }
-                      label={tr("audit chain", "chaîne d'audit")}
-                      alert={data.configured && data.audit?.valid !== true}
-                    />
-                    <Metric
-                      value={formatCount(data.audit?.checked ?? 0)}
-                      label={tr("audited events", "événements audités")}
-                    />
+                    <div className="card" style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
+                        {tr("Workers", "Agents")}
+                      </div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "1rem",
+                          marginTop: "4px",
+                          color: data.health?.worker_enabled
+                            ? "var(--color-success, #00e676)"
+                            : "var(--color-muted, #888)",
+                        }}
+                      >
+                        {data.health?.worker_enabled
+                          ? tr("Active", "Actif")
+                          : tr("Inactive", "Inactif")}
+                      </div>
+                    </div>
+                    <div className="card" style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
+                        {tr("Concurrency", "Concurrence")}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: "1.1rem", marginTop: "4px" }}>
+                        {data.health?.worker_concurrency ?? 0}
+                      </div>
+                    </div>
+                    <div className="card" style={{ padding: "12px 16px" }}>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "var(--color-muted, #888)",
+                        }}
+                      >
+                        {tr("Audit Chain", "Chaîne d'audit")}
+                      </div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "1rem",
+                          marginTop: "4px",
+                          color: data.audit?.valid
+                            ? "var(--color-success, #00e676)"
+                            : "var(--color-warning, #ffb300)",
+                        }}
+                      >
+                        {data.audit?.valid ? tr("Valid", "Valide") : tr("Checking", "En cours")}
+                      </div>
+                    </div>
                   </>
                 )}
-                <Metric
-                  value={formatCount(activeRuns)}
-                  label={tr("active missions", "missions actives")}
-                />
+                <div className="card" style={{ padding: "12px 16px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "var(--color-muted, #888)",
+                    }}
+                  >
+                    {tr("Active Missions", "Missions actives")}
+                  </div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                      marginTop: "4px",
+                      color: activeRuns > 0 ? "var(--color-accent, #00e5ff)" : "inherit",
+                    }}
+                  >
+                    {formatCount(activeRuns)}
+                  </div>
+                </div>
               </div>
 
               <p className="muted">{data.detail}</p>
@@ -511,6 +662,28 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       ))}
                     </div>
                   )}
+
+                  <details className="card" style={{ marginTop: "1.5rem" }}>
+                    <summary
+                      style={{
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "1rem",
+                        userSelect: "none",
+                        padding: "4px 0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <IconBarChart size={18} color="var(--nx-accent-line, #38bdf8)" />{" "}
+                      {tr(
+                        "Agent Execution Traces & Tool Audit",
+                        "Historique & Traçabilité des exécutions d'agents",
+                      )}
+                    </summary>
+                    <Runs api={api} embedded />
+                  </details>
                 </>
               )}
 
