@@ -4,6 +4,7 @@ import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "../CyberRetypeTitle.js";
 import {
   IconInbox,
+  IconEducation,
   IconScales,
   IconKanban,
   IconDocument,
@@ -45,6 +46,7 @@ import { ApprovalCards } from "./ApprovalCards.js";
 import { CareerSettings } from "./CareerSettings.js";
 
 export type CareerEducationTabId =
+  | "education"
   | "inbox"
   | "comparison"
   | "pipeline"
@@ -117,23 +119,12 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
       setInterviews(ints);
       setAnalytics(anl);
       setConfirmations(confs);
-
-      // Pre-select 2 opportunities for comparison if empty
-      if (selectedForComparison.length >= 2) {
-        const matrix = await client.compareOpportunities(selectedForComparison);
-        setComparisonMatrix(matrix);
-      } else if (oppRes.items.length >= 2) {
-        const defaultPair = [oppRes.items[0]!.id, oppRes.items[1]!.id];
-        setSelectedForComparison(defaultPair);
-        const matrix = await client.compareOpportunities(defaultPair);
-        setComparisonMatrix(matrix);
-      }
     } catch (err) {
       setOfflineError(err instanceof Error ? err.message : "Network error.");
     } finally {
       setLoading(false);
     }
-  }, [client, selectedForComparison]);
+  }, [client]);
 
   useEffect(() => {
     void reloadAll();
@@ -427,10 +418,64 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
           <IconSettings size={15} style={{ marginRight: 6 }} />
           {tr("Settings & Feeds", "Paramètres & Sources")}
         </button>
+        <button
+          type="button"
+          className="career-tab-btn"
+          role="tab"
+          onClick={() => setActiveTab("education")}
+          aria-selected={activeTab === "education"}
+        >
+          <IconEducation size={16} /> {tr("Education pathways", "Parcours de formation")}
+        </button>
       </nav>
 
       {/* View Panels */}
       <div role="tabpanel" aria-label={`View ${activeTab}`}>
+        {activeTab === "education" && (
+          <section
+            className="career-card"
+            role="region"
+            aria-label={tr("Education recommendations", "Recommandations de formation")}
+          >
+            <h3>
+              <IconEducation />{" "}
+              {tr("Recommended doctoral opportunities", "Opportunités doctorales recommandées")}
+            </h3>
+            <p>
+              {tr(
+                "Ranked using your profile skills and research preferences.",
+                "Classées selon vos compétences et préférences de recherche.",
+              )}
+            </p>
+            {loading ? (
+              <p>{tr("Loading recommendations...", "Chargement des recommandations...")}</p>
+            ) : opportunities.filter((o) => o.track === "phd").length === 0 ? (
+              <p>
+                {tr(
+                  "No doctoral opportunities available.",
+                  "Aucune opportunité doctorale disponible.",
+                )}
+              </p>
+            ) : (
+              <ul>
+                {opportunities
+                  .filter((o) => o.track === "phd")
+                  .map((o) => (
+                    <li key={o.id}>
+                      <strong>{o.title}</strong> · {o.organization} · {o.match.score}%
+                      <p>{o.match.rationale}</p>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            <h4>{tr("Profile recommendations", "Recommandations de profil")}</h4>
+            <ul>
+              {profile?.completeness.actionableRecommendations.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </section>
+        )}
         {activeTab === "inbox" && (
           <OpportunityInbox
             opportunities={opportunities}

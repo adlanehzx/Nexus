@@ -1,6 +1,6 @@
+import { DashboardCareerClient } from "./career-api-client.js";
 import {
   FakeCareerEducationClient,
-  HttpCareerEducationClient,
   type CareerEducationClient,
   type SessionManager,
 } from "@nexus/client-core";
@@ -10,9 +10,16 @@ import {
  * When an authenticated SessionManager is provided, it connects directly
  * to the Fastify API /api/v1/career/* routes.
  */
+const clients = new WeakMap<SessionManager, CareerEducationClient>();
+
 export function createCareerEducationClient(session?: SessionManager): CareerEducationClient {
   if (session !== undefined) {
-    return new HttpCareerEducationClient(session, { seedDemoData: false });
+    let client = clients.get(session);
+    if (!client) {
+      client = new DashboardCareerClient(session);
+      clients.set(session, client);
+    }
+    return client;
   }
   return new FakeCareerEducationClient({ seedDemoData: false });
 }

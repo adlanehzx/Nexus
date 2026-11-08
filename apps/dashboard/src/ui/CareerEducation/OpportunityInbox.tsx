@@ -6,7 +6,15 @@ import type {
   MonitoredSource,
 } from "@nexus/client-core";
 import { useI18n } from "../i18n/index.js";
-import { IconSearch, IconWarning, IconStar, IconRefresh } from "../icons.js";
+import {
+  IconSearch,
+  IconWarning,
+  IconStar,
+  IconRefresh,
+  IconJob,
+  IconEducation,
+  IconKanban,
+} from "../icons.js";
 
 interface OpportunityInboxProps {
   opportunities: Opportunity[];
@@ -414,6 +422,7 @@ export function OpportunityInbox({
                     }}
                   >
                     <span className={`career-track-pill ${opp.track}`}>
+                      {opp.track === "phd" ? <IconEducation size={13} /> : <IconJob size={13} />}{" "}
                       {formatTrack(opp.track)}
                     </span>
                     <span className={`staleness-pill ${opp.staleness}`}>
@@ -444,6 +453,10 @@ export function OpportunityInbox({
                   </label>
                 </div>
 
+                <span>
+                  <IconKanban size={13} /> {tr("Application status:", "Statut de candidature :")}{" "}
+                  {opp.workflowStatus}
+                </span>
                 {/* Title & Organization */}
                 <div>
                   <h3

@@ -20,8 +20,56 @@
     "reason": "Multi-tenant surface, deliberately exposed without an interface until the edition decision lands. Lot 4 puts it behind ORGANIZATIONS_ENABLED (default false); the schema and service stay. Revisit this entry when that flag ships."
   },
   {
-    "route": "* /api/v1/career*",
-    "reason": "Career client answers from a local cache for most reads, so several ready server routes have no caller yet. Lot 7.2 wires the eight that exist and lot 7.3 the rest; this entry shrinks as it goes."
+    "route": "GET /api/v1/career/applications/:p",
+    "reason": "Application detail is reserved for the Lot 7.3 detail view; Lot 7.2 uses the application list and opportunity detail."
+  },
+  {
+    "route": "GET /api/v1/career/applications/:p/confirmations",
+    "reason": "Application-specific approval history is reserved for Lot 7.3."
+  },
+  {
+    "route": "GET /api/v1/career/applications/:p/events",
+    "reason": "Application event history is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/advance",
+    "reason": "Canonical transition endpoint; the dashboard uses the compatible stage endpoint."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/approval-request",
+    "reason": "Submission approval preparation is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/contacts",
+    "reason": "Contact creation is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/drafting",
+    "reason": "Explicit drafting transition is reserved for Lot 7.3; the dashboard currently uses the stage endpoint."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/follow-ups",
+    "reason": "Follow-up scheduling is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/interviews",
+    "reason": "Interview creation is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/applications/:p/submit",
+    "reason": "External submission execution is reserved for Lot 7.3."
+  },
+  {
+    "route": "POST /api/v1/career/confirmations/:p/decide",
+    "reason": "Canonical decision endpoint; existing clients use the compatible resolve endpoint."
+  },
+  {
+    "route": "POST /api/v1/career/ingest",
+    "reason": "Opportunity ingestion is an operator API; discovery UI reads ranked opportunities."
+  },
+  {
+    "route": "POST /api/v1/career/sweep-expired",
+    "reason": "Expiry maintenance is an operator API, without a dashboard control."
   },
   {
     "route": "GET /api/v1/tools",

@@ -1,3 +1,12 @@
+import type { CareerProfileInput } from "@nexus/career";
+import type {
+  CareerProfileDto,
+  CareerDocumentDto,
+  CareerDocumentSummaryDto,
+  CareerOpportunityDto,
+  CareerApplicationDto,
+} from "./career-api-client.js";
+
 export interface PaperOrder {
   id: string;
   market_id: string;
@@ -1222,6 +1231,74 @@ export class DashboardApi {
 
   constructor(session: SessionManager) {
     this.#session = session;
+  }
+
+  careerDocuments(applicationId: string): Promise<{ documents: CareerDocumentSummaryDto[] }> {
+    return this.#get(`/api/v1/career/applications/${encodeURIComponent(applicationId)}/documents`);
+  }
+
+  careerDocument(id: string): Promise<CareerDocumentDto> {
+    return this.#get(`/api/v1/career/documents/${encodeURIComponent(id)}`);
+  }
+
+  tailorCareerDocument(input: {
+    opportunityId: string;
+    applicationId?: string | undefined;
+    type: string;
+  }): Promise<CareerDocumentDto> {
+    return this.#request("POST", "/api/v1/career/documents/tailor", input);
+  }
+
+  careerProfile(): Promise<CareerProfileDto> {
+    return this.#get("/api/v1/career/profile");
+  }
+
+  saveCareerProfile(input: CareerProfileInput): Promise<CareerProfileDto> {
+    return this.#request("PUT", "/api/v1/career/profile", input);
+  }
+
+  careerOpportunities(
+    track?: "all" | "phd" | "cdi" | "freelance",
+  ): Promise<{ opportunities: CareerOpportunityDto[] }> {
+    const query = new URLSearchParams({ limit: "200" });
+    if (track && track !== "all") query.set("kind", track === "cdi" ? "permanent_job" : track);
+    return this.#get(`/api/v1/career/opportunities?${query}`);
+  }
+
+  careerOpportunity(id: string): Promise<CareerOpportunityDto> {
+    return this.#get(`/api/v1/career/opportunities/${encodeURIComponent(id)}`);
+  }
+
+  shortlistCareerOpportunity(id: string): Promise<CareerApplicationDto> {
+    return this.#request(
+      "POST",
+      `/api/v1/career/opportunities/${encodeURIComponent(id)}/shortlist`,
+    );
+  }
+
+  compareCareerOpportunities(
+    ids: string[],
+  ): Promise<{ items: CareerOpportunityDto[]; comparisonAttributes: string[] }> {
+    return this.#request("POST", "/api/v1/career/opportunities/compare", { ids });
+  }
+
+  careerApplications(): Promise<{ applications: CareerApplicationDto[] }> {
+    return this.#get("/api/v1/career/applications");
+  }
+
+  createCareerApplication(opportunityId: string): Promise<CareerApplicationDto> {
+    return this.#request("POST", "/api/v1/career/applications", { opportunityId });
+  }
+
+  updateCareerApplicationStage(
+    id: string,
+    stage: string,
+    note?: string,
+  ): Promise<CareerApplicationDto> {
+    return this.#request("PUT", `/api/v1/career/applications/${encodeURIComponent(id)}/stage`, {
+      stage,
+      note,
+    });
   }
 
   overview(): Promise<Overview> {
