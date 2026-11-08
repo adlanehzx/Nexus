@@ -261,3 +261,41 @@ describe("MissionControlClient", () => {
     await expect(client.health()).rejects.not.toThrow(/TOKEN_SECRET/);
   });
 });
+
+it("forwards paper order idempotency and validates filled, declined and replay results", async () => {
+  const marketId = "22222222-2222-4222-8222-222222222222";
+  const filled = { id: marketId, outcome: "yes", stake_cents: 100, filled: true };
+  const declined = {
+    filled: false,
+    risk_decision_id: marketId,
+    stake_cents: 100,
+    reasons: ["stale_quote"],
+  };
+  const replay = { id: marketId, outcome: "yes", stake_cents: 100, state: "filled" };
+  const fetchImpl = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(filled)))
+    .mockResolvedValueOnce(new Response(JSON.stringify(declined)))
+    .mockResolvedValueOnce(new Response(JSON.stringify(replay)))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ market_id: marketId, winning_outcome: "yes", replayed: true })),
+    );
+  const client = new MissionControlClient({ baseUrl: "http://127.0.0.1:18100", fetchImpl });
+  const input = {
+    account_id: account.id,
+    market_id: marketId,
+    model_probability: "0.7",
+    confidence: "0.9",
+  };
+  await expect(client.placePaperOrder(input, "key-1")).resolves.toMatchObject(filled);
+  await expect(client.placePaperOrder(input, "key-2")).resolves.toMatchObject(declined);
+  await expect(client.placePaperOrder(input, "key-1")).resolves.toMatchObject(replay);
+  expect(fetchImpl.mock.calls[0]?.[1].headers).toMatchObject({ "idempotency-key": "key-1" });
+  await expect(client.settlePaperMarket(marketId, "yes")).resolves.toMatchObject({
+    replayed: true,
+  });
+  expect(fetchImpl.mock.calls[3]?.[0]).toBe(
+    `http://127.0.0.1:18100/v1/paper/markets/${marketId}/settle`,
+  );
+  expect(() => client.placePaperOrder(input, "")).toThrow(/idempotency/);
+});
