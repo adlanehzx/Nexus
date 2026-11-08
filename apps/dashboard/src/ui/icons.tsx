@@ -551,3 +551,40 @@ export function IconEducation({ size = 16, color, style, className }: IconProps)
     </svg>
   );
 }
+
+export function IconPause({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  );
+}
+
+export function IconPlay({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+}
+
+export function IconPower({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+export function IconSnowflake({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <line x1="12" y1="2" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      <line x1="19.07" y1="4.93" x2="4.93" y2="19.07" />
+    </svg>
+  );
+}

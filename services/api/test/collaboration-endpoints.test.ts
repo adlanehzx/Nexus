@@ -126,6 +126,8 @@ describe("Inter-Agent Collaboration Endpoints", () => {
       getPaperMarket: vi.fn(),
       listPaperMarkets: vi.fn().mockResolvedValue([]),
       addPaperQuote: vi.fn(),
+      placePaperOrder: vi.fn(),
+      settlePaperMarket: vi.fn(),
       submitResearchMission: vi.fn(),
       getResearchRun: vi.fn(),
       listResearchRuns: vi.fn().mockResolvedValue([]),

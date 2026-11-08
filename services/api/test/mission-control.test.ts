@@ -39,6 +39,8 @@ const fake = {
   getPaperMarket: vi.fn(),
   listPaperMarkets: vi.fn().mockResolvedValue([]),
   addPaperQuote: vi.fn(),
+  placePaperOrder: vi.fn(),
+  settlePaperMarket: vi.fn(),
   submitResearchMission: vi.fn(),
   getResearchRun: vi.fn(),
   listResearchRuns: vi.fn().mockResolvedValue([]),
@@ -243,5 +245,98 @@ describe("Mission Control routes", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(fake.listScheduleRuns).toHaveBeenCalledWith(owned.id, 100);
+  });
+});
+
+describe("Paper orders and settlement bridge", () => {
+  const marketId = "11111111-1111-4111-8111-111111111111";
+  const accountId = "22222222-2222-4222-8222-222222222222";
+  it("requires admin access, validates order input and forwards idempotency", async () => {
+    const payload = {
+      account_id: accountId,
+      market_id: marketId,
+      model_probability: "0.7",
+      confidence: "0.9",
+    };
+    fake.placePaperOrder.mockResolvedValue({
+      filled: false,
+      stake_cents: 100,
+      risk_decision_id: marketId,
+      reasons: ["stale_quote"],
+    });
+    for (const [headers, status] of [
+      [{}, 401],
+      [member.authorization, 403],
+    ] as const) {
+      expect(
+        (
+          await harness.app.inject({
+            method: "POST",
+            url: "/api/v1/mission-control/paper/orders",
+            headers: { ...headers, "idempotency-key": "order-1" },
+            payload,
+          })
+        ).statusCode,
+      ).toBe(status);
+    }
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: "/api/v1/mission-control/paper/orders",
+          headers: admin.authorization,
+          payload,
+        })
+      ).statusCode,
+    ).toBe(400);
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/mission-control/paper/orders",
+      headers: { ...admin.authorization, "idempotency-key": "order-1" },
+      payload,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.reasons).toEqual(["stale_quote"]);
+    expect(fake.placePaperOrder).toHaveBeenCalledWith(payload, "order-1");
+  });
+  it("validates and forwards settlement outcomes", async () => {
+    fake.settlePaperMarket.mockResolvedValue({
+      market_id: marketId,
+      winning_outcome: "yes",
+      replayed: false,
+      orders_settled: 1,
+    });
+    const url = `/api/v1/mission-control/paper/markets/${marketId}/settle`;
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url,
+          headers: member.authorization,
+          payload: { winning_outcome: "yes" },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url,
+          headers: admin.authorization,
+          payload: { winning_outcome: "invalid" },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url,
+          headers: admin.authorization,
+          payload: { winning_outcome: "yes" },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(fake.settlePaperMarket).toHaveBeenCalledWith(marketId, "yes");
   });
 });

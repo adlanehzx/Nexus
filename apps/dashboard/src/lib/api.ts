@@ -6,6 +6,42 @@ import type {
   CareerOpportunityDto,
   CareerApplicationDto,
 } from "./career-api-client.js";
+
+export interface PaperOrder {
+  id: string;
+  market_id: string;
+  outcome: "yes" | "no";
+  state: "filled" | "settled" | "voided";
+  stake_cents: number;
+  shares_micro: number;
+  payout_cents: number | null;
+  execution_price_ppm: number;
+}
+export interface PaperAccountDetail {
+  id: string;
+  name: string;
+  cash_balance_cents: number;
+  realized_pnl_cents: number;
+  open_exposure_cents: number;
+  orders: PaperOrder[];
+}
+export interface PaperMarketDetail {
+  id: string;
+  question: string;
+  state: "open" | "settled" | "cancelled";
+  close_at: string;
+  winning_outcome: "yes" | "no" | null;
+  latest_quote: { yes_price_ppm: number; liquidity_cents: number; observed_at: string } | null;
+}
+export interface PaperOrderInput {
+  account_id: string;
+  market_id: string;
+  model_probability: string;
+  confidence: string;
+}
+export type PaperOrderResult =
+  | { filled: false; reasons: string[]; stake_cents: number }
+  | { id: string; outcome: "yes" | "no"; stake_cents: number; filled?: true };
 import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-core";
 import type { HttpClient, SecureStorage } from "@nexus/client-core";
 import type {
@@ -1658,6 +1694,14 @@ export class DashboardApi {
     );
   }
 
+  enableProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/enable`);
+  }
+
+  disableProviderAccount(id: string): Promise<ProviderAccountDto> {
+    return this.#request("POST", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}/disable`);
+  }
+
   deleteProviderAccount(id: string): Promise<{ deleted: boolean }> {
     return this.#request("DELETE", `/api/v1/orchestrator/accounts/${encodeURIComponent(id)}`);
   }
@@ -1718,6 +1762,35 @@ export class DashboardApi {
 
   artifactDownloadUrl(missionId: string, uri: string): string {
     return `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/artifacts/download?uri=${encodeURIComponent(uri)}`;
+  }
+
+  getPaperAccount(id: string): Promise<PaperAccountDetail> {
+    return this.#request("GET", `/api/v1/mission-control/paper/accounts/${encodeURIComponent(id)}`);
+  }
+  getPaperMarket(id: string): Promise<PaperMarketDetail> {
+    return this.#request("GET", `/api/v1/mission-control/paper/markets/${encodeURIComponent(id)}`);
+  }
+  addPaperQuote(
+    id: string,
+    input: { yes_price: string; liquidity_eur: string; source_url: string; observed_at: string },
+  ): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/mission-control/paper/markets/${encodeURIComponent(id)}/quotes`,
+      input,
+    );
+  }
+  placePaperOrder(input: PaperOrderInput, idempotencyKey: string): Promise<PaperOrderResult> {
+    return this.#request("POST", "/api/v1/mission-control/paper/orders", input, {
+      "idempotency-key": idempotencyKey,
+    });
+  }
+  settlePaperMarket(id: string, outcome: "yes" | "no"): Promise<unknown> {
+    return this.#request(
+      "POST",
+      `/api/v1/mission-control/paper/markets/${encodeURIComponent(id)}/settle`,
+      { winning_outcome: outcome },
+    );
   }
 
   createPaperAccount(input: { name: string; bankroll_eur: string }): Promise<unknown> {
@@ -2113,9 +2186,19 @@ export class DashboardApi {
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
-    unwrap = true,
+    headersOrUnwrap?: Record<string, string> | boolean,
+    unwrapParam = true,
   ): Promise<T> {
-    const response = await this.#session.authorizedRequest({ method, path, body });
+    const headers =
+      typeof headersOrUnwrap === "object" && headersOrUnwrap !== null ? headersOrUnwrap : undefined;
+    const unwrap = typeof headersOrUnwrap === "boolean" ? headersOrUnwrap : unwrapParam;
+
+    const response = await this.#session.authorizedRequest({
+      method,
+      path,
+      body,
+      ...(headers === undefined ? {} : { headers }),
+    });
 
     if (response.status === 403) {
       throw new ForbiddenError("This section is not accessible with this account.");

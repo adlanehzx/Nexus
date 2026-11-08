@@ -84,10 +84,6 @@
     "reason": "REST twin of the WebSocket challenge in the worker handshake, which is the path all four workers actually use. Kept for clients that cannot hold a socket; do not unify without a protocol version bump."
   },
   {
-    "route": "* /api/v1/mission-control/paper*",
-    "reason": "Paper-trading detail and quote routes. The Trading Lab works from aggregate lists; lot 9.3 closes the loop with orders and settlement and will use these."
-  },
-  {
     "route": "GET /api/v1/mission-control/schedules/:p",
     "reason": "Schedule detail is read from the aggregate mission-control payload."
   },
@@ -98,14 +94,6 @@
   {
     "route": "GET /api/v1/mission-control/research-runs/:p",
     "reason": "Research run detail, unexposed until lot 12.2."
-  },
-  {
-    "route": "* /api/v1/orchestrator/accounts/:p/enable",
-    "reason": "Provider account enable/disable has no control; the UI only offers cooldown. Lot 6.2 adds per-agent pause and emergency stop and will use these."
-  },
-  {
-    "route": "* /api/v1/orchestrator/accounts/:p/disable",
-    "reason": "See the enable route: unexposed until lot 6.2."
   },
   {
     "route": "PATCH /api/v1/orchestrator/agents/:p/health",

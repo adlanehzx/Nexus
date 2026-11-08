@@ -4,6 +4,7 @@ import { formatAge, formatCount, formatDuration } from "../../lib/format.js";
 import { Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 import { Runs } from "./runs.js";
+import { PaperTrading } from "./paper-trading.js";
 import { IconBarChart } from "../icons.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -757,6 +758,12 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                     </Table>
                   )}
 
+                  <PaperTrading
+                    api={api}
+                    accountIds={data.accounts.map((a) => a.id)}
+                    marketIds={data.markets.map((m) => m.id)}
+                    onChanged={state.reload}
+                  />
                   <h3>{tr("Recent Missions", "Missions récentes")}</h3>
                   {data.recent_runs.length === 0 ? (
                     <Empty>{tr("No ACP missions executed.", "Aucune mission ACP exécutée.")}</Empty>
