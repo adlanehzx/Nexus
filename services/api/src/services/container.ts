@@ -147,6 +147,13 @@ import {
   type DomotiqueStore,
 } from "./domotique/store.js";
 import { SatelliteVoiceGateway } from "./domotique/satellite-voice.js";
+import {
+  InMemorySatelliteEnrollmentStore,
+  PrismaSatelliteEnrollmentStore,
+  SatelliteEnrollmentService,
+} from "./domotique/satellite-enrollment.js";
+import { mdnsBrowse } from "./domotique/mdns.js";
+import type { HomeAssistantSetupOptions } from "@nexus/devices";
 import { HomeVoiceIntentHandler, createAgentFallback } from "./domotique/voice-intent.js";
 import type { SpeechToTextPort, TextToSpeechPort } from "@nexus/voice";
 import type { FreeLlmRuntimeProvider } from "./freelm-runtime.js";
@@ -321,6 +328,19 @@ export interface ServiceContainerOptions {
   domotiqueTickMs?: number;
   /** Lab 4 — IANA timezone in which routine cron expressions are evaluated. */
   homeTimezone?: string;
+  /** Lab 4 — HA discovery/setup overrides (tests inject a mocked HA and no mDNS). */
+  homeAssistantDiscovery?: {
+    browse?: () => Promise<
+      readonly {
+        host: string | null;
+        port: number | null;
+        addresses: string[];
+        txt: Record<string, string>;
+      }[]
+    >;
+    candidates?: readonly string[];
+    setupOptions?: HomeAssistantSetupOptions;
+  };
 }
 
 export class ServiceContainer {
@@ -405,6 +425,8 @@ export class ServiceContainer {
   readonly domotique: DomotiqueService;
   /** Lab 4 — ESP32 satellite voice sessions (wake → STT → intent → TTS). */
   readonly satelliteVoice: SatelliteVoiceGateway;
+  /** Lab 4 — ESP32 satellites enrolled from the network and approved in the dashboard. */
+  readonly satelliteEnrollment: SatelliteEnrollmentService;
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
@@ -786,6 +808,7 @@ export class ServiceContainer {
       ...(options.llmProvider ? { llm: options.llmProvider } : {}),
       ...(options.prisma ? { persistence: new PrismaOsintStore(options.prisma) } : {}),
     });
+    const homeTimezone = options.homeTimezone;
     this.domotique = new DomotiqueService({
       store:
         options.domotiqueStore ??
@@ -799,10 +822,26 @@ export class ServiceContainer {
         ? {}
         : { clientFactory: options.homeAssistantClientFactory }),
       ...(options.domotiqueTickMs === undefined ? {} : { tickMs: options.domotiqueTickMs }),
-      timezoneFor: () => Promise.resolve(options.homeTimezone ?? "Europe/Paris"),
+      ...(homeTimezone === undefined ? {} : { timezoneFor: () => Promise.resolve(homeTimezone) }),
+      browseHomeAssistant:
+        options.homeAssistantDiscovery?.browse ?? (() => mdnsBrowse("_home-assistant._tcp.local")),
+      ...(options.homeAssistantDiscovery?.candidates === undefined
+        ? {}
+        : { homeAssistantCandidates: options.homeAssistantDiscovery.candidates }),
+      ...(options.homeAssistantDiscovery?.setupOptions === undefined
+        ? {}
+        : { setupOptions: options.homeAssistantDiscovery.setupOptions }),
       now,
     });
     this.domotique.attachWorkers(this.deviceRegistry);
+    this.satelliteEnrollment = new SatelliteEnrollmentService({
+      store:
+        options.prisma === undefined
+          ? new InMemorySatelliteEnrollmentStore()
+          : new PrismaSatelliteEnrollmentStore(options.prisma),
+      now,
+    });
+    this.domotique.attachEnrollment(this.satelliteEnrollment);
     const agentCore = this.agentCore;
     this.satelliteVoice = new SatelliteVoiceGateway({
       stt: options.satelliteVoicePorts?.stt,

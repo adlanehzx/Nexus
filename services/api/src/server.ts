@@ -69,6 +69,7 @@ import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-sto
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { PrismaCareerStore } from "./services/persistence/prisma-career-store.js";
 import { satelliteVoicePortsFromEnv } from "./services/domotique/voice-engines.js";
+import { MdnsResponder, defaultHostLabel, lanAddresses } from "./services/domotique/mdns.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
@@ -231,7 +232,8 @@ const services = new ServiceContainer({
     process.env,
     resolve(here, "../../../var/voice-scratch"),
   ),
-  homeTimezone: process.env.NEXUS_HOME_TIMEZONE ?? process.env.TZ ?? "Europe/Paris",
+  // Unset = Home Assistant's timezone once connected, else the host's.
+  ...(process.env.NEXUS_HOME_TIMEZONE ? { homeTimezone: process.env.NEXUS_HOME_TIMEZONE } : {}),
   telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
   embeddings,
   observabilityDirectory:
@@ -349,6 +351,34 @@ async function main(): Promise<void> {
     "API listening",
   );
 
+  // Lab 4 — announce NEXUS on the LAN (`_nexus._tcp.local`) so a freshly
+  // flashed ESP32 satellite finds the API without anyone typing an address.
+  const mdns =
+    process.env.NEXUS_MDNS === "off"
+      ? undefined
+      : new MdnsResponder(
+          () => {
+            const label = defaultHostLabel();
+            return {
+              type: "_nexus._tcp.local",
+              instance: `NEXUS ${label}`,
+              port: config.API_PORT,
+              host: `${label}.local`,
+              addresses: lanAddresses(),
+              txt: {
+                v: "1",
+                api: "/api/v1",
+                enroll: "/api/v1/satellites/enroll",
+                ws: "/ws/satellite",
+              },
+            };
+          },
+          (error) => {
+            logger.warn({ err: error, event: "mdns.error" }, "mDNS advertisement problem");
+          },
+        );
+  mdns?.start();
+
   let shuttingDown = false;
 
   /**
@@ -363,6 +393,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     clearInterval(osintWatchTimer);
+    mdns?.stop();
 
     logger.info({ event: "api.shutdown.start", signal }, "Shutdown in progress");
 

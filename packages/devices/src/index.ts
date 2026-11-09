@@ -17,3 +17,4 @@ export * from "./homeassistant-client.js";
 export * from "./home.js";
 export * from "./home-automation.js";
 export * from "./home-tools.js";
+export * from "./homeassistant-setup.js";

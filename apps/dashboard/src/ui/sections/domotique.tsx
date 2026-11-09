@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { generateQrSvg } from "@nexus/client-core";
 import type {
   DashboardApi,
-  PairingTicket,
   SatelliteCommandAccepted,
   SatelliteCommandName,
   SatelliteView,
@@ -12,6 +10,7 @@ import {
   HomeAssistantPanel,
   HomeAutomationsPanel,
   HomeDevicesPanel,
+  SatelliteEnrollmentPanel,
   VoiceSatellitesPanel,
 } from "./domotique-home.js";
 import { useI18n } from "../i18n/index.js";
@@ -190,15 +189,18 @@ function extractRoom(sat: SatelliteView): string {
 // Interactive Remote Control Component (D-Pad, Navigation & Media Keys)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function RemoteControl({
-  api,
-  serial = "192.168.1.120:5555",
-}: {
-  api: DashboardApi;
-  serial?: string;
-}) {
+export function RemoteControl({ api, serial }: { api: DashboardApi; serial?: string }) {
   const { tr } = useI18n();
-  const [targetSerial, setTargetSerial] = useState(serial);
+  // TVs come from the account's own list: no address is built in.
+  const tvs = useSection(() => api.homeTvs());
+  const [targetSerial, setTargetSerial] = useState(serial ?? "");
+  const [newTvSerial, setNewTvSerial] = useState("");
+  const [newTvName, setNewTvName] = useState("");
+  const [tvError, setTvError] = useState<string | null>(null);
+  useEffect(() => {
+    const first = tvs.data?.[0];
+    if (targetSerial === "" && first !== undefined) setTargetSerial(first.serial);
+  }, [tvs.data, targetSerial]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [lastResult, setLastResult] = useState<{
@@ -216,7 +218,10 @@ export function RemoteControl({
     setIsSending(true);
     const start = Date.now();
     try {
-      const res = await api.sendFireTvRemote(action, targetSerial);
+      const res = await api.sendFireTvRemote(
+        action,
+        targetSerial === "" ? undefined : targetSerial,
+      );
       const elapsedMs = Date.now() - start;
       const record: RemoteActionLog = {
         id: `rem-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -772,59 +777,110 @@ export function RemoteControl({
 
         {/* Right Column: Status & Real-time Action Telemetry */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* Target Serial Configuration */}
+          {/* Target TV (the account's own list) */}
           <div
             style={{
               padding: "1rem",
               background: "var(--nx-canvas-sunken)",
               borderRadius: "var(--nx-radius-md)",
               border: "1px solid var(--nx-line)",
+              display: "grid",
+              gap: "0.5rem",
             }}
           >
             <label
               htmlFor="remote-serial"
-              style={{
-                display: "block",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                color: "var(--nx-text)",
-                marginBottom: "0.4rem",
+              style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--nx-text)" }}
+            >
+              {tr("Target TV", "TV ciblée")}
+            </label>
+            {(tvs.data ?? []).length === 0 ? (
+              <span style={{ fontSize: "0.8rem", color: "var(--nx-text-muted)" }}>
+                {tr(
+                  "No TV yet. Enable ADB debugging on the TV (Developer options), then add its address below. TVs Home Assistant manages also appear in the Home tab.",
+                  "Aucune TV. Activez le débogage ADB sur la TV (Options pour les développeurs), puis ajoutez son adresse ci-dessous. Les TV gérées par Home Assistant apparaissent aussi dans l'onglet Maison.",
+                )}
+              </span>
+            ) : (
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <select
+                  id="remote-serial"
+                  className="input"
+                  value={targetSerial}
+                  onChange={(e) => setTargetSerial(e.target.value)}
+                  style={{ flex: 1 }}
+                >
+                  {(tvs.data ?? []).map((tv) => (
+                    <option key={tv.serial} value={tv.serial}>
+                      {tv.name} ({tv.serial})
+                    </option>
+                  ))}
+                </select>
+                {(tvs.data ?? []).some((tv) => tv.serial === targetSerial && !tv.shared) && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    title={tr("Remove this TV", "Retirer cette TV")}
+                    onClick={() =>
+                      void api
+                        .removeHomeTv(targetSerial)
+                        .then(() => {
+                          setTargetSerial("");
+                          tvs.reload();
+                        })
+                        .catch((e: unknown) =>
+                          setTvError(e instanceof Error ? e.message : String(e)),
+                        )
+                    }
+                  >
+                    <IconClose size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+            <form
+              style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                setTvError(null);
+                void api
+                  .addHomeTv(newTvSerial.trim(), newTvName.trim() || "TV")
+                  .then((tv) => {
+                    setNewTvSerial("");
+                    setNewTvName("");
+                    setTargetSerial(tv.serial);
+                    tvs.reload();
+                  })
+                  .catch((err: unknown) =>
+                    setTvError(err instanceof Error ? err.message : String(err)),
+                  );
               }}
             >
-              {tr("Fire TV Host / IP Endpoint", "Hôte ADB Fire TV / Adresse IP")}
-            </label>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
               <input
-                id="remote-serial"
-                type="text"
                 className="input"
-                value={targetSerial}
-                onChange={(e) => setTargetSerial(e.target.value)}
-                placeholder="192.168.1.120:5555"
-                style={{ flex: 1 }}
+                style={{ flex: 2, minWidth: 140 }}
+                placeholder={tr("TV address (host:5555)", "Adresse de la TV (hôte:5555)")}
+                value={newTvSerial}
+                onChange={(e) => setNewTvSerial(e.target.value)}
+              />
+              <input
+                className="input"
+                style={{ flex: 1, minWidth: 90 }}
+                placeholder={tr("Name", "Nom")}
+                value={newTvName}
+                onChange={(e) => setNewTvName(e.target.value)}
               />
               <button
-                type="button"
+                type="submit"
                 className="button secondary"
-                onClick={() => setTargetSerial("192.168.1.120:5555")}
-                title={tr("Reset to default", "Réinitialiser")}
+                disabled={newTvSerial.trim() === ""}
               >
-                <IconRefresh size={14} />
+                <IconPlus size={14} />
               </button>
-            </div>
-            <span
-              style={{
-                display: "block",
-                marginTop: "0.4rem",
-                fontSize: "0.75rem",
-                color: "var(--nx-text-muted)",
-              }}
-            >
-              {tr(
-                "Commands are dispatched via the restricted local ADB daemon bridge on port 5037.",
-                "Commandes relayées via le démon ADB local sécurisé sur le port 5037.",
-              )}
-            </span>
+            </form>
+            {tvError && (
+              <span style={{ fontSize: "0.75rem", color: "var(--nx-danger)" }}>{tvError}</span>
+            )}
           </div>
 
           {/* Last Dispatched Action Badge */}
@@ -987,51 +1043,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
   // Pairing drawer state
   const [pairingOpen, setPairingOpen] = useState(false);
-  const [pairingDeviceId, setPairingDeviceId] = useState("");
-  const [pairingName, setPairingName] = useState("");
-  const [pairingRoom, setPairingRoom] = useState("");
-  const [pairingTicket, setPairingTicket] = useState<PairingTicket | null>(null);
-  const [provisioningPayload, setProvisionPayload] = useState<string | null>(null);
-  const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
-  const [pairingError, setPairingError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const state = useSection(() => api.satellites());
-  // Real rooms only: Home Assistant areas mirrored by NEXUS, or rooms the user created.
-  const homeRooms = useSection(() => api.homeRooms().catch(() => []));
   useEffect(() => {
     const timer = setInterval(() => state.reload(), 4_000);
     return () => clearInterval(timer);
   }, [state.reload]);
-
-  const handlePairingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pairingDeviceId.trim()) return;
-
-    setIsGeneratingTicket(true);
-    setPairingError(null);
-    setPairingTicket(null);
-    setProvisionPayload(null);
-
-    try {
-      const res = await api.registerSatellite({
-        deviceId: pairingDeviceId.trim(),
-        name: pairingName.trim() || pairingDeviceId.trim(),
-        ...(pairingRoom.trim() === "" ? {} : { room: pairingRoom.trim() }),
-      });
-      setPairingTicket(res.ticket);
-      setProvisionPayload(res.provisioningPayload);
-      void state.reload();
-    } catch (err) {
-      setPairingError(
-        err instanceof Error
-          ? err.message
-          : tr("Failed to register satellite", "Échec d'enregistrement"),
-      );
-    } finally {
-      setIsGeneratingTicket(false);
-    }
-  };
 
   const executeCommand = async (
     deviceId: string,
@@ -1161,15 +1179,6 @@ export function Domotique({ api }: { api: DashboardApi }) {
     }
   };
 
-  const qrSvg = (() => {
-    if (!provisioningPayload && !pairingTicket) return null;
-    try {
-      return generateQrSvg(provisioningPayload ?? pairingTicket?.payload ?? "");
-    } catch {
-      return null;
-    }
-  })();
-
   const fleet = state.data?.satellites ?? [];
 
   // Group fleet by room
@@ -1269,16 +1278,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
             <button
               type="button"
               className="button primary"
-              onClick={() => {
-                setPairingOpen(!pairingOpen);
-                setPairingError(null);
-              }}
+              onClick={() => setPairingOpen(!pairingOpen)}
             >
               <IconHardware size={16} />
               <span>
                 {pairingOpen
-                  ? tr("Close Pairing", "Fermer l'appairage")
-                  : tr("Pair New Satellite", "Appairer un satellite")}
+                  ? tr("Close", "Fermer")
+                  : tr("Add a satellite", "Ajouter un satellite")}
               </span>
             </button>
           </div>
@@ -1468,214 +1474,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
           </button>
         </div>
 
-        {/* Pairing / Registration Drawer */}
+        {/* Network enrolment: a powered ESP32 announces itself, the user approves it here. */}
         {pairingOpen && (
-          <div
-            className="card"
-            style={{
-              marginTop: "1.25rem",
-              background: "var(--nx-surface-raised)",
-              border: "1px dashed var(--nx-accent)",
-            }}
-          >
-            <div className="pairing-heading">
-              <div>
-                <span className="eyebrow">
-                  {tr("HARDWARE PROVISIONING", "PROVISIONNEMENT MATERIEL")}
-                </span>
-                <h3>{tr("Register & Flash ESP32 Satellite", "Enregistrer & Flasher un ESP32")}</h3>
-                <p className="muted">
-                  {tr(
-                    "Generate authentication credentials and provisioning token for your ESP32-S3 or ESP32-Audio board.",
-                    "Générez les identifiants d'authentification et le jeton de provisionnement pour votre carte ESP32-S3.",
-                  )}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => setPairingOpen(false)}
-                title={tr("Close", "Fermer")}
-              >
-                <IconClose size={16} />
-              </button>
-            </div>
-
-            {pairingError && <p className="banner error">{pairingError}</p>}
-
-            <form onSubmit={(e) => void handlePairingSubmit(e)} style={{ marginTop: "1rem" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "1rem",
-                }}
-              >
-                <div>
-                  <label
-                    htmlFor="pair-device-id"
-                    style={{
-                      display: "block",
-                      marginBottom: "0.25rem",
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {tr("Device ID (Alpha-numeric)", "ID Appareil (Alphanumérique)")}
-                  </label>
-                  <input
-                    id="pair-device-id"
-                    type="text"
-                    className="input"
-                    placeholder="esp32-salon-01"
-                    value={pairingDeviceId}
-                    onChange={(e) => setPairingDeviceId(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="pair-name"
-                    style={{
-                      display: "block",
-                      marginBottom: "0.25rem",
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {tr("Friendly Name", "Nom convivial")}
-                  </label>
-                  <input
-                    id="pair-name"
-                    type="text"
-                    className="input"
-                    placeholder={tr("Living Room Mic", "Micro Salon")}
-                    value={pairingName}
-                    onChange={(e) => setPairingName(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="pair-room"
-                    style={{
-                      display: "block",
-                      marginBottom: "0.25rem",
-                      fontSize: "0.85rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {tr("Room / Living Zone", "Pièce / Zone de vie")}
-                  </label>
-                  <select
-                    id="pair-room"
-                    className="input"
-                    value={pairingRoom}
-                    onChange={(e) => setPairingRoom(e.target.value)}
-                  >
-                    <option value="">{tr("No room", "Aucune pièce")}</option>
-                    {(homeRooms.data ?? []).map((r) => (
-                      <option key={r.id} value={r.name}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="submit"
-                  className="button primary"
-                  disabled={isGeneratingTicket || !pairingDeviceId.trim()}
-                >
-                  <IconCheck size={16} />
-                  <span>
-                    {isGeneratingTicket
-                      ? tr("Generating...", "Génération...")
-                      : tr("Generate Pairing Ticket & QR", "Générer Ticket & QR")}
-                  </span>
-                </button>
-              </div>
-            </form>
-
-            {pairingTicket && (
-              <div
-                style={{
-                  marginTop: "1.25rem",
-                  padding: "1rem",
-                  background: "var(--nx-canvas-sunken)",
-                  borderRadius: "var(--nx-radius-md)",
-                  border: "1px solid var(--nx-line)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "center" }}
-                >
-                  {qrSvg && (
-                    <div
-                      style={{
-                        padding: "0.75rem",
-                        background: "var(--nx-surface-raised)",
-                        borderRadius: "var(--nx-radius-md)",
-                        display: "inline-block",
-                      }}
-                      dangerouslySetInnerHTML={{ __html: qrSvg }}
-                    />
-                  )}
-                  <div style={{ flex: 1, minWidth: "260px" }}>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                        color: "var(--nx-ok)",
-                        fontWeight: 600,
-                        fontSize: "0.9rem",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      <IconCheck size={16} />
-                      <span>{tr("Pairing Ticket Active", "Jeton d'appairage actif")}</span>
-                    </div>
-                    <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
-                      <strong>{tr("Device ID:", "ID Appareil :")}</strong> {pairingDeviceId}
-                    </p>
-                    <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
-                      <strong>{tr("Ticket ID:", "ID Jeton :")}</strong> {pairingTicket.id}
-                    </p>
-                    <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
-                      <strong>{tr("Expires at:", "Expire à :")}</strong>{" "}
-                      {new Date(pairingTicket.expiresAt).toLocaleTimeString()}
-                    </p>
-                    <div style={{ marginTop: "0.75rem" }}>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.8rem",
-                          color: "var(--nx-text-muted)",
-                        }}
-                      >
-                        {tr("Provisioning Payload (JSON)", "Payload de provisionnement (JSON)")}
-                      </label>
-                      <pre
-                        style={{
-                          background: "var(--nx-canvas)",
-                          color: "var(--nx-text)",
-                          padding: "0.5rem",
-                          borderRadius: "var(--nx-radius-xs)",
-                          fontSize: "0.75rem",
-                          overflowX: "auto",
-                        }}
-                      >
-                        {provisioningPayload ?? pairingTicket.payload}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div style={{ marginTop: "1.25rem" }}>
+            <SatelliteEnrollmentPanel api={api} />
           </div>
         )}
       </section>

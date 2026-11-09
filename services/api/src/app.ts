@@ -215,16 +215,14 @@ export async function buildApp(options: BuildAppOptions) {
     );
   }
 
-  // Lab 4 — satellites and the Fire TV join the unified home registry.
+  // Lab 4 — satellites (static env or enrolled from the network) and ADB TVs
+  // (added per account in the dashboard) join the unified home registry.
+  app.satellites.attachRegistry(services.satelliteEnrollment);
   services.domotique.attachSatellites(app.satellites);
-  if (config.FIRE_TV_ADB_SERIAL !== undefined) {
-    const fireTv = new FireTvService(config.FIRE_TV_ADB_SERIAL, config.FIRE_TV_ADB_SERVER);
-    services.domotique.attachFireTv({
-      serial: config.FIRE_TV_ADB_SERIAL,
-      name: "Fire TV",
-      control: (action) => fireTv.control(action),
-    });
-  }
+  services.domotique.attachAdb({
+    controlFor: (serial) => new FireTvService(serial, config.FIRE_TV_ADB_SERVER),
+    sharedSerial: config.FIRE_TV_ADB_SERIAL,
+  });
 
   app.decorate(
     "clientChannel",
@@ -344,6 +342,12 @@ export async function buildApp(options: BuildAppOptions) {
     app.log.info({ event: "api.ready", version: config.API_VERSION }, "API ready");
     // Lab 4 — Home Assistant connections and the routine scheduler. Never blocks
     // boot: an unreachable HA or a missing migration is reported, not fatal.
+    services.satelliteEnrollment.load().catch((error: unknown) => {
+      app.log.warn(
+        { err: error, event: "satellites.enrollment_load_failed" },
+        "Enrolled satellites not loaded",
+      );
+    });
     services.domotique.start().catch((error: unknown) => {
       app.log.warn({ err: error, event: "domotique.start_failed" }, "Domotique did not start");
     });

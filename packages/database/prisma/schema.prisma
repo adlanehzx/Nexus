@@ -1841,3 +1841,41 @@ model HomeExecutionLog {
   @@index([ownerId, createdAt(sort: Desc)])
   @@map("home_execution_logs")
 }
+
+/// Lab 4 — ESP32 satellites enrolled from the network (no hand-written env).
+/// A device announces itself, the user approves it in the dashboard after
+/// comparing the verification code, and the device fetches its token once.
+/// Only SHA-256 digests of the enrolment secret and of the token are stored.
+model HomeSatellite {
+  deviceId          String    @id
+  ownerId           String?
+  name              String
+  status            String
+  enrollSecretHash  String
+  verificationCode  String
+  tokenHash         String?
+  tokenDelivered    Boolean   @default(false)
+  firmware          String?
+  capabilities      Json
+  roomId            String?   @db.Uuid
+  sourceIp          String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  approvedAt        DateTime? @db.Timestamptz(3)
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("home_satellites")
+}
+
+/// Lab 4 — Android / Fire TV devices reached over ADB, configured per owner
+/// from the dashboard (no hard-coded address).
+model HomeAdbDevice {
+  ownerId   String
+  serial    String
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([ownerId, serial])
+  @@map("home_adb_devices")
+}

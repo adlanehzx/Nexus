@@ -1328,6 +1328,41 @@ export interface HomeTopologyDevice {
   lastSeenAt: string | null;
 }
 
+export interface HomeAssistantProbeView {
+  url: string;
+  reachable: boolean;
+  isHomeAssistant: boolean;
+  onboarded: boolean | null;
+  pendingSteps: string[];
+}
+
+export interface HomeDiscoveredIntegration {
+  flowId: string;
+  domain: string;
+  source: string;
+  title: string;
+}
+
+export interface SatelliteEnrollments {
+  pending: {
+    deviceId: string;
+    name: string;
+    firmware: string | null;
+    capabilities: string[];
+    sourceIp: string | null;
+    announcedAt: string;
+  }[];
+  owned: {
+    deviceId: string;
+    name: string;
+    firmware: string | null;
+    capabilities: string[];
+    approvedAt: string | null;
+    tokenDelivered: boolean;
+    online: boolean;
+  }[];
+}
+
 export interface HomeTopology {
   rooms: {
     id: string;
@@ -2765,24 +2800,6 @@ export class DashboardApi {
     return this.sendSatelliteCommand(deviceId, "audio.privacy", { muted });
   }
 
-  registerSatellite(input: {
-    deviceId: string;
-    name: string;
-    room?: string;
-  }): Promise<{ ticket: PairingTicket; provisioningPayload: string }> {
-    const label = `satellite:${input.deviceId}:${input.room ?? input.name}`;
-    return this.createPairingTicket(label).then((ticket) => ({
-      ticket,
-      provisioningPayload: JSON.stringify({
-        deviceId: input.deviceId,
-        name: input.name,
-        room: input.room ?? input.name,
-        token: ticket.token,
-        apiUrl: ticket.payload,
-      }),
-    }));
-  }
-
   sendFireTvRemote(
     action: string,
     serial?: string,
@@ -2929,6 +2946,84 @@ export class DashboardApi {
 
   homeVoice(): Promise<HomeVoiceStatus> {
     return this.#get("/api/v1/domotique/voice");
+  }
+
+  /** Home Assistant instances found on the LAN, with their onboarding state. */
+  discoverHomeAssistant(): Promise<{ instances: HomeAssistantProbeView[] }> {
+    return this.#get("/api/v1/domotique/home-assistant/discover");
+  }
+
+  /** Onboards a fresh Home Assistant; generated owner credentials come back once. */
+  autoSetupHomeAssistant(input: {
+    baseUrl: string;
+    username?: string;
+    password?: string;
+    language?: string;
+  }): Promise<{
+    status: HomeAssistantStatus;
+    credentials: { username: string; password: string } | null;
+  }> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant/auto-setup", input);
+  }
+
+  /** Credentials are used once by the API to mint NEXUS's own token; never stored. */
+  loginHomeAssistant(input: {
+    baseUrl: string;
+    username: string;
+    password: string;
+  }): Promise<HomeAssistantStatus> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant/login", input);
+  }
+
+  homeAssistantDiscovered(): Promise<{ integrations: HomeDiscoveredIntegration[] }> {
+    return this.#get("/api/v1/domotique/home-assistant/discovered");
+  }
+
+  acceptHomeAssistantDiscovered(
+    flowId: string,
+  ): Promise<{ status: "added" | "needs_input" | "aborted"; detail: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/domotique/home-assistant/discovered/${encodeURIComponent(flowId)}/accept`,
+    );
+  }
+
+  satelliteEnrollments(): Promise<SatelliteEnrollments> {
+    return this.#get("/api/v1/satellites/enrollments");
+  }
+
+  approveSatellite(
+    deviceId: string,
+    input: { verificationCode: string; name?: string; roomId?: string | null },
+  ): Promise<{ deviceId: string; name: string; status: string }> {
+    return this.#request(
+      "POST",
+      `/api/v1/satellites/enrollments/${encodeURIComponent(deviceId)}/approve`,
+      input,
+    );
+  }
+
+  rejectSatellite(deviceId: string): Promise<{ rejected: boolean }> {
+    return this.#request(
+      "POST",
+      `/api/v1/satellites/enrollments/${encodeURIComponent(deviceId)}/reject`,
+    );
+  }
+
+  removeSatellite(deviceId: string): Promise<{ removed: boolean }> {
+    return this.#request("DELETE", `/api/v1/satellites/${encodeURIComponent(deviceId)}`);
+  }
+
+  homeTvs(): Promise<{ serial: string; name: string; shared: boolean }[]> {
+    return this.#get("/api/v1/domotique/tvs");
+  }
+
+  addHomeTv(serial: string, name: string): Promise<{ serial: string; name: string }> {
+    return this.#request("POST", "/api/v1/domotique/tvs", { serial, name });
+  }
+
+  removeHomeTv(serial: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/domotique/tvs/${encodeURIComponent(serial)}`);
   }
 
   tradingStatus(): Promise<TradingStatus> {

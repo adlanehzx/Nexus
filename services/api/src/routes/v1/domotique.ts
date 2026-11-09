@@ -122,6 +122,156 @@ export const domotiqueRoutes: FastifyPluginCallback = (fastify, _options, done) 
     },
   );
 
+  // ── Hands-free setup ───────────────────────────────────────────────────
+
+  app.get(
+    "/domotique/home-assistant/discover",
+    {
+      preHandler: app.requireUser,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["domotique"],
+        summary:
+          "Find Home Assistant on the LAN (mDNS + well-known addresses), with onboarding state",
+        response: anyOk,
+      },
+    },
+    async (request) => ok({ instances: await home().discoverHomeAssistant() }, request.id),
+  );
+
+  app.post(
+    "/domotique/home-assistant/auto-setup",
+    {
+      preHandler: app.requireUser,
+      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["domotique"],
+        summary:
+          "Onboard a fresh Home Assistant on the user's behalf and connect NEXUS to it. Generated HA owner credentials are returned once.",
+        body: z.object({
+          baseUrl: z.string().min(1).max(300),
+          username: z.string().trim().min(3).max(40).optional(),
+          password: z.string().min(8).max(200).optional(),
+          language: z
+            .string()
+            .regex(/^[a-z]{2}(-[A-Z]{2})?$/)
+            .optional(),
+        }),
+        response: anyOk,
+      },
+    },
+    async (request) => {
+      const user = currentUser(request);
+      const account = await app.services.users.findById(user.userId);
+      return ok(
+        await home().autoSetupHomeAssistant(user.userId, {
+          baseUrl: request.body.baseUrl,
+          ownerName: account?.displayName ?? "NEXUS",
+          ...(request.body.username === undefined ? {} : { username: request.body.username }),
+          ...(request.body.password === undefined ? {} : { password: request.body.password }),
+          ...(request.body.language === undefined ? {} : { language: request.body.language }),
+        }),
+        request.id,
+      );
+    },
+  );
+
+  app.post(
+    "/domotique/home-assistant/login",
+    {
+      preHandler: app.requireUser,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["domotique"],
+        summary:
+          "Connect to an existing Home Assistant with its username/password (used once, never stored); NEXUS creates its own long-lived token",
+        body: z.object({
+          baseUrl: z.string().min(1).max(300),
+          username: z.string().min(1).max(100),
+          password: z.string().min(1).max(200),
+        }),
+        response: anyOk,
+      },
+    },
+    async (request) =>
+      ok(await home().loginHomeAssistant(currentUser(request).userId, request.body), request.id),
+  );
+
+  app.get(
+    "/domotique/home-assistant/discovered",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["domotique"],
+        summary: "Devices and integrations Home Assistant discovered on the network",
+        response: anyOk,
+      },
+    },
+    async (request) =>
+      ok(
+        { integrations: await home().discoveredIntegrations(currentUser(request).userId) },
+        request.id,
+      ),
+  );
+
+  app.post(
+    "/domotique/home-assistant/discovered/:flowId/accept",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["domotique"],
+        params: z.object({ flowId: z.string().regex(/^[a-zA-Z0-9]{8,64}$/) }),
+        response: anyOk,
+      },
+    },
+    async (request) =>
+      ok(
+        await home().acceptIntegration(currentUser(request).userId, request.params.flowId),
+        request.id,
+      ),
+  );
+
+  // ── Android / Fire TV (ADB) ─────────────────────────────────────────────
+
+  app.get(
+    "/domotique/tvs",
+    { preHandler: app.requireUser, schema: { tags: ["domotique"], response: anyOk } },
+    async (request) => ok(await home().listTvs(currentUser(request).userId), request.id),
+  );
+
+  app.post(
+    "/domotique/tvs",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["domotique"],
+        body: z.object({
+          serial: z.string().min(3).max(128),
+          name: z.string().max(60).default("TV"),
+        }),
+        response: anyOk,
+      },
+    },
+    async (request) =>
+      ok(await home().addTv(currentUser(request).userId, request.body), request.id),
+  );
+
+  app.delete(
+    "/domotique/tvs/:serial",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["domotique"],
+        params: z.object({ serial: z.string().min(3).max(128) }),
+        response: anyOk,
+      },
+    },
+    async (request) => {
+      await home().removeTv(currentUser(request).userId, request.params.serial);
+      return ok({ deleted: true }, request.id);
+    },
+  );
+
   // ── Unified registry ───────────────────────────────────────────────────
 
   app.get(

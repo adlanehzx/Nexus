@@ -8,6 +8,10 @@
     "reason": "Hardware contract for ESP32 satellites. Heartbeat emitted by physical ESP32 satellites over Wi-Fi. The firmware lives outside this repository; the dashboard consumes GET /api/v1/satellites (Lot 11.2)."
   },
   {
+    "route": "POST /api/v1/satellites/enroll/status",
+    "reason": "Hardware contract for ESP32 satellites (Lab 4). Polled by a satellite after announcing itself, until a user approves it in the dashboard; delivers its token once. See docs/integration/esp32-voice-satellite-protocol.md."
+  },
+  {
     "route": "GET /api/v1/satellites/:p/commands/next",
     "reason": "Hardware contract for ESP32 satellites. Polled by physical ESP32 satellite devices to fetch queued commands enqueued by the dashboard (Lot 11.2)."
   },

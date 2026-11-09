@@ -75,6 +75,11 @@ export function satelliteVoiceSocketRoute(app: FastifyInstance, handshakeTimeout
         );
         return;
       }
+      // Removed from the dashboard while connected: the token is gone, so is the link.
+      if (!app.satellites.isKnown(deviceId)) {
+        socket.close(AUTH_FAILED, "revoked");
+        return;
+      }
       if (isBinary) {
         gateway.audio(deviceId, toBytes(data));
         return;

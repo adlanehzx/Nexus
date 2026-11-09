@@ -4,9 +4,94 @@ This document is the contract between the NEXUS API and the firmware of the
 ESP32 satellites (microphone now, speaker next). It covers transport, message
 formats and audio formats. The firmware itself is out of scope.
 
-The satellite keeps its existing HTTP channel for heartbeat, commands and mic
-mute (`/api/v1/satellites/:id/...`). The voice channel below is an addition,
-and it uses the **same per-device token**.
+The protocol works with any NEXUS, on any network, with no address, token or
+owner written into the firmware or into NEXUS's configuration. A satellite
+goes through three stages:
+
+1. **Wi-Fi.** The firmware gets the network credentials through its own
+   provisioning, e.g. ESP-IDF `wifi_provisioning` over SoftAP or BLE.
+2. **Discovery and enrolment.** The satellite finds NEXUS through mDNS and
+   asks to join. A person approves it in the dashboard.
+3. **Operation.** The satellite uses its per-device token for the HTTP
+   heartbeat and commands (`/api/v1/satellites/:id/...`), and for the voice
+   WebSocket described below.
+
+## Zero-configuration onboarding
+
+### Find NEXUS (mDNS / DNS-SD)
+
+NEXUS advertises itself on the LAN as:
+
+| Field        | Value                       |
+| ------------ | --------------------------- |
+| Service      | `_nexus._tcp.local`         |
+| Port         | the API port (`API_PORT`)   |
+| TXT `v`      | `1`                         |
+| TXT `api`    | `/api/v1`                   |
+| TXT `enroll` | `/api/v1/satellites/enroll` |
+| TXT `ws`     | `/ws/satellite`             |
+
+With ESP-IDF, call `mdns_query_ptr("_nexus", "_tcp", …)` and use the first
+answer's address and port. Cache the result in NVS, and browse again when the
+host stops answering. Set `NEXUS_MDNS=off` on the API host to disable the
+advertisement.
+
+### Enrol
+
+1. On first boot, or after a factory reset, generate an **enrolment secret**
+   and store it in NVS: 32 random bytes encoded base64url, so 43 characters
+   from `[A-Za-z0-9_-]`. The accepted length is 32 to 128 characters.
+2. Compute the **verification code**:
+   - take `HMAC-SHA256(key = secret as UTF-8, message = "nexus-satellite-verify")`;
+   - read its first 4 bytes as a big-endian unsigned integer;
+   - take that value modulo 1,000,000;
+   - pad it with zeros to 6 digits.
+3. Announce yourself:
+
+   ```http
+   POST /api/v1/satellites/enroll
+   {"v":1,"deviceId":"esp32-a1b2c3","name":"ESP32 satellite","enrollSecret":"<secret>",
+    "firmware":"1.4.0","capabilities":[{"name":"audio.microphone"},{"name":"audio.speaker"}]}
+   ```
+
+   The response is `202 {"v":1,"status":"pending","verificationCode":"482913","pollAfterMs":3000}`.
+   The returned code must equal the one you computed. If it does not, you are
+   not talking to the NEXUS you think: stop.
+
+   Use a stable `deviceId`, for example derived from the MAC address. It must
+   match `^[a-zA-Z0-9_-]{1,47}$`.
+
+4. **Give the code to the person**: speak it through the speaker, show it on a
+   display, blink it on the LED, and print it on the serial console. They type
+   it in the dashboard (**Domotique**, **Satellites vocaux**, **Satellites on
+   your network**). The dashboard deliberately does not show the code.
+   Comparing the two is what proves the person approves _this_ device.
+5. Poll every `pollAfterMs`:
+
+   ```http
+   POST /api/v1/satellites/enroll/status
+   {"v":1,"deviceId":"esp32-a1b2c3","enrollSecret":"<secret>"}
+   ```
+
+   | Response                                      | Meaning                                                               |
+   | --------------------------------------------- | --------------------------------------------------------------------- |
+   | `200 {"status":"pending", …}`                 | Still waiting for approval.                                           |
+   | `200 {"status":"approved","token":"<token>"}` | **Delivered once.** Store the token in NVS right away.                |
+   | `200 {"status":"enrolled"}`                   | The token was already delivered.                                      |
+   | `404 {"status":"unknown"}`                    | Rejected, expired after 24 h, or wrong secret. Start again at step 1. |
+
+Rules NEXUS enforces:
+
+- Enrolment endpoints answer only callers on private networks: RFC 1918,
+  loopback, link-local, CGNAT/Tailscale and ULA addresses. Others get `403`.
+- Once a `deviceId` is enrolled, an announce with another secret gets `409`.
+  Another device on the LAN cannot take it over.
+- Only SHA-256 digests of the secret and of the token are stored.
+- The person who approves becomes the owner. Removing the satellite from the
+  dashboard revokes its token immediately; the device must then enrol again.
+
+Static configuration through `SATELLITE_TOKEN_HASHES_JSON` /
+`SATELLITE_OWNERS_JSON` remains supported, but nothing requires it.
 
 ## Pipeline
 
@@ -66,9 +151,9 @@ The first frame must be:
 }
 ```
 
-- `deviceId` matches `^[a-zA-Z0-9_-]{1,47}$`. It must be paired, which means
-  its SHA-256 token digest is in `SATELLITE_TOKEN_HASHES_JSON`.
-- `token` is the device secret. NEXUS compares SHA-256 digests in constant
+- `deviceId` matches `^[a-zA-Z0-9_-]{1,47}$`. It must be enrolled (see above),
+  or declared in the legacy `SATELLITE_TOKEN_HASHES_JSON`.
+- `token` is the token delivered at enrolment. NEXUS compares SHA-256 digests in constant
   time. Send it over `wss://` whenever NEXUS is reached through anything
   other than a trusted LAN.
 - `audio.speaker` declares the speaker capability. Omit it for mic-only

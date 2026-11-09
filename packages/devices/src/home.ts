@@ -365,6 +365,8 @@ export interface HomeRegistryInput {
   readonly ha?: Pick<HomeAssistantSnapshot, "states" | "devices" | "entities"> | undefined;
   readonly satellites?: readonly SatelliteSourceView[];
   readonly fireTv?: FireTvSourceView | undefined;
+  /** Android / Fire TV devices reached over ADB (several per home). */
+  readonly fireTvs?: readonly FireTvSourceView[];
   readonly workers?: readonly WorkerSourceView[];
   readonly rooms: readonly HomeRoom[];
   readonly settings: readonly HomeDeviceSetting[];
@@ -450,8 +452,11 @@ export function buildHomeDevices(input: HomeRegistryInput): HomeDevice[] {
     });
   }
 
-  if (input.fireTv !== undefined) {
-    const tv = input.fireTv;
+  const tvs = [...(input.fireTv === undefined ? [] : [input.fireTv]), ...(input.fireTvs ?? [])];
+  const seenTv = new Set<string>();
+  for (const tv of tvs) {
+    if (seenTv.has(tv.serial)) continue;
+    seenTv.add(tv.serial);
     devices.push({
       id: `firetv:${tv.serial}`,
       source: "fire_tv",
@@ -470,8 +475,8 @@ export function buildHomeDevices(input: HomeRegistryInput): HomeDevice[] {
       },
       entityIds: [],
       lastChanged: null,
-      manufacturer: "Amazon",
-      model: "Fire TV",
+      manufacturer: null,
+      model: "Android TV (ADB)",
     });
   }
 

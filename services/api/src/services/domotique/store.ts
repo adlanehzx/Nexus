@@ -28,6 +28,12 @@ export interface HomeAssistantLinkRecord {
   readonly updatedAt: string;
 }
 
+/** An Android / Fire TV reached over ADB (`host:port`). */
+export interface AdbDeviceRecord {
+  readonly serial: string;
+  readonly name: string;
+}
+
 export interface DomotiqueStore {
   listLinks(): Promise<HomeAssistantLinkRecord[]>;
   getLink(ownerId: string): Promise<HomeAssistantLinkRecord | undefined>;
@@ -50,6 +56,10 @@ export interface DomotiqueStore {
   saveRoutine(routine: HomeRoutine): Promise<void>;
   deleteRoutine(ownerId: string, routineId: string): Promise<void>;
 
+  listAdbDevices(ownerId: string): Promise<AdbDeviceRecord[]>;
+  saveAdbDevice(ownerId: string, device: AdbDeviceRecord): Promise<void>;
+  deleteAdbDevice(ownerId: string, serial: string): Promise<void>;
+
   appendLog(entry: HomeExecutionLogEntry): Promise<void>;
   listLogs(ownerId: string, limit: number): Promise<HomeExecutionLogEntry[]>;
 }
@@ -64,6 +74,21 @@ export class InMemoryDomotiqueStore implements DomotiqueStore {
   readonly #scenes = new Map<string, HomeScene>();
   readonly #routines = new Map<string, HomeRoutine>();
   readonly #logs: HomeExecutionLogEntry[] = [];
+  readonly #adb = new Map<string, Map<string, AdbDeviceRecord>>();
+
+  listAdbDevices(ownerId: string) {
+    return Promise.resolve([...(this.#adb.get(ownerId)?.values() ?? [])]);
+  }
+  saveAdbDevice(ownerId: string, device: AdbDeviceRecord) {
+    const devices = this.#adb.get(ownerId) ?? new Map<string, AdbDeviceRecord>();
+    devices.set(device.serial, device);
+    this.#adb.set(ownerId, devices);
+    return Promise.resolve();
+  }
+  deleteAdbDevice(ownerId: string, serial: string) {
+    this.#adb.get(ownerId)?.delete(serial);
+    return Promise.resolve();
+  }
 
   listLinks() {
     return Promise.resolve([...this.#links.values()]);
@@ -283,6 +308,26 @@ export class PrismaDomotiqueStore implements DomotiqueStore {
 
   async deleteRoutine(ownerId: string, routineId: string) {
     await this.#prisma.homeRoutine.deleteMany({ where: { id: routineId, ownerId } });
+  }
+
+  async listAdbDevices(ownerId: string) {
+    const rows = await this.#prisma.homeAdbDevice.findMany({
+      where: { ownerId },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => ({ serial: r.serial, name: r.name }));
+  }
+
+  async saveAdbDevice(ownerId: string, device: AdbDeviceRecord) {
+    await this.#prisma.homeAdbDevice.upsert({
+      where: { ownerId_serial: { ownerId, serial: device.serial } },
+      create: { ownerId, serial: device.serial, name: device.name },
+      update: { name: device.name },
+    });
+  }
+
+  async deleteAdbDevice(ownerId: string, serial: string) {
+    await this.#prisma.homeAdbDevice.deleteMany({ where: { ownerId, serial } });
   }
 
   async appendLog(entry: HomeExecutionLogEntry) {

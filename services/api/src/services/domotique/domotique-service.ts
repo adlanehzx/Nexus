@@ -1,11 +1,20 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   DEFAULT_SENSITIVE_CLASSES,
   HomeActionNotSupportedError,
   HomeAssistantAuthError,
   HomeAssistantBridge,
   HomeAssistantClient,
+  HomeAssistantSetupError,
   HomeAssistantStateCache,
+  acceptDiscoveredIntegration,
+  listDiscoveredIntegrations,
+  loginHomeAssistant,
+  onboardHomeAssistant,
+  probeHomeAssistant,
+  type DiscoveredIntegration,
+  type HomeAssistantProbe,
+  type HomeAssistantSetupOptions,
   actionIsSensitive,
   assertActionSupported,
   buildHomeDevices,
@@ -39,12 +48,12 @@ import {
   type SceneInput,
   type WorkerSourceView,
 } from "@nexus/devices";
-import { AppError, NotFoundError, ValidationError, uuidv7 } from "@nexus/shared";
+import { AppError, ConflictError, NotFoundError, ValidationError, uuidv7 } from "@nexus/shared";
 import type { ConfirmationService } from "@nexus/tools";
 import type { ConfirmationBroker } from "../confirmation-broker.js";
 import type { SecretVault } from "../runtime-configuration.js";
 import { ACTION_KEYS, type FireTvAction } from "../fire-tv.js";
-import type { DomotiqueStore, HomeAssistantLinkRecord } from "./store.js";
+import type { AdbDeviceRecord, DomotiqueStore, HomeAssistantLinkRecord } from "./store.js";
 
 /**
  * Domotique orchestration: NEXUS is the brain, Home Assistant the hands.
@@ -94,11 +103,37 @@ export interface WorkerDirectory {
   >;
 }
 
-export interface FireTvControl {
-  readonly serial: string;
-  readonly name: string;
-  control(action: FireTvAction): Promise<unknown>;
+/** ADB bridge: returns a controller for any `host:port` serial. */
+export interface AdbControl {
+  controlFor(serial: string): { control(action: FireTvAction): Promise<unknown> };
+  /** Install-wide TV from `FIRE_TV_ADB_SERIAL`, visible to every account. Optional. */
+  readonly sharedSerial?: string | undefined;
 }
+
+/** Satellites enrolled from the network (see `SatelliteEnrollmentService`). */
+export interface EnrolledSatelliteDirectory {
+  owned(userId: string): Promise<
+    readonly {
+      deviceId: string;
+      name: string;
+      firmware: string | null;
+      capabilities: readonly { name: string }[];
+      approvedAt: string | null;
+    }[]
+  >;
+}
+
+/** Finds `_home-assistant._tcp` instances on the LAN. */
+export type HomeAssistantBrowser = () => Promise<
+  readonly {
+    host: string | null;
+    port: number | null;
+    addresses: string[];
+    txt: Record<string, string>;
+  }[]
+>;
+
+const ADB_SERIAL = /^[a-zA-Z0-9._:-]{1,128}$/;
 
 export type HomeAssistantClientFactory = (input: {
   baseUrl: string;
@@ -111,7 +146,17 @@ export interface DomotiqueServiceOptions {
   readonly broker: ConfirmationBroker;
   readonly vault?: SecretVault | undefined;
   readonly clientFactory?: HomeAssistantClientFactory;
+  /**
+   * Timezone of routine schedules when Home Assistant does not provide one.
+   * Default: the host timezone.
+   */
   readonly timezoneFor?: (ownerId: string) => Promise<string>;
+  /** LAN discovery of Home Assistant (mDNS). Omitted = only well-known URLs are probed. */
+  readonly browseHomeAssistant?: HomeAssistantBrowser;
+  /** Extra URLs probed during discovery (e.g. the bundled container). */
+  readonly homeAssistantCandidates?: readonly string[];
+  /** Options passed to the HA setup helpers (tests inject fetch / sockets). */
+  readonly setupOptions?: HomeAssistantSetupOptions;
   readonly now?: () => Date;
   readonly log?: {
     info(obj: Record<string, unknown>, msg: string): void;
@@ -148,6 +193,8 @@ interface Runtime {
   bridge: HomeAssistantBridge | undefined;
   cache: HomeAssistantStateCache;
   tokenMissing: boolean;
+  /** IANA timezone reported by Home Assistant. */
+  timeZone: string | null;
   dispose: (() => void)[];
 }
 
@@ -171,8 +218,9 @@ export class DomotiqueService {
   #satellites: SatelliteDirectory | undefined;
   #voice: SatelliteVoiceDirectory | undefined;
   #workers: WorkerDirectory | undefined;
-  #fireTv: FireTvControl | undefined;
-  #fireTvReachable: boolean | null = null;
+  #adb: AdbControl | undefined;
+  readonly #adbReachable = new Map<string, boolean>();
+  #enrolled: EnrolledSatelliteDirectory | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
   #lastTickMinute: string | null = null;
   #started = false;
@@ -196,17 +244,222 @@ export class DomotiqueService {
     this.#workers = directory;
   }
 
-  attachFireTv(control: FireTvControl | undefined): void {
-    this.#fireTv = control;
+  attachAdb(control: AdbControl | undefined): void {
+    this.#adb = control;
   }
 
-  /** Owner of a paired satellite, as configured in SATELLITE_OWNERS_JSON. */
+  attachEnrollment(directory: EnrolledSatelliteDirectory): void {
+    this.#enrolled = directory;
+  }
+
+  /** Owner of a paired satellite (network enrolment or SATELLITE_OWNERS_JSON). */
   satelliteOwner(deviceId: string): string | undefined {
     return this.#satellites?.ownerOf(deviceId);
   }
 
-  get fireTv(): FireTvControl | undefined {
-    return this.#fireTv;
+  // ── Android / Fire TV over ADB ──────────────────────────────────────────
+
+  async listTvs(ownerId: string): Promise<(AdbDeviceRecord & { shared: boolean })[]> {
+    const own = (await this.#o.store.listAdbDevices(ownerId)).map((d) => ({ ...d, shared: false }));
+    const shared = this.#adb?.sharedSerial;
+    if (shared !== undefined && !own.some((d) => d.serial === shared)) {
+      own.push({ serial: shared, name: "TV", shared: true });
+    }
+    return own;
+  }
+
+  async addTv(ownerId: string, input: { serial: string; name: string }): Promise<AdbDeviceRecord> {
+    const serial = input.serial.trim();
+    if (!ADB_SERIAL.test(serial)) {
+      throw new ValidationError({
+        message: "invalid adb serial",
+        userMessage: "Enter the TV address as host:port, for example 10.0.0.42:5555.",
+      });
+    }
+    const record = { serial, name: input.name.trim() === "" ? "TV" : input.name.trim() };
+    await this.#o.store.saveAdbDevice(ownerId, record);
+    return record;
+  }
+
+  async removeTv(ownerId: string, serial: string): Promise<void> {
+    await this.#o.store.deleteAdbDevice(ownerId, serial);
+  }
+
+  /**
+   * Sends a remote key to one of the owner's TVs. Only TVs the owner added
+   * (or the install-wide one) can be targeted: the API is not an open ADB relay.
+   */
+  async tvRemote(
+    ownerId: string,
+    action: FireTvAction,
+    serial?: string,
+  ): Promise<{ serial: string }> {
+    const tvs = await this.listTvs(ownerId);
+    const target = serial === undefined ? tvs[0] : tvs.find((t) => t.serial === serial);
+    if (target === undefined) {
+      throw new NotFoundError({
+        message: "no tv configured",
+        userMessage: "No TV is configured yet. Add one in Domotique, TV tab.",
+      });
+    }
+    if (this.#adb === undefined) throw new Error("ADB bridge is not available.");
+    try {
+      await this.#adb.controlFor(target.serial).control(action);
+      this.#adbReachable.set(target.serial, true);
+    } catch (error) {
+      this.#adbReachable.set(target.serial, false);
+      throw error;
+    }
+    return { serial: target.serial };
+  }
+
+  // ── Home Assistant discovery and hands-free setup ───────────────────────
+
+  /**
+   * Looks for Home Assistant on the LAN (mDNS) and at well-known addresses
+   * (bundled container, `homeassistant.local`). Never invents an instance.
+   */
+  async discoverHomeAssistant(): Promise<HomeAssistantProbe[]> {
+    const candidates = new Set<string>(
+      this.#o.homeAssistantCandidates ?? [
+        "http://127.0.0.1:8123",
+        "http://homeassistant.local:8123",
+        "http://homeassistant:8123",
+      ],
+    );
+    try {
+      for (const service of (await this.#o.browseHomeAssistant?.()) ?? []) {
+        const advertised = service.txt.internal_url ?? service.txt.base_url;
+        if (advertised !== undefined && /^https?:\/\//.test(advertised)) candidates.add(advertised);
+        const port = service.port ?? 8123;
+        for (const address of service.addresses)
+          candidates.add(`http://${address}:${String(port)}`);
+      }
+    } catch (error) {
+      this.#o.log?.warn({ err: error }, "Home Assistant mDNS discovery failed");
+    }
+    const probes = await Promise.all(
+      [...candidates].map((url) =>
+        probeHomeAssistant(url, { timeoutMs: 2_500, ...this.#o.setupOptions }),
+      ),
+    );
+    // One entry per instance: the same HA is often reachable under several names.
+    const found = probes.filter((p) => p.isHomeAssistant);
+    return found.length <= 1 ? found : dedupeProbes(found);
+  }
+
+  /**
+   * One-click setup. A fresh HA is onboarded by NEXUS (owner account created
+   * with the given or generated credentials, returned once so the person can
+   * open HA's own UI). An already-owned HA needs `login` instead.
+   */
+  async autoSetupHomeAssistant(
+    ownerId: string,
+    input: {
+      baseUrl: string;
+      ownerName: string;
+      username?: string;
+      password?: string;
+      language?: string;
+    },
+  ): Promise<{
+    status: HomeAssistantStatusView;
+    credentials: { username: string; password: string } | null;
+  }> {
+    const probe = await probeHomeAssistant(input.baseUrl, this.#o.setupOptions);
+    if (!probe.isHomeAssistant) {
+      throw new ValidationError({
+        message: "not home assistant",
+        userMessage: "No Home Assistant answers at this address.",
+      });
+    }
+    if (probe.onboarded !== false) {
+      throw new ConflictError({
+        message: "home assistant already onboarded",
+        userMessage:
+          "This Home Assistant already has an owner: sign in with its username and password.",
+      });
+    }
+    const username =
+      (input.username ?? "nexus")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, "") || "nexus";
+    const generated = input.password === undefined;
+    const password = input.password ?? randomBytes(18).toString("base64url");
+    const { token } = await onboardHomeAssistant(
+      probe.url,
+      {
+        name: input.ownerName,
+        username,
+        password,
+        ...(input.language === undefined ? {} : { language: input.language }),
+      },
+      this.#o.setupOptions,
+    ).catch((error: unknown) => {
+      throw this.#setupError(error);
+    });
+    const status = await this.configure(ownerId, { baseUrl: probe.url, token });
+    return { status, credentials: generated ? { username, password } : null };
+  }
+
+  /** Signs in to an existing HA; the credentials are used once and never stored. */
+  async loginHomeAssistant(
+    ownerId: string,
+    input: { baseUrl: string; username: string; password: string },
+  ): Promise<HomeAssistantStatusView> {
+    const { token } = await loginHomeAssistant(
+      input.baseUrl,
+      { username: input.username, password: input.password },
+      this.#o.setupOptions,
+    ).catch((error: unknown) => {
+      throw this.#setupError(error);
+    });
+    return this.configure(ownerId, { baseUrl: input.baseUrl, token });
+  }
+
+  async discoveredIntegrations(ownerId: string): Promise<DiscoveredIntegration[]> {
+    const client = this.#connectedClient(ownerId);
+    return client === undefined ? [] : listDiscoveredIntegrations(client);
+  }
+
+  async acceptIntegration(
+    ownerId: string,
+    flowId: string,
+  ): Promise<{ status: "added" | "needs_input" | "aborted"; detail: string }> {
+    const client = this.#connectedClient(ownerId);
+    if (client === undefined) {
+      throw new ValidationError({
+        message: "ha not connected",
+        userMessage: "Home Assistant is not connected.",
+      });
+    }
+    const result = await acceptDiscoveredIntegration(client, flowId);
+    if (result.status === "added") await this.#sync(ownerId).catch(() => undefined);
+    return result;
+  }
+
+  #connectedClient(ownerId: string): HomeAssistantClient | undefined {
+    const client = this.#runtimes.get(ownerId)?.client;
+    return client?.status.state === "connected" ? client : undefined;
+  }
+
+  #setupError(error: unknown): Error {
+    if (error instanceof HomeAssistantSetupError) {
+      return error.reason === "invalid_auth"
+        ? new HomeAssistantAuthError()
+        : new ValidationError({ message: error.message, userMessage: error.message });
+    }
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  /** Routine timezone: Home Assistant's, else the configured one, else the host's. */
+  async timezone(ownerId: string): Promise<string> {
+    return (
+      this.#runtimes.get(ownerId)?.timeZone ??
+      (await this.#o.timezoneFor?.(ownerId)) ??
+      Intl.DateTimeFormat().resolvedOptions().timeZone
+    );
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -487,8 +740,8 @@ export class DomotiqueService {
     const runtime = this.#runtimes.get(ownerId);
     const devices = buildHomeDevices({
       ha: runtime?.cache.syncedAt == null ? undefined : runtime.cache.snapshot(),
-      satellites: this.#satelliteViews(ownerId),
-      fireTv: this.#fireTvView(),
+      satellites: await this.#satelliteViews(ownerId),
+      fireTvs: await this.#tvViews(ownerId),
       workers: await this.#workerViews(ownerId),
       rooms,
       settings:
@@ -632,17 +885,9 @@ export class DomotiqueService {
           : `${device.name}: ${result.newState}`;
       }
       case "fire_tv": {
-        const tv = this.#fireTv;
-        if (tv === undefined) throw new Error("Fire TV is not configured.");
         const key = fireTvKeyFor(device, action);
-        try {
-          await tv.control(key);
-          this.#fireTvReachable = true;
-        } catch (error) {
-          this.#fireTvReachable = false;
-          throw error;
-        }
-        return `Fire TV: ${key}`;
+        const { serial } = await this.tvRemote(ownerId, key, device.id.slice("firetv:".length));
+        return `${device.name} (${serial}): ${key}`;
       }
       case "satellite": {
         const id = device.id.slice("sat:".length);
@@ -892,7 +1137,7 @@ export class DomotiqueService {
       });
     }
     if (reason !== "manual") {
-      const tz = (await this.#o.timezoneFor?.(ownerId)) ?? "Europe/Paris";
+      const tz = await this.timezone(ownerId);
       const devices = await this.listDevices(ownerId);
       const states = new Map(devices.map((d) => [d.id, d.state.raw]));
       if (
@@ -934,7 +1179,7 @@ export class DomotiqueService {
     }
     let fired = 0;
     for (const [ownerId, list] of byOwner) {
-      const tz = (await this.#o.timezoneFor?.(ownerId)) ?? "Europe/Paris";
+      const tz = await this.timezone(ownerId);
       for (const routine of dueTimeRoutines(list, zonedParts(at, tz))) {
         if (routine.lastRunAt?.slice(0, 16) === minuteKey) continue;
         fired += 1;
@@ -1009,6 +1254,7 @@ export class DomotiqueService {
       bridge: undefined,
       cache: new HomeAssistantStateCache(),
       tokenMissing: false,
+      timeZone: null,
       dispose: [],
     };
     this.#runtimes.set(link.ownerId, runtime);
@@ -1064,6 +1310,8 @@ export class DomotiqueService {
     if (runtime?.client === undefined) throw new Error("Home Assistant is not connected.");
     const snapshot = await runtime.client.fetchSnapshot();
     runtime.cache.replace(snapshot, this.#now());
+    runtime.timeZone =
+      (await runtime.client.checkConnection().catch(() => null))?.timeZone ?? runtime.timeZone;
     const rooms = await this.#o.store.listRooms(ownerId);
     let order = rooms.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0);
     for (const area of missingRoomsForAreas(snapshot.areas, rooms)) {
@@ -1095,9 +1343,12 @@ export class DomotiqueService {
     }
   }
 
-  #satelliteViews(ownerId: string): SatelliteSourceView[] {
+  async #satelliteViews(ownerId: string): Promise<SatelliteSourceView[]> {
     const directory = this.#satellites;
     if (directory === undefined) return [];
+    const enrolled = new Map(
+      ((await this.#enrolled?.owned(ownerId)) ?? []).map((e) => [e.deviceId, e]),
+    );
     const views: SatelliteSourceView[] = directory
       .list()
       .filter((s) => directory.isOwnedBy(s.deviceId, ownerId))
@@ -1105,7 +1356,8 @@ export class DomotiqueService {
         const voice = this.#voice?.status(s.deviceId);
         return {
           deviceId: s.deviceId,
-          name: s.name,
+          // The name chosen at approval wins over the firmware's default.
+          name: enrolled.get(s.deviceId)?.name ?? s.name,
           // A live voice socket proves presence as well as a heartbeat does.
           online: s.online || voice?.connected === true,
           lastSeenAt: s.lastSeenAt,
@@ -1122,22 +1374,41 @@ export class DomotiqueService {
       const voice = this.#voice?.status(deviceId);
       views.push({
         deviceId,
-        name: deviceId,
+        name: enrolled.get(deviceId)?.name ?? deviceId,
         online: true,
         lastSeenAt: null,
         health: {},
-        capabilities: [{ name: "audio.microphone" }],
+        capabilities: [
+          { name: "audio.microphone" },
+          ...(enrolled.get(deviceId)?.capabilities ?? []),
+        ],
         voice,
+      });
+      known.add(deviceId);
+    }
+    // Enrolled but silent: listed as offline rather than hidden.
+    for (const satellite of enrolled.values()) {
+      if (known.has(satellite.deviceId)) continue;
+      views.push({
+        deviceId: satellite.deviceId,
+        name: satellite.name,
+        online: false,
+        lastSeenAt: null,
+        health: {},
+        capabilities: satellite.capabilities,
+        voice: undefined,
       });
     }
     return views;
   }
 
-  #fireTvView(): FireTvSourceView | undefined {
-    const tv = this.#fireTv;
-    return tv === undefined
-      ? undefined
-      : { serial: tv.serial, name: tv.name, reachable: this.#fireTvReachable };
+  async #tvViews(ownerId: string): Promise<FireTvSourceView[]> {
+    if (this.#adb === undefined) return [];
+    return (await this.listTvs(ownerId)).map((tv) => ({
+      serial: tv.serial,
+      name: tv.name,
+      reachable: this.#adbReachable.get(tv.serial) ?? null,
+    }));
   }
 
   async #workerViews(ownerId: string): Promise<WorkerSourceView[]> {
@@ -1184,6 +1455,13 @@ export class DomotiqueService {
       this.#o.log?.warn({ err: error }, "home execution log write failed");
     }
   }
+}
+
+function dedupeProbes(probes: HomeAssistantProbe[]): HomeAssistantProbe[] {
+  // Prefer LAN-reachable names over loopback so other devices can use them too.
+  const score = (url: string) =>
+    /127\.0\.0\.1|localhost/.test(url) ? 2 : /\.local\b/.test(url) ? 0 : 1;
+  return [...probes].sort((a, b) => score(a.url) - score(b.url));
 }
 
 function aggregate(results: readonly HomeActionOutcome[]): HomeExecutionStatus {

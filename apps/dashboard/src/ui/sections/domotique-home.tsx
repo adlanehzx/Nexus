@@ -4,6 +4,7 @@ import type {
   HomeAction,
   HomeActionOutcome,
   HomeAssistantStatus,
+  HomeAssistantProbeView,
   HomeDeviceView,
   HomeRoomView,
   HomeRoutineInput,
@@ -267,8 +268,20 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
         </p>
       )}
 
+      {connection?.state !== "connected" && (
+        <HomeAssistantWizard
+          api={api}
+          onConnected={(url) => {
+            setBaseUrl(url);
+            status.reload();
+          }}
+        />
+      )}
+      {connection?.state === "connected" && <DiscoveredByHomeAssistant api={api} />}
+
+      <h4 style={{ margin: "1.5rem 0 0" }}>{tr("Settings", "Réglages")}</h4>
       <form
-        style={{ display: "grid", gap: "0.75rem", marginTop: "1.25rem", maxWidth: 640 }}
+        style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem", maxWidth: 640 }}
         onSubmit={(event) => {
           event.preventDefault();
           void save();
@@ -282,14 +295,17 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
             className="input"
             type="url"
             required
-            placeholder="http://192.168.1.10:8123"
+            placeholder="http://homeassistant.local:8123"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
           />
         </label>
         <label style={{ display: "grid", gap: "0.3rem" }}>
           <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-            {tr("Long-lived access token", "Jeton d'accès longue durée")}
+            {tr(
+              "Long-lived access token (advanced, optional)",
+              "Jeton d'accès longue durée (avancé, facultatif)",
+            )}
           </span>
           <input
             className="input"
@@ -408,6 +424,461 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
           </button>
         </div>
       </form>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Connection wizard: find Home Assistant, set it up or sign in. No token copy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function HomeAssistantWizard({
+  api,
+  onConnected,
+}: {
+  api: DashboardApi;
+  onConnected: (url: string) => void;
+}) {
+  const { tr } = useI18n();
+  const [searching, setSearching] = useState(false);
+  const [instances, setInstances] = useState<HomeAssistantProbeView[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(
+    null,
+  );
+  const [login, setLogin] = useState<{ url: string; username: string; password: string } | null>(
+    null,
+  );
+
+  const search = async () => {
+    setSearching(true);
+    setError(null);
+    try {
+      setInstances((await api.discoverHomeAssistant()).instances);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    void search();
+    // Search once when the wizard appears.
+  }, []);
+
+  const setup = async (url: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.autoSetupHomeAssistant({
+        baseUrl: url,
+        language: navigator.language.slice(0, 2),
+      });
+      setCredentials(result.credentials);
+      onConnected(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signIn = async () => {
+    if (login === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.loginHomeAssistant({
+        baseUrl: login.url,
+        username: login.username,
+        password: login.password,
+      });
+      setLogin(null);
+      onConnected(login.url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        marginTop: "1.25rem",
+        padding: "1rem",
+        border: "1px solid var(--nx-accent-line)",
+        background: "var(--nx-accent-muted)",
+        borderRadius: "var(--nx-radius-md)",
+        display: "grid",
+        gap: "0.75rem",
+      }}
+    >
+      <div style={{ ...row, justifyContent: "space-between" }}>
+        <strong>{tr("Connect Home Assistant", "Connecter Home Assistant")}</strong>
+        <button
+          type="button"
+          className="button compact secondary"
+          disabled={searching}
+          onClick={() => void search()}
+        >
+          <IconRefresh size={14} />
+          <span>{searching ? tr("Searching", "Recherche") : tr("Search again", "Relancer")}</span>
+        </button>
+      </div>
+      {error && (
+        <p className="banner error" style={{ margin: 0 }}>
+          {error}
+        </p>
+      )}
+
+      {credentials && (
+        <div className="banner" style={{ margin: 0 }}>
+          <strong>{tr("Home Assistant is ready.", "Home Assistant est prêt.")}</strong>{" "}
+          {tr(
+            "NEXUS created its owner account. Save these credentials to open Home Assistant's own interface later; they are shown only now:",
+            "NEXUS a créé son compte propriétaire. Notez ces identifiants pour ouvrir l'interface de Home Assistant plus tard ; ils ne s'affichent qu'une fois :",
+          )}{" "}
+          <code>{credentials.username}</code> / <code>{credentials.password}</code>
+        </div>
+      )}
+
+      {instances !== null && instances.length === 0 && !searching && (
+        <p className="muted" style={{ margin: 0 }}>
+          {tr(
+            "No Home Assistant found on this network. Start the one bundled with NEXUS (pnpm docker:home) or enter its address in Settings below.",
+            "Aucun Home Assistant trouvé sur ce réseau. Démarrez celui fourni avec NEXUS (pnpm docker:home) ou saisissez son adresse dans Réglages ci-dessous.",
+          )}
+        </p>
+      )}
+
+      {(instances ?? []).map((instance) => (
+        <div
+          key={instance.url}
+          style={{
+            ...row,
+            justifyContent: "space-between",
+            background: "var(--nx-surface-raised)",
+            border: "1px solid var(--nx-line)",
+            borderRadius: "var(--nx-radius-md)",
+            padding: "0.6rem 0.8rem",
+          }}
+        >
+          <div>
+            <code>{instance.url}</code>{" "}
+            <span style={chip(instance.onboarded === false ? "ok" : "muted")}>
+              {instance.onboarded === false
+                ? tr("new installation", "nouvelle installation")
+                : tr("already set up", "déjà configuré")}
+            </span>
+          </div>
+          {instance.onboarded === false ? (
+            <button
+              type="button"
+              className="button compact primary"
+              disabled={busy}
+              onClick={() => void setup(instance.url)}
+            >
+              <IconCheck size={14} />
+              <span>{tr("Set up automatically", "Configurer automatiquement")}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="button compact primary"
+              disabled={busy}
+              onClick={() => setLogin({ url: instance.url, username: "", password: "" })}
+            >
+              <span>{tr("Sign in", "Se connecter")}</span>
+            </button>
+          )}
+        </div>
+      ))}
+
+      {login && (
+        <form
+          style={{ ...row, alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void signIn();
+          }}
+        >
+          <label style={{ display: "grid", gap: "0.2rem", flex: 1, minWidth: 140 }}>
+            <span style={{ fontSize: "0.8rem" }}>{tr("HA username", "Identifiant HA")}</span>
+            <input
+              className="input"
+              autoComplete="username"
+              value={login.username}
+              onChange={(e) => setLogin({ ...login, username: e.target.value })}
+            />
+          </label>
+          <label style={{ display: "grid", gap: "0.2rem", flex: 1, minWidth: 140 }}>
+            <span style={{ fontSize: "0.8rem" }}>{tr("Password", "Mot de passe")}</span>
+            <input
+              className="input"
+              type="password"
+              autoComplete="current-password"
+              value={login.password}
+              onChange={(e) => setLogin({ ...login, password: e.target.value })}
+            />
+          </label>
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy || login.username === "" || login.password === ""}
+          >
+            {tr("Connect", "Connecter")}
+          </button>
+          <span className="muted" style={{ fontSize: "0.75rem", flexBasis: "100%" }}>
+            {tr(
+              "Used once to create NEXUS's own access token, never stored.",
+              "Utilisés une seule fois pour créer le jeton d'accès de NEXUS, jamais conservés.",
+            )}
+          </span>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function DiscoveredByHomeAssistant({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
+  const found = useLive(() => api.homeAssistantDiscovered(), 15_000);
+  const [notice, setNotice] = useState<string | null>(null);
+  const integrations = found.data?.integrations ?? [];
+  if (integrations.length === 0 && notice === null) return null;
+  return (
+    <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.5rem" }}>
+      <strong>{tr("Found on your network", "Trouvé sur votre réseau")}</strong>
+      {notice && (
+        <p className="banner" style={{ margin: 0 }}>
+          {notice}
+        </p>
+      )}
+      {integrations.map((item) => (
+        <div key={item.flowId} style={{ ...row, justifyContent: "space-between" }}>
+          <span>
+            {item.title} <span className="muted">({item.domain})</span>
+          </span>
+          <button
+            type="button"
+            className="button compact primary"
+            onClick={() =>
+              void api
+                .acceptHomeAssistantDiscovered(item.flowId)
+                .then((result) => {
+                  setNotice(
+                    result.status === "added"
+                      ? tr(`${item.title} added.`, `${item.title} ajouté.`)
+                      : result.status === "needs_input"
+                        ? tr(
+                            `${item.title} needs a step on the device itself (button or code): finish it in Home Assistant.`,
+                            `${item.title} demande une action sur l'appareil (bouton ou code) : terminez dans Home Assistant.`,
+                          )
+                        : tr(
+                            `${item.title}: not added (${result.detail}).`,
+                            `${item.title} : non ajouté (${result.detail}).`,
+                          ),
+                  );
+                  found.reload();
+                })
+                .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+            }
+          >
+            <IconPlus size={14} />
+            <span>{tr("Add", "Ajouter")}</span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Satellites announced on the network
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function SatelliteEnrollmentPanel({ api }: { api: DashboardApi }) {
+  const { tr } = useI18n();
+  const enrollments = useLive(() => api.satelliteEnrollments(), 3_000);
+  const rooms = useSection(() => api.homeRooms().catch(() => [] as HomeRoomView[]));
+  const [drafts, setDrafts] = useState<
+    Record<string, { code: string; name: string; roomId: string }>
+  >({});
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const pending = enrollments.data?.pending ?? [];
+  const owned = enrollments.data?.owned ?? [];
+
+  const draft = (id: string, fallbackName: string) =>
+    drafts[id] ?? { code: "", name: fallbackName, roomId: "" };
+
+  const run = async (work: () => Promise<string>) => {
+    setNotice(null);
+    try {
+      setNotice({ tone: "ok", text: await work() });
+      enrollments.reload();
+    } catch (e) {
+      setNotice({ tone: "error", text: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  return (
+    <section className="card" aria-labelledby="enroll-title">
+      <span className="eyebrow">{tr("ADD A SATELLITE", "AJOUTER UN SATELLITE")}</span>
+      <h3 id="enroll-title" style={{ margin: "0.25rem 0" }}>
+        {tr("Satellites on your network", "Satellites sur votre réseau")}
+      </h3>
+      <p className="muted" style={{ margin: 0 }}>
+        {tr(
+          "Power an ESP32 satellite on the same network: it finds NEXUS by itself and appears here. Compare the 6-digit code it gives (voice, screen, LED or serial console) and approve it.",
+          "Branchez un satellite ESP32 sur le même réseau : il trouve NEXUS tout seul et apparaît ici. Comparez le code à 6 chiffres qu'il donne (voix, écran, LED ou console série) puis approuvez-le.",
+        )}
+      </p>
+      {notice && (
+        <p className={`banner ${notice.tone === "error" ? "error" : ""}`}>{notice.text}</p>
+      )}
+
+      {pending.length === 0 ? (
+        <p className="muted" style={{ marginTop: "0.75rem" }}>
+          {tr("Waiting for a satellite to announce itself…", "En attente d'un satellite…")}
+        </p>
+      ) : (
+        <div style={{ display: "grid", gap: "0.6rem", marginTop: "0.75rem" }}>
+          {pending.map((item) => {
+            const d = draft(item.deviceId, item.name);
+            const update = (patch: Partial<typeof d>) =>
+              setDrafts({ ...drafts, [item.deviceId]: { ...d, ...patch } });
+            return (
+              <form
+                key={item.deviceId}
+                style={{
+                  ...row,
+                  border: "1px dashed var(--nx-accent)",
+                  borderRadius: "var(--nx-radius-md)",
+                  padding: "0.6rem 0.8rem",
+                }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run(async () => {
+                    await api.approveSatellite(item.deviceId, {
+                      verificationCode: d.code,
+                      name: d.name.trim() || item.name,
+                      ...(d.roomId === "" ? {} : { roomId: d.roomId }),
+                    });
+                    return tr(
+                      `${d.name || item.name} approved.`,
+                      `${d.name || item.name} approuvé.`,
+                    );
+                  });
+                }}
+              >
+                <div style={{ minWidth: 160 }}>
+                  <IconSatellite size={14} /> <strong>{item.deviceId}</strong>
+                  <div className="muted" style={{ fontSize: "0.75rem" }}>
+                    {item.firmware ? `firmware ${item.firmware} · ` : ""}
+                    {item.sourceIp ?? ""} · {item.capabilities.join(", ")}
+                  </div>
+                </div>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  style={{ width: 100, fontFamily: "monospace", letterSpacing: "0.2em" }}
+                  placeholder="000000"
+                  aria-label={tr("Code shown by the device", "Code donné par l'appareil")}
+                  value={d.code}
+                  onChange={(e) => update({ code: e.target.value.replace(/\D/g, "") })}
+                />
+                <input
+                  className="input"
+                  style={{ width: 150 }}
+                  aria-label={tr("Name", "Nom")}
+                  value={d.name}
+                  onChange={(e) => update({ name: e.target.value })}
+                />
+                <select
+                  className="input"
+                  aria-label={tr("Room", "Pièce")}
+                  value={d.roomId}
+                  onChange={(e) => update({ roomId: e.target.value })}
+                >
+                  <option value="">{tr("No room", "Sans pièce")}</option>
+                  {(rooms.data ?? []).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  className="button compact primary"
+                  disabled={d.code.length !== 6}
+                >
+                  <IconCheck size={14} /> {tr("Approve", "Approuver")}
+                </button>
+                <button
+                  type="button"
+                  className="button compact secondary"
+                  onClick={() =>
+                    void run(async () => {
+                      await api.rejectSatellite(item.deviceId);
+                      return tr("Rejected.", "Refusé.");
+                    })
+                  }
+                >
+                  {tr("Reject", "Refuser")}
+                </button>
+              </form>
+            );
+          })}
+        </div>
+      )}
+
+      {owned.length > 0 && (
+        <div style={{ display: "grid", gap: "0.4rem", marginTop: "1rem" }}>
+          <strong style={{ fontSize: "0.85rem" }}>{tr("Your satellites", "Vos satellites")}</strong>
+          {owned.map((item) => (
+            <div key={item.deviceId} style={{ ...row, justifyContent: "space-between" }}>
+              <span>
+                <span style={chip(item.online ? "ok" : "muted")}>
+                  {item.online ? tr("online", "en ligne") : tr("offline", "hors ligne")}
+                </span>{" "}
+                {item.name} <span className="muted">({item.deviceId})</span>
+                {!item.tokenDelivered && (
+                  <span className="muted">
+                    {" "}
+                    · {tr("waiting for the device", "en attente de l'appareil")}
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="button compact secondary"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      tr(
+                        "Remove this satellite? It will have to be approved again.",
+                        "Retirer ce satellite ? Il devra être approuvé à nouveau.",
+                      ),
+                    )
+                  )
+                    return;
+                  void run(async () => {
+                    await api.removeSatellite(item.deviceId);
+                    return tr("Satellite removed.", "Satellite retiré.");
+                  });
+                }}
+              >
+                <IconTrash size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -2019,138 +2490,143 @@ export function VoiceSatellitesPanel({ api }: { api: DashboardApi }) {
   };
 
   return (
-    <section className="card" style={{ marginTop: "1rem" }} aria-labelledby="voice-title">
-      <div className="pairing-heading">
-        <div>
-          <span className="eyebrow">{tr("VOICE PIPELINE", "CHAÎNE VOCALE")}</span>
-          <h3 id="voice-title" style={{ margin: "0.25rem 0" }}>
-            {tr("Voice satellites", "Satellites vocaux")}
-          </h3>
-          <p className="muted" style={{ margin: 0 }}>
-            {tr(
-              "Wake word on the ESP32, speech-to-text (whisper.cpp), NEXUS intent, text-to-speech (Piper) streamed back to the same satellite. Protocol: docs/integration/esp32-voice-satellite-protocol.md.",
-              "Mot d'éveil sur l'ESP32, transcription (whisper.cpp), intention NEXUS, synthèse (Piper) renvoyée au même satellite. Protocole : docs/integration/esp32-voice-satellite-protocol.md.",
-            )}
-          </p>
+    <>
+      <div style={{ marginTop: "1rem" }}>
+        <SatelliteEnrollmentPanel api={api} />
+      </div>
+      <section className="card" style={{ marginTop: "1rem" }} aria-labelledby="voice-title">
+        <div className="pairing-heading">
+          <div>
+            <span className="eyebrow">{tr("VOICE PIPELINE", "CHAÎNE VOCALE")}</span>
+            <h3 id="voice-title" style={{ margin: "0.25rem 0" }}>
+              {tr("Voice satellites", "Satellites vocaux")}
+            </h3>
+            <p className="muted" style={{ margin: 0 }}>
+              {tr(
+                "Wake word on the ESP32, speech-to-text (whisper.cpp), NEXUS intent, text-to-speech (Piper) streamed back to the same satellite. Protocol: docs/integration/esp32-voice-satellite-protocol.md.",
+                "Mot d'éveil sur l'ESP32, transcription (whisper.cpp), intention NEXUS, synthèse (Piper) renvoyée au même satellite. Protocole : docs/integration/esp32-voice-satellite-protocol.md.",
+              )}
+            </p>
+          </div>
+          {data && (
+            <div style={row}>
+              <span style={chip(data.engines.stt ? "ok" : "danger")}>
+                STT {data.engines.stt ? tr("ready", "prêt") : tr("not configured", "non configuré")}
+              </span>
+              <span style={chip(data.engines.tts ? "ok" : "danger")}>
+                TTS {data.engines.tts ? tr("ready", "prêt") : tr("not configured", "non configuré")}
+              </span>
+            </div>
+          )}
         </div>
+        {voice.error && <p className="banner error">{voice.error}</p>}
+        {notice && <p className="banner">{notice}</p>}
         {data && (
-          <div style={row}>
-            <span style={chip(data.engines.stt ? "ok" : "danger")}>
-              STT {data.engines.stt ? tr("ready", "prêt") : tr("not configured", "non configuré")}
-            </span>
-            <span style={chip(data.engines.tts ? "ok" : "danger")}>
-              TTS {data.engines.tts ? tr("ready", "prêt") : tr("not configured", "non configuré")}
-            </span>
+          <p className="muted" style={{ fontSize: "0.8rem" }}>
+            WebSocket <code>{data.protocol.path}</code> · v{data.protocol.version} ·{" "}
+            {data.protocol.mic}
+          </p>
+        )}
+        {data?.satellites.length === 0 ? (
+          <Empty>
+            {tr(
+              "No satellite enrolled to your account yet: power one on, it will appear above.",
+              "Aucun satellite rattaché à votre compte : allumez-en un, il apparaîtra ci-dessus.",
+            )}
+          </Empty>
+        ) : (
+          <div style={{ ...grid(280), marginTop: "0.75rem" }}>
+            {(data?.satellites ?? []).map((sat) => (
+              <div
+                key={sat.deviceId}
+                style={{
+                  border: "1px solid var(--nx-line)",
+                  borderRadius: "var(--nx-radius-md)",
+                  padding: "0.85rem",
+                  background: "var(--nx-surface-raised)",
+                  display: "grid",
+                  gap: "0.5rem",
+                }}
+              >
+                <div style={{ ...row, justifyContent: "space-between" }}>
+                  <strong style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <IconSatellite size={16} /> {sat.name}
+                  </strong>
+                  <span style={chip(sat.connected ? "ok" : sat.online ? "warn" : "danger")}>
+                    {sat.connected
+                      ? tr("voice linked", "voix reliée")
+                      : sat.online
+                        ? tr("online, no voice link", "en ligne, sans voix")
+                        : tr("offline", "hors ligne")}
+                  </span>
+                </div>
+                <div style={row}>
+                  <span style={chip(sat.mic ? "ok" : "muted")}>
+                    <IconMic size={12} /> {tr("mic", "micro")}
+                  </span>
+                  <span style={chip(sat.speaker ? "ok" : "muted")}>
+                    <IconVolume size={12} />{" "}
+                    {sat.speaker
+                      ? `${tr("speaker", "haut-parleur")} ${String(sat.speakerSampleRate ?? "")} Hz`
+                      : tr("no speaker", "pas de haut-parleur")}
+                  </span>
+                  <span style={chip("muted")}>{sat.state}</span>
+                </div>
+                <div className="muted" style={{ fontSize: "0.8rem" }}>
+                  {sat.firmware ? `firmware ${sat.firmware} · ` : ""}
+                  {sat.turns} {tr("turn(s)", "échange(s)")}
+                  {sat.lastTurnAt
+                    ? ` · ${tr("last", "dernier")} ${new Date(sat.lastTurnAt).toLocaleTimeString()}`
+                    : ""}
+                </div>
+                <div style={row}>
+                  <button
+                    type="button"
+                    className="button compact secondary"
+                    onClick={() => void act(sat.deviceId, { action: "mic_mute", muted: true })}
+                  >
+                    <IconMicOff size={14} /> {tr("Mute", "Couper")}
+                  </button>
+                  <button
+                    type="button"
+                    className="button compact secondary"
+                    onClick={() => void act(sat.deviceId, { action: "mic_mute", muted: false })}
+                  >
+                    <IconMic size={14} /> {tr("Unmute", "Réactiver")}
+                  </button>
+                </div>
+                {sat.speaker && (
+                  <form
+                    style={row}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const text = (speech[sat.deviceId] ?? "").trim();
+                      if (text === "") return;
+                      void act(sat.deviceId, { action: "speak", text });
+                      setSpeech({ ...speech, [sat.deviceId]: "" });
+                    }}
+                  >
+                    <input
+                      className="input"
+                      style={{ flex: 1, minWidth: 120 }}
+                      placeholder={tr("Speaker test", "Test du haut-parleur")}
+                      value={speech[sat.deviceId] ?? ""}
+                      onChange={(e) => setSpeech({ ...speech, [sat.deviceId]: e.target.value })}
+                    />
+                    <button
+                      type="submit"
+                      className="button compact secondary"
+                      disabled={!sat.connected || !data?.engines.tts}
+                    >
+                      <IconVolume size={14} />
+                    </button>
+                  </form>
+                )}
+              </div>
+            ))}
           </div>
         )}
-      </div>
-      {voice.error && <p className="banner error">{voice.error}</p>}
-      {notice && <p className="banner">{notice}</p>}
-      {data && (
-        <p className="muted" style={{ fontSize: "0.8rem" }}>
-          WebSocket <code>{data.protocol.path}</code> · v{data.protocol.version} ·{" "}
-          {data.protocol.mic}
-        </p>
-      )}
-      {data?.satellites.length === 0 ? (
-        <Empty>
-          {tr(
-            "No satellite paired to your account yet. Pair one from the Satellites tab.",
-            "Aucun satellite appairé à votre compte. Appairez-en un depuis l'onglet Satellites.",
-          )}
-        </Empty>
-      ) : (
-        <div style={{ ...grid(280), marginTop: "0.75rem" }}>
-          {(data?.satellites ?? []).map((sat) => (
-            <div
-              key={sat.deviceId}
-              style={{
-                border: "1px solid var(--nx-line)",
-                borderRadius: "var(--nx-radius-md)",
-                padding: "0.85rem",
-                background: "var(--nx-surface-raised)",
-                display: "grid",
-                gap: "0.5rem",
-              }}
-            >
-              <div style={{ ...row, justifyContent: "space-between" }}>
-                <strong style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <IconSatellite size={16} /> {sat.name}
-                </strong>
-                <span style={chip(sat.connected ? "ok" : sat.online ? "warn" : "danger")}>
-                  {sat.connected
-                    ? tr("voice linked", "voix reliée")
-                    : sat.online
-                      ? tr("online, no voice link", "en ligne, sans voix")
-                      : tr("offline", "hors ligne")}
-                </span>
-              </div>
-              <div style={row}>
-                <span style={chip(sat.mic ? "ok" : "muted")}>
-                  <IconMic size={12} /> {tr("mic", "micro")}
-                </span>
-                <span style={chip(sat.speaker ? "ok" : "muted")}>
-                  <IconVolume size={12} />{" "}
-                  {sat.speaker
-                    ? `${tr("speaker", "haut-parleur")} ${String(sat.speakerSampleRate ?? "")} Hz`
-                    : tr("no speaker", "pas de haut-parleur")}
-                </span>
-                <span style={chip("muted")}>{sat.state}</span>
-              </div>
-              <div className="muted" style={{ fontSize: "0.8rem" }}>
-                {sat.firmware ? `firmware ${sat.firmware} · ` : ""}
-                {sat.turns} {tr("turn(s)", "échange(s)")}
-                {sat.lastTurnAt
-                  ? ` · ${tr("last", "dernier")} ${new Date(sat.lastTurnAt).toLocaleTimeString()}`
-                  : ""}
-              </div>
-              <div style={row}>
-                <button
-                  type="button"
-                  className="button compact secondary"
-                  onClick={() => void act(sat.deviceId, { action: "mic_mute", muted: true })}
-                >
-                  <IconMicOff size={14} /> {tr("Mute", "Couper")}
-                </button>
-                <button
-                  type="button"
-                  className="button compact secondary"
-                  onClick={() => void act(sat.deviceId, { action: "mic_mute", muted: false })}
-                >
-                  <IconMic size={14} /> {tr("Unmute", "Réactiver")}
-                </button>
-              </div>
-              {sat.speaker && (
-                <form
-                  style={row}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const text = (speech[sat.deviceId] ?? "").trim();
-                    if (text === "") return;
-                    void act(sat.deviceId, { action: "speak", text });
-                    setSpeech({ ...speech, [sat.deviceId]: "" });
-                  }}
-                >
-                  <input
-                    className="input"
-                    style={{ flex: 1, minWidth: 120 }}
-                    placeholder={tr("Speaker test", "Test du haut-parleur")}
-                    value={speech[sat.deviceId] ?? ""}
-                    onChange={(e) => setSpeech({ ...speech, [sat.deviceId]: e.target.value })}
-                  />
-                  <button
-                    type="submit"
-                    className="button compact secondary"
-                    disabled={!sat.connected || !data?.engines.tts}
-                  >
-                    <IconVolume size={14} />
-                  </button>
-                </form>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+      </section>
+    </>
   );
 }

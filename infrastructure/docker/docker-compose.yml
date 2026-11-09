@@ -128,9 +128,10 @@ services:
       SATELLITE_TOKEN_HASHES_JSON: ${SATELLITE_TOKEN_HASHES_JSON:-{}}
       FIRE_TV_ADB_SERIAL: ${FIRE_TV_ADB_SERIAL:-}
       FIRE_TV_ADB_SERVER: ${FIRE_TV_ADB_SERVER:-127.0.0.1:5037}
-      # Lab 4 — timezone of routine cron expressions. The Home Assistant URL and
-      # token are NOT set here: they are entered in the dashboard (Domotique).
-      NEXUS_HOME_TIMEZONE: ${NEXUS_HOME_TIMEZONE:-Europe/Paris}
+      # Lab 4 — optional override of the routine timezone. Unset: Home Assistant's
+      # timezone once connected, else the host's. Home Assistant itself is found
+      # and set up from the dashboard (Domotique): nothing to configure here.
+      NEXUS_HOME_TIMEZONE: ${NEXUS_HOME_TIMEZONE:-}
       # With host networking, local dependencies remain reachable only through
       # their loopback-published ports.
       DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@127.0.0.1:${POSTGRES_PORT:-15432}/${POSTGRES_DB:-nexus}?schema=public
@@ -384,8 +385,6 @@ services:
     # Host networking: mDNS, SSDP, HomeKit and Cast discovery need the LAN
     # broadcast domain. Home Assistant listens on http://<host>:8123.
     network_mode: host
-    environment:
-      TZ: ${NEXUS_HOME_TIMEZONE:-Europe/Paris}
     volumes:
       - homeassistant-config:/config
       - /etc/localtime:/etc/localtime:ro

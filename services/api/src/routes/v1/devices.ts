@@ -12,7 +12,7 @@ import { ValidationError } from "@nexus/shared";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
-import { FireTvService, actionSchema, ACTION_KEYS } from "../../services/fire-tv.js";
+import { actionSchema, ACTION_KEYS } from "../../services/fire-tv.js";
 
 /**
  * Devices, device sessions, capabilities.
@@ -730,7 +730,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Direct Fire TV remote control key execution",
+        summary: "Send a remote key to one of the caller's Android / Fire TV devices (ADB)",
         body: z.object({
           action: actionSchema,
           serial: z.string().optional(),
@@ -748,13 +748,15 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       },
     },
     async (request) => {
-      const serial = request.body.serial ?? app.config.FIRE_TV_ADB_SERIAL ?? "192.168.1.120:5555";
-      const service = new FireTvService(serial, app.config.FIRE_TV_ADB_SERVER);
+      // Only a TV the caller added (or the install-wide FIRE_TV_ADB_SERIAL) can
+      // be targeted; there is no built-in address.
+      const { userId } = currentUser(request);
+      const serial = request.body.serial;
       try {
-        const result = await service.control(request.body.action);
+        await app.services.domotique.tvRemote(userId, request.body.action, serial);
         return ok(
           {
-            action: result.action,
+            action: request.body.action,
             delivered: true,
             key: ACTION_KEYS[request.body.action],
           },

@@ -16,6 +16,8 @@ describe("Lab 4 — Domotique dashboard", () => {
       const source = readFileSync(resolve(__dirname, `../src/ui/sections/${file}`), "utf8");
       expect(emoji.test(source)).toBe(false);
       expect(source).not.toContain("DEFAULT_ROOMS");
+      // Nothing is tailored to one home: no private address is built in.
+      expect(source).not.toMatch(/\b(192\.168|10\.\d+\.\d+|172\.(1[6-9]|2\d|3[01]))\.\d+/);
     }
   });
 
@@ -86,6 +88,43 @@ describe("Lab 4 — Domotique dashboard", () => {
       "GET /api/v1/domotique/logs?limit=10",
       "GET /api/v1/domotique/voice",
       "GET /api/v1/devices/topology",
+    ]);
+  });
+
+  it("wires zero-configuration endpoints: HA discovery/setup/login, satellite enrolment, TVs", async () => {
+    const { api, authorizedRequest } = apiWith({ data: {} });
+    await api.discoverHomeAssistant();
+    await api.autoSetupHomeAssistant({ baseUrl: "http://homeassistant.local:8123" });
+    await api.loginHomeAssistant({
+      baseUrl: "http://homeassistant.local:8123",
+      username: "u",
+      password: "p",
+    });
+    await api.homeAssistantDiscovered();
+    await api.acceptHomeAssistantDiscovered("abcdef0123456789");
+    await api.satelliteEnrollments();
+    await api.approveSatellite("esp32-a1", { verificationCode: "123456" });
+    await api.rejectSatellite("esp32-b2");
+    await api.removeSatellite("esp32-a1");
+    await api.homeTvs();
+    await api.addHomeTv("tv.local:5555", "TV");
+    await api.removeHomeTv("tv.local:5555");
+    const paths = authorizedRequest.mock.calls.map(
+      ([call]) => `${String(call.method)} ${String(call.path)}`,
+    );
+    expect(paths).toEqual([
+      "GET /api/v1/domotique/home-assistant/discover",
+      "POST /api/v1/domotique/home-assistant/auto-setup",
+      "POST /api/v1/domotique/home-assistant/login",
+      "GET /api/v1/domotique/home-assistant/discovered",
+      "POST /api/v1/domotique/home-assistant/discovered/abcdef0123456789/accept",
+      "GET /api/v1/satellites/enrollments",
+      "POST /api/v1/satellites/enrollments/esp32-a1/approve",
+      "POST /api/v1/satellites/enrollments/esp32-b2/reject",
+      "DELETE /api/v1/satellites/esp32-a1",
+      "GET /api/v1/domotique/tvs",
+      "POST /api/v1/domotique/tvs",
+      "DELETE /api/v1/domotique/tvs/tv.local%3A5555",
     ]);
   });
 });

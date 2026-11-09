@@ -242,12 +242,34 @@ export class HomeAssistantClient implements HomeAssistantClientAdapter {
   // ── REST ────────────────────────────────────────────────────────────────
 
   /** Verifies URL and token over REST. Throws `HomeAssistantAuthError` on 401/403. */
-  async checkConnection(): Promise<{ version: string | null; locationName: string | null }> {
+  async checkConnection(): Promise<{
+    version: string | null;
+    locationName: string | null;
+    timeZone: string | null;
+    language: string | null;
+  }> {
     const config = (await this.#rest("GET", "/api/config")) as Record<string, unknown>;
     return {
       version: typeof config.version === "string" ? config.version : null,
       locationName: typeof config.location_name === "string" ? config.location_name : null,
+      timeZone: typeof config.time_zone === "string" ? config.time_zone : null,
+      language: typeof config.language === "string" ? config.language : null,
     };
+  }
+
+  /**
+   * Advances a config flow (e.g. an integration HA discovered on the network).
+   * An empty input confirms a discovery step.
+   */
+  async configFlowStep(
+    flowId: string,
+    input: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    if (!/^[a-zA-Z0-9]{8,64}$/.test(flowId)) throw new Error("Invalid flow id.");
+    return (await this.#rest("POST", `/api/config/config_entries/flow/${flowId}`, input)) as Record<
+      string,
+      unknown
+    >;
   }
 
   async getState(entityId: string): Promise<HomeAssistantEntityState | undefined> {
