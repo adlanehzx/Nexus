@@ -7,7 +7,35 @@ import type {
   RoutingEvaluationDto,
 } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
-import { IconCheck, IconShield, IconStar } from "./icons.js";
+import {
+  IconAnthropic,
+  IconCheck,
+  IconClock,
+  IconCpu,
+  IconGemini,
+  IconOpenAI,
+  IconPlay,
+  IconPower,
+  IconSettings,
+  IconShield,
+  IconStar,
+  IconStop,
+  IconWarning,
+} from "./icons.js";
+
+function renderAgentLogo(key: string, size = 18) {
+  const k = key.toLowerCase();
+  if (k.includes("claude") || k.includes("anthropic")) {
+    return <IconAnthropic size={size} color="currentColor" />;
+  }
+  if (k.includes("codex") || k.includes("openai") || k.includes("gpt")) {
+    return <IconOpenAI size={size} color="currentColor" />;
+  }
+  if (k.includes("agy") || k.includes("antigravity") || k.includes("gemini")) {
+    return <IconGemini size={size} color="currentColor" />;
+  }
+  return <IconCpu size={size} color="currentColor" />;
+}
 
 export function Agents({ api }: { api: DashboardApi }) {
   const { locale, t, tr } = useI18n();
@@ -416,53 +444,128 @@ export function Agents({ api }: { api: DashboardApi }) {
                 ? "attention"
                 : "idle";
           return (
-            <article className="agent-card" key={agent.key}>
-              <div className="agent-card-top">
-                <div className={`agent-avatar ${state}`}>{agent.key.slice(0, 1).toUpperCase()}</div>
-                <div>
-                  <h3>{agent.key}</h3>
-                  <div className="muted">
-                    {profile?.name ?? "NEXUS Profile"} · {profile?.agent_kind ?? "ACP"}
+            <article className="agent-card" key={agent.key} data-testid={`agent-card-${agent.key}`}>
+              <div className="agent-card-header">
+                <div className="agent-identity">
+                  <div className={`agent-avatar ${state}`} title={agent.key}>
+                    {renderAgentLogo(agent.key, 20)}
+                  </div>
+                  <div className="agent-titles">
+                    <div className="agent-key-row">
+                      <h3>{agent.key}</h3>
+                      <span className="agent-kind-tag">
+                        {profile?.agent_kind?.toUpperCase() ?? "ACP"}
+                      </span>
+                    </div>
+                    <div className="agent-profile-name muted">
+                      {profile?.name ?? "NEXUS Agent Profile"}
+                    </div>
                   </div>
                 </div>
-                <span className={`agent-status ${state}`}>
-                  {state === "active"
-                    ? tr("On mission", "En mission")
-                    : healthLabel(agent.status, tr)}
-                </span>
+
+                <div className={`agent-status-badge ${state}`}>
+                  {state === "active" ? (
+                    <>
+                      <span className="live-pulse-dot" />
+                      <span>{tr("On mission", "En mission")}</span>
+                    </>
+                  ) : agent.status === "available" ? (
+                    <>
+                      <IconCheck size={12} color="currentColor" />
+                      <span>{tr("Available", "Disponible")}</span>
+                    </>
+                  ) : agent.status === "cooldown" ? (
+                    <>
+                      <IconClock size={12} color="currentColor" />
+                      <span>{tr("Cooldown", "En pause")}</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconWarning size={12} color="currentColor" />
+                      <span>{healthLabel(agent.status, tr)}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="agent-stats">
-                <span>
-                  <strong>{agent.running_tasks}</strong> {tr("active", "actives")}
-                </span>
-                <span>
-                  <strong>{agent.queued_tasks}</strong> {tr("queued", "en attente")}
-                </span>
-                <span>
-                  <strong>{agent.last_task_state ?? "—"}</strong> {tr("last state", "dernier état")}
-                </span>
-                <span>
-                  <strong>{percent(agent.remaining_5h_percent)}</strong>{" "}
-                  {tr("5h window", "fenêtre 5h")}
-                </span>
-                <span>
-                  <strong>{percent(agent.remaining_week_percent)}</strong> {tr("week", "semaine")}
-                </span>
+
+              {/* Agent Specs & Environment */}
+              <div className="agent-specs-row">
+                <div className="agent-spec-chip" title={tr("Configured AI Model", "Modèle IA configuré")}>
+                  <IconCpu size={12} color="var(--accent-color, #00d2ff)" />
+                  <span className="mono">{profile?.model || tr("Default Model", "Modèle standard")}</span>
+                </div>
+                {profile?.command ? (
+                  <div className="agent-spec-chip muted" title={tr("Command entrypoint", "Point d'entrée commande")}>
+                    <code>{profile.command}</code>
+                  </div>
+                ) : null}
+                <div className="agent-spec-chip safe" title={tr("Workspace execution sandbox", "Espace d'exécution isolé")}>
+                  <IconShield size={12} color="var(--color-success, #00e676)" />
+                  <span>{tr("Sandboxed", "Isolé")}</span>
+                </div>
               </div>
+
+              {/* Live Operational Status Banner */}
+              <div className={`agent-live-banner ${state}`}>
+                {state === "active" ? (
+                  <div className="agent-live-text active">
+                    <span className="live-pulse-dot" />
+                    <span>
+                      <strong>{agent.running_tasks}</strong>{" "}
+                      {tr("running mission(s) active", "mission(s) en cours d'exécution")}
+                    </span>
+                  </div>
+                ) : agent.cooldown_until ? (
+                  <div className="agent-live-text warning">
+                    <IconClock size={13} color="var(--color-warning, #f59e0b)" />
+                    <span>
+                      {tr("Cooling down until", "Pause active jusqu'à")}{" "}
+                      {new Date(agent.cooldown_until).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ) : agent.last_error_category ? (
+                  <div className="agent-live-text error">
+                    <IconWarning size={13} color="var(--color-danger, #ef4444)" />
+                    <span>{agent.last_error_category}</span>
+                  </div>
+                ) : (
+                  <div className="agent-live-text ready">
+                    <span className="live-pulse-dot" />
+                    <span>{tr("Operational · Ready for dispatch", "Opérationnel · Prêt pour orchestration")}</span>
+                  </div>
+                )}
+              </div>
+
               <div className="agent-card-actions">
                 <button
-                  className="button"
+                  className="button compact"
                   type="button"
                   onClick={() => edit(agent.agent_profile_id)}
+                  title={tr("Configure agent parameters", "Configurer les paramètres")}
                 >
+                  <IconSettings size={13} color="currentColor" />
                   {tr("Configure", "Configurer")}
                 </button>
                 <button
-                  className="button danger"
+                  className="button compact"
+                  type="button"
+                  onClick={() => {
+                    edit(agent.agent_profile_id);
+                    setTestWorkspace("/tmp/nexus-test");
+                  }}
+                  title={tr("Test agent connection", "Tester la connexion de l'agent")}
+                >
+                  <IconPlay size={13} color="currentColor" />
+                  {tr("Test", "Tester")}
+                </button>
+                <button
+                  className="button danger compact"
                   type="button"
                   disabled={busy || agent.running_tasks > 0}
                   onClick={() => disable(agent.key)}
+                  title={tr("Disable this agent profile", "Désactiver cet agent")}
                 >
+                  <IconPower size={13} color="currentColor" />
                   {tr("Disable", "Désactiver")}
                 </button>
               </div>
