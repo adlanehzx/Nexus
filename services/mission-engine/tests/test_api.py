@@ -24,7 +24,7 @@ def client(tmp_path: Path) -> TestClient:
             runtime_settings_file=tmp_path / "runtime-settings.json",
         )
     )
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 def payload() -> dict:
@@ -146,7 +146,7 @@ def test_agent_registry_discovers_and_persists_native_profile(tmp_path: Path) ->
         )
     )
 
-    with TestClient(app) as api:
+    with TestClient(app, client=("127.0.0.1", 50000)) as api:
         registry = api.get("/v1/agents")
         assert registry.status_code == 200
         assert registry.json()["available"][0]["registered_as"] == "codex"
@@ -187,7 +187,7 @@ def test_creates_acp_profile_from_safe_template_and_registers_it(tmp_path: Path)
         )
     )
 
-    with TestClient(app) as api:
+    with TestClient(app, client=("127.0.0.1", 50000)) as api:
         created = api.post(
             "/v1/agents/create",
             json={

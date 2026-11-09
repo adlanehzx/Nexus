@@ -35,10 +35,11 @@ import {
 } from "@nexus/devices";
 import {
   ConfirmationService,
-  InMemoryConfirmationStore,
+  type ConfirmationStore,
   PermissionService,
   ToolRegistry,
 } from "@nexus/tools";
+import { createConfirmationStore } from "./file-confirmation-store.js";
 import {
   AgentOrchestrator,
   InMemoryAgentRunStore,
@@ -145,6 +146,12 @@ export interface ServiceContainerOptions {
   memory?: MemoryProvider;
   credentials?: DeviceCredentialStore;
   taskStore?: TaskStore;
+  /**
+   * Human-confirmation store. When omitted, `NEXUS_CONFIRMATION_STORE_FILE`
+   * selects a file-backed store; otherwise an in-memory store is used and every
+   * pending confirmation is LOST on restart (and not shared across replicas).
+   */
+  confirmationStore?: ConfirmationStore;
   deviceStore?: DeviceStore;
   /**
    * Pairing ticket store.
@@ -475,7 +482,8 @@ export class ServiceContainer {
     });
 
     this.confirmations = new ConfirmationService({
-      store: new InMemoryConfirmationStore(),
+      // Not persistent unless NEXUS_CONFIRMATION_STORE_FILE or options.confirmationStore is set.
+      store: options.confirmationStore ?? createConfirmationStore(),
       now,
     });
 

@@ -266,3 +266,36 @@ describe("CLA3: Advanced Execution Security", () => {
     });
   });
 });
+
+describe("Vault master secret (no hardcoded fallback)", () => {
+  it("refuses to start in production without a configured master secret", () => {
+    expect(() => new EncryptedSoftwareVault(undefined, { NODE_ENV: "production" })).toThrow(
+      /master secret is not configured/,
+    );
+  });
+
+  it("accepts NEXUS_CONNECTOR_MASTER_SECRET or CONNECTOR_VAULT_KEY", async () => {
+    const secret = "a".repeat(40);
+    const a = new EncryptedSoftwareVault(undefined, { NEXUS_CONNECTOR_MASTER_SECRET: secret });
+    const b = new EncryptedSoftwareVault(undefined, { CONNECTOR_VAULT_KEY: secret });
+    const sealed = await a.sealSecret("k", "token");
+    expect(await b.unsealSecret("k", sealed.sealedData, sealed.tag)).toBe("token");
+  });
+
+  it("rejects short secrets", () => {
+    expect(() => new EncryptedSoftwareVault("short", {})).toThrow(/at least 32/);
+  });
+
+  it("uses a random ephemeral key outside production (no shared known key)", async () => {
+    const a = new EncryptedSoftwareVault(undefined, {});
+    const b = new EncryptedSoftwareVault(undefined, {});
+    const sealed = await a.sealSecret("k", "token");
+    await expect(b.unsealSecret("k", sealed.sealedData, sealed.tag)).rejects.toThrow();
+  });
+
+  it("TPM stub never claims hardware backing or attestation", async () => {
+    const tpm = new TpmVaultAdapter();
+    expect(tpm.isHardwareBacked).toBe(false);
+    expect((await tpm.attestKey("k")).attested).toBe(false);
+  });
+});

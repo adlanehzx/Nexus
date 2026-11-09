@@ -234,11 +234,18 @@ def test_every_mutating_route_is_covered(tmp_path) -> None:
         assert response.status_code == 401, f"{method} {path} does not require a token"
 
 
-def test_without_a_key_the_engine_keeps_its_previous_posture(tmp_path) -> None:
+def test_without_a_key_mutations_are_restricted_to_loopback(tmp_path) -> None:
     client = TestClient(create_app(_settings(tmp_path, None)))
     body = {"task_timeout_seconds": 1800, "max_attempts": 2, "retry_delay_seconds": 10,
             "context_budget_chars": 60000, "quality_review": True,
             "research_priority": ["codex"], "review_priority": ["codex"],
             "synthesis_priority": ["codex"]}
-    # When no key is configured, loopback-only posture is maintained.
-    assert client.put("/v1/settings", json=body).status_code == 200
+    # Without a key, only loopback peers may mutate; TestClient defaults to "testclient".
+    assert client.put("/v1/settings", json=body).status_code == 403
+
+    loopback = TestClient(create_app(_settings(tmp_path, None)), client=("127.0.0.1", 50000))
+    assert loopback.put("/v1/settings", json=body).status_code == 200
+
+    remote = TestClient(create_app(_settings(tmp_path, None)), client=("203.0.113.9", 50000))
+    assert remote.put("/v1/settings", json=body).status_code == 403
+    assert remote.get("/v1/health/ready").status_code == 200

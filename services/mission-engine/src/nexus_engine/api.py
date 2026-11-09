@@ -198,6 +198,10 @@ class RuntimeSettingsRequest(BaseModel):
     synthesis_priority: list[str] = Field(min_length=1, max_length=20)
 
 
+# Socket peers considered local when no service public key is configured.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"})
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     configured = settings or Settings.from_environment()
     database = (
@@ -233,8 +237,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     if service_verifier is None:
         logging.getLogger("nexus_engine.service_auth").warning(
-            "no API public key configured: mutation routes are only protected by loopback "
-            "(see NEXUS_ENGINE_API_PUBLIC_KEY_FILE)"
+            "no API public key configured: mutation routes are restricted to loopback "
+            "clients and refused for any other peer (see NEXUS_ENGINE_API_PUBLIC_KEY_FILE)"
         )
     else:
         logging.getLogger("nexus_engine.service_auth").info(
@@ -328,7 +332,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         Implemented as middleware rather than route dependencies to ensure
         all mutation routes are consistently protected.
         """
-        if service_verifier is None or request.method in {"GET", "HEAD", "OPTIONS"}:
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+
+        if service_verifier is None:
+            # Fail closed: without a configured public key we cannot verify
+            # service tokens, so mutations are only accepted from the local
+            # machine. The peer address comes from the socket (never from
+            # forwarded headers, which a remote client could spoof).
+            peer = request.client.host if request.client is not None else None
+            if peer not in _LOOPBACK_HOSTS:
+                logging.getLogger("nexus_engine.service_auth").warning(
+                    "mutation refused on %s %s: no API public key configured and "
+                    "peer %r is not loopback",
+                    request.method,
+                    request.url.path,
+                    peer,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "service authentication is not configured"},
+                )
             return await call_next(request)
 
         try:

@@ -683,11 +683,13 @@ export class ProviderAccountService {
               }));
             quotas = estimateObservedQuotas(acc.provider, matchingRuns, now);
           } else {
+            // No usage history available: quotas are UNKNOWN, not full. Reporting
+            // 100%/100% with invented reset dates would bias model routing.
             quotas = {
-              remaining5hPercent: 100,
-              remainingWeekPercent: 100,
-              resets5hAt: new Date(now.getTime() + 5 * 3600 * 1000).toISOString(),
-              resetsWeekAt: new Date(now.getTime() + 7 * 24 * 3600 * 1000).toISOString(),
+              remaining5hPercent: null,
+              remainingWeekPercent: null,
+              resets5hAt: null,
+              resetsWeekAt: null,
               exhausted: false,
             };
           }

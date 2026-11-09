@@ -31,6 +31,12 @@ export interface MicroVmStatus {
   pid?: number | undefined;
   startedAt?: string | undefined;
   exitCode?: number | undefined;
+  /**
+   * True when the status was produced by the development stub and NO real
+   * microVM was spawned. Consumers must never treat such a VM as an isolation
+   * boundary.
+   */
+  simulated?: boolean | undefined;
 }
 
 export interface MicroVmPort {
@@ -40,8 +46,16 @@ export interface MicroVmPort {
   stopMicroVm(vmId: string): Promise<void>;
 }
 
+/**
+ * DEVELOPMENT STUB — this runner does NOT launch Firecracker. It only checks
+ * that `/dev/kvm` is present and records a simulated VM entry (fake pid) so the
+ * surrounding orchestration can be exercised. Because it provides no actual
+ * isolation, it is fail-closed in production (`NODE_ENV=production`): starting a
+ * VM throws `IsolationUnavailableError` (`MICROVM_NOT_IMPLEMENTED`) until a real
+ * Firecracker integration replaces it.
+ */
 export class FirecrackerMicroVmRunner implements MicroVmPort {
-  readonly name = "firecracker";
+  readonly name = "firecracker-dev-stub";
   private activeVms = new Map<string, MicroVmStatus>();
 
   isAvailable(): boolean {
@@ -76,11 +90,20 @@ export class FirecrackerMicroVmRunner implements MicroVmPort {
       );
     }
 
+    if (process.env.NODE_ENV === "production") {
+      throw new IsolationUnavailableError(
+        "Firecracker integration is not implemented: refusing to simulate a microVM in production. Untrusted execution is blocked.",
+        "MICROVM_NOT_IMPLEMENTED",
+      );
+    }
+
+    // DEV STUB: no VM is spawned; the pid is a placeholder, not a real process.
     const status: MicroVmStatus = {
       vmId: config.vmId,
       running: true,
       pid: Math.floor(Math.random() * 50000) + 1000,
       startedAt: new Date().toISOString(),
+      simulated: true,
     };
 
     this.activeVms.set(config.vmId, status);
@@ -414,16 +437,53 @@ export interface HardwareVaultPort {
   attestKey(keyId: string): Promise<{ attested: boolean; pcrDigest?: string | undefined }>;
 }
 
+/**
+ * DEVELOPMENT STUB — this adapter does NOT talk to a TPM. It only detects the
+ * presence of a TPM character device and then emulates "sealing" in software
+ * with AES-256-GCM, using a key derived from a hash of the PCR policy *string*
+ * (not real PCR values). Nothing is bound to hardware, so:
+ *  - `isHardwareBacked` is always `false` (it must never claim otherwise);
+ *  - `attestKey` never reports a key as attested;
+ *  - in production (`NODE_ENV=production`) sealing/unsealing is refused until a
+ *    real tpm2 integration replaces this stub.
+ * Production deployments must use `EncryptedSoftwareVault` with an operator
+ * supplied master secret, or a real TPM adapter.
+ */
 export class TpmVaultAdapter implements HardwareVaultPort {
-  readonly name = "tpm2.0";
-  private sealedStore = new Map<string, string>();
+  readonly name = "tpm2.0-dev-stub";
+  /** keyId -> PCR policy string used to derive the emulated sealing key. */
+  private readonly policies = new Map<string, string>();
 
-  get isHardwareBacked(): boolean {
+  /** Whether a TPM device node exists on this host (presence only, unused for sealing). */
+  get hasTpmDevice(): boolean {
     try {
       return fs.existsSync("/dev/tpmrm0") || fs.existsSync("/dev/tpm0");
     } catch {
       return false;
     }
+  }
+
+  /** Always false: secrets are never actually bound to TPM hardware by this stub. */
+  readonly isHardwareBacked = false;
+
+  private assertUsable(): void {
+    if (process.env.NODE_ENV === "production") {
+      throw new HardwareVaultError(
+        "TPM sealing is not implemented (development stub): refusing to emulate hardware sealing in production",
+        "TPM_NOT_IMPLEMENTED",
+      );
+    }
+    if (!this.hasTpmDevice) {
+      throw new HardwareVaultError(
+        "TPM 2.0 hardware is not available on this machine (/dev/tpmrm0 missing)",
+        "TPM_UNAVAILABLE",
+      );
+    }
+  }
+
+  private deriveKey(policy: string, salt: Buffer): Buffer {
+    const pcrDigest = crypto.createHash("sha256").update(policy).digest("hex");
+    return crypto.pbkdf2Sync(pcrDigest, salt, 10000, 32, "sha256");
   }
 
   async sealSecret(
@@ -432,19 +492,11 @@ export class TpmVaultAdapter implements HardwareVaultPort {
     options?: { pcrPolicy?: string | undefined },
   ): Promise<{ sealedData: string; tag: string }> {
     await Promise.resolve();
-    if (!this.isHardwareBacked) {
-      throw new HardwareVaultError(
-        "TPM 2.0 hardware is not available on this machine (/dev/tpmrm0 missing)",
-        "TPM_UNAVAILABLE",
-      );
-    }
+    this.assertUsable();
 
+    const policy = options?.pcrPolicy ?? "PCR0-DEFAULT";
     const salt = crypto.randomBytes(16);
-    const pcrDigest = crypto
-      .createHash("sha256")
-      .update(options?.pcrPolicy ?? "PCR0-DEFAULT")
-      .digest("hex");
-    const key = crypto.pbkdf2Sync(pcrDigest, salt, 10000, 32, "sha256");
+    const key = this.deriveKey(policy, salt);
 
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -458,35 +510,70 @@ export class TpmVaultAdapter implements HardwareVaultPort {
       ciphertext: encrypted,
     });
 
-    this.sealedStore.set(keyId, plainText);
+    // Only the (non-secret) policy label is kept in memory, never the plaintext.
+    this.policies.set(keyId, policy);
     return { sealedData, tag };
   }
 
-  async unsealSecret(keyId: string, _sealedData: string, _tag: string): Promise<string> {
+  async unsealSecret(keyId: string, sealedData: string, tag: string): Promise<string> {
     await Promise.resolve();
-    if (!this.isHardwareBacked) {
-      throw new HardwareVaultError("TPM 2.0 hardware is not available", "TPM_UNAVAILABLE");
-    }
+    this.assertUsable();
 
-    const secret = this.sealedStore.get(keyId);
-    if (!secret) {
+    const policy = this.policies.get(keyId);
+    if (policy === undefined) {
       throw new HardwareVaultError(
         `Sealed key '${keyId}' not found or policy mismatch`,
         "UNSEAL_FAILED",
       );
     }
-    return secret;
+
+    try {
+      const parsed = JSON.parse(sealedData) as { salt: string; iv: string; ciphertext: string };
+      const key = this.deriveKey(policy, Buffer.from(parsed.salt, "base64"));
+      const decipher = crypto.createDecipheriv(
+        "aes-256-gcm",
+        key,
+        Buffer.from(parsed.iv, "base64"),
+      );
+      decipher.setAuthTag(Buffer.from(tag, "base64"));
+      let decrypted = decipher.update(parsed.ciphertext, "base64", "utf8");
+      decrypted += decipher.final("utf8");
+      return decrypted;
+    } catch {
+      throw new HardwareVaultError(
+        `Sealed key '${keyId}' not found or policy mismatch`,
+        "UNSEAL_FAILED",
+      );
+    }
   }
 
+  /** The stub performs no real attestation: it never reports a key as attested. */
   async attestKey(_keyId: string): Promise<{ attested: boolean; pcrDigest?: string | undefined }> {
     await Promise.resolve();
-    return {
-      attested: this.isHardwareBacked,
-      pcrDigest: this.isHardwareBacked
-        ? "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        : undefined,
-    };
+    return { attested: false, pcrDigest: undefined };
   }
+}
+
+export const NEXUS_VAULT_SECRET_ENV_VARS = [
+  "NEXUS_CONNECTOR_MASTER_SECRET",
+  "CONNECTOR_VAULT_KEY",
+] as const;
+
+const MIN_VAULT_SECRET_LENGTH = 32;
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed === "" ? undefined : trimmed;
+}
+
+function readVaultSecretFromEnv(env: NodeJS.ProcessEnv): string | undefined {
+  for (const name of NEXUS_VAULT_SECRET_ENV_VARS) {
+    const value = nonEmpty(env[name]);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 export class EncryptedSoftwareVault implements HardwareVaultPort {
@@ -495,8 +582,36 @@ export class EncryptedSoftwareVault implements HardwareVaultPort {
 
   private readonly masterKey: Buffer;
 
-  constructor(masterSecret = "nexus-local-software-vault-key-32ch") {
-    this.masterKey = crypto.createHash("sha256").update(masterSecret).digest();
+  /**
+   * The master secret is resolved from, in order: the `masterSecret` argument,
+   * `NEXUS_CONNECTOR_MASTER_SECRET`, then `CONNECTOR_VAULT_KEY`. There is no
+   * built-in default key.
+   *
+   * - In production (`NODE_ENV=production`) a missing secret throws
+   *   `HardwareVaultError("MASTER_SECRET_MISSING")`.
+   * - Outside production, a missing secret yields a random per-process key:
+   *   sealed data is then only readable by this process and is lost on restart.
+   * - A provided secret shorter than 32 characters is always rejected.
+   */
+  constructor(masterSecret?: string, env: NodeJS.ProcessEnv = process.env) {
+    const secret = nonEmpty(masterSecret) ?? readVaultSecretFromEnv(env);
+    if (secret === undefined) {
+      if (env.NODE_ENV === "production") {
+        throw new HardwareVaultError(
+          `Software vault master secret is not configured: set ${NEXUS_VAULT_SECRET_ENV_VARS.join(" or ")} (at least ${MIN_VAULT_SECRET_LENGTH} characters)`,
+          "MASTER_SECRET_MISSING",
+        );
+      }
+      this.masterKey = crypto.randomBytes(32);
+      return;
+    }
+    if (secret.length < MIN_VAULT_SECRET_LENGTH) {
+      throw new HardwareVaultError(
+        `Software vault master secret must be at least ${MIN_VAULT_SECRET_LENGTH} characters`,
+        "MASTER_SECRET_WEAK",
+      );
+    }
+    this.masterKey = crypto.createHash("sha256").update(secret).digest();
   }
 
   async sealSecret(
