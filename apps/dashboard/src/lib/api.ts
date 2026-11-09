@@ -45,6 +45,7 @@ export interface PaperOrderInput {
 export type PaperOrderResult =
   | { filled: false; reasons: string[]; stake_cents: number }
   | { id: string; outcome: "yes" | "no"; stake_cents: number; filled?: true };
+import type { TradingStatus } from "./trading.js";
 import { FetchHttpClient, SessionManager, VolatileStorage } from "@nexus/client-core";
 import type { HttpClient, SecureStorage } from "@nexus/client-core";
 import type {
@@ -53,6 +54,8 @@ import type {
   OsintCaseRecord,
   OsintEntity,
   OsintInvestigation,
+  OsintMission,
+  OsintMissionInput,
   OsintRelation,
   OsintWatch,
 } from "@nexus/osint";
@@ -1119,6 +1122,231 @@ export interface UnifiedModelDto {
   maxOutputTokens?: number;
 }
 
+// ── Lab 4 — Domotique ────────────────────────────────────────────────────
+
+export type HomeCapability =
+  | "onoff"
+  | "brightness"
+  | "color"
+  | "power_metering"
+  | "media"
+  | "remote"
+  | "mic"
+  | "speaker"
+  | "lock"
+  | "alarm"
+  | "climate"
+  | "cover";
+
+export type HomeDeviceSource = "home_assistant" | "satellite" | "fire_tv" | "nexus_worker";
+
+export interface HomeDeviceView {
+  id: string;
+  source: HomeDeviceSource;
+  name: string;
+  domain: string;
+  deviceClass: string | null;
+  roomId: string | null;
+  areaId: string | null;
+  capabilities: HomeCapability[];
+  online: boolean;
+  sensitive: boolean;
+  sensitiveReason: "class" | "user" | null;
+  state: {
+    raw: string;
+    on: boolean | null;
+    brightness?: number;
+    color?: string;
+    powerW?: number;
+    energyKWh?: number;
+    media?: { title?: string; volume?: number; muted?: boolean; source?: string };
+    temperature?: number;
+    targetTemperature?: number;
+    locked?: boolean;
+    alarm?: string;
+    micMuted?: boolean;
+    speakerConnected?: boolean;
+  };
+  entityIds: string[];
+  lastChanged: string | null;
+  manufacturer: string | null;
+  model: string | null;
+}
+
+export interface HomeRoomView {
+  id: string;
+  name: string;
+  haAreaId: string | null;
+  sortOrder: number;
+}
+
+export interface HomeAssistantStatus {
+  configured: boolean;
+  baseUrl: string | null;
+  enabled: boolean;
+  token: { stored: boolean; persistence: "vault" | "memory" | null };
+  connection: {
+    state:
+      | "not_configured"
+      | "token_missing"
+      | "disconnected"
+      | "connecting"
+      | "connected"
+      | "auth_failed"
+      | "unreachable";
+    haVersion: string | null;
+    connectedAt: string | null;
+    lastError: string | null;
+    attempt: number;
+    nextRetryAt: string | null;
+  };
+  syncedAt: string | null;
+  entityCount: number;
+  areaCount: number;
+  sensitiveClasses: string[];
+}
+
+export type HomeAction =
+  | { action: "turn_on"; brightness?: number; color?: string; transition?: number }
+  | { action: "turn_off" }
+  | { action: "toggle" }
+  | { action: "set_brightness"; brightness: number }
+  | { action: "set_color"; color: string }
+  | {
+      action: "media";
+      command:
+        | "play"
+        | "pause"
+        | "play_pause"
+        | "stop"
+        | "next"
+        | "previous"
+        | "volume_up"
+        | "volume_down"
+        | "volume_set"
+        | "mute"
+        | "unmute";
+      volume?: number;
+    }
+  | { action: "remote"; key: string }
+  | { action: "lock" }
+  | { action: "unlock" }
+  | { action: "set_temperature"; temperature: number }
+  | { action: "alarm_arm"; mode: "home" | "away" | "night" }
+  | { action: "alarm_disarm"; code?: string }
+  | { action: "open" }
+  | { action: "close" }
+  | { action: "stop" }
+  | { action: "mic_mute"; muted: boolean }
+  | { action: "speak"; text: string };
+
+export interface HomeActionOutcome {
+  status: "succeeded" | "failed" | "pending_confirmation" | "rejected" | "partial" | "skipped";
+  message: string;
+  deviceId: string;
+  confirmationId?: string;
+}
+
+export interface HomeSceneInput {
+  name: string;
+  actions: { deviceId: string; action: HomeAction }[];
+}
+
+export interface HomeSceneView extends HomeSceneInput {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HomeRoutineTrigger =
+  | { type: "time"; cron: string }
+  | { type: "device_state"; deviceId: string; to?: string; from?: string }
+  | { type: "presence"; event: "arrive" | "leave"; person?: string };
+
+export type HomeRoutineCondition =
+  | { type: "time_between"; after: string; before: string }
+  | { type: "weekday"; days: number[] }
+  | { type: "device_state"; deviceId: string; state: string };
+
+export type HomeRoutineAction =
+  { type: "device"; deviceId: string; action: HomeAction } | { type: "scene"; sceneId: string };
+
+export interface HomeRoutineInput {
+  name: string;
+  enabled: boolean;
+  trigger: HomeRoutineTrigger;
+  conditions: HomeRoutineCondition[];
+  actions: HomeRoutineAction[];
+}
+
+export interface HomeRoutineView extends HomeRoutineInput {
+  id: string;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomeExecutionLogView {
+  id: string;
+  kind: "action" | "scene" | "routine";
+  refId: string | null;
+  name: string;
+  status: string;
+  origin: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface HomeVoiceStatus {
+  engines: { stt: boolean; tts: boolean };
+  protocol: { path: string; version: number; mic: string };
+  satellites: {
+    deviceId: string;
+    name: string;
+    online: boolean;
+    connected: boolean;
+    mic: boolean;
+    speaker: boolean;
+    speakerSampleRate: number | null;
+    state: string;
+    firmware: string | null;
+    connectedAt: string | null;
+    lastTurnAt: string | null;
+    turns: number;
+  }[];
+}
+
+export interface HomeTopologyDevice {
+  id: string;
+  name: string;
+  kind: HomeDeviceSource;
+  type: string;
+  online: boolean;
+  status: string;
+  capabilities: string[];
+  sensitive: boolean;
+  lastSeenAt: string | null;
+}
+
+export interface HomeTopology {
+  rooms: {
+    id: string;
+    name: string;
+    haAreaId: string | null;
+    deviceCount: number;
+    onlineCount: number;
+    devices: HomeTopologyDevice[];
+  }[];
+  devices: (HomeTopologyDevice & { room: string | null })[];
+  summary: {
+    totalRooms: number;
+    totalDevices: number;
+    onlineDevices: number;
+    satelliteCount: number;
+    homeAssistant: string;
+  };
+}
+
 export type SatelliteCommandName =
   | "system.ping"
   | "system.diagnostics"
@@ -1351,7 +1579,8 @@ export class DashboardApi {
     if (applicationId) query.set("applicationId", applicationId);
     if (status) query.set("status", status);
     const qs = query.toString();
-    return this.#get(`/api/v1/career/confirmations${qs ? `?${qs}` : ""}`);
+    const path = "/api/v1/career/confirmations";
+    return this.#get(qs ? `${path}?${qs}` : path);
   }
 
   requestCareerApproval(
@@ -1414,7 +1643,8 @@ export class DashboardApi {
     const query = new URLSearchParams();
     if (applicationId) query.set("applicationId", applicationId);
     const qs = query.toString();
-    return this.#get(`/api/v1/career/contacts${qs ? `?${qs}` : ""}`);
+    const path = "/api/v1/career/contacts";
+    return this.#get(qs ? `${path}?${qs}` : path);
   }
 
   createCareerContact(
@@ -1691,6 +1921,17 @@ export class DashboardApi {
     });
   }
 
+  osintMissions(): Promise<{ missions: OsintMission[] }> {
+    return this.#request("GET", "/api/v1/osint/missions");
+  }
+  createOsintMission(input: OsintMissionInput): Promise<OsintMission> {
+    return this.#request("POST", "/api/v1/osint/missions", input);
+  }
+  controlOsintMission(id: string, action: "pause" | "resume" | "cancel"): Promise<OsintMission> {
+    return this.#request("POST", `/api/v1/osint/missions/${encodeURIComponent(id)}/control`, {
+      action,
+    });
+  }
   osintCases(): Promise<{ cases: OsintCaseRecord[] }> {
     return this.#get("/api/v1/osint/cases");
   }
@@ -1762,14 +2003,14 @@ export class DashboardApi {
     limit = 10,
   ): Promise<{
     query: string;
-    results: Array<{
+    results: {
       title: string;
       url: string;
       snippet: string;
       engines: string[];
       publishedAt?: string | null;
       score?: number | null;
-    }>;
+    }[];
     suggestions?: string[];
     answers?: string[];
   }> {
@@ -2552,45 +2793,161 @@ export class DashboardApi {
     });
   }
 
-  getDeviceTopology(): Promise<{
-    rooms: Array<{
-      id: string;
-      name: string;
-      deviceCount: number;
-      onlineCount: number;
-      devices: Array<{
-        id: string;
-        name: string;
-        kind: "device" | "satellite";
-        type: string;
-        platform?: string;
-        role?: string;
-        online: boolean;
-        status: string;
-        capabilities: string[];
-      }>;
-    }>;
-    devices: Array<{
-      id: string;
-      name: string;
-      kind: "device" | "satellite";
-      room: string;
-      type: string;
-      platform?: string;
-      role?: string;
-      online: boolean;
-      status: string;
-      capabilities: string[];
-      lastSeenAt: string | null;
-    }>;
-    summary: {
-      totalRooms: number;
-      totalDevices: number;
-      onlineDevices: number;
-      satelliteCount: number;
-    };
-  }> {
+  getDeviceTopology(): Promise<HomeTopology> {
     return this.#get("/api/v1/devices/topology");
+  }
+
+  // ── Lab 4 — Domotique ──────────────────────────────────────────────────
+
+  homeAssistantStatus(): Promise<HomeAssistantStatus> {
+    return this.#get("/api/v1/domotique/home-assistant");
+  }
+
+  /** The token is write-only: it is sent here and never read back. */
+  configureHomeAssistant(input: {
+    baseUrl: string;
+    token?: string;
+    enabled?: boolean;
+    sensitiveClasses?: string[];
+  }): Promise<HomeAssistantStatus> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant", input);
+  }
+
+  unlinkHomeAssistant(): Promise<{ unlinked: boolean }> {
+    return this.#request("DELETE", "/api/v1/domotique/home-assistant");
+  }
+
+  testHomeAssistant(): Promise<{
+    ok: boolean;
+    version: string | null;
+    locationName: string | null;
+    error: string | null;
+  }> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant/test");
+  }
+
+  resyncHomeAssistant(): Promise<{ resynced: boolean }> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant/resync");
+  }
+
+  homeDevices(): Promise<{
+    devices: HomeDeviceView[];
+    rooms: HomeRoomView[];
+    homeAssistant: HomeAssistantStatus;
+  }> {
+    return this.#get("/api/v1/domotique/devices");
+  }
+
+  updateHomeDevice(
+    deviceId: string,
+    patch: {
+      roomId?: string | null;
+      sensitive?: boolean | null;
+      alias?: string | null;
+      hidden?: boolean;
+    },
+  ): Promise<unknown> {
+    return this.#request(
+      "PATCH",
+      `/api/v1/domotique/devices/${encodeURIComponent(deviceId)}`,
+      patch,
+    );
+  }
+
+  runHomeDeviceAction(deviceId: string, action: HomeAction): Promise<HomeActionOutcome> {
+    return this.#request("POST", `/api/v1/devices/${encodeURIComponent(deviceId)}/actions`, action);
+  }
+
+  homeRooms(): Promise<HomeRoomView[]> {
+    return this.#get("/api/v1/domotique/rooms");
+  }
+
+  createHomeRoom(name: string): Promise<HomeRoomView> {
+    return this.#request("POST", "/api/v1/domotique/rooms", { name });
+  }
+
+  updateHomeRoom(
+    roomId: string,
+    patch: { name?: string; sortOrder?: number },
+  ): Promise<HomeRoomView> {
+    return this.#request("PATCH", `/api/v1/domotique/rooms/${encodeURIComponent(roomId)}`, patch);
+  }
+
+  deleteHomeRoom(roomId: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/domotique/rooms/${encodeURIComponent(roomId)}`);
+  }
+
+  homeScenes(): Promise<HomeSceneView[]> {
+    return this.#get("/api/v1/domotique/scenes");
+  }
+
+  createHomeScene(input: HomeSceneInput): Promise<HomeSceneView> {
+    return this.#request("POST", "/api/v1/domotique/scenes", input);
+  }
+
+  updateHomeScene(sceneId: string, input: HomeSceneInput): Promise<HomeSceneView> {
+    return this.#request("PATCH", `/api/v1/domotique/scenes/${encodeURIComponent(sceneId)}`, input);
+  }
+
+  deleteHomeScene(sceneId: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/domotique/scenes/${encodeURIComponent(sceneId)}`);
+  }
+
+  runHomeScene(
+    sceneId: string,
+  ): Promise<{ status: string; message: string; confirmationId?: string }> {
+    return this.#request("POST", `/api/v1/domotique/scenes/${encodeURIComponent(sceneId)}/run`);
+  }
+
+  homeRoutines(): Promise<HomeRoutineView[]> {
+    return this.#get("/api/v1/domotique/routines");
+  }
+
+  createHomeRoutine(input: HomeRoutineInput): Promise<HomeRoutineView> {
+    return this.#request("POST", "/api/v1/domotique/routines", input);
+  }
+
+  updateHomeRoutine(routineId: string, input: HomeRoutineInput): Promise<HomeRoutineView> {
+    return this.#request(
+      "PATCH",
+      `/api/v1/domotique/routines/${encodeURIComponent(routineId)}`,
+      input,
+    );
+  }
+
+  deleteHomeRoutine(routineId: string): Promise<{ deleted: boolean }> {
+    return this.#request("DELETE", `/api/v1/domotique/routines/${encodeURIComponent(routineId)}`);
+  }
+
+  runHomeRoutine(routineId: string): Promise<{ status: string }> {
+    return this.#request("POST", `/api/v1/domotique/routines/${encodeURIComponent(routineId)}/run`);
+  }
+
+  homeLogs(limit = 50): Promise<HomeExecutionLogView[]> {
+    return this.#get(`/api/v1/domotique/logs?limit=${String(limit)}`);
+  }
+
+  homeVoice(): Promise<HomeVoiceStatus> {
+    return this.#get("/api/v1/domotique/voice");
+  }
+
+  tradingStatus(): Promise<TradingStatus> {
+    return this.#get("/api/v1/mission-control/trading");
+  }
+  tradingRefresh(): Promise<TradingStatus> {
+    return this.#request("POST", "/api/v1/mission-control/trading/refresh");
+  }
+  tradingKill(): Promise<TradingStatus> {
+    return this.#request("POST", "/api/v1/mission-control/trading/kill");
+  }
+  tradingConfigure(body: unknown): Promise<TradingStatus> {
+    return this.#request("PUT", "/api/v1/mission-control/trading/config", body);
+  }
+  tradingSetCredentials(body: unknown): Promise<TradingStatus> {
+    return this.#request("PUT", "/api/v1/mission-control/trading/credentials", body);
+  }
+  tradingSubmitOrder(body: unknown): Promise<TradingStatus> {
+    return this.#request("POST", "/api/v1/mission-control/trading/orders", body);
   }
 
   async #get<T>(path: string): Promise<T> {

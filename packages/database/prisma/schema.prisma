@@ -64,6 +64,12 @@ model User {
   careerSubmissionAttempts CareerSubmissionAttempt[]
   careerConfirmations      CareerConfirmation[]
   careerApplicationEvents  CareerApplicationEvent[]
+  /// Lab 1: career autonomy and LinkedIn content management.
+  careerAutonomySettings   CareerAutonomySettings?
+  linkedInContentSettings  LinkedInContentSettings?
+  linkedInPosts            LinkedInPost[]
+  linkedInEngagements      LinkedInEngagement[]
+  linkedInAuditEvents      LinkedInAuditEvent[]
 
   /// Unified T3 Code & VCS Extensions
   worktrees                Worktree[]
@@ -1254,6 +1260,8 @@ model CareerApplicationEvent {
   /// Redacted by `redactForAudit` before the write: named personal fields
   /// dropped, secret-shaped values masked, every string bounded.
   context       Json
+  /// `owner` for the human, `nexus-autonomous` for an action Nexus took alone.
+  actor         String                  @default("owner") @db.VarChar(32)
   createdAt     DateTime                @default(now()) @db.Timestamptz(3)
 
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1262,6 +1270,148 @@ model CareerApplicationEvent {
   @@unique([applicationId, sequence])
   @@index([userId, createdAt(sort: Desc)])
   @@map("career_application_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lab 1 — Career autonomy and LinkedIn content management
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Per-user autonomy settings for the career pipeline. `settings` is validated
+/// by `careerAutonomySettingsSchema` (@nexus/career) on every read and write;
+/// a missing row means the defaults (every action in `approval`).
+model CareerAutonomySettings {
+  userId          String   @id @db.Uuid
+  settings        Json
+  /// Denormalised: true when at least one action is autonomous and the kill
+  /// switch is off. Lets the scheduler find the owners it has work for.
+  autonomyActive  Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([autonomyActive])
+  @@map("career_autonomy_settings")
+}
+
+/// Per-user LinkedIn content settings, validated by
+/// `linkedInContentSettingsSchema` (@nexus/linkedin). The automation consent is
+/// kept in columns, not in the JSON, so a settings write can never forge it.
+model LinkedInContentSettings {
+  userId                   String    @id @db.Uuid
+  settings                 Json
+  /// True when at least one action is not `manual`.
+  active                   Boolean   @default(false)
+  automationConsentAt      DateTime? @db.Timestamptz(3)
+  automationConsentVersion Int?
+  createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime  @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([active])
+  @@map("linkedin_content_settings")
+}
+
+enum LinkedInPostState {
+  draft
+  awaiting_approval
+  scheduled
+  publishing
+  published
+  failed
+  rejected
+  cancelled
+}
+
+/// A post Nexus drafted or the member wrote, published through the official API.
+model LinkedInPost {
+  id            String            @id @db.Uuid
+  userId        String            @db.Uuid
+  state         LinkedInPostState
+  text          String            @db.VarChar(3000)
+  topic         String?           @db.VarChar(120)
+  visibility    String            @db.VarChar(16)
+  scheduledAt   DateTime?         @db.Timestamptz(3)
+  publishedAt   DateTime?         @db.Timestamptz(3)
+  /// URN LinkedIn returned (`x-restli-id`). Present exactly when published.
+  externalId    String?           @db.VarChar(200)
+  failureReason String?           @db.VarChar(400)
+  createdBy     String            @db.VarChar(32)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, state, scheduledAt])
+  @@index([state, scheduledAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("linkedin_posts")
+}
+
+enum LinkedInEngagementKind {
+  reaction
+  comment
+}
+
+enum LinkedInEngagementState {
+  proposed
+  queued
+  executing
+  executed
+  failed
+  rejected
+  cancelled
+}
+
+/// A reaction or comment on another member's content, executed by the
+/// pluggable engagement executor (never by the official API).
+model LinkedInEngagement {
+  id            String                  @id @db.Uuid
+  userId        String                  @db.Uuid
+  kind          LinkedInEngagementKind
+  /// Post URN or linkedin.com post URL.
+  target        String                  @db.VarChar(500)
+  reaction      String?                 @db.VarChar(24)
+  text          String?                 @db.VarChar(1250)
+  rationale     String?                 @db.VarChar(400)
+  state         LinkedInEngagementState
+  /// Human-like delay: an autonomous action does not run before this instant.
+  executeAfter  DateTime?               @db.Timestamptz(3)
+  executedAt    DateTime?               @db.Timestamptz(3)
+  executor      String?                 @db.VarChar(64)
+  failureReason String?                 @db.VarChar(400)
+  createdBy     String                  @db.VarChar(32)
+  createdAt     DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Idempotence: one reaction and one comment per target and owner.
+  @@unique([userId, kind, target])
+  @@index([userId, state, executeAfter])
+  @@index([userId, executedAt])
+  @@map("linkedin_engagements")
+}
+
+/// Append-only audit trail of every LinkedIn content action. Never holds
+/// tokens or credentials: the context is redacted before the write.
+model LinkedInAuditEvent {
+  id          String   @id @db.Uuid
+  userId      String   @db.Uuid
+  actor       String   @db.VarChar(32)
+  action      String   @db.VarChar(64)
+  subjectType String   @db.VarChar(32)
+  subjectId   String?  @db.Uuid
+  outcome     String   @db.VarChar(16)
+  summary     String   @db.VarChar(400)
+  context     Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("linkedin_audit_events")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1578,3 +1728,116 @@ model TenantAuditEvent {
   @@map("tenant_audit_events")
 }
 
+
+model OsintCaseSnapshot {
+  id String @id @db.Uuid
+  ownerId String
+  payload Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@index([ownerId])
+}
+
+model OsintMissionSnapshot {
+  id String @id @db.Uuid
+  ownerId String
+  caseId String @db.Uuid
+  status String
+  payload Json
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@index([ownerId, status])
+}
+
+model OsintImport {
+  id String @id
+  importedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lab 4 — Domotique (NEXUS is the brain, Home Assistant the hands)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Owner-scoped like the OSINT snapshots: `ownerId` is the NEXUS user id. The
+// HA access token is never stored here — only a vault reference to it.
+
+model HomeAssistantLink {
+  id                String   @id @db.Uuid
+  ownerId           String   @unique
+  baseUrl           String
+  tokenRef          String?
+  enabled           Boolean  @default(true)
+  sensitiveClasses  String[]
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("home_assistant_links")
+}
+
+model HomeRoom {
+  id        String   @id @db.Uuid
+  ownerId   String
+  name      String
+  haAreaId  String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([ownerId, haAreaId])
+  @@index([ownerId])
+  @@map("home_rooms")
+}
+
+model HomeDeviceSetting {
+  ownerId   String
+  deviceId  String
+  roomId    String?  @db.Uuid
+  sensitive Boolean?
+  alias     String?
+  hidden    Boolean  @default(false)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([ownerId, deviceId])
+  @@map("home_device_settings")
+}
+
+model HomeScene {
+  id        String   @id @db.Uuid
+  ownerId   String
+  name      String
+  actions   Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([ownerId])
+  @@map("home_scenes")
+}
+
+model HomeRoutine {
+  id         String    @id @db.Uuid
+  ownerId    String
+  name       String
+  enabled    Boolean   @default(true)
+  trigger    Json
+  conditions Json
+  actions    Json
+  lastRunAt  DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([ownerId])
+  @@map("home_routines")
+}
+
+model HomeExecutionLog {
+  id        String   @id @db.Uuid
+  ownerId   String
+  kind      String
+  refId     String?
+  name      String
+  status    String
+  origin    String
+  detail    Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@map("home_execution_logs")
+}

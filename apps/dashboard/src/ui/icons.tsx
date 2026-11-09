@@ -859,3 +859,62 @@ export function IconActivity({ size = 16, color, style, className }: IconProps) 
     </svg>
   );
 }
+
+/* Lab 1 — LinkedIn content management. */
+export function IconThumbUp({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M7 10v12" />
+      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+    </svg>
+  );
+}
+
+export function IconSend({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  );
+}
+
+// ── Lab 4 — Domotique device icons ─────────────────────────────────────────
+
+export function IconBulb({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+      <path d="M12 2a7 7 0 0 0-4 12.74V16a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1.26A7 7 0 0 0 12 2z" />
+    </svg>
+  );
+}
+
+export function IconPlug({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M9 2v6" />
+      <path d="M15 2v6" />
+      <path d="M6 8h12v3a6 6 0 0 1-12 0V8z" />
+      <path d="M12 17v5" />
+    </svg>
+  );
+}
+
+export function IconLock({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+export function IconThermometer({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <path d="M14 14.76V4a2 2 0 0 0-4 0v10.76a4 4 0 1 0 4 0z" />
+    </svg>
+  );
+}

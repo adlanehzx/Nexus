@@ -98,6 +98,28 @@ import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
 import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
+// Lab 1: career autonomy and LinkedIn content management.
+import { CareerAutonomyService } from "./career/autonomy-service.js";
+import { InMemoryCareerAutonomyStore, type CareerAutonomyStore } from "./career/autonomy-store.js";
+import { LinkedInContentService } from "./linkedin-content/content-service.js";
+import {
+  InMemoryLinkedInContentStore,
+  type LinkedInContentStore,
+} from "./linkedin-content/store.js";
+import {
+  LlmContentDrafter,
+  UnavailableContentDrafter,
+  type ContentDrafter,
+} from "./linkedin-content/drafter.js";
+import {
+  BrowserWorkerEngagementExecutor,
+  type EngagementExecutor,
+} from "./linkedin-content/engagement-executor.js";
+import {
+  PrismaCareerAutonomyStore,
+  PrismaLinkedInContentStore,
+} from "./persistence/prisma-lab1-store.js";
+import type { LinkedInClient } from "@nexus/linkedin";
 import { AgentRealtimeBridge } from "./agent-realtime.js";
 import {
   InMemoryPushTokenStore,
@@ -111,8 +133,22 @@ import {
   type McpAccessStore,
 } from "./mcp-gateway.js";
 import type { LinkedInIntegrationService } from "./linkedin-integration.js";
+import { PrismaOsintStore } from "./persistence/prisma-osint-store.js";
+import { OsintMissionService } from "./osint-missions.js";
 import { OsintService } from "./osint-service.js";
 import { registerToolDomains } from "./tool-registration.js";
+import {
+  DomotiqueService,
+  type HomeAssistantClientFactory,
+} from "./domotique/domotique-service.js";
+import {
+  InMemoryDomotiqueStore,
+  PrismaDomotiqueStore,
+  type DomotiqueStore,
+} from "./domotique/store.js";
+import { SatelliteVoiceGateway } from "./domotique/satellite-voice.js";
+import { HomeVoiceIntentHandler, createAgentFallback } from "./domotique/voice-intent.js";
+import type { SpeechToTextPort, TextToSpeechPort } from "@nexus/voice";
 import type { FreeLlmRuntimeProvider } from "./freelm-runtime.js";
 import type { UnifiedLlmRuntimeProvider } from "./llm-runtime.js";
 
@@ -266,8 +302,25 @@ export interface ServiceContainerOptions {
   careerStore?: CareerStore;
   careerService?: CareerService;
   careerAdapter?: SubmissionAdapter;
+  /** Lab 1 — injectable for tests; defaults follow `prisma` like `careerStore`. */
+  careerAutonomyStore?: CareerAutonomyStore;
+  linkedinContentStore?: LinkedInContentStore;
+  linkedinContentDrafter?: ContentDrafter;
+  linkedinEngagementExecutor?: EngagementExecutor;
+  /** Per-user official LinkedIn client. Defaults to the LinkedIn integration's vault-backed one. */
+  linkedinClientResolver?: (userId: string) => Promise<LinkedInClient>;
   linkedin?: LinkedInIntegrationService;
   osint?: OsintService;
+  /** Lab 4 — domotique persistence. Defaults follow `prisma` like `careerStore`. */
+  domotiqueStore?: DomotiqueStore;
+  /** Lab 4 — injectable Home Assistant client (tests use a mocked HA). */
+  homeAssistantClientFactory?: HomeAssistantClientFactory;
+  /** Lab 4 — satellite speech engines (whisper.cpp / Piper). Absent = reported unavailable. */
+  satelliteVoicePorts?: { stt?: SpeechToTextPort; tts?: TextToSpeechPort };
+  /** Lab 4 — routine scheduler cadence; 0 disables the timer. */
+  domotiqueTickMs?: number;
+  /** Lab 4 — IANA timezone in which routine cron expressions are evaluated. */
+  homeTimezone?: string;
 }
 
 export class ServiceContainer {
@@ -305,6 +358,8 @@ export class ServiceContainer {
   readonly supervisor: TaskSupervisor;
   readonly careerStore: CareerStore;
   readonly career: CareerService;
+  readonly careerAutonomy: CareerAutonomyService;
+  readonly linkedinContent: LinkedInContentService;
 
   // ── Observability ─────────────────────────────────────────────────────
   //
@@ -345,6 +400,11 @@ export class ServiceContainer {
   readonly vault: SecretVault | undefined;
   readonly linkedin: LinkedInIntegrationService | undefined;
   readonly osint: OsintService;
+  readonly osintMissions: OsintMissionService;
+  /** Lab 4 — Home Assistant bridge, unified device registry, scenes and routines. */
+  readonly domotique: DomotiqueService;
+  /** Lab 4 — ESP32 satellite voice sessions (wake → STT → intent → TTS). */
+  readonly satelliteVoice: SatelliteVoiceGateway;
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
@@ -715,12 +775,56 @@ export class ServiceContainer {
     this.osint =
       options.osint ??
       new OsintService({
+        ...(options.prisma ? { persistence: new PrismaOsintStore(options.prisma) } : {}),
         ...(options.runtimeConfiguration === undefined
           ? {}
           : { runtime: options.runtimeConfiguration }),
         ...(options.vault === undefined ? {} : { vault: options.vault }),
       });
-    registerToolDomains(this.toolRegistry, { osint: this.osint });
+    this.osintMissions = new OsintMissionService({
+      cases: this.osint,
+      ...(options.llmProvider ? { llm: options.llmProvider } : {}),
+      ...(options.prisma ? { persistence: new PrismaOsintStore(options.prisma) } : {}),
+    });
+    this.domotique = new DomotiqueService({
+      store:
+        options.domotiqueStore ??
+        (options.prisma === undefined
+          ? new InMemoryDomotiqueStore()
+          : new PrismaDomotiqueStore(options.prisma)),
+      confirmations: this.confirmations,
+      broker: this.confirmationBroker,
+      vault: options.vault,
+      ...(options.homeAssistantClientFactory === undefined
+        ? {}
+        : { clientFactory: options.homeAssistantClientFactory }),
+      ...(options.domotiqueTickMs === undefined ? {} : { tickMs: options.domotiqueTickMs }),
+      timezoneFor: () => Promise.resolve(options.homeTimezone ?? "Europe/Paris"),
+      now,
+    });
+    this.domotique.attachWorkers(this.deviceRegistry);
+    const agentCore = this.agentCore;
+    this.satelliteVoice = new SatelliteVoiceGateway({
+      stt: options.satelliteVoicePorts?.stt,
+      tts: options.satelliteVoicePorts?.tts,
+      intent: new HomeVoiceIntentHandler({
+        domotique: this.domotique,
+        ownerOf: (satelliteId) => this.domotique.satelliteOwner(satelliteId),
+        agent:
+          agentCore === undefined
+            ? undefined
+            : createAgentFallback({
+                run: (input) => agentCore.run(input),
+                conversations: this.conversations,
+              }),
+      }),
+      now,
+    });
+    this.domotique.attachVoice(this.satelliteVoice);
+    registerToolDomains(this.toolRegistry, {
+      osint: this.osint,
+      domotique: this.domotique.toolsHost(),
+    });
     this.missionControl = options.missionControl;
     this.notificationDispatcher = options.notificationDispatcher;
 
@@ -740,6 +844,48 @@ export class ServiceContainer {
         now,
         ...(options.publicApiUrl !== undefined ? { dashboardBaseUrl: options.publicApiUrl } : {}),
       });
+
+    this.careerAutonomy = new CareerAutonomyService({
+      career: this.career,
+      careerStore: this.careerStore,
+      store:
+        options.careerAutonomyStore ??
+        (options.prisma === undefined
+          ? new InMemoryCareerAutonomyStore()
+          : new PrismaCareerAutonomyStore(options.prisma)),
+      now,
+    });
+    this.linkedinContent = new LinkedInContentService({
+      store:
+        options.linkedinContentStore ??
+        (options.prisma === undefined
+          ? new InMemoryLinkedInContentStore()
+          : new PrismaLinkedInContentStore(options.prisma)),
+      drafter:
+        options.linkedinContentDrafter ??
+        (options.llmProvider === undefined
+          ? new UnavailableContentDrafter()
+          : new LlmContentDrafter(options.llmProvider)),
+      executor:
+        options.linkedinEngagementExecutor ??
+        new BrowserWorkerEngagementExecutor({ client: () => this.browser }),
+      resolveClient:
+        options.linkedinClientResolver ??
+        ((userId) => {
+          if (this.linkedin === undefined) {
+            return Promise.reject(
+              new Error("LinkedIn integration is not configured on this system."),
+            );
+          }
+          return this.linkedin.resolveClientForUser(userId);
+        }),
+      connection: async (userId: string) => {
+        if (this.linkedin === undefined) return { configured: false, connected: false };
+        const status = await this.linkedin.status(userId);
+        return { configured: status.configured, connected: status.connected };
+      },
+      now,
+    });
 
     this.dashboard = new DashboardService({
       services: this,

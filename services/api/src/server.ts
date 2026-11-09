@@ -68,6 +68,7 @@ import { PrismaNotificationStore } from "./services/persistence/prisma-notificat
 import { PrismaAgentRunStore } from "./services/persistence/prisma-agent-run-store.js";
 import { PrismaConversationStore } from "./services/persistence/prisma-conversation-store.js";
 import { PrismaCareerStore } from "./services/persistence/prisma-career-store.js";
+import { satelliteVoicePortsFromEnv } from "./services/domotique/voice-engines.js";
 import { MissionControlClient } from "@nexus/mission-control-client";
 import { MISSION_ENGINE_AUDIENCE, TokenService } from "@nexus/auth";
 import { SearxngClient, createWebSearchTools } from "@nexus/web-search";
@@ -224,6 +225,13 @@ const services = new ServiceContainer({
   notifications: new PrismaNotificationStore(prisma),
   runStore: new PrismaAgentRunStore(prisma),
   careerStore: new PrismaCareerStore(prisma),
+  // Lab 4 — whisper.cpp / Piper for ESP32 voice satellites (opt-in via env),
+  // and the timezone in which routine cron expressions are evaluated.
+  satelliteVoicePorts: satelliteVoicePortsFromEnv(
+    process.env,
+    resolve(here, "../../../var/voice-scratch"),
+  ),
+  homeTimezone: process.env.NEXUS_HOME_TIMEZONE ?? process.env.TZ ?? "Europe/Paris",
   telemetry: new NexusTelemetry({ pricing: config.MODEL_PRICING_JSON }),
   embeddings,
   observabilityDirectory:
@@ -299,6 +307,20 @@ async function main(): Promise<void> {
     });
   }, 60_000);
   osintWatchTimer.unref();
+  // Lab 1: career autonomy runs and LinkedIn content scheduling. Each owner's
+  // failure is contained (and audited) inside the services.
+  const lab1Timer = setInterval(() => {
+    void services.linkedinContent.tick().catch((error: unknown) => {
+      logger.warn({ err: error }, "LinkedIn content tick failed");
+    });
+  }, 60_000);
+  lab1Timer.unref();
+  const careerAutonomyTimer = setInterval(() => {
+    void services.careerAutonomy.runDue().catch((error: unknown) => {
+      logger.warn({ err: error }, "Career autonomy cycle failed");
+    });
+  }, 5 * 60_000);
+  careerAutonomyTimer.unref();
 
   // Redis uses `lazyConnect`: we force connection now so that an unreachable
   // Redis fails startup loudly.

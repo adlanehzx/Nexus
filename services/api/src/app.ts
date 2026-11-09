@@ -49,7 +49,10 @@ import { connectionRoutes } from "./routes/v1/connections.js";
 import { organizationRoutes } from "./routes/v1/organizations.js";
 import { careerRoutes } from "./routes/v1/career.js";
 import { linkedInRoutes } from "./routes/v1/linkedin.js";
+import { careerAutonomyRoutes } from "./routes/v1/career-autonomy.js";
+import { linkedInContentRoutes } from "./routes/v1/linkedin-content.js";
 import { satelliteRoutes } from "./routes/v1/satellites.js";
+import { domotiqueRoutes } from "./routes/v1/domotique.js";
 import { SatelliteService } from "./services/satellite-service.js";
 import { createFireTvTool, FireTvService } from "./services/fire-tv.js";
 import { osintRoutes } from "./routes/v1/osint.js";
@@ -212,6 +215,17 @@ export async function buildApp(options: BuildAppOptions) {
     );
   }
 
+  // Lab 4 — satellites and the Fire TV join the unified home registry.
+  services.domotique.attachSatellites(app.satellites);
+  if (config.FIRE_TV_ADB_SERIAL !== undefined) {
+    const fireTv = new FireTvService(config.FIRE_TV_ADB_SERIAL, config.FIRE_TV_ADB_SERVER);
+    services.domotique.attachFireTv({
+      serial: config.FIRE_TV_ADB_SERIAL,
+      name: "Fire TV",
+      control: (action) => fireTv.control(action),
+    });
+  }
+
   app.decorate(
     "clientChannel",
     new ClientChannel({
@@ -311,8 +325,11 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(organizationRoutes);
       await v1.register(careerRoutes);
       await v1.register(linkedInRoutes);
+      await v1.register(careerAutonomyRoutes);
+      await v1.register(linkedInContentRoutes);
       await v1.register(osintRoutes);
       await v1.register(satelliteRoutes);
+      await v1.register(domotiqueRoutes);
       await v1.register(worktreeRoutes);
       await v1.register(checkpointRoutes);
       await v1.register(providerRoutes);
@@ -325,6 +342,15 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.addHook("onReady", () => {
     app.log.info({ event: "api.ready", version: config.API_VERSION }, "API ready");
+    // Lab 4 — Home Assistant connections and the routine scheduler. Never blocks
+    // boot: an unreachable HA or a missing migration is reported, not fatal.
+    services.domotique.start().catch((error: unknown) => {
+      app.log.warn({ err: error, event: "domotique.start_failed" }, "Domotique did not start");
+    });
+  });
+  app.addHook("onClose", async () => {
+    services.domotique.stop();
+    await Promise.resolve();
   });
 
   return app;
