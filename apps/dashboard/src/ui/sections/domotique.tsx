@@ -432,10 +432,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "back" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "back" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "back" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "back" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "var(--nx-line)",
                 transition: "all var(--nx-fast, 140ms) ease",
               }}
@@ -457,10 +455,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "home" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "home" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "home" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "home" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "var(--nx-line)",
                 transition: "all var(--nx-fast, 140ms) ease",
               }}
@@ -482,10 +478,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "menu" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "menu" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "menu" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "menu" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "var(--nx-line)",
                 transition: "all var(--nx-fast, 140ms) ease",
               }}
@@ -521,10 +515,8 @@ export function RemoteControl({
                 left: "calc(50% - 24px)",
                 width: "48px",
                 height: "46px",
-                background:
-                  activeKey === "up" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "up" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "up" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "up" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 border: "1px solid var(--nx-line)",
                 borderRadius: "var(--nx-radius-md)",
                 display: "flex",
@@ -532,8 +524,7 @@ export function RemoteControl({
                 justifyContent: "center",
                 cursor: "pointer",
                 transition: "all var(--nx-fast, 140ms) ease",
-                boxShadow:
-                  activeKey === "up" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
+                boxShadow: activeKey === "up" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
               }}
               title={tr("Direction Up (KEYCODE_DPAD_UP)", "Haut (KEYCODE_DPAD_UP)")}
             >
@@ -551,10 +542,8 @@ export function RemoteControl({
                 left: "calc(50% - 24px)",
                 width: "48px",
                 height: "46px",
-                background:
-                  activeKey === "down" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "down" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "down" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "down" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 border: "1px solid var(--nx-line)",
                 borderRadius: "var(--nx-radius-md)",
                 display: "flex",
@@ -562,8 +551,7 @@ export function RemoteControl({
                 justifyContent: "center",
                 cursor: "pointer",
                 transition: "all var(--nx-fast, 140ms) ease",
-                boxShadow:
-                  activeKey === "down" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
+                boxShadow: activeKey === "down" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
               }}
               title={tr("Direction Down (KEYCODE_DPAD_DOWN)", "Bas (KEYCODE_DPAD_DOWN)")}
             >
@@ -581,10 +569,8 @@ export function RemoteControl({
                 top: "calc(50% - 24px)",
                 width: "46px",
                 height: "48px",
-                background:
-                  activeKey === "left" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "left" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "left" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "left" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 border: "1px solid var(--nx-line)",
                 borderRadius: "var(--nx-radius-md)",
                 display: "flex",
@@ -592,8 +578,7 @@ export function RemoteControl({
                 justifyContent: "center",
                 cursor: "pointer",
                 transition: "all var(--nx-fast, 140ms) ease",
-                boxShadow:
-                  activeKey === "left" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
+                boxShadow: activeKey === "left" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
               }}
               title={tr("Direction Left (KEYCODE_DPAD_LEFT)", "Gauche (KEYCODE_DPAD_LEFT)")}
             >
@@ -611,10 +596,8 @@ export function RemoteControl({
                 top: "calc(50% - 24px)",
                 width: "46px",
                 height: "48px",
-                background:
-                  activeKey === "right" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "right" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                background: activeKey === "right" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
+                color: activeKey === "right" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 border: "1px solid var(--nx-line)",
                 borderRadius: "var(--nx-radius-md)",
                 display: "flex",
@@ -622,8 +605,7 @@ export function RemoteControl({
                 justifyContent: "center",
                 cursor: "pointer",
                 transition: "all var(--nx-fast, 140ms) ease",
-                boxShadow:
-                  activeKey === "right" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
+                boxShadow: activeKey === "right" ? "none" : "0 2px 4px rgba(0, 0, 0, 0.05)",
               }}
               title={tr("Direction Right (KEYCODE_DPAD_RIGHT)", "Droite (KEYCODE_DPAD_RIGHT)")}
             >
@@ -643,8 +625,7 @@ export function RemoteControl({
                   activeKey === "select"
                     ? "var(--nx-accent)"
                     : "var(--nx-surface-sunken, var(--nx-canvas))",
-                color:
-                  activeKey === "select" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                color: activeKey === "select" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 border: "2px solid var(--nx-line-strong)",
                 display: "flex",
                 flexDirection: "column",
@@ -658,7 +639,10 @@ export function RemoteControl({
                 boxShadow: "var(--nx-shadow-popover)",
                 zIndex: 2,
               }}
-              title={tr("Select / Validate (KEYCODE_DPAD_CENTER)", "Valider / OK (KEYCODE_DPAD_CENTER)")}
+              title={tr(
+                "Select / Validate (KEYCODE_DPAD_CENTER)",
+                "Valider / OK (KEYCODE_DPAD_CENTER)",
+              )}
             >
               <span>OK</span>
             </button>
@@ -671,7 +655,10 @@ export function RemoteControl({
               className="button secondary"
               onClick={() => void dispatchKey("play_pause")}
               disabled={isSending}
-              title={tr("Play / Pause (KEYCODE_MEDIA_PLAY_PAUSE)", "Lecture / Pause (KEYCODE_MEDIA_PLAY_PAUSE)")}
+              title={tr(
+                "Play / Pause (KEYCODE_MEDIA_PLAY_PAUSE)",
+                "Lecture / Pause (KEYCODE_MEDIA_PLAY_PAUSE)",
+              )}
               style={{
                 width: "100%",
                 display: "flex",
@@ -681,8 +668,7 @@ export function RemoteControl({
                 borderRadius: "var(--nx-radius-md)",
                 background:
                   activeKey === "play_pause" ? "var(--nx-accent)" : "var(--nx-surface-raised)",
-                color:
-                  activeKey === "play_pause" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
+                color: activeKey === "play_pause" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "var(--nx-line)",
                 transition: "all var(--nx-fast, 140ms) ease",
               }}
@@ -723,12 +709,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "volume_down" ? "var(--nx-accent)" : "transparent",
-                color:
-                  activeKey === "volume_down"
-                    ? "var(--nx-text-on-accent)"
-                    : "var(--nx-text)",
+                background: activeKey === "volume_down" ? "var(--nx-accent)" : "transparent",
+                color: activeKey === "volume_down" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "transparent",
               }}
             >
@@ -750,10 +732,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "mute" ? "var(--nx-warn-bg)" : "transparent",
-                color:
-                  activeKey === "mute" ? "var(--nx-warn)" : "var(--nx-text-muted)",
+                background: activeKey === "mute" ? "var(--nx-warn-bg)" : "transparent",
+                color: activeKey === "mute" ? "var(--nx-warn)" : "var(--nx-text-muted)",
                 borderColor: "transparent",
               }}
             >
@@ -775,12 +755,8 @@ export function RemoteControl({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background:
-                  activeKey === "volume_up" ? "var(--nx-accent)" : "transparent",
-                color:
-                  activeKey === "volume_up"
-                    ? "var(--nx-text-on-accent)"
-                    : "var(--nx-text)",
+                background: activeKey === "volume_up" ? "var(--nx-accent)" : "transparent",
+                color: activeKey === "volume_up" ? "var(--nx-text-on-accent)" : "var(--nx-text)",
                 borderColor: "transparent",
               }}
             >
@@ -852,9 +828,7 @@ export function RemoteControl({
               style={{
                 padding: "0.9rem 1.1rem",
                 borderRadius: "var(--nx-radius-md)",
-                background: lastResult.delivered
-                  ? "var(--nx-ok-bg)"
-                  : "var(--nx-accent-muted)",
+                background: lastResult.delivered ? "var(--nx-ok-bg)" : "var(--nx-accent-muted)",
                 border: `1px solid ${
                   lastResult.delivered ? "var(--nx-ok-line)" : "var(--nx-accent-line)"
                 }`,
@@ -1039,7 +1013,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
       void state.reload();
     } catch (err) {
       setPairingError(
-        err instanceof Error ? err.message : tr("Failed to register satellite", "Échec d'enregistrement"),
+        err instanceof Error
+          ? err.message
+          : tr("Failed to register satellite", "Échec d'enregistrement"),
       );
     } finally {
       setIsGeneratingTicket(false);
@@ -1364,7 +1340,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                 type="button"
                 className={`button compact ${domotiqueMode === "intercom" ? "primary" : "secondary"}`}
                 onClick={() => void handleApplyDomotiqueMode("intercom")}
-                title={tr("Broadcast chime across all satellites", "Diffuser un carillon sur tous les satellites")}
+                title={tr(
+                  "Broadcast chime across all satellites",
+                  "Diffuser un carillon sur tous les satellites",
+                )}
               >
                 <IconVolume size={14} />
                 <span>{tr("Intercom Chime", "Carillon Intercom")}</span>
@@ -1631,7 +1610,11 @@ export function Domotique({ api }: { api: DashboardApi }) {
                     </p>
                     <div style={{ marginTop: "0.75rem" }}>
                       <label
-                        style={{ display: "block", fontSize: "0.8rem", color: "var(--nx-text-muted)" }}
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          color: "var(--nx-text-muted)",
+                        }}
                       >
                         {tr("Provisioning Payload (JSON)", "Payload de provisionnement (JSON)")}
                       </label>
@@ -1759,8 +1742,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                           fontSize: "0.75rem",
                           padding: "0.2rem 0.5rem",
                           borderRadius: "var(--nx-radius-pill)",
-                          background:
-                            onlineInRoom > 0 ? "var(--nx-ok-bg)" : "var(--nx-canvas)",
+                          background: onlineInRoom > 0 ? "var(--nx-ok-bg)" : "var(--nx-canvas)",
                           color: onlineInRoom > 0 ? "var(--nx-ok)" : "var(--nx-text-muted)",
                         }}
                       >
@@ -1801,7 +1783,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                             color: onlineInRoom > 0 ? "var(--nx-ok)" : "var(--nx-text-muted)",
                           }}
                         >
-                          <IconMic size={14} color={onlineInRoom > 0 ? "var(--nx-ok)" : "var(--nx-text-muted)"} />
+                          <IconMic
+                            size={14}
+                            color={onlineInRoom > 0 ? "var(--nx-ok)" : "var(--nx-text-muted)"}
+                          />
                           <span>{tr("Listening", "À l'écoute")}</span>
                         </span>
                       )}
@@ -1916,9 +1901,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
                                 padding: "0.2rem 0.6rem",
                                 borderRadius: "var(--nx-radius-pill)",
                                 fontWeight: 600,
-                                background: sat.online
-                                  ? "var(--nx-ok-bg)"
-                                  : "var(--nx-danger-bg)",
+                                background: sat.online ? "var(--nx-ok-bg)" : "var(--nx-danger-bg)",
                                 color: sat.online ? "var(--nx-ok)" : "var(--nx-danger)",
                               }}
                             >
@@ -1931,7 +1914,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                                 }}
                               />
                               <span>
-                                {sat.online ? tr("ONLINE", "EN LIGNE") : tr("OFFLINE", "HORS LIGNE")}
+                                {sat.online
+                                  ? tr("ONLINE", "EN LIGNE")
+                                  : tr("OFFLINE", "HORS LIGNE")}
                               </span>
                             </span>
                           </div>
@@ -1952,7 +1937,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                         >
                           {/* RSSI Signal */}
                           <div>
-                            <span className="muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                            <span
+                              className="muted"
+                              style={{ display: "block", fontSize: "0.7rem" }}
+                            >
                               {tr("Wi-Fi Signal", "Signal Wi-Fi")}
                             </span>
                             {rssi ? (
@@ -1983,7 +1971,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
                           {/* Battery */}
                           <div>
-                            <span className="muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                            <span
+                              className="muted"
+                              style={{ display: "block", fontSize: "0.7rem" }}
+                            >
                               {tr("Battery", "Batterie")}
                             </span>
                             {battery ? (
@@ -2000,7 +1991,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                                 ) : (
                                   <IconBattery
                                     size={14}
-                                    color={battery.percent > 20 ? "var(--nx-text)" : "var(--nx-danger)"}
+                                    color={
+                                      battery.percent > 20 ? "var(--nx-text)" : "var(--nx-danger)"
+                                    }
                                   />
                                 )}
                                 <span>
@@ -2014,12 +2007,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
 
                           {/* Uptime */}
                           <div>
-                            <span className="muted" style={{ display: "block", fontSize: "0.7rem" }}>
+                            <span
+                              className="muted"
+                              style={{ display: "block", fontSize: "0.7rem" }}
+                            >
                               {tr("Uptime", "Disponibilité")}
                             </span>
-                            <span style={{ display: "block", marginTop: "0.15rem" }}>
-                              {uptime}
-                            </span>
+                            <span style={{ display: "block", marginTop: "0.15rem" }}>{uptime}</span>
                           </div>
                         </div>
 
@@ -2046,7 +2040,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                               }}
                               disabled={!sat.online || isBusy}
                               onClick={() =>
-                                void executeCommand(sat.deviceId, "audio.privacy", { muted: !mic.muted })
+                                void executeCommand(sat.deviceId, "audio.privacy", {
+                                  muted: !mic.muted,
+                                })
                               }
                               title={
                                 mic.muted
@@ -2065,7 +2061,9 @@ export function Domotique({ api }: { api: DashboardApi }) {
                               ) : (
                                 <IconMic size={14} color="var(--nx-ok)" />
                               )}
-                              <span>{mic.muted ? tr("Muted", "Coupé") : tr("Active", "Actif")}</span>
+                              <span>
+                                {mic.muted ? tr("Muted", "Coupé") : tr("Active", "Actif")}
+                              </span>
                             </button>
 
                             {/* Speaker Status */}
@@ -2171,8 +2169,12 @@ export function Domotique({ api }: { api: DashboardApi }) {
             <section className="card" style={{ marginTop: "1rem" }} aria-labelledby="history-title">
               <div className="pairing-heading">
                 <div>
-                  <span className="eyebrow">{tr("COMMAND BUS TELEMETRY", "TÉLÉMÉTRIE DU BUS")}</span>
-                  <h3 id="history-title">{tr("Live Hardware Command Log", "Journal des Commandes")}</h3>
+                  <span className="eyebrow">
+                    {tr("COMMAND BUS TELEMETRY", "TÉLÉMÉTRIE DU BUS")}
+                  </span>
+                  <h3 id="history-title">
+                    {tr("Live Hardware Command Log", "Journal des Commandes")}
+                  </h3>
                 </div>
                 <button
                   type="button"

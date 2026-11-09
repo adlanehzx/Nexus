@@ -211,32 +211,32 @@ export function OsintWorkspace({
                 <span className="status-badge">{selected.status}</span>
               </div>
               <nav className="osint-tabs" aria-label="Investigation views">
-                {(["search", "evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]).map(
-                  (item) => {
-                    const label =
-                      item === "search"
-                        ? tr("SearXNG Search", "Recherche SearXNG")
-                        : item === "evidence"
-                          ? tr("Evidence", "Preuves")
-                          : item === "graph"
-                            ? tr("Graph", "Graphe")
-                            : item === "monitoring"
-                              ? tr("Monitoring", "Surveillance")
-                              : item === "enrichment"
-                                ? tr("Tools & Enrichment", "Outils & Enrichissement")
-                                : tr("Reports", "Rapports");
-                    return (
-                      <button
-                        type="button"
-                        className={tab === item ? "active" : ""}
-                        key={item}
-                        onClick={() => setTab(item)}
-                      >
-                        {label}
-                      </button>
-                    );
-                  },
-                )}
+                {(
+                  ["search", "evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]
+                ).map((item) => {
+                  const label =
+                    item === "search"
+                      ? tr("SearXNG Search", "Recherche SearXNG")
+                      : item === "evidence"
+                        ? tr("Evidence", "Preuves")
+                        : item === "graph"
+                          ? tr("Graph", "Graphe")
+                          : item === "monitoring"
+                            ? tr("Monitoring", "Surveillance")
+                            : item === "enrichment"
+                              ? tr("Tools & Enrichment", "Outils & Enrichissement")
+                              : tr("Reports", "Rapports");
+                  return (
+                    <button
+                      type="button"
+                      className={tab === item ? "active" : ""}
+                      key={item}
+                      onClick={() => setTab(item)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </nav>
               {tab === "search" && (
                 <SearchPanel
@@ -989,10 +989,7 @@ function EntityInspector({
   onDeleteRelation: (id: string) => Promise<void>;
 }) {
   const { tr } = useI18n();
-  const entityMap = useMemo(
-    () => new Map(allEntities.map((e) => [e.id, e.label])),
-    [allEntities],
-  );
+  const entityMap = useMemo(() => new Map(allEntities.map((e) => [e.id, e.label])), [allEntities]);
 
   const incomingRelations = record.relations.filter((r) => r.targetId === entity.id);
   const outgoingRelations = record.relations.filter((r) => r.sourceId === entity.id);
@@ -1103,7 +1100,9 @@ function EntityInspector({
           {tr("Associated Evidence", "Preuves associées")} ({associatedEvidence.length})
         </h5>
         {associatedEvidence.length === 0 ? (
-          <small className="muted">{tr("No direct evidence linked", "Aucune preuve directe liée")}</small>
+          <small className="muted">
+            {tr("No direct evidence linked", "Aucune preuve directe liée")}
+          </small>
         ) : (
           associatedEvidence.slice(0, 4).map((ev) => (
             <div className="osint-evidence-mini" key={ev.id}>
@@ -1113,7 +1112,12 @@ function EntityInspector({
                 href={ev.url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "3px" }}
+                style={{
+                  fontSize: "11px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
               >
                 {tr("View source", "Voir la source")}
                 <IconExternalLink size={10} />

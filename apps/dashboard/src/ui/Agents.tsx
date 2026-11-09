@@ -337,7 +337,9 @@ export function Agents({ api }: { api: DashboardApi }) {
     setEditConfigOptions(JSON.stringify(profile.config_options, null, 2));
     setTestResult(null);
     setTimeout(() => {
-      document.getElementById("agent-edit-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document
+        .getElementById("agent-edit-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 60);
   };
 

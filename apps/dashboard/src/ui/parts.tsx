@@ -201,12 +201,7 @@ export function Modal(props: {
   if (!props.isOpen) return null;
 
   return (
-    <div
-      className="nexus-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      onClick={props.onClose}
-    >
+    <div className="nexus-modal-backdrop" role="dialog" aria-modal="true" onClick={props.onClose}>
       <div
         className="nexus-modal-content"
         style={props.width ? { width: props.width } : undefined}
@@ -220,7 +215,14 @@ export function Modal(props: {
             onClick={props.onClose}
             aria-label="Close"
           >
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M3 3l10 10M13 3L3 13" />
             </svg>
           </button>

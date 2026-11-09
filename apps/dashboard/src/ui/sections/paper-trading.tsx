@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardApi, PaperAccountDetail, PaperMarketDetail, PaperOrder } from "../../lib/api.js";
+import type {
+  DashboardApi,
+  PaperAccountDetail,
+  PaperMarketDetail,
+  PaperOrder,
+} from "../../lib/api.js";
 import { paperOrderInput, paperOrderPnl } from "../../lib/paper-trading.js";
 import {
   IconActivity,
@@ -141,7 +146,9 @@ function EquityBalanceChart({
         const factor = s / (stepsNeeded + 1);
         const wave = Math.sin(factor * Math.PI) * 0.015;
         const interpCash = Math.round(startPt.cash + (endCash - startPt.cash) * factor);
-        const interpExposure = Math.round(startPt.exposure + (endExposure - startPt.exposure) * factor);
+        const interpExposure = Math.round(
+          startPt.exposure + (endExposure - startPt.exposure) * factor,
+        );
         const interpTotal = Math.round(
           startPt.total + (endTotal - startPt.total) * (factor + wave),
         );
@@ -232,7 +239,10 @@ function EquityBalanceChart({
   const isRoiNeg = Number(roiPercent) < 0;
 
   return (
-    <div className="equity-chart-container" aria-label={tr("Portfolio Equity Evolution", "Évolution du Portefeuille")}>
+    <div
+      className="equity-chart-container"
+      aria-label={tr("Portfolio Equity Evolution", "Évolution du Portefeuille")}
+    >
       <div className="equity-chart-header">
         <div className="equity-chart-title-area">
           <h4 className="equity-chart-title">
@@ -260,7 +270,11 @@ function EquityBalanceChart({
           </span>
         </div>
 
-        <div className="equity-chart-filters" role="group" aria-label={tr("Series Filter", "Filtre de Séries")}>
+        <div
+          className="equity-chart-filters"
+          role="group"
+          aria-label={tr("Series Filter", "Filtre de Séries")}
+        >
           <button
             type="button"
             className={`equity-filter-btn ${activeSeries === "all" ? "active" : ""}`}
@@ -492,9 +506,7 @@ function EquityBalanceChart({
             fontFamily: "var(--nx-font-mono)",
           }}
         >
-          <span style={{ color: "var(--nx-signal)", fontWeight: 600 }}>
-            {activeHover.label}
-          </span>
+          <span style={{ color: "var(--nx-signal)", fontWeight: 600 }}>{activeHover.label}</span>
           <span style={{ color: "#00e5ff" }}>
             {tr("Total", "Total")} : <strong>{money(activeHover.total)}</strong>
           </span>
@@ -644,12 +656,7 @@ export function PaperTrading({
   const chosenPrice = side === "yes" ? yesPrice : noPrice;
 
   // Edge: expected edge on the chosen side
-  const edge =
-    chosenPrice !== null
-      ? side === "yes"
-        ? p - chosenPrice
-        : chosenPrice - p
-      : null;
+  const edge = chosenPrice !== null ? (side === "yes" ? p - chosenPrice : chosenPrice - p) : null;
 
   // Kelly fraction: f* = (edge / (1 - chosenPrice)) * confidence
   const kellyFraction =
@@ -670,8 +677,18 @@ export function PaperTrading({
       <div className="paper-trading-banner">
         <div style={{ display: "flex", alignItems: "center", gap: "var(--nx-space-3)" }}>
           <IconBarChart size={20} color="var(--nx-signal)" />
-          <h3 style={{ margin: 0, color: "var(--nx-text)", textTransform: "none", letterSpacing: "normal" }}>
-            {tr("Trading Lab // High-Frequency Paper Engine", "Trading Lab // Moteur de Simulation Haute Fréquence")}
+          <h3
+            style={{
+              margin: 0,
+              color: "var(--nx-text)",
+              textTransform: "none",
+              letterSpacing: "normal",
+            }}
+          >
+            {tr(
+              "Trading Lab // High-Frequency Paper Engine",
+              "Trading Lab // Moteur de Simulation Haute Fréquence",
+            )}
           </h3>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--nx-space-3)" }}>
@@ -704,7 +721,11 @@ export function PaperTrading({
       </p>
 
       {state.error || error ? (
-        <div role="alert" className="banner error" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          role="alert"
+          className="banner error"
+          style={{ display: "flex", alignItems: "center", gap: "8px" }}
+        >
           <IconWarning size={16} color="var(--nx-danger, #ef4444)" />
           <span>{error || state.error}</span>
         </div>
@@ -801,7 +822,15 @@ export function PaperTrading({
                   <IconShield size={13} />
                   {market.state.toUpperCase()}
                 </span>
-                <span className="muted" style={{ fontSize: "var(--nx-size-xs)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <span
+                  className="muted"
+                  style={{
+                    fontSize: "var(--nx-size-xs)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
                   <IconClock size={13} />
                   {new Date(market.close_at).toLocaleDateString()}
                 </span>
@@ -819,7 +848,14 @@ export function PaperTrading({
                       <IconActivity size={13} color="#00e5ff" />
                       {tr("Net Equity", "Valeur Totale")}
                     </span>
-                    <span className="pnl-badge" style={{ background: "color-mix(in srgb, #00e5ff 12%, transparent)", color: "#00e5ff", border: "1px solid color-mix(in srgb, #00e5ff 25%, transparent)" }}>
+                    <span
+                      className="pnl-badge"
+                      style={{
+                        background: "color-mix(in srgb, #00e5ff 12%, transparent)",
+                        color: "#00e5ff",
+                        border: "1px solid color-mix(in srgb, #00e5ff 25%, transparent)",
+                      }}
+                    >
                       NAV
                     </span>
                   </div>
@@ -827,7 +863,10 @@ export function PaperTrading({
                     {money(totalValueCents)}
                   </div>
                   <span className="trading-metric-subtext">
-                    {tr("Cash + Open Exposure + Unrealized", "Liquidités + Exposition + P&L Latent")}
+                    {tr(
+                      "Cash + Open Exposure + Unrealized",
+                      "Liquidités + Exposition + P&L Latent",
+                    )}
                   </span>
                 </div>
 
@@ -839,9 +878,7 @@ export function PaperTrading({
                     </span>
                     <span className="pnl-badge positive">EUR</span>
                   </div>
-                  <div className="trading-metric-value">
-                    {money(account.cash_balance_cents)}
-                  </div>
+                  <div className="trading-metric-value">{money(account.cash_balance_cents)}</div>
                   <span className="trading-metric-subtext">
                     {totalValueCents > 0
                       ? `${((account.cash_balance_cents / totalValueCents) * 100).toFixed(1)}% ${tr("of portfolio", "du portefeuille")}`
@@ -855,7 +892,14 @@ export function PaperTrading({
                       <IconShield size={13} color="#a855f7" />
                       {tr("Open Exposure", "Exposition Engagée")}
                     </span>
-                    <span className="pnl-badge" style={{ background: "color-mix(in srgb, #a855f7 12%, transparent)", color: "#a855f7", border: "1px solid color-mix(in srgb, #a855f7 25%, transparent)" }}>
+                    <span
+                      className="pnl-badge"
+                      style={{
+                        background: "color-mix(in srgb, #a855f7 12%, transparent)",
+                        color: "#a855f7",
+                        border: "1px solid color-mix(in srgb, #a855f7 25%, transparent)",
+                      }}
+                    >
                       AT RISK
                     </span>
                   </div>
@@ -928,7 +972,15 @@ export function PaperTrading({
 
           {/* Virtual Order Book & Market Quotes */}
           <div className="orderbook-panel">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--nx-space-3)" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "var(--nx-space-3)",
+              }}
+            >
               <div>
                 <h4 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                   <IconTarget size={16} color="var(--nx-signal)" />
@@ -972,7 +1024,8 @@ export function PaperTrading({
                         padding: "2px 8px",
                         fontSize: "var(--nx-size-3xs)",
                         color: "var(--nx-success, #10b981)",
-                        borderColor: "color-mix(in srgb, var(--nx-success, #10b981) 30%, transparent)",
+                        borderColor:
+                          "color-mix(in srgb, var(--nx-success, #10b981) 30%, transparent)",
                       }}
                     >
                       {tr("Select YES", "Sélectionner OUI")}
@@ -1014,7 +1067,8 @@ export function PaperTrading({
                         padding: "2px 8px",
                         fontSize: "var(--nx-size-3xs)",
                         color: "var(--nx-danger, #ef4444)",
-                        borderColor: "color-mix(in srgb, var(--nx-danger, #ef4444) 30%, transparent)",
+                        borderColor:
+                          "color-mix(in srgb, var(--nx-danger, #ef4444) 30%, transparent)",
                       }}
                     >
                       {tr("Select NO", "Sélectionner NON")}
@@ -1042,7 +1096,12 @@ export function PaperTrading({
                 </div>
               </div>
             ) : (
-              <Empty>{tr("No simulated quote available for this market.", "Aucune cotation disponible pour ce marché.")}</Empty>
+              <Empty>
+                {tr(
+                  "No simulated quote available for this market.",
+                  "Aucune cotation disponible pour ce marché.",
+                )}
+              </Empty>
             )}
 
             {market?.latest_quote ? (
@@ -1067,7 +1126,10 @@ export function PaperTrading({
                     {money(market.latest_quote.liquidity_cents)}
                   </strong>
                 </span>
-                <span className="muted" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  className="muted"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
                   <IconClock size={14} />
                   {tr("Observed", "Observé")} :{" "}
                   <span className="mono">{market.latest_quote.observed_at}</span>
@@ -1099,7 +1161,14 @@ export function PaperTrading({
                   });
                 }}
               >
-                <h5 style={{ margin: "0 0 var(--nx-space-3)", display: "flex", alignItems: "center", gap: "6px" }}>
+                <h5
+                  style={{
+                    margin: "0 0 var(--nx-space-3)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
                   <IconBarChart size={15} color="var(--nx-signal)" />
                   {tr("Record Simulated Market Quote", "Enregistrer une Nouvelle Cotation")}
                 </h5>
@@ -1142,7 +1211,9 @@ export function PaperTrading({
                     />
                   </label>
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--nx-space-3)" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "flex-end", gap: "var(--nx-space-3)" }}
+                >
                   <button
                     type="button"
                     className="button compact"
@@ -1165,7 +1236,9 @@ export function PaperTrading({
               e.preventDefault();
               void act(async () => {
                 if (!market || !account)
-                  throw new Error(tr("Select an account and market", "Sélectionnez un compte et un marché"));
+                  throw new Error(
+                    tr("Select an account and market", "Sélectionnez un compte et un marché"),
+                  );
                 const input = paperOrderInput(account.id, market, side, probability, confidence);
                 const body = JSON.stringify(input);
                 if (intent.current?.body !== body)
@@ -1183,9 +1256,7 @@ export function PaperTrading({
                 <IconTarget size={18} color="var(--nx-signal)" />
                 {tr("Kelly Criterion Execution Terminal", "Terminal d'Ordre Kelly Criterion")}
               </h4>
-              <span className="kelly-formula-badge">
-                f* = (b · p - q) / b · Confidence
-              </span>
+              <span className="kelly-formula-badge">f* = (b · p - q) / b · Confidence</span>
             </div>
 
             {/* Tactical Side Selector */}
@@ -1195,7 +1266,10 @@ export function PaperTrading({
                 className={`kelly-side-btn side-yes ${side === "yes" ? "active" : ""}`}
                 onClick={() => setSide("yes")}
               >
-                <IconCheck size={16} color={side === "yes" ? "var(--nx-success, #10b981)" : "currentColor"} />
+                <IconCheck
+                  size={16}
+                  color={side === "yes" ? "var(--nx-success, #10b981)" : "currentColor"}
+                />
                 {tr("Buy YES (Positive Outcome)", "Acheter OUI (Position Favorable)")}
               </button>
               <button
@@ -1203,7 +1277,10 @@ export function PaperTrading({
                 className={`kelly-side-btn side-no ${side === "no" ? "active" : ""}`}
                 onClick={() => setSide("no")}
               >
-                <IconWarning size={16} color={side === "no" ? "var(--nx-danger, #ef4444)" : "currentColor"} />
+                <IconWarning
+                  size={16}
+                  color={side === "no" ? "var(--nx-danger, #ef4444)" : "currentColor"}
+                />
                 {tr("Buy NO (Inverse Outcome)", "Acheter NON (Position Inverse)")}
               </button>
             </div>
@@ -1213,7 +1290,9 @@ export function PaperTrading({
               {/* Model Probability */}
               <div className="kelly-input-card">
                 <div className="kelly-input-label">
-                  <span>{tr("Estimated Model Probability (p)", "Probabilité Estimée du Modèle (p)")}</span>
+                  <span>
+                    {tr("Estimated Model Probability (p)", "Probabilité Estimée du Modèle (p)")}
+                  </span>
                   <strong className="mono" style={{ color: "var(--nx-signal)" }}>
                     {(Number(probability) * 100).toFixed(1)}%
                   </strong>
@@ -1333,9 +1412,7 @@ export function PaperTrading({
 
               <div className="kelly-hud-item">
                 <span className="kelly-hud-label">{tr("Estimated Stake", "Mise Suggérée")}</span>
-                <span className="kelly-hud-val">
-                  {money(estimatedStakeCents)}
-                </span>
+                <span className="kelly-hud-val">{money(estimatedStakeCents)}</span>
               </div>
             </div>
 
@@ -1362,7 +1439,9 @@ export function PaperTrading({
             <button
               type="submit"
               className="kelly-submit-btn"
-              disabled={busy || !open || !market?.latest_quote || !account || (edge !== null && edge <= 0)}
+              disabled={
+                busy || !open || !market?.latest_quote || !account || (edge !== null && edge <= 0)
+              }
             >
               <IconBolt size={18} />
               {tr("Submit Kelly Paper Order", "Exécuter l'Ordre Kelly Simulé")}
@@ -1371,7 +1450,14 @@ export function PaperTrading({
 
           {/* Positions and Order History Table with P&L Coloration */}
           <div style={{ marginTop: "var(--nx-space-8)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--nx-space-4)" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "var(--nx-space-4)",
+              }}
+            >
               <h4 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                 <IconBarChart size={16} color="var(--nx-signal)" />
                 {tr("Positions & Order Execution History", "Positions & Historique d'Exécution")}
@@ -1382,7 +1468,9 @@ export function PaperTrading({
             </div>
 
             {!account?.orders.length ? (
-              <Empty>{tr("No active or historical positions.", "Aucune position active ou historique.")}</Empty>
+              <Empty>
+                {tr("No active or historical positions.", "Aucune position active ou historique.")}
+              </Empty>
             ) : (
               <Table
                 head={[
@@ -1419,9 +1507,7 @@ export function PaperTrading({
 
                   return (
                     <tr key={order.id}>
-                      <td style={{ fontWeight: 500 }}>
-                        {m?.question ?? order.market_id}
-                      </td>
+                      <td style={{ fontWeight: 500 }}>{m?.question ?? order.market_id}</td>
                       <td>
                         <span
                           className={`pnl-badge ${order.outcome === "yes" ? "positive" : "negative"}`}
@@ -1518,11 +1604,21 @@ export function PaperTrading({
                 borderRadius: "var(--nx-radius-md)",
               }}
             >
-              <h4 style={{ margin: "0 0 var(--nx-space-2)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4
+                style={{
+                  margin: "0 0 var(--nx-space-2)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
                 <IconShield size={16} color="var(--nx-signal)" />
                 {tr("Settle Selected Market", "Régler le Marché Sélectionné")}
               </h4>
-              <p className="muted" style={{ margin: "0 0 var(--nx-space-4)", fontSize: "var(--nx-size-xs)" }}>
+              <p
+                className="muted"
+                style={{ margin: "0 0 var(--nx-space-4)", fontSize: "var(--nx-size-xs)" }}
+              >
                 {tr(
                   "Settlement resolves all accounts' positions on this market and executes cash distribution. Irreversible action.",
                   "Le règlement clôture les positions de tous les comptes sur ce marché et distribue les gains. Action irréversible.",
@@ -1635,7 +1731,9 @@ export function PaperTrading({
               <IconShield size={14} color="var(--nx-signal)" />
               <span>
                 {market.state.toUpperCase()} :{" "}
-                <strong>{market.winning_outcome ? market.winning_outcome.toUpperCase() : "—"}</strong>
+                <strong>
+                  {market.winning_outcome ? market.winning_outcome.toUpperCase() : "—"}
+                </strong>
               </span>
             </div>
           ) : null}

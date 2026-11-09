@@ -410,7 +410,9 @@ export function PreferencesPanel() {
               padding: "1.25rem",
               borderRadius: "10px",
               background:
-                defaultOS === "spatial" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                defaultOS === "spatial"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 defaultOS === "spatial"
                   ? "2px solid var(--nx-signal)"
@@ -480,7 +482,9 @@ export function PreferencesPanel() {
               padding: "1.25rem",
               borderRadius: "10px",
               background:
-                defaultOS === "classic" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                defaultOS === "classic"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 defaultOS === "classic"
                   ? "2px solid var(--nx-signal)"
@@ -582,7 +586,9 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "dark" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                themeMode === "dark"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "dark"
                   ? "2px solid var(--nx-signal)"
@@ -618,7 +624,9 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "light" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                themeMode === "light"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "light"
                   ? "2px solid var(--nx-signal)"
@@ -654,7 +662,9 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "system" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                themeMode === "system"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "system"
                   ? "2px solid var(--nx-signal)"
@@ -722,7 +732,9 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                locale === "fr" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                locale === "fr"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 locale === "fr"
                   ? "2px solid var(--nx-signal)"
@@ -741,8 +753,7 @@ export function PreferencesPanel() {
                 width: "36px",
                 height: "36px",
                 borderRadius: "6px",
-                background:
-                  locale === "fr" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
+                background: locale === "fr" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
                 color: locale === "fr" ? "var(--nx-text-on-accent)" : "var(--nx-text, #fff)",
                 fontWeight: 700,
                 fontSize: "0.9rem",
@@ -771,7 +782,9 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                locale === "en" ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)" : "var(--nx-surface, #0e131c)",
+                locale === "en"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 locale === "en"
                   ? "2px solid var(--nx-signal)"
@@ -790,8 +803,7 @@ export function PreferencesPanel() {
                 width: "36px",
                 height: "36px",
                 borderRadius: "6px",
-                background:
-                  locale === "en" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
+                background: locale === "en" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
                 color: locale === "en" ? "var(--nx-text-on-accent)" : "var(--nx-text, #fff)",
                 fontWeight: 700,
                 fontSize: "0.9rem",
@@ -855,9 +867,7 @@ export function PreferencesPanel() {
                 style={{
                   padding: "1rem",
                   borderRadius: "10px",
-                  background: isSelected
-                    ? "var(--nx-surface-hover)"
-                    : "var(--nx-surface, #0e131c)",
+                  background: isSelected ? "var(--nx-surface-hover)" : "var(--nx-surface, #0e131c)",
                   border: isSelected
                     ? `2px solid ${config.signal}`
                     : "1px solid var(--nx-line, #212b3b)",

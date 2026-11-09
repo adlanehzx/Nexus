@@ -67,7 +67,9 @@ export const errorHandlerPlugin = fp(
 
 /** Maps any error — Fastify, Zod, or unexpected — to our taxonomy. */
 function translate(
-  error: FastifyError | (Error & { statusCode?: number; code?: string; httpStatus?: number; userMessage?: string }),
+  error:
+    | FastifyError
+    | (Error & { statusCode?: number; code?: string; httpStatus?: number; userMessage?: string }),
 ): AppError {
   if (error instanceof AppError) return error;
 
@@ -112,7 +114,9 @@ function translate(
     // which is exactly what cost an evening on lastSeenAt.
     const errObj = error as { method?: string; url?: string };
     return toAppError(
-      new Error(`Response does not match schema on ${errObj.method ?? ""} ${errObj.url ?? ""}: ${error.message}`),
+      new Error(
+        `Response does not match schema on ${errObj.method ?? ""} ${errObj.url ?? ""}: ${error.message}`,
+      ),
     );
   }
 

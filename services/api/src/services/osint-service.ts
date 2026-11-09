@@ -113,7 +113,9 @@ export class OsintService {
 
   deleteRelation(ownerId: string, caseId: string, relationId: string): Promise<void> {
     return this.#mutate((store) => {
-      if (typeof (store as unknown as { deleteRelation?: Function }).deleteRelation === "function") {
+      if (
+        typeof (store as unknown as { deleteRelation?: Function }).deleteRelation === "function"
+      ) {
         store.deleteRelation(ownerId, caseId, relationId);
       } else {
         const record = store.get(ownerId, caseId);

@@ -2780,7 +2780,11 @@ tbody tr:last-child td {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--nx-signal) 20%, transparent), color-mix(in srgb, var(--nx-accent) 20%, transparent));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--nx-signal) 20%, transparent),
+    color-mix(in srgb, var(--nx-accent) 20%, transparent)
+  );
   border: 1px solid color-mix(in srgb, var(--nx-signal) 40%, transparent);
   color: var(--nx-signal);
   font-size: 0.75rem;
@@ -4727,7 +4731,9 @@ td.pnl-cell {
   padding: var(--nx-space-6);
   margin-bottom: var(--nx-space-6);
   overflow: hidden;
-  transition: border-color var(--nx-fast) var(--nx-ease), box-shadow var(--nx-normal) var(--nx-ease);
+  transition:
+    border-color var(--nx-fast) var(--nx-ease),
+    box-shadow var(--nx-normal) var(--nx-ease);
 }
 
 .trading-lab-card:hover {
@@ -5288,7 +5294,11 @@ td.pnl-cell {
   text-transform: uppercase;
   border-radius: var(--nx-radius-sm);
   border: 1px solid var(--nx-signal);
-  background: linear-gradient(135deg, var(--nx-signal) 0%, color-mix(in srgb, var(--nx-signal) 80%, black) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--nx-signal) 0%,
+    color-mix(in srgb, var(--nx-signal) 80%, black) 100%
+  );
   color: var(--nx-text-on-accent, #fff);
   cursor: pointer;
   display: flex;
@@ -6298,14 +6308,22 @@ td.pnl-cell {
 .quota-chart-bar-fill {
   width: 100%;
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, var(--nx-accent) 0%, color-mix(in srgb, var(--nx-accent) 35%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--nx-accent) 0%,
+    color-mix(in srgb, var(--nx-accent) 35%, transparent) 100%
+  );
   transition:
     height 0.3s ease,
     background 0.2s ease,
     box-shadow 0.2s ease;
 }
 .quota-chart-col:hover .quota-chart-bar-fill {
-  background: linear-gradient(180deg, #67e8f9 0%, color-mix(in srgb, var(--nx-accent) 60%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    #67e8f9 0%,
+    color-mix(in srgb, var(--nx-accent) 60%, transparent) 100%
+  );
   box-shadow: 0 0 12px color-mix(in srgb, var(--nx-accent) 40%, transparent);
 }
 .quota-chart-val {
@@ -6460,11 +6478,26 @@ td.pnl-cell {
   border-radius: 50%;
 }
 
-.secret-list { list-style: none; padding: 0; display: grid; gap: var(--nx-space-4); }
-.secret-row { display: flex; align-items: center; justify-content: space-between; gap: var(--nx-space-4); }
-.secret-row code { min-width: 0; overflow-wrap: anywhere; }
-.secret-row > .button { flex: 0 0 auto; margin: 0; }
-
+.secret-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--nx-space-4);
+}
+.secret-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-4);
+}
+.secret-row code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.secret-row > .button {
+  flex: 0 0 auto;
+  margin: 0;
+}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Disclosure header (Overview: Tasks & Queue, Recent Activity)

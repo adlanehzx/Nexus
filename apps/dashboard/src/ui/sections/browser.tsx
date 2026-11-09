@@ -362,9 +362,7 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
             {daemon?.browser_ready ? (
               <span style={{ color: "var(--color-success, #00e676)" }}>{tr("Ready", "Prêt")}</span>
             ) : daemon?.alive ? (
-              <span style={{ color: "var(--nx-signal)" }}>
-                {tr("Connected", "Connecté")}
-              </span>
+              <span style={{ color: "var(--nx-signal)" }}>{tr("Connected", "Connecté")}</span>
             ) : (
               <span style={{ color: "var(--color-muted, #95a3ba)" }}>
                 {tr("Inactive", "Inactif")}

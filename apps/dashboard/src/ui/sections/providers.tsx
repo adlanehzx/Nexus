@@ -401,7 +401,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                     justifyContent: "space-between",
                     minWidth: 0,
                     overflow: "hidden",
-                    background: selectedProvider === p.id ? "color-mix(in srgb, var(--nx-signal) 5%, transparent)" : undefined,
+                    background:
+                      selectedProvider === p.id
+                        ? "color-mix(in srgb, var(--nx-signal) 5%, transparent)"
+                        : undefined,
                   }}
                   onClick={() => {
                     setSelectedProvider(p.id);
@@ -1049,7 +1052,8 @@ export function Providers({ api }: { api: DashboardApi }) {
                                     </button>
                                   ))}
                                 </div>
-                                <input aria-label={tr(
+                                <input
+                                  aria-label={tr(
                                     "Optional reason (e.g. Rate limits, testing)",
                                     "Motif optionnel (ex. Quota dépassé, test)",
                                   )}
@@ -1115,7 +1119,8 @@ export function Providers({ api }: { api: DashboardApi }) {
               <div
                 style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}
               >
-                <input aria-label={tr(
+                <input
+                  aria-label={tr(
                     `Enter API key or session token for ${selectedProvider}...`,
                     `Clé API ou token de session pour ${selectedProvider}...`,
                   )}

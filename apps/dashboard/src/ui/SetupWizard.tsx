@@ -952,7 +952,9 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                     "Aucun outil CLI local installé ou connecté ?",
                   )}
                 </strong>
-                <p style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--nx-text-muted)" }}>
+                <p
+                  style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--nx-text-muted)" }}
+                >
                   {tr(
                     "You can continue directly with Free Cloud LLMs (NVIDIA NIM / Llama 3 included) or configure your API keys in Settings.",
                     "Vous pouvez continuer directement avec les modèles Cloud gratuits (NVIDIA NIM / Llama 3 inclus) ou configurer vos clés API dans les Paramètres.",

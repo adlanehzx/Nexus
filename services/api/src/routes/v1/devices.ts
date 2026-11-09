@@ -735,10 +735,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       },
     },
     async (request) => {
-      const serial =
-        request.body.serial ??
-        app.config.FIRE_TV_ADB_SERIAL ??
-        "192.168.1.120:5555";
+      const serial = request.body.serial ?? app.config.FIRE_TV_ADB_SERIAL ?? "192.168.1.120:5555";
       const service = new FireTvService(serial, app.config.FIRE_TV_ADB_SERVER);
       try {
         const result = await service.control(request.body.action);
@@ -832,14 +829,7 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
         ? app.satellites.list().filter((s) => app.satellites.isOwnedBy(s.deviceId, userId))
         : [];
 
-      const DEFAULT_ROOMS = [
-        "Salon",
-        "Bureau",
-        "Cuisine",
-        "Chambre",
-        "Entrée",
-        "Atelier",
-      ];
+      const DEFAULT_ROOMS = ["Salon", "Bureau", "Cuisine", "Chambre", "Entrée", "Atelier"];
 
       function determineRoom(name: string, health: Record<string, unknown> = {}): string {
         if (typeof health.room === "string" && health.room.trim().length > 0) {
@@ -874,7 +864,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
 
       for (const r of DEFAULT_ROOMS) {
         roomMap.set(r, {
-          id: r.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+          id: r
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s+/g, "-"),
           name: r,
           deviceCount: 0,
           onlineCount: 0,
@@ -920,7 +914,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
 
         if (!roomMap.has(roomName)) {
           roomMap.set(roomName, {
-            id: roomName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+            id: roomName
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/\s+/g, "-"),
             name: roomName,
             deviceCount: 0,
             onlineCount: 0,
@@ -975,7 +973,11 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
 
         if (!roomMap.has(roomName)) {
           roomMap.set(roomName, {
-            id: roomName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+            id: roomName
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/\s+/g, "-"),
             name: roomName,
             deviceCount: 0,
             onlineCount: 0,

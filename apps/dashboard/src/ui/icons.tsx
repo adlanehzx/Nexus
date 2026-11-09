@@ -859,4 +859,3 @@ export function IconActivity({ size = 16, color, style, className }: IconProps) 
     </svg>
   );
 }
-

@@ -464,7 +464,10 @@ function AppContent() {
       if (!hasModifier) return;
 
       // Ctrl+K or Ctrl+P: Switch to Spatial and open Command Palette
-      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p")) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p")
+      ) {
         e.preventDefault();
         e.stopPropagation();
         toggleViewMode("spatial");

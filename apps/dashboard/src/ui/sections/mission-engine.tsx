@@ -57,16 +57,10 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
       <Section state={state}>
         {(data) => {
           const cash = isTrading
-            ? data.accounts.reduce(
-                (total, account) => total + account.cash_balance_cents,
-                0,
-              )
+            ? data.accounts.reduce((total, account) => total + account.cash_balance_cents, 0)
             : 0;
           const exposure = isTrading
-            ? data.accounts.reduce(
-                (total, account) => total + account.open_exposure_cents,
-                0,
-              )
+            ? data.accounts.reduce((total, account) => total + account.open_exposure_cents, 0)
             : 0;
           const activeRuns = data.recent_runs.filter(
             (run) => run.state === "running" || run.state === "waiting_market_data",

@@ -25,6 +25,7 @@ bash scripts/quickstart.sh
 ```
 
 Ce script effectue automatiquement :
+
 1. La vérification de Docker et Docker Compose.
 2. La détection des binaires CLI installés localement (`claude`, `codex`, `agy`).
 3. La génération des clés cryptographiques Ed25519 et du coffre sécurisé (`MASTER_KEY`).
@@ -37,11 +38,11 @@ Ce script effectue automatiquement :
 
 Une fois le démarrage confirmé :
 
-| Mode d'accès | URL | Description |
-| :--- | :--- | :--- |
-| **Local** | [http://localhost:8080](http://localhost:8080) | Accès direct depuis votre machine |
-| **Réseau / Tailscale** | `http://<VOTRE_IP_TAILSCALE>:8080` | Accès distant sécurisé (ex. mobile / PC portable) |
-| **API Backend** | [http://localhost:8080/api/v1](http://localhost:8080/api/v1) | Endpoints REST & OpenAPI |
+| Mode d'accès           | URL                                                          | Description                                       |
+| :--------------------- | :----------------------------------------------------------- | :------------------------------------------------ |
+| **Local**              | [http://localhost:8080](http://localhost:8080)               | Accès direct depuis votre machine                 |
+| **Réseau / Tailscale** | `http://<VOTRE_IP_TAILSCALE>:8080`                           | Accès distant sécurisé (ex. mobile / PC portable) |
+| **API Backend**        | [http://localhost:8080/api/v1](http://localhost:8080/api/v1) | Endpoints REST & OpenAPI                          |
 
 ---
 
@@ -53,7 +54,7 @@ Lors de votre première visite, vous serez guidé par l'assistant interactif en 
 2. **Infrastructure & Données** : Initialisation sécurisée de la base de données PostgreSQL et du cache Redis.
 3. **Connexion des Agents IA** :
    - **Détection CLI locale** : Si vous utilisez déjà `claude code`, `codex` ou `antigravity`, NEXUS détecte vos profils sans jamais demander vos mots de passe.
-   - **Alternative Cloud** : Si aucune CLI n'est installée, cliquez simplement sur *"Continuer avec les LLMs Cloud"* pour utiliser les modèles intégrés ou configurer vos clés API.
+   - **Alternative Cloud** : Si aucune CLI n'est installée, cliquez simplement sur _"Continuer avec les LLMs Cloud"_ pour utiliser les modèles intégrés ou configurer vos clés API.
 4. **Capacités Optionnelles** : Automatisation de navigateur headless (CDP) et serveurs MCP.
 5. **Validation & Smoke Test** : Test en direct de la chaîne d'orchestration avant d'accéder au tableau de bord.
 
@@ -62,7 +63,7 @@ Lors de votre première visite, vous serez guidé par l'assistant interactif en 
 ## 5. Fonctionnalités Principales Disponibles en Bêta
 
 - **NEXUS Chat Orchestré** : Assistant conversationnel multi-agents avec streaming direct, suggestions guidées et routage intelligent des tâches.
-- **Gestion des Worktrees & Checkpoints VCS** : Créez, inspectez, fusionnez (*handoff*) vos worktrees Git et effectuez des rollbacks de points de contrôle sans blocage navigateur.
+- **Gestion des Worktrees & Checkpoints VCS** : Créez, inspectez, fusionnez (_handoff_) vos worktrees Git et effectuez des rollbacks de points de contrôle sans blocage navigateur.
 - **Moteur de Missions & Tâches** : Suivi des tâches en cours, annulation sécurisée et planification automatisée (Cron).
 - **Gestion des Profils d'Agents** : Visualisation, configuration et test direct des adaptateurs ACP.
 - **Catalogue MCP** : Connexion et gestion centralisée des serveurs d'outils Model Context Protocol.
@@ -72,17 +73,17 @@ Lors de votre première visite, vous serez guidé par l'assistant interactif en 
 
 ## 6. Raccourcis Clavier Principaux
 
-| Raccourci | Action |
-| :--- | :--- |
-| `Alt+1` | Ouvrir le Chat Orchestré |
-| `Alt+2` | Vue d'ensemble (Supervision) |
-| `Alt+3` | Suivi des Tâches |
-| `Alt+4` | Moteur de Mission |
-| `Alt+5` | Gestion des Agents |
-| `Alt+6` | Outils MCP |
-| `Alt+7` | Paramètres & Clés API |
-| `Alt+O` | Basculer entre Dashboard Classique et OS Spatial 3D |
-| `Ctrl+K` | Ouvrir la Palette de commandes rapides |
+| Raccourci | Action                                              |
+| :-------- | :-------------------------------------------------- |
+| `Alt+1`   | Ouvrir le Chat Orchestré                            |
+| `Alt+2`   | Vue d'ensemble (Supervision)                        |
+| `Alt+3`   | Suivi des Tâches                                    |
+| `Alt+4`   | Moteur de Mission                                   |
+| `Alt+5`   | Gestion des Agents                                  |
+| `Alt+6`   | Outils MCP                                          |
+| `Alt+7`   | Paramètres & Clés API                               |
+| `Alt+O`   | Basculer entre Dashboard Classique et OS Spatial 3D |
+| `Ctrl+K`  | Ouvrir la Palette de commandes rapides              |
 
 ---
 
@@ -106,4 +107,4 @@ docker compose -f infrastructure/docker/docker-compose.yml up -d
 
 ## 8. Remarque sur les Modules Expérimentaux
 
-Les laboratoires de recherche avancée (*CareerLab, TradingLab, Domotique, OSINT*) sont actuellement désactivés de la navigation principale afin de concentrer cette version Bêta sur le socle central : orchestration multi-agents, outils MCP et environnement de développement de code.
+Les laboratoires de recherche avancée (_CareerLab, TradingLab, Domotique, OSINT_) sont actuellement désactivés de la navigation principale afin de concentrer cette version Bêta sur le socle central : orchestration multi-agents, outils MCP et environnement de développement de code.
