@@ -30,6 +30,15 @@ import type {
   SavedSearch,
 } from "./types.js";
 
+export class CareerApiError extends Error {
+  readonly status: number | undefined;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+    this.name = "CareerApiError";
+  }
+}
+
 export interface HttpCareerEducationClientOptions {
   seedDemoData?: boolean;
 }
@@ -38,8 +47,8 @@ export interface HttpCareerEducationClientOptions {
  * Production-ready HTTP client for NEXUS Career & Education.
  *
  * Connects directly to `/api/v1/career/*` endpoints using the authenticated
- * `SessionManager`. Falls back seamlessly to safe local in-memory models
- * when offline or in standalone demonstration mode.
+ * `SessionManager`. Approvals, deadlines and contacts are strictly API-backed
+ * (errors surface to callers); features without a backend route stay local.
  */
 export class HttpCareerEducationClient implements CareerEducationClient {
   readonly #session: SessionManager;
@@ -50,6 +59,29 @@ export class HttpCareerEducationClient implements CareerEducationClient {
     this.#fallback = new FakeCareerEducationClient({
       seedDemoData: options.seedDemoData ?? false,
     });
+  }
+
+  /**
+   * Strict request helper for routes that exist on the backend. Never falls
+   * back to local data: auth and API failures surface to the caller.
+   */
+  async #call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
+    if (!this.#session.isAuthenticated) {
+      throw new CareerApiError("Sign in to use this Career feature.", 401);
+    }
+    const res = await this.#session.authorizedRequest({
+      method,
+      path,
+      ...(body !== undefined ? { body } : {}),
+    });
+    if (res.status < 200 || res.status >= 300 || !isSuccessData(res.body)) {
+      const err = (res.body as { error?: { message?: string } } | null)?.error;
+      throw new CareerApiError(
+        err?.message ?? `Career API request failed (${res.status}).`,
+        res.status,
+      );
+    }
+    return res.body.data as T;
   }
 
   async getProfile(): Promise<CareerEducationProfile> {
@@ -378,38 +410,42 @@ export class HttpCareerEducationClient implements CareerEducationClient {
   }
 
   async getDeadlines(): Promise<Deadline[]> {
-    return this.#fallback.getDeadlines();
+    const data = await this.#call<{ deadlines?: Record<string, unknown>[] }>(
+      "GET",
+      "/api/v1/career/deadlines",
+    );
+    return (data.deadlines ?? []).map(toDeadline);
   }
 
   async createDeadline(input: CreateDeadlineInput): Promise<Deadline> {
-    const local = await this.#fallback.createDeadline(input);
-
-    if (this.#session.isAuthenticated && input.opportunityId) {
-      try {
-        await this.#session.authorizedRequest({
-          method: "POST",
-          path: `/api/v1/career/applications/${encodeURIComponent(input.opportunityId)}/deadlines`,
-          body: {
-            title: input.title,
-            dueDate: input.dueDate,
-            category: input.category,
-            priority: input.priority,
-          },
-        });
-      } catch {
-        // Fallback holds the deadline
-      }
+    if (!input.opportunityId) {
+      throw new CareerApiError("An application is required to create a deadline.");
     }
-
-    return local;
+    const data = await this.#call<Record<string, unknown>>(
+      "POST",
+      `/api/v1/career/applications/${encodeURIComponent(input.opportunityId)}/deadlines`,
+      { kind: input.category, dueAt: input.dueDate, label: input.title },
+    );
+    return toDeadline(data);
   }
 
   async toggleDeadlineCompleted(id: string, completed: boolean): Promise<Deadline> {
-    return this.#fallback.toggleDeadlineCompleted(id, completed);
+    const data = await this.#call<Record<string, unknown>>(
+      "PUT",
+      `/api/v1/career/deadlines/${encodeURIComponent(id)}`,
+      { completed },
+    );
+    return toDeadline(data);
   }
 
   async getContacts(opportunityId?: string): Promise<Contact[]> {
-    return this.#fallback.getContacts(opportunityId);
+    const query = opportunityId ? `?applicationId=${encodeURIComponent(opportunityId)}` : "";
+    const path = "/api/v1/career/contacts";
+    const data = await this.#call<{ contacts?: Record<string, unknown>[] }>(
+      "GET",
+      `${path}${query}`,
+    );
+    return (data.contacts ?? []).map(toContact);
   }
 
   async getInterviews(applicationId?: string): Promise<Interview[]> {
@@ -439,11 +475,30 @@ export class HttpCareerEducationClient implements CareerEducationClient {
   }
 
   async getConfirmations(status?: ConfirmationStatus): Promise<ConfirmationRequest[]> {
-    return this.#fallback.getConfirmations(status);
+    const query = status ? `?status=${encodeURIComponent(status)}` : "";
+    const path = "/api/v1/career/confirmations";
+    const data = await this.#call<{ confirmations?: Record<string, unknown>[] }>(
+      "GET",
+      `${path}${query}`,
+    );
+    return (data.confirmations ?? []).map(toConfirmationRequest);
   }
 
   async requestConfirmation(input: CreateConfirmationInput): Promise<ConfirmationRequest> {
-    return this.#fallback.requestConfirmation(input);
+    // An empty target id must also fall back to the payload application id, hence `||`.
+    const targetId =
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+      input.targetOpportunityId || (input.payload?.applicationId as string | undefined);
+    if (!targetId) {
+      throw new CareerApiError("An application is required to request approval.");
+    }
+    const data = await this.#call<{ confirmation?: Record<string, unknown> }>(
+      "POST",
+      `/api/v1/career/applications/${encodeURIComponent(targetId)}/approval-request`,
+      {},
+    );
+    if (!data.confirmation) throw new CareerApiError("Malformed approval response.");
+    return toConfirmationRequest(data.confirmation);
   }
 
   async resolveConfirmation(
@@ -451,21 +506,13 @@ export class HttpCareerEducationClient implements CareerEducationClient {
     decision: "approve" | "reject" | "cancel",
     reason?: string,
   ): Promise<ConfirmationRequest> {
-    const local = await this.#fallback.resolveConfirmation(id, decision, reason);
-
-    if (this.#session.isAuthenticated) {
-      try {
-        await this.#session.authorizedRequest({
-          method: "POST",
-          path: `/api/v1/career/confirmations/${encodeURIComponent(id)}/resolve`,
-          body: { decision, reason },
-        });
-      } catch {
-        // Handled in local state
-      }
-    }
-
-    return local;
+    const data = await this.#call<{ confirmation?: Record<string, unknown> }>(
+      "POST",
+      `/api/v1/career/confirmations/${encodeURIComponent(id)}/resolve`,
+      { decision, reason },
+    );
+    if (!data.confirmation) throw new CareerApiError("Malformed confirmation response.");
+    return toConfirmationRequest(data.confirmation);
   }
 
   async getAuditEvents(limit = 100): Promise<AuditEvent[]> {
@@ -483,7 +530,16 @@ export class HttpCareerEducationClient implements CareerEducationClient {
     opportunityId: string,
     formValues: Record<string, string>,
   ): Promise<ConfirmationRequest> {
-    return this.#fallback.prepareDraftApplication(opportunityId, formValues);
+    return this.requestConfirmation({
+      actionType: "browser_submit_application",
+      title: `Submit application ${opportunityId}`,
+      summary: `Application package submission for ${opportunityId}`,
+      destination: "Company Portal",
+      targetOpportunityId: opportunityId,
+      payload: { opportunityId, formValues },
+      risks: ["Irreversible application submission"],
+      consequences: ["Candidate application package is transmitted to the employer"],
+    });
   }
 
   async prepareDraftEmail(
@@ -507,4 +563,69 @@ export class HttpCareerEducationClient implements CareerEducationClient {
 
 function isSuccessData(body: unknown): body is { data: unknown } {
   return body !== null && typeof body === "object" && "data" in body;
+}
+
+/** Coerces an untyped API field to a string, falling back when it is missing or not a scalar. */
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : fallback;
+}
+
+function toConfirmationRequest(raw: Record<string, unknown>): ConfirmationRequest {
+  const isApproved = raw.state === "approved" || raw.state === "consumed";
+  return {
+    id: text(raw.id),
+    actionType:
+      raw.purpose === "submit_application" ? "browser_submit_application" : "document_export",
+    title: `Approval: ${text(raw.summary, "Request")}`,
+    summary: text(raw.summary),
+    destination: "Direct Career Channel",
+    targetOpportunityId: typeof raw.applicationId === "string" ? raw.applicationId : undefined,
+    payload: { applicationId: raw.applicationId, payloadHash: raw.payloadHash },
+    attachedDocuments: [],
+    risks: ["Irreversible external submission of tailored application package"],
+    consequences: ["Transmits data to external organization"],
+    requiresHumanApproval: true,
+    status: isApproved ? "approved" : ((raw.state as ConfirmationStatus) ?? "pending"),
+    createdAt: text(raw.requestedAt, new Date().toISOString()),
+    expiresAt: text(raw.expiresAt, new Date(Date.now() + 86_400_000).toISOString()),
+    decidedAt: typeof raw.decidedAt === "string" ? raw.decidedAt : undefined,
+    resolvedBy: raw.decidedAt ? "human_operator" : undefined,
+  };
+}
+
+function toDeadline(raw: Record<string, unknown>): Deadline {
+  return {
+    id: text(raw.id),
+    opportunityId: text(raw.applicationId),
+    opportunityTitle: text(raw.label, "Application Deadline"),
+    organization: "Target Organization",
+    title: text(raw.label ?? raw.kind, "Deadline"),
+    dueDate: text(raw.dueAt, new Date().toISOString()),
+    category:
+      raw.kind === "interview"
+        ? "interview"
+        : raw.kind === "funding_call"
+          ? "funding_call"
+          : raw.kind === "follow_up"
+            ? "follow_up"
+            : "application_deadline",
+    priority: "high",
+    completed: raw.state === "met",
+    calendarSyncStatus: "confirmed",
+  };
+}
+
+function toContact(raw: Record<string, unknown>): Contact {
+  return {
+    id: text(raw.id),
+    opportunityId: text(raw.opportunityId ?? raw.applicationId),
+    name: text(raw.displayName, "Contact"),
+    role: text(raw.role, "Contact"),
+    organization: text(raw.organization),
+    email: text(raw.email),
+    phone: undefined,
+    notes: typeof raw.notes === "string" ? raw.notes : undefined,
+  };
 }

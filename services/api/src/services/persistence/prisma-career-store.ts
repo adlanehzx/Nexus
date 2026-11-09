@@ -652,10 +652,13 @@ export class PrismaCareerStore implements CareerStore {
     return presentConfirmation(row);
   }
 
-  async listConfirmations(userId: string, applicationId: string): Promise<ConfirmationRecord[]> {
+  async listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]> {
     const rows = await this.#prisma.careerConfirmation.findMany({
-      where: { userId, applicationId },
-      orderBy: { requestedAt: "asc" },
+      where: {
+        userId,
+        ...(applicationId !== undefined ? { applicationId } : {}),
+      },
+      orderBy: { requestedAt: "desc" },
     });
     return rows.map(presentConfirmation);
   }
@@ -754,6 +757,7 @@ export class PrismaCareerStore implements CareerStore {
     toState: ApplicationState | null;
     summary: string;
     context: Record<string, unknown>;
+    actor?: string;
     now: Date;
   }): Promise<ApplicationEvent> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -776,6 +780,7 @@ export class PrismaCareerStore implements CareerStore {
             toState: input.toState,
             summary: input.summary,
             context: input.context as InputJsonValue,
+            actor: input.actor ?? "owner",
             createdAt: input.now,
           },
         });
@@ -797,6 +802,36 @@ export class PrismaCareerStore implements CareerStore {
       orderBy: { sequence: "asc" },
     });
     return rows.map(presentEvent);
+  }
+
+  async listRecentEvents(
+    userId: string,
+    filter: { actor?: string; kindPrefix?: string; limit: number },
+  ): Promise<ApplicationEvent[]> {
+    const rows = await this.#prisma.careerApplicationEvent.findMany({
+      where: {
+        userId,
+        ...(filter.actor === undefined ? {} : { actor: filter.actor }),
+        ...(filter.kindPrefix === undefined ? {} : { kind: { startsWith: filter.kindPrefix } }),
+      },
+      orderBy: [{ createdAt: "desc" }, { sequence: "desc" }],
+      take: filter.limit,
+    });
+    return rows.map(presentEvent);
+  }
+
+  countEvents(
+    userId: string,
+    filter: { actor: string; kind: string; since: Date },
+  ): Promise<number> {
+    return this.#prisma.careerApplicationEvent.count({
+      where: {
+        userId,
+        actor: filter.actor,
+        kind: filter.kind,
+        createdAt: { gte: filter.since },
+      },
+    });
   }
 }
 
@@ -1097,6 +1132,7 @@ function presentEvent(row: {
   toState: string | null;
   summary: string;
   context: unknown;
+  actor: string;
   createdAt: Date;
 }): ApplicationEvent {
   return {

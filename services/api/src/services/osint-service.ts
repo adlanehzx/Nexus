@@ -1,3 +1,4 @@
+import { assertPublicWebUrl } from "@nexus/web-search";
 import { spawn } from "node:child_process";
 import { resolveAny, lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
@@ -22,18 +23,30 @@ import {
   type OsintRelation,
   type OsintWatch,
 } from "@nexus/osint";
+import type { OsintPersistence } from "./persistence/prisma-osint-store.js";
 import type { RuntimeConfigurationStore, SecretVault } from "./runtime-configuration.js";
 
 export type OsintEnrichmentProvider =
   "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
+export class OsintNotFoundError extends Error {}
+
 export class OsintService {
+  readonly #persistence: OsintPersistence | undefined;
+  #loading: Promise<InMemoryOsintCaseStore> | undefined;
   readonly #runtime: RuntimeConfigurationStore | undefined;
   readonly #vault: SecretVault | undefined;
   #store: InMemoryOsintCaseStore | undefined;
   #queue: Promise<void> = Promise.resolve();
 
-  constructor(options: { runtime?: RuntimeConfigurationStore; vault?: SecretVault } = {}) {
+  constructor(
+    options: {
+      runtime?: RuntimeConfigurationStore;
+      vault?: SecretVault;
+      persistence?: OsintPersistence;
+    } = {},
+  ) {
+    this.#persistence = options.persistence;
     this.#runtime = options.runtime;
     this.#vault = options.vault;
   }
@@ -79,12 +92,53 @@ export class OsintService {
     return this.#mutate((store) => store.addEntity(ownerId, caseId, input));
   }
 
+  deleteEntity(ownerId: string, caseId: string, entityId: string): Promise<void> {
+    return this.#mutate((store) => {
+      if (typeof (store as unknown as { deleteEntity?: unknown }).deleteEntity === "function") {
+        store.deleteEntity(ownerId, caseId, entityId);
+      } else {
+        const record = store.get(ownerId, caseId);
+        if (!record) {
+          throw new Error(`OSINT case ${caseId} was not found.`);
+        }
+        const exists = record.entities.some((e) => e.id === entityId);
+        if (!exists) {
+          throw new Error(`OSINT entity ${entityId} was not found.`);
+        }
+        record.entities = record.entities.filter((e) => e.id !== entityId);
+        record.relations = record.relations.filter(
+          (r) => r.sourceId !== entityId && r.targetId !== entityId,
+        );
+        record.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
   addRelation(
     ownerId: string,
     caseId: string,
     input: Omit<OsintRelation, "id">,
   ): Promise<OsintRelation> {
     return this.#mutate((store) => store.addRelation(ownerId, caseId, input));
+  }
+
+  deleteRelation(ownerId: string, caseId: string, relationId: string): Promise<void> {
+    return this.#mutate((store) => {
+      if (typeof (store as unknown as { deleteRelation?: unknown }).deleteRelation === "function") {
+        store.deleteRelation(ownerId, caseId, relationId);
+      } else {
+        const record = store.get(ownerId, caseId);
+        if (!record) {
+          throw new Error(`OSINT case ${caseId} was not found.`);
+        }
+        const exists = record.relations.some((r) => r.id === relationId);
+        if (!exists) {
+          throw new Error(`OSINT relation ${relationId} was not found.`);
+        }
+        record.relations = record.relations.filter((r) => r.id !== relationId);
+        record.updatedAt = new Date().toISOString();
+      }
+    });
   }
 
   addWatch(
@@ -219,8 +273,15 @@ export class OsintService {
 
   async #load(): Promise<InMemoryOsintCaseStore> {
     if (this.#store !== undefined) return this.#store;
-    this.#store = new InMemoryOsintCaseStore((await this.#runtime?.loadOsintCases()) ?? []);
-    return this.#store;
+    this.#loading ??= (async () => {
+      const legacy = (await this.#runtime?.loadOsintCases()) ?? [];
+      await this.#persistence?.importCases(legacy);
+      this.#store = new InMemoryOsintCaseStore(
+        this.#persistence ? await this.#persistence.loadCases() : legacy,
+      );
+      return this.#store;
+    })();
+    return this.#loading;
   }
 
   async #required(ownerId: string, caseId: string): Promise<OsintCaseRecord> {
@@ -235,7 +296,9 @@ export class OsintService {
         try {
           const store = await this.#load();
           const result = operation(store);
-          await this.#runtime?.saveOsintCases(store.snapshot());
+          if (this.#persistence) {
+            for (const record of store.snapshot()) await this.#persistence.saveCase(record);
+          } else await this.#runtime?.saveOsintCases(store.snapshot());
           resolve(result);
         } catch (error) {
           reject(error instanceof Error ? error : new Error("OSINT operation failed."));
@@ -286,9 +349,7 @@ function isPublicAddress(address: string): boolean {
 }
 
 async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) throw new Error(`Public registry request failed (${response.status}).`);
-  return response.json();
+  return JSON.parse(await fetchOsintPublicText(url));
 }
 
 function readCertificate(hostname: string, address: string): Promise<unknown> {
@@ -313,7 +374,12 @@ function readCertificate(hostname: string, address: string): Promise<unknown> {
   });
 }
 
-function readPinnedPublicPage(url: URL, address: string): Promise<string> {
+function readPinnedPublicPage(
+  url: URL,
+  address: string,
+  signal?: AbortSignal,
+  onRedirect?: (location: string) => Promise<string>,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const request = httpsRequest(
       {
@@ -322,10 +388,20 @@ function readPinnedPublicPage(url: URL, address: string): Promise<string> {
         port: url.port === "" ? 443 : Number(url.port),
         path: `${url.pathname}${url.search}`,
         method: "GET",
+        ...(signal ? { signal } : {}),
         headers: { host: url.host, "user-agent": "NEXUS-OSINT-Watch/1.0" },
         timeout: 15_000,
       },
       (response) => {
+        if (
+          [301, 302, 303, 307, 308].includes(response.statusCode ?? 0) &&
+          onRedirect &&
+          response.headers.location
+        ) {
+          response.resume();
+          void onRedirect(response.headers.location).then(resolve, reject);
+          return;
+        }
         if ((response.statusCode ?? 500) < 200 || (response.statusCode ?? 500) >= 300) {
           response.resume();
           reject(new Error(`Public watch request failed (${response.statusCode ?? 0}).`));
@@ -421,4 +497,22 @@ function runSherlock(usernameInput: string): Promise<unknown> {
       );
     });
   });
+}
+
+/** Pinned DNS transport; every redirect is revalidated and pinned independently. */
+export async function fetchOsintPublicText(
+  value: string,
+  signal?: AbortSignal,
+  redirects = 0,
+): Promise<string> {
+  if (redirects > 5) throw new Error("Too many public registry redirects");
+  const url = new URL(value);
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443"))
+    throw new Error("Only public HTTPS sources are allowed.");
+  await assertPublicWebUrl(url);
+  const address = await resolvePublicAddress(url.hostname);
+  signal?.throwIfAborted();
+  return readPinnedPublicPage(url, address, signal, (location) =>
+    fetchOsintPublicText(new URL(location, url).toString(), signal, redirects + 1),
+  );
 }

@@ -206,8 +206,66 @@ export const fr: Translations = {
       description: "Topologie des messages inter-agents, débit et latence de messagerie.",
     },
     "quota-forecast": {
-      title: "Prévisions quotas",
-      description: "Projections d'usage des modèles, dates estimées d'épuisement et confiance.",
+      title: "Usage & Quotas",
+      description:
+        "Télémétrie des jetons en temps réel, tendances de consommation et analyse des coûts.",
+    },
+    domotique: {
+      title: "Domotique & Satellites",
+      description:
+        "Supervision domotique, contrôle des pièces de vie, télémétrie acoustique et flotte de satellites vocaux ESP32.",
+    },
+    satellites: {
+      title: "Domotique & Satellites",
+      description:
+        "Supervision domotique, contrôle des pièces de vie, télémétrie acoustique et flotte de satellites vocaux ESP32.",
+    },
+    "settings-preferences": {
+      title: "Préférences & Thèmes",
+      description:
+        "Apparence visuelle, mode clair/sombre, langue et options de l'interface bureau.",
+    },
+    "settings-shortcuts": {
+      title: "Raccourcis clavier",
+      description: "Raccourcis clavier configurables et touches de productivité.",
+    },
+    "settings-engine": {
+      title: "Moteurs LLM & Routage",
+      description:
+        "Configurez les modèles locaux, les chaînes de repli et les fournisseurs d'API externes.",
+    },
+    "settings-secrets": {
+      title: "Clés API & Secrets",
+      description:
+        "Identifiants chiffrés, jetons d'accès des fournisseurs et secrets d'environnement.",
+    },
+    "settings-backup": {
+      title: "Sauvegarde & Restauration",
+      description:
+        "Instantanés de configuration, export de l'état et restauration de points précédents.",
+    },
+    "usage-limits": {
+      title: "Limites & Réinitialisations",
+      description:
+        "Jauges de capacité, fenêtres glissantes de 5 heures et comptes à rebours hebdomadaires.",
+    },
+    "usage-costs": {
+      title: "Répartition des coûts",
+      description: "Coûts par modèle, par niveau de fournisseur et par utilisation du cache.",
+    },
+    "usage-tokens": {
+      title: "Flux de jetons & métriques",
+      description:
+        "Répartition fine des jetons de prompt, de complétion et de lecture/écriture du cache.",
+    },
+    observability: {
+      title: "Observabilité",
+      description:
+        "Santé des services, moteur de missions, serveurs MCP, erreurs récentes et recherche d'incidents.",
+    },
+    organizations: {
+      title: "Organisations",
+      description: "Organisations dont vous êtes membre, leurs membres et leurs rôles.",
     },
     "vcs-worktrees": {
       title: "VCS & Worktrees",

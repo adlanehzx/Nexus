@@ -49,7 +49,10 @@ import { connectionRoutes } from "./routes/v1/connections.js";
 import { organizationRoutes } from "./routes/v1/organizations.js";
 import { careerRoutes } from "./routes/v1/career.js";
 import { linkedInRoutes } from "./routes/v1/linkedin.js";
+import { careerAutonomyRoutes } from "./routes/v1/career-autonomy.js";
+import { linkedInContentRoutes } from "./routes/v1/linkedin-content.js";
 import { satelliteRoutes } from "./routes/v1/satellites.js";
+import { domotiqueRoutes } from "./routes/v1/domotique.js";
 import { SatelliteService } from "./services/satellite-service.js";
 import { createFireTvTool, FireTvService } from "./services/fire-tv.js";
 import { osintRoutes } from "./routes/v1/osint.js";
@@ -212,6 +215,15 @@ export async function buildApp(options: BuildAppOptions) {
     );
   }
 
+  // Lab 4 — satellites (static env or enrolled from the network) and ADB TVs
+  // (added per account in the dashboard) join the unified home registry.
+  app.satellites.attachRegistry(services.satelliteEnrollment);
+  services.domotique.attachSatellites(app.satellites);
+  services.domotique.attachAdb({
+    controlFor: (serial) => new FireTvService(serial, config.FIRE_TV_ADB_SERVER),
+    sharedSerial: config.FIRE_TV_ADB_SERIAL,
+  });
+
   app.decorate(
     "clientChannel",
     new ClientChannel({
@@ -267,6 +279,11 @@ export async function buildApp(options: BuildAppOptions) {
     transform: jsonSchemaTransform,
   });
 
+  // Unversioned fallback redirect so requests to /devices/* gracefully reach /api/v1/devices/*
+  app.all("/devices/*", async (request, reply) => {
+    return reply.redirect(`/api/v1${request.url}`, 307);
+  });
+
   // Liveness probe, unversioned: belongs to infrastructure, not the API's public contract.
   await app.register(healthRoutes);
 
@@ -306,8 +323,11 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(organizationRoutes);
       await v1.register(careerRoutes);
       await v1.register(linkedInRoutes);
+      await v1.register(careerAutonomyRoutes);
+      await v1.register(linkedInContentRoutes);
       await v1.register(osintRoutes);
       await v1.register(satelliteRoutes);
+      await v1.register(domotiqueRoutes);
       await v1.register(worktreeRoutes);
       await v1.register(checkpointRoutes);
       await v1.register(providerRoutes);
@@ -320,6 +340,21 @@ export async function buildApp(options: BuildAppOptions) {
 
   app.addHook("onReady", () => {
     app.log.info({ event: "api.ready", version: config.API_VERSION }, "API ready");
+    // Lab 4 — Home Assistant connections and the routine scheduler. Never blocks
+    // boot: an unreachable HA or a missing migration is reported, not fatal.
+    services.satelliteEnrollment.load().catch((error: unknown) => {
+      app.log.warn(
+        { err: error, event: "satellites.enrollment_load_failed" },
+        "Enrolled satellites not loaded",
+      );
+    });
+    services.domotique.start().catch((error: unknown) => {
+      app.log.warn({ err: error, event: "domotique.start_failed" }, "Domotique did not start");
+    });
+  });
+  app.addHook("onClose", async () => {
+    services.domotique.stop();
+    await Promise.resolve();
   });
 
   return app;

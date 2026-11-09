@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { DashboardApi } from "../../lib/api.js";
 import {
   HEALTH_LABELS,
@@ -12,6 +12,7 @@ import { useI18n } from "../i18n/index.js";
 import { Futuristic3DCanvas } from "../Futuristic3DCanvas.js";
 import { Futuristic3DCard } from "../Futuristic3DCard.js";
 import { Tasks } from "./tasks.js";
+import { IconChevronRight } from "../icons.js";
 
 /**
  * Supervision sections.
@@ -27,11 +28,53 @@ import { Tasks } from "./tasks.js";
 // 1. Overview
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Disclosure header. A real <button> so it is focusable, activates with Enter/Space,
+ * and announces its state through aria-expanded.
+ */
+function CollapsibleHeader({
+  open,
+  onToggle,
+  controlsId,
+  expandLabel,
+  collapseLabel,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  controlsId: string;
+  expandLabel: string;
+  collapseLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="collapsible-header"
+      aria-expanded={open}
+      aria-controls={controlsId}
+      onClick={onToggle}
+    >
+      <span className="collapsible-header-title">
+        <IconChevronRight size={16} className={open ? "is-open" : ""} />
+        <span>{children}</span>
+      </span>
+      <span className="muted collapsible-header-hint">{open ? collapseLabel : expandLabel}</span>
+    </button>
+  );
+}
+
 export function Overview({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const state = useSection(() => api.overview());
   const [showTasks, setShowTasks] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [taskCounts, setTaskCounts] = useState<{ running: number; total: number } | null>(null);
+  const onTaskCounts = useCallback((counts: { running: number; total: number }) => {
+    setTaskCounts((previous) =>
+      previous?.running === counts.running && previous.total === counts.total ? previous : counts,
+    );
+  }, []);
 
   return (
     <div className="content">
@@ -199,109 +242,43 @@ export function Overview({ api }: { api: DashboardApi }) {
 
               {/* Collapsible Tasks Section */}
               <div style={{ marginTop: "2rem", marginBottom: "1rem" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.85rem 1.2rem",
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid var(--border-color, #2a2e39)",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                  onClick={() => setShowTasks(!showTasks)}
+                <CollapsibleHeader
+                  open={showTasks}
+                  onToggle={() => setShowTasks(!showTasks)}
+                  controlsId="overview-tasks-panel"
+                  expandLabel={tr("Click to expand", "Cliquer pour dérouler")}
+                  collapseLabel={tr("Click to collapse", "Cliquer pour replier")}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: showTasks ? "rotate(90deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease",
-                      }}
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                    <span style={{ fontWeight: 600, fontSize: "1rem" }}>
-                      {tr("Tasks & Queue", "Tâches & File d'attente")}{" "}
-                      <span
-                        style={{
-                          color: data.tasks.running > 0 ? "var(--nx-accent, #64ffda)" : "inherit",
-                        }}
-                      >
-                        ({data.tasks.running} {tr("running", "en cours")} / {data.tasks.total}{" "}
-                        {tr("total", "total")})
-                      </span>
-                    </span>
-                  </div>
-                  <span className="muted" style={{ fontSize: "0.85rem" }}>
-                    {showTasks
-                      ? tr("Click to collapse", "Cliquer pour replier")
-                      : tr("Click to expand", "Cliquer pour dérouler")}
+                  {tr("Tasks & Queue", "Tâches & File d'attente")}{" "}
+                  <span
+                    className={(taskCounts?.running ?? data.tasks.running) > 0 ? "is-live" : ""}
+                  >
+                    ({taskCounts?.running ?? data.tasks.running} {tr("running", "en cours")} /{" "}
+                    {taskCounts?.total ?? data.tasks.total} {tr("total", "total")})
                   </span>
-                </div>
+                </CollapsibleHeader>
 
                 {showTasks && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <Tasks api={api} embedded />
+                  <div id="overview-tasks-panel" style={{ marginTop: "1rem" }}>
+                    <Tasks api={api} embedded onCounts={onTaskCounts} />
                   </div>
                 )}
               </div>
 
               {/* Collapsible Recent Activity Section */}
               <div style={{ marginTop: "2rem", marginBottom: "1.5rem" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.85rem 1.2rem",
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid var(--border-color, #2a2e39)",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                  onClick={() => setShowActivity(!showActivity)}
+                <CollapsibleHeader
+                  open={showActivity}
+                  onToggle={() => setShowActivity(!showActivity)}
+                  controlsId="overview-activity-panel"
+                  expandLabel={tr("Click to expand", "Cliquer pour dérouler")}
+                  collapseLabel={tr("Click to collapse", "Cliquer pour replier")}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: showActivity ? "rotate(90deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease",
-                      }}
-                    >
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                    <span style={{ fontWeight: 600, fontSize: "1rem" }}>
-                      {tr("Recent Activity", "Activité Récente")} ({sorted.length})
-                    </span>
-                  </div>
-                  <span className="muted" style={{ fontSize: "0.85rem" }}>
-                    {showActivity
-                      ? tr("Click to collapse", "Cliquer pour replier")
-                      : tr("Click to expand", "Cliquer pour dérouler")}
-                  </span>
-                </div>
+                  {tr("Recent Activity", "Activité Récente")} ({sorted.length})
+                </CollapsibleHeader>
 
                 {showActivity && (
-                  <div style={{ marginTop: "1rem" }}>
+                  <div id="overview-activity-panel" style={{ marginTop: "1rem" }}>
                     {sorted.length === 0 ? (
                       <Empty>{tr("Nothing to report.", "Rien à signaler.")}</Empty>
                     ) : (

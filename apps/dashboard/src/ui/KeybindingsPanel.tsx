@@ -100,10 +100,10 @@ export function KeybindingsPanel() {
   };
 
   const categories = [
-    { id: "all", label: tr("Tous", "All") },
-    { id: "spaces", label: tr("Espaces", "Spaces") },
-    { id: "windows", label: tr("Fenêtres & Tiling", "Windows & Tiling") },
-    { id: "system", label: tr("Système & Vue", "System & View") },
+    { id: "all", label: tr("All", "Tous") },
+    { id: "spaces", label: tr("Spaces", "Espaces") },
+    { id: "windows", label: tr("Windows & Tiling", "Fenêtres & Tiling") },
+    { id: "system", label: tr("System & View", "Système & Vue") },
     { id: "navigation", label: tr("Navigation", "Navigation") },
   ];
 
@@ -113,7 +113,8 @@ export function KeybindingsPanel() {
       const q = searchQuery.toLowerCase();
       const matchLabel =
         item.label.toLowerCase().includes(q) || item.labelEn.toLowerCase().includes(q);
-      const matchDesc = item.description.toLowerCase().includes(q);
+      const matchDesc =
+        item.description.toLowerCase().includes(q) || item.descriptionEn.toLowerCase().includes(q);
       const matchKeys = (bindings[item.id] ?? item.defaultKeys).toLowerCase().includes(q);
       return matchLabel || matchDesc || matchKeys;
     }
@@ -124,11 +125,11 @@ export function KeybindingsPanel() {
     <div className="preferences-panel cyber-reticle" style={{ maxWidth: "1000px" }}>
       <div className="pref-header">
         <div>
-          <h3>{tr("Raccourcis Clavier & Keybindings", "Keyboard Shortcuts & Keybindings")}</h3>
+          <h3>{tr("Keyboard Shortcuts & Keybindings", "Raccourcis Clavier & Keybindings")}</h3>
           <p>
             {tr(
-              "Personnalisez les raccourcis clavier de NEXUS pour le Spatial OS et le Dashboard. Compatible QWERTY, AZERTY et Desktop Omarchy.",
               "Customize NEXUS keyboard shortcuts for Spatial OS and Dashboard. Compatible with QWERTY, AZERTY, and Omarchy Desktop.",
+              "Personnalisez les raccourcis clavier de NEXUS pour le Spatial OS et le Dashboard. Compatible QWERTY, AZERTY et Desktop Omarchy.",
             )}
           </p>
         </div>
@@ -136,9 +137,9 @@ export function KeybindingsPanel() {
           type="button"
           className="button secondary"
           onClick={handleResetAll}
-          title={tr("Rétablir tous les raccourcis par défaut", "Reset all shortcuts to defaults")}
+          title={tr("Reset all shortcuts to defaults", "Rétablir tous les raccourcis par défaut")}
         >
-          {tr("Réinitialiser tout", "Reset all")}
+          {tr("Reset all", "Réinitialiser tout")}
         </button>
       </div>
 
@@ -175,9 +176,10 @@ export function KeybindingsPanel() {
         </div>
 
         <input
+          aria-label={tr("Filter by action or key...", "Filtrer par action ou touche...")}
           type="search"
           className="field"
-          placeholder={tr("Filtrer par action ou touche...", "Filter by action or key...")}
+          placeholder={tr("Filter by action or key...", "Filtrer par action ou touche...")}
           style={{ width: "220px", fontSize: "12px", padding: "6px 10px" }}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -200,12 +202,8 @@ export function KeybindingsPanel() {
                 justifyContent: "space-between",
                 padding: "10px 14px",
                 borderRadius: "var(--nx-radius-sm, 6px)",
-                background: isEditing
-                  ? "var(--nx-accent-muted, rgba(0, 240, 255, 0.08))"
-                  : "var(--nx-surface-raised, rgba(255, 255, 255, 0.03))",
-                border: isEditing
-                  ? "1px solid var(--nx-accent, #00f0ff)"
-                  : "1px solid var(--nx-line, rgba(255, 255, 255, 0.08))",
+                background: isEditing ? "var(--nx-accent-muted)" : "var(--nx-surface-raised)",
+                border: isEditing ? "1px solid var(--nx-accent)" : "1px solid var(--nx-line)",
                 transition: "all 0.15s ease",
               }}
             >
@@ -225,12 +223,12 @@ export function KeybindingsPanel() {
                         fontFamily: "var(--nx-font-mono)",
                       }}
                     >
-                      {tr("personnalisé", "custom")}
+                      {tr("custom", "personnalisé")}
                     </span>
                   )}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--nx-text-muted)", marginTop: "2px" }}>
-                  {item.description}
+                  {locale === "fr" ? item.description : item.descriptionEn}
                 </div>
               </div>
 
@@ -251,7 +249,7 @@ export function KeybindingsPanel() {
                         textAlign: "center",
                       }}
                     >
-                      {recordedKeys || tr("Appuyez sur des touches...", "Press keys...")}
+                      {recordedKeys || tr("Press keys...", "Appuyez sur des touches...")}
                     </span>
                     <button
                       type="button"
@@ -260,7 +258,7 @@ export function KeybindingsPanel() {
                       disabled={!recordedKeys}
                       onClick={() => handleSave(item.id)}
                     >
-                      {tr("Valider", "Save")}
+                      {tr("Save", "Valider")}
                     </button>
                     <button
                       type="button"
@@ -271,7 +269,7 @@ export function KeybindingsPanel() {
                         setRecordedKeys("");
                       }}
                     >
-                      {tr("Annuler", "Cancel")}
+                      {tr("Cancel", "Annuler")}
                     </button>
                   </div>
                 ) : (
@@ -299,14 +297,14 @@ export function KeybindingsPanel() {
                         setRecordedKeys("");
                       }}
                     >
-                      {tr("Modifier", "Edit")}
+                      {tr("Edit", "Modifier")}
                     </button>
                     {isCustom && (
                       <button
                         type="button"
                         className="button secondary"
                         style={{ fontSize: "11px", padding: "3px 6px", opacity: 0.7 }}
-                        title={tr("Rétablir la touche par défaut", "Reset to default")}
+                        title={tr("Reset to default", "Rétablir la touche par défaut")}
                         onClick={() => handleResetOne(item.id)}
                       >
                         <IconRefresh size={11} />

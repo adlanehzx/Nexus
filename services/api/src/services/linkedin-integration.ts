@@ -134,6 +134,15 @@ export class LinkedInIntegrationService {
   }
 
   async resolveClient(context: ToolContext): Promise<LinkedInClient> {
+    return this.resolveClientForUser(context.userId);
+  }
+
+  /**
+   * The member's own official API client, used by content management.
+   * Same strict per-user isolation as the tool path: no global fallback.
+   */
+  async resolveClientForUser(userId: string | undefined): Promise<LinkedInClient> {
+    const context = { userId };
     if (!context.userId || context.userId.trim() === "" || context.userId === "anonymous") {
       throw new Error(
         "Unauthenticated user: LinkedIn actions require an authenticated user context.",

@@ -33,14 +33,14 @@ export function State({ tone, label }: { tone: string; label: string }) {
   );
 }
 
-export function Bar({ percent }: { percent: number }) {
+export function Bar({ percent, label = "Progress" }: { percent: number; label?: string }) {
   const value = Math.max(0, Math.min(100, percent));
   return (
     <div
       className="gauge"
       title={`${String(value)} %`}
       role="progressbar"
-      aria-label="Usage"
+      aria-label={label}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={value}
@@ -180,4 +180,137 @@ export function Section<T>(props: {
     );
   }
   return <>{props.children(props.state.data)}</>;
+}
+
+export function Modal(props: {
+  title: string;
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  width?: string;
+}) {
+  useEffect(() => {
+    if (!props.isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") props.onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [props.isOpen, props.onClose]);
+
+  if (!props.isOpen) return null;
+
+  return (
+    <div className="nexus-modal-backdrop" role="dialog" aria-modal="true" onClick={props.onClose}>
+      <div
+        className="nexus-modal-content"
+        style={props.width ? { width: props.width } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="nexus-modal-header">
+          <h3 className="nexus-modal-title">{props.title}</h3>
+          <button
+            type="button"
+            className="nexus-modal-close"
+            onClick={props.onClose}
+            aria-label="Close"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M3 3l10 10M13 3L3 13" />
+            </svg>
+          </button>
+        </div>
+        <div className="nexus-modal-body">{props.children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function ConfirmModal(props: {
+  title: string;
+  message: string;
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+}) {
+  const { tr } = useI18n();
+  return (
+    <Modal title={props.title} isOpen={props.isOpen} onClose={props.onCancel}>
+      <p style={{ margin: "0 0 1.25rem 0", lineHeight: 1.5 }}>{props.message}</p>
+      <div className="nexus-modal-footer">
+        <button type="button" className="button secondary compact" onClick={props.onCancel}>
+          {props.cancelLabel ?? tr("Cancel", "Annuler")}
+        </button>
+        <button
+          type="button"
+          className={`button compact ${props.danger ? "danger" : "primary"}`}
+          onClick={props.onConfirm}
+        >
+          {props.confirmLabel ?? tr("Confirm", "Confirmer")}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+export function PromptModal(props: {
+  title: string;
+  message: string;
+  isOpen: boolean;
+  defaultValue?: string;
+  placeholder?: string;
+  onSubmit: (val: string) => void;
+  onCancel: () => void;
+  submitLabel?: string;
+  cancelLabel?: string;
+}) {
+  const { tr } = useI18n();
+  const [val, setVal] = useState(props.defaultValue ?? "");
+
+  useEffect(() => {
+    if (props.isOpen) setVal(props.defaultValue ?? "");
+  }, [props.isOpen, props.defaultValue]);
+
+  return (
+    <Modal title={props.title} isOpen={props.isOpen} onClose={props.onCancel}>
+      <p style={{ margin: "0 0 0.75rem 0", lineHeight: 1.5 }}>{props.message}</p>
+      <input
+        type="text"
+        className="field"
+        autoFocus
+        value={val}
+        placeholder={props.placeholder}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && val.trim().length > 0) {
+            props.onSubmit(val.trim());
+          }
+        }}
+        style={{ width: "100%", marginBottom: "1.25rem" }}
+      />
+      <div className="nexus-modal-footer">
+        <button type="button" className="button secondary compact" onClick={props.onCancel}>
+          {props.cancelLabel ?? tr("Cancel", "Annuler")}
+        </button>
+        <button
+          type="button"
+          className="button primary compact"
+          disabled={val.trim().length === 0}
+          onClick={() => props.onSubmit(val.trim())}
+        >
+          {props.submitLabel ?? tr("Submit", "Valider")}
+        </button>
+      </div>
+    </Modal>
+  );
 }

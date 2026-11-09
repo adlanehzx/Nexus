@@ -244,10 +244,13 @@ export function failedSteps(task: TaskRow): TaskRow["steps"] {
 export function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
   if (ms < 1_000) return `${String(Math.round(ms))} ms`;
-  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)} s`;
+  const tenths = Math.round(ms / 100) / 10;
+  if (tenths < 60) return `${tenths.toFixed(1)} s`;
 
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1_000);
+  // Round to whole seconds *before* splitting, otherwise 119.6 s becomes "1 min 60 s".
+  const totalSeconds = Math.round(ms / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
   return `${String(minutes)} min ${String(seconds)} s`;
 }
 

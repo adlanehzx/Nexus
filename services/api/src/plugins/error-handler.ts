@@ -66,13 +66,44 @@ export const errorHandlerPlugin = fp(
 );
 
 /** Maps any error — Fastify, Zod, or unexpected — to our taxonomy. */
-function translate(error: FastifyError): AppError {
+function translate(
+  error:
+    | FastifyError
+    | (Error & { statusCode?: number; code?: string; httpStatus?: number; userMessage?: string }),
+): AppError {
   if (error instanceof AppError) return error;
+
+  // Duck typing for AppError (preserves code & httpStatus across bundle boundaries)
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "httpStatus" in error &&
+    typeof (error as { httpStatus: unknown }).httpStatus === "number" &&
+    typeof (error as { toPublicJSON?: unknown }).toPublicJSON === "function"
+  ) {
+    return error as unknown as AppError;
+  }
+
+  // Any explicit 404 or NotFoundError must return a NotFoundError (HTTP 404)
+  if (
+    error?.name === "NotFoundError" ||
+    error?.name === "DeviceNotFoundError" ||
+    (error as { code?: string })?.code === "NOT_FOUND" ||
+    (error as { code?: string })?.code === "DEVICE_NOT_FOUND" ||
+    error.statusCode === 404 ||
+    (error as { httpStatus?: number })?.httpStatus === 404
+  ) {
+    return new NotFoundError({
+      message: error.message || "Resource not found",
+      userMessage: (error as { userMessage?: string })?.userMessage ?? "Resource not found.",
+    });
+  }
 
   if (hasZodFastifySchemaValidationErrors(error)) {
     return new ValidationError({
       message: "Request validation failed",
-      context: { issues: error.validation },
+      context: { issues: (error as FastifyError).validation },
     });
   }
 
@@ -81,8 +112,11 @@ function translate(error: FastifyError): AppError {
     // never a client error. The schema violation details accompany the
     // message: without them, diagnosis was reduced to "somewhere in this route",
     // which is exactly what cost an evening on lastSeenAt.
+    const errObj = error as { method?: string; url?: string };
     return toAppError(
-      new Error(`Response does not match schema on ${error.method} ${error.url}: ${error.message}`),
+      new Error(
+        `Response does not match schema on ${errObj.method ?? ""} ${errObj.url ?? ""}: ${error.message}`,
+      ),
     );
   }
 
@@ -92,6 +126,16 @@ function translate(error: FastifyError): AppError {
 
   if (typeof error.statusCode === "number" && error.statusCode < 500) {
     return new ValidationError({ message: error.message });
+  }
+
+  if (typeof (error as { httpStatus?: number })?.httpStatus === "number") {
+    const status = (error as { httpStatus: number }).httpStatus;
+    if (status === 404) {
+      return new NotFoundError({
+        message: error.message || "Resource not found",
+        userMessage: (error as { userMessage?: string })?.userMessage ?? "Resource not found.",
+      });
+    }
   }
 
   return toAppError(error);

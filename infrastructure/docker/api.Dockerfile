@@ -42,6 +42,7 @@ COPY packages/web-search/package.json  packages/web-search/
 COPY packages/worker-core/package.json packages/worker-core/
 COPY packages/design/package.json      packages/design/
 COPY packages/client-core/package.json packages/client-core/
+COPY packages/voice/package.json       packages/voice/
 COPY services/api/package.json         services/api/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \

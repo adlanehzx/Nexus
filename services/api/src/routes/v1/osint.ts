@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import {
+  osintMissionInputSchema,
+  osintMissionSchema,
   archivedEvidenceSchema,
   osintAlertSchema,
   osintCaseRecordSchema,
@@ -10,16 +12,115 @@ import {
   osintRelationSchema,
   osintWatchSchema,
 } from "@nexus/osint";
+import { SearxngClient } from "@nexus/web-search";
 import { NotFoundError } from "@nexus/shared";
 import { currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema } from "../../lib/response.js";
 
 const caseParams = z.object({ caseId: z.string().uuid() });
+const entityParams = caseParams.extend({ entityId: z.string().uuid() });
+const relationParams = caseParams.extend({ relationId: z.string().uuid() });
 const alertParams = caseParams.extend({ alertId: z.string().uuid() });
 const watchParams = caseParams.extend({ watchId: z.string().uuid() });
 
+const searchBodySchema = z.object({
+  query: z.string().min(1).max(500),
+  limit: z.number().int().min(1).max(50).default(10),
+});
+
+const searchQuerySchema = z.object({
+  query: z.string().min(1).max(500),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+const searchResultItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  engines: z.array(z.string()),
+  publishedAt: z.string().nullable().optional(),
+  score: z.number().nullable().optional(),
+});
+
+const searchResponseSchema = z.object({
+  query: z.string(),
+  results: z.array(searchResultItemSchema),
+  suggestions: z.array(z.string()).default([]),
+  answers: z.array(z.string()).default([]),
+  numberOfResults: z.number().nullable().optional(),
+});
+
+async function executeSearxngSearch(query: string, limit = 10) {
+  const searxngUrl = process.env.SEARXNG_URL ?? "http://127.0.0.1:18080";
+  const client = new SearxngClient({
+    baseUrl: searxngUrl,
+    timeoutMs: Number(process.env.SEARXNG_TIMEOUT_MS) || 15_000,
+  });
+  return client.search({ query, limit });
+}
+
 export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/osint/missions",
+    {
+      preHandler: app.requireUser,
+      schema: { response: { 200: okSchema(z.object({ missions: z.array(osintMissionSchema) })) } },
+    },
+    async (request) =>
+      ok(
+        { missions: await app.services.osintMissions.list(currentUser(request).userId) },
+        request.id,
+      ),
+  );
+  app.post(
+    "/osint/missions",
+    {
+      preHandler: app.requireUser,
+      schema: { body: osintMissionInputSchema, response: { 200: okSchema(osintMissionSchema) } },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.create(currentUser(request).userId, request.body),
+        request.id,
+      ),
+  );
+  app.get(
+    "/osint/missions/:missionId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        params: z.object({ missionId: z.string().uuid() }),
+        response: { 200: okSchema(osintMissionSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.get(currentUser(request).userId, request.params.missionId),
+        request.id,
+      ),
+  );
+  app.post(
+    "/osint/missions/:missionId/control",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        params: z.object({ missionId: z.string().uuid() }),
+        body: z.object({ action: z.enum(["pause", "resume", "cancel"]) }),
+        response: { 200: okSchema(osintMissionSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.control(
+          currentUser(request).userId,
+          request.params.missionId,
+          request.body.action,
+        ),
+        request.id,
+      ),
+  );
 
   app.get(
     "/osint/cases",
@@ -146,6 +247,36 @@ export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
       ),
   );
 
+  app.delete(
+    "/osint/cases/:caseId/entities/:entityId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        params: entityParams,
+        response: { 200: okSchema(z.object({ deleted: z.literal(true) })) },
+      },
+    },
+    async (request) => {
+      try {
+        await app.services.osint.deleteEntity(
+          currentUser(request).userId,
+          request.params.caseId,
+          request.params.entityId,
+        );
+        return ok({ deleted: true }, request.id);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("not found")) {
+          throw new NotFoundError({
+            message: `Entity or case not found: ${request.params.entityId}`,
+            userMessage: "The requested entity or case does not exist.",
+          });
+        }
+        throw error;
+      }
+    },
+  );
+
   app.post(
     "/osint/cases/:caseId/relations",
     {
@@ -166,6 +297,36 @@ export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         ),
         request.id,
       ),
+  );
+
+  app.delete(
+    "/osint/cases/:caseId/relations/:relationId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        params: relationParams,
+        response: { 200: okSchema(z.object({ deleted: z.literal(true) })) },
+      },
+    },
+    async (request) => {
+      try {
+        await app.services.osint.deleteRelation(
+          currentUser(request).userId,
+          request.params.caseId,
+          request.params.relationId,
+        );
+        return ok({ deleted: true }, request.id);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("not found")) {
+          throw new NotFoundError({
+            message: `Relation or case not found: ${request.params.relationId}`,
+            userMessage: "The requested relation or case does not exist.",
+          });
+        }
+        throw error;
+      }
+    },
   );
 
   app.post(
@@ -307,6 +468,92 @@ export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
         },
         request.id,
       );
+    },
+  );
+
+  app.post(
+    "/osint/cases/:caseId/search",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        params: caseParams,
+        body: searchBodySchema,
+        response: { 200: okSchema(searchResponseSchema) },
+      },
+    },
+    async (request) => {
+      const record = await app.services.osint.get(
+        currentUser(request).userId,
+        request.params.caseId,
+      );
+      if (record === undefined) {
+        throw new NotFoundError({
+          message: `Unknown OSINT case: ${request.params.caseId}`,
+          userMessage: "The requested OSINT case does not exist.",
+        });
+      }
+      const results = await executeSearxngSearch(request.body.query, request.body.limit);
+      return ok(results, request.id);
+    },
+  );
+
+  app.get(
+    "/osint/cases/:caseId/search",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        params: caseParams,
+        querystring: searchQuerySchema,
+        response: { 200: okSchema(searchResponseSchema) },
+      },
+    },
+    async (request) => {
+      const record = await app.services.osint.get(
+        currentUser(request).userId,
+        request.params.caseId,
+      );
+      if (record === undefined) {
+        throw new NotFoundError({
+          message: `Unknown OSINT case: ${request.params.caseId}`,
+          userMessage: "The requested OSINT case does not exist.",
+        });
+      }
+      const results = await executeSearxngSearch(request.query.query, request.query.limit);
+      return ok(results, request.id);
+    },
+  );
+
+  app.post(
+    "/osint/search",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        body: searchBodySchema,
+        response: { 200: okSchema(searchResponseSchema) },
+      },
+    },
+    async (request) => {
+      const results = await executeSearxngSearch(request.body.query, request.body.limit);
+      return ok(results, request.id);
+    },
+  );
+
+  app.get(
+    "/osint/search",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["osint"],
+        querystring: searchQuerySchema,
+        response: { 200: okSchema(searchResponseSchema) },
+      },
+    },
+    async (request) => {
+      const results = await executeSearxngSearch(request.query.query, request.query.limit);
+      return ok(results, request.id);
     },
   );
 

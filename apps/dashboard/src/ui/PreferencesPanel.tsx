@@ -39,7 +39,7 @@ function IconMonitor() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal, #00f0ff)" }}
+      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal)" }}
     >
       <rect x="2" y="3" width="20" height="14" rx="2" />
       <line x1="8" y1="21" x2="16" y2="21" />
@@ -101,7 +101,7 @@ function IconSunMoon() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal, #00f0ff)" }}
+      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal)" }}
     >
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
@@ -120,7 +120,7 @@ function IconMoon() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ color: "var(--nx-signal, #00f0ff)" }}
+      style={{ color: "var(--nx-signal)" }}
     >
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
@@ -139,7 +139,7 @@ function IconSun() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ color: "var(--nx-signal, #00f0ff)" }}
+      style={{ color: "var(--nx-signal)" }}
     >
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
@@ -159,7 +159,7 @@ function IconLaptop() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ color: "var(--nx-signal, #00f0ff)" }}
+      style={{ color: "var(--nx-signal)" }}
     >
       <rect x="3" y="4" width="18" height="12" rx="2" />
       <line x1="2" y1="20" x2="22" y2="20" />
@@ -179,7 +179,7 @@ function IconGlobe() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal, #00f0ff)" }}
+      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal)" }}
     >
       <circle cx="12" cy="12" r="10" />
       <line x1="2" y1="12" x2="22" y2="12" />
@@ -200,7 +200,7 @@ function IconPalette() {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal, #00f0ff)" }}
+      style={{ verticalAlign: "middle", marginRight: "8px", color: "var(--nx-signal)" }}
     >
       <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
       <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
@@ -323,8 +323,8 @@ export function PreferencesPanel() {
           style={{
             padding: "0.75rem 1.25rem",
             borderRadius: "8px",
-            background: "rgba(0, 240, 255, 0.12)",
-            border: "1px solid var(--nx-signal, #00f0ff)",
+            background: "color-mix(in srgb, var(--nx-signal) 12%, transparent)",
+            border: "1px solid var(--nx-signal)",
             color: "var(--nx-text, #ffffff)",
             fontSize: "0.875rem",
             display: "flex",
@@ -410,10 +410,12 @@ export function PreferencesPanel() {
               padding: "1.25rem",
               borderRadius: "10px",
               background:
-                defaultOS === "spatial" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                defaultOS === "spatial"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 defaultOS === "spatial"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               transition: "all 0.2s ease",
@@ -446,8 +448,8 @@ export function PreferencesPanel() {
                     fontSize: "0.75rem",
                     padding: "2px 8px",
                     borderRadius: "999px",
-                    background: "var(--nx-signal, #00f0ff)",
-                    color: "#06090e",
+                    background: "var(--nx-signal)",
+                    color: "var(--nx-text-on-accent)",
                     fontWeight: 700,
                   }}
                 >
@@ -480,10 +482,12 @@ export function PreferencesPanel() {
               padding: "1.25rem",
               borderRadius: "10px",
               background:
-                defaultOS === "classic" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                defaultOS === "classic"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 defaultOS === "classic"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               transition: "all 0.2s ease",
@@ -516,8 +520,8 @@ export function PreferencesPanel() {
                     fontSize: "0.75rem",
                     padding: "2px 8px",
                     borderRadius: "999px",
-                    background: "var(--nx-signal, #00f0ff)",
-                    color: "#06090e",
+                    background: "var(--nx-signal)",
+                    color: "var(--nx-text-on-accent)",
                     fontWeight: 700,
                   }}
                 >
@@ -582,10 +586,12 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "dark" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                themeMode === "dark"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "dark"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               textAlign: "center",
@@ -618,10 +624,12 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "light" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                themeMode === "light"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "light"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               textAlign: "center",
@@ -654,10 +662,12 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                themeMode === "system" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                themeMode === "system"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 themeMode === "system"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               textAlign: "center",
@@ -722,10 +732,12 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                locale === "fr" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                locale === "fr"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 locale === "fr"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               display: "flex",
@@ -741,9 +753,8 @@ export function PreferencesPanel() {
                 width: "36px",
                 height: "36px",
                 borderRadius: "6px",
-                background:
-                  locale === "fr" ? "var(--nx-signal, #00f0ff)" : "rgba(255, 255, 255, 0.08)",
-                color: locale === "fr" ? "#06090e" : "var(--nx-text, #fff)",
+                background: locale === "fr" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
+                color: locale === "fr" ? "var(--nx-text-on-accent)" : "var(--nx-text, #fff)",
                 fontWeight: 700,
                 fontSize: "0.9rem",
                 letterSpacing: "0.05em",
@@ -771,10 +782,12 @@ export function PreferencesPanel() {
               padding: "1rem",
               borderRadius: "8px",
               background:
-                locale === "en" ? "rgba(0, 240, 255, 0.08)" : "var(--nx-surface, #0e131c)",
+                locale === "en"
+                  ? "color-mix(in srgb, var(--nx-signal) 8%, transparent)"
+                  : "var(--nx-surface, #0e131c)",
               border:
                 locale === "en"
-                  ? "2px solid var(--nx-signal, #00f0ff)"
+                  ? "2px solid var(--nx-signal)"
                   : "1px solid var(--nx-line, #212b3b)",
               cursor: "pointer",
               display: "flex",
@@ -790,9 +803,8 @@ export function PreferencesPanel() {
                 width: "36px",
                 height: "36px",
                 borderRadius: "6px",
-                background:
-                  locale === "en" ? "var(--nx-signal, #00f0ff)" : "rgba(255, 255, 255, 0.08)",
-                color: locale === "en" ? "#06090e" : "var(--nx-text, #fff)",
+                background: locale === "en" ? "var(--nx-signal)" : "var(--nx-surface-hover)",
+                color: locale === "en" ? "var(--nx-text-on-accent)" : "var(--nx-text, #fff)",
                 fontWeight: 700,
                 fontSize: "0.9rem",
                 letterSpacing: "0.05em",
@@ -855,9 +867,7 @@ export function PreferencesPanel() {
                 style={{
                   padding: "1rem",
                   borderRadius: "10px",
-                  background: isSelected
-                    ? "rgba(255, 255, 255, 0.05)"
-                    : "var(--nx-surface, #0e131c)",
+                  background: isSelected ? "var(--nx-surface-hover)" : "var(--nx-surface, #0e131c)",
                   border: isSelected
                     ? `2px solid ${config.signal}`
                     : "1px solid var(--nx-line, #212b3b)",
@@ -903,7 +913,7 @@ export function PreferencesPanel() {
                         height: "20px",
                         borderRadius: "4px",
                         background: config.signal,
-                        color: "#06090e",
+                        color: "var(--nx-text-on-accent)",
                       }}
                     >
                       <IconCheck />

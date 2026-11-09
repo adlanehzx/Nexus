@@ -204,8 +204,59 @@ export const en: Translations = {
       description: "Inter-agent message topologies, communication volume, and latency.",
     },
     "quota-forecast": {
-      title: "Quota forecast",
-      description: "Provider usage projections, estimated depletion dates, and confidence.",
+      title: "Usage & Quotas",
+      description: "Real-time token telemetry, consumption trends, and cost analytics.",
+    },
+    domotique: {
+      title: "Home & Satellites",
+      description:
+        "Home automation supervision, living-room control, acoustic telemetry and ESP32 voice satellite fleet.",
+    },
+    satellites: {
+      title: "Home & Satellites",
+      description:
+        "Home automation supervision, living-room control, acoustic telemetry and ESP32 voice satellite fleet.",
+    },
+    "settings-preferences": {
+      title: "Preferences & Themes",
+      description: "Visual appearance, light/dark mode, language, and desktop interface options.",
+    },
+    "settings-shortcuts": {
+      title: "Keybindings",
+      description: "Configurable keyboard shortcuts and productivity hotkeys.",
+    },
+    "settings-engine": {
+      title: "LLM Engines & Routing",
+      description: "Configure local models, fallback chains, and external API providers.",
+    },
+    "settings-secrets": {
+      title: "API Keys & Secrets",
+      description: "Encrypted credentials, provider access tokens, and environment secrets.",
+    },
+    "settings-backup": {
+      title: "Backup & Restore",
+      description: "Snapshot configurations, export state, and restore previous checkpoints.",
+    },
+    "usage-limits": {
+      title: "Limits & Resets",
+      description: "Capacity gauges, sliding 5-hour windows, and weekly refresh countdowns.",
+    },
+    "usage-costs": {
+      title: "Cost Breakdown",
+      description: "Cost breakdown by model, provider tier, and cache utilization.",
+    },
+    "usage-tokens": {
+      title: "Token Stream & Metrics",
+      description: "Granular prompt, completion, cache read/write token distributions.",
+    },
+    observability: {
+      title: "Observability",
+      description:
+        "Service health, mission engine, MCP servers, recent errors and incident lookup.",
+    },
+    organizations: {
+      title: "Organizations",
+      description: "Organizations you belong to, their members and roles.",
     },
     "vcs-worktrees": {
       title: "VCS & Worktrees",

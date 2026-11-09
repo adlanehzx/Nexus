@@ -10,6 +10,12 @@ import {
   type CareerEducationProfile,
   type DocumentVariant,
   type GenerateDocumentInput,
+  type ConfirmationRequest,
+  type ConfirmationStatus,
+  type CreateConfirmationInput,
+  type Deadline,
+  type CreateDeadlineInput,
+  type Contact,
 } from "@nexus/client-core";
 import type {
   opportunityView,
@@ -17,6 +23,9 @@ import type {
   applicationView,
   documentView,
   documentSummaryView,
+  confirmationView,
+  deadlineView,
+  contactView,
   CareerProfileInput,
   CompletenessReport,
   MatchExplanation,
@@ -30,6 +39,9 @@ export type CareerOpportunityDto = ReturnType<typeof opportunityView> & {
 export type CareerDocumentDto = ReturnType<typeof documentView>;
 export type CareerDocumentSummaryDto = ReturnType<typeof documentSummaryView>;
 export type CareerApplicationDto = ReturnType<typeof applicationView>;
+export type CareerConfirmationDto = ReturnType<typeof confirmationView>;
+export type CareerDeadlineDto = ReturnType<typeof deadlineView>;
+export type CareerContactDto = ReturnType<typeof contactView>;
 export interface CareerProfileDto {
   profile: ReturnType<typeof profileView> | null;
   completeness: CompletenessReport | null;
@@ -81,6 +93,65 @@ export function careerOpportunity(dto: CareerOpportunityDto): Opportunity {
               dto.applicationState === "expired"
             ? "dismissed"
             : "applied",
+  };
+}
+
+export function careerConfirmation(dto: CareerConfirmationDto): ConfirmationRequest {
+  const isApproved = dto.state === "approved" || dto.state === "consumed";
+  return {
+    id: dto.id,
+    actionType:
+      dto.purpose === "submit_application" ? "browser_submit_application" : "document_export",
+    title: `Approval: ${dto.summary}`,
+    summary: dto.summary,
+    destination: "Direct Career Channel",
+    targetOpportunityId: dto.applicationId,
+    payload: { applicationId: dto.applicationId, payloadHash: dto.payloadHash },
+    attachedDocuments: [],
+    risks: ["Irreversible external transmission of tailored application dossier"],
+    consequences: ["Transmits data to external organization"],
+    requiresHumanApproval: true,
+    status: isApproved ? "approved" : (dto.state as ConfirmationStatus),
+    createdAt: dto.requestedAt,
+    expiresAt: dto.expiresAt,
+    decidedAt: dto.decidedAt ?? undefined,
+    resolvedBy: dto.decidedAt ? "human_operator" : undefined,
+  };
+}
+
+export function careerDeadline(dto: CareerDeadlineDto): Deadline {
+  return {
+    id: dto.id,
+    opportunityId: dto.applicationId,
+    opportunityTitle: dto.label ?? "Application Deadline",
+    organization: "Target Organization",
+    title: dto.label ?? dto.kind,
+    dueDate: dto.dueAt,
+    category:
+      dto.kind === "interview"
+        ? "interview"
+        : // Not in the server vocabulary today; kept for forward compatibility.
+          (dto.kind as string) === "funding_call"
+          ? "funding_call"
+          : dto.kind === "follow_up"
+            ? "follow_up"
+            : "application_deadline",
+    priority: "high",
+    completed: dto.state === "met",
+    calendarSyncStatus: "confirmed",
+  };
+}
+
+export function careerContact(dto: CareerContactDto): Contact {
+  return {
+    id: dto.id,
+    opportunityId: dto.opportunityId ?? dto.applicationId ?? "",
+    name: dto.displayName,
+    role: dto.role ?? "Contact",
+    organization: dto.organization ?? "",
+    email: dto.email ?? "",
+    phone: undefined,
+    notes: dto.notes ?? undefined,
   };
 }
 
@@ -306,5 +377,99 @@ export class DashboardCareerClient extends HttpCareerEducationClient {
       })),
       tradeoffsSummary: [],
     };
+  }
+
+  override async getConfirmations(status?: ConfirmationStatus): Promise<ConfirmationRequest[]> {
+    const res = await this.#api.careerConfirmations(undefined, status);
+    return res.confirmations.map(careerConfirmation);
+  }
+
+  override async requestConfirmation(input: CreateConfirmationInput): Promise<ConfirmationRequest> {
+    const apps = (await this.#api.careerApplications()).applications;
+    let targetApp = input.targetOpportunityId
+      ? apps.find(
+          (a) =>
+            a.id === input.targetOpportunityId || a.opportunityId === input.targetOpportunityId,
+        )
+      : undefined;
+
+    if (!targetApp && input.targetOpportunityId) {
+      targetApp = await this.#api.createCareerApplication(input.targetOpportunityId);
+    }
+
+    targetApp ??= apps[0];
+    if (!targetApp) {
+      throw new Error("No application found to request approval for.");
+    }
+
+    if (targetApp.state === "shortlisted" || targetApp.state === "discovered") {
+      targetApp = await this.#api.updateCareerApplicationStage(targetApp.id, "drafting");
+    }
+
+    const docs = await this.#api.careerDocuments(targetApp.id);
+    if (docs.documents.length === 0) {
+      await this.#api.tailorCareerDocument({
+        opportunityId: targetApp.opportunityId,
+        applicationId: targetApp.id,
+        type: "cover_letter",
+      });
+    }
+
+    const res = await this.#api.requestCareerApproval(targetApp.id);
+    return careerConfirmation(res.confirmation);
+  }
+
+  override async resolveConfirmation(
+    id: string,
+    decision: "approve" | "reject" | "cancel",
+    reason?: string,
+  ): Promise<ConfirmationRequest> {
+    const res = await this.#api.resolveCareerConfirmation(id, decision, reason);
+    return careerConfirmation(res.confirmation);
+  }
+
+  override async getDeadlines(): Promise<Deadline[]> {
+    const res = await this.#api.careerDeadlines();
+    return res.deadlines.map(careerDeadline);
+  }
+
+  override async createDeadline(input: CreateDeadlineInput): Promise<Deadline> {
+    const apps = (await this.#api.careerApplications()).applications;
+    const app =
+      apps.find((a) => a.id === input.opportunityId || a.opportunityId === input.opportunityId) ??
+      apps[0];
+    if (!app) throw new Error("No application found for deadline.");
+    const res = await this.#api.createCareerDeadline(app.id, {
+      kind: input.category,
+      dueAt: input.dueDate,
+      label: input.title,
+    });
+    return careerDeadline(res);
+  }
+
+  override async toggleDeadlineCompleted(id: string, completed: boolean): Promise<Deadline> {
+    const res = await this.#api.updateCareerDeadline(id, { completed });
+    return careerDeadline(res);
+  }
+
+  override async getContacts(opportunityId?: string): Promise<Contact[]> {
+    const res = await this.#api.careerContacts(opportunityId);
+    return res.contacts.map(careerContact);
+  }
+
+  override async prepareDraftApplication(
+    opportunityId: string,
+    _formValues: Record<string, string>,
+  ): Promise<ConfirmationRequest> {
+    return this.requestConfirmation({
+      actionType: "browser_submit_application",
+      title: `Submit Application for ${opportunityId}`,
+      summary: `Automated dossier submission for opportunity ${opportunityId}`,
+      destination: "Company Portal",
+      targetOpportunityId: opportunityId,
+      payload: { opportunityId },
+      risks: ["Irreversible application submission"],
+      consequences: ["Candidate dossier is transmitted to employer"],
+    });
   }
 }

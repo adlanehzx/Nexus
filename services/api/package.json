@@ -47,6 +47,7 @@
     "@nexus/shared": "workspace:*",
     "@nexus/tools": "workspace:*",
     "@nexus/vcs": "workspace:*",
+    "@nexus/voice": "workspace:*",
     "@nexus/web-search": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-prometheus": "0.223.0",

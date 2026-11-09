@@ -14,6 +14,8 @@ import {
   IconTarget,
   IconSettings,
   IconWarning,
+  IconBolt,
+  IconSend,
 } from "../icons.js";
 import type {
   Application,
@@ -44,6 +46,9 @@ import { DeadlinesCalendar } from "./DeadlinesCalendar.js";
 import { ContactsOutcomesAnalytics } from "./ContactsOutcomesAnalytics.js";
 import { ApprovalCards } from "./ApprovalCards.js";
 import { CareerSettings } from "./CareerSettings.js";
+import { AutonomyPanel } from "./AutonomyPanel.js";
+import { LinkedInPanel } from "./LinkedInPanel.js";
+import { lab1ClientFor } from "../../lib/career-education.js";
 
 export type CareerEducationTabId =
   | "education"
@@ -55,7 +60,9 @@ export type CareerEducationTabId =
   | "analytics"
   | "approvals"
   | "profile"
-  | "settings";
+  | "settings"
+  | "autonomy"
+  | "linkedin";
 
 interface CareerEducationProps {
   client: CareerEducationClient;
@@ -65,6 +72,7 @@ interface CareerEducationProps {
 export function CareerEducation({ client, initialTab = "inbox" }: CareerEducationProps) {
   const { tr } = useI18n();
   const [activeTab, setActiveTab] = useState<CareerEducationTabId>(initialTab);
+  const lab1 = lab1ClientFor(client);
   const [loading, setLoading] = useState(true);
   const [offlineError, setOfflineError] = useState<string | null>(null);
 
@@ -159,12 +167,29 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
   // Safe research plane draft preparation
   const handlePrepareDraftApplication = async (oppId: string) => {
     const email =
+      // An empty profile email must fall through to the prompt, hence `||`.
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       profile?.email?.trim() ||
       window.prompt("Enter your email address for this application:")?.trim();
     if (!email) return;
     await client.prepareDraftApplication(oppId, {
       applicantName: profile?.fullName ?? "Applicant",
       applicantEmail: email,
+    });
+    await reloadAll();
+    setActiveTab("approvals");
+  };
+
+  const handleRequestApproval = async (oppId: string) => {
+    await client.requestConfirmation({
+      actionType: "browser_submit_application",
+      title: `Submit Application for ${oppId}`,
+      summary: `Automated dossier submission for opportunity ${oppId}`,
+      destination: "Company Portal",
+      targetOpportunityId: oppId,
+      payload: { opportunityId: oppId },
+      risks: ["Irreversible application submission"],
+      consequences: ["Candidate dossier is transmitted to employer"],
     });
     await reloadAll();
     setActiveTab("approvals");
@@ -431,6 +456,26 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
         >
           <IconEducation size={16} /> {tr("Education pathways", "Parcours de formation")}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "autonomy"}
+          className="career-tab-btn"
+          onClick={() => setActiveTab("autonomy")}
+        >
+          <IconBolt size={15} style={{ marginRight: 6 }} />
+          {tr("Autonomy", "Autonomie")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "linkedin"}
+          className="career-tab-btn"
+          onClick={() => setActiveTab("linkedin")}
+        >
+          <IconSend size={15} style={{ marginRight: 6 }} />
+          LinkedIn
+        </button>
       </nav>
 
       {/* View Panels */}
@@ -489,6 +534,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
             onToggleComparison={(id) => void handleToggleComparison(id)}
             onToggleShortlist={handleToggleShortlist}
             onPrepareDraftApplication={handlePrepareDraftApplication}
+            onRequestApproval={handleRequestApproval}
             onPrepareDraftEmail={handlePrepareDraftEmail}
             onSelectSavedSearch={(ss) => {
               void client.searchOpportunities(ss.query).then((res) => setOpportunities(res.items));
@@ -609,6 +655,10 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
             loading={loading}
           />
         )}
+
+        {activeTab === "autonomy" && <AutonomyPanel client={lab1} />}
+
+        {activeTab === "linkedin" && <LinkedInPanel client={lab1} />}
 
         {activeTab === "settings" && settings && (
           <CareerSettings

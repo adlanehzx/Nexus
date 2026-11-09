@@ -726,14 +726,14 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               <div
                 className="setup-card"
                 style={{
-                  border: "1px solid var(--accent, #00f0ff)",
-                  background: "rgba(0, 240, 255, 0.05)",
+                  border: "1px solid var(--nx-signal)",
+                  background: "color-mix(in srgb, var(--nx-signal) 5%, transparent)",
                   padding: "1.75rem",
                   marginBottom: "1.25rem",
                   borderRadius: "8px",
                 }}
               >
-                <h3 style={{ color: "var(--accent, #00f0ff)", margin: "0 0 0.5rem" }}>
+                <h3 style={{ color: "var(--nx-signal)", margin: "0 0 0.5rem" }}>
                   {tr("Instance already initialized", "Instance déjà initialisée")}
                 </h3>
                 <p
@@ -931,6 +931,45 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </button>
             </div>
 
+            <div
+              style={{
+                padding: "1rem",
+                marginBottom: "1rem",
+                background: "var(--nx-surface-raised, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--nx-line, rgba(255, 255, 255, 0.1))",
+                borderRadius: "var(--nx-radius-md, 8px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "1rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <strong style={{ display: "block", fontSize: "0.95rem", color: "var(--nx-text)" }}>
+                  {tr(
+                    "No local CLI tool installed or logged in?",
+                    "Aucun outil CLI local installé ou connecté ?",
+                  )}
+                </strong>
+                <p
+                  style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--nx-text-muted)" }}
+                >
+                  {tr(
+                    "You can continue directly with Free Cloud LLMs (NVIDIA NIM / Llama 3 included) or configure your API keys in Settings.",
+                    "Vous pouvez continuer directement avec les modèles Cloud gratuits (NVIDIA NIM / Llama 3 inclus) ou configurer vos clés API dans les Paramètres.",
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button primary compact"
+                onClick={() => goToStep("capabilities")}
+              >
+                {tr("Continue with Cloud LLMs →", "Continuer avec les LLMs Cloud →")}
+              </button>
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {connections.map((entry) => {
                 const status = classifyConnection(entry);
@@ -990,7 +1029,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                           padding: "12px 16px",
                           background: "rgba(10, 18, 34, 0.8)",
                           borderRadius: "8px",
-                          borderLeft: "3px solid var(--accent, #00f0ff)",
+                          borderLeft: "3px solid var(--nx-signal)",
                         }}
                       >
                         <div
@@ -998,7 +1037,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                             fontSize: "12px",
                             fontWeight: "bold",
                             marginBottom: "6px",
-                            color: "var(--accent, #00f0ff)",
+                            color: "var(--nx-signal)",
                           }}
                         >
                           {tr("Official Sign-in Command", "Commande officielle de connexion")}
@@ -1026,7 +1065,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                               rel="noreferrer"
                               style={{
                                 fontSize: "12px",
-                                color: "var(--accent, #00f0ff)",
+                                color: "var(--nx-signal)",
                                 fontWeight: 600,
                               }}
                             >
@@ -1302,7 +1341,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                 <div
                   style={{
                     background: "rgba(10, 18, 34, 0.8)",
-                    border: "1px solid rgba(0, 240, 255, 0.2)",
+                    border: "1px solid color-mix(in srgb, var(--nx-signal) 20%, transparent)",
                     padding: "1rem 1.25rem",
                     borderRadius: "8px",
                   }}
@@ -1314,7 +1353,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       alignItems: "center",
                     }}
                   >
-                    <strong style={{ color: "var(--nx-signal, #00f0ff)" }}>
+                    <strong style={{ color: "var(--nx-signal)" }}>
                       {tr("Pairing Ticket Generated", "Ticket d'association généré")}
                     </strong>
                     <small className="muted">

@@ -132,7 +132,15 @@ export class InternalError extends AppError {
 }
 
 export function isAppError(error: unknown): error is AppError {
-  return error instanceof AppError;
+  if (error instanceof AppError) return true;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "httpStatus" in error &&
+    typeof (error as { httpStatus: unknown }).httpStatus === "number" &&
+    typeof (error as { toPublicJSON?: unknown }).toPublicJSON === "function"
+  );
 }
 
 /**

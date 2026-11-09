@@ -68,6 +68,21 @@ describe("OSINT mission policy", () => {
       label: "A. Director",
       confidence: 0.8,
     });
+    const relation = store.addRelation("owner-a", record.id, {
+      sourceId: director.id,
+      targetId: company.id,
+      label: "directs",
+      confidence: 0.8,
+      evidenceIds: [evidence.id],
+    });
+    expect(store.get("owner-a", record.id)?.entities).toHaveLength(2);
+    expect(store.get("owner-a", record.id)?.relations).toHaveLength(1);
+
+    // Delete relation
+    store.deleteRelation("owner-a", record.id, relation.id);
+    expect(store.get("owner-a", record.id)?.relations).toHaveLength(0);
+
+    // Re-add relation and test cascade delete on entity removal
     store.addRelation("owner-a", record.id, {
       sourceId: director.id,
       targetId: company.id,
@@ -75,6 +90,11 @@ describe("OSINT mission policy", () => {
       confidence: 0.8,
       evidenceIds: [evidence.id],
     });
+    expect(store.get("owner-a", record.id)?.relations).toHaveLength(1);
+    store.deleteEntity("owner-a", record.id, director.id);
+    expect(store.get("owner-a", record.id)?.entities).toHaveLength(1);
+    expect(store.get("owner-a", record.id)?.relations).toHaveLength(0);
+
     const watch = store.addWatch("owner-a", record.id, "Example Robotics filing", 1440);
     expect(store.evaluateWatch("owner-a", record.id, watch.id, "version one")).toBeUndefined();
     expect(store.evaluateWatch("owner-a", record.id, watch.id, "version two")?.title).toContain(

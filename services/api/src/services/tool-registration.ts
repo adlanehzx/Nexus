@@ -1,4 +1,5 @@
 import { createOsintTools } from "@nexus/osint";
+import { createHomeTools, type HomeToolsHost } from "@nexus/devices";
 import type { ToolDefinition, ToolRegistry } from "@nexus/tools";
 import type { OsintService } from "./osint-service.js";
 
@@ -21,6 +22,8 @@ import type { OsintService } from "./osint-service.js";
 /** What a domain may draw on to build its tools. */
 export interface ToolDomainContext {
   readonly osint: OsintService;
+  /** Lab 4 — house devices, scenes. Absent = domain contributes nothing. */
+  readonly domotique?: HomeToolsHost | undefined;
 }
 
 export interface ToolDomain {
@@ -43,6 +46,10 @@ export const TOOL_DOMAINS: readonly ToolDomain[] = [
   {
     name: "osint",
     tools: (context) => createOsintTools(context.osint),
+  },
+  {
+    name: "domotique",
+    tools: (context) => (context.domotique === undefined ? [] : createHomeTools(context.domotique)),
   },
 ];
 

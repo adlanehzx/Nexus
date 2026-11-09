@@ -56,14 +56,12 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
       {actionError === null ? null : <p className="banner error">{actionError}</p>}
       <Section state={state}>
         {(data) => {
-          const cash = data.accounts.reduce(
-            (total, account) => total + account.cash_balance_cents,
-            0,
-          );
-          const exposure = data.accounts.reduce(
-            (total, account) => total + account.open_exposure_cents,
-            0,
-          );
+          const cash = isTrading
+            ? data.accounts.reduce((total, account) => total + account.cash_balance_cents, 0)
+            : 0;
+          const exposure = isTrading
+            ? data.accounts.reduce((total, account) => total + account.open_exposure_cents, 0)
+            : 0;
           const activeRuns = data.recent_runs.filter(
             (run) => run.state === "running" || run.state === "waiting_market_data",
           ).length;
@@ -314,6 +312,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                   <div className="admin-form-card schedule-form-card">
                     <div className="inline-admin-form schedule-form">
                       <input
+                        aria-label={tr("Schedule name", "Nom de la planification")}
                         className="field"
                         value={scheduleName}
                         onChange={(event) => setScheduleName(event.target.value)}
@@ -321,6 +320,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       />
                       <select
                         className="field"
+                        aria-label={tr("Schedule type", "Type de planification")}
                         value={scheduleKind}
                         onChange={(event) =>
                           setScheduleKind(event.target.value as "one_shot" | "cron")
@@ -331,6 +331,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       </select>
                       <select
                         className="field"
+                        aria-label={tr("Agent profile", "Profil d'agent")}
                         value={scheduleProfile}
                         onChange={(event) => setScheduleProfile(event.target.value)}
                       >
@@ -347,6 +348,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         ))}
                       </select>
                       <input
+                        aria-label="Europe/Paris"
                         className="field"
                         value={scheduleTimezone}
                         onChange={(event) => setScheduleTimezone(event.target.value)}
@@ -354,6 +356,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       />
                       {scheduleKind === "cron" ? (
                         <input
+                          aria-label="0 8 * * 1-5"
                           className="field mono"
                           value={scheduleCron}
                           onChange={(event) => setScheduleCron(event.target.value)}
@@ -363,12 +366,14 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         <input
                           className="field"
                           type="datetime-local"
+                          aria-label={tr("Run at", "Exécuter le")}
                           value={scheduleRunAt}
                           onChange={(event) => setScheduleRunAt(event.target.value)}
                         />
                       )}
                       <select
                         className="field"
+                        aria-label={tr("Missed-run policy", "Politique des exécutions manquées")}
                         value={scheduleCatchUp}
                         onChange={(event) =>
                           setScheduleCatchUp(event.target.value as "skip" | "latest" | "all")
@@ -392,6 +397,10 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                       </select>
                     </div>
                     <textarea
+                      aria-label={tr(
+                        "Mission to execute automatically",
+                        "Mission à exécuter automatiquement",
+                      )}
                       className="field schedule-instruction"
                       value={scheduleInstruction}
                       onChange={(event) => setScheduleInstruction(event.target.value)}
@@ -677,7 +686,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                         gap: "0.5rem",
                       }}
                     >
-                      <IconBarChart size={18} color="var(--nx-accent-line, #38bdf8)" />{" "}
+                      <IconBarChart size={18} color="var(--nx-accent)" />{" "}
                       {tr(
                         "Agent Execution Traces & Tool Audit",
                         "Historique & Traçabilité des exécutions d'agents",
@@ -693,12 +702,14 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                   <h3>{tr("Paper Portfolios", "Portefeuilles de recherche papier")}</h3>
                   <div className="inline-admin-form">
                     <input
+                      aria-label={tr("Portfolio name", "Nom du portefeuille")}
                       className="field"
                       value={accountName}
                       onChange={(event) => setAccountName(event.target.value)}
                       placeholder={tr("Portfolio name", "Nom du portefeuille")}
                     />
                     <input
+                      aria-label="Capital EUR"
                       className="field"
                       value={bankroll}
                       onChange={(event) => setBankroll(event.target.value)}
@@ -803,6 +814,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                   <h3>{tr("Paper Research Market", "Marché de recherche papier")}</h3>
                   <div className="inline-admin-form market-form">
                     <input
+                      aria-label={tr("Market question", "Question du marché")}
                       className="field"
                       value={marketQuestion}
                       onChange={(event) => setMarketQuestion(event.target.value)}
@@ -811,6 +823,7 @@ function MissionEngineView({ api, view }: { api: DashboardApi; view: "missions" 
                     <input
                       className="field"
                       type="datetime-local"
+                      aria-label={tr("Market close time", "Heure de clôture du marché")}
                       value={marketClose}
                       onChange={(event) => setMarketClose(event.target.value)}
                     />

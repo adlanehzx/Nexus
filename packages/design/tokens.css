@@ -81,7 +81,7 @@
   --nx-line-strong: rgb(17 38 70 / 26%);
   --nx-text: #0d1826;
   --nx-text-muted: #4e5d75;
-  --nx-text-faint: #6c7c95;
+  --nx-text-faint: #596880;
   --nx-text-on-accent: #ffffff;
   --nx-accent: #1f5fd0;
   --nx-accent-hover: #174bab;
@@ -128,7 +128,7 @@
     --nx-line-strong: rgb(146 172 206 / 28%);
     --nx-text: #e9eefa;
     --nx-text-muted: #95a3ba;
-    --nx-text-faint: #6a788e;
+    --nx-text-faint: #8594aa;
     --nx-text-on-accent: #04070e;
     --nx-accent: #5b9dff;
     --nx-accent-hover: #7cb0ff;
@@ -175,7 +175,7 @@
   --nx-line-strong: rgb(146 172 206 / 28%);
   --nx-text: #e9eefa;
   --nx-text-muted: #95a3ba;
-  --nx-text-faint: #6a788e;
+  --nx-text-faint: #8594aa;
   --nx-text-on-accent: #04070e;
   --nx-accent: #5b9dff;
   --nx-accent-hover: #7cb0ff;

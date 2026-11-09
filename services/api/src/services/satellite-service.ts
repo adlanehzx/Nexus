@@ -43,6 +43,15 @@ export interface SatelliteView extends SatelliteHeartbeat {
   online: boolean;
 }
 
+/**
+ * Satellites enrolled from the network (dashboard approval). Consulted after
+ * the static `SATELLITE_TOKEN_HASHES_JSON` map, which remains supported.
+ */
+export interface SatelliteRegistry {
+  tokenHash(deviceId: string): string | undefined;
+  owner(deviceId: string): string | undefined;
+}
+
 interface SatelliteRecord {
   heartbeat: SatelliteHeartbeat;
   lastSeenAt: number;
@@ -63,6 +72,7 @@ export class SatelliteService {
   >();
   readonly #now: () => number;
   private readonly owners: Readonly<Record<string, string>>;
+  #registry: SatelliteRegistry | undefined;
 
   constructor(
     tokenHashes: Readonly<Record<string, string>>,
@@ -74,12 +84,35 @@ export class SatelliteService {
     this.owners = owners;
   }
 
+  attachRegistry(registry: SatelliteRegistry): void {
+    this.#registry = registry;
+  }
+
+  /** Owner of a paired satellite, or `undefined` when unknown or without a token. */
+  ownerOf(deviceId: string): string | undefined {
+    if (this.#tokenHashes[deviceId] !== undefined) return this.owners[deviceId];
+    return this.#registry?.tokenHash(deviceId) === undefined
+      ? undefined
+      : this.#registry.owner(deviceId);
+  }
+
   isOwnedBy(deviceId: string, userId: string): boolean {
-    return this.owners[deviceId] === userId && this.#tokenHashes[deviceId] !== undefined;
+    return this.ownerOf(deviceId) === userId;
+  }
+
+  /** True while the satellite still has a valid token (static or enrolled). */
+  isKnown(deviceId: string): boolean {
+    return (this.#tokenHashes[deviceId] ?? this.#registry?.tokenHash(deviceId)) !== undefined;
+  }
+
+  /** Forgets live state of a satellite that was removed. */
+  forget(deviceId: string): void {
+    this.#satellites.delete(deviceId);
+    this.#commands.delete(deviceId);
   }
 
   authenticate(deviceId: string, authorization: string | undefined): boolean {
-    const expectedHex = this.#tokenHashes[deviceId];
+    const expectedHex = this.#tokenHashes[deviceId] ?? this.#registry?.tokenHash(deviceId);
     if (expectedHex === undefined || !/^[0-9a-f]{64}$/i.test(expectedHex)) return false;
     const prefix = "Bearer ";
     if (!authorization?.startsWith(prefix)) return false;

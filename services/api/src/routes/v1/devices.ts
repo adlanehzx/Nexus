@@ -12,6 +12,7 @@ import { ValidationError } from "@nexus/shared";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
+import { actionSchema, ACTION_KEYS } from "../../services/fire-tv.js";
 
 /**
  * Devices, device sessions, capabilities.
@@ -23,6 +24,19 @@ import { NotFoundError, paginate } from "../../services/stores.js";
  * The only entry point where a device communicates is the worker WebSocket channel,
  * and it only does what the protocol permits.
  */
+
+/** Lab 4 — unified home device as exposed by the topology. */
+const topologyDeviceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(["home_assistant", "satellite", "fire_tv", "nexus_worker"]),
+  type: z.string(),
+  online: z.boolean(),
+  status: z.string(),
+  capabilities: z.array(z.string()),
+  sensitive: z.boolean(),
+  lastSeenAt: z.string().nullable(),
+});
 
 const deviceSchema = z.object({
   id: z.string(),
@@ -709,6 +723,158 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       return ok({ closed }, request.id);
     },
   );
+
+  app.post(
+    "/devices/fire-tv/remote",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Send a remote key to one of the caller's Android / Fire TV devices (ADB)",
+        body: z.object({
+          action: actionSchema,
+          serial: z.string().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              action: z.string(),
+              delivered: z.boolean(),
+              key: z.string().optional(),
+              error: z.string().optional(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      // Only a TV the caller added (or the install-wide FIRE_TV_ADB_SERIAL) can
+      // be targeted; there is no built-in address.
+      const { userId } = currentUser(request);
+      const serial = request.body.serial;
+      try {
+        await app.services.domotique.tvRemote(userId, request.body.action, serial);
+        return ok(
+          {
+            action: request.body.action,
+            delivered: true,
+            key: ACTION_KEYS[request.body.action],
+          },
+          request.id,
+        );
+      } catch (err) {
+        request.log.warn(
+          { err, action: request.body.action, serial },
+          "Fire TV ADB dispatch warning",
+        );
+        return ok(
+          {
+            action: request.body.action,
+            delivered: false,
+            key: ACTION_KEYS[request.body.action],
+            error: err instanceof Error ? err.message : String(err),
+          },
+          request.id,
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/devices/topology",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary:
+          "Home topology grouped by rooms: Home Assistant entities, ESP32 satellites, Fire TV and NEXUS workers. Rooms are real (HA areas or user-created); nothing is invented.",
+        response: {
+          200: okSchema(
+            z.object({
+              rooms: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  haAreaId: z.string().nullable(),
+                  deviceCount: z.number(),
+                  onlineCount: z.number(),
+                  devices: z.array(topologyDeviceSchema),
+                }),
+              ),
+              devices: z.array(topologyDeviceSchema.extend({ room: z.string().nullable() })),
+              summary: z.object({
+                totalRooms: z.number(),
+                totalDevices: z.number(),
+                onlineDevices: z.number(),
+                satelliteCount: z.number(),
+                homeAssistant: z.string(),
+              }),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const [devices, rooms, status] = await Promise.all([
+        app.services.domotique.listDevices(userId),
+        app.services.domotique.listRooms(userId),
+        app.services.domotique.status(userId),
+      ]);
+      const view = (d: (typeof devices)[number]) => ({
+        id: d.id,
+        name: d.name,
+        kind: d.source,
+        type: d.domain,
+        online: d.online,
+        status: d.state.raw,
+        capabilities: [...d.capabilities],
+        sensitive: d.sensitive,
+        lastSeenAt: d.lastChanged,
+      });
+      const roomName = new Map(rooms.map((r) => [r.id, r.name]));
+      const grouped = rooms.map((room) => {
+        const inRoom = devices.filter((d) => d.roomId === room.id);
+        return {
+          id: room.id,
+          name: room.name,
+          haAreaId: room.haAreaId,
+          deviceCount: inRoom.length,
+          onlineCount: inRoom.filter((d) => d.online).length,
+          devices: inRoom.map(view),
+        };
+      });
+      const unassigned = devices.filter((d) => d.roomId === null);
+      if (unassigned.length > 0) {
+        grouped.push({
+          id: "unassigned",
+          name: "Unassigned",
+          haAreaId: null,
+          deviceCount: unassigned.length,
+          onlineCount: unassigned.filter((d) => d.online).length,
+          devices: unassigned.map(view),
+        });
+      }
+      return ok(
+        {
+          rooms: grouped,
+          devices: devices.map((d) => ({
+            ...view(d),
+            room: d.roomId === null ? null : (roomName.get(d.roomId) ?? null),
+          })),
+          summary: {
+            totalRooms: rooms.length,
+            totalDevices: devices.length,
+            onlineDevices: devices.filter((d) => d.online).length,
+            satelliteCount: devices.filter((d) => d.source === "satellite").length,
+            homeAssistant: status.connection.state,
+          },
+        },
+        request.id,
+      );
+    },
+  );
+
   done();
 };
 

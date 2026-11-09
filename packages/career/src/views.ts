@@ -255,6 +255,7 @@ export function eventView(event: ApplicationEvent) {
     toState: event.toState,
     summary: event.summary,
     context: event.context,
+    actor: event.actor,
     createdAt: iso(event.createdAt),
   };
 }

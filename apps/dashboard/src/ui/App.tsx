@@ -401,11 +401,12 @@ function AppContent() {
   const [viewMode, setViewMode] = useState<"spatial" | "classic">(() => {
     try {
       const saved = window.sessionStorage.getItem("nexus.ui.viewMode");
+      if (saved === "spatial") return "spatial";
       if (saved === "classic") return "classic";
     } catch {
       // Storage unavailable
     }
-    return "spatial";
+    return "classic";
   });
 
   const toggleViewMode = useCallback((mode?: "spatial" | "classic") => {
@@ -437,6 +438,13 @@ function AppContent() {
     if (window.location.hash !== nextHash) window.history.pushState(null, "", nextHash);
   }, []);
 
+  // An unknown or aliased hash resolves to a real section; rewrite the address bar to
+  // match so the URL never claims a page that is not the one on screen.
+  useEffect(() => {
+    const raw = window.location.hash.replace(/^#\/?/, "");
+    if (raw !== "" && raw !== section) window.history.replaceState(null, "", `#/${section}`);
+  }, [section]);
+
   useEffect(() => {
     const syncSection = (): void => setSection(sectionFromHash());
     window.addEventListener("hashchange", syncSection);
@@ -447,7 +455,7 @@ function AppContent() {
     };
   }, []);
 
-  // Classic Dashboard Keyboard Shortcuts (Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
+  // Classic Dashboard Keyboard Shortcuts (Alt+1..7 / Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
   useEffect(() => {
     if (!authenticated || viewMode !== "classic") return;
 
@@ -456,7 +464,10 @@ function AppContent() {
       if (!hasModifier) return;
 
       // Ctrl+K or Ctrl+P: Switch to Spatial and open Command Palette
-      if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p")
+      ) {
         e.preventDefault();
         e.stopPropagation();
         toggleViewMode("spatial");
@@ -465,7 +476,7 @@ function AppContent() {
       }
 
       // Ctrl+Shift+O / Alt+O: Toggle view mode between Classic and Spatial
-      if (e.key.toLowerCase() === "o") {
+      if ((e.altKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "o") {
         e.preventDefault();
         e.stopPropagation();
         toggleViewMode("spatial");
@@ -473,7 +484,7 @@ function AppContent() {
       }
 
       // Ctrl+, : Settings
-      if (e.key === ",") {
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
         e.stopPropagation();
         navigate("settings");
@@ -484,19 +495,22 @@ function AppContent() {
 
       const digit = getDigitFromEvent(e);
       if (digit !== null && digit >= 1 && digit <= 7) {
-        e.preventDefault();
-        e.stopPropagation();
-        const sectionMap: Record<number, SectionId> = {
-          1: "chat",
-          2: "overview",
-          3: "career-education",
-          4: "trading-lab",
-          5: "osint",
-          6: "domotique",
-          7: "settings",
-        };
-        const target = sectionMap[digit];
-        if (target) navigate(target);
+        // Prefer Alt+1..7 or Ctrl+1..7 (avoid colliding with Cmd on Mac if user switches tabs)
+        if (e.altKey || (!e.metaKey && e.ctrlKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const sectionMap: Record<number, SectionId> = {
+            1: "chat",
+            2: "overview",
+            3: "tasks",
+            4: "mission-control",
+            5: "agents",
+            6: "mcp",
+            7: "settings",
+          };
+          const target = sectionMap[digit];
+          if (target) navigate(target);
+        }
       }
     };
 
@@ -608,8 +622,15 @@ function AppContent() {
     );
   }
 
-  const metaTitle = t(`meta.${section}.title`) ?? PAGE_META[section]?.title ?? section;
-  const metaDescription = t(`meta.${section}.description`) ?? PAGE_META[section]?.description ?? "";
+  // `t()` returns the lookup path itself when a key is missing, so compare against
+  // the path to detect a miss and fall back to the static page metadata.
+  const translateMeta = (field: "title" | "description", fallback: string): string => {
+    const path = `meta.${section}.${field}`;
+    const value = t(path);
+    return value === path ? fallback : value;
+  };
+  const metaTitle = translateMeta("title", PAGE_META[section]?.title ?? section);
+  const metaDescription = translateMeta("description", PAGE_META[section]?.description ?? "");
 
   return (
     <div className="app">

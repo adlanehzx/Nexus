@@ -59,15 +59,27 @@ if [ -n "${AGY_PATH}" ]; then
   fi
 fi
 
-# 4. Generate Master Secret if needed
-if grep -q "MASTER_SECRET=nexus-local-software-vault-key-32ch" "${ENV_FILE}" 2>/dev/null || ! grep -q "^MASTER_SECRET=" "${ENV_FILE}" 2>/dev/null; then
-  RANDOM_SECRET="$(head -c 32 /dev/urandom | xxd -p -c 32 2>/dev/null || openssl rand -hex 32 2>/dev/null || node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')"
-  if grep -q "^MASTER_SECRET=" "${ENV_FILE}"; then
-    sed -i "s/^MASTER_SECRET=.*/MASTER_SECRET=${RANDOM_SECRET}/" "${ENV_FILE}"
-  else
-    echo "MASTER_SECRET=${RANDOM_SECRET}" >> "${ENV_FILE}"
-  fi
-  echo "[INFO] Generated secure random MASTER_SECRET."
+# 4. Generate Cryptographic Keys & Secrets (Ed25519 & Master Key)
+if [ -f "${DOCKER_DIR}/generate-keys.sh" ]; then
+  bash "${DOCKER_DIR}/generate-keys.sh" "${ENV_FILE}"
+fi
+
+# Ensure Mission Engine public key is synced to ~/.config/nexus/api-public.pem
+NEXUS_CONFIG_DIR="${HOME}/.config/nexus"
+mkdir -p "${NEXUS_CONFIG_DIR}"
+if [ ! -f "${NEXUS_CONFIG_DIR}/api-public.pem" ] && [ -f "${ENV_FILE}" ]; then
+  node -e '
+    const fs = require("fs");
+    const crypto = require("crypto");
+    const env = fs.readFileSync(process.argv[1], "utf8");
+    const match = env.match(/AUTH_SIGNING_KEY="([^"]+)"/);
+    if (match) {
+      const pem = match[1].replace(/\\n/g, "\n");
+      const priv = crypto.createPrivateKey(pem);
+      const pub = crypto.createPublicKey(priv);
+      fs.writeFileSync(process.argv[2], pub.export({ type: "spki", format: "pem" }));
+    }
+  ' "${ENV_FILE}" "${NEXUS_CONFIG_DIR}/api-public.pem" 2>/dev/null || true
 fi
 
 # 5. Start Container Stack

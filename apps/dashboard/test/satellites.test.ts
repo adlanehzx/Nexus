@@ -167,43 +167,26 @@ describe("ESP32 Satellites Management & Monitoring UI (Lot 11.2 & Lab Domotique)
     expect(statusRes.result?.ok).toBe(true);
   });
 
-  it("registers satellite and prepares ticket with provisioning JSON payload", async () => {
+  it("approves a satellite announced on the network with the code shown by the device", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: 200,
-      body: {
-        token: "tok-sec-987",
-        expiresAt: new Date(Date.now() + 300000).toISOString(),
-        payload: "https://api.nexus.lan/pair?token=tok-sec-987",
-      },
+      body: { data: { deviceId: "sat-esp32-kitchen", name: "Kitchen Voice", status: "approved" } },
     });
 
     const session = { authorizedRequest: mockRequest };
     const api = new DashboardApi(session as never);
 
-    const res = await api.registerSatellite({
-      deviceId: "sat-esp32-kitchen",
+    const res = await api.approveSatellite("sat-esp32-kitchen", {
+      verificationCode: "123456",
       name: "Kitchen Voice",
-      room: "Cuisine",
     });
 
     expect(mockRequest).toHaveBeenCalledWith({
       method: "POST",
-      path: "/api/v1/devices/pairing-tickets",
-      body: { label: "satellite:sat-esp32-kitchen:Cuisine" },
+      path: "/api/v1/satellites/enrollments/sat-esp32-kitchen/approve",
+      body: { verificationCode: "123456", name: "Kitchen Voice" },
     });
-    expect(res.ticket.token).toBe("tok-sec-987");
-
-    const parsedPayload = JSON.parse(res.provisioningPayload) as {
-      deviceId: string;
-      name: string;
-      room: string;
-      token: string;
-      apiUrl: string;
-    };
-    expect(parsedPayload.deviceId).toBe("sat-esp32-kitchen");
-    expect(parsedPayload.name).toBe("Kitchen Voice");
-    expect(parsedPayload.room).toBe("Cuisine");
-    expect(parsedPayload.token).toBe("tok-sec-987");
+    expect(res.status).toBe("approved");
   });
 
   it("handles voice/speaker diagnostics command dispatch", async () => {

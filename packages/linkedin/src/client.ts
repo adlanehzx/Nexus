@@ -5,6 +5,20 @@ import {
   type LinkedInProfile,
 } from "./types.js";
 
+/**
+ * A non-2xx answer from LinkedIn. The status is kept so callers can tell an
+ * expired token (401) or a missing scope (403) from an outage (5xx); the
+ * response body is deliberately not kept, because it can echo request data.
+ */
+export class LinkedInApiError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`LinkedIn API request failed (${String(status)})`);
+    this.name = "LinkedInApiError";
+    this.status = status;
+  }
+}
+
 export class LinkedInClient {
   readonly #getToken: () => Promise<string>;
   readonly #fetch: typeof fetch;
@@ -29,6 +43,12 @@ export class LinkedInClient {
       ...(signal === undefined ? {} : { signal }),
     });
     return linkedInProfileSchema.parse(value);
+  }
+
+  /** The member URN posts are authored as, derived from the OpenID `sub`. */
+  async getAuthorUrn(signal?: AbortSignal): Promise<string> {
+    const profile = await this.getProfile(signal);
+    return `urn:li:person:${profile.sub}`;
   }
 
   async createTextPost(input: {
@@ -97,7 +117,7 @@ export class LinkedInClient {
     headers.set("LinkedIn-Version", this.#version);
     headers.set("X-Restli-Protocol-Version", "2.0.0");
     const response = await this.#fetch(url, { ...init, headers });
-    if (!response.ok) throw new Error(`LinkedIn API request failed (${response.status})`);
+    if (!response.ok) throw new LinkedInApiError(response.status);
     return response;
   }
 }

@@ -11,3 +11,4 @@ export * from "./translation.js";
 export * from "./noise.js";
 export * from "./wakeword.js";
 export * from "./biometric.js";
+export * from "./satellite.js";

@@ -2,16 +2,26 @@ import { createConnection } from "node:net";
 import { z } from "zod";
 import type { ToolDefinition } from "@nexus/tools";
 
-const ACTION_KEYS = {
+export const ACTION_KEYS = {
   wake: "KEYCODE_WAKEUP",
   sleep: "KEYCODE_SLEEP",
   home: "KEYCODE_HOME",
+  up: "KEYCODE_DPAD_UP",
+  down: "KEYCODE_DPAD_DOWN",
+  left: "KEYCODE_DPAD_LEFT",
+  right: "KEYCODE_DPAD_RIGHT",
+  select: "KEYCODE_DPAD_CENTER",
+  back: "KEYCODE_DPAD_BACK",
+  menu: "KEYCODE_MENU",
+  play_pause: "KEYCODE_MEDIA_PLAY_PAUSE",
   volume_up: "KEYCODE_VOLUME_UP",
   volume_down: "KEYCODE_VOLUME_DOWN",
   mute: "KEYCODE_VOLUME_MUTE",
 } as const;
 
 export type FireTvAction = keyof typeof ACTION_KEYS;
+
+export const actionSchema = z.enum(Object.keys(ACTION_KEYS) as [FireTvAction, ...FireTvAction[]]);
 
 function packet(command: string): Buffer {
   const body = Buffer.from(command, "utf8");
@@ -72,8 +82,6 @@ export class FireTvService {
     });
   }
 }
-
-const actionSchema = z.enum(Object.keys(ACTION_KEYS) as [FireTvAction, ...FireTvAction[]]);
 
 export function createFireTvTool(
   service: FireTvService,

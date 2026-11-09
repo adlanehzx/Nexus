@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ConflictError, NotFoundError, ValidationError, toAppError, uuidv7 } from "@nexus/shared";
 import {
   INGEST_LIMITS,
@@ -155,6 +156,24 @@ export interface ApplicationDetail {
 }
 
 const DEFAULT_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * Who is acting, for the audit trail.
+ *
+ * Carried in async context rather than threaded through every method, so the
+ * autonomy layer can call the exact same public methods a human calls — with
+ * every lifecycle, approval-hash and idempotency check intact — and still have
+ * each event it causes attributed to `nexus-autonomous`.
+ */
+const careerActor = new AsyncLocalStorage<string>();
+
+export function runAsCareerActor<T>(actor: string, fn: () => Promise<T>): Promise<T> {
+  return careerActor.run(actor, fn);
+}
+
+export function currentCareerActor(): string {
+  return careerActor.getStore() ?? "owner";
+}
 
 /** Targets the generic transition endpoint must never reach. */
 const GUARDED_TRANSITION_TARGETS: readonly ApplicationState[] = ["approved", "submitted"];
@@ -836,6 +855,10 @@ export class CareerService {
     return this.#store.listConfirmations(userId, applicationId);
   }
 
+  listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]> {
+    return this.#store.listConfirmations(userId, applicationId);
+  }
+
   // ── Submission ────────────────────────────────────────────────────────────
 
   /**
@@ -1403,6 +1426,28 @@ export class CareerService {
     return updated;
   }
 
+  /**
+   * Records an autonomy decision (an action taken or held back) on the
+   * application's immutable history, attributed to the current actor.
+   */
+  async recordAutonomyEvent(
+    userId: string,
+    applicationId: string,
+    kind: string,
+    context: Record<string, unknown>,
+  ): Promise<ApplicationEvent> {
+    const application = await this.#requireApplication(userId, applicationId);
+    return this.#appendEvent(application, kind, null, null, context);
+  }
+
+  /** Recent events across all applications, newest first. */
+  recentEvents(
+    userId: string,
+    filter: { actor?: string; kindPrefix?: string; limit: number },
+  ): Promise<ApplicationEvent[]> {
+    return this.#store.listRecentEvents(userId, filter);
+  }
+
   async #appendEvent(
     application: Application,
     kind: string,
@@ -1419,6 +1464,7 @@ export class CareerService {
       toState,
       summary: `${kind}${toState === null ? "" : ` -> ${toState}`}`,
       context: redactForAudit(context),
+      actor: currentCareerActor(),
       now: this.#now(),
     });
   }

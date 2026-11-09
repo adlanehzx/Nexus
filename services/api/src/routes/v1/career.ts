@@ -37,7 +37,33 @@ const idParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const optionalEmptyBodySchema = z
+  .union([z.record(z.string(), z.unknown()), z.undefined(), z.null()])
+  .optional()
+  .default({});
+
 export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => {
+  fastify.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, doneParsing) => {
+      const text = typeof body === "string" ? body : body.toString("utf8");
+      if (!text || text.trim() === "") {
+        doneParsing(null, {});
+        return;
+      }
+      try {
+        doneParsing(null, JSON.parse(text));
+      } catch (err) {
+        const parseError = Object.assign(
+          new Error(err instanceof Error ? err.message : "Invalid JSON body"),
+          { statusCode: 400 },
+        );
+        doneParsing(parseError, undefined);
+      }
+    },
+  );
+
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   // ── Profile ─────────────────────────────────────────────────────────────
@@ -302,6 +328,7 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: [app.requireUser],
       schema: {
         params: idParamsSchema,
+        body: optionalEmptyBodySchema,
         response: {
           200: okSchema(z.any()),
         },
@@ -435,6 +462,7 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: [app.requireUser],
       schema: {
         params: idParamsSchema,
+        body: optionalEmptyBodySchema,
         response: {
           200: okSchema(z.any()),
         },
@@ -656,7 +684,43 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     },
   );
 
-  // ── Confirmations ───────────────────────────────────────────────────────
+  // ── Confirmations ──────────────────────────────────────────────────────────
+
+  app.get(
+    "/career/confirmations",
+    {
+      preHandler: [app.requireUser],
+      schema: {
+        querystring: z.object({
+          applicationId: z.string().uuid().optional(),
+          status: z.string().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              confirmations: z.array(z.any()),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      let confirmations = await app.services.career.listConfirmations(
+        userId,
+        request.query.applicationId,
+      );
+      if (request.query.status) {
+        confirmations = confirmations.filter((c) => c.state === request.query.status);
+      }
+      return ok(
+        {
+          confirmations: confirmations.map(confirmationView),
+        },
+        request.id,
+      );
+    },
+  );
 
   app.get(
     "/career/applications/:id/confirmations",
@@ -694,6 +758,7 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: [app.requireUser],
       schema: {
         params: idParamsSchema,
+        body: optionalEmptyBodySchema,
         response: {
           200: okSchema(
             z.object({
@@ -811,6 +876,7 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: [app.requireUser],
       schema: {
         params: idParamsSchema,
+        body: optionalEmptyBodySchema,
         response: {
           200: okSchema(
             z.object({
@@ -857,6 +923,57 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
 
   // ── Contacts ────────────────────────────────────────────────────────────
 
+  app.get(
+    "/career/contacts",
+    {
+      preHandler: [app.requireUser],
+      schema: {
+        querystring: z.object({
+          applicationId: z.string().uuid().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              contacts: z.array(z.any()),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const filter = {
+        ...(request.query.applicationId ? { applicationId: request.query.applicationId } : {}),
+        limit: 100,
+      };
+      const contacts = await app.services.career.listContacts(userId, filter);
+      return ok(
+        {
+          contacts: contacts.map(contactView),
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.post(
+    "/career/contacts",
+    {
+      preHandler: [app.requireUser],
+      schema: {
+        body: contactInputSchema,
+        response: {
+          200: okSchema(z.any()),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const contact = await app.services.career.addContact(userId, request.body);
+      return ok(contactView(contact), request.id);
+    },
+  );
+
   app.post(
     "/career/applications/:id/contacts",
     {
@@ -877,6 +994,68 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
   );
 
   // ── Deadlines ───────────────────────────────────────────────────────────
+
+  app.get(
+    "/career/deadlines",
+    {
+      preHandler: [app.requireUser],
+      schema: {
+        querystring: z.object({
+          applicationId: z.string().uuid().optional(),
+          status: z.string().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              deadlines: z.array(z.any()),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const filter = {
+        ...(request.query.applicationId ? { applicationId: request.query.applicationId } : {}),
+        limit: 100,
+      };
+      const deadlines = await app.services.careerStore.listDeadlines(userId, filter);
+      return ok(
+        {
+          deadlines: deadlines.map(deadlineView),
+        },
+        request.id,
+      );
+    },
+  );
+
+  app.put(
+    "/career/deadlines/:id",
+    {
+      preHandler: [app.requireUser],
+      schema: {
+        params: idParamsSchema,
+        body: z.object({
+          completed: z.boolean().optional(),
+          state: z.enum(["pending", "cancelled", "reminded", "met", "missed"]).optional(),
+        }),
+        response: {
+          200: okSchema(z.any()),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const state = request.body.state ?? (request.body.completed ? "met" : "pending");
+      const updated = await app.services.careerStore.updateDeadline({
+        userId,
+        id: request.params.id,
+        state,
+        now: new Date(),
+      });
+      return ok(deadlineView(updated), request.id);
+    },
+  );
 
   app.post(
     "/career/applications/:id/deadlines",
@@ -987,6 +1166,7 @@ export const careerRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     {
       preHandler: [app.requireUser],
       schema: {
+        body: optionalEmptyBodySchema,
         response: {
           200: okSchema(
             z.object({

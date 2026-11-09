@@ -63,7 +63,7 @@ export function Futuristic3DCard({
           right: 0,
           bottom: 0,
           pointerEvents: "none",
-          background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(0, 240, 255, ${glarePos.opacity}), transparent 60%)`,
+          background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, color-mix(in srgb, var(--nx-signal) ${String(Math.round(glarePos.opacity * 100))}%, transparent), transparent 60%)`,
           transition: "opacity 0.2s ease",
           zIndex: 1,
         }}

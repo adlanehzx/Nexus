@@ -23,6 +23,7 @@ export function Memory({ api }: { api: DashboardApi }) {
         <h3>{tr("Add Memory", "Ajouter une Mémoire")}</h3>
         <div className="inline-admin-form memory-form">
           <input
+            aria-label={tr("What NEXUS should remember", "Ce dont NEXUS doit se souvenir")}
             className="field"
             value={content}
             onChange={(event) => setContent(event.target.value)}
@@ -30,6 +31,7 @@ export function Memory({ api }: { api: DashboardApi }) {
           />
           <select
             className="field"
+            aria-label={tr("Memory layer", "Couche mémoire")}
             value={layer}
             onChange={(event) => setLayer(event.target.value as "LONG_TERM" | "PREFERENCE")}
           >
@@ -37,6 +39,7 @@ export function Memory({ api }: { api: DashboardApi }) {
             <option value="PREFERENCE">{tr("Preference", "Préférence")}</option>
           </select>
           <input
+            aria-label={tr("tags, comma, separated", "tags, séparés, par des virgules")}
             className="field"
             value={tags}
             onChange={(event) => setTags(event.target.value)}

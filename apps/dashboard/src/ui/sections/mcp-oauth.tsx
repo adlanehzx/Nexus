@@ -171,7 +171,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
   const renderProviderIcon = (id: string, size = 20) => {
     switch (id) {
       case "github":
-        return <IconGitHub size={size} color="#ffffff" />;
+        return <IconGitHub size={size} color="currentColor" />;
       case "slack":
         return <IconSlack size={size} color="#e01e5a" />;
       case "google-drive":
@@ -180,7 +180,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
         return <IconLinear size={size} color="#5e6ad2" />;
       case "notion":
       default:
-        return <IconNotion size={size} color="#ffffff" />;
+        return <IconNotion size={size} color="currentColor" />;
     }
   };
 
@@ -196,13 +196,13 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
               style={{
                 margin: 0,
                 fontSize: "1.2rem",
-                color: "var(--nx-signal, #00f0ff)",
+                color: "var(--nx-signal)",
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
               }}
             >
-              <IconBolt size={18} color="var(--nx-signal, #00f0ff)" />
+              <IconBolt size={18} color="var(--nx-signal)" />
               {tr("OAuth 2.0 PKCE Integrations", "Intégrations OAuth 2.0 PKCE")}
             </h3>
             <p
@@ -261,12 +261,10 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 justifyContent: "space-between",
                 padding: "1.25rem",
                 borderRadius: "8px",
-                border: isConnected
-                  ? "1px solid rgba(16, 185, 129, 0.4)"
-                  : "1px solid var(--nx-line, rgba(255, 255, 255, 0.12))",
+                border: isConnected ? "1px solid var(--nx-ok-line)" : "1px solid var(--nx-line)",
                 background: isConnected
-                  ? "linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(13, 17, 23, 0.95) 100%)"
-                  : "rgba(18, 22, 31, 0.8)",
+                  ? "linear-gradient(180deg, var(--nx-ok-bg) 0%, var(--nx-surface) 100%)"
+                  : "var(--nx-surface)",
                 position: "relative",
               }}
             >
@@ -286,11 +284,11 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                         width: "36px",
                         height: "36px",
                         borderRadius: "8px",
-                        background: "rgba(255, 255, 255, 0.06)",
+                        background: "var(--nx-surface-hover)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        border: "1px solid var(--nx-line)",
                       }}
                     >
                       {renderProviderIcon(p.id, 20)}
@@ -312,11 +310,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                       fontWeight: 600,
                       padding: "3px 8px",
                       borderRadius: "12px",
-                      background: isConnected
-                        ? "rgba(16, 185, 129, 0.15)"
-                        : "rgba(255, 255, 255, 0.05)",
-                      color: isConnected ? "#10b981" : "var(--nx-muted, #8b949e)",
-                      border: `1px solid ${isConnected ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.1)"}`,
+                      background: isConnected ? "var(--nx-ok-bg)" : "var(--nx-surface-hover)",
+                      color: isConnected ? "var(--nx-ok)" : "var(--nx-text-muted)",
+                      border: `1px solid ${isConnected ? "var(--nx-ok-line)" : "var(--nx-line)"}`,
                     }}
                   >
                     <span
@@ -324,8 +320,10 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                         width: "6px",
                         height: "6px",
                         borderRadius: "50%",
-                        background: isConnected ? "#10b981" : "#6b7280",
-                        boxShadow: isConnected ? "0 0 8px #10b981" : "none",
+                        background: isConnected ? "var(--nx-ok)" : "var(--nx-text-faint)",
+                        boxShadow: isConnected
+                          ? "0 0 8px color-mix(in srgb, var(--nx-ok) 70%, transparent)"
+                          : "none",
                       }}
                     />
                     {isConnected ? tr("CONNECTED", "CONNECTÉ") : tr("READY", "PRÊT")}
@@ -356,7 +354,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span className="muted">{tr("Vault Secret Ref:", "Réf secret coffre :")}</span>
-                    <code style={{ fontSize: "0.75rem", color: "var(--nx-signal, #00f0ff)" }}>
+                    <code style={{ fontSize: "0.75rem", color: "var(--nx-signal)" }}>
                       {p.vaultRef}
                     </code>
                   </div>
@@ -364,7 +362,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     <span className="muted">
                       {tr("Security Protocol:", "Protocole sécurité :")}
                     </span>
-                    <span style={{ color: "#a78bfa" }}>
+                    <span style={{ color: "var(--nx-accent)" }}>
                       {p.supportsPkce ? "RFC 7636 PKCE (S256)" : "OAuth 2.0 Bearer"}
                     </span>
                   </div>
@@ -374,7 +372,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     </span>
                     <span
                       style={{
-                        color: p.clientIdConfigured ? "#10b981" : "#eab308",
+                        color: p.clientIdConfigured ? "var(--nx-ok)" : "var(--nx-warn)",
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "0.25rem",
@@ -382,7 +380,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     >
                       {p.clientIdConfigured ? (
                         <>
-                          <IconCheck size={12} color="#10b981" />
+                          <IconCheck size={12} color="var(--nx-ok)" />
                           {tr("1-Click Ready", "Prêt 1-Clic")}
                         </>
                       ) : (
@@ -420,9 +418,9 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     type="button"
                     style={{
                       flex: 1,
-                      borderColor: "var(--nx-signal, #00f0ff)",
-                      background: "rgba(0, 240, 255, 0.12)",
-                      color: "var(--nx-signal, #00f0ff)",
+                      borderColor: "var(--nx-signal)",
+                      background: "color-mix(in srgb, var(--nx-signal) 12%, transparent)",
+                      color: "var(--nx-signal)",
                       fontWeight: 600,
                       display: "inline-flex",
                       alignItems: "center",
@@ -450,7 +448,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "rgba(0, 0, 0, 0.75)",
+            background: "var(--nx-scrim)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -464,10 +462,10 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
             style={{
               width: "100%",
               maxWidth: "540px",
-              background: "#161b22",
-              border: "1px solid var(--nx-signal, #00f0ff)",
+              background: "var(--nx-surface-overlay)",
+              border: "1px solid var(--nx-signal)",
               borderRadius: "10px",
-              boxShadow: "0 8px 32px rgba(0, 240, 255, 0.2)",
+              boxShadow: "0 8px 32px color-mix(in srgb, var(--nx-signal) 20%, transparent)",
               padding: "1.5rem",
             }}
           >
@@ -486,7 +484,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     width: "32px",
                     height: "32px",
                     borderRadius: "6px",
-                    background: "rgba(255, 255, 255, 0.08)",
+                    background: "var(--nx-surface-hover)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -495,7 +493,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   {renderProviderIcon(selectedProvider.id, 18)}
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--nx-signal, #00f0ff)" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--nx-signal)" }}>
                     {tr(`Connect ${selectedProvider.name}`, `Connecter ${selectedProvider.name}`)}
                   </h3>
                   <span className="muted" style={{ fontSize: "0.75rem" }}>
@@ -544,12 +542,12 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                       width: "10px",
                       height: "10px",
                       borderRadius: "50%",
-                      background: "#10b981",
-                      boxShadow: "0 0 10px #10b981",
+                      background: "var(--nx-ok)",
+                      boxShadow: "0 0 10px color-mix(in srgb, var(--nx-ok) 70%, transparent)",
                       animation: "pulse 2s infinite",
                     }}
                   />
-                  <div style={{ fontSize: "0.85rem", color: "#10b981" }}>
+                  <div style={{ fontSize: "0.85rem", color: "var(--nx-ok)" }}>
                     {tr(
                       `Authorization window launched. Sign in and grant access on ${selectedProvider.name}.`,
                       `Fenêtre d'autorisation lancée. Connectez-vous et autorisez l'accès sur ${selectedProvider.name}.`,
@@ -595,16 +593,17 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     )}
                   </span>
                   <input
+                    aria-label="Authorization code or redirect URL"
                     type="text"
                     placeholder="Paste code or entire redirect URL (e.g. http://127.0.0.1:8080/api/v1/mcp/oauth/callback?code=...)"
                     value={authCode}
                     onChange={(e) => setAuthCode(e.target.value)}
                     style={{
-                      background: "rgba(0, 0, 0, 0.3)",
-                      border: "1px solid var(--nx-signal, #00f0ff)",
+                      background: "var(--nx-canvas-sunken)",
+                      border: "1px solid var(--nx-signal)",
                       padding: "9px 12px",
                       borderRadius: "6px",
-                      color: "#fff",
+                      color: "var(--nx-text)",
                       fontFamily: "monospace",
                       fontSize: "0.82rem",
                     }}
@@ -664,11 +663,11 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                     value={manualClientId}
                     onChange={(e) => setManualClientId(e.target.value)}
                     style={{
-                      background: "rgba(0, 0, 0, 0.3)",
-                      border: "1px solid var(--nx-line, rgba(255, 255, 255, 0.15))",
+                      background: "var(--nx-canvas-sunken)",
+                      border: "1px solid var(--nx-line)",
                       padding: "8px 12px",
                       borderRadius: "6px",
-                      color: "#fff",
+                      color: "var(--nx-text)",
                     }}
                   />
                 </label>
@@ -689,11 +688,11 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                       value={manualClientSecret}
                       onChange={(e) => setManualClientSecret(e.target.value)}
                       style={{
-                        background: "rgba(0, 0, 0, 0.3)",
-                        border: "1px solid var(--nx-line, rgba(255, 255, 255, 0.15))",
+                        background: "var(--nx-canvas-sunken)",
+                        border: "1px solid var(--nx-line)",
                         padding: "8px 12px",
                         borderRadius: "6px",
-                        color: "#fff",
+                        color: "var(--nx-text)",
                       }}
                     />
                   </label>

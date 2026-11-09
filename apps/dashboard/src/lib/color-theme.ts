@@ -10,6 +10,23 @@
 export type ColorThemeId =
   "emerald" | "cyan" | "violet" | "amber" | "crimson" | "blue" | "graphite";
 
+/**
+ * Accent values for one display mode.
+ *
+ * A single neon value cannot serve both modes: the saturated colour that reads
+ * well on a near-black canvas fails WCAG AA as text on a white card, and the
+ * deep colour that reads on white disappears on the dark canvas. Each theme
+ * therefore carries one palette per mode; every value is at least 4.5:1 against
+ * the NEXUS surface ramp of its mode.
+ */
+export interface ColorThemeModePalette {
+  /** Interactive accent: links, focus rings, filled buttons. */
+  accent: string;
+  accentHover: string;
+  /** Live / selected "signal": eyebrows, the rail, active tabs. */
+  signal: string;
+}
+
 export interface ColorThemeConfig {
   id: ColorThemeId;
   nameEn: string;
@@ -21,6 +38,8 @@ export interface ColorThemeConfig {
   signalMuted: string;
   accentGlow: string;
   previewGradient: string;
+  light: ColorThemeModePalette;
+  dark: ColorThemeModePalette;
 }
 
 export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
@@ -35,6 +54,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(0, 255, 157, 0.14)",
     accentGlow: "rgba(0, 255, 157, 0.28)",
     previewGradient: "linear-gradient(135deg, #059669 0%, #00ff9d 100%)",
+    light: { accent: "#047857", accentHover: "#065f46", signal: "#03725a" },
+    dark: { accent: "#34d399", accentHover: "#6ee7b7", signal: "#2dffa8" },
   },
   cyan: {
     id: "cyan",
@@ -47,6 +68,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(0, 240, 255, 0.14)",
     accentGlow: "rgba(0, 240, 255, 0.28)",
     previewGradient: "linear-gradient(135deg, #0284c7 0%, #00f0ff 100%)",
+    light: { accent: "#0c6a85", accentHover: "#0a566d", signal: "#0b7285" },
+    dark: { accent: "#22d3ee", accentHover: "#67e8f9", signal: "#2ee6ff" },
   },
   violet: {
     id: "violet",
@@ -59,6 +82,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(179, 0, 255, 0.14)",
     accentGlow: "rgba(179, 0, 255, 0.28)",
     previewGradient: "linear-gradient(135deg, #7c3aed 0%, #d946ef 100%)",
+    light: { accent: "#7e22ce", accentHover: "#6b21a8", signal: "#7a1fd1" },
+    dark: { accent: "#c084fc", accentHover: "#d8b4fe", signal: "#cf8bff" },
   },
   amber: {
     id: "amber",
@@ -71,6 +96,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(255, 153, 0, 0.14)",
     accentGlow: "rgba(255, 153, 0, 0.28)",
     previewGradient: "linear-gradient(135deg, #d97706 0%, #fbbf24 100%)",
+    light: { accent: "#9a4608", accentHover: "#7c3a05", signal: "#8f5200" },
+    dark: { accent: "#fbbf24", accentHover: "#fcd34d", signal: "#ffb020" },
   },
   crimson: {
     id: "crimson",
@@ -83,6 +110,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(255, 42, 109, 0.14)",
     accentGlow: "rgba(255, 42, 109, 0.28)",
     previewGradient: "linear-gradient(135deg, #e11d48 0%, #ff2a6d 100%)",
+    light: { accent: "#be123c", accentHover: "#9f1239", signal: "#c4124a" },
+    dark: { accent: "#fb7185", accentHover: "#fda4af", signal: "#ff5c8a" },
   },
   blue: {
     id: "blue",
@@ -95,6 +124,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(59, 130, 246, 0.14)",
     accentGlow: "rgba(59, 130, 246, 0.28)",
     previewGradient: "linear-gradient(135deg, #1d4ed8 0%, #38bdf8 100%)",
+    light: { accent: "#1d4ed8", accentHover: "#1e40af", signal: "#0369a1" },
+    dark: { accent: "#60a5fa", accentHover: "#93c5fd", signal: "#38bdf8" },
   },
   graphite: {
     id: "graphite",
@@ -107,6 +138,8 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorThemeConfig> = {
     signalMuted: "rgba(226, 232, 240, 0.14)",
     accentGlow: "rgba(226, 232, 240, 0.24)",
     previewGradient: "linear-gradient(135deg, #334155 0%, #cbd5e1 100%)",
+    light: { accent: "#475569", accentHover: "#334155", signal: "#3b4658" },
+    dark: { accent: "#cbd5e1", accentHover: "#e2e8f0", signal: "#e2e8f0" },
   },
 };
 
@@ -130,11 +163,15 @@ export function applyColorTheme(themeId: ColorThemeId): void {
 
   root.setAttribute("data-color-theme", theme.id);
 
-  // Apply to standard NEXUS variables
-  root.style.setProperty("--nx-signal", theme.signal);
-  root.style.setProperty("--nx-signal-muted", theme.signalMuted);
-  root.style.setProperty("--nx-accent", theme.primary);
-  root.style.setProperty("--nx-accent-hover", theme.signal);
+  // Per-mode palettes. `color-themes.css` maps these onto --nx-accent / --nx-signal
+  // according to the active light/dark mode, so a theme switch needs no JS when the
+  // user flips the colour scheme.
+  for (const mode of ["light", "dark"] as const) {
+    const palette = theme[mode];
+    root.style.setProperty(`--nx-theme-accent-${mode}`, palette.accent);
+    root.style.setProperty(`--nx-theme-accent-hover-${mode}`, palette.accentHover);
+    root.style.setProperty(`--nx-theme-signal-${mode}`, palette.signal);
+  }
 
   // Apply to Omarchy Spatial OS variables
   root.style.setProperty("--sp-accent", theme.signal);

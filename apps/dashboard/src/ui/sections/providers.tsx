@@ -393,7 +393,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                     padding: "1rem",
                     border:
                       selectedProvider === p.id
-                        ? "2px solid var(--accent-color, #00d2ff)"
+                        ? "2px solid var(--nx-signal)"
                         : "1px solid var(--border-color, #2a2e39)",
                     borderRadius: "8px",
                     display: "flex",
@@ -401,7 +401,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                     justifyContent: "space-between",
                     minWidth: 0,
                     overflow: "hidden",
-                    background: selectedProvider === p.id ? "rgba(0, 210, 255, 0.05)" : undefined,
+                    background:
+                      selectedProvider === p.id
+                        ? "color-mix(in srgb, var(--nx-signal) 5%, transparent)"
+                        : undefined,
                   }}
                   onClick={() => {
                     setSelectedProvider(p.id);
@@ -440,7 +443,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                         padding: "2px 6px",
                         letterSpacing: "0.05em",
                         borderRadius: "4px",
-                        background: "var(--color-bg-subtle, rgba(255, 255, 255, 0.08))",
+                        background: "var(--nx-surface-hover)",
                         color: "var(--color-muted, #aaa)",
                         fontWeight: 600,
                         border: "1px solid var(--border-color, #333)",
@@ -458,7 +461,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                       fontSize: "0.8rem",
                       marginTop: "auto",
                       paddingTop: "0.6rem",
-                      borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.06))",
+                      borderTop: "1px solid var(--nx-line)",
                     }}
                   >
                     <span
@@ -471,7 +474,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                         fontSize: "0.75rem",
                         background: p.capabilities.streaming
                           ? "rgba(0, 230, 118, 0.12)"
-                          : "rgba(255, 255, 255, 0.05)",
+                          : "var(--nx-surface-hover)",
                         color: p.capabilities.streaming
                           ? "var(--color-success, #00e676)"
                           : "var(--color-muted, #888)",
@@ -490,7 +493,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                         fontSize: "0.75rem",
                         background: p.capabilities.toolCall
                           ? "rgba(0, 230, 118, 0.12)"
-                          : "rgba(255, 255, 255, 0.05)",
+                          : "var(--nx-surface-hover)",
                         color: p.capabilities.toolCall
                           ? "var(--color-success, #00e676)"
                           : "var(--color-muted, #888)",
@@ -509,7 +512,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                         fontSize: "0.75rem",
                         background: p.capabilities.checkpointRollback
                           ? "rgba(0, 230, 118, 0.12)"
-                          : "rgba(255, 255, 255, 0.05)",
+                          : "var(--nx-surface-hover)",
                         color: p.capabilities.checkpointRollback
                           ? "var(--color-success, #00e676)"
                           : "var(--color-muted, #888)",
@@ -1014,7 +1017,7 @@ export function Providers({ api }: { api: DashboardApi }) {
                                   marginTop: "8px",
                                   padding: "8px",
                                   borderRadius: "6px",
-                                  background: "var(--color-bg-subtle, rgba(255, 255, 255, 0.05))",
+                                  background: "var(--nx-surface-hover)",
                                   border: "1px solid var(--border-color, #333)",
                                 }}
                                 data-testid={`agent-cooldown-panel-${acc.id}`}
@@ -1050,6 +1053,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                                   ))}
                                 </div>
                                 <input
+                                  aria-label={tr(
+                                    "Optional reason (e.g. Rate limits, testing)",
+                                    "Motif optionnel (ex. Quota dépassé, test)",
+                                  )}
                                   className="field"
                                   style={{
                                     fontSize: "11px",
@@ -1113,6 +1120,10 @@ export function Providers({ api }: { api: DashboardApi }) {
                 style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}
               >
                 <input
+                  aria-label={tr(
+                    `Enter API key or session token for ${selectedProvider}...`,
+                    `Clé API ou token de session pour ${selectedProvider}...`,
+                  )}
                   type="password"
                   placeholder={tr(
                     `Enter API key or session token for ${selectedProvider}...`,

@@ -19,7 +19,6 @@ import {
   IconSettings,
   IconShield,
   IconStar,
-  IconStop,
   IconWarning,
 } from "./icons.js";
 
@@ -337,6 +336,11 @@ export function Agents({ api }: { api: DashboardApi }) {
     setEditAdditionalDirs(profile.additional_dirs.join("\n"));
     setEditConfigOptions(JSON.stringify(profile.config_options, null, 2));
     setTestResult(null);
+    setTimeout(() => {
+      document
+        .getElementById("agent-edit-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   };
 
   const saveProfile = (): void => {
@@ -452,7 +456,7 @@ export function Agents({ api }: { api: DashboardApi }) {
                   </div>
                   <div className="agent-titles">
                     <div className="agent-key-row">
-                      <h3>{agent.key}</h3>
+                      <h3 title={agent.key}>{agent.key}</h3>
                       <span className="agent-kind-tag">
                         {profile?.agent_kind?.toUpperCase() ?? "ACP"}
                       </span>
@@ -490,16 +494,31 @@ export function Agents({ api }: { api: DashboardApi }) {
 
               {/* Agent Specs & Environment */}
               <div className="agent-specs-row">
-                <div className="agent-spec-chip" title={tr("Configured AI Model", "Modèle IA configuré")}>
-                  <IconCpu size={12} color="var(--accent-color, #00d2ff)" />
-                  <span className="mono">{profile?.model || tr("Default Model", "Modèle standard")}</span>
+                <div
+                  className="agent-spec-chip"
+                  title={tr("Configured AI Model", "Modèle IA configuré")}
+                >
+                  <IconCpu size={12} color="var(--nx-signal)" />
+                  <span className="mono">
+                    {profile?.model !== undefined && profile.model !== ""
+                      ? profile.model
+                      : tr("Default Model", "Modèle standard")}
+                  </span>
                 </div>
                 {profile?.command ? (
-                  <div className="agent-spec-chip muted" title={tr("Command entrypoint", "Point d'entrée commande")}>
-                    <code>{profile.command}</code>
+                  <div
+                    className="agent-spec-chip muted"
+                    title={tr("Command entrypoint", "Point d'entrée commande")}
+                  >
+                    <code title={profile.command}>
+                      {profile.command.replaceAll("${HOME}", "~")}
+                    </code>
                   </div>
                 ) : null}
-                <div className="agent-spec-chip safe" title={tr("Workspace execution sandbox", "Espace d'exécution isolé")}>
+                <div
+                  className="agent-spec-chip safe"
+                  title={tr("Workspace execution sandbox", "Espace d'exécution isolé")}
+                >
                   <IconShield size={12} color="var(--color-success, #00e676)" />
                   <span>{tr("Sandboxed", "Isolé")}</span>
                 </div>
@@ -531,7 +550,12 @@ export function Agents({ api }: { api: DashboardApi }) {
                 ) : (
                   <div className="agent-live-text ready">
                     <span className="live-pulse-dot" />
-                    <span>{tr("Operational · Ready for dispatch", "Opérationnel · Prêt pour orchestration")}</span>
+                    <span>
+                      {tr(
+                        "Operational · Ready for dispatch",
+                        "Opérationnel · Prêt pour orchestration",
+                      )}
+                    </span>
                   </div>
                 )}
               </div>
@@ -575,7 +599,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       </div>
 
       {editing === null ? null : (
-        <section className="settings-panel">
+        <section id="agent-edit-panel" className="settings-panel">
           <div className="settings-panel-heading">
             <div>
               <h3>
@@ -739,6 +763,7 @@ export function Agents({ api }: { api: DashboardApi }) {
         <div className="agent-create-form">
           <select
             className="field"
+            aria-label={tr("Agent template", "Modèle d'agent")}
             value={template}
             onChange={(event) => setTemplate(event.target.value)}
           >
@@ -750,6 +775,7 @@ export function Agents({ api }: { api: DashboardApi }) {
             ))}
           </select>
           <input
+            aria-label={tr("Profile name", "Nom du profil")}
             className="field"
             value={newName}
             placeholder={tr("Profile name", "Nom du profil")}
@@ -760,12 +786,14 @@ export function Agents({ api }: { api: DashboardApi }) {
             }}
           />
           <input
+            aria-label={tr("nexus-name", "nom-nexus")}
             className="field"
             value={newKey}
             placeholder={tr("nexus-name", "nom-nexus")}
             onChange={(event) => setNewKey(normalizeKey(event.target.value))}
           />
           <input
+            aria-label={tr("Optional model", "Modèle optionnel")}
             className="field"
             value={model}
             placeholder={tr("Optional model", "Modèle optionnel")}
@@ -805,6 +833,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div className="agent-add-form">
             <select
               className="field"
+              aria-label={tr("Agent profile", "Profil d'agent")}
               value={selected}
               onChange={(event) => choose(event.target.value)}
             >
@@ -818,6 +847,7 @@ export function Agents({ api }: { api: DashboardApi }) {
               ))}
             </select>
             <input
+              aria-label={tr("short-name", "nom-court")}
               className="field"
               value={key}
               placeholder={tr("short-name", "nom-court")}
@@ -865,6 +895,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div>
             <select
               className="field"
+              aria-label={tr("Filter by provider", "Filtrer par fournisseur")}
               value={providerFilter}
               onChange={(e) => setProviderFilter(e.target.value)}
               style={{ width: "auto" }}
@@ -1086,6 +1117,7 @@ export function Agents({ api }: { api: DashboardApi }) {
           <div className="agent-add-form">
             <select
               className="field"
+              aria-label={tr("Account provider", "Fournisseur du compte")}
               value={newAccProvider}
               onChange={(e) => {
                 setNewAccProvider(e.target.value);
@@ -1097,18 +1129,21 @@ export function Agents({ api }: { api: DashboardApi }) {
               <option value="codex">Codex (ChatGPT Plus subscription)</option>
             </select>
             <input
+              aria-label={tr("unique-identifier", "identifiant-unique")}
               className="field"
               value={newAccId}
               placeholder={tr("unique-identifier", "identifiant-unique")}
               onChange={(e) => setNewAccId(normalizeKey(e.target.value))}
             />
             <input
+              aria-label={tr("Full name (e.g. Claude Backup)", "Nom complet (ex. Claude Backup)")}
               className="field"
               value={newAccName}
               placeholder={tr("Full name (e.g. Claude Backup)", "Nom complet (ex. Claude Backup)")}
               onChange={(e) => setNewAccName(e.target.value)}
             />
             <input
+              aria-label={tr("Priority (1 = high priority)", "Priorité (1 = haute priorité)")}
               className="field"
               type="number"
               min={1}
@@ -1281,6 +1316,10 @@ export function Agents({ api }: { api: DashboardApi }) {
             </p>
             <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
               <input
+                aria-label={tr(
+                  "e.g. Fix the bug in services/api/src/auth.ts and add a vitest test",
+                  "ex. Corriger le bug dans services/api/src/auth.ts et ajouter un test vitest",
+                )}
                 className="field"
                 type="text"
                 placeholder={tr(
@@ -1414,10 +1453,6 @@ function normalizeProfileName(value: string): string {
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^[^A-Za-z0-9]+/, "")
     .slice(0, 64);
-}
-
-function percent(value: number | null): string {
-  return value === null ? "—" : `${value} %`;
 }
 
 function formatAuthStatus(

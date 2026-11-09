@@ -4,6 +4,7 @@ import type { WebSocket } from "ws";
 import { uuidv7 } from "@nexus/shared";
 import { WsCloseCode, parseClientHello } from "@nexus/protocol";
 import { isAllowedSocketOrigin } from "./socket-origin.js";
+import { satelliteVoiceSocketRoute } from "./satellite-voice-socket.js";
 
 /**
  * WebSocket transport for both channels.
@@ -70,6 +71,8 @@ export async function websocketRoutes(
 
   clientSocketRoute(app, handshakeTimeoutMs);
   workerSocketRoute(app, handshakeTimeoutMs);
+  // Lab 4 — ESP32 voice satellites (PCM audio in, TTS audio out).
+  satelliteVoiceSocketRoute(app, handshakeTimeoutMs);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
