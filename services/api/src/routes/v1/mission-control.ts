@@ -1,3 +1,4 @@
+import { tradingRoutes } from "./trading.js";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -61,6 +62,7 @@ const statusSchema = z.object({
  */
 export const missionControlRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+  void app.register(tradingRoutes);
 
   app.get(
     "/dashboard/mission-control",

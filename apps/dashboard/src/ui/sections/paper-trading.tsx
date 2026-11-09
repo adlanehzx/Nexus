@@ -1,10 +1,6 @@
+import { TradingConsole } from "./trading-console.js";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  DashboardApi,
-  PaperAccountDetail,
-  PaperMarketDetail,
-  PaperOrder,
-} from "../../lib/api.js";
+import type { DashboardApi, PaperAccountDetail, PaperMarketDetail } from "../../lib/api.js";
 import { paperOrderInput, paperOrderPnl } from "../../lib/paper-trading.js";
 import {
   IconActivity,
@@ -12,7 +8,6 @@ import {
   IconBolt,
   IconCheck,
   IconClock,
-  IconExternalLink,
   IconRefresh,
   IconShield,
   IconTarget,
@@ -40,13 +35,13 @@ const money = (cents: number): string => `${(cents / 100).toFixed(2)} EUR`;
  */
 function getSmoothPath(pts: { x: number; y: number }[]): string {
   if (pts.length === 0) return "";
-  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  if (pts.length === 1) return `M ${pts[0]!.x.toFixed(1)} ${pts[0]!.y.toFixed(1)}`;
+  let d = `M ${pts[0]!.x.toFixed(1)} ${pts[0]!.y.toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i === 0 ? 0 : i - 1];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+    const p0 = pts[i === 0 ? 0 : i - 1]!;
+    const p1 = pts[i]!;
+    const p2 = pts[i + 1]!;
+    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1]!;
     const cp1x = p1.x + (p2.x - p0.x) / 6;
     const cp1y = p1.y + (p2.y - p0.y) / 6;
     const cp2x = p2.x - (p3.x - p1.x) / 6;
@@ -63,11 +58,16 @@ function getSmoothPath(pts: { x: number; y: number }[]): string {
 function EquityBalanceChart({
   account,
   markets,
+  externalHistory,
+  currency = "EUR",
 }: {
   account: PaperAccountDetail;
   markets: PaperMarketDetail[];
+  externalHistory?: { at: string; equity: number; cash?: number; exposure?: number }[];
+  currency?: string;
 }) {
   const { tr } = useI18n();
+  const money = (cents: number) => `${(cents / 100).toFixed(2)} ${currency}`;
   const [activeSeries, setActiveSeries] = useState<"all" | "total" | "cash" | "exposure">("all");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -80,8 +80,9 @@ function EquityBalanceChart({
     }, 0);
   }, [account.orders, markets]);
 
-  const currentTotalCents =
-    account.cash_balance_cents + account.open_exposure_cents + unrealizedPnlCents;
+  const currentTotalCents = externalHistory
+    ? (externalHistory.at(-1)?.equity ?? 0) * 100
+    : account.cash_balance_cents + account.open_exposure_cents + unrealizedPnlCents;
 
   // Build the historical trajectory from account orders and live state
   const series = useMemo<EquitySnapshot[]>(() => {
@@ -89,6 +90,15 @@ function EquityBalanceChart({
     const initialBankroll =
       account.cash_balance_cents + account.open_exposure_cents - account.realized_pnl_cents;
 
+    if (externalHistory)
+      return externalHistory.map((p) => ({
+        timestamp: Date.parse(p.at),
+        label: new Date(p.at).toLocaleString(),
+        cash: (p.cash ?? 0) * 100,
+        exposure: (p.exposure ?? 0) * 100,
+        unrealizedPnl: 0,
+        total: p.equity * 100,
+      }));
     const points: EquitySnapshot[] = [];
 
     // Base point at start of account
@@ -104,7 +114,6 @@ function EquityBalanceChart({
     // Step through chronological order transitions
     let runningCash = initialBankroll;
     let runningExposure = 0;
-    let runningRealized = 0;
 
     account.orders.forEach((order, index) => {
       if (order.state === "filled") {
@@ -122,7 +131,6 @@ function EquityBalanceChart({
         });
       } else if (order.state === "settled" && order.payout_cents !== null) {
         runningCash += order.payout_cents;
-        runningRealized += order.payout_cents - order.stake_cents;
         points.push({
           timestamp: Date.now() - (account.orders.length - index) * 300_000,
           label: `${tr("Settled", "Clôturé")} #${index + 1}`,
@@ -136,7 +144,7 @@ function EquityBalanceChart({
 
     // If there are few points, synthesize smooth intermediate progression steps
     if (points.length < 5) {
-      const startPt = points[0];
+      const startPt = points[0]!;
       const endCash = account.cash_balance_cents;
       const endExposure = account.open_exposure_cents;
       const endTotal = currentTotalCents;
@@ -175,6 +183,7 @@ function EquityBalanceChart({
 
     return points;
   }, [
+    externalHistory,
     account.cash_balance_cents,
     account.open_exposure_cents,
     account.realized_pnl_cents,
@@ -213,27 +222,28 @@ function EquityBalanceChart({
 
   const totalAreaPath =
     totalPoints.length > 0
-      ? `${totalPath} L ${totalPoints[totalPoints.length - 1].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${totalPoints[0].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
+      ? `${totalPath} L ${totalPoints[totalPoints.length - 1]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${totalPoints[0]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
       : "";
 
   const cashAreaPath =
     cashPoints.length > 0
-      ? `${cashPath} L ${cashPoints[cashPoints.length - 1].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${cashPoints[0].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
+      ? `${cashPath} L ${cashPoints[cashPoints.length - 1]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${cashPoints[0]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
       : "";
 
   const exposureAreaPath =
     exposurePoints.length > 0
-      ? `${exposurePath} L ${exposurePoints[exposurePoints.length - 1].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${exposurePoints[0].x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
+      ? `${exposurePath} L ${exposurePoints[exposurePoints.length - 1]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} L ${exposurePoints[0]!.x.toFixed(1)} ${(padTop + chartH).toFixed(1)} Z`
       : "";
 
   // Grid levels (4 steps)
   const gridSteps = [0, 0.333, 0.666, 1];
 
-  const activeHover = hoverIndex !== null && hoverIndex < series.length ? series[hoverIndex] : null;
+  const activeHover =
+    hoverIndex !== null && hoverIndex < series.length ? series[hoverIndex]! : null;
 
   const roiPercent =
-    series[0].total > 0
-      ? (((currentTotalCents - series[0].total) / series[0].total) * 100).toFixed(2)
+    series[0]!.total > 0
+      ? (((currentTotalCents - series[0]!.total) / series[0]!.total) * 100).toFixed(2)
       : "0.00";
   const isRoiPos = Number(roiPercent) > 0;
   const isRoiNeg = Number(roiPercent) < 0;
@@ -415,14 +425,14 @@ function EquityBalanceChart({
         {(activeSeries === "all" || activeSeries === "total") && totalPoints.length > 0 && (
           <g>
             <circle
-              cx={totalPoints[totalPoints.length - 1].x}
-              cy={totalPoints[totalPoints.length - 1].y}
+              cx={totalPoints[totalPoints.length - 1]!.x}
+              cy={totalPoints[totalPoints.length - 1]!.y}
               r={5}
               fill="#00e5ff"
             />
             <circle
-              cx={totalPoints[totalPoints.length - 1].x}
-              cy={totalPoints[totalPoints.length - 1].y}
+              cx={totalPoints[totalPoints.length - 1]!.x}
+              cy={totalPoints[totalPoints.length - 1]!.y}
               r={10}
               fill="none"
               stroke="#00e5ff"
@@ -446,7 +456,7 @@ function EquityBalanceChart({
             />
             <circle
               cx={projectX(hoverIndex)}
-              cy={projectY(series[hoverIndex].total)}
+              cy={projectY(series[hoverIndex]!.total)}
               r={4.5}
               fill="#00e5ff"
               stroke="#ffffff"
@@ -454,13 +464,13 @@ function EquityBalanceChart({
             />
             <circle
               cx={projectX(hoverIndex)}
-              cy={projectY(series[hoverIndex].cash)}
+              cy={projectY(series[hoverIndex]!.cash)}
               r={3.5}
               fill="var(--nx-success, #10b981)"
             />
             <circle
               cx={projectX(hoverIndex)}
-              cy={projectY(series[hoverIndex].exposure)}
+              cy={projectY(series[hoverIndex]!.exposure)}
               r={3.5}
               fill="#a855f7"
             />
@@ -674,6 +684,24 @@ export function PaperTrading({
       className="trading-lab-card"
       aria-label={tr("Trading Lab & Paper Simulation", "Laboratoire de Trading & Simulation")}
     >
+      <TradingConsole
+        api={api}
+        chart={(history, currency) => (
+          <EquityBalanceChart
+            account={{
+              id: "execution",
+              name: "Execution",
+              cash_balance_cents: 0,
+              realized_pnl_cents: 0,
+              open_exposure_cents: 0,
+              orders: [],
+            }}
+            markets={[]}
+            externalHistory={history}
+            currency={currency}
+          />
+        )}
+      />
       <div className="paper-trading-banner">
         <div style={{ display: "flex", alignItems: "center", gap: "var(--nx-space-3)" }}>
           <IconBarChart size={20} color="var(--nx-signal)" />
