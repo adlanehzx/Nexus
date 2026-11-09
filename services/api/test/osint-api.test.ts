@@ -1,3 +1,5 @@
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
@@ -14,14 +16,42 @@ describe("OSINT API", () => {
   let harness: ApiHarness;
   let owner: Account;
   let outsider: Account;
+  let searxng: Server;
+  let previousSearxngUrl: string | undefined;
 
   beforeEach(async () => {
+    // Local SearXNG stand-in so the search route never depends on a real instance.
+    searxng = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          query: "cybersecurity",
+          number_of_results: 1,
+          results: [
+            {
+              url: "https://example.com/report",
+              title: "Example report",
+              content: "Public report excerpt.",
+              engines: ["duckduckgo"],
+            },
+          ],
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => searxng.listen(0, "127.0.0.1", resolve));
+    previousSearxngUrl = process.env.SEARXNG_URL;
+    process.env.SEARXNG_URL = `http://127.0.0.1:${String((searxng.address() as AddressInfo).port)}`;
     harness = await makeApi();
     owner = await createAccount(harness, "osint-owner@example.test");
     outsider = await createAccount(harness, "osint-outsider@example.test");
   });
 
-  afterEach(async () => harness.close());
+  afterEach(async () => {
+    await harness.close();
+    if (previousSearxngUrl === undefined) delete process.env.SEARXNG_URL;
+    else process.env.SEARXNG_URL = previousSearxngUrl;
+    await new Promise<void>((resolve) => searxng.close(() => resolve()));
+  });
 
   it("persists an evidence-led case and isolates it by owner", async () => {
     const created = await harness.app.inject({
