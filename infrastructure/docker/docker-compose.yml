@@ -213,6 +213,7 @@ services:
     read_only: true
     volumes:
       - ../../apps/dashboard/dist:/usr/share/nginx/html:ro
+      - ./dashboard.nginx.conf:/etc/nginx/templates/default.conf.template:ro
     tmpfs:
       - /tmp:size=16m,mode=1777
       - /etc/nginx/conf.d:size=1m,mode=0755,uid=101,gid=101
