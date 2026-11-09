@@ -1,3 +1,4 @@
+import { OsintMissionsPanel } from "./OsintMissionsPanel.js";
 import { useEffect, useMemo, useState } from "react";
 import { buildOsintMission, osintInvestigationSchema } from "@nexus/osint/policy";
 import type { OsintCaseRecord, OsintEntity } from "@nexus/osint";
@@ -79,6 +80,15 @@ export function OsintWorkspace({
     setSelectedId(select ?? selectedId ?? result.cases[0]?.id ?? null);
   };
   useEffect(() => {
+    const timer = setInterval(() => {
+      void api
+        .osintCases()
+        .then((result) => setCases(result.cases))
+        .catch(() => undefined);
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [api]);
+  useEffect(() => {
     void refresh().catch((cause: unknown) => setError(message(cause)));
   }, []);
 
@@ -144,6 +154,13 @@ export function OsintWorkspace({
           </span>
         </div>
       </section>
+
+      <OsintMissionsPanel
+        api={api}
+        onCase={(id) => {
+          void refresh(id);
+        }}
+      />
 
       <div className="osint-case-shell">
         <aside className="domain-panel osint-case-list">
@@ -520,14 +537,14 @@ function SearchPanel({
   const { tr } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<
-    Array<{
+    {
       title: string;
       url: string;
       snippet: string;
       engines: string[];
       publishedAt?: string | null;
       score?: number | null;
-    }>
+    }[]
   >([]);
   const [searched, setSearched] = useState(false);
   const [archivedUrls, setArchivedUrls] = useState<Set<string>>(new Set());
@@ -695,6 +712,13 @@ function EvidencePanel({
   importDataset: () => Promise<void>;
 }) {
   const { tr } = useI18n();
+  const [filter, setFilter] = useState("");
+  const [reliability, setReliability] = useState("");
+  const evidence = record.evidence.filter(
+    (item) =>
+      (!reliability || item.reliability === reliability) &&
+      `${item.title} ${item.url} ${item.excerpt}`.toLowerCase().includes(filter.toLowerCase()),
+  );
   return (
     <div className="osint-panel-stack">
       <div className="osint-metrics">
@@ -705,6 +729,25 @@ function EvidencePanel({
           value={record.alerts.filter((item) => !item.acknowledged).length}
         />
       </div>
+      <div className="settings-grid">
+        <label>
+          {tr("Filter archive", "Filtrer les archives")}
+          <input className="field" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        </label>
+        <label>
+          {tr("Reliability", "Fiabilité")}
+          <select
+            className="field"
+            value={reliability}
+            onChange={(e) => setReliability(e.target.value)}
+          >
+            <option value="">{tr("All", "Toutes")}</option>
+            {["primary", "corroborated", "unverified"].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="osint-evidence-list">
         {record.evidence.length === 0 ? (
           <p className="muted">
@@ -714,7 +757,7 @@ function EvidencePanel({
             )}
           </p>
         ) : (
-          record.evidence.map((item) => (
+          evidence.map((item) => (
             <article key={item.id}>
               <div>
                 <strong>{item.title}</strong>
@@ -731,6 +774,7 @@ function EvidencePanel({
               </div>
               <span>
                 {item.reliability}
+                <small>{item.observedAt}</small>
                 <small>{item.contentHash.slice(0, 12)}…</small>
               </span>
             </article>

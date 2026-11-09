@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import {
+  osintMissionInputSchema,
+  osintMissionSchema,
   archivedEvidenceSchema,
   osintAlertSchema,
   osintCaseRecordSchema,
@@ -59,6 +61,66 @@ async function executeSearxngSearch(query: string, limit = 10) {
 
 export const osintRoutes: FastifyPluginCallback = (fastify, _options, done) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/osint/missions",
+    {
+      preHandler: app.requireUser,
+      schema: { response: { 200: okSchema(z.object({ missions: z.array(osintMissionSchema) })) } },
+    },
+    async (request) =>
+      ok(
+        { missions: await app.services.osintMissions.list(currentUser(request).userId) },
+        request.id,
+      ),
+  );
+  app.post(
+    "/osint/missions",
+    {
+      preHandler: app.requireUser,
+      schema: { body: osintMissionInputSchema, response: { 200: okSchema(osintMissionSchema) } },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.create(currentUser(request).userId, request.body),
+        request.id,
+      ),
+  );
+  app.get(
+    "/osint/missions/:missionId",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        params: z.object({ missionId: z.string().uuid() }),
+        response: { 200: okSchema(osintMissionSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.get(currentUser(request).userId, request.params.missionId),
+        request.id,
+      ),
+  );
+  app.post(
+    "/osint/missions/:missionId/control",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        params: z.object({ missionId: z.string().uuid() }),
+        body: z.object({ action: z.enum(["pause", "resume", "cancel"]) }),
+        response: { 200: okSchema(osintMissionSchema) },
+      },
+    },
+    async (request) =>
+      ok(
+        await app.services.osintMissions.control(
+          currentUser(request).userId,
+          request.params.missionId,
+          request.body.action,
+        ),
+        request.id,
+      ),
+  );
 
   app.get(
     "/osint/cases",
