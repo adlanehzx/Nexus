@@ -503,7 +503,7 @@ function AppContent() {
             1: "chat",
             2: "overview",
             3: "tasks",
-            4: "mission-engine",
+            4: "mission-control",
             5: "agents",
             6: "mcp",
             7: "settings",

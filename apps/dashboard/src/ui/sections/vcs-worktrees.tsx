@@ -48,8 +48,8 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
     title: string;
     message: string;
     danger?: boolean;
-    onConfirm: () => void;
-  }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+    onConfirm: () => void | Promise<void>;
+  }>({ isOpen: false, title: "", message: "", onConfirm: () => undefined });
 
   const [handoffModal, setHandoffModal] = useState<{
     isOpen: boolean;
@@ -818,8 +818,8 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
-        danger={confirmModal.danger}
-        onConfirm={confirmModal.onConfirm}
+        {...(confirmModal.danger !== undefined ? { danger: confirmModal.danger } : {})}
+        onConfirm={() => void confirmModal.onConfirm()}
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
 

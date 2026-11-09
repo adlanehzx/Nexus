@@ -36,14 +36,6 @@
     "reason": "Canonical transition endpoint; the dashboard uses the compatible stage endpoint."
   },
   {
-    "route": "POST /api/v1/career/applications/:p/approval-request",
-    "reason": "Submission approval preparation is reserved for Lot 7.3."
-  },
-  {
-    "route": "POST /api/v1/career/applications/:p/contacts",
-    "reason": "Contact creation is reserved for Lot 7.3."
-  },
-  {
     "route": "POST /api/v1/career/applications/:p/drafting",
     "reason": "Explicit drafting transition is reserved for Lot 7.3; the dashboard currently uses the stage endpoint."
   },
@@ -58,10 +50,6 @@
   {
     "route": "POST /api/v1/career/applications/:p/submit",
     "reason": "External submission execution is reserved for Lot 7.3."
-  },
-  {
-    "route": "POST /api/v1/career/confirmations/:p/decide",
-    "reason": "Canonical decision endpoint; existing clients use the compatible resolve endpoint."
   },
   {
     "route": "POST /api/v1/career/ingest",
@@ -106,10 +94,6 @@
   {
     "route": "* /api/v1/orchestrator/missions/:p/collaboration/advanced*",
     "reason": "Advanced collaboration sessions have no interface. The coordinator behind them is live via acp-orchestrator; lot 5 decides whether the sessions get a screen."
-  },
-  {
-    "route": "POST /api/v1/osint/cases/:p/evidence",
-    "reason": "Single-evidence capture; the workspace uses bulk import instead. Low impact, kept for API completeness."
   },
   {
     "route": "POST /api/v1/osint/cases/:p/watches/:p/evaluate",
@@ -158,5 +142,17 @@
   {
     "route": "GET /api/v1/linkedin/oauth/callback",
     "reason": "OAuth redirect callback invoked by LinkedIn authorization server during code exchange in the user browser."
+  },
+  {
+    "route": "GET /api/v1/osint/missions/:p",
+    "reason": "The dashboard reads missions through GET /api/v1/osint/missions (list) and controls them with POST .../control; the single-mission read serves API and agent clients."
+  },
+  {
+    "route": "GET /api/v1/osint/search",
+    "reason": "Case-less web search for API and agent clients; the dashboard searches inside an investigation through POST /api/v1/osint/cases/:id/search."
+  },
+  {
+    "route": "POST /api/v1/osint/search",
+    "reason": "Case-less web search for API and agent clients; the dashboard searches inside an investigation through POST /api/v1/osint/cases/:id/search."
   }
 ]

@@ -100,14 +100,14 @@ function translate(
     });
   }
 
-  if (hasZodFastifySchemaValidationErrors(error as FastifyError)) {
+  if (hasZodFastifySchemaValidationErrors(error)) {
     return new ValidationError({
       message: "Request validation failed",
       context: { issues: (error as FastifyError).validation },
     });
   }
 
-  if (isResponseSerializationError(error as FastifyError)) {
+  if (isResponseSerializationError(error)) {
     // A response that does not respect its own schema is a server bug,
     // never a client error. The schema violation details accompany the
     // message: without them, diagnosis was reduced to "somewhere in this route",
