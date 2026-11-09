@@ -393,4 +393,47 @@ describe("Career & Education API Routes", () => {
       expect(resolveBody.data.application.state).toBe("approved");
     });
   });
+
+  describe("empty-body POST and list routes", () => {
+    it.each([
+      ["no body", undefined, undefined],
+      ["empty string body", "", "application/json"],
+      ["whitespace body", "   ", "application/json"],
+    ])("accepts sweep-expired with %s", async (_label, payload, contentType) => {
+      const res = await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/career/sweep-expired",
+        headers: {
+          ...userA.authorization,
+          ...(contentType ? { "content-type": contentType } : {}),
+        },
+        ...(payload === undefined ? {} : { payload }),
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it("rejects malformed JSON with a 4xx rather than 500", async () => {
+      const res = await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/career/sweep-expired",
+        headers: { ...userA.authorization, "content-type": "application/json" },
+        payload: "{not json",
+      });
+      expect(res.statusCode).toBeGreaterThanOrEqual(400);
+      expect(res.statusCode).toBeLessThan(500);
+    });
+
+    it("lists confirmations, deadlines and contacts for the user", async () => {
+      for (const path of ["confirmations", "deadlines", "contacts"]) {
+        const res = await harness.app.inject({
+          method: "GET",
+          url: `/api/v1/career/${path}`,
+          headers: userA.authorization,
+        });
+        expect(res.statusCode).toBe(200);
+        const data = res.json<{ data: Record<string, unknown[]> }>().data;
+        expect(Array.isArray(data[path])).toBe(true);
+      }
+    });
+  });
 });

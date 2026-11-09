@@ -25,9 +25,8 @@ export function createCareerEducationClient(session?: SessionManager): CareerEdu
 }
 
 /**
- * Shared singleton instance of the contract-backed CareerEducationClient.
- * Serves as the typed boundary between the dashboard presentation layer
- * and the domain engine.
+ * Offline demo/test singleton backed by in-memory data. The app never uses it:
+ * authenticated screens must go through createCareerEducationClient(session).
  */
 export const careerEducationClient: CareerEducationClient = new FakeCareerEducationClient({
   seedDemoData: false,

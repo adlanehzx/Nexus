@@ -83,25 +83,88 @@ describe("HttpCareerEducationClient Integration", () => {
     expect(http.requests.some((r) => r.path.includes("/stage") && r.method === "PUT")).toBe(true);
   });
 
-  it("resolves confirmation request to backend endpoint", async () => {
+  const confirmation = {
+    id: "conf-1",
+    applicationId: "app-1",
+    purpose: "submit_application",
+    payloadHash: "h",
+    state: "pending",
+    summary: "Submit dossier",
+    requestedAt: "2026-11-01T00:00:00.000Z",
+    expiresAt: "2026-11-02T00:00:00.000Z",
+  };
+
+  it("requests, lists and resolves confirmations through the HTTP API", async () => {
     const { http, session } = makeAuthenticatedSession();
     await session.login("alex@example.test", "sufficient password");
-
-    const client = new HttpCareerEducationClient(session, { seedDemoData: true });
-    const opps = await client.searchOpportunities({ track: "all" });
-    const oppId = opps.items[0]!.id;
-
-    const draft = await client.prepareDraftApplication(oppId, { applicant: "Alex" });
-
-    http.on("POST", `/api/v1/career/confirmations/${encodeURIComponent(draft.id)}/resolve`, {
+    http.on("POST", "/api/v1/career/applications/app-1/approval-request", {
       status: 200,
-      body: { data: { id: draft.id, status: "approved" } },
+      body: { data: { confirmation } },
     });
-
-    const resolved = await client.resolveConfirmation(draft.id, "approve", "Approved by user");
+    http.on("GET", "/api/v1/career/confirmations", {
+      status: 200,
+      body: { data: { confirmations: [confirmation] } },
+    });
+    http.on("POST", "/api/v1/career/confirmations/conf-1/resolve", {
+      status: 200,
+      body: { data: { confirmation: { ...confirmation, state: "approved" } } },
+    });
+    const client = new HttpCareerEducationClient(session, { seedDemoData: false });
+    const requested = await client.prepareDraftApplication("app-1", {});
+    expect(requested.id).toBe("conf-1");
+    expect(await client.getConfirmations()).toHaveLength(1);
+    const resolved = await client.resolveConfirmation("conf-1", "approve", "ok");
     expect(resolved.status).toBe("approved");
-    expect(http.requests.some((r) => r.path.includes("/resolve") && r.method === "POST")).toBe(
-      true,
-    );
+  });
+
+  it("serves deadlines and contacts from the HTTP API", async () => {
+    const { http, session } = makeAuthenticatedSession();
+    await session.login("alex@example.test", "sufficient password");
+    http.on("GET", "/api/v1/career/deadlines", {
+      status: 200,
+      body: {
+        data: {
+          deadlines: [
+            {
+              id: "d1",
+              applicationId: "app-1",
+              kind: "interview",
+              label: "Call",
+              dueAt: "2026-11-10T10:00:00.000Z",
+              state: "pending",
+            },
+          ],
+        },
+      },
+    });
+    http.on("GET", "/api/v1/career/contacts", {
+      status: 200,
+      body: { data: { contacts: [{ id: "c1", applicationId: "app-1", displayName: "Elena" }] } },
+    });
+    const client = new HttpCareerEducationClient(session, { seedDemoData: false });
+    expect((await client.getDeadlines())[0]).toMatchObject({ id: "d1", title: "Call" });
+    expect((await client.getContacts())[0]).toMatchObject({ id: "c1", name: "Elena" });
+  });
+
+  it("surfaces API failures instead of substituting fake data", async () => {
+    const { http, session } = makeAuthenticatedSession();
+    await session.login("alex@example.test", "sufficient password");
+    http.on("GET", "/api/v1/career/deadlines", {
+      status: 500,
+      body: { error: { message: "boom" } },
+    });
+    http.on("GET", "/api/v1/career/confirmations", { status: 503, body: {} });
+    const client = new HttpCareerEducationClient(session, { seedDemoData: true });
+    await expect(client.getDeadlines()).rejects.toThrow("boom");
+    await expect(client.getConfirmations()).rejects.toThrow("503");
+    await expect(client.getContacts()).rejects.toThrow(); // 404 from unmocked route
+    http.failNext = true;
+    await expect(client.getDeadlines()).rejects.toThrow("network");
+  });
+
+  it("rejects approval/deadline calls when unauthenticated", async () => {
+    const { session } = makeAuthenticatedSession();
+    const client = new HttpCareerEducationClient(session, { seedDemoData: true });
+    await expect(client.getConfirmations()).rejects.toThrow("Sign in");
   });
 });

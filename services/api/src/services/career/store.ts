@@ -210,7 +210,7 @@ export interface CareerStore {
     state: ConfirmationState;
     now: Date;
   }): Promise<ConfirmationRecord>;
-  listConfirmations(userId: string, applicationId: string): Promise<ConfirmationRecord[]>;
+  listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]>;
 
   // ── Submission attempts ─────────────────────────────────────────────────
   findAttemptByIdempotencyKey(
@@ -703,10 +703,14 @@ export class InMemoryCareerStore implements CareerStore {
     return Promise.resolve(clone(updated));
   }
 
-  listConfirmations(userId: string, applicationId: string): Promise<ConfirmationRecord[]> {
+  listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]> {
     const items = [...this.#confirmations.values()]
-      .filter((item) => item.userId === userId && item.applicationId === applicationId)
-      .sort((left, right) => +left.requestedAt - +right.requestedAt);
+      .filter(
+        (item) =>
+          item.userId === userId &&
+          (applicationId === undefined || item.applicationId === applicationId),
+      )
+      .sort((left, right) => +right.requestedAt - +left.requestedAt);
     return Promise.resolve(items.map(clone));
   }
 

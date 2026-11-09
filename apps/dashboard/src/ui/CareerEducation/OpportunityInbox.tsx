@@ -14,6 +14,7 @@ import {
   IconJob,
   IconEducation,
   IconKanban,
+  IconShield,
 } from "../icons.js";
 
 interface OpportunityInboxProps {
@@ -24,6 +25,7 @@ interface OpportunityInboxProps {
   onToggleComparison: (id: string) => void;
   onToggleShortlist: (id: string, shortlisted: boolean) => Promise<void>;
   onPrepareDraftApplication: (oppId: string) => Promise<void>;
+  onRequestApproval?: (oppId: string) => Promise<void>;
   onPrepareDraftEmail: (oppId: string) => Promise<void>;
   onSelectSavedSearch: (search: SavedSearch) => void;
   onRefreshSource: (sourceId: string) => Promise<void>;
@@ -38,6 +40,7 @@ export function OpportunityInbox({
   onToggleComparison,
   onToggleShortlist,
   onPrepareDraftApplication,
+  onRequestApproval,
   onPrepareDraftEmail,
   onSelectSavedSearch,
   onRefreshSource,
@@ -727,6 +730,32 @@ export function OpportunityInbox({
                     >
                       {tr("Draft Application", "Préparer candidature")}
                     </button>
+                    {onRequestApproval && (
+                      <button
+                        type="button"
+                        className="button"
+                        onClick={() =>
+                          void handleAction(
+                            () => onRequestApproval(opp.id),
+                            tr(
+                              "Approval requested. Action paused at Confirmation Card.",
+                              "Approbation demandée. Action suspendue à la carte de confirmation.",
+                            ),
+                          )
+                        }
+                        title={tr(
+                          "Directly requests human approval for this application dossier",
+                          "Demande directement l'approbation humaine pour ce dossier de candidature",
+                        )}
+                      >
+                        <span
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <IconShield size={13} />
+                          <span>{tr("Request Approval", "Demander approbation")}</span>
+                        </span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="button"

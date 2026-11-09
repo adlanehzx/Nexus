@@ -170,6 +170,21 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
     setActiveTab("approvals");
   };
 
+  const handleRequestApproval = async (oppId: string) => {
+    await client.requestConfirmation({
+      actionType: "browser_submit_application",
+      title: `Submit Application for ${oppId}`,
+      summary: `Automated dossier submission for opportunity ${oppId}`,
+      destination: "Company Portal",
+      targetOpportunityId: oppId,
+      payload: { opportunityId: oppId },
+      risks: ["Irreversible application submission"],
+      consequences: ["Candidate dossier is transmitted to employer"],
+    });
+    await reloadAll();
+    setActiveTab("approvals");
+  };
+
   const handlePrepareDraftEmail = async (oppId: string) => {
     const opp = opportunities.find((o) => o.id === oppId);
     await client.prepareDraftEmail(
@@ -489,6 +504,7 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
             onToggleComparison={(id) => void handleToggleComparison(id)}
             onToggleShortlist={handleToggleShortlist}
             onPrepareDraftApplication={handlePrepareDraftApplication}
+            onRequestApproval={handleRequestApproval}
             onPrepareDraftEmail={handlePrepareDraftEmail}
             onSelectSavedSearch={(ss) => {
               void client.searchOpportunities(ss.query).then((res) => setOpportunities(res.items));

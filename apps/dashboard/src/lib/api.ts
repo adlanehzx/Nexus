@@ -5,6 +5,9 @@ import type {
   CareerDocumentSummaryDto,
   CareerOpportunityDto,
   CareerApplicationDto,
+  CareerConfirmationDto,
+  CareerDeadlineDto,
+  CareerContactDto,
 } from "./career-api-client.js";
 
 export interface PaperOrder {
@@ -1340,6 +1343,97 @@ export class DashboardApi {
     });
   }
 
+  careerConfirmations(
+    applicationId?: string,
+    status?: string,
+  ): Promise<{ confirmations: CareerConfirmationDto[] }> {
+    const query = new URLSearchParams();
+    if (applicationId) query.set("applicationId", applicationId);
+    if (status) query.set("status", status);
+    const qs = query.toString();
+    return this.#get(`/api/v1/career/confirmations${qs ? `?${qs}` : ""}`);
+  }
+
+  requestCareerApproval(
+    applicationId: string,
+  ): Promise<{ confirmation: CareerConfirmationDto; application: CareerApplicationDto }> {
+    return this.#request(
+      "POST",
+      `/api/v1/career/applications/${encodeURIComponent(applicationId)}/approval-request`,
+    );
+  }
+
+  decideCareerConfirmation(
+    id: string,
+    decision: "approved" | "rejected" | "cancelled",
+    reason?: string,
+  ): Promise<{ confirmation: CareerConfirmationDto; application: CareerApplicationDto }> {
+    return this.#request("POST", `/api/v1/career/confirmations/${encodeURIComponent(id)}/decide`, {
+      decision,
+      reason,
+    });
+  }
+
+  resolveCareerConfirmation(
+    id: string,
+    decision: "approve" | "reject" | "cancel" | "approved" | "rejected" | "cancelled",
+    reason?: string,
+  ): Promise<{ confirmation: CareerConfirmationDto; application: CareerApplicationDto }> {
+    return this.#request("POST", `/api/v1/career/confirmations/${encodeURIComponent(id)}/resolve`, {
+      decision,
+      reason,
+    });
+  }
+
+  careerDeadlines(applicationId?: string): Promise<{ deadlines: CareerDeadlineDto[] }> {
+    const query = new URLSearchParams();
+    if (applicationId) query.set("applicationId", applicationId);
+    const qs = query.toString();
+    return this.#get(`/api/v1/career/deadlines${qs ? `?${qs}` : ""}`);
+  }
+
+  createCareerDeadline(
+    applicationId: string,
+    input: { kind: string; dueAt: string; label?: string },
+  ): Promise<CareerDeadlineDto> {
+    return this.#request(
+      "POST",
+      `/api/v1/career/applications/${encodeURIComponent(applicationId)}/deadlines`,
+      input,
+    );
+  }
+
+  updateCareerDeadline(
+    id: string,
+    input: { completed?: boolean; state?: string },
+  ): Promise<CareerDeadlineDto> {
+    return this.#request("PUT", `/api/v1/career/deadlines/${encodeURIComponent(id)}`, input);
+  }
+
+  careerContacts(applicationId?: string): Promise<{ contacts: CareerContactDto[] }> {
+    const query = new URLSearchParams();
+    if (applicationId) query.set("applicationId", applicationId);
+    const qs = query.toString();
+    return this.#get(`/api/v1/career/contacts${qs ? `?${qs}` : ""}`);
+  }
+
+  createCareerContact(
+    applicationId: string,
+    input: {
+      displayName: string;
+      role?: string;
+      organization?: string;
+      email?: string;
+      notes?: string;
+    },
+  ): Promise<CareerContactDto> {
+    return this.#request(
+      "POST",
+      `/api/v1/career/applications/${encodeURIComponent(applicationId)}/contacts`,
+      input,
+    );
+  }
+
   overview(): Promise<Overview> {
     return this.#get("/api/v1/dashboard/overview");
   }
@@ -1615,11 +1709,35 @@ export class DashboardApi {
     });
   }
 
+  addOsintEvidence(
+    caseId: string,
+    input: {
+      url: string;
+      title: string;
+      excerpt: string;
+      reliability: "primary" | "corroborated" | "unverified";
+      content: string;
+    },
+  ): Promise<ArchivedEvidence> {
+    return this.#request(
+      "POST",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/evidence`,
+      input,
+    );
+  }
+
   addOsintEntity(caseId: string, input: Omit<OsintEntity, "id">): Promise<OsintEntity> {
     return this.#request(
       "POST",
       `/api/v1/osint/cases/${encodeURIComponent(caseId)}/entities`,
       input,
+    );
+  }
+
+  deleteOsintEntity(caseId: string, entityId: string): Promise<{ deleted: true }> {
+    return this.#request(
+      "DELETE",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/entities/${encodeURIComponent(entityId)}`,
     );
   }
 
@@ -1629,6 +1747,36 @@ export class DashboardApi {
       `/api/v1/osint/cases/${encodeURIComponent(caseId)}/relations`,
       input,
     );
+  }
+
+  deleteOsintRelation(caseId: string, relationId: string): Promise<{ deleted: true }> {
+    return this.#request(
+      "DELETE",
+      `/api/v1/osint/cases/${encodeURIComponent(caseId)}/relations/${encodeURIComponent(relationId)}`,
+    );
+  }
+
+  searchOsint(
+    caseId: string,
+    query: string,
+    limit = 10,
+  ): Promise<{
+    query: string;
+    results: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+      engines: string[];
+      publishedAt?: string | null;
+      score?: number | null;
+    }>;
+    suggestions?: string[];
+    answers?: string[];
+  }> {
+    return this.#request("POST", `/api/v1/osint/cases/${encodeURIComponent(caseId)}/search`, {
+      query,
+      limit,
+    });
   }
 
   addOsintWatch(caseId: string, query: string, intervalMinutes: number): Promise<OsintWatch> {
@@ -2392,6 +2540,57 @@ export class DashboardApi {
         apiUrl: ticket.payload,
       }),
     }));
+  }
+
+  sendFireTvRemote(
+    action: string,
+    serial?: string,
+  ): Promise<{ action: string; delivered: boolean; key?: string; error?: string }> {
+    return this.#request("POST", "/api/v1/devices/fire-tv/remote", {
+      action,
+      ...(serial !== undefined ? { serial } : {}),
+    });
+  }
+
+  getDeviceTopology(): Promise<{
+    rooms: Array<{
+      id: string;
+      name: string;
+      deviceCount: number;
+      onlineCount: number;
+      devices: Array<{
+        id: string;
+        name: string;
+        kind: "device" | "satellite";
+        type: string;
+        platform?: string;
+        role?: string;
+        online: boolean;
+        status: string;
+        capabilities: string[];
+      }>;
+    }>;
+    devices: Array<{
+      id: string;
+      name: string;
+      kind: "device" | "satellite";
+      room: string;
+      type: string;
+      platform?: string;
+      role?: string;
+      online: boolean;
+      status: string;
+      capabilities: string[];
+      lastSeenAt: string | null;
+    }>;
+    summary: {
+      totalRooms: number;
+      totalDevices: number;
+      onlineDevices: number;
+      satelliteCount: number;
+    };
+  }> {
+    return this.#get("/api/v1/devices/topology");
   }
 
   async #get<T>(path: string): Promise<T> {

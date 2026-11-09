@@ -836,6 +836,10 @@ export class CareerService {
     return this.#store.listConfirmations(userId, applicationId);
   }
 
+  listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]> {
+    return this.#store.listConfirmations(userId, applicationId);
+  }
+
   // ── Submission ────────────────────────────────────────────────────────────
 
   /**

@@ -652,10 +652,13 @@ export class PrismaCareerStore implements CareerStore {
     return presentConfirmation(row);
   }
 
-  async listConfirmations(userId: string, applicationId: string): Promise<ConfirmationRecord[]> {
+  async listConfirmations(userId: string, applicationId?: string): Promise<ConfirmationRecord[]> {
     const rows = await this.#prisma.careerConfirmation.findMany({
-      where: { userId, applicationId },
-      orderBy: { requestedAt: "asc" },
+      where: {
+        userId,
+        ...(applicationId !== undefined ? { applicationId } : {}),
+      },
+      orderBy: { requestedAt: "desc" },
     });
     return rows.map(presentConfirmation);
   }

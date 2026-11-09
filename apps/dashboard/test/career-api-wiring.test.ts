@@ -194,4 +194,114 @@ describe("career dashboard server contracts", () => {
     await expect(client.toggleShortlist("opp-1", false)).rejects.toThrow("unavailable");
     expect(request).not.toHaveBeenCalled();
   });
+  it("fetches and resolves confirmations through the server endpoints", async () => {
+    const confirmation = {
+      id: "conf-1",
+      applicationId: "app-1",
+      purpose: "submit_application",
+      payloadHash: "hash-1",
+      state: "pending",
+      summary: "Submit dossier",
+      requestedAt: "2026-11-01T00:00:00.000Z",
+      expiresAt: "2026-11-02T00:00:00.000Z",
+      decidedAt: null,
+      consumedAt: null,
+    };
+    const { client, request } = setup((path) => {
+      if (path.endsWith("/confirmations")) {
+        return { confirmations: [confirmation] };
+      }
+      return { confirmation, application };
+    });
+    const list = await client.getConfirmations();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: "conf-1",
+      title: "Approval: Submit dossier",
+      status: "pending",
+    });
+
+    const resolved = await client.resolveConfirmation("conf-1", "approve");
+    expect(resolved.id).toBe("conf-1");
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/v1/career/confirmations/conf-1/resolve",
+      }),
+    );
+  });
+  it("fetches, creates, and toggles deadlines through the server endpoints", async () => {
+    const deadline = {
+      id: "dl-1",
+      applicationId: "app-1",
+      kind: "interview",
+      dueAt: "2026-11-10T10:00:00.000Z",
+      state: "pending",
+      label: "Technical interview",
+      reminderOffsetsMinutes: [1440],
+      remindedOffsetsMinutes: [],
+      createdAt: "2026-11-01T00:00:00.000Z",
+      updatedAt: "2026-11-01T00:00:00.000Z",
+    };
+    const { client, request } = setup((path) => {
+      if (path.endsWith("/applications")) return { applications: [application] };
+      if (path.includes("/deadlines")) return { deadlines: [deadline] };
+      return deadline;
+    });
+    const deadlines = await client.getDeadlines();
+    expect(deadlines).toHaveLength(1);
+    expect(deadlines[0]).toMatchObject({
+      id: "dl-1",
+      title: "Technical interview",
+      completed: false,
+    });
+
+    await client.toggleDeadlineCompleted("dl-1", true);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PUT",
+        path: "/api/v1/career/deadlines/dl-1",
+        body: { completed: true },
+      }),
+    );
+  });
+  it("fetches contacts through the server endpoints", async () => {
+    const contact = {
+      id: "ct-1",
+      applicationId: "app-1",
+      opportunityId: "opp-1",
+      displayName: "Elena Rostova",
+      role: "Head of Engineering",
+      organization: "Nexus Labs",
+      email: "elena@example.com",
+      notes: "Met at conference",
+      source: "manual_entry",
+      createdAt: "2026-11-01T00:00:00.000Z",
+      updatedAt: "2026-11-01T00:00:00.000Z",
+    };
+    const { client } = setup(() => ({ contacts: [contact] }));
+    const contacts = await client.getContacts("opp-1");
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toMatchObject({
+      id: "ct-1",
+      name: "Elena Rostova",
+      role: "Head of Engineering",
+    });
+  });
+  it("surfaces API failures for approvals, deadlines and contacts instead of fake data", async () => {
+    const request = vi.fn(() =>
+      Promise.resolve({ status: 500, body: { error: { message: "backend down" } } }),
+    );
+    const session = {
+      authorizedRequest: request,
+      isAuthenticated: true,
+    } as unknown as SessionManager;
+    const client = new DashboardCareerClient(session);
+    await expect(client.getConfirmations()).rejects.toThrow();
+    await expect(client.resolveConfirmation("conf-1", "approve")).rejects.toThrow();
+    await expect(client.getDeadlines()).rejects.toThrow();
+    await expect(client.toggleDeadlineCompleted("dl-1", true)).rejects.toThrow();
+    await expect(client.getContacts()).rejects.toThrow();
+    expect(request).toHaveBeenCalled();
+  });
 });
