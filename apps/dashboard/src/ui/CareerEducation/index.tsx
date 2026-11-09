@@ -158,9 +158,13 @@ export function CareerEducation({ client, initialTab = "inbox" }: CareerEducatio
 
   // Safe research plane draft preparation
   const handlePrepareDraftApplication = async (oppId: string) => {
+    const email =
+      profile?.email?.trim() ||
+      window.prompt("Enter your email address for this application:")?.trim();
+    if (!email) return;
     await client.prepareDraftApplication(oppId, {
       applicantName: profile?.fullName ?? "Applicant",
-      applicantEmail: profile?.email ?? "applicant@nexus.local",
+      applicantEmail: email,
     });
     await reloadAll();
     setActiveTab("approvals");

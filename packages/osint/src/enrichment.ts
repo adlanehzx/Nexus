@@ -9,9 +9,18 @@ async function requestJson(
   headers: Record<string, string>,
   fetchFn: typeof fetch,
 ): Promise<unknown> {
-  const response = await fetchFn(url, { headers });
-  if (!response.ok) throw new Error(`Enrichment provider failed (${response.status}).`);
-  return response.json();
+  const sanitizedUrl = url.replace(/([?&]key=)[^&]+/gi, "$1[REDACTED]");
+  try {
+    const response = await fetchFn(url, { headers });
+    if (!response.ok)
+      throw new Error(`Enrichment provider failed (${response.status}) for ${sanitizedUrl}.`);
+    return await response.json();
+  } catch (err) {
+    if (err instanceof Error) {
+      err.message = err.message.replace(/([?&]key=)[^&]+/gi, "$1[REDACTED]");
+    }
+    throw err;
+  }
 }
 export async function queryVirusTotal(
   domain: string,

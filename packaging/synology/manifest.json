@@ -1,0 +1,20 @@
+{
+  "package": "nexus",
+  "version": "1.0.0",
+  "name": "nexus",
+  "displayname": "NEXUS Personal Intelligence OS",
+  "description": "Sovereign personal intelligence operating system for Synology NAS.",
+  "maintainer": "NEXUS Team",
+  "maintainer_url": "https://nexus-assistant.org",
+  "install_path": "${SYNOPKG_PKGDEST:-${SYNOLOGY_APP_DIR:-/volume1/@appstore/nexus}}",
+  "data_path": "${SYNOLOGY_DATA_DIR:-/volume1/docker/nexus}",
+  "volume_path": "${SYNOLOGY_VOLUME:-/volume1}",
+  "target_dir": "${SYNOPKG_PKGDEST:-${SYNOLOGY_APP_DIR:-/volume1/@appstore/nexus}}",
+  "service": {
+    "start": "${SYNOPKG_PKGDEST:-${SYNOLOGY_APP_DIR:-/volume1/@appstore/nexus}}/scripts/start.sh",
+    "stop": "${SYNOPKG_PKGDEST:-${SYNOLOGY_APP_DIR:-/volume1/@appstore/nexus}}/scripts/stop.sh",
+    "status": "${SYNOPKG_PKGDEST:-${SYNOLOGY_APP_DIR:-/volume1/@appstore/nexus}}/scripts/status.sh"
+  },
+  "port": 8080,
+  "admin_url": "http://localhost:8080"
+}

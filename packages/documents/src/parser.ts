@@ -264,9 +264,10 @@ except Exception as e:
       const data = JSON.parse(stdout) as { paragraphs: string[]; tables: string[][][] };
       paragraphs = data.paragraphs;
       rawTables = data.tables;
-    } catch {
-      paragraphs = ["Extracted DOCX content"];
-      rawTables = [];
+    } catch (err) {
+      throw new Error(
+        `Failed to parse DOCX document "${filename}": ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     const sections: DocumentSection[] = [];
@@ -377,8 +378,10 @@ except Exception as e:
         slides: { title: string; content: string; page: number }[];
       };
       slides = data.slides;
-    } catch {
-      slides = [{ title: "Presentation", content: "Extracted content", page: 1 }];
+    } catch (err) {
+      throw new Error(
+        `Failed to parse PPTX presentation "${filename}": ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     const sections: DocumentSection[] = slides.map((s) => ({

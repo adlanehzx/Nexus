@@ -391,7 +391,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
         setBrowserSuccessMsg("Local browser harness configured and verified.");
       } else {
         try {
-          await api.saveSecret("browser-worker-token", "auto-generated-remote-token");
+          await api.saveSecret("browser-worker-token", crypto.randomUUID());
         } catch {
           // Ignore if vault already has secret or cannot overwrite
         }

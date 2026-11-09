@@ -48,7 +48,18 @@ import { taskRequestBody, type TaskDraft } from "./tasks.js";
  * Core backend address.
  */
 function backendUrl(): string {
-  return import.meta.env.VITE_NEXUS_URL ?? "https://nexus.local";
+  const configured = import.meta.env.VITE_NEXUS_URL?.trim();
+  if (configured) return configured;
+  const stored = localStorage.getItem("nexus.serverUrl")?.trim();
+  if (stored) return stored;
+  const entered = window.prompt("Enter the URL of your NEXUS server:")?.trim();
+  if (!entered)
+    throw new Error(
+      "A NEXUS server URL is required. Set VITE_NEXUS_URL or enter one when prompted.",
+    );
+  const url = backendHttpUrl(entered);
+  localStorage.setItem("nexus.serverUrl", url);
+  return url;
 }
 
 export type Screen =

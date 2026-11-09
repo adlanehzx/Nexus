@@ -1,0 +1,22 @@
+app:
+  name: nexus
+  version: 1.0.0
+  title: "NEXUS Personal Intelligence OS"
+  description: "Sovereign personal intelligence operating system for TrueNAS SCALE."
+  categories:
+    - AI
+    - Productivity
+  maintainer:
+    name: "NEXUS Team"
+    url: "https://nexus-assistant.org"
+
+config:
+  host_path: "${TRUENAS_BASE_PATH:-${TRUENAS_DATA_DIR:-/mnt/tank/nexus}}"
+  storage:
+    data: "${TRUENAS_DATA_DIR:-/mnt/tank/nexus}/data"
+    uploads: "${TRUENAS_DATA_DIR:-/mnt/tank/nexus}/uploads"
+    postgres: "${TRUENAS_DATA_DIR:-/mnt/tank/nexus}/postgres_data"
+    redis: "${TRUENAS_DATA_DIR:-/mnt/tank/nexus}/redis_data"
+  ports:
+    dashboard: 8080
+    api: 3000

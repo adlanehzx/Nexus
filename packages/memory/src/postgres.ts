@@ -16,16 +16,25 @@ import {
   type EmbeddingProvider,
 } from "./embedding.js";
 
+export interface PostgresMemoryProviderOptions {
+  prisma: PrismaClient;
+  now?: () => Date;
+  embeddings?: EmbeddingProvider;
+  vectorDimensions?: number;
+}
+
 /** Durable PostgreSQL implementation of the existing MemoryProvider contract. */
 export class PostgresMemoryProvider implements MemoryProvider {
   readonly #prisma: PrismaClient;
   readonly #now: () => Date;
   readonly #embeddings: EmbeddingProvider;
+  readonly #vectorDimensions: number | undefined;
 
-  constructor(options: { prisma: PrismaClient; now?: () => Date; embeddings?: EmbeddingProvider }) {
+  constructor(options: PostgresMemoryProviderOptions) {
     this.#prisma = options.prisma;
     this.#now = options.now ?? (() => new Date());
     this.#embeddings = options.embeddings ?? new LocalHashEmbeddingProvider();
+    this.#vectorDimensions = options.vectorDimensions ?? options.embeddings?.dimensions;
   }
 
   async store(input: MemoryStoreInput): Promise<MemoryRecord> {
@@ -152,13 +161,12 @@ export class PostgresMemoryProvider implements MemoryProvider {
     const [queryVector = []] =
       terms.length === 0 ? [[]] : await this.#embeddings.embed([query.query]);
     const hits: MemoryHit[] = [];
-    const semanticScores =
-      queryVector.length === 384
-        ? await this.#semanticScores(
-            queryVector,
-            records.map((record) => record.id),
-          )
-        : new Map<string, number>();
+    const semanticScores = this.#isValidVector(queryVector)
+      ? await this.#semanticScores(
+          queryVector,
+          records.map((record) => record.id),
+        ).catch(() => new Map<string, number>())
+      : new Map<string, number>();
 
     for (const stored of records) {
       const record = toRecord(stored);
@@ -205,6 +213,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
     return Promise.resolve(kept.length > 0 ? kept.join(" ") : input.text.slice(0, budget));
   }
 
+  #isValidVector(vector: readonly number[]): boolean {
+    if (vector.length === 0) return false;
+    if (this.#vectorDimensions !== undefined && vector.length !== this.#vectorDimensions) {
+      return false;
+    }
+    return (
+      vector.length >= 2 && vector.length <= 16_000 && vector.every((val) => Number.isFinite(val))
+    );
+  }
+
   async #writeVector(
     client: {
       $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
@@ -212,12 +230,16 @@ export class PostgresMemoryProvider implements MemoryProvider {
     id: string,
     embedding: readonly number[],
   ): Promise<void> {
-    if (embedding.length !== 384) return;
-    await client.$executeRawUnsafe(
-      'UPDATE "memories" SET "embedding_vector" = $1::vector WHERE "id" = $2::uuid',
-      vectorLiteral(embedding),
-      id,
-    );
+    if (!this.#isValidVector(embedding)) return;
+    try {
+      await client.$executeRawUnsafe(
+        'UPDATE "memories" SET "embedding_vector" = $1::vector WHERE "id" = $2::uuid',
+        vectorLiteral(embedding),
+        id,
+      );
+    } catch {
+      // Gracefully ignore pgvector column dimension mismatches or database errors
+    }
   }
 
   async #semanticScores(

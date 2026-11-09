@@ -14,8 +14,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /mnt/tank/apps/nexus/data:/app/data
-      - /mnt/tank/apps/nexus/uploads:/app/uploads
+      - ${TRUENAS_DATA_DIR:-/mnt/tank/apps/nexus}/data:/app/data
+      - ${TRUENAS_DATA_DIR:-/mnt/tank/apps/nexus}/uploads:/app/uploads
     depends_on:
       nexus-postgres:
         condition: service_healthy
@@ -53,7 +53,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=nexus
     volumes:
-      - /mnt/tank/apps/nexus/postgres_data:/var/lib/postgresql/data
+      - ${TRUENAS_DATA_DIR:-/mnt/tank/apps/nexus}/postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
       interval: 10s
@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
-      - /mnt/tank/apps/nexus/redis_data:/data
+      - ${TRUENAS_DATA_DIR:-/mnt/tank/apps/nexus}/redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
