@@ -162,6 +162,23 @@ export class InMemoryOsintCaseStore {
     record.updatedAt = new Date().toISOString();
     return structuredClone(relation);
   }
+  deleteEntity(ownerId: string, caseId: string, entityId: string): void {
+    const record = this.#owned(ownerId, caseId);
+    const index = record.entities.findIndex((item) => item.id === entityId);
+    if (index === -1) throw new Error("Entity not found.");
+    record.entities.splice(index, 1);
+    record.relations = record.relations.filter(
+      (rel) => rel.sourceId !== entityId && rel.targetId !== entityId,
+    );
+    record.updatedAt = new Date().toISOString();
+  }
+  deleteRelation(ownerId: string, caseId: string, relationId: string): void {
+    const record = this.#owned(ownerId, caseId);
+    const index = record.relations.findIndex((item) => item.id === relationId);
+    if (index === -1) throw new Error("Relation not found.");
+    record.relations.splice(index, 1);
+    record.updatedAt = new Date().toISOString();
+  }
   addWatch(ownerId: string, caseId: string, query: string, intervalMinutes: number): OsintWatch {
     const record = this.#owned(ownerId, caseId);
     const watch = osintWatchSchema.parse({

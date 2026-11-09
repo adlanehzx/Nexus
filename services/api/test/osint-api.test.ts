@@ -59,6 +59,70 @@ describe("OSINT API", () => {
     expect(report.statusCode).toBe(200);
     const pdf = Buffer.from(report.json<{ data: { content: string } }>().data.content, "base64");
     expect(pdf.toString("utf8", 0, 8)).toBe("%PDF-1.4");
+
+    // Add entities and relation, then delete
+    const ent1 = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/osint/cases/${caseId}/entities`,
+      headers: owner.authorization,
+      payload: { label: "Target Corp", type: "organization", confidence: 0.9 },
+    });
+    expect(ent1.statusCode).toBe(200);
+    const ent1Id = ent1.json<{ data: { id: string } }>().data.id;
+
+    const ent2 = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/osint/cases/${caseId}/entities`,
+      headers: owner.authorization,
+      payload: { label: "Alice Director", type: "person", confidence: 0.8 },
+    });
+    expect(ent2.statusCode).toBe(200);
+    const ent2Id = ent2.json<{ data: { id: string } }>().data.id;
+
+    const rel = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/osint/cases/${caseId}/relations`,
+      headers: owner.authorization,
+      payload: {
+        sourceId: ent2Id,
+        targetId: ent1Id,
+        label: "directs",
+        confidence: 0.85,
+        evidenceIds: [],
+      },
+    });
+    expect(rel.statusCode).toBe(200);
+    const relId = rel.json<{ data: { id: string } }>().data.id;
+
+    // Delete relation
+    const delRel = await harness.app.inject({
+      method: "DELETE",
+      url: `/api/v1/osint/cases/${caseId}/relations/${relId}`,
+      headers: owner.authorization,
+    });
+    expect(delRel.statusCode).toBe(200);
+    expect(delRel.json<{ data: { deleted: boolean } }>().data.deleted).toBe(true);
+
+    // Delete entity
+    const delEnt = await harness.app.inject({
+      method: "DELETE",
+      url: `/api/v1/osint/cases/${caseId}/entities/${ent1Id}`,
+      headers: owner.authorization,
+    });
+    expect(delEnt.statusCode).toBe(200);
+    expect(delEnt.json<{ data: { deleted: boolean } }>().data.deleted).toBe(true);
+
+    // Search route
+    const searchRes = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/osint/cases/${caseId}/search`,
+      headers: owner.authorization,
+      payload: { query: "cybersecurity", limit: 5 },
+    });
+    expect(searchRes.statusCode).toBe(200);
+    expect(searchRes.json<{ data: { query: string; results: unknown[] } }>().data.query).toBe(
+      "cybersecurity",
+    );
   });
 
   it("requires authentication and explicit lawful-purpose confirmation", async () => {

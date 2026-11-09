@@ -27,6 +27,8 @@ import type { RuntimeConfigurationStore, SecretVault } from "./runtime-configura
 export type OsintEnrichmentProvider =
   "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
+export class OsintNotFoundError extends Error {}
+
 export class OsintService {
   readonly #runtime: RuntimeConfigurationStore | undefined;
   readonly #vault: SecretVault | undefined;
@@ -79,12 +81,53 @@ export class OsintService {
     return this.#mutate((store) => store.addEntity(ownerId, caseId, input));
   }
 
+  deleteEntity(ownerId: string, caseId: string, entityId: string): Promise<void> {
+    return this.#mutate((store) => {
+      if (typeof (store as unknown as { deleteEntity?: Function }).deleteEntity === "function") {
+        store.deleteEntity(ownerId, caseId, entityId);
+      } else {
+        const record = store.get(ownerId, caseId);
+        if (!record) {
+          throw new Error(`OSINT case ${caseId} was not found.`);
+        }
+        const exists = record.entities.some((e) => e.id === entityId);
+        if (!exists) {
+          throw new Error(`OSINT entity ${entityId} was not found.`);
+        }
+        record.entities = record.entities.filter((e) => e.id !== entityId);
+        record.relations = record.relations.filter(
+          (r) => r.sourceId !== entityId && r.targetId !== entityId,
+        );
+        record.updatedAt = new Date().toISOString();
+      }
+    });
+  }
+
   addRelation(
     ownerId: string,
     caseId: string,
     input: Omit<OsintRelation, "id">,
   ): Promise<OsintRelation> {
     return this.#mutate((store) => store.addRelation(ownerId, caseId, input));
+  }
+
+  deleteRelation(ownerId: string, caseId: string, relationId: string): Promise<void> {
+    return this.#mutate((store) => {
+      if (typeof (store as unknown as { deleteRelation?: Function }).deleteRelation === "function") {
+        store.deleteRelation(ownerId, caseId, relationId);
+      } else {
+        const record = store.get(ownerId, caseId);
+        if (!record) {
+          throw new Error(`OSINT case ${caseId} was not found.`);
+        }
+        const exists = record.relations.some((r) => r.id === relationId);
+        if (!exists) {
+          throw new Error(`OSINT relation ${relationId} was not found.`);
+        }
+        record.relations = record.relations.filter((r) => r.id !== relationId);
+        record.updatedAt = new Date().toISOString();
+      }
+    });
   }
 
   addWatch(

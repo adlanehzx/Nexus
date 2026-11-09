@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildOsintMission, osintInvestigationSchema } from "@nexus/osint/policy";
-import type { OsintCaseRecord } from "@nexus/osint";
+import type { OsintCaseRecord, OsintEntity } from "@nexus/osint";
 import type { DashboardApi, OrchestratedMission } from "../lib/api.js";
 import { useI18n } from "./i18n/index.js";
+import {
+  IconCheck,
+  IconClose,
+  IconExternalLink,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+} from "./icons.js";
 
 const TEMPLATES = [
   [
@@ -34,7 +42,7 @@ const TEMPLATES = [
     "Corroborer une déclaration et exposer les contradictions.",
   ],
 ] as const;
-type Tab = "evidence" | "graph" | "monitoring" | "enrichment" | "reports";
+type Tab = "search" | "evidence" | "graph" | "monitoring" | "enrichment" | "reports";
 type Enrichment =
   "sherlock" | "dns" | "rdap" | "certificate" | "company_registry" | "virustotal" | "shodan";
 
@@ -150,7 +158,10 @@ export function OsintWorkspace({
             className={`osint-case-row ${selectedId === null ? "active" : ""}`}
             onClick={() => setSelectedId(null)}
           >
-            <strong>{tr("＋ New investigation", "＋ Nouvelle enquête")}</strong>
+            <strong style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <IconPlus size={14} />
+              {tr("New investigation", "Nouvelle enquête")}
+            </strong>
             <span>
               {tr("Define scope and launch agents", "Définir le périmètre et lancer les agents")}
             </span>
@@ -200,18 +211,20 @@ export function OsintWorkspace({
                 <span className="status-badge">{selected.status}</span>
               </div>
               <nav className="osint-tabs" aria-label="Investigation views">
-                {(["evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]).map(
+                {(["search", "evidence", "graph", "monitoring", "enrichment", "reports"] as Tab[]).map(
                   (item) => {
                     const label =
-                      item === "evidence"
-                        ? tr("Evidence", "Preuves")
-                        : item === "graph"
-                          ? tr("Graph", "Graphe")
-                          : item === "monitoring"
-                            ? tr("Monitoring", "Surveillance")
-                            : item === "enrichment"
-                              ? tr("Tools & Enrichment", "Outils & Enrichissement")
-                              : tr("Reports", "Rapports");
+                      item === "search"
+                        ? tr("SearXNG Search", "Recherche SearXNG")
+                        : item === "evidence"
+                          ? tr("Evidence", "Preuves")
+                          : item === "graph"
+                            ? tr("Graph", "Graphe")
+                            : item === "monitoring"
+                              ? tr("Monitoring", "Surveillance")
+                              : item === "enrichment"
+                                ? tr("Tools & Enrichment", "Outils & Enrichissement")
+                                : tr("Reports", "Rapports");
                     return (
                       <button
                         type="button"
@@ -225,6 +238,15 @@ export function OsintWorkspace({
                   },
                 )}
               </nav>
+              {tab === "search" && (
+                <SearchPanel
+                  caseId={selected.id}
+                  api={api}
+                  act={act}
+                  busy={busy}
+                  onEvidenceAdded={() => refresh(selected.id)}
+                />
+              )}
               {tab === "evidence" && (
                 <EvidencePanel
                   record={selected}
@@ -249,6 +271,12 @@ export function OsintWorkspace({
                       await refresh(selected.id);
                     })
                   }
+                  deleteEntity={(entityId) =>
+                    act(async () => {
+                      await api.deleteOsintEntity(selected.id, entityId);
+                      await refresh(selected.id);
+                    })
+                  }
                   addRelation={(sourceId, targetId, label) =>
                     act(async () => {
                       await api.addOsintRelation(selected.id, {
@@ -258,6 +286,12 @@ export function OsintWorkspace({
                         confidence: 0.7,
                         evidenceIds: [],
                       });
+                      await refresh(selected.id);
+                    })
+                  }
+                  deleteRelation={(relationId) =>
+                    act(async () => {
+                      await api.deleteOsintRelation(selected.id, relationId);
                       await refresh(selected.id);
                     })
                   }
@@ -467,6 +501,183 @@ function NewCaseForm(props: {
           : tr("Create case and launch agents", "Créer le dossier et lancer les agents")}
       </button>
     </>
+  );
+}
+
+function SearchPanel({
+  caseId,
+  api,
+  act,
+  busy,
+  onEvidenceAdded,
+}: {
+  caseId: string;
+  api: DashboardApi;
+  act: (operation: () => Promise<void>) => Promise<void>;
+  busy: boolean;
+  onEvidenceAdded: () => Promise<void>;
+}) {
+  const { tr } = useI18n();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<
+    Array<{
+      title: string;
+      url: string;
+      snippet: string;
+      engines: string[];
+      publishedAt?: string | null;
+      score?: number | null;
+    }>
+  >([]);
+  const [searched, setSearched] = useState(false);
+  const [archivedUrls, setArchivedUrls] = useState<Set<string>>(new Set());
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = () =>
+    act(async () => {
+      setSearchError(null);
+      try {
+        const response = await api.searchOsint(caseId, query.trim(), 15);
+        setResults(response.results);
+        setSearched(true);
+      } catch (err) {
+        setSearchError(message(err));
+      }
+    });
+
+  const handleAddEvidence = (item: { title: string; url: string; snippet: string }) =>
+    act(async () => {
+      await api.addOsintEvidence(caseId, {
+        url: item.url,
+        title: item.title,
+        excerpt: item.snippet,
+        reliability: "corroborated",
+        content: item.snippet,
+      });
+      setArchivedUrls((prev) => new Set(prev).add(item.url));
+      await onEvidenceAdded();
+    });
+
+  return (
+    <div className="osint-panel-stack">
+      <p className="muted">
+        {tr(
+          "Multi-engine search directly through SearXNG (port 18080). Archive any result as case evidence with 1 click.",
+          "Recherche multi-moteurs directe via SearXNG (port 18080). Archivez n'importe quel résultat comme preuve du dossier en 1 clic.",
+        )}
+      </p>
+      <div className="osint-search-box">
+        <input
+          className="field"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && query.trim().length > 1 && !busy) {
+              void handleSearch();
+            }
+          }}
+          placeholder={tr(
+            "Search public web, registries, domains, people...",
+            "Rechercher sur le web public, registres, domaines, personnes...",
+          )}
+        />
+        <button
+          className="button primary"
+          type="button"
+          disabled={busy || query.trim().length < 2}
+          onClick={() => void handleSearch()}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <IconSearch size={14} />
+          {tr("Search", "Rechercher")}
+        </button>
+      </div>
+
+      {searchError && (
+        <div className="banner warning" role="alert">
+          {searchError}
+        </div>
+      )}
+
+      {searched && (
+        <div className="osint-search-results">
+          <div className="osint-metrics">
+            <Metric label={tr("Results found", "Résultats trouvés")} value={results.length} />
+            <Metric
+              label={tr("Archived into case", "Archivés dans le dossier")}
+              value={archivedUrls.size}
+            />
+          </div>
+
+          {results.length === 0 ? (
+            <p className="muted">
+              {tr(
+                "No public sources returned for this query.",
+                "Aucune source publique trouvée pour cette requête.",
+              )}
+            </p>
+          ) : (
+            results.map((item, index) => {
+              const isArchived = archivedUrls.has(item.url);
+              return (
+                <article className="osint-search-card" key={`${item.url}-${index}`}>
+                  <div className="osint-search-card-header">
+                    <div>
+                      <strong>
+                        <a href={item.url} target="_blank" rel="noreferrer">
+                          {item.title}
+                          <IconExternalLink size={12} style={{ marginLeft: "4px" }} />
+                        </a>
+                      </strong>
+                      <div className="osint-search-url">{item.url}</div>
+                    </div>
+                    <button
+                      className={isArchived ? "button" : "button primary"}
+                      type="button"
+                      disabled={busy || isArchived}
+                      onClick={() => void handleAddEvidence(item)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {isArchived ? (
+                        <>
+                          <IconCheck size={14} />
+                          {tr("Archived", "Archivée")}
+                        </>
+                      ) : (
+                        <>
+                          <IconPlus size={14} />
+                          {tr("Add as evidence", "Ajouter comme preuve")}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {item.snippet && <p className="osint-search-snippet">{item.snippet}</p>}
+                  <div className="osint-search-meta">
+                    <div className="osint-engines-badge">
+                      {item.engines.map((engine) => (
+                        <span className="osint-engine-tag" key={engine}>
+                          {engine}
+                        </span>
+                      ))}
+                    </div>
+                    {item.publishedAt && (
+                      <small className="muted">
+                        {new Date(item.publishedAt).toLocaleDateString()}
+                      </small>
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -762,17 +973,192 @@ function ReportsPanel({
   );
 }
 
+function EntityInspector({
+  entity,
+  allEntities,
+  record,
+  onClose,
+  onDeleteEntity,
+  onDeleteRelation,
+}: {
+  entity: OsintEntity;
+  allEntities: OsintEntity[];
+  record: OsintCaseRecord;
+  onClose: () => void;
+  onDeleteEntity: (id: string) => Promise<void>;
+  onDeleteRelation: (id: string) => Promise<void>;
+}) {
+  const { tr } = useI18n();
+  const entityMap = useMemo(
+    () => new Map(allEntities.map((e) => [e.id, e.label])),
+    [allEntities],
+  );
+
+  const incomingRelations = record.relations.filter((r) => r.targetId === entity.id);
+  const outgoingRelations = record.relations.filter((r) => r.sourceId === entity.id);
+
+  const connectedRelationEvidenceIds = new Set(
+    record.relations
+      .filter((r) => r.sourceId === entity.id || r.targetId === entity.id)
+      .flatMap((r) => r.evidenceIds),
+  );
+  const associatedEvidence = record.evidence.filter(
+    (ev) =>
+      connectedRelationEvidenceIds.has(ev.id) ||
+      ev.title.toLowerCase().includes(entity.label.toLowerCase()) ||
+      ev.excerpt.toLowerCase().includes(entity.label.toLowerCase()),
+  );
+
+  return (
+    <aside className="osint-inspector" aria-label={tr("Entity inspector", "Inspecteur d'entité")}>
+      <div className="osint-inspector-header">
+        <div>
+          <span className="eyebrow">{entity.type.toUpperCase()}</span>
+          <h4>{entity.label}</h4>
+        </div>
+        <button
+          type="button"
+          className="button icon-only"
+          onClick={onClose}
+          aria-label={tr("Close inspector", "Fermer l'inspecteur")}
+        >
+          <IconClose size={14} />
+        </button>
+      </div>
+
+      <div className="osint-inspector-section">
+        <h5>{tr("Confidence Score", "Indice de confiance")}</h5>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>{Math.round(entity.confidence * 100)}%</span>
+          <small className="muted">
+            {entity.confidence >= 0.8
+              ? tr("High confidence", "Confiance élevée")
+              : tr("Standard confidence", "Confiance standard")}
+          </small>
+        </div>
+        <div className="osint-confidence-bar">
+          <div
+            className="osint-confidence-fill"
+            style={{ width: `${Math.round(entity.confidence * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="osint-inspector-section">
+        <h5>
+          {tr("Incoming Relations", "Relations entrantes")} ({incomingRelations.length})
+        </h5>
+        {incomingRelations.length === 0 ? (
+          <small className="muted">{tr("No incoming links", "Aucun lien entrant")}</small>
+        ) : (
+          incomingRelations.map((rel) => (
+            <div className="osint-rel-item" key={rel.id}>
+              <span>
+                <strong>{entityMap.get(rel.sourceId) ?? rel.sourceId}</strong>
+                {" → "}
+                <em>{rel.label}</em>
+              </span>
+              <button
+                type="button"
+                className="button icon-only"
+                onClick={() => void onDeleteRelation(rel.id)}
+                title={tr("Delete relation", "Supprimer la relation")}
+              >
+                <IconTrash size={12} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="osint-inspector-section">
+        <h5>
+          {tr("Outgoing Relations", "Relations sortantes")} ({outgoingRelations.length})
+        </h5>
+        {outgoingRelations.length === 0 ? (
+          <small className="muted">{tr("No outgoing links", "Aucun lien sortant")}</small>
+        ) : (
+          outgoingRelations.map((rel) => (
+            <div className="osint-rel-item" key={rel.id}>
+              <span>
+                <em>{rel.label}</em>
+                {" → "}
+                <strong>{entityMap.get(rel.targetId) ?? rel.targetId}</strong>
+              </span>
+              <button
+                type="button"
+                className="button icon-only"
+                onClick={() => void onDeleteRelation(rel.id)}
+                title={tr("Delete relation", "Supprimer la relation")}
+              >
+                <IconTrash size={12} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="osint-inspector-section">
+        <h5>
+          {tr("Associated Evidence", "Preuves associées")} ({associatedEvidence.length})
+        </h5>
+        {associatedEvidence.length === 0 ? (
+          <small className="muted">{tr("No direct evidence linked", "Aucune preuve directe liée")}</small>
+        ) : (
+          associatedEvidence.slice(0, 4).map((ev) => (
+            <div className="osint-evidence-mini" key={ev.id}>
+              <strong>{ev.title}</strong>
+              <small className="muted">{ev.excerpt.slice(0, 90)}…</small>
+              <a
+                href={ev.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "3px" }}
+              >
+                {tr("View source", "Voir la source")}
+                <IconExternalLink size={10} />
+              </a>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div style={{ marginTop: "auto", paddingTop: "12px", borderTop: "1px solid var(--nx-line)" }}>
+        <button
+          className="button danger"
+          type="button"
+          onClick={() => void onDeleteEntity(entity.id)}
+          style={{
+            width: "100%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+          }}
+        >
+          <IconTrash size={14} />
+          {tr("Delete entity", "Supprimer l'entité")}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 function GraphPanel({
   record,
   addEntity,
+  deleteEntity,
   addRelation,
+  deleteRelation,
 }: {
   record: OsintCaseRecord;
   addEntity: (label: string, type: string) => Promise<void>;
+  deleteEntity: (entityId: string) => Promise<void>;
   addRelation: (sourceId: string, targetId: string, label: string) => Promise<void>;
+  deleteRelation: (relationId: string) => Promise<void>;
 }) {
   const { tr } = useI18n();
-  const [focus, setFocus] = useState<string | null>(null);
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [entityLabel, setEntityLabel] = useState("");
   const [entityType, setEntityType] = useState("organization");
   const [sourceId, setSourceId] = useState("");
@@ -784,54 +1170,137 @@ function GraphPanel({
     y: 180 + Math.sin((index / count) * Math.PI * 2) * 125,
   });
   const positions = new Map(record.entities.map((entity, index) => [entity.id, position(index)]));
+  const selectedEntity = record.entities.find((e) => e.id === selectedEntityId) ?? null;
+
   return (
     <div className="osint-panel-stack">
       <p className="muted">
-        {focus ??
-          `${record.relations.length} ${tr("verified relationships", "relations vérifiées")}`}
+        {selectedEntity
+          ? `${selectedEntity.label} · ${selectedEntity.type}`
+          : `${record.relations.length} ${tr("verified relationships", "relations vérifiées")}`}
       </p>
-      <svg
-        className="osint-graph"
-        viewBox="0 0 600 360"
-        role="img"
-        aria-label={tr(
-          "Interactive entity relationship graph",
-          "Graphe interactif des relations entre entités",
-        )}
-      >
-        {record.relations.map((relation) => {
-          const from = positions.get(relation.sourceId);
-          const to = positions.get(relation.targetId);
-          return from && to ? (
-            <g key={relation.id}>
-              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
-              <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2}>
-                {relation.label}
-              </text>
-            </g>
-          ) : null;
-        })}
-        {record.entities.map((entity, index) => {
-          const point = position(index);
-          return (
-            <g
-              className={focus === entity.label ? "focused" : ""}
-              key={entity.id}
-              onClick={() => setFocus(entity.label)}
-              role="button"
+
+      <div className={`osint-graph-shell ${selectedEntity ? "has-inspector" : ""}`}>
+        <svg
+          className="osint-graph"
+          viewBox="0 0 600 360"
+          role="img"
+          aria-label={tr(
+            "Interactive entity relationship graph",
+            "Graphe interactif des relations entre entités",
+          )}
+        >
+          <defs>
+            <marker
+              id="osint-arrow"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
             >
-              <circle cx={point.x} cy={point.y} r="34" />
-              <text x={point.x} y={point.y}>
-                {entity.label.slice(0, 16)}
-              </text>
-              <title>
-                {entity.label} · {Math.round(entity.confidence * 100)}%{" "}
-                {tr("confidence", "confiance")}
-              </title>
-            </g>
-          );
-        })}
-      </svg>
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--nx-accent, #6366f1)" />
+            </marker>
+            <marker
+              id="osint-arrow-focused"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--nx-signal, #38bdf8)" />
+            </marker>
+          </defs>
+          {record.relations.map((relation) => {
+            const from = positions.get(relation.sourceId);
+            const to = positions.get(relation.targetId);
+            if (!from || !to) return null;
+            const isRelFocused =
+              selectedEntityId === relation.sourceId || selectedEntityId === relation.targetId;
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const dist = Math.hypot(dx, dy);
+            const r = 38;
+            const targetX = dist > 0 ? to.x - (dx / dist) * r : to.x;
+            const targetY = dist > 0 ? to.y - (dy / dist) * r : to.y;
+            const startX = dist > 0 ? from.x + (dx / dist) * r : from.x;
+            const startY = dist > 0 ? from.y + (dy / dist) * r : from.y;
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2;
+            const badgeWidth = Math.max(relation.label.length * 7.5 + 16, 44);
+
+            return (
+              <g key={relation.id}>
+                <line
+                  x1={startX}
+                  y1={startY}
+                  x2={targetX}
+                  y2={targetY}
+                  className={isRelFocused ? "focused" : ""}
+                  markerEnd={isRelFocused ? "url(#osint-arrow-focused)" : "url(#osint-arrow)"}
+                />
+                <g className="relation-group">
+                  <rect
+                    x={midX - badgeWidth / 2}
+                    y={midY - 11}
+                    width={badgeWidth}
+                    height={22}
+                    rx={4}
+                    className={`relation-badge ${isRelFocused ? "focused" : ""}`}
+                  />
+                  <text x={midX} y={midY} className="relation-text">
+                    {relation.label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+          {record.entities.map((entity, index) => {
+            const point = position(index);
+            const isFocused = selectedEntityId === entity.id;
+            return (
+              <g
+                className={isFocused ? "focused" : ""}
+                key={entity.id}
+                onClick={() => setSelectedEntityId(isFocused ? null : entity.id)}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: "pointer" }}
+              >
+                <circle cx={point.x} cy={point.y} r="34" />
+                <text className="entity-label" x={point.x} y={point.y - 4}>
+                  {entity.label.slice(0, 14)}
+                </text>
+                <text className="entity-type" x={point.x} y={point.y + 11}>
+                  {entity.type.slice(0, 10)}
+                </text>
+                <title>
+                  {entity.label} ({entity.type}) · {Math.round(entity.confidence * 100)}%{" "}
+                  {tr("confidence", "confiance")}
+                </title>
+              </g>
+            );
+          })}
+        </svg>
+
+        {selectedEntity && (
+          <EntityInspector
+            entity={selectedEntity}
+            allEntities={record.entities}
+            record={record}
+            onClose={() => setSelectedEntityId(null)}
+            onDeleteEntity={async (id) => {
+              await deleteEntity(id);
+              setSelectedEntityId(null);
+            }}
+            onDeleteRelation={deleteRelation}
+          />
+        )}
+      </div>
+
       {record.entities.length === 0 && (
         <p className="muted">
           {tr(
@@ -840,6 +1309,7 @@ function GraphPanel({
           )}
         </p>
       )}
+
       <div className="settings-grid">
         <label>
           {tr("Entity label", "Libellé de l'entité")}
@@ -872,6 +1342,7 @@ function GraphPanel({
       >
         {tr("Add entity", "Ajouter l'entité")}
       </button>
+
       {record.entities.length >= 2 && (
         <>
           <div className="settings-grid">
