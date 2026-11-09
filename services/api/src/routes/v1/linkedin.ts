@@ -3,6 +3,7 @@ import type { FastifyPluginCallback } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { linkedInRuntimeConfigSchema } from "../../services/runtime-configuration.js";
 import { ok, okSchema } from "../../lib/response.js";
+import { currentUser } from "../../plugins/authentication.js";
 
 const statusSchema = z.object({
   configured: z.boolean(),
@@ -24,7 +25,9 @@ export const linkedInRoutes: FastifyPluginCallback = (fastify, _options, done) =
       preHandler: app.requireAdmin,
       schema: { tags: ["linkedin"], response: { 200: okSchema(statusSchema) } },
     },
-    async (request) => ok(await service().status(), request.id),
+    // Per member: tokens are stored under the member's own vault key, which is
+    // what content management resolves (no global fallback).
+    async (request) => ok(await service().status(currentUser(request).userId), request.id),
   );
 
   app.post(
@@ -38,7 +41,8 @@ export const linkedInRoutes: FastifyPluginCallback = (fastify, _options, done) =
         response: { 200: okSchema(z.object({ authorizationUrl: z.string().url() })) },
       },
     },
-    async (request) => ok(await service().start(request.body), request.id),
+    async (request) =>
+      ok(await service().start(request.body, currentUser(request).userId), request.id),
   );
 
   app.get(
@@ -66,8 +70,9 @@ export const linkedInRoutes: FastifyPluginCallback = (fastify, _options, done) =
       schema: { tags: ["linkedin"], response: { 200: okSchema(statusSchema) } },
     },
     async (request) => {
-      await service().disconnect();
-      return ok(await service().status(), request.id);
+      const { userId } = currentUser(request);
+      await service().disconnect(userId);
+      return ok(await service().status(userId), request.id);
     },
   );
 

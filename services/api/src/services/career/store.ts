@@ -240,9 +240,21 @@ export interface CareerStore {
     toState: ApplicationState | null;
     summary: string;
     context: Record<string, unknown>;
+    /** Defaults to `owner`. `nexus-autonomous` for autonomy-driven actions. */
+    actor?: string;
     now: Date;
   }): Promise<ApplicationEvent>;
   listEvents(userId: string, applicationId: string): Promise<ApplicationEvent[]>;
+  /** Events across all of the owner's applications, newest first. */
+  listRecentEvents(
+    userId: string,
+    filter: { actor?: string; kindPrefix?: string; limit: number },
+  ): Promise<ApplicationEvent[]>;
+  /** Counts events of `kind` by `actor` since an instant (daily caps). */
+  countEvents(
+    userId: string,
+    filter: { actor: string; kind: string; since: Date },
+  ): Promise<number>;
 }
 
 /**
@@ -777,6 +789,7 @@ export class InMemoryCareerStore implements CareerStore {
     toState: ApplicationState | null;
     summary: string;
     context: Record<string, unknown>;
+    actor?: string;
     now: Date;
   }): Promise<ApplicationEvent> {
     const highest = [...this.#events.values()]
@@ -793,6 +806,7 @@ export class InMemoryCareerStore implements CareerStore {
       toState: input.toState,
       summary: input.summary,
       context: input.context,
+      actor: input.actor ?? "owner",
       createdAt: input.now,
     };
     this.#events.set(record.id, clone(record));
@@ -804,6 +818,37 @@ export class InMemoryCareerStore implements CareerStore {
       .filter((item) => item.userId === userId && item.applicationId === applicationId)
       .sort((left, right) => left.sequence - right.sequence);
     return Promise.resolve(items.map(clone));
+  }
+
+  listRecentEvents(
+    userId: string,
+    filter: { actor?: string; kindPrefix?: string; limit: number },
+  ): Promise<ApplicationEvent[]> {
+    const items = [...this.#events.values()]
+      .filter(
+        (item) =>
+          item.userId === userId &&
+          (filter.actor === undefined || item.actor === filter.actor) &&
+          (filter.kindPrefix === undefined || item.kind.startsWith(filter.kindPrefix)),
+      )
+      .sort((left, right) => +right.createdAt - +left.createdAt || right.sequence - left.sequence)
+      .slice(0, filter.limit);
+    return Promise.resolve(items.map(clone));
+  }
+
+  countEvents(
+    userId: string,
+    filter: { actor: string; kind: string; since: Date },
+  ): Promise<number> {
+    return Promise.resolve(
+      [...this.#events.values()].filter(
+        (item) =>
+          item.userId === userId &&
+          item.actor === filter.actor &&
+          item.kind === filter.kind &&
+          item.createdAt >= filter.since,
+      ).length,
+    );
   }
 
   #require<T>(record: T | undefined, what: string): T {

@@ -130,7 +130,8 @@ export function careerDeadline(dto: CareerDeadlineDto): Deadline {
     category:
       dto.kind === "interview"
         ? "interview"
-        : dto.kind === "funding_call"
+        : // Not in the server vocabulary today; kept for forward compatibility.
+          (dto.kind as string) === "funding_call"
           ? "funding_call"
           : dto.kind === "follow_up"
             ? "follow_up"
@@ -396,9 +397,7 @@ export class DashboardCareerClient extends HttpCareerEducationClient {
       targetApp = await this.#api.createCareerApplication(input.targetOpportunityId);
     }
 
-    if (!targetApp) {
-      targetApp = apps[0];
-    }
+    targetApp ??= apps[0];
     if (!targetApp) {
       throw new Error("No application found to request approval for.");
     }

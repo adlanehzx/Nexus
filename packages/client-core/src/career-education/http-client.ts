@@ -410,7 +410,7 @@ export class HttpCareerEducationClient implements CareerEducationClient {
   }
 
   async getDeadlines(): Promise<Deadline[]> {
-    const data = await this.#call<{ deadlines?: Array<Record<string, unknown>> }>(
+    const data = await this.#call<{ deadlines?: Record<string, unknown>[] }>(
       "GET",
       "/api/v1/career/deadlines",
     );
@@ -440,9 +440,10 @@ export class HttpCareerEducationClient implements CareerEducationClient {
 
   async getContacts(opportunityId?: string): Promise<Contact[]> {
     const query = opportunityId ? `?applicationId=${encodeURIComponent(opportunityId)}` : "";
-    const data = await this.#call<{ contacts?: Array<Record<string, unknown>> }>(
+    const path = "/api/v1/career/contacts";
+    const data = await this.#call<{ contacts?: Record<string, unknown>[] }>(
       "GET",
-      `/api/v1/career/contacts${query}`,
+      `${path}${query}`,
     );
     return (data.contacts ?? []).map(toContact);
   }
@@ -475,15 +476,18 @@ export class HttpCareerEducationClient implements CareerEducationClient {
 
   async getConfirmations(status?: ConfirmationStatus): Promise<ConfirmationRequest[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
-    const data = await this.#call<{ confirmations?: Array<Record<string, unknown>> }>(
+    const path = "/api/v1/career/confirmations";
+    const data = await this.#call<{ confirmations?: Record<string, unknown>[] }>(
       "GET",
-      `/api/v1/career/confirmations${query}`,
+      `${path}${query}`,
     );
     return (data.confirmations ?? []).map(toConfirmationRequest);
   }
 
   async requestConfirmation(input: CreateConfirmationInput): Promise<ConfirmationRequest> {
+    // An empty target id must also fall back to the payload application id, hence `||`.
     const targetId =
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       input.targetOpportunityId || (input.payload?.applicationId as string | undefined);
     if (!targetId) {
       throw new CareerApiError("An application is required to request approval.");
@@ -529,12 +533,12 @@ export class HttpCareerEducationClient implements CareerEducationClient {
     return this.requestConfirmation({
       actionType: "browser_submit_application",
       title: `Submit application ${opportunityId}`,
-      summary: `Dossier submission for ${opportunityId}`,
+      summary: `Application package submission for ${opportunityId}`,
       destination: "Company Portal",
       targetOpportunityId: opportunityId,
       payload: { opportunityId, formValues },
       risks: ["Irreversible application submission"],
-      consequences: ["Candidate dossier is transmitted to the employer"],
+      consequences: ["Candidate application package is transmitted to the employer"],
     });
   }
 
@@ -561,24 +565,31 @@ function isSuccessData(body: unknown): body is { data: unknown } {
   return body !== null && typeof body === "object" && "data" in body;
 }
 
+/** Coerces an untyped API field to a string, falling back when it is missing or not a scalar. */
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : fallback;
+}
+
 function toConfirmationRequest(raw: Record<string, unknown>): ConfirmationRequest {
   const isApproved = raw.state === "approved" || raw.state === "consumed";
   return {
-    id: String(raw.id ?? ""),
+    id: text(raw.id),
     actionType:
       raw.purpose === "submit_application" ? "browser_submit_application" : "document_export",
-    title: `Approval: ${String(raw.summary ?? "Request")}`,
-    summary: String(raw.summary ?? ""),
+    title: `Approval: ${text(raw.summary, "Request")}`,
+    summary: text(raw.summary),
     destination: "Direct Career Channel",
     targetOpportunityId: typeof raw.applicationId === "string" ? raw.applicationId : undefined,
     payload: { applicationId: raw.applicationId, payloadHash: raw.payloadHash },
     attachedDocuments: [],
-    risks: ["Irreversible external submission of tailored application dossier"],
+    risks: ["Irreversible external submission of tailored application package"],
     consequences: ["Transmits data to external organization"],
     requiresHumanApproval: true,
     status: isApproved ? "approved" : ((raw.state as ConfirmationStatus) ?? "pending"),
-    createdAt: String(raw.requestedAt ?? new Date().toISOString()),
-    expiresAt: String(raw.expiresAt ?? new Date(Date.now() + 86_400_000).toISOString()),
+    createdAt: text(raw.requestedAt, new Date().toISOString()),
+    expiresAt: text(raw.expiresAt, new Date(Date.now() + 86_400_000).toISOString()),
     decidedAt: typeof raw.decidedAt === "string" ? raw.decidedAt : undefined,
     resolvedBy: raw.decidedAt ? "human_operator" : undefined,
   };
@@ -586,12 +597,12 @@ function toConfirmationRequest(raw: Record<string, unknown>): ConfirmationReques
 
 function toDeadline(raw: Record<string, unknown>): Deadline {
   return {
-    id: String(raw.id ?? ""),
-    opportunityId: String(raw.applicationId ?? ""),
-    opportunityTitle: String(raw.label ?? "Application Deadline"),
+    id: text(raw.id),
+    opportunityId: text(raw.applicationId),
+    opportunityTitle: text(raw.label, "Application Deadline"),
     organization: "Target Organization",
-    title: String(raw.label ?? raw.kind ?? "Deadline"),
-    dueDate: String(raw.dueAt ?? new Date().toISOString()),
+    title: text(raw.label ?? raw.kind, "Deadline"),
+    dueDate: text(raw.dueAt, new Date().toISOString()),
     category:
       raw.kind === "interview"
         ? "interview"
@@ -608,12 +619,12 @@ function toDeadline(raw: Record<string, unknown>): Deadline {
 
 function toContact(raw: Record<string, unknown>): Contact {
   return {
-    id: String(raw.id ?? ""),
-    opportunityId: String(raw.opportunityId ?? raw.applicationId ?? ""),
-    name: String(raw.displayName ?? "Contact"),
-    role: String(raw.role ?? "Contact"),
-    organization: String(raw.organization ?? ""),
-    email: String(raw.email ?? ""),
+    id: text(raw.id),
+    opportunityId: text(raw.opportunityId ?? raw.applicationId),
+    name: text(raw.displayName, "Contact"),
+    role: text(raw.role, "Contact"),
+    organization: text(raw.organization),
+    email: text(raw.email),
     phone: undefined,
     notes: typeof raw.notes === "string" ? raw.notes : undefined,
   };

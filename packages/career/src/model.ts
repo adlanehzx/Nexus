@@ -446,6 +446,11 @@ export interface ApplicationEvent {
   toState: ApplicationState | null;
   summary: string;
   context: Record<string, unknown>;
+  /**
+   * Who caused the event: `owner` for the human, `nexus-autonomous` for an
+   * action Nexus took on its own under the autonomy settings.
+   */
+  actor: string;
   createdAt: Date;
 }
 

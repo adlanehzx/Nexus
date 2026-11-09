@@ -89,7 +89,7 @@ describe("HttpCareerEducationClient Integration", () => {
     purpose: "submit_application",
     payloadHash: "h",
     state: "pending",
-    summary: "Submit dossier",
+    summary: "Submit application package",
     requestedAt: "2026-11-01T00:00:00.000Z",
     expiresAt: "2026-11-02T00:00:00.000Z",
   };
