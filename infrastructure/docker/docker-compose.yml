@@ -170,6 +170,8 @@ services:
       - ${GEMINI_CONFIG_DIR:-${HOME}/.gemini}:/home/node/.gemini:ro
       - ${NEXUS_SESSIONS_DIR:-${HOME}/.nexus}:/home/node/.nexus
       - ../../services/api/dist:/app/dist:ro
+      # Lab 4 — private socket of the home supervisor (bundled Home Assistant on/off).
+      - home-supervisor-socket:/run/nexus-home
       - ../../packages/agent-core/dist:/app/node_modules/@nexus/agent-core/dist:ro
       - ../../packages/mcp/dist:/app/node_modules/.pnpm/@nexus+mcp@file+packages+mcp_supports-color@8.1.1/node_modules/@nexus/mcp/dist:ro
     healthcheck:
@@ -382,6 +384,8 @@ services:
     container_name: nexus-homeassistant
     restart: unless-stopped
     profiles: [home]
+    # Same cap as when the dashboard toggle starts it (home-supervisor).
+    mem_limit: ${HOME_ASSISTANT_MEMORY_LIMIT:-1g}
     # Host networking: mDNS, SSDP, HomeKit and Cast discovery need the LAN
     # broadcast domain. Home Assistant listens on http://<host>:8123.
     network_mode: host
@@ -396,6 +400,30 @@ services:
       start_period: 90s
     security_opt:
       - no-new-privileges:true
+
+  # Turns the bundled Home Assistant on/off from the dashboard (Domotique, Home
+  # Assistant tab). The only NEXUS process with the Docker socket: it can
+  # inspect, create, start and stop the single `nexus-homeassistant` container,
+  # nothing else, and talks to the API over a private Unix socket. ~30 MB RAM.
+  home-supervisor:
+    image: node:24.20.0-bookworm-slim
+    container_name: nexus-home-supervisor
+    restart: unless-stopped
+    command: ["node", "/app/home-supervisor/main.js"]
+    environment:
+      HOME_ASSISTANT_IMAGE: ${HOME_ASSISTANT_IMAGE:-ghcr.io/home-assistant/home-assistant:2026.10.4}
+      HOME_ASSISTANT_MEMORY_MB: ${HOME_ASSISTANT_MEMORY_MB:-1024}
+      HOME_ASSISTANT_VOLUME: nexus_homeassistant-config
+    volumes:
+      - ../../services/api/dist/home-supervisor:/app/home-supervisor:ro
+      - ../../services/api/package.json:/app/package.json:ro
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      - home-supervisor-socket:/run/nexus-home
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 96m
 
   # Optional MQTT broker for future ESP32 MQTT devices and Zigbee2MQTT.
   # Start with: pnpm docker:mqtt (create the password file first, see docs).
@@ -429,6 +457,7 @@ volumes:
   nexus-artifacts:
   nexus-observability:
   homeassistant-config:
+  home-supervisor-socket:
   mosquitto-auth:
   mosquitto-data:
 

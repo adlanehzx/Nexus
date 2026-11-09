@@ -93,6 +93,8 @@ describe("Lab 4 — Domotique dashboard", () => {
 
   it("wires zero-configuration endpoints: HA discovery/setup/login, satellite enrolment, TVs", async () => {
     const { api, authorizedRequest } = apiWith({ data: {} });
+    await api.bundledHomeAssistant();
+    await api.setBundledHomeAssistant(true);
     await api.discoverHomeAssistant();
     await api.autoSetupHomeAssistant({ baseUrl: "http://homeassistant.local:8123" });
     await api.loginHomeAssistant({
@@ -113,6 +115,8 @@ describe("Lab 4 — Domotique dashboard", () => {
       ([call]) => `${String(call.method)} ${String(call.path)}`,
     );
     expect(paths).toEqual([
+      "GET /api/v1/domotique/home-assistant/bundled",
+      "POST /api/v1/domotique/home-assistant/bundled",
       "GET /api/v1/domotique/home-assistant/discover",
       "POST /api/v1/domotique/home-assistant/auto-setup",
       "POST /api/v1/domotique/home-assistant/login",

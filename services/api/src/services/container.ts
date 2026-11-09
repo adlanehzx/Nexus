@@ -153,6 +153,10 @@ import {
   SatelliteEnrollmentService,
 } from "./domotique/satellite-enrollment.js";
 import { mdnsBrowse } from "./domotique/mdns.js";
+import {
+  SupervisorSocketClient,
+  type BundledHomeAssistantControl,
+} from "./domotique/bundled-home-assistant.js";
 import type { HomeAssistantSetupOptions } from "@nexus/devices";
 import { HomeVoiceIntentHandler, createAgentFallback } from "./domotique/voice-intent.js";
 import type { SpeechToTextPort, TextToSpeechPort } from "@nexus/voice";
@@ -328,6 +332,8 @@ export interface ServiceContainerOptions {
   domotiqueTickMs?: number;
   /** Lab 4 — IANA timezone in which routine cron expressions are evaluated. */
   homeTimezone?: string;
+  /** Lab 4 — on/off switch of the bundled Home Assistant (via the home supervisor). */
+  bundledHomeAssistant?: BundledHomeAssistantControl;
   /** Lab 4 — HA discovery/setup overrides (tests inject a mocked HA and no mDNS). */
   homeAssistantDiscovery?: {
     browse?: () => Promise<
@@ -427,6 +433,8 @@ export class ServiceContainer {
   readonly satelliteVoice: SatelliteVoiceGateway;
   /** Lab 4 — ESP32 satellites enrolled from the network and approved in the dashboard. */
   readonly satelliteEnrollment: SatelliteEnrollmentService;
+  /** Lab 4 — bundled Home Assistant toggle. Reports "unavailable" without a supervisor. */
+  readonly bundledHomeAssistant: BundledHomeAssistantControl;
   /** NEXUS ACP/paper-trading engine, when configured. */
   readonly missionControl: MissionControlPort | undefined;
   /** LLM provider for task planning (optional). */
@@ -842,6 +850,11 @@ export class ServiceContainer {
       now,
     });
     this.domotique.attachEnrollment(this.satelliteEnrollment);
+    this.bundledHomeAssistant =
+      options.bundledHomeAssistant ??
+      new SupervisorSocketClient(
+        process.env.NEXUS_HOME_SUPERVISOR_SOCKET ?? "/run/nexus-home/supervisor.sock",
+      );
     const agentCore = this.agentCore;
     this.satelliteVoice = new SatelliteVoiceGateway({
       stt: options.satelliteVoicePorts?.stt,

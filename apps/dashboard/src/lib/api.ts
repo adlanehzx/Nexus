@@ -1328,6 +1328,19 @@ export interface HomeTopologyDevice {
   lastSeenAt: string | null;
 }
 
+export type BundledHomeAssistantView =
+  | {
+      available: true;
+      state: "absent" | "pulling" | "starting" | "running" | "stopping" | "stopped" | "error";
+      image: string;
+      memoryUsageBytes: number | null;
+      memoryLimitBytes: number;
+      pull: { currentBytes: number; totalBytes: number } | null;
+      startedAt: string | null;
+      error: string | null;
+    }
+  | { available: false; reason: string };
+
 export interface HomeAssistantProbeView {
   url: string;
   reachable: boolean;
@@ -2946,6 +2959,16 @@ export class DashboardApi {
 
   homeVoice(): Promise<HomeVoiceStatus> {
     return this.#get("/api/v1/domotique/voice");
+  }
+
+  /** Home Assistant bundled with NEXUS: state and memory use. */
+  bundledHomeAssistant(): Promise<BundledHomeAssistantView> {
+    return this.#get("/api/v1/domotique/home-assistant/bundled");
+  }
+
+  /** Administrators only: download/create/start, or stop (configuration kept). */
+  setBundledHomeAssistant(enabled: boolean): Promise<BundledHomeAssistantView> {
+    return this.#request("POST", "/api/v1/domotique/home-assistant/bundled", { enabled });
   }
 
   /** Home Assistant instances found on the LAN, with their onboarding state. */

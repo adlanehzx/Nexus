@@ -178,6 +178,7 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
   const [classes, setClasses] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [bundledRunning, setBundledRunning] = useState(false);
   const current = status.data;
 
   useEffect(() => {
@@ -268,9 +269,12 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
         </p>
       )}
 
+      <BundledHomeAssistantSwitch api={api} onRunningChange={setBundledRunning} />
+
       {connection?.state !== "connected" && (
         <HomeAssistantWizard
           api={api}
+          keepSearching={bundledRunning}
           onConnected={(url) => {
             setBaseUrl(url);
             status.reload();
@@ -429,14 +433,154 @@ export function HomeAssistantPanel({ api }: { api: DashboardApi }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Bundled Home Assistant: one switch. Off = no RAM used.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formatMb(bytes: number): string {
+  return `${String(Math.round(bytes / (1024 * 1024)))} MB`;
+}
+
+function BundledHomeAssistantSwitch({
+  api,
+  onRunningChange,
+}: {
+  api: DashboardApi;
+  onRunningChange: (running: boolean) => void;
+}) {
+  const { tr } = useI18n();
+  const bundled = useLive(() => api.bundledHomeAssistant(), 3_000);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const view = bundled.data;
+  const running = view?.available === true && view.state === "running";
+  useEffect(() => onRunningChange(running), [running, onRunningChange]);
+  if (view === undefined) return null;
+  if (!view.available) {
+    return (
+      <p className="muted" style={{ marginTop: "1rem", fontSize: "0.8rem" }}>
+        {tr(
+          "Bundled Home Assistant: switch unavailable (the NEXUS home supervisor is not running).",
+          "Home Assistant intégré : interrupteur indisponible (le superviseur domotique de NEXUS ne tourne pas).",
+        )}
+      </p>
+    );
+  }
+  const on = ["pulling", "starting", "running"].includes(view.state);
+  const transitional =
+    view.state === "pulling" || view.state === "starting" || view.state === "stopping";
+  const label: Record<typeof view.state, string> = {
+    absent: tr("off (not installed yet)", "éteint (pas encore installé)"),
+    pulling: tr("downloading", "téléchargement"),
+    starting: tr("starting", "démarrage"),
+    running: tr("running", "en marche"),
+    stopping: tr("stopping", "arrêt en cours"),
+    stopped: tr("off", "éteint"),
+    error: tr("error", "erreur"),
+  };
+  const toggle = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setBundledHomeAssistant(!on);
+      bundled.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      style={{
+        marginTop: "1.25rem",
+        padding: "0.85rem 1rem",
+        border: "1px solid var(--nx-line)",
+        borderRadius: "var(--nx-radius-md)",
+        background: "var(--nx-canvas-sunken)",
+        display: "grid",
+        gap: "0.4rem",
+      }}
+    >
+      <div style={{ ...row, justifyContent: "space-between" }}>
+        <div>
+          <strong>
+            {tr("Home Assistant bundled with NEXUS", "Home Assistant intégré à NEXUS")}
+          </strong>
+          <div className="muted" style={{ fontSize: "0.8rem" }}>
+            {tr(
+              "Turn it on if you have no Home Assistant yet. Off, it uses no memory; its configuration is kept.",
+              "Activez-le si vous n'avez pas encore de Home Assistant. Éteint, il n'utilise aucune mémoire ; sa configuration est conservée.",
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          className={`button ${on ? "primary" : "secondary"}`}
+          disabled={busy || transitional}
+          onClick={() => void toggle()}
+        >
+          <IconPower size={16} />
+          <span>{on ? tr("On", "Activé") : tr("Off", "Désactivé")}</span>
+        </button>
+      </div>
+      <div style={row}>
+        <span
+          style={chip(
+            view.state === "running"
+              ? "ok"
+              : view.state === "error"
+                ? "danger"
+                : transitional
+                  ? "warn"
+                  : "muted",
+          )}
+        >
+          {label[view.state]}
+        </span>
+        {view.memoryUsageBytes !== null && (
+          <span style={chip("muted")}>
+            {tr("Memory", "Mémoire")}: {formatMb(view.memoryUsageBytes)} /{" "}
+            {formatMb(view.memoryLimitBytes)}
+          </span>
+        )}
+        {view.pull !== null && view.pull.totalBytes > 0 && (
+          <span style={chip("warn")}>
+            {String(Math.round((view.pull.currentBytes / view.pull.totalBytes) * 100))}% ·{" "}
+            {formatMb(view.pull.totalBytes)}
+          </span>
+        )}
+        {view.state === "starting" && (
+          <span className="muted" style={{ fontSize: "0.8rem" }}>
+            {tr(
+              "First start takes one to two minutes.",
+              "Le premier démarrage prend une à deux minutes.",
+            )}
+          </span>
+        )}
+      </div>
+      {(error ?? view.error) && (
+        <p className="banner error" style={{ margin: 0 }}>
+          {error ?? view.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Connection wizard: find Home Assistant, set it up or sign in. No token copy.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function HomeAssistantWizard({
   api,
+  keepSearching,
   onConnected,
 }: {
   api: DashboardApi;
+  /** The bundled HA was just turned on: search again until it answers (first boot takes a minute or two). */
+  keepSearching: boolean;
   onConnected: (url: string) => void;
 }) {
   const { tr } = useI18n();
@@ -467,6 +611,12 @@ function HomeAssistantWizard({
     void search();
     // Search once when the wizard appears.
   }, []);
+
+  useEffect(() => {
+    if (!keepSearching || (instances !== null && instances.length > 0)) return;
+    const timer = setInterval(() => void search(), 10_000);
+    return () => clearInterval(timer);
+  }, [keepSearching, instances]);
 
   const setup = async (url: string) => {
     setBusy(true);

@@ -155,6 +155,24 @@ let services: ServiceContainer;
 let account: Account;
 let other: Account;
 const adbCalls: string[] = [];
+let bundledEnabled = false;
+const bundled = {
+  status: () =>
+    Promise.resolve({
+      available: true as const,
+      state: bundledEnabled ? ("running" as const) : ("stopped" as const),
+      image: "ghcr.io/home-assistant/home-assistant:2026.10.4",
+      memoryUsageBytes: bundledEnabled ? 280 * 1024 * 1024 : null,
+      memoryLimitBytes: 1024 * 1024 * 1024,
+      pull: null,
+      startedAt: null,
+      error: null,
+    }),
+  setEnabled: (enabled: boolean) => {
+    bundledEnabled = enabled;
+    return bundled.status();
+  },
+};
 
 type Json = Record<string, unknown>;
 const data = (response: { json: () => unknown }) => (response.json() as { data: Json }).data;
@@ -182,6 +200,7 @@ beforeAll(async () => {
         keepaliveMs: 0,
       }),
     homeAssistantDiscovery: { browse: () => Promise.resolve([]), candidates: [ha.url] },
+    bundledHomeAssistant: bundled,
   });
   app = await buildApp({
     config,
@@ -408,5 +427,33 @@ describe("TVs: added per account, no built-in address", () => {
     expect(devices.find((d) => d.id === "firetv:10.1.2.3:5555")).toMatchObject({
       name: "TV salon",
     });
+  });
+});
+
+describe("Bundled Home Assistant toggle", () => {
+  it("lets the administrator turn it on and off, and shows its memory use", async () => {
+    const on = await as(account)("POST", "/api/v1/domotique/home-assistant/bundled", {
+      enabled: true,
+    });
+    expect(on.statusCode).toBe(200);
+    expect(data(on)).toMatchObject({
+      available: true,
+      state: "running",
+      memoryUsageBytes: 280 * 1024 * 1024,
+    });
+    const off = await as(account)("POST", "/api/v1/domotique/home-assistant/bundled", {
+      enabled: false,
+    });
+    expect(data(off)).toMatchObject({ state: "stopped", memoryUsageBytes: null });
+  });
+
+  it("refuses the switch to non-administrators but shows them the state", async () => {
+    const denied = await as(other)("POST", "/api/v1/domotique/home-assistant/bundled", {
+      enabled: true,
+    });
+    expect(denied.statusCode).toBeGreaterThanOrEqual(403);
+    expect(bundledEnabled).toBe(false);
+    const seen = await as(other)("GET", "/api/v1/domotique/home-assistant/bundled");
+    expect(data(seen)).toMatchObject({ available: true, state: "stopped" });
   });
 });

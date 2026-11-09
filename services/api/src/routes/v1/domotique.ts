@@ -124,6 +124,39 @@ export const domotiqueRoutes: FastifyPluginCallback = (fastify, _options, done) 
 
   // ── Hands-free setup ───────────────────────────────────────────────────
 
+  // ── Bundled Home Assistant on/off ─────────────────────────────────────
+
+  app.get(
+    "/domotique/home-assistant/bundled",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["domotique"],
+        summary: "State and memory use of the Home Assistant bundled with NEXUS",
+        response: anyOk,
+      },
+    },
+    async (request) => ok(await app.services.bundledHomeAssistant.status(), request.id),
+  );
+
+  app.post(
+    "/domotique/home-assistant/bundled",
+    {
+      // Starts or stops a container on the host: administrators only.
+      preHandler: app.requireAdmin,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["domotique"],
+        summary:
+          "Turn the bundled Home Assistant on (download, create, start) or off (stop, config kept)",
+        body: z.object({ enabled: z.boolean() }),
+        response: anyOk,
+      },
+    },
+    async (request) =>
+      ok(await app.services.bundledHomeAssistant.setEnabled(request.body.enabled), request.id),
+  );
+
   app.get(
     "/domotique/home-assistant/discover",
     {

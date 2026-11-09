@@ -25,22 +25,47 @@ so, and lists only the devices NEXUS reaches itself.
 If HA already runs somewhere on the LAN (HA OS, a container or a NAS), do
 nothing: NEXUS finds it in the next step.
 
-### Or start the one bundled with NEXUS
+### Or turn on the one bundled with NEXUS: one switch
 
-```bash
-pnpm docker:home
-# equivalent to:
-docker compose -f infrastructure/docker/docker-compose.yml --env-file .env --profile home up -d homeassistant
-```
+Go to **Domotique**, then **Home Assistant**, and use the **Home Assistant
+bundled with NEXUS** switch. Only an administrator, the first NEXUS account,
+can use it.
 
-- **Image:** pinned to `ghcr.io/home-assistant/home-assistant:2026.10.4`.
-  Override it with `HOME_ASSISTANT_IMAGE`.
-- **Networking:** host networking, because mDNS, SSDP, HomeKit and Cast
-  discovery only work inside the LAN broadcast domain. HA listens on port
-  `8123` of the host.
-- **Persistence:** the configuration lives in the `homeassistant-config`
-  volume, which survives `docker compose down`.
-- **Time zone:** taken from the host (`/etc/localtime`).
+- **On:**
+  - The first time, NEXUS downloads the pinned image
+    `ghcr.io/home-assistant/home-assistant:2026.10.4`, about 1.5 GB, and shows
+    the progress.
+  - It then creates and starts the container, with host networking (port
+    `8123`) and a **1 GB memory cap**.
+  - The switch shows the live memory use. A home with few integrations
+    usually needs 200 to 350 MB; it grows with cameras, Bluetooth and long
+    history.
+  - The connection wizard below detects it as soon as it answers. The first
+    start takes one to two minutes.
+- **Off:** the container stops and uses no memory. Its configuration, in the
+  `nexus_homeassistant-config` volume, is kept for the next time.
+- **After a reboot:** the container returns in the state you left it.
+
+How it works: the switch goes through **`home-supervisor`**, a small service
+of about 30 MB. It is the only NEXUS process with access to the Docker socket,
+and it can only inspect, create, start and stop the one `nexus-homeassistant`
+container, with a fixed image, volume and memory cap. The API itself never
+touches Docker: it talks to the supervisor through a private Unix socket. When
+the supervisor is not running, for example with the API started outside
+compose, the switch says so.
+
+Settings:
+
+| Variable                      | Effect                                        |
+| ----------------------------- | --------------------------------------------- |
+| `HOME_ASSISTANT_IMAGE`        | Pinned image.                                 |
+| `HOME_ASSISTANT_MEMORY_MB`    | Memory cap for the switch (default `1024`).   |
+| `HOME_ASSISTANT_MEMORY_LIMIT` | Memory cap for the compose profile.           |
+| `DOCKER_SOCKET_PATH`          | Docker socket path, e.g. for rootless Docker. |
+
+From the command line, `pnpm docker:home` starts the same Home Assistant
+(compose `home` profile, same configuration volume). Use one way or the
+other: the switch, or the command line.
 
 ### Connect, in the dashboard
 
@@ -147,6 +172,7 @@ Anonymous access is disabled. The broker listens on loopback by default; set
 
 | Method and path                                                                                                  | Purpose                                                                                       |
 | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `GET` / `POST /api/v1/domotique/home-assistant/bundled`                                                          | Bundled Home Assistant state and memory use; turn it on or off (admin).                       |
 | `GET /api/v1/domotique/home-assistant/discover`                                                                  | Home Assistant instances on the LAN, with their onboarding state.                             |
 | `POST /api/v1/domotique/home-assistant/auto-setup`                                                               | Onboard a fresh HA and connect to it. Credentials are returned once.                          |
 | `POST /api/v1/domotique/home-assistant/login`                                                                    | Connect with HA credentials, used once and never stored.                                      |
