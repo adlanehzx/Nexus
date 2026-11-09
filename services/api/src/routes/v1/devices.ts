@@ -25,6 +25,19 @@ import { FireTvService, actionSchema, ACTION_KEYS } from "../../services/fire-tv
  * and it only does what the protocol permits.
  */
 
+/** Lab 4 — unified home device as exposed by the topology. */
+const topologyDeviceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(["home_assistant", "satellite", "fire_tv", "nexus_worker"]),
+  type: z.string(),
+  online: z.boolean(),
+  status: z.string(),
+  capabilities: z.array(z.string()),
+  sensitive: z.boolean(),
+  lastSeenAt: z.string().nullable(),
+});
+
 const deviceSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -771,7 +784,8 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       preHandler: app.requireUser,
       schema: {
         tags: ["devices"],
-        summary: "Returns smart home topology grouped by rooms and zones",
+        summary:
+          "Home topology grouped by rooms: Home Assistant entities, ESP32 satellites, Fire TV and NEXUS workers. Rooms are real (HA areas or user-created); nothing is invented.",
         response: {
           200: okSchema(
             z.object({
@@ -779,43 +793,19 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
                 z.object({
                   id: z.string(),
                   name: z.string(),
+                  haAreaId: z.string().nullable(),
                   deviceCount: z.number(),
                   onlineCount: z.number(),
-                  devices: z.array(
-                    z.object({
-                      id: z.string(),
-                      name: z.string(),
-                      kind: z.enum(["device", "satellite"]),
-                      type: z.string(),
-                      platform: z.string().optional(),
-                      role: z.string().optional(),
-                      online: z.boolean(),
-                      status: z.string(),
-                      capabilities: z.array(z.string()),
-                    }),
-                  ),
+                  devices: z.array(topologyDeviceSchema),
                 }),
               ),
-              devices: z.array(
-                z.object({
-                  id: z.string(),
-                  name: z.string(),
-                  kind: z.enum(["device", "satellite"]),
-                  room: z.string(),
-                  type: z.string(),
-                  platform: z.string().optional(),
-                  role: z.string().optional(),
-                  online: z.boolean(),
-                  status: z.string(),
-                  capabilities: z.array(z.string()),
-                  lastSeenAt: z.string().nullable(),
-                }),
-              ),
+              devices: z.array(topologyDeviceSchema.extend({ room: z.string().nullable() })),
               summary: z.object({
                 totalRooms: z.number(),
                 totalDevices: z.number(),
                 onlineDevices: z.number(),
                 satelliteCount: z.number(),
+                homeAssistant: z.string(),
               }),
             }),
           ),
@@ -824,191 +814,58 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
     },
     async (request) => {
       const { userId } = currentUser(request);
-      const userDevices = await app.services.deviceRegistry.listDevices(userId);
-      const userSatellites = app.satellites
-        ? app.satellites.list().filter((s) => app.satellites.isOwnedBy(s.deviceId, userId))
-        : [];
-
-      const DEFAULT_ROOMS = ["Salon", "Bureau", "Cuisine", "Chambre", "Entrée", "Atelier"];
-
-      function determineRoom(name: string, health: Record<string, unknown> = {}): string {
-        if (typeof health.room === "string" && health.room.trim().length > 0) {
-          return health.room.trim();
-        }
-        for (const r of DEFAULT_ROOMS) {
-          if (name.toLowerCase().includes(r.toLowerCase())) return r;
-        }
-        return "Salon";
-      }
-
-      const roomMap = new Map<
-        string,
-        {
-          id: string;
-          name: string;
-          deviceCount: number;
-          onlineCount: number;
-          devices: Array<{
-            id: string;
-            name: string;
-            kind: "device" | "satellite";
-            type: string;
-            platform?: string;
-            role?: string;
-            online: boolean;
-            status: string;
-            capabilities: string[];
-          }>;
-        }
-      >();
-
-      for (const r of DEFAULT_ROOMS) {
-        roomMap.set(r, {
-          id: r
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/\s+/g, "-"),
-          name: r,
-          deviceCount: 0,
-          onlineCount: 0,
-          devices: [],
-        });
-      }
-
-      const flatDevices: Array<{
-        id: string;
-        name: string;
-        kind: "device" | "satellite";
-        room: string;
-        type: string;
-        platform?: string;
-        role?: string;
-        online: boolean;
-        status: string;
-        capabilities: string[];
-        lastSeenAt: string | null;
-      }> = [];
-
-      let onlineTotal = 0;
-
-      for (const dev of userDevices) {
-        const roomName = determineRoom(dev.name, dev.health as Record<string, unknown>);
-        const isOnline = dev.status === "ONLINE";
-        if (isOnline) onlineTotal++;
-
-        const entry = {
-          id: dev.id,
-          name: dev.name,
-          kind: "device" as const,
-          room: roomName,
-          type: dev.type,
-          platform: dev.platform,
-          role: dev.role,
-          online: isOnline,
-          status: dev.status,
-          capabilities: dev.capabilities.filter((c) => c.enabled).map((c) => c.name),
-          lastSeenAt: dev.lastSeenAt ? dev.lastSeenAt.toISOString() : null,
+      const [devices, rooms, status] = await Promise.all([
+        app.services.domotique.listDevices(userId),
+        app.services.domotique.listRooms(userId),
+        app.services.domotique.status(userId),
+      ]);
+      const view = (d: (typeof devices)[number]) => ({
+        id: d.id,
+        name: d.name,
+        kind: d.source,
+        type: d.domain,
+        online: d.online,
+        status: d.state.raw,
+        capabilities: [...d.capabilities],
+        sensitive: d.sensitive,
+        lastSeenAt: d.lastChanged,
+      });
+      const roomName = new Map(rooms.map((r) => [r.id, r.name]));
+      const grouped = rooms.map((room) => {
+        const inRoom = devices.filter((d) => d.roomId === room.id);
+        return {
+          id: room.id,
+          name: room.name,
+          haAreaId: room.haAreaId,
+          deviceCount: inRoom.length,
+          onlineCount: inRoom.filter((d) => d.online).length,
+          devices: inRoom.map(view),
         };
-        flatDevices.push(entry);
-
-        if (!roomMap.has(roomName)) {
-          roomMap.set(roomName, {
-            id: roomName
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/\s+/g, "-"),
-            name: roomName,
-            deviceCount: 0,
-            onlineCount: 0,
-            devices: [],
-          });
-        }
-        const room = roomMap.get(roomName)!;
-        room.deviceCount++;
-        if (isOnline) room.onlineCount++;
-        room.devices.push({
-          id: entry.id,
-          name: entry.name,
-          kind: entry.kind,
-          type: entry.type,
-          platform: entry.platform,
-          role: entry.role,
-          online: entry.online,
-          status: entry.status,
-          capabilities: entry.capabilities,
+      });
+      const unassigned = devices.filter((d) => d.roomId === null);
+      if (unassigned.length > 0) {
+        grouped.push({
+          id: "unassigned",
+          name: "Unassigned",
+          haAreaId: null,
+          deviceCount: unassigned.length,
+          onlineCount: unassigned.filter((d) => d.online).length,
+          devices: unassigned.map(view),
         });
       }
-
-      for (const sat of userSatellites) {
-        const roomName = determineRoom(sat.name, sat.health);
-        const isOnline = sat.online;
-        if (isOnline) onlineTotal++;
-
-        const capNames: string[] = Array.isArray(sat.capabilities)
-          ? sat.capabilities.map((c: unknown) =>
-              typeof c === "string"
-                ? c
-                : typeof c === "object" && c !== null && "name" in c
-                  ? String((c as { name: unknown }).name)
-                  : String(c),
-            )
-          : [];
-
-        const entry = {
-          id: sat.deviceId,
-          name: sat.name,
-          kind: "satellite" as const,
-          room: roomName,
-          type: "ESP32_SATELLITE",
-          platform: "ESP32",
-          role: "VOICE_SATELLITE",
-          online: isOnline,
-          status: isOnline ? "ONLINE" : "OFFLINE",
-          capabilities: capNames,
-          lastSeenAt: typeof sat.lastSeenAt === "string" ? sat.lastSeenAt : null,
-        };
-        flatDevices.push(entry);
-
-        if (!roomMap.has(roomName)) {
-          roomMap.set(roomName, {
-            id: roomName
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/\s+/g, "-"),
-            name: roomName,
-            deviceCount: 0,
-            onlineCount: 0,
-            devices: [],
-          });
-        }
-        const room = roomMap.get(roomName)!;
-        room.deviceCount++;
-        if (isOnline) room.onlineCount++;
-        room.devices.push({
-          id: entry.id,
-          name: entry.name,
-          kind: entry.kind,
-          type: entry.type,
-          platform: entry.platform,
-          role: entry.role,
-          online: entry.online,
-          status: entry.status,
-          capabilities: entry.capabilities,
-        });
-      }
-
       return ok(
         {
-          rooms: Array.from(roomMap.values()),
-          devices: flatDevices,
+          rooms: grouped,
+          devices: devices.map((d) => ({
+            ...view(d),
+            room: d.roomId === null ? null : (roomName.get(d.roomId) ?? null),
+          })),
           summary: {
-            totalRooms: roomMap.size,
-            totalDevices: flatDevices.length,
-            onlineDevices: onlineTotal,
-            satelliteCount: userSatellites.length,
+            totalRooms: rooms.length,
+            totalDevices: devices.length,
+            onlineDevices: devices.filter((d) => d.online).length,
+            satelliteCount: devices.filter((d) => d.source === "satellite").length,
+            homeAssistant: status.connection.state,
           },
         },
         request.id,

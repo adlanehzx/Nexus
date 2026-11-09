@@ -74,6 +74,11 @@ export class SatelliteService {
     this.owners = owners;
   }
 
+  /** Owner of a paired satellite, or `undefined` when unknown or without a token. */
+  ownerOf(deviceId: string): string | undefined {
+    return this.#tokenHashes[deviceId] === undefined ? undefined : this.owners[deviceId];
+  }
+
   isOwnedBy(deviceId: string, userId: string): boolean {
     return this.owners[deviceId] === userId && this.#tokenHashes[deviceId] !== undefined;
   }

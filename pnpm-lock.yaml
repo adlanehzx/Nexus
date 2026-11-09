@@ -963,6 +963,9 @@ importers:
       '@nexus/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      '@nexus/voice':
+        specifier: workspace:*
+        version: link:../../packages/voice
       '@nexus/web-search':
         specifier: workspace:*
         version: link:../../packages/web-search

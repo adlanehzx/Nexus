@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { ToolRegistry } from "@nexus/tools";
 import { TOOL_DOMAINS, registerToolDomains } from "../src/services/tool-registration.js";
 import { OsintService } from "../src/services/osint-service.js";
+import type { HomeToolsHost } from "@nexus/devices";
+
+/** Lab 4 — a host with no devices is enough to register the home tools. */
+const emptyHome: HomeToolsHost = {
+  listDevices: () => Promise.resolve([]),
+  listRooms: () => Promise.resolve([]),
+  cachedDevices: () => [],
+  executeAction: () => Promise.resolve({ status: "failed", message: "no device" }),
+  listScenes: () => Promise.resolve([]),
+  cachedScenes: () => [],
+  runScene: () => Promise.resolve({ status: "failed", message: "no scene" }),
+};
 
 /**
  * The registry exists to keep the container out of merge conflicts, so what it
@@ -12,7 +24,10 @@ import { OsintService } from "../src/services/osint-service.js";
 describe("tool domain registration", () => {
   it("registers every declared domain into the registry", () => {
     const registry = new ToolRegistry();
-    const registered = registerToolDomains(registry, { osint: new OsintService({}) });
+    const registered = registerToolDomains(registry, {
+      osint: new OsintService({}),
+      domotique: emptyHome,
+    });
 
     expect(registered).toEqual(TOOL_DOMAINS.map((domain) => domain.name));
     expect(registry.list().length).toBeGreaterThan(0);

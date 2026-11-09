@@ -603,8 +603,19 @@ describe("infrastructure sections", () => {
       "osint.evidence.archive",
       "osint.entity.add",
       "osint.relation.add",
+      // Lab 4 — home devices and scenes.
+      "home.devices_list",
+      "home.device_control",
+      "home.scenes_list",
+      "home.scene_run",
     ]);
-    expect(tools.every((tool) => tool.allowed)).toBe(true);
+    expect(
+      tools.filter((tool) => tool.name.startsWith("osint.")).every((tool) => tool.allowed),
+    ).toBe(true);
+    // Home tools require `homeassistant.read` / `homeassistant.write`, which no device grants here.
+    expect(tools.filter((tool) => tool.name.startsWith("home.")).some((tool) => tool.allowed)).toBe(
+      false,
+    );
   });
 
   it("strictly rejects SSRF target URLs when configuring remote MCP server", async () => {

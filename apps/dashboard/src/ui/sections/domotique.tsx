@@ -5,10 +5,15 @@ import type {
   PairingTicket,
   SatelliteCommandAccepted,
   SatelliteCommandName,
-  SatelliteCommandResult,
   SatelliteView,
 } from "../../lib/api.js";
 import { Empty, useSection } from "../parts.js";
+import {
+  HomeAssistantPanel,
+  HomeAutomationsPanel,
+  HomeDevicesPanel,
+  VoiceSatellitesPanel,
+} from "./domotique-home.js";
 import { useI18n } from "../i18n/index.js";
 import {
   IconArrowLeft,
@@ -19,6 +24,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconChevronUp,
+  IconClock,
   IconClose,
   IconHardware,
   IconHome,
@@ -26,13 +32,13 @@ import {
   IconMic,
   IconMicOff,
   IconMinus,
-  IconPause,
   IconPlay,
   IconPlus,
   IconPower,
   IconRadio,
   IconRefresh,
   IconSatellite,
+  IconSettings,
   IconTv,
   IconVolume,
   IconVolumeX,
@@ -57,16 +63,18 @@ interface CommandExecutionRecord {
 interface RemoteActionLog {
   id: string;
   action: string;
-  key?: string;
+  key?: string | undefined;
   delivered: boolean;
   timestamp: string;
-  error?: string;
+  error?: string | undefined;
   elapsedMs?: number;
 }
 
-const DEFAULT_ROOMS = ["Salon", "Bureau", "Cuisine", "Chambre", "Entrée", "Atelier"];
+/** Satellites that report no room are grouped here. No room is ever invented. */
+const UNASSIGNED_ROOM = "—";
 
 type DomotiqueMode = "normal" | "silence" | "nuit" | "intercom";
+type DomotiqueTab = "home" | "automations" | "voice" | "ha" | "fleet" | "remote";
 
 function extractBattery(health: Record<string, unknown>): {
   percent: number;
@@ -175,10 +183,7 @@ function extractRoom(sat: SatelliteView): string {
   if (typeof sat.health.room === "string" && sat.health.room.trim().length > 0) {
     return sat.health.room.trim();
   }
-  for (const r of DEFAULT_ROOMS) {
-    if (sat.name.toLowerCase().includes(r.toLowerCase())) return r;
-  }
-  return "Salon";
+  return UNASSIGNED_ROOM;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,8 +204,8 @@ export function RemoteControl({
   const [lastResult, setLastResult] = useState<{
     action: string;
     delivered: boolean;
-    key?: string;
-    error?: string;
+    key?: string | undefined;
+    error?: string | undefined;
     timestamp: string;
     latencyMs: number;
   } | null>(null);
@@ -974,7 +979,7 @@ export function RemoteControl({
 export function Domotique({ api }: { api: DashboardApi }) {
   const { tr } = useI18n();
   const [selectedRoom, setSelectedRoom] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<"fleet" | "remote">("fleet");
+  const [activeTab, setActiveTab] = useState<DomotiqueTab>("home");
   const [busyDevice, setBusyDevice] = useState<string | null>(null);
   const [commandHistory, setCommandHistory] = useState<CommandExecutionRecord[]>([]);
   const [domotiqueMode, setDomotiqueMode] = useState<DomotiqueMode>("normal");
@@ -984,14 +989,20 @@ export function Domotique({ api }: { api: DashboardApi }) {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [pairingDeviceId, setPairingDeviceId] = useState("");
   const [pairingName, setPairingName] = useState("");
-  const [pairingRoom, setPairingRoom] = useState(DEFAULT_ROOMS[0]);
+  const [pairingRoom, setPairingRoom] = useState("");
   const [pairingTicket, setPairingTicket] = useState<PairingTicket | null>(null);
   const [provisioningPayload, setProvisionPayload] = useState<string | null>(null);
   const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const state = useSection(() => api.satellites(), 4_000);
+  const state = useSection(() => api.satellites());
+  // Real rooms only: Home Assistant areas mirrored by NEXUS, or rooms the user created.
+  const homeRooms = useSection(() => api.homeRooms().catch(() => []));
+  useEffect(() => {
+    const timer = setInterval(() => state.reload(), 4_000);
+    return () => clearInterval(timer);
+  }, [state.reload]);
 
   const handlePairingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1006,7 +1017,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
       const res = await api.registerSatellite({
         deviceId: pairingDeviceId.trim(),
         name: pairingName.trim() || pairingDeviceId.trim(),
-        room: pairingRoom,
+        ...(pairingRoom.trim() === "" ? {} : { room: pairingRoom.trim() }),
       });
       setPairingTicket(res.ticket);
       setProvisionPayload(res.provisioningPayload);
@@ -1057,7 +1068,7 @@ export function Domotique({ api }: { api: DashboardApi }) {
           item.id === correlationId
             ? {
                 ...item,
-                status: accepted.accepted ? "delivered" : "failed",
+                status: accepted.correlationId ? "delivered" : "failed",
                 elapsedMs,
               }
             : item,
@@ -1164,9 +1175,6 @@ export function Domotique({ api }: { api: DashboardApi }) {
   // Group fleet by room
   const roomsMap = useMemo(() => {
     const map = new Map<string, SatelliteView[]>();
-    for (const room of DEFAULT_ROOMS) {
-      map.set(room, []);
-    }
     for (const sat of fleet) {
       const r = extractRoom(sat);
       if (!map.has(r)) {
@@ -1412,6 +1420,38 @@ export function Domotique({ api }: { api: DashboardApi }) {
         >
           <button
             type="button"
+            className={`button ${activeTab === "home" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("home")}
+          >
+            <IconHome size={16} />
+            <span>{tr("Home", "Maison")}</span>
+          </button>
+          <button
+            type="button"
+            className={`button ${activeTab === "automations" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("automations")}
+          >
+            <IconClock size={16} />
+            <span>{tr("Scenes & routines", "Scènes & routines")}</span>
+          </button>
+          <button
+            type="button"
+            className={`button ${activeTab === "voice" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("voice")}
+          >
+            <IconMic size={16} />
+            <span>{tr("Voice satellites", "Satellites vocaux")}</span>
+          </button>
+          <button
+            type="button"
+            className={`button ${activeTab === "ha" ? "primary" : "secondary"}`}
+            onClick={() => setActiveTab("ha")}
+          >
+            <IconSettings size={16} />
+            <span>Home Assistant</span>
+          </button>
+          <button
+            type="button"
             className={`button ${activeTab === "fleet" ? "primary" : "secondary"}`}
             onClick={() => setActiveTab("fleet")}
           >
@@ -1534,9 +1574,10 @@ export function Domotique({ api }: { api: DashboardApi }) {
                     value={pairingRoom}
                     onChange={(e) => setPairingRoom(e.target.value)}
                   >
-                    {DEFAULT_ROOMS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
+                    <option value="">{tr("No room", "Aucune pièce")}</option>
+                    {(homeRooms.data ?? []).map((r) => (
+                      <option key={r.id} value={r.name}>
+                        {r.name}
                       </option>
                     ))}
                   </select>
@@ -1638,6 +1679,13 @@ export function Domotique({ api }: { api: DashboardApi }) {
           </div>
         )}
       </section>
+
+      {activeTab === "home" && (
+        <HomeDevicesPanel api={api} onOpenSettings={() => setActiveTab("ha")} />
+      )}
+      {activeTab === "automations" && <HomeAutomationsPanel api={api} />}
+      {activeTab === "voice" && <VoiceSatellitesPanel api={api} />}
+      {activeTab === "ha" && <HomeAssistantPanel api={api} />}
 
       {/* Tab: Interactive Remote Control */}
       {activeTab === "remote" && (
@@ -1814,20 +1862,17 @@ export function Domotique({ api }: { api: DashboardApi }) {
             </div>
 
             {filteredSatellites.length === 0 ? (
-              <Empty
-                title={tr("No satellites found", "Aucun satellite trouvé")}
-                body={
-                  selectedRoom === "all"
-                    ? tr(
-                        "No satellites have reported yet. Click 'Pair New Satellite' to generate a QR config.",
-                        "Aucun satellite n'a encore transmis. Cliquez sur 'Appairer un satellite' pour générer un QR.",
-                      )
-                    : tr(
-                        `No satellites assigned to zone "${selectedRoom}".`,
-                        `Aucun satellite assigné à la zone "${selectedRoom}".`,
-                      )
-                }
-              />
+              <Empty>
+                {selectedRoom === "all"
+                  ? tr(
+                      "No satellites have reported yet. Click 'Pair New Satellite' to generate a QR config.",
+                      "Aucun satellite n'a encore transmis. Cliquez sur 'Appairer un satellite' pour générer un QR.",
+                    )
+                  : tr(
+                      `No satellites assigned to zone "${selectedRoom}".`,
+                      `Aucun satellite assigné à la zone "${selectedRoom}".`,
+                    )}
+              </Empty>
             ) : (
               <div
                 style={{

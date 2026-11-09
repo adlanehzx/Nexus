@@ -128,6 +128,9 @@ services:
       SATELLITE_TOKEN_HASHES_JSON: ${SATELLITE_TOKEN_HASHES_JSON:-{}}
       FIRE_TV_ADB_SERIAL: ${FIRE_TV_ADB_SERIAL:-}
       FIRE_TV_ADB_SERVER: ${FIRE_TV_ADB_SERVER:-127.0.0.1:5037}
+      # Lab 4 — timezone of routine cron expressions. The Home Assistant URL and
+      # token are NOT set here: they are entered in the dashboard (Domotique).
+      NEXUS_HOME_TIMEZONE: ${NEXUS_HOME_TIMEZONE:-Europe/Paris}
       # With host networking, local dependencies remain reachable only through
       # their loopback-published ports.
       DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_dev_password}@127.0.0.1:${POSTGRES_PORT:-15432}/${POSTGRES_DB:-nexus}?schema=public
@@ -369,6 +372,51 @@ services:
     stop_grace_period: 20s
     networks: [nexus]
 
+  # ── Lab 4 — Domotique ───────────────────────────────────────────────────
+  # NEXUS is the brain, Home Assistant the hands (Wi-Fi plugs and bulbs,
+  # Zigbee, Matter, TVs). Start with: pnpm docker:home
+  # Onboarding: docs/integration/home-assistant.md
+  homeassistant:
+    image: ${HOME_ASSISTANT_IMAGE:-ghcr.io/home-assistant/home-assistant:2026.10.4}
+    container_name: nexus-homeassistant
+    restart: unless-stopped
+    profiles: [home]
+    # Host networking: mDNS, SSDP, HomeKit and Cast discovery need the LAN
+    # broadcast domain. Home Assistant listens on http://<host>:8123.
+    network_mode: host
+    environment:
+      TZ: ${NEXUS_HOME_TIMEZONE:-Europe/Paris}
+    volumes:
+      - homeassistant-config:/config
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8123/manifest.json >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    security_opt:
+      - no-new-privileges:true
+
+  # Optional MQTT broker for future ESP32 MQTT devices and Zigbee2MQTT.
+  # Start with: pnpm docker:mqtt (create the password file first, see docs).
+  mosquitto:
+    image: ${MOSQUITTO_IMAGE:-docker.io/library/eclipse-mosquitto:2.0.22}
+    container_name: nexus-mosquitto
+    restart: unless-stopped
+    profiles: [mqtt]
+    ports:
+      # Loopback by default; set MQTT_BIND=0.0.0.0 to accept LAN devices
+      # (authentication is always required, see mosquitto.conf).
+      - "${MQTT_BIND:-127.0.0.1}:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-auth:/mosquitto/auth
+      - mosquitto-data:/mosquitto/data
+    security_opt:
+      - no-new-privileges:true
+    networks: [nexus]
+
 volumes:
   postgres-data:
   redis-data:
@@ -381,6 +429,9 @@ volumes:
   nexus-runtime-config:
   nexus-artifacts:
   nexus-observability:
+  homeassistant-config:
+  mosquitto-auth:
+  mosquitto-data:
 
 networks:
   nexus:
