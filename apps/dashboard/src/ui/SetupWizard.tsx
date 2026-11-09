@@ -931,6 +931,43 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
               </button>
             </div>
 
+            <div
+              style={{
+                padding: "1rem",
+                marginBottom: "1rem",
+                background: "var(--nx-surface-raised, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--nx-line, rgba(255, 255, 255, 0.1))",
+                borderRadius: "var(--nx-radius-md, 8px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "1rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <strong style={{ display: "block", fontSize: "0.95rem", color: "var(--nx-text)" }}>
+                  {tr(
+                    "No local CLI tool installed or logged in?",
+                    "Aucun outil CLI local installé ou connecté ?",
+                  )}
+                </strong>
+                <p style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--nx-text-muted)" }}>
+                  {tr(
+                    "You can continue directly with Free Cloud LLMs (NVIDIA NIM / Llama 3 included) or configure your API keys in Settings.",
+                    "Vous pouvez continuer directement avec les modèles Cloud gratuits (NVIDIA NIM / Llama 3 inclus) ou configurer vos clés API dans les Paramètres.",
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button primary compact"
+                onClick={() => goToStep("capabilities")}
+              >
+                {tr("Continue with Cloud LLMs →", "Continuer avec les LLMs Cloud →")}
+              </button>
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {connections.map((entry) => {
                 const status = classifyConnection(entry);

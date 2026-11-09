@@ -401,11 +401,12 @@ function AppContent() {
   const [viewMode, setViewMode] = useState<"spatial" | "classic">(() => {
     try {
       const saved = window.sessionStorage.getItem("nexus.ui.viewMode");
+      if (saved === "spatial") return "spatial";
       if (saved === "classic") return "classic";
     } catch {
       // Storage unavailable
     }
-    return "spatial";
+    return "classic";
   });
 
   const toggleViewMode = useCallback((mode?: "spatial" | "classic") => {
@@ -454,7 +455,7 @@ function AppContent() {
     };
   }, []);
 
-  // Classic Dashboard Keyboard Shortcuts (Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
+  // Classic Dashboard Keyboard Shortcuts (Alt+1..7 / Ctrl+1..7, Ctrl+K, Ctrl+P, Ctrl+,, Ctrl+Shift+O)
   useEffect(() => {
     if (!authenticated || viewMode !== "classic") return;
 
@@ -463,7 +464,7 @@ function AppContent() {
       if (!hasModifier) return;
 
       // Ctrl+K or Ctrl+P: Switch to Spatial and open Command Palette
-      if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p")) {
         e.preventDefault();
         e.stopPropagation();
         toggleViewMode("spatial");
@@ -472,7 +473,7 @@ function AppContent() {
       }
 
       // Ctrl+Shift+O / Alt+O: Toggle view mode between Classic and Spatial
-      if (e.key.toLowerCase() === "o") {
+      if ((e.altKey || (e.ctrlKey && e.shiftKey)) && e.key.toLowerCase() === "o") {
         e.preventDefault();
         e.stopPropagation();
         toggleViewMode("spatial");
@@ -480,7 +481,7 @@ function AppContent() {
       }
 
       // Ctrl+, : Settings
-      if (e.key === ",") {
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
         e.stopPropagation();
         navigate("settings");
@@ -491,19 +492,22 @@ function AppContent() {
 
       const digit = getDigitFromEvent(e);
       if (digit !== null && digit >= 1 && digit <= 7) {
-        e.preventDefault();
-        e.stopPropagation();
-        const sectionMap: Record<number, SectionId> = {
-          1: "chat",
-          2: "overview",
-          3: "career-education",
-          4: "trading-lab",
-          5: "osint",
-          6: "domotique",
-          7: "settings",
-        };
-        const target = sectionMap[digit];
-        if (target) navigate(target);
+        // Prefer Alt+1..7 or Ctrl+1..7 (avoid colliding with Cmd on Mac if user switches tabs)
+        if (e.altKey || (!e.metaKey && e.ctrlKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const sectionMap: Record<number, SectionId> = {
+            1: "chat",
+            2: "overview",
+            3: "tasks",
+            4: "mission-engine",
+            5: "agents",
+            6: "mcp",
+            7: "settings",
+          };
+          const target = sectionMap[digit];
+          if (target) navigate(target);
+        }
       }
     };
 

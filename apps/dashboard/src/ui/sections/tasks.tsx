@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { DashboardApi, TaskDetail, TaskExecution } from "../../lib/api.js";
 import { failedSteps, formatAge, formatDuration, selectedWorkers } from "../../lib/format.js";
-import { Bar, Empty, Section, State, Table, useSection } from "../parts.js";
+import { Bar, ConfirmModal, Empty, Section, State, Table, useSection } from "../parts.js";
 import { IconCheck, IconClock, IconStop, IconWarning, IconRefresh } from "../icons.js";
 import { useI18n } from "../i18n/index.js";
 
@@ -37,6 +37,7 @@ export function Tasks({
   }, [loadedTasks, onCounts]);
   const [selected, setSelected] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [taskToCancel, setTaskToCancel] = useState<{ id: string; title: string } | null>(null);
 
   const inner = (
     <>
@@ -112,22 +113,7 @@ export function Tasks({
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (
-                              !window.confirm(
-                                tr(`Cancel "${task.title}"?`, `Annuler "${task.title}" ?`),
-                              )
-                            )
-                              return;
-                            void api
-                              .cancelTask(task.id)
-                              .then(() => state.reload())
-                              .catch((cause: unknown) =>
-                                setActionError(
-                                  cause instanceof Error
-                                    ? cause.message
-                                    : tr("Cancellation failed.", "Échec de l'annulation."),
-                                ),
-                              );
+                            setTaskToCancel({ id: task.id, title: task.title });
                           }}
                         >
                           {tr("Cancel", "Annuler")}
@@ -147,6 +133,32 @@ export function Tasks({
           )
         }
       </Section>
+
+      <ConfirmModal
+        isOpen={taskToCancel !== null}
+        title={tr("Cancel Task", "Annuler la tâche")}
+        message={tr(
+          `Cancel "${taskToCancel?.title ?? ""}"?`,
+          `Annuler "${taskToCancel?.title ?? ""}" ?`,
+        )}
+        danger={true}
+        onConfirm={() => {
+          if (!taskToCancel) return;
+          const tid = taskToCancel.id;
+          setTaskToCancel(null);
+          void api
+            .cancelTask(tid)
+            .then(() => state.reload())
+            .catch((cause: unknown) =>
+              setActionError(
+                cause instanceof Error
+                  ? cause.message
+                  : tr("Cancellation failed.", "Échec de l'annulation."),
+              ),
+            );
+        }}
+        onCancel={() => setTaskToCancel(null)}
+      />
     </>
   );
 

@@ -336,6 +336,9 @@ export function Agents({ api }: { api: DashboardApi }) {
     setEditAdditionalDirs(profile.additional_dirs.join("\n"));
     setEditConfigOptions(JSON.stringify(profile.config_options, null, 2));
     setTestResult(null);
+    setTimeout(() => {
+      document.getElementById("agent-edit-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   };
 
   const saveProfile = (): void => {
@@ -594,7 +597,7 @@ export function Agents({ api }: { api: DashboardApi }) {
       </div>
 
       {editing === null ? null : (
-        <section className="settings-panel">
+        <section id="agent-edit-panel" className="settings-panel">
           <div className="settings-panel-heading">
             <div>
               <h3>

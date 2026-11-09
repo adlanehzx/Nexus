@@ -8,7 +8,7 @@ import type {
   WorktreeStatusDto,
 } from "../../lib/api.js";
 import { formatAge } from "../../lib/format.js";
-import { Empty, Metric, Section, State, Table, useSection } from "../parts.js";
+import { Empty, Metric, Section, State, Table, useSection, ConfirmModal, Modal } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
 import { IconCheck, IconWarning, IconArrowRight, IconEye } from "../icons.js";
 
@@ -41,6 +41,22 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
   // Feedback notifications
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
+
+  // Modals state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+
+  const [handoffModal, setHandoffModal] = useState<{
+    isOpen: boolean;
+    worktree: WorktreeDto | null;
+  }>({ isOpen: false, worktree: null });
+  const [handoffBranch, setHandoffBranch] = useState("master");
+  const [handoffCommitMsg, setHandoffCommitMsg] = useState("");
 
   const notifySuccess = (msg: string) => {
     setBannerError(null);
@@ -83,23 +99,22 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
     }
   };
 
-  const handleHandoff = async (wt: WorktreeDto) => {
-    const targetBranch = globalThis.prompt(
-      tr("Target branch to handoff into:", "Branche cible pour le handoff :"),
-      "master",
-    );
-    if (!targetBranch) return;
-    const commitMsg = globalThis.prompt(
-      tr("Handoff commit message:", "Message de commit pour le handoff :"),
-      `feat(handoff): merge worktree ${wt.branch}`,
-    );
-    if (!commitMsg) return;
+  const handleHandoff = (wt: WorktreeDto) => {
+    setHandoffBranch("master");
+    setHandoffCommitMsg(`feat(handoff): merge worktree ${wt.branch}`);
+    setHandoffModal({ isOpen: true, worktree: wt });
+  };
+
+  const submitHandoff = async () => {
+    const wt = handoffModal.worktree;
+    if (!wt || !handoffBranch.trim() || !handoffCommitMsg.trim()) return;
+    setHandoffModal({ isOpen: false, worktree: null });
 
     try {
       const res = await api.handoffWorktree({
         worktreePath: wt.path,
-        targetBranch,
-        commitMessage: commitMsg,
+        targetBranch: handoffBranch.trim(),
+        commitMessage: handoffCommitMsg.trim(),
       });
       if (res.success) {
         notifySuccess(
@@ -115,57 +130,62 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
     }
   };
 
-  const handleRemoveWorktree = async (wt: WorktreeDto) => {
-    if (
-      !globalThis.confirm(
-        tr(`Delete worktree at ${wt.path}?`, `Supprimer le worktree à ${wt.path} ?`),
-      )
-    )
-      return;
-    try {
-      await api.removeWorktree({
-        workspaceRoot: ".",
-        worktreePath: wt.path,
-        force: true,
-      });
-      notifySuccess(tr("Worktree pruned.", "Worktree supprimé."));
-      if (inspectedStatus?.path === wt.path) setInspectedStatus(null);
-      worktreesState.reload();
-    } catch (e) {
-      notifyError(e);
-    }
+  const handleRemoveWorktree = (wt: WorktreeDto) => {
+    setConfirmModal({
+      isOpen: true,
+      title: tr("Delete Worktree", "Supprimer le worktree"),
+      message: tr(`Delete worktree at ${wt.path}?`, `Supprimer le worktree à ${wt.path} ?`),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api.removeWorktree({
+            workspaceRoot: ".",
+            worktreePath: wt.path,
+            force: true,
+          });
+          notifySuccess(tr("Worktree pruned.", "Worktree supprimé."));
+          if (inspectedStatus?.path === wt.path) setInspectedStatus(null);
+          worktreesState.reload();
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
   };
 
   // Checkpoints actions
-  const handleRestoreTurn = async (turn: number) => {
-    if (
-      !globalThis.confirm(
-        tr(
-          `Rollback workspace to Turn #${turn}? Any unsaved changes in current turn will be safely backed up and wiped.`,
-          `Revenir au Tour #${turn} ? Toutes les modifications non sauvegardées du tour actuel seront archivées de secours puis réinitialisées.`,
-        ),
-      )
-    )
-      return;
-
-    try {
-      const res = await api.restoreCheckpoint(threadId, { turnCount: turn, cwd: "." });
-      if (res.success) {
-        notifySuccess(
-          tr(
-            `Restored workspace to Turn #${res.restoredTurnCount}.`,
-            `Espace de travail restauré au Tour #${res.restoredTurnCount}.`,
-          ),
-        );
-        checkpointsState.reload();
-      } else {
-        notifyError(
-          tr("Rollback returned no changes.", "Le rollback n'a produit aucun changement."),
-        );
-      }
-    } catch (e) {
-      notifyError(e);
-    }
+  const handleRestoreTurn = (turn: number) => {
+    setConfirmModal({
+      isOpen: true,
+      title: tr("Rollback Workspace", "Restaurer l'espace de travail"),
+      message: tr(
+        `Rollback workspace to Turn #${turn}? Any unsaved changes in current turn will be safely backed up and wiped.`,
+        `Revenir au Tour #${turn} ? Toutes les modifications non sauvegardées du tour actuel seront archivées de secours puis réinitialisées.`,
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await api.restoreCheckpoint(threadId, { turnCount: turn, cwd: "." });
+          if (res.success) {
+            notifySuccess(
+              tr(
+                `Restored workspace to Turn #${res.restoredTurnCount}.`,
+                `Espace de travail restauré au Tour #${res.restoredTurnCount}.`,
+              ),
+            );
+            checkpointsState.reload();
+          } else {
+            notifyError(
+              tr("Rollback returned no changes.", "Le rollback n'a produit aucun changement."),
+            );
+          }
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
   };
 
   const handleInspectDiff = async (turn: number) => {
@@ -207,14 +227,22 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
     }
   };
 
-  const handleUnlink = async (link: SourceControlLinkDto) => {
-    if (!globalThis.confirm(tr("Unlink this PR?", "Détacher cette PR ?"))) return;
-    try {
-      await api.unlinkPullRequest(link.id);
-      scLinksState.reload();
-    } catch (e) {
-      notifyError(e);
-    }
+  const handleUnlink = (link: SourceControlLinkDto) => {
+    setConfirmModal({
+      isOpen: true,
+      title: tr("Unlink PR", "Détacher la PR"),
+      message: tr("Unlink this PR?", "Détacher cette PR ?"),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await api.unlinkPullRequest(link.id);
+          scLinksState.reload();
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
   };
 
   return (
@@ -784,6 +812,81 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
           )}
         </Section>
       )}
+
+      {/* Confirm Action Dialog */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Worktree Handoff Modal */}
+      <Modal
+        title={tr("Worktree Handoff", "Handoff du Worktree")}
+        isOpen={handoffModal.isOpen}
+        onClose={() => setHandoffModal({ isOpen: false, worktree: null })}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <label>
+            <span
+              style={{
+                display: "block",
+                fontSize: "0.85rem",
+                marginBottom: "4px",
+                color: "var(--nx-text-muted)",
+              }}
+            >
+              {tr("Target branch to handoff into:", "Branche cible pour le handoff :")}
+            </span>
+            <input
+              type="text"
+              className="field"
+              value={handoffBranch}
+              onChange={(e) => setHandoffBranch(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </label>
+          <label>
+            <span
+              style={{
+                display: "block",
+                fontSize: "0.85rem",
+                marginBottom: "4px",
+                color: "var(--nx-text-muted)",
+              }}
+            >
+              {tr("Handoff commit message:", "Message de commit pour le handoff :")}
+            </span>
+            <input
+              type="text"
+              className="field"
+              value={handoffCommitMsg}
+              onChange={(e) => setHandoffCommitMsg(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </label>
+          <div className="nexus-modal-footer">
+            <button
+              type="button"
+              className="button secondary compact"
+              onClick={() => setHandoffModal({ isOpen: false, worktree: null })}
+            >
+              {tr("Cancel", "Annuler")}
+            </button>
+            <button
+              type="button"
+              className="button primary compact"
+              disabled={!handoffBranch.trim() || !handoffCommitMsg.trim()}
+              onClick={() => void submitHandoff()}
+            >
+              {tr("Execute Handoff", "Exécuter le handoff")}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

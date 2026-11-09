@@ -3902,6 +3902,67 @@ tbody tr:last-child td {
   text-transform: none;
 }
 
+.nexus-modal-backdrop {
+  position: fixed;
+  z-index: var(--nx-z-overlay, 1100);
+  display: grid;
+  padding: 1.5rem;
+  inset: 0;
+  place-items: center;
+  background: var(--nx-scrim, rgba(0, 0, 0, 0.75));
+  backdrop-filter: blur(4px);
+}
+.nexus-modal-content {
+  width: min(540px, 100%);
+  max-height: min(85vh, 700px);
+  overflow: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--nx-line-strong, rgba(255, 255, 255, 0.15));
+  border-radius: var(--nx-radius-lg, 10px);
+  background: var(--nx-surface-raised, #0e1726);
+  box-shadow: var(--nx-shadow-overlay, 0 16px 36px rgba(0, 0, 0, 0.5));
+}
+.nexus-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--nx-line, rgba(255, 255, 255, 0.1));
+}
+.nexus-modal-title {
+  margin: 0;
+  color: var(--nx-text);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.nexus-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--nx-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.nexus-modal-close:hover {
+  color: var(--nx-text);
+  background: var(--nx-surface-hover, rgba(255, 255, 255, 0.08));
+}
+.nexus-modal-body {
+  margin-bottom: 1.25rem;
+  color: var(--nx-text);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.nexus-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    Responsive
    ─────────────────────────────────────────────────────────────────────────── */
