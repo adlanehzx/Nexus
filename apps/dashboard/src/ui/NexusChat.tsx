@@ -637,14 +637,14 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                 onClick={() =>
                   setDraft(
                     tr(
-                      "Scan career opportunities and summarize top research positions",
-                      "Scanner les opportunités de carrière et résumer les meilleures thèses",
+                      "Analyze project architecture and identify critical modules",
+                      "Analyser l'architecture du projet et identifier les modules critiques",
                     ),
                   )
                 }
               >
                 <IconTarget size={14} />
-                <span>{tr("Scan career opportunities", "Scanner les opportunités")}</span>
+                <span>{tr("Analyze architecture", "Analyser l'architecture")}</span>
               </button>
               <button
                 type="button"
