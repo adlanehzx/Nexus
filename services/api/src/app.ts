@@ -267,6 +267,11 @@ export async function buildApp(options: BuildAppOptions) {
     transform: jsonSchemaTransform,
   });
 
+  // Unversioned fallback redirect so requests to /devices/* gracefully reach /api/v1/devices/*
+  app.all("/devices/*", async (request, reply) => {
+    return reply.redirect(`/api/v1${request.url}`, 307);
+  });
+
   // Liveness probe, unversioned: belongs to infrastructure, not the API's public contract.
   await app.register(healthRoutes);
 

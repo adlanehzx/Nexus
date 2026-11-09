@@ -12,6 +12,7 @@ import { ValidationError } from "@nexus/shared";
 import { assertOwnedBy, currentUser } from "../../plugins/authentication.js";
 import { ok, okSchema, listSchema, paginationQuerySchema } from "../../lib/response.js";
 import { NotFoundError, paginate } from "../../services/stores.js";
+import { FireTvService, actionSchema, ACTION_KEYS } from "../../services/fire-tv.js";
 
 /**
  * Devices, device sessions, capabilities.
@@ -709,6 +710,310 @@ export const deviceRoutes: FastifyPluginCallback = (fastify, _options, done) => 
       return ok({ closed }, request.id);
     },
   );
+
+  app.post(
+    "/devices/fire-tv/remote",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Direct Fire TV remote control key execution",
+        body: z.object({
+          action: actionSchema,
+          serial: z.string().optional(),
+        }),
+        response: {
+          200: okSchema(
+            z.object({
+              action: z.string(),
+              delivered: z.boolean(),
+              key: z.string().optional(),
+              error: z.string().optional(),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const serial =
+        request.body.serial ??
+        app.config.FIRE_TV_ADB_SERIAL ??
+        "192.168.1.120:5555";
+      const service = new FireTvService(serial, app.config.FIRE_TV_ADB_SERVER);
+      try {
+        const result = await service.control(request.body.action);
+        return ok(
+          {
+            action: result.action,
+            delivered: true,
+            key: ACTION_KEYS[request.body.action],
+          },
+          request.id,
+        );
+      } catch (err) {
+        request.log.warn(
+          { err, action: request.body.action, serial },
+          "Fire TV ADB dispatch warning",
+        );
+        return ok(
+          {
+            action: request.body.action,
+            delivered: false,
+            key: ACTION_KEYS[request.body.action],
+            error: err instanceof Error ? err.message : String(err),
+          },
+          request.id,
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/devices/topology",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["devices"],
+        summary: "Returns smart home topology grouped by rooms and zones",
+        response: {
+          200: okSchema(
+            z.object({
+              rooms: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  deviceCount: z.number(),
+                  onlineCount: z.number(),
+                  devices: z.array(
+                    z.object({
+                      id: z.string(),
+                      name: z.string(),
+                      kind: z.enum(["device", "satellite"]),
+                      type: z.string(),
+                      platform: z.string().optional(),
+                      role: z.string().optional(),
+                      online: z.boolean(),
+                      status: z.string(),
+                      capabilities: z.array(z.string()),
+                    }),
+                  ),
+                }),
+              ),
+              devices: z.array(
+                z.object({
+                  id: z.string(),
+                  name: z.string(),
+                  kind: z.enum(["device", "satellite"]),
+                  room: z.string(),
+                  type: z.string(),
+                  platform: z.string().optional(),
+                  role: z.string().optional(),
+                  online: z.boolean(),
+                  status: z.string(),
+                  capabilities: z.array(z.string()),
+                  lastSeenAt: z.string().nullable(),
+                }),
+              ),
+              summary: z.object({
+                totalRooms: z.number(),
+                totalDevices: z.number(),
+                onlineDevices: z.number(),
+                satelliteCount: z.number(),
+              }),
+            }),
+          ),
+        },
+      },
+    },
+    async (request) => {
+      const { userId } = currentUser(request);
+      const userDevices = await app.services.deviceRegistry.listDevices(userId);
+      const userSatellites = app.satellites
+        ? app.satellites.list().filter((s) => app.satellites.isOwnedBy(s.deviceId, userId))
+        : [];
+
+      const DEFAULT_ROOMS = [
+        "Salon",
+        "Bureau",
+        "Cuisine",
+        "Chambre",
+        "Entrée",
+        "Atelier",
+      ];
+
+      function determineRoom(name: string, health: Record<string, unknown> = {}): string {
+        if (typeof health.room === "string" && health.room.trim().length > 0) {
+          return health.room.trim();
+        }
+        for (const r of DEFAULT_ROOMS) {
+          if (name.toLowerCase().includes(r.toLowerCase())) return r;
+        }
+        return "Salon";
+      }
+
+      const roomMap = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          deviceCount: number;
+          onlineCount: number;
+          devices: Array<{
+            id: string;
+            name: string;
+            kind: "device" | "satellite";
+            type: string;
+            platform?: string;
+            role?: string;
+            online: boolean;
+            status: string;
+            capabilities: string[];
+          }>;
+        }
+      >();
+
+      for (const r of DEFAULT_ROOMS) {
+        roomMap.set(r, {
+          id: r.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+          name: r,
+          deviceCount: 0,
+          onlineCount: 0,
+          devices: [],
+        });
+      }
+
+      const flatDevices: Array<{
+        id: string;
+        name: string;
+        kind: "device" | "satellite";
+        room: string;
+        type: string;
+        platform?: string;
+        role?: string;
+        online: boolean;
+        status: string;
+        capabilities: string[];
+        lastSeenAt: string | null;
+      }> = [];
+
+      let onlineTotal = 0;
+
+      for (const dev of userDevices) {
+        const roomName = determineRoom(dev.name, dev.health as Record<string, unknown>);
+        const isOnline = dev.status === "ONLINE";
+        if (isOnline) onlineTotal++;
+
+        const entry = {
+          id: dev.id,
+          name: dev.name,
+          kind: "device" as const,
+          room: roomName,
+          type: dev.type,
+          platform: dev.platform,
+          role: dev.role,
+          online: isOnline,
+          status: dev.status,
+          capabilities: dev.capabilities.filter((c) => c.enabled).map((c) => c.name),
+          lastSeenAt: dev.lastSeenAt ? dev.lastSeenAt.toISOString() : null,
+        };
+        flatDevices.push(entry);
+
+        if (!roomMap.has(roomName)) {
+          roomMap.set(roomName, {
+            id: roomName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+            name: roomName,
+            deviceCount: 0,
+            onlineCount: 0,
+            devices: [],
+          });
+        }
+        const room = roomMap.get(roomName)!;
+        room.deviceCount++;
+        if (isOnline) room.onlineCount++;
+        room.devices.push({
+          id: entry.id,
+          name: entry.name,
+          kind: entry.kind,
+          type: entry.type,
+          platform: entry.platform,
+          role: entry.role,
+          online: entry.online,
+          status: entry.status,
+          capabilities: entry.capabilities,
+        });
+      }
+
+      for (const sat of userSatellites) {
+        const roomName = determineRoom(sat.name, sat.health);
+        const isOnline = sat.online;
+        if (isOnline) onlineTotal++;
+
+        const capNames: string[] = Array.isArray(sat.capabilities)
+          ? sat.capabilities.map((c: unknown) =>
+              typeof c === "string"
+                ? c
+                : typeof c === "object" && c !== null && "name" in c
+                  ? String((c as { name: unknown }).name)
+                  : String(c),
+            )
+          : [];
+
+        const entry = {
+          id: sat.deviceId,
+          name: sat.name,
+          kind: "satellite" as const,
+          room: roomName,
+          type: "ESP32_SATELLITE",
+          platform: "ESP32",
+          role: "VOICE_SATELLITE",
+          online: isOnline,
+          status: isOnline ? "ONLINE" : "OFFLINE",
+          capabilities: capNames,
+          lastSeenAt: typeof sat.lastSeenAt === "string" ? sat.lastSeenAt : null,
+        };
+        flatDevices.push(entry);
+
+        if (!roomMap.has(roomName)) {
+          roomMap.set(roomName, {
+            id: roomName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+            name: roomName,
+            deviceCount: 0,
+            onlineCount: 0,
+            devices: [],
+          });
+        }
+        const room = roomMap.get(roomName)!;
+        room.deviceCount++;
+        if (isOnline) room.onlineCount++;
+        room.devices.push({
+          id: entry.id,
+          name: entry.name,
+          kind: entry.kind,
+          type: entry.type,
+          platform: entry.platform,
+          role: entry.role,
+          online: entry.online,
+          status: entry.status,
+          capabilities: entry.capabilities,
+        });
+      }
+
+      return ok(
+        {
+          rooms: Array.from(roomMap.values()),
+          devices: flatDevices,
+          summary: {
+            totalRooms: roomMap.size,
+            totalDevices: flatDevices.length,
+            onlineDevices: onlineTotal,
+            satelliteCount: userSatellites.length,
+          },
+        },
+        request.id,
+      );
+    },
+  );
+
   done();
 };
 
