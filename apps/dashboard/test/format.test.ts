@@ -183,6 +183,9 @@ describe("formatting", () => {
     expect(formatDuration(450)).toBe("450 ms");
     expect(formatDuration(4_200)).toBe("4.2 s");
     expect(formatDuration(125_000)).toBe("2 min 5 s");
+    // Seconds that round up to 60 must carry into the minutes.
+    expect(formatDuration(119_600)).toBe("2 min 0 s");
+    expect(formatDuration(59_999)).toBe("1 min 0 s");
   });
 
   it("formats relative timestamps readably", () => {

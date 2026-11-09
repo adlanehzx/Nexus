@@ -165,6 +165,32 @@ export function IconCheck({ size = 16, color, style, className }: IconProps) {
   );
 }
 
+export function IconChevronRight({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+export function IconChevronDown({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+/** Return / Enter key glyph (corner down-left arrow). */
+export function IconCornerDownLeft({ size = 16, color, style, className }: IconProps) {
+  return (
+    <svg {...baseProps(size, color, style, className)}>
+      <polyline points="9 10 4 15 9 20" />
+      <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+    </svg>
+  );
+}
+
 export function IconClose({ size = 16, color, style, className }: IconProps) {
   return (
     <svg {...baseProps(size, color, style, className)}>

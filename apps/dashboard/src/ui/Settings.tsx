@@ -169,7 +169,7 @@ export function Settings({
           style={{
             display: "flex",
             gap: "0.5rem",
-            borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
+            borderBottom: "1px solid var(--nx-line)",
             paddingBottom: "0.75rem",
             marginBottom: "1.75rem",
             flexWrap: "wrap",
@@ -187,9 +187,9 @@ export function Settings({
               alignItems: "center",
               ...(activeTab === "preferences"
                 ? {
-                    borderColor: "var(--nx-signal, #00f0ff)",
-                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                    color: "var(--nx-signal, #00f0ff)",
+                    borderColor: "var(--nx-signal)",
+                    background: "var(--nx-signal-muted)",
+                    color: "var(--nx-signal)",
                   }
                 : {}),
             }}
@@ -209,9 +209,9 @@ export function Settings({
               alignItems: "center",
               ...(activeTab === "shortcuts"
                 ? {
-                    borderColor: "var(--nx-signal, #00f0ff)",
-                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                    color: "var(--nx-signal, #00f0ff)",
+                    borderColor: "var(--nx-signal)",
+                    background: "var(--nx-signal-muted)",
+                    color: "var(--nx-signal)",
                   }
                 : {}),
             }}
@@ -231,9 +231,9 @@ export function Settings({
               alignItems: "center",
               ...(activeTab === "engine"
                 ? {
-                    borderColor: "var(--nx-signal, #00f0ff)",
-                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                    color: "var(--nx-signal, #00f0ff)",
+                    borderColor: "var(--nx-signal)",
+                    background: "var(--nx-signal-muted)",
+                    color: "var(--nx-signal)",
                   }
                 : {}),
             }}
@@ -253,9 +253,9 @@ export function Settings({
               alignItems: "center",
               ...(activeTab === "secrets"
                 ? {
-                    borderColor: "var(--nx-signal, #00f0ff)",
-                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                    color: "var(--nx-signal, #00f0ff)",
+                    borderColor: "var(--nx-signal)",
+                    background: "var(--nx-signal-muted)",
+                    color: "var(--nx-signal)",
                   }
                 : {}),
             }}
@@ -275,9 +275,9 @@ export function Settings({
               alignItems: "center",
               ...(activeTab === "backup"
                 ? {
-                    borderColor: "var(--nx-signal, #00f0ff)",
-                    background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                    color: "var(--nx-signal, #00f0ff)",
+                    borderColor: "var(--nx-signal)",
+                    background: "var(--nx-signal-muted)",
+                    color: "var(--nx-signal)",
                   }
                 : {}),
             }}
@@ -1191,9 +1191,9 @@ function SecretsForm({
       {names.length === 0 ? (
         <p className="empty-state">{tr("No secrets stored.", "Aucun secret stocké.")}</p>
       ) : (
-        <ul>
+        <ul className="secret-list">
           {names.map((item) => (
-            <li key={item}>
+            <li className="secret-row" key={item}>
               <code>vault://nexus/{item}</code>{" "}
               <button
                 className="button danger"

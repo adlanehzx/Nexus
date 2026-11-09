@@ -1,0 +1,84 @@
+/*
+ * Colour themes — per-mode accent mapping.
+ *
+ * `lib/color-theme.ts` publishes each theme's palettes as
+ * `--nx-theme-{accent,accent-hover,signal}-{light,dark}` on <html>. This file
+ * is the only place that maps them onto the design tokens, because only CSS can
+ * react to the light/dark mode (the `data-theme` attribute and the OS
+ * `prefers-color-scheme` query) without JavaScript.
+ *
+ * Selector specificity mirrors @nexus/design/tokens.css so each block wins over
+ * the token defaults it replaces:
+ *   light      :root[data-color-theme]                                  (0,2,0)
+ *   dark       :root[data-theme="dark"][data-color-theme]               (0,3,0)
+ *   OS dark    :root:not([data-theme="light"])[data-color-theme]        (0,3,0)
+ *
+ * Derived tokens (muted fill, border line) are mixed from the accent so they
+ * follow the theme instead of staying on the default blue.
+ */
+
+/*
+ * Legacy token aliases.
+ *
+ * Several components reference ad-hoc names (`--nx-text-primary`,
+ * `--color-muted`, …) that the design system never defined. Each `var()` then
+ * fell back to a literal written for a dark canvas — near-white text on a
+ * white card in light mode. Pointing the names at the real tokens makes every
+ * such use follow the active mode and theme; the literal fallbacks stay inert.
+ */
+:root {
+  --nx-text-primary: var(--nx-text);
+  --nx-text-subtle: var(--nx-text-faint);
+  --nx-muted: var(--nx-text-muted);
+  --nx-font-heading: var(--nx-font-display);
+  --color-muted: var(--nx-text-muted);
+  --color-success: var(--nx-ok);
+  --color-warning: var(--nx-warn);
+  --color-error: var(--nx-danger);
+  --color-danger: var(--nx-danger);
+  --color-accent: var(--nx-signal);
+  --color-brand-cyan: var(--nx-signal);
+  --color-bg-subtle: var(--nx-surface-hover);
+  --accent-color: var(--nx-signal);
+  --border-color: var(--nx-line);
+  --border-subtle: var(--nx-line);
+  --code-bg: var(--nx-canvas-sunken);
+  --success: var(--nx-ok);
+  --warn: var(--nx-warn);
+  --warning: var(--nx-warn);
+}
+
+:root[data-color-theme] {
+  --nx-accent: var(--nx-theme-accent-light);
+  --nx-accent-hover: var(--nx-theme-accent-hover-light);
+  --nx-accent-muted: color-mix(in srgb, var(--nx-theme-accent-light) 10%, transparent);
+  --nx-accent-line: color-mix(in srgb, var(--nx-theme-accent-light) 38%, transparent);
+  --nx-accent-surface: color-mix(in srgb, var(--nx-theme-accent-light) 12%, transparent);
+  --nx-signal: var(--nx-theme-signal-light);
+  --nx-signal-muted: color-mix(in srgb, var(--nx-theme-signal-light) 12%, transparent);
+  --nx-text-on-accent: #ffffff;
+}
+
+:root[data-theme="dark"][data-color-theme] {
+  --nx-accent: var(--nx-theme-accent-dark);
+  --nx-accent-hover: var(--nx-theme-accent-hover-dark);
+  --nx-accent-muted: color-mix(in srgb, var(--nx-theme-accent-dark) 14%, transparent);
+  --nx-accent-line: color-mix(in srgb, var(--nx-theme-accent-dark) 42%, transparent);
+  --nx-accent-surface: color-mix(in srgb, var(--nx-theme-accent-dark) 16%, transparent);
+  --nx-signal: var(--nx-theme-signal-dark);
+  --nx-signal-muted: color-mix(in srgb, var(--nx-theme-signal-dark) 14%, transparent);
+  --nx-text-on-accent: #04070e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-color-theme] {
+    --nx-accent: var(--nx-theme-accent-dark);
+    --nx-accent-hover: var(--nx-theme-accent-hover-dark);
+    --nx-accent-muted: color-mix(in srgb, var(--nx-theme-accent-dark) 14%, transparent);
+    --nx-accent-line: color-mix(in srgb, var(--nx-theme-accent-dark) 42%, transparent);
+    --nx-accent-surface: color-mix(in srgb, var(--nx-theme-accent-dark) 16%, transparent);
+    --nx-signal: var(--nx-theme-signal-dark);
+    --nx-signal-muted: color-mix(in srgb, var(--nx-theme-signal-dark) 14%, transparent);
+    --nx-text-on-accent: #04070e;
+  }
+}

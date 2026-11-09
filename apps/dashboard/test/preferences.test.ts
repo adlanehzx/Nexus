@@ -86,7 +86,12 @@ describe("NEXUS Preferences & Color Themes", () => {
     applyColorTheme("emerald");
 
     expect(attributes.get("data-color-theme")).toBe("emerald");
-    expect(styleProperties.get("--nx-signal")).toBe(COLOR_THEMES.emerald.signal);
+    // Per-mode palettes: color-themes.css maps them onto --nx-accent / --nx-signal.
+    expect(styleProperties.get("--nx-theme-signal-dark")).toBe(COLOR_THEMES.emerald.dark.signal);
+    expect(styleProperties.get("--nx-theme-signal-light")).toBe(COLOR_THEMES.emerald.light.signal);
+    expect(styleProperties.get("--nx-theme-accent-dark")).toBe(COLOR_THEMES.emerald.dark.accent);
+    expect(styleProperties.get("--nx-theme-accent-light")).toBe(COLOR_THEMES.emerald.light.accent);
+    // The Spatial OS variables keep the brand signal.
     expect(styleProperties.get("--sp-accent")).toBe(COLOR_THEMES.emerald.signal);
     expect(styleProperties.get("--sp-border-active")).toBe(COLOR_THEMES.emerald.signal);
   });
@@ -96,5 +101,46 @@ describe("NEXUS Preferences & Color Themes", () => {
     const active = initColorTheme();
     expect(active).toBe("amber");
     expect(attributes.get("data-color-theme")).toBe("amber");
+  });
+  it("keeps every theme palette at WCAG AA (4.5:1) on its mode's surface ramp", () => {
+    const luminance = (hex: string): number => {
+      const channel = (offset: number): number => {
+        const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+        return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+    };
+    const contrast = (a: string, b: string): number => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // Surfaces from @nexus/design tokens: canvas, surface, raised, active.
+    const surfaces = {
+      light: ["#f4f7fb", "#ffffff", "#e9eff7", "#e3ebf6"],
+      dark: ["#080b11", "#0e131c", "#141b26", "#212b3b"],
+    } as const;
+    const onAccent = { light: "#ffffff", dark: "#04070e" } as const;
+
+    for (const config of Object.values(COLOR_THEMES)) {
+      for (const mode of ["light", "dark"] as const) {
+        const palette = config[mode];
+        for (const surface of surfaces[mode]) {
+          for (const [name, color] of [
+            ["accent", palette.accent],
+            ["accentHover", palette.accentHover],
+            ["signal", palette.signal],
+          ] as const) {
+            expect(
+              contrast(color, surface),
+              `${config.id}/${mode} ${name} ${color} on ${surface}`,
+            ).toBeGreaterThanOrEqual(4.5);
+          }
+        }
+        expect(
+          contrast(onAccent[mode], palette.accent),
+          `${config.id}/${mode} text on accent fill`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 });

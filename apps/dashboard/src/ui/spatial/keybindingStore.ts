@@ -12,6 +12,7 @@ export interface KeybindingDef {
   category: "spaces" | "windows" | "navigation" | "system";
   defaultKeys: string;
   description: string;
+  descriptionEn: string;
 }
 
 export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
@@ -23,6 +24,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "spaces",
     defaultKeys: "Ctrl+1",
     description: "Assistant conversationnel, missions et santé système",
+    descriptionEn: "Conversational assistant, missions and system health",
   },
   {
     id: "space-2",
@@ -31,6 +33,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "spaces",
     defaultKeys: "Ctrl+2",
     description: "Orchestration interactive et graphes DAG",
+    descriptionEn: "Interactive orchestration and DAG graphs",
   },
   {
     id: "space-3",
@@ -39,6 +42,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "spaces",
     defaultKeys: "Ctrl+3",
     description: "Développement T3 Code, agents jumeaux et VCS",
+    descriptionEn: "T3 Code development, twin agents and VCS",
   },
   {
     id: "space-4",
@@ -47,6 +51,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "spaces",
     defaultKeys: "Ctrl+4",
     description: "Topologie des machines, workers et visual control",
+    descriptionEn: "Machine topology, workers and visual control",
   },
   {
     id: "space-5",
@@ -55,6 +60,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "spaces",
     defaultKeys: "Ctrl+5",
     description: "Mémoire sémantique, connaissances et gouvernance",
+    descriptionEn: "Semantic memory, knowledge and governance",
   },
 
   // System & Camera
@@ -65,6 +71,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+0",
     description: "Recentre la caméra sur toutes les fenêtres de l'espace",
+    descriptionEn: "Recenters the camera on every window in the space",
   },
   {
     id: "reset-camera",
@@ -73,6 +80,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Escape",
     description: "Position d'origine 0,0 et zoom 100%",
+    descriptionEn: "Origin position 0,0 and 100% zoom",
   },
   {
     id: "zoom-in",
@@ -81,6 +89,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+=",
     description: "Agrandit le plan spatial",
+    descriptionEn: "Zooms into the spatial plane",
   },
   {
     id: "zoom-out",
@@ -89,6 +98,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+-",
     description: "Dézoome pour vue panoramique",
+    descriptionEn: "Zooms out for a panoramic view",
   },
   {
     id: "command-palette",
@@ -97,6 +107,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+K",
     description: "Recherche instantanée d'espaces, modules et actions",
+    descriptionEn: "Instant search across spaces, modules and actions",
   },
   {
     id: "toggle-os",
@@ -105,6 +116,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+Shift+O",
     description: "Alterne entre le Spatial OS et le Dashboard classique",
+    descriptionEn: "Switches between Spatial OS and the classic Dashboard",
   },
   {
     id: "open-settings",
@@ -113,6 +125,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "system",
     defaultKeys: "Ctrl+,",
     description: "Accès direct au panneau de configuration",
+    descriptionEn: "Direct access to the settings panel",
   },
 
   // Windows & Tiling
@@ -123,6 +136,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "windows",
     defaultKeys: "Ctrl+Enter",
     description: "Maximise la fenêtre active sur l'espace",
+    descriptionEn: "Maximizes the active window in the space",
   },
   {
     id: "close-window",
@@ -131,6 +145,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "windows",
     defaultKeys: "Ctrl+W",
     description: "Ferme la fenêtre ciblée",
+    descriptionEn: "Closes the targeted window",
   },
   {
     id: "toggle-floating",
@@ -139,6 +154,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "windows",
     defaultKeys: "Ctrl+F",
     description: "Change le mode de positionnement de la fenêtre",
+    descriptionEn: "Changes the window positioning mode",
   },
   {
     id: "cycle-tiling",
@@ -147,6 +163,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "windows",
     defaultKeys: "Ctrl+Shift+S",
     description: "Grille, Split horizontal, Split vertical ou Cascade",
+    descriptionEn: "Grid, horizontal split, vertical split or cascade",
   },
   {
     id: "toggle-minimap",
@@ -155,6 +172,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "navigation",
     defaultKeys: "Ctrl+M",
     description: "Bascule la visibilité de la carte radar en bas à droite",
+    descriptionEn: "Toggles the radar minimap in the bottom-right corner",
   },
   {
     id: "cycle-window",
@@ -163,6 +181,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingDef[] = [
     category: "navigation",
     defaultKeys: "Ctrl+Tab",
     description: "Passe à la fenêtre suivante de l'espace actif",
+    descriptionEn: "Moves to the next window in the active space",
   },
 ];
 

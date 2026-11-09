@@ -332,7 +332,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
         style={{
           display: "flex",
           gap: "0.5rem",
-          borderBottom: "1px solid var(--nx-line, rgba(255,255,255,0.12))",
+          borderBottom: "1px solid var(--nx-line)",
           paddingBottom: "0.75rem",
           marginBottom: "1.5rem",
         }}
@@ -346,9 +346,9 @@ export function Mcp({ api }: { api: DashboardApi }) {
           style={
             activeTab === "oauth"
               ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
+                  borderColor: "var(--nx-signal)",
+                  background: "var(--nx-signal-muted)",
+                  color: "var(--nx-signal)",
                 }
               : {}
           }
@@ -368,9 +368,9 @@ export function Mcp({ api }: { api: DashboardApi }) {
           style={
             activeTab === "servers"
               ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
+                  borderColor: "var(--nx-signal)",
+                  background: "var(--nx-signal-muted)",
+                  color: "var(--nx-signal)",
                 }
               : {}
           }
@@ -386,9 +386,9 @@ export function Mcp({ api }: { api: DashboardApi }) {
           style={
             activeTab === "external"
               ? {
-                  borderColor: "var(--nx-signal, #00f0ff)",
-                  background: "var(--nx-signal-muted, rgba(0, 240, 255, 0.12))",
-                  color: "var(--nx-signal, #00f0ff)",
+                  borderColor: "var(--nx-signal)",
+                  background: "var(--nx-signal-muted)",
+                  color: "var(--nx-signal)",
                 }
               : {}
           }
@@ -563,7 +563,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
                 style={{
                   padding: "1rem",
                   marginBottom: "1.2rem",
-                  background: "rgba(255, 255, 255, 0.03)",
+                  background: "var(--nx-surface-hover)",
                   border: "1px solid var(--border-subtle, #333)",
                   borderRadius: "6px",
                   fontSize: "0.85rem",

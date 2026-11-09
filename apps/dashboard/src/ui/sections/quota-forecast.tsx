@@ -11,6 +11,7 @@ import {
 } from "../../lib/usage.js";
 import { Bar, Empty, Section, State, Table, useSection } from "../parts.js";
 import { useI18n } from "../i18n/index.js";
+import { IconChevronDown } from "../icons.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 16. Phase 2: Quota Forecast & Usage Monitoring
@@ -350,7 +351,7 @@ export function QuotaForecast({ api }: { api: DashboardApi }) {
               className={`quota-accordion-arrow ${historyOpen ? "open" : ""}`}
               aria-hidden="true"
             >
-              ▼
+              <IconChevronDown size={14} />
             </span>
             <span className="quota-accordion-title">
               {tr("Detailed Run History", "Historique détaillé des exécutions")}
@@ -802,10 +803,7 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                       <td className="mono">{number(mIn)}</td>
                       <td className="mono">{number(t.outputTokens)}</td>
                       <td className="mono">{cacheRatio} %</td>
-                      <td
-                        className="mono"
-                        style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}
-                      >
+                      <td className="mono" style={{ fontWeight: 600, color: "var(--nx-accent)" }}>
                         ${modelCost.toFixed(4)}
                       </td>
                     </tr>
@@ -832,8 +830,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                     style={{
                       padding: "0.75rem",
                       borderRadius: "6px",
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
+                      background: "var(--nx-surface-hover)",
+                      border: "1px solid var(--nx-line)",
                     }}
                   >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.7 / Opus 5</div>
@@ -851,8 +849,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                     style={{
                       padding: "0.75rem",
                       borderRadius: "6px",
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
+                      background: "var(--nx-surface-hover)",
+                      border: "1px solid var(--nx-line)",
                     }}
                   >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.5 Sonnet</div>
@@ -870,8 +868,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                     style={{
                       padding: "0.75rem",
                       borderRadius: "6px",
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
+                      background: "var(--nx-surface-hover)",
+                      border: "1px solid var(--nx-line)",
                     }}
                   >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>GPT-5 / Codex / Sol</div>
@@ -889,8 +887,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
                     style={{
                       padding: "0.75rem",
                       borderRadius: "6px",
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
+                      background: "var(--nx-surface-hover)",
+                      border: "1px solid var(--nx-line)",
                     }}
                   >
                     <div style={{ fontWeight: 600, marginBottom: "4px" }}>
@@ -1117,10 +1115,7 @@ export function UsageTokens({ api }: { api: DashboardApi }) {
                       <td className="mono">{number(mIn)}</td>
                       <td className="mono">{number(mOut)}</td>
                       <td className="mono">{number(mCache)}</td>
-                      <td
-                        className="mono"
-                        style={{ fontWeight: 600, color: "var(--nx-accent, #38bdf8)" }}
-                      >
+                      <td className="mono" style={{ fontWeight: 600, color: "var(--nx-accent)" }}>
                         {number(mTotal)}
                       </td>
                     </tr>

@@ -33,14 +33,14 @@ export function State({ tone, label }: { tone: string; label: string }) {
   );
 }
 
-export function Bar({ percent }: { percent: number }) {
+export function Bar({ percent, label = "Progress" }: { percent: number; label?: string }) {
   const value = Math.max(0, Math.min(100, percent));
   return (
     <div
       className="gauge"
       title={`${String(value)} %`}
       role="progressbar"
-      aria-label="Usage"
+      aria-label={label}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={value}

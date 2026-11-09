@@ -135,7 +135,7 @@ const dark: Palette = {
 
   text: "#e9eefa",
   textMuted: "#95a3ba",
-  textFaint: "#6a788e",
+  textFaint: "#8594aa",
   textOnAccent: "#04070e",
 
   accent: "#5b9dff",
@@ -190,7 +190,7 @@ const light: Palette = {
 
   text: "#0d1826",
   textMuted: "#4e5d75",
-  textFaint: "#6c7c95",
+  textFaint: "#596880",
   textOnAccent: "#ffffff",
 
   accent: "#1f5fd0",

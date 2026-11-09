@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DashboardApi, TaskDetail, TaskExecution } from "../../lib/api.js";
 import { failedSteps, formatAge, formatDuration, selectedWorkers } from "../../lib/format.js";
 import { Bar, Empty, Section, State, Table, useSection } from "../parts.js";
@@ -9,9 +9,32 @@ import { useI18n } from "../i18n/index.js";
 // 4. Tasks
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?: boolean }) {
+const ACTIVE_TASK_STATUSES: ReadonlySet<string> = new Set([
+  "running",
+  "pending",
+  "waiting_for_confirmation",
+]);
+
+export function Tasks({
+  api,
+  embedded = false,
+  onCounts,
+}: {
+  api: DashboardApi;
+  embedded?: boolean;
+  /** Reports the counts of the list actually rendered, so a parent header cannot disagree with it. */
+  onCounts?: (counts: { running: number; total: number }) => void;
+}) {
   const { tr } = useI18n();
   const state = useSection(() => api.tasks());
+  const loadedTasks = state.data?.tasks;
+  useEffect(() => {
+    if (loadedTasks === undefined || onCounts === undefined) return;
+    onCounts({
+      running: loadedTasks.filter((task) => ACTIVE_TASK_STATUSES.has(task.status)).length,
+      total: loadedTasks.length,
+    });
+  }, [loadedTasks, onCounts]);
   const [selected, setSelected] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -55,7 +78,7 @@ export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?:
                       >
                         {task.title}
                       </button>
-                      <div className="muted mono">
+                      <div className="muted mono task-correlation" title={task.correlationId}>
                         {task.source.toUpperCase()} · {task.correlationId}
                       </div>
                     </td>
@@ -63,7 +86,10 @@ export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?:
                       <State tone={taskTone(task.status)} label={task.status} />
                     </td>
                     <td>
-                      <Bar percent={task.progressPercent} />
+                      <Bar
+                        percent={task.status === "succeeded" ? 100 : task.progressPercent}
+                        label={tr("Task progress", "Progression de la tâche")}
+                      />
                     </td>
                     <td className="muted mono">
                       {task.source === "acp"
@@ -80,10 +106,7 @@ export function Tasks({ api, embedded = false }: { api: DashboardApi; embedded?:
                       )}
                     </td>
                     <td>
-                      {task.source === "device" &&
-                      new Set(["running", "pending", "waiting_for_confirmation"]).has(
-                        task.status,
-                      ) ? (
+                      {task.source === "device" && ACTIVE_TASK_STATUSES.has(task.status) ? (
                         <button
                           className="button danger"
                           type="button"

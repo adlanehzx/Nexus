@@ -310,10 +310,10 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
         {/* Metric 1: Global Health */}
         <div
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--nx-surface-hover)",
             padding: "10px 14px",
             borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid var(--nx-line)",
           }}
         >
           <div
@@ -342,10 +342,10 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
         {/* Metric 2: Daemon State */}
         <div
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--nx-surface-hover)",
             padding: "10px 14px",
             borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid var(--nx-line)",
           }}
         >
           <div
@@ -362,7 +362,7 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
             {daemon?.browser_ready ? (
               <span style={{ color: "var(--color-success, #00e676)" }}>{tr("Ready", "Prêt")}</span>
             ) : daemon?.alive ? (
-              <span style={{ color: "var(--nx-signal, #00f0ff)" }}>
+              <span style={{ color: "var(--nx-signal)" }}>
                 {tr("Connected", "Connecté")}
               </span>
             ) : (
@@ -384,10 +384,10 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
         {/* Metric 3: Chrome Process */}
         <div
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--nx-surface-hover)",
             padding: "10px 14px",
             borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid var(--nx-line)",
           }}
         >
           <div
@@ -416,10 +416,10 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
         {/* Metric 4: Version & Mode */}
         <div
           style={{
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--nx-surface-hover)",
             padding: "10px 14px",
             borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid var(--nx-line)",
           }}
         >
           <div
@@ -461,9 +461,10 @@ function BrowserHealthPanel({ health }: { health: unknown }) {
           style={{
             marginTop: "0.5rem",
             padding: "10px 12px",
-            background: "rgba(0, 0, 0, 0.35)",
+            background: "var(--nx-canvas-sunken)",
+            color: "var(--nx-text)",
             borderRadius: "6px",
-            border: "1px solid rgba(255,255,255,0.06)",
+            border: "1px solid var(--nx-line)",
             overflowX: "auto",
             fontSize: "0.75rem",
             lineHeight: 1.4,

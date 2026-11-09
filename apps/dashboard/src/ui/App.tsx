@@ -437,6 +437,13 @@ function AppContent() {
     if (window.location.hash !== nextHash) window.history.pushState(null, "", nextHash);
   }, []);
 
+  // An unknown or aliased hash resolves to a real section; rewrite the address bar to
+  // match so the URL never claims a page that is not the one on screen.
+  useEffect(() => {
+    const raw = window.location.hash.replace(/^#\/?/, "");
+    if (raw !== "" && raw !== section) window.history.replaceState(null, "", `#/${section}`);
+  }, [section]);
+
   useEffect(() => {
     const syncSection = (): void => setSection(sectionFromHash());
     window.addEventListener("hashchange", syncSection);
@@ -608,8 +615,15 @@ function AppContent() {
     );
   }
 
-  const metaTitle = t(`meta.${section}.title`) ?? PAGE_META[section]?.title ?? section;
-  const metaDescription = t(`meta.${section}.description`) ?? PAGE_META[section]?.description ?? "";
+  // `t()` returns the lookup path itself when a key is missing, so compare against
+  // the path to detect a miss and fall back to the static page metadata.
+  const translateMeta = (field: "title" | "description", fallback: string): string => {
+    const path = `meta.${section}.${field}`;
+    const value = t(path);
+    return value === path ? fallback : value;
+  };
+  const metaTitle = translateMeta("title", PAGE_META[section]?.title ?? section);
+  const metaDescription = translateMeta("description", PAGE_META[section]?.description ?? "");
 
   return (
     <div className="app">

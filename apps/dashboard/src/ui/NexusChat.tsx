@@ -18,6 +18,8 @@ import {
   IconCopy,
   IconRefresh,
   IconStop,
+  IconChevronDown,
+  IconCornerDownLeft,
 } from "./icons.js";
 import { ChatMessageContent } from "./ChatMessageContent.js";
 import { ConversationSidebar } from "./ConversationSidebar.js";
@@ -34,9 +36,12 @@ export interface EngineOption {
   models: { id: string; label: string }[];
 }
 
+type Translate = (enText: string, frText: string) => string;
+
 function modelsForAgent(
   profileId: string,
-  modelName?: string | null,
+  modelName: string | null | undefined,
+  tr: Translate,
 ): { id: string; label: string }[] {
   const norm = profileId.toLowerCase();
   const defModel = modelName ? modelName.toLowerCase() : "";
@@ -44,19 +49,32 @@ function modelsForAgent(
   if (norm.includes("claude")) {
     const isSonnetDefault = defModel.includes("sonnet");
     const isOpusDefault = defModel.includes("opus");
+    const base = modelName ?? "Claude 3.7 Sonnet";
     return [
       {
         id: "auto",
         label: isSonnetDefault
-          ? `Auto (${modelName ?? "Claude 3.7 Sonnet"} - Standard)`
+          ? `Auto (${base} - ${tr("Standard", "Standard")})`
           : isOpusDefault
-            ? `Auto (${modelName ?? "Claude 3 Opus"} - Approfondi)`
-            : `Auto (${modelName ?? "Claude 3.7 Sonnet"} - Par défaut)`,
+            ? `Auto (${modelName ?? "Claude 3 Opus"} - ${tr("In-depth", "Approfondi")})`
+            : `Auto (${base} - ${tr("Default", "Par défaut")})`,
       },
-      { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (Hybride & Raisonnement)" },
-      { id: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet (Production rapide)" },
-      { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku (Ultra rapide)" },
-      { id: "claude-3-opus", label: "Claude 3 Opus (Analyses complexes)" },
+      {
+        id: "claude-3-7-sonnet",
+        label: `Claude 3.7 Sonnet (${tr("Hybrid & reasoning", "Hybride & raisonnement")})`,
+      },
+      {
+        id: "claude-3-5-sonnet",
+        label: `Claude 3.5 Sonnet (${tr("Fast production", "Production rapide")})`,
+      },
+      {
+        id: "claude-3-5-haiku",
+        label: `Claude 3.5 Haiku (${tr("Ultra fast", "Ultra rapide")})`,
+      },
+      {
+        id: "claude-3-opus",
+        label: `Claude 3 Opus (${tr("Complex analysis", "Analyses complexes")})`,
+      },
     ];
   }
   if (norm.includes("codex") || norm.includes("openai")) {
@@ -65,27 +83,45 @@ function modelsForAgent(
       {
         id: "auto",
         label: isO1Default
-          ? `Auto (${modelName ?? "OpenAI o1"} - Raisonnement)`
-          : `Auto (${modelName ?? "GPT-4o"} - Par défaut)`,
+          ? `Auto (${modelName ?? "OpenAI o1"} - ${tr("Reasoning", "Raisonnement")})`
+          : `Auto (${modelName ?? "GPT-4o"} - ${tr("Default", "Par défaut")})`,
       },
-      { id: "gpt-4o", label: "GPT-4o (Polyvalent & Rapide)" },
-      { id: "gpt-4o-mini", label: "GPT-4o mini (Léger & Économique)" },
-      { id: "o1", label: "OpenAI o1 (Raisonnement avancé)" },
-      { id: "o3-mini", label: "OpenAI o3-mini (Raisonnement technique)" },
+      { id: "gpt-4o", label: `GPT-4o (${tr("Versatile & fast", "Polyvalent & rapide")})` },
+      {
+        id: "gpt-4o-mini",
+        label: `GPT-4o mini (${tr("Light & economical", "Léger & économique")})`,
+      },
+      { id: "o1", label: `OpenAI o1 (${tr("Advanced reasoning", "Raisonnement avancé")})` },
+      {
+        id: "o3-mini",
+        label: `OpenAI o3-mini (${tr("Technical reasoning", "Raisonnement technique")})`,
+      },
     ];
   }
   if (norm.includes("gemini") || norm.includes("antigravity") || norm.includes("agy")) {
     return [
-      { id: "auto", label: `Auto (${modelName ?? "Gemini 2.0 Flash"} - Par défaut)` },
-      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Haute vitesse & Multimodal)" },
-      { id: "gemini-2.0-pro-exp", label: "Gemini 2.0 Pro (Raisonnement et code)" },
-      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (Grand contexte)" },
-      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Ultra économique)" },
+      {
+        id: "auto",
+        label: `Auto (${modelName ?? "Gemini 2.0 Flash"} - ${tr("Default", "Par défaut")})`,
+      },
+      {
+        id: "gemini-2.0-flash",
+        label: `Gemini 2.0 Flash (${tr("High speed & multimodal", "Haute vitesse & multimodal")})`,
+      },
+      {
+        id: "gemini-2.0-pro-exp",
+        label: `Gemini 2.0 Pro (${tr("Reasoning & code", "Raisonnement et code")})`,
+      },
+      { id: "gemini-1.5-pro", label: `Gemini 1.5 Pro (${tr("Large context", "Grand contexte")})` },
+      {
+        id: "gemini-1.5-flash",
+        label: `Gemini 1.5 Flash (${tr("Ultra economical", "Ultra économique")})`,
+      },
     ];
   }
   if (norm.includes("grok")) {
     return [
-      { id: "auto", label: `Auto (${modelName ?? "Grok 3"} - Par défaut)` },
+      { id: "auto", label: `Auto (${modelName ?? "Grok 3"} - ${tr("Default", "Par défaut")})` },
       { id: "grok-3", label: "Grok 3 (Deep Thinking)" },
       { id: "grok-2", label: "Grok 2" },
       { id: "grok-beta", label: "Grok Beta" },
@@ -93,56 +129,55 @@ function modelsForAgent(
   }
   if (norm.includes("cursor")) {
     return [
-      { id: "auto", label: `Auto (${modelName ?? "Cursor Fast"} - Par défaut)` },
+      {
+        id: "auto",
+        label: `Auto (${modelName ?? "Cursor Fast"} - ${tr("Default", "Par défaut")})`,
+      },
       {
         id: modelName ?? "cursor-fast",
-        label: modelName ? `${modelName} (Défini)` : "Cursor Fast",
+        label: modelName ? `${modelName} (${tr("Set", "Défini")})` : "Cursor Fast",
       },
     ];
   }
   return [
-    { id: "auto", label: `Auto (${modelName ?? "Défaut agent"})` },
-    { id: modelName ?? "default", label: modelName ?? "Modèle par défaut" },
+    { id: "auto", label: `Auto (${modelName ?? tr("Agent default", "Défaut agent")})` },
+    { id: modelName ?? "default", label: modelName ?? tr("Default model", "Modèle par défaut") },
   ];
 }
 
-function effortsForAgent(profileId: string): {
+function effortsForAgent(
+  profileId: string,
+  tr: Translate,
+): {
   id: "auto" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
   label: string;
 }[] {
   const norm = profileId.toLowerCase();
+  const low = { id: "low" as const, label: tr("Low", "Bas") };
+  const medium = { id: "medium" as const, label: tr("Med", "Moy") };
+  const high = { id: "high" as const, label: tr("High", "Haut") };
+  const xhigh = { id: "xhigh" as const, label: tr("X-High", "X-Haut") };
+  const auto = { id: "auto" as const, label: "Auto" };
   if (norm.includes("codex") || norm.includes("openai")) {
     return [
-      { id: "auto", label: "Auto" },
-      { id: "low", label: "Bas" },
-      { id: "medium", label: "Moy" },
-      { id: "high", label: "Haut" },
-      { id: "xhigh", label: "X-Haut" },
+      auto,
+      low,
+      medium,
+      high,
+      xhigh,
       { id: "max", label: "Max" },
       { id: "ultra", label: "Ultra" },
     ];
   }
   if (norm.includes("claude")) {
-    return [
-      { id: "auto", label: "Auto" },
-      { id: "low", label: "Bas" },
-      { id: "medium", label: "Moy" },
-      { id: "high", label: "Haut" },
-      { id: "xhigh", label: "X-Haut" },
-      { id: "max", label: "Max" },
-    ];
+    return [auto, low, medium, high, xhigh, { id: "max", label: "Max" }];
   }
-  return [
-    { id: "auto", label: "Auto" },
-    { id: "low", label: "Bas" },
-    { id: "medium", label: "Moy" },
-    { id: "high", label: "Haut" },
-  ];
+  return [auto, low, medium, high];
 }
 
 function getEngineIcon(engineId: string, size = 14) {
   if (engineId === "auto") {
-    return <IconBolt size={size} color="var(--nx-accent-line, #38bdf8)" />;
+    return <IconBolt size={size} color="var(--nx-accent)" />;
   }
   const norm = engineId.toLowerCase();
   if (norm.includes("claude") || norm.includes("anthropic")) {
@@ -163,9 +198,9 @@ function getEngineIcon(engineId: string, size = 14) {
     return <IconNvidia size={size} color="#22c55e" />;
   }
   if (norm.startsWith("local:")) {
-    return <IconCpu size={size} color="#a855f7" />;
+    return <IconCpu size={size} color="var(--nx-signal)" />;
   }
-  return <IconBolt size={size} color="var(--nx-accent-line, #38bdf8)" />;
+  return <IconBolt size={size} color="var(--nx-accent)" />;
 }
 
 export function NexusChat({ api }: { api: DashboardApi }) {
@@ -272,10 +307,10 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         for (const profile of agentsRes.value.available) {
           options.push({
             id: `acp:${profile.id}`,
-            label: `${profile.name ?? profile.id} [${profile.model ?? "défaut"}]`,
+            label: `${profile.name ?? profile.id} [${profile.model ?? tr("default", "défaut")}]`,
             category: "acp",
             profileKey: profile.id,
-            models: modelsForAgent(profile.id, profile.model),
+            models: modelsForAgent(profile.id, profile.model, tr),
           });
         }
       } else {
@@ -293,7 +328,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             label: `${p.name} [${p.model}]`,
             category: "acp",
             profileKey: p.id,
-            models: modelsForAgent(p.id, p.model),
+            models: modelsForAgent(p.id, p.model, tr),
           });
         }
       }
@@ -470,10 +505,12 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         className="chat-cockpit-strip"
         style={{
           display: "flex",
+          flexWrap: "wrap",
+          gap: "0.35rem 0.75rem",
           justifyContent: "space-between",
           alignItems: "center",
           padding: "0.5rem 0.25rem 0.75rem",
-          borderBottom: "1px solid rgba(0, 240, 255, 0.15)",
+          borderBottom: "1px solid color-mix(in srgb, var(--nx-signal) 15%, transparent)",
           marginBottom: "0.5rem",
         }}
       >
@@ -487,7 +524,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--accent, #00f0ff)",
+              color: "var(--nx-signal)",
             }}
           >
             {tr(
@@ -501,7 +538,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         </span>
         <div>
           {missionInFlight ? (
-            <span className="hud-telemetry-badge" style={{ borderColor: "var(--accent, #00f0ff)" }}>
+            <span className="hud-telemetry-badge" style={{ borderColor: "var(--nx-signal)" }}>
               <span className="hud-audio-bars">
                 <span className="hud-audio-bar" />
                 <span className="hud-audio-bar" />
@@ -561,15 +598,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         ) : null}
         {chat.entries.length === 0 && chat.transcriptStatus === "ready" ? (
           <div className="chat-welcome">
-            <div
-              className="nexus-mark"
-              style={{
-                boxShadow: "0 0 25px rgba(0, 240, 255, 0.4)",
-                border: "1px solid #00f0ff",
-              }}
-            >
-              N
-            </div>
+            <div className="nexus-mark">N</div>
             <h2>
               <CyberRetypeTitle
                 text={
@@ -671,7 +700,11 @@ export function NexusChat({ api }: { api: DashboardApi }) {
             )}
           </article>
         ))}
-        {chat.error !== null ? <div className="chat-error">{chat.error}</div> : null}
+        {chat.error !== null ? (
+          <div className="chat-error" role="alert">
+            {chat.error}
+          </div>
+        ) : null}
         <div ref={endRef} />
       </div>
 
@@ -684,7 +717,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
         }}
       >
         <textarea
-          aria-label="Mission for NEXUS"
+          aria-label={tr("Mission for NEXUS", "Mission pour NEXUS")}
           value={draft}
           disabled={missionInFlight}
           placeholder={
@@ -755,7 +788,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
               <div className="t3-config-popover" ref={configPanelRef}>
                 <div className="t3-popover-header">
                   <span className="t3-popover-title">
-                    {tr("Configuration de l'IA", "AI Engine & Model")}
+                    {tr("AI Engine & Model", "Configuration de l'IA")}
                   </span>
                   <button
                     type="button"
@@ -765,7 +798,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                       e.stopPropagation();
                       setIsConfigOpen(false);
                     }}
-                    title={tr("Fermer", "Close")}
+                    title={tr("Close", "Fermer")}
+                    aria-label={tr("Close", "Fermer")}
                   >
                     <IconClose size={13} />
                   </button>
@@ -775,7 +809,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   {/* Section 1: Engine */}
                   <div>
                     <div className="t3-popover-section-title">
-                      <span>▾ {tr("Engine:", "Moteur :")}</span>
+                      <IconChevronDown size={12} />
+                      <span>{tr("Engine:", "Moteur :")}</span>
                     </div>
                     <div className="t3-options-list">
                       {engineOptions.map((opt) => {
@@ -788,13 +823,14 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                               : opt.category === "api"
                                 ? "API"
                                 : opt.category === "freellm"
-                                  ? "Gratuit"
+                                  ? tr("Free", "Gratuit")
                                   : "Local";
                         return (
                           <button
                             key={opt.id}
                             type="button"
                             className={`t3-option-item ${isSelected ? "selected" : ""}`}
+                            aria-pressed={isSelected}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -809,9 +845,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                               <span className="t3-option-badge">{badgeText}</span>
-                              {isSelected && (
-                                <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />
-                              )}
+                              {isSelected && <IconCheck size={13} color="var(--nx-accent)" />}
                             </div>
                           </button>
                         );
@@ -823,7 +857,8 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   {currentModels.length > 0 && (
                     <div>
                       <div className="t3-popover-section-title">
-                        <span>▾ {tr("Model:", "Modèle :")}</span>
+                        <IconChevronDown size={12} />
+                        <span>{tr("Model:", "Modèle :")}</span>
                       </div>
                       <div className="t3-options-list">
                         {currentModels.map((m) => {
@@ -833,6 +868,7 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                               key={m.id}
                               type="button"
                               className={`t3-option-item ${isSelected ? "selected" : ""}`}
+                              aria-pressed={isSelected}
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -843,18 +879,14 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                                 <span className="t3-option-icon">
                                   <IconBrain
                                     size={13}
-                                    color={
-                                      isSelected ? "var(--nx-accent-line, #38bdf8)" : "#94a3b8"
-                                    }
+                                    color={isSelected ? "var(--nx-accent)" : "var(--nx-text-muted)"}
                                   />
                                 </span>
                                 <div className="t3-option-text">
                                   <span className="t3-option-name">{m.label}</span>
                                 </div>
                               </div>
-                              {isSelected && (
-                                <IconCheck size={13} color="var(--nx-accent-line, #38bdf8)" />
-                              )}
+                              {isSelected && <IconCheck size={13} color="var(--nx-accent)" />}
                             </button>
                           );
                         })}
@@ -865,26 +897,30 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                   {/* Section 3: Reasoning Effort */}
                   <div>
                     <div className="t3-popover-section-title">
-                      <span>▾ {tr("Effort:", "Effort :")}</span>
+                      <IconChevronDown size={12} />
+                      <span>{tr("Effort:", "Effort :")}</span>
                     </div>
                     <div className="t3-effort-group">
-                      {effortsForAgent(activeEngine?.profileKey ?? selectedEngine).map((eff) => {
-                        const isEffortActive = reasoningEffort === eff.id;
-                        return (
-                          <button
-                            key={eff.id}
-                            type="button"
-                            className={`t3-effort-btn ${isEffortActive ? "active" : ""}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setReasoningEffort(eff.id);
-                            }}
-                          >
-                            {eff.label}
-                          </button>
-                        );
-                      })}
+                      {effortsForAgent(activeEngine?.profileKey ?? selectedEngine, tr).map(
+                        (eff) => {
+                          const isEffortActive = reasoningEffort === eff.id;
+                          return (
+                            <button
+                              key={eff.id}
+                              type="button"
+                              className={`t3-effort-btn ${isEffortActive ? "active" : ""}`}
+                              aria-pressed={isEffortActive}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setReasoningEffort(eff.id);
+                              }}
+                            >
+                              {eff.label}
+                            </button>
+                          );
+                        },
+                      )}
                     </div>
                   </div>
                 </div>
@@ -894,9 +930,15 @@ export function NexusChat({ api }: { api: DashboardApi }) {
 
           <div className="composer-actions">
             <span className="composer-hint">
-              {missionInFlight
-                ? tr("Mission in flight", "Mission en cours d'exécution")
-                : tr("Enter ↵ to send", "Entrée ↵ pour envoyer")}
+              {missionInFlight ? (
+                tr("Mission in flight", "Mission en cours d'exécution")
+              ) : (
+                <>
+                  <kbd>{tr("Enter", "Entrée")}</kbd>
+                  <IconCornerDownLeft size={11} />
+                  <span>{tr("to send", "pour envoyer")}</span>
+                </>
+              )}
             </span>
             {missionInFlight ? (
               <button
@@ -904,9 +946,12 @@ export function NexusChat({ api }: { api: DashboardApi }) {
                 className="composer-stop-btn"
                 onClick={() => history.stopTracked()}
                 aria-label={tr("Stop orchestration", "Arrêter l'orchestration")}
-                title={tr("Interrupt in-flight mission tracking", "Interrompre le suivi de la mission")}
+                title={tr(
+                  "Interrupt in-flight mission tracking",
+                  "Interrompre le suivi de la mission",
+                )}
               >
-                <IconStop size={12} color="#ef4444" />
+                <IconStop size={12} color="var(--nx-danger)" />
                 <span>{tr("Stop", "Arrêter")}</span>
               </button>
             ) : (
@@ -1054,8 +1099,8 @@ function MissionReply({ mission }: { mission: OrchestratedMission }) {
         <div
           style={{
             width: `${String(percent)}%`,
-            background: "linear-gradient(90deg, #00f0ff, #00ff88)",
-            boxShadow: "0 0 10px rgba(0, 240, 255, 0.6)",
+            background: "linear-gradient(90deg, var(--nx-signal), var(--nx-accent))",
+            boxShadow: "0 0 10px color-mix(in srgb, var(--nx-signal) 60%, transparent)",
           }}
         />
       </div>

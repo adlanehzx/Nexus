@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { readSignalRgb, watchThemeChange } from "../lib/theme-rgb.js";
 
 interface Point3D {
   x: number;
@@ -26,6 +27,12 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
     if (!ctx) return;
 
     let animId: number;
+    let signal = readSignalRgb();
+    const stopWatchingTheme = watchThemeChange(() => {
+      signal = readSignalRgb();
+    });
+    const sig = (alpha: number | string): string =>
+      `rgba(${String(signal[0])}, ${String(signal[1])}, ${String(signal[2])}, ${String(alpha)})`;
     let width = (canvas.width = canvas.parentElement?.clientWidth ?? window.innerWidth);
     let height = (canvas.height = canvas.parentElement?.clientHeight ?? 260);
 
@@ -204,7 +211,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
           if (dist < 70) {
             const alpha = (1 - dist / 70) * 0.15;
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(0, 240, 255, ${alpha.toFixed(3)})`;
+            ctx.strokeStyle = sig(alpha.toFixed(3));
             ctx.lineWidth = 0.8;
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
@@ -219,7 +226,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
         const orig = particles[i]!;
         const alpha = Math.max(0.1, Math.min(0.7, 0.4 + (p.z / 200) * 0.3));
         ctx.beginPath();
-        ctx.fillStyle = `rgba(0, 240, 255, ${alpha.toFixed(3)})`;
+        ctx.fillStyle = sig(alpha.toFixed(3));
         ctx.arc(p.x, p.y, orig.radius * p.scale * 0.8, 0, Math.PI * 2);
         ctx.fill();
       }
@@ -239,7 +246,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
 
         ctx.beginPath();
         const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-        grad.addColorStop(0, `rgba(0, 240, 255, ${depthAlpha.toFixed(3)})`);
+        grad.addColorStop(0, sig(depthAlpha.toFixed(3)));
         grad.addColorStop(0.5, `rgba(180, 50, 255, ${depthAlpha.toFixed(3)})`);
         grad.addColorStop(1, `rgba(0, 255, 170, ${depthAlpha.toFixed(3)})`);
         ctx.strokeStyle = grad;
@@ -253,7 +260,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
         const nodeAlpha = Math.max(0.2, Math.min(1, 0.6 + (p.z / 100) * 0.4));
         ctx.beginPath();
         ctx.fillStyle = `rgba(255, 255, 255, ${nodeAlpha.toFixed(3)})`;
-        ctx.shadowColor = "#00f0ff";
+        ctx.shadowColor = sig(1);
         ctx.shadowBlur = 10;
         ctx.arc(p.x, p.y, Math.max(1.5, 3 * p.scale), 0, Math.PI * 2);
         ctx.fill();
@@ -266,7 +273,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
       );
 
       ctx.lineWidth = 0.9;
-      ctx.strokeStyle = "rgba(0, 240, 255, 0.35)";
+      ctx.strokeStyle = sig(0.35);
       for (let i = 0; i < 8; i++) {
         for (let j = i + 1; j < 8; j++) {
           const v1 = innerVertices[i]!;
@@ -288,8 +295,8 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
       const pulseSize = (Math.sin(t * 3) * 0.2 + 0.8) * 8;
       const centerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseSize * 2.5);
       centerGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
-      centerGrad.addColorStop(0.3, "rgba(0, 240, 255, 0.6)");
-      centerGrad.addColorStop(1, "rgba(0, 240, 255, 0)");
+      centerGrad.addColorStop(0.3, sig(0.6));
+      centerGrad.addColorStop(1, sig(0));
       ctx.fillStyle = centerGrad;
       ctx.arc(cx, cy, pulseSize * 2.5, 0, Math.PI * 2);
       ctx.fill();
@@ -301,6 +308,7 @@ export function Futuristic3DCanvas({ className }: { className?: string }) {
 
     return () => {
       cancelAnimationFrame(animId);
+      stopWatchingTheme();
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("mousemove", handleMouseMove);
     };

@@ -563,6 +563,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                               >
                                 <input
                                   type="checkbox"
+                                  aria-label={perm.id}
                                   checked={editingPermissions.includes(perm.id)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
@@ -594,6 +595,7 @@ export function Devices({ api }: { api: DashboardApi }) {
                                 >
                                   <input
                                     type="checkbox"
+                                    aria-label={custom}
                                     checked
                                     onChange={() =>
                                       setEditingPermissions((prev) =>
@@ -608,6 +610,10 @@ export function Devices({ api }: { api: DashboardApi }) {
 
                           <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
                             <input
+                              aria-label={tr(
+                                "Custom (e.g. sensor.custom)",
+                                "Personnalisé (ex: sensor.custom)",
+                              )}
                               className="field"
                               placeholder={tr(
                                 "Custom (e.g. sensor.custom)",
