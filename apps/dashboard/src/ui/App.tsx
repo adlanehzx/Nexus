@@ -534,12 +534,27 @@ function AppContent() {
 
   useEffect(() => {
     let active = true;
-    void session.restore().then((restored) => {
+    void (async () => {
+      const restored = await session.restore();
+      if (!active) return;
+      if (restored) {
+        setAuthenticated(true);
+        setRestoringSession(false);
+        return;
+      }
+      try {
+        const setup = await session.checkSetupStatus();
+        if (active && setup.initialized === false) {
+          setAuthMode("setup");
+        }
+      } catch {
+        // Fall back gracefully to login
+      }
       if (active) {
-        setAuthenticated(restored);
+        setAuthenticated(false);
         setRestoringSession(false);
       }
-    });
+    })();
     return () => {
       active = false;
     };

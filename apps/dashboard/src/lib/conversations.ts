@@ -329,6 +329,13 @@ export class ConversationHistory {
     }
   }
 
+  /** Halts tracking of the currently in-flight mission and releases the composer. */
+  stopTracked(): void {
+    if (this.#state.tracked !== null) {
+      this.#set({ tracked: null });
+    }
+  }
+
   async rename(conversationId: string, title: string): Promise<boolean> {
     const next = title.trim();
     const current = this.#state.conversations.find((item) => item.id === conversationId);

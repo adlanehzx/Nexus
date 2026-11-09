@@ -17,6 +17,7 @@ import {
   IconClose,
   IconCopy,
   IconRefresh,
+  IconStop,
 } from "./icons.js";
 import { ChatMessageContent } from "./ChatMessageContent.js";
 import { ConversationSidebar } from "./ConversationSidebar.js";
@@ -41,45 +42,45 @@ function modelsForAgent(
   const defModel = modelName ? modelName.toLowerCase() : "";
 
   if (norm.includes("claude")) {
+    const isSonnetDefault = defModel.includes("sonnet");
     const isOpusDefault = defModel.includes("opus");
     return [
       {
         id: "auto",
-        label: isOpusDefault
-          ? `Auto (${modelName ?? "Claude Opus"} - Par défaut)`
-          : `Auto (${modelName ?? "Claude Sonnet"} - Par défaut)`,
+        label: isSonnetDefault
+          ? `Auto (${modelName ?? "Claude 3.7 Sonnet"} - Standard)`
+          : isOpusDefault
+            ? `Auto (${modelName ?? "Claude 3 Opus"} - Approfondi)`
+            : `Auto (${modelName ?? "Claude 3.7 Sonnet"} - Par défaut)`,
       },
-      { id: "opus", label: "Claude Opus (Complexe & approfondi)" },
-      { id: "sonnet", label: "Claude Sonnet (Défaut standard)" },
-      { id: "opus[1m]", label: "Claude Opus 1M (Contexte 1M)" },
-      { id: "haiku", label: "Claude Haiku (Ultra rapide)" },
-      { id: "claude-fable-5[1m]", label: "Claude Fable 1M (Tâches extrêmes)" },
+      { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (Hybride & Raisonnement)" },
+      { id: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet (Production rapide)" },
+      { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku (Ultra rapide)" },
+      { id: "claude-3-opus", label: "Claude 3 Opus (Analyses complexes)" },
     ];
   }
   if (norm.includes("codex") || norm.includes("openai")) {
-    const isSolDefault = defModel.includes("sol") || defModel.includes("gpt-5");
-    const isGpt6Default = defModel.includes("gpt-6");
+    const isO1Default = defModel.includes("o1");
     return [
       {
         id: "auto",
-        label: isGpt6Default
-          ? `Auto (${modelName ?? "GPT-6-Astra"} - Par défaut)`
-          : isSolDefault
-            ? `Auto (${modelName ?? "GPT-5.6-Sol"} - Par défaut)`
-            : `Auto (${modelName ?? "Codex"} - Par défaut)`,
+        label: isO1Default
+          ? `Auto (${modelName ?? "OpenAI o1"} - Raisonnement)`
+          : `Auto (${modelName ?? "GPT-4o"} - Par défaut)`,
       },
-      { id: "gpt-6-astra", label: "GPT-6-Astra (Frontier intelligence)" },
-      { id: "gpt-5.6-sol", label: "GPT-5.6-Sol (Modèle de travail standard)" },
-      { id: "gpt-5.6-terra", label: "GPT-5.6-Terra (Équilibré)" },
-      { id: "gpt-5.6-luna", label: "GPT-5.6-Luna (Rapide & efficace)" },
+      { id: "gpt-4o", label: "GPT-4o (Polyvalent & Rapide)" },
+      { id: "gpt-4o-mini", label: "GPT-4o mini (Léger & Économique)" },
+      { id: "o1", label: "OpenAI o1 (Raisonnement avancé)" },
+      { id: "o3-mini", label: "OpenAI o3-mini (Raisonnement technique)" },
     ];
   }
   if (norm.includes("gemini") || norm.includes("antigravity") || norm.includes("agy")) {
     return [
-      { id: "auto", label: `Auto (${modelName ?? "Gemini 3.8 Flash High"} - Par défaut)` },
-      { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash High (Défaut)" },
-      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Raisonnement profond)" },
-      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Rapide)" },
+      { id: "auto", label: `Auto (${modelName ?? "Gemini 2.0 Flash"} - Par défaut)` },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Haute vitesse & Multimodal)" },
+      { id: "gemini-2.0-pro-exp", label: "Gemini 2.0 Pro (Raisonnement et code)" },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (Grand contexte)" },
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Ultra économique)" },
     ];
   }
   if (norm.includes("grok")) {
@@ -892,27 +893,44 @@ export function NexusChat({ api }: { api: DashboardApi }) {
           </div>
 
           <div className="composer-actions">
-            <span className="composer-hint">{tr("Enter ↵ to send", "Entrée ↵ pour envoyer")}</span>
-            <button
-              type="submit"
-              className="composer-send-btn"
-              disabled={missionInFlight || chat.sending || draft.trim().length === 0}
-              aria-label={t("chat.send")}
-            >
-              <span>{t("chat.send")}</span>
-              <svg
-                viewBox="0 0 16 16"
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            <span className="composer-hint">
+              {missionInFlight
+                ? tr("Mission in flight", "Mission en cours d'exécution")
+                : tr("Enter ↵ to send", "Entrée ↵ pour envoyer")}
+            </span>
+            {missionInFlight ? (
+              <button
+                type="button"
+                className="composer-stop-btn"
+                onClick={() => history.stopTracked()}
+                aria-label={tr("Stop orchestration", "Arrêter l'orchestration")}
+                title={tr("Interrupt in-flight mission tracking", "Interrompre le suivi de la mission")}
               >
-                <path d="M8 12V4M4 8l4-4 4 4" />
-              </svg>
-            </button>
+                <IconStop size={12} color="#ef4444" />
+                <span>{tr("Stop", "Arrêter")}</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="composer-send-btn"
+                disabled={chat.sending || draft.trim().length === 0}
+                aria-label={t("chat.send")}
+              >
+                <span>{t("chat.send")}</span>
+                <svg
+                  viewBox="0 0 16 16"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 12V4M4 8l4-4 4 4" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </form>

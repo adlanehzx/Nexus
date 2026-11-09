@@ -327,6 +327,16 @@ describe("sending from a new conversation", () => {
     expect(nexus.created).toBe(1);
   });
 
+  it("stops tracking the in-flight mission when requested", async () => {
+    const nexus = new FakeNexus();
+    const history = await started(nexus);
+    await history.send("Long running mission");
+    expect(history.getSnapshot().tracked).not.toBeNull();
+
+    history.stopTracked();
+    expect(history.getSnapshot().tracked).toBeNull();
+  });
+
   it("keeps the prompt on screen and reports why when dispatch fails", async () => {
     const nexus = new FakeNexus();
     const history = await started(nexus);
