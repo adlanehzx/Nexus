@@ -203,13 +203,21 @@ function getEngineIcon(engineId: string, size = 14) {
   return <IconBolt size={size} color="var(--nx-accent)" />;
 }
 
-export function NexusChat({ api }: { api: DashboardApi }) {
+export interface NexusChatProps {
+  api: DashboardApi;
+  /** Store shared with a host that shows the conversation list itself. */
+  history?: ConversationHistory;
+  /** False when the host renders the conversation list (main navigation sidebar). */
+  showHistory?: boolean;
+}
+
+export function NexusChat({ api, history: sharedHistory, showHistory = true }: NexusChatProps) {
   const { t, locale, tr } = useI18n();
   // The page link names the conversation and the mission in flight, so a
   // reload lands back where it was. Reading it here is free of side effects.
   const history = useMemo(
-    () => new ConversationHistory(api, readChatLocation(window.location.href)),
-    [api],
+    () => sharedHistory ?? new ConversationHistory(api, readChatLocation(window.location.href)),
+    [api, sharedHistory],
   );
   // Same snapshot for a static render: the store holds no browser-only state.
   const chat = useSyncExternalStore(history.subscribe, history.getSnapshot, history.getSnapshot);
@@ -981,6 +989,14 @@ export function NexusChat({ api }: { api: DashboardApi }) {
       </form>
     </section>
   );
+
+  if (!showHistory) {
+    return (
+      <div ref={shellRef} className="nexus-chat-shell history-external">
+        <div className="chat-main">{conversation}</div>
+      </div>
+    );
+  }
 
   return (
     <div

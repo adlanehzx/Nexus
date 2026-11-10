@@ -31,6 +31,8 @@ export interface ConversationSidebarProps {
   collapsed: boolean;
   /** Narrow host: the open panel floats over the chat instead of beside it. */
   overlay: boolean;
+  /** Rendered inside the main navigation sidebar: no collapse toggle, always open. */
+  embedded?: boolean;
   /** Reference instant for the date groups; tests pin it. */
   now?: Date;
   onToggle: () => void;
@@ -124,21 +126,23 @@ export function ConversationSidebar(props: ConversationSidebarProps) {
 
   return (
     <aside
-      className={`chat-history${props.collapsed ? " collapsed" : ""}${props.overlay ? " overlay" : ""}`}
+      className={`chat-history${props.embedded ? " embedded" : ""}${props.collapsed ? " collapsed" : ""}${props.overlay ? " overlay" : ""}`}
       aria-label={tr("Conversation history", "Historique des conversations")}
     >
       <div className="chat-history-header">
-        <button
-          type="button"
-          className="chat-history-icon-btn"
-          onClick={props.onToggle}
-          aria-expanded={!props.collapsed}
-          aria-controls={panelId}
-          aria-label={toggleLabel}
-          title={toggleLabel}
-        >
-          <IconSidebar size={15} />
-        </button>
+        {props.embedded ? null : (
+          <button
+            type="button"
+            className="chat-history-icon-btn"
+            onClick={props.onToggle}
+            aria-expanded={!props.collapsed}
+            aria-controls={panelId}
+            aria-label={toggleLabel}
+            title={toggleLabel}
+          >
+            <IconSidebar size={15} />
+          </button>
+        )}
         {props.collapsed ? null : (
           <span className="chat-history-heading">{tr("Conversations", "Conversations")}</span>
         )}

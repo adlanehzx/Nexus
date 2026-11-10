@@ -1,7 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { SessionManager } from "@nexus/client-core";
 import { DashboardApi, createSession, type SystemPauseState } from "../lib/api.js";
 import { createCareerEducationClient } from "../lib/career-education.js";
+import { ConversationHistory, readChatLocation } from "../lib/conversations.js";
+import { ConversationSidebar } from "./ConversationSidebar.js";
 import { ThemeToggle } from "./ThemeToggle.js";
 import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
@@ -518,6 +528,21 @@ function AppContent() {
     return () => window.removeEventListener("keydown", handleClassicKeyDown, { capture: true });
   }, [authenticated, viewMode, navigate, toggleViewMode, spatialStore]);
 
+  // One conversation store for the whole shell: the main sidebar lists the
+  // conversations and the chat page shows the open one. Recreated per sign-in.
+  const conversationHistory = useMemo(() => {
+    void authenticated; // a new sign-in starts a fresh store
+    return new ConversationHistory(api, readChatLocation(window.location.href));
+  }, [api, authenticated]);
+  const conversations = useSyncExternalStore(
+    conversationHistory.subscribe,
+    conversationHistory.getSnapshot,
+    conversationHistory.getSnapshot,
+  );
+  useEffect(() => {
+    if (authenticated) void conversationHistory.start();
+  }, [authenticated, conversationHistory]);
+
   useEffect(() => {
     if (!authenticated) return;
     let cancelled = false;
@@ -707,6 +732,37 @@ function AppContent() {
                 icon="overview"
                 current={section}
                 onSelect={navigate}
+              />
+            </div>
+          )}
+
+          {rootMode === "supervision" && (
+            <div className="nav-conversations">
+              <ConversationSidebar
+                embedded
+                conversations={conversations.conversations}
+                activeId={section === "chat" ? conversations.activeId : null}
+                busyId={conversations.tracked?.conversationId ?? null}
+                status={conversations.listStatus}
+                error={conversations.listError}
+                hasMore={conversations.listCursor !== null}
+                collapsed={false}
+                overlay={false}
+                onToggle={() => undefined}
+                onNew={() => {
+                  navigate("chat");
+                  void conversationHistory.open(null);
+                }}
+                onSelect={(conversationId) => {
+                  navigate("chat");
+                  void conversationHistory.open(conversationId);
+                }}
+                onRename={(conversationId, title) =>
+                  conversationHistory.rename(conversationId, title)
+                }
+                onDelete={(conversationId) => conversationHistory.remove(conversationId)}
+                onLoadMore={() => void conversationHistory.loadMore()}
+                onRetry={() => void conversationHistory.refresh()}
               />
             </div>
           )}
@@ -961,7 +1017,7 @@ function AppContent() {
         )}
         <Suspense fallback={<SectionLoading />}>
           <div className="section-frame" key={`${section}-${String(refreshKey)}`}>
-            {renderSection(section, api, session, navigate)}
+            {renderSection(section, api, session, navigate, conversationHistory)}
           </div>
         </Suspense>
       </main>
@@ -994,10 +1050,11 @@ function renderSection(
   api: DashboardApi,
   session: SessionManager,
   navigate: (next: SectionId) => void,
+  conversationHistory: ConversationHistory,
 ) {
   switch (section) {
     case "chat":
-      return <NexusChat api={api} />;
+      return <NexusChat api={api} history={conversationHistory} showHistory={false} />;
     case "career-education":
       return <CareerEducation client={createCareerEducationClient(session)} />;
     case "trading-lab":

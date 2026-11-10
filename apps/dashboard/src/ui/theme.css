@@ -6571,3 +6571,38 @@ input[type="radio"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * Conversation history embedded in the main navigation sidebar (supervision
+ * mode): one sidebar for navigation and conversations, the chat page keeps the
+ * full width.
+ */
+.navigation.navigation-supervision {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.nav-conversations {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin-top: var(--nx-space-5);
+}
+.chat-history.embedded {
+  width: 100%;
+  flex: 1;
+  border-right: 0;
+  background: transparent;
+}
+.chat-history.embedded .chat-history-header {
+  padding-inline: var(--nx-space-2);
+}
+.chat-history.embedded .chat-history-panel {
+  min-height: 0;
+  flex: 1;
+}
+.nexus-chat-shell.history-external .chat-main {
+  padding-left: 0;
+}
