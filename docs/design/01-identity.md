@@ -1,5 +1,7 @@
 # NEXUS — Phase 1: visual identity proposals
 
+> **Decision (Phase 2).** The owner chose **C · Cadran, pure** — not the hybrid recommended below. Spatial OS, the seven accent themes, Orbitron and Rajdhani are removed. This document is kept as the record of the three proposals. The final Cadran values, which differ slightly from the ones printed here, are in [`03-design-system.md`](03-design-system.md); the structure is in [`02-ux-architecture.md`](02-ux-architecture.md); [`directions/c-cadran.html`](directions/c-cadran.html) has been rebuilt as the visual reference.
+
 Three directions for the web dashboard, all inside the same brief: futuristic, but sober — precise, legible, confident, almost no glow. The name NEXUS stays; the logo is redrawn in each direction.
 
 Each direction has a self-contained page (no network access needed, fonts embedded) that renders the logo, both palettes, the type scale, the icons, the components, a sample application shell and the motion. Open them in a browser and use the theme and language switches in the top bar:
