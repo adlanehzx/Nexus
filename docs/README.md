@@ -70,7 +70,6 @@ These describe what exists, with the gaps named rather than hidden.
 
 - [Roadmap by phase](ROADMAP.md)
 - [Technical risks](RISKS.md)
-- [Implementation rush coordination](rush/README.md)
 
 ## The guiding principle
 
