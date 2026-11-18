@@ -38,7 +38,7 @@
   "devDependencies": {
     "@babel/plugin-transform-export-namespace-from": "7.27.1",
     "@react-native-community/cli": "20.2.0",
-    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-android": "21.0.0",
     "@react-native/babel-preset": "0.88.1",
     "@react-native/gradle-plugin": "0.88.1",
     "@react-native/metro-config": "0.88.1",
