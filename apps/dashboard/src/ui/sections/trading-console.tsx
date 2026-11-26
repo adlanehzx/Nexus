@@ -111,7 +111,7 @@ export function TradingConsole({
       </h3>
       <div
         role="status"
-        style={{ color: real ? "var(--nx-danger)" : "var(--nx-signal)", fontWeight: 700 }}
+        style={{ color: real ? "var(--nx-danger)" : "var(--nx-accent)", fontWeight: 700 }}
       >
         {real
           ? "RÉEL — capital exposé aux marchés. Les environnements production utilisent de l’argent réel."

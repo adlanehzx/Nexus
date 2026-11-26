@@ -1428,6 +1428,38 @@ class MissionRepository:
             return "timeout", "degraded", 60
         return error[:80], "degraded", 30
 
+    def cancel_mission(self, mission_id: str) -> dict[str, Any]:
+        """Durably fence all unfinished work; completed effects remain recorded.
+
+        A worker holding an external call loses its lease at its next heartbeat.
+        Cancellation cannot undo an external effect that already happened.
+        """
+        current = timestamp()
+        with self.db.transaction(immediate=True) as connection:
+            mission = self._mission_snapshot(connection, mission_id)
+            if mission["state"] in ("succeeded", "failed", "cancelled"):
+                return mission
+            connection.execute(
+                "UPDATE missions SET state='cancelled',updated_at=? WHERE id=?",
+                (current, mission_id),
+            )
+            connection.execute(
+                """UPDATE attempts SET state='cancelled',finished_at=?,updated_at=?,
+                       lease_owner=NULL,lease_token=NULL,lease_expires_at=NULL
+                   WHERE task_id IN (SELECT id FROM tasks WHERE mission_id=?)
+                     AND state IN ('leased','creating','running','awaiting_confirmation')""",
+                (current, current, mission_id),
+            )
+            connection.execute(
+                """UPDATE tasks SET state='cancelled',next_attempt_at=NULL,updated_at=?
+                   WHERE mission_id=? AND state IN
+                     ('blocked','ready','running','retry_wait','awaiting_confirmation')""",
+                (current, mission_id),
+            )
+            self._emit(connection, "mission", mission_id, "mission.cancelled",
+                       f"mission:{mission_id}:cancelled", {"mission_id": mission_id}, current)
+            return self._mission_snapshot(connection, mission_id)
+
     def mission(self, mission_id: str) -> dict[str, Any]:
         with self.db.connect() as connection:
             return self._mission_snapshot(connection, mission_id)

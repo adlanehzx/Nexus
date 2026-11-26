@@ -17,7 +17,7 @@ import { I18nProvider, LanguageSwitch, useI18n } from "./i18n/index.js";
 import { Futuristic3DCanvas } from "./Futuristic3DCanvas.js";
 import { CyberRetypeTitle } from "./CyberRetypeTitle.js";
 import { IconLab, IconSettings, IconStop, IconUsage } from "./icons.js";
-import { NexusLogo } from "./NexusLogo.js";
+import { NexusLogo, type NexusState } from "./NexusLogo.js";
 import { SpatialShell, useSpatialStore } from "./spatial/index.js";
 import { getDigitFromEvent, isEditingText } from "./spatial/keyboardUtils.js";
 
@@ -602,7 +602,7 @@ function AppContent() {
   if (restoringSession) {
     return (
       <main className="session-restoring" role="status" aria-label="Restoring session">
-        <NexusLogo size={48} />
+        <NexusLogo size={48} state="planning" />
       </main>
     );
   }
@@ -647,6 +647,11 @@ function AppContent() {
     );
   }
 
+  // The sidebar logo shows what is actually known here: an engaged emergency stop,
+  // or a mission of this session still in flight. Nothing else is claimed.
+  const logoState: NexusState =
+    systemPause?.paused === true ? "paused" : conversations.tracked !== null ? "executing" : "idle";
+
   // `t()` returns the lookup path itself when a key is missing, so compare against
   // the path to detect a miss and fall back to the static page metadata.
   const translateMeta = (field: "title" | "description", fallback: string): string => {
@@ -663,7 +668,7 @@ function AppContent() {
         {/* Top Header / Mode Switcher */}
         {rootMode === "supervision" ? (
           <button className="nexus-home" type="button" onClick={() => navigate("chat")}>
-            <NexusLogo size={32} />
+            <NexusLogo size={32} state={logoState} />
             <span>
               <strong>NEXUS</strong>
               <small>{t("nav.groups.supervision")}</small>
@@ -1028,7 +1033,7 @@ function AppContent() {
 function FullPageLoading() {
   return (
     <main className="session-restoring" role="status" aria-label="Loading setup">
-      <NexusLogo size={48} />
+      <NexusLogo size={48} state="planning" />
     </main>
   );
 }

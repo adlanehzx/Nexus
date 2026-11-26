@@ -9,8 +9,9 @@ import { syncUserMissionsToRunStore } from "../../services/acp-orchestrator.js";
 const pricing = new PricingCatalog();
 
 /** API-equivalent list price. Never a billed amount; calculates deterministic cost from pricing catalog. */
-function estimateApiCostUsd(bucket: RunUsageBucket): number {
+function estimateApiCostUsd(bucket: RunUsageBucket): number | null {
   const tier = pricing.getPricing(bucket.model);
+  if (!tier) return null;
   const cost = pricing.calculateCostUsd(tier ? tier.modelId : bucket.model, {
     inputTokens: bucket.inputTokens,
     outputTokens: bucket.outputTokens,
@@ -130,6 +131,8 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
                   cacheReadTokens: z.number().nullable(),
                   cacheWriteTokens: z.number().nullable(),
                   estimatedApiCostUsd: z.number().nullable(),
+                  costProvenance: z.enum(["catalog_estimate", "family_estimate", "unavailable"]),
+                  pricingModel: z.string().nullable(),
                 }),
               ),
             }),
@@ -155,6 +158,13 @@ export const usageRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
           buckets: buckets.map((bucket) => ({
             ...bucket,
             estimatedApiCostUsd: estimateApiCostUsd(bucket),
+            costProvenance: !pricing.getPricing(bucket.model)
+              ? ("unavailable" as const)
+              : pricing.getPricing(bucket.model)!.modelId.toLowerCase() ===
+                  bucket.model.toLowerCase()
+                ? ("catalog_estimate" as const)
+                : ("family_estimate" as const),
+            pricingModel: pricing.getPricing(bucket.model)?.modelId ?? null,
           })),
         },
         request.id,

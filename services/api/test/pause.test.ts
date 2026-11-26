@@ -171,6 +171,38 @@ describe("global pause", () => {
     if (after.effect === "deny") expect(after.reason).toContain("paused");
   });
 
+  it("lets a member stop but not resume the global system", async () => {
+    const registered = await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      payload: { email: "member@example.test", displayName: "Member", password: PASSWORD },
+    });
+    const member = registered.json().data.tokens.accessToken as string;
+    const headers = { authorization: `Bearer ${member}` };
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: "/api/v1/pause",
+          headers,
+          payload: { paused: true },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: "/api/v1/pause",
+          headers,
+          payload: { paused: false },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(harness.services.pause.paused).toBe(true);
+    expect((await pause(false)).statusCode).toBe(200);
+  });
+
   it("requires a user", async () => {
     const response = await harness.app.inject({
       method: "POST",

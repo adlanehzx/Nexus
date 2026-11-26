@@ -1,0 +1,177 @@
+/*
+ * The NEXUS mark: an N machined inside an instrument bezel, with one lamp.
+ *
+ * The lamp is the only part that changes, and it says what NEXUS is doing.
+ * Every state also differs by shape (blink, travelling stroke, bar, broken
+ * diagonal, hollow lamp, dashed bezel), so it survives the loss of colour, and
+ * every state has a still frame, so it survives the loss of motion.
+ * Specification: docs/design/03-design-system.md §6.
+ */
+
+.nx-logo {
+  display: inline-block;
+  flex: none;
+  overflow: visible;
+  color: var(--nx-text);
+  vertical-align: middle;
+}
+
+.nx-logo .bezel {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.5;
+}
+
+.nx-logo .n,
+.nx-logo .n-gap {
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 2.5;
+}
+
+.nx-logo .seg {
+  fill: none;
+  opacity: 0;
+  stroke: var(--nx-signal);
+  stroke-linecap: butt;
+  stroke-width: 2.5;
+}
+
+.nx-logo .lamp,
+.nx-logo .lamp-wide {
+  fill: var(--nx-signal);
+}
+
+.nx-logo .n-gap,
+.nx-logo .lamp-wide {
+  display: none;
+}
+
+/* Small cut, 20px and under: heavier strokes, lamp seated in the open corner. */
+.nx-logo.sm .bezel {
+  stroke-linecap: square;
+  stroke-width: 2;
+}
+
+.nx-logo.sm .n,
+.nx-logo.sm .n-gap,
+.nx-logo.sm .seg {
+  stroke-width: 3;
+}
+
+/* planning — a request is out, no plan has come back: the lamp blinks. */
+.nx-logo[data-state="planning"] .lamp {
+  animation: nx-blink var(--nx-blink);
+}
+
+/* executing — the three strokes of the N light in turn. */
+.nx-logo[data-state="executing"] .seg {
+  animation: nx-logo-seg 1.2s steps(1) infinite;
+}
+
+.nx-logo[data-state="executing"] .s2 {
+  animation-delay: 0.4s;
+}
+
+.nx-logo[data-state="executing"] .s3 {
+  animation-delay: 0.8s;
+}
+
+/* waiting — an approval is pending: the lamp becomes an amber bar. */
+.nx-logo[data-state="waiting"] .lamp {
+  display: none;
+}
+
+.nx-logo[data-state="waiting"] .lamp-wide {
+  display: inline;
+  animation: nx-logo-double 2s steps(1) infinite;
+  fill: var(--nx-warn);
+}
+
+/* error — the diagonal is broken; faults never blink. */
+.nx-logo[data-state="error"] .n {
+  display: none;
+}
+
+.nx-logo[data-state="error"] .n-gap {
+  display: inline;
+}
+
+.nx-logo[data-state="error"] .lamp {
+  fill: var(--nx-danger);
+}
+
+/* offline — everything recedes and the lamp is hollow. */
+.nx-logo[data-state="offline"] {
+  color: var(--nx-text-faint);
+}
+
+.nx-logo[data-state="offline"] .lamp {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1;
+}
+
+/* paused — emergency stop engaged: dashed bezel, hollow lamp. */
+.nx-logo[data-state="paused"] .bezel {
+  stroke: var(--nx-danger);
+  stroke-dasharray: 2.4 2.4;
+  stroke-linecap: butt;
+}
+
+.nx-logo[data-state="paused"] .n {
+  stroke: var(--nx-text-faint);
+}
+
+.nx-logo[data-state="paused"] .lamp {
+  fill: none;
+  stroke: var(--nx-danger);
+  stroke-width: 1;
+}
+
+/* success — held two seconds by the caller, then back to idle. */
+.nx-logo[data-state="success"] .lamp {
+  fill: var(--nx-ok);
+}
+
+@keyframes nx-logo-seg {
+  0% {
+    opacity: 1;
+  }
+
+  33.4%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes nx-logo-double {
+  0% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 0.2;
+  }
+
+  78% {
+    opacity: 1;
+  }
+
+  86% {
+    opacity: 0.2;
+  }
+
+  94% {
+    opacity: 1;
+  }
+}
+
+/* Still frames: the diagonal stays lit while executing. */
+@media (prefers-reduced-motion: reduce) {
+  .nx-logo[data-state="executing"] .s2 {
+    opacity: 1;
+  }
+}

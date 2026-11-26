@@ -1,0 +1,36 @@
+/*
+ * Cadran base rules shared by every screen.
+ *
+ * Loaded after the tokens and before the legacy stylesheet. It holds the few
+ * rules the identity needs everywhere, and one interim section that goes away
+ * with the old shell.
+ */
+
+/* The lamp: switches, never fades. Used by anything that is actually running. */
+@keyframes nx-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/*
+ * Interim — removed with the old shell (migration packages S and C).
+ *
+ * These elements show constants as if they were telemetry ("CORE: NOMINAL",
+ * "SYNC 100%", "ONLINE // STANDBY", "API en direct", animated "neural bus"
+ * bars) or invented jargon ("NEURAL LINK // COGNITIVE DISPATCHER"). They are
+ * hidden rather than restyled: a supervision tool must not display a state it
+ * does not measure. The status bar of the new shell replaces them with values
+ * read from the API. The badge shown while a mission is in flight is a real
+ * state and stays visible.
+ */
+/* `:root` raises the specificity above the legacy rules, which load later. */
+:root .header-actions .hud-telemetry-badge,
+:root .hud-telemetry-badge:has(> .system-dot),
+:root .hud-audio-bars,
+:root .radar-pulse-ring,
+:root .cyber-cursor,
+:root .live-pulse-container,
+:root .chat-cockpit-label {
+  display: none;
+}

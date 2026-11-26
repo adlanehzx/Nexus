@@ -167,8 +167,7 @@ export class AuthService {
       throw new SessionRevokedError("session expired");
     }
 
-    await this.#sessions.revoke(session.id, now);
-    return this.#openSession(session.userId);
+    return this.#openSession(session.userId, session.id);
   }
 
   async logout(sessionId: string): Promise<void> {
@@ -201,20 +200,28 @@ export class AuthService {
       : hashPassword(password, this.#passwordParams);
   }
 
-  async #openSession(userId: string): Promise<AuthTokens> {
+  async #openSession(userId: string, previousId?: string): Promise<AuthTokens> {
     const now = this.#now();
     const sessionId = uuidv7();
     const refreshToken = randomBytes(32).toString("base64url");
     const refreshExpiresAt = new Date(now.getTime() + this.#refreshTtlMs);
 
-    await this.#sessions.create({
+    const successor = {
       id: sessionId,
       userId,
       createdAt: now,
       expiresAt: refreshExpiresAt,
       revokedAt: null,
       refreshTokenHash: hashRefreshToken(refreshToken),
-    });
+    };
+    if (previousId !== undefined) {
+      if (!(await this.#sessions.rotate(previousId, now, successor))) {
+        // A losing concurrent request must not revoke the winning successor.
+        throw new SessionRevokedError("refresh token already consumed");
+      }
+    } else {
+      await this.#sessions.create(successor);
+    }
 
     const access = this.#tokens.issueAccessToken({ userId, sessionId });
 

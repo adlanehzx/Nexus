@@ -1,0 +1,49 @@
+/*
+ * IBM Plex — the two families of the Cadran identity.
+ *
+ * Self-hosted: the dashboard's content security policy allows no third-party
+ * origin. Latin subset, which covers French (é, ç, œ, guillemets). The italic
+ * file is fetched only when italic text is actually rendered.
+ *
+ * Licence: SIL Open Font License 1.1 (see THIRD_PARTY_NOTICES.md).
+ */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("../../assets/fonts/IBMPlexSans-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: italic;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("../../assets/fonts/IBMPlexSans-Italic-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../assets/fonts/IBMPlexMono-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../assets/fonts/IBMPlexMono-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../assets/fonts/IBMPlexMono-600.woff2") format("woff2");
+}

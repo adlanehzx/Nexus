@@ -5,6 +5,7 @@ node_modules
 pnpm-lock.yaml
 src/generated
 packages/design/tokens.css
+packages/design/cadran.css
 .venv
 .venv-*
 __pycache__

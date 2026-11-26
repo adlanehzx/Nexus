@@ -341,6 +341,42 @@ export const orchestratorRoutes: FastifyPluginCallback = (fastify, _options, don
     },
   );
 
+  app.post(
+    "/orchestrator/missions/:missionId/cancel",
+    {
+      preHandler: app.requireUser,
+      schema: {
+        tags: ["orchestrator"],
+        params: z.object({ missionId: z.string().uuid() }),
+        response: { 200: okSchema(missionViewSchema) },
+      },
+    },
+    async (request) => {
+      if (!orchestrator) throw new DependencyError({ message: "ACP engine is not configured." });
+      const { userId } = currentUser(request);
+      const mission = await orchestrator.cancel(userId, request.params.missionId);
+      if (!mission) throw new NotFoundError("Mission", request.params.missionId);
+      if (mission.state === "cancelled" && missionControl) {
+        const snapshot = await missionControl.getMission(request.params.missionId);
+        // Include active runs that have not yet returned a confirmation to the engine.
+        const runs = (await app.services.runStore.listAll()).filter(
+          (state) =>
+            state.record.userId === userId &&
+            state.record.missionExternalKey === snapshot.external_key,
+        );
+        for (const state of runs) {
+          await app.services.agentCore?.cancel(state.record.runId);
+          for (const confirmation of await app.services.confirmations.listPendingForUser(userId)) {
+            if (confirmation.runId === state.record.runId) {
+              await app.services.confirmations.resolve(confirmation.id, "rejected");
+            }
+          }
+        }
+      }
+      return ok(mission, request.id);
+    },
+  );
+
   app.get(
     "/orchestrator/agents",
     {

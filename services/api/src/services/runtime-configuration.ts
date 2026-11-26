@@ -1,3 +1,4 @@
+import { fileWorkspaceSchema, type FileWorkspace } from "./file-workspaces.js";
 import { spawn } from "node:child_process";
 import {
   createCipheriv,
@@ -258,6 +259,14 @@ export class RuntimeConfigurationStore {
 
   async saveProviderAccounts(accounts: ProviderAccount[]): Promise<void> {
     await this.#write("provider-accounts.json", z.array(providerAccountSchema).parse(accounts));
+  }
+
+  async loadFileWorkspaces(): Promise<FileWorkspace[]> {
+    return z.array(fileWorkspaceSchema).parse(await this.#read("file-workspaces.json", []));
+  }
+
+  async saveFileWorkspaces(entries: FileWorkspace[]): Promise<void> {
+    await this.#write("file-workspaces.json", z.array(fileWorkspaceSchema).parse(entries));
   }
 
   async loadPause(): Promise<PauseState | null> {

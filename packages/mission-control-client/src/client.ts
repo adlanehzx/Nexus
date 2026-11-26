@@ -103,6 +103,7 @@ export interface MissionControlPort {
     signal?: AbortSignal,
   ): Promise<MissionSubmission>;
   getMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
+  cancelMission?(id: string, signal?: AbortSignal): Promise<MissionSnapshot>;
   listMissions(
     limit?: number,
     externalPrefix?: string,
@@ -214,6 +215,16 @@ export class MissionControlClient implements MissionControlPort {
     return this.#request(
       "GET",
       `/v1/missions/${encodeURIComponent(id)}`,
+      missionSnapshotSchema,
+      undefined,
+      signal,
+    );
+  }
+
+  cancelMission(id: string, signal?: AbortSignal): Promise<MissionSnapshot> {
+    return this.#request(
+      "POST",
+      `/v1/missions/${encodeURIComponent(id)}/cancel`,
       missionSnapshotSchema,
       undefined,
       signal,

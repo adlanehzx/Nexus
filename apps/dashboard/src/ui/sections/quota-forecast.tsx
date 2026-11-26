@@ -683,16 +683,14 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>
-            {tr("Cost & Billing Breakdown", "Analyse des Coûts & Facturation")}
-          </h2>
+          <h2 style={{ margin: 0 }}>{tr("Estimated API costs", "Coûts API estimés")}</h2>
           <span className="quota-header-badge">
             <span
               className="badge ok"
               style={{ width: 6, height: 6, margin: 0 }}
               aria-hidden="true"
             />
-            {tr("T3 Code Pricing Model", "Modèle Tarifaire T3 Code")}
+            {tr("Local catalog estimate", "Estimation du catalogue local")}
           </span>
         </div>
         <div className="quota-toolbar-filters">
@@ -711,8 +709,8 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
       <div className="quota-intro-card">
         <p>
           {tr(
-            "Detailed API cost calculation based on actual token consumption, prompt cache discounts, and official provider tier rates (OpenAI Codex, Anthropic Claude, Google DeepMind Antigravity).",
-            "Calcul précis des coûts API basé sur la consommation réelle des tokens, les remises de prompt caching et les barèmes officiels des fournisseurs (OpenAI Codex, Anthropic Claude, Google DeepMind Antigravity).",
+            "Estimates use recorded tokens and the local pricing catalog. They are not invoices or subscription costs. Unknown prices remain unavailable.",
+            "Estimations fondées sur les tokens enregistrés et le catalogue tarifaire local. Ce ne sont ni des factures ni des coûts d’abonnement. Les tarifs inconnus restent indisponibles.",
           )}
         </p>
       </div>
@@ -724,188 +722,59 @@ export function UsageCosts({ api }: { api: DashboardApi }) {
             (a, b) => (b.totals.estimatedApiCostUsd ?? 0) - (a.totals.estimatedApiCostUsd ?? 0),
           );
 
-          const totalCost = totals.estimatedApiCostUsd ?? 0;
-          const cacheReadTokens = totals.cacheReadTokens ?? 0;
-          const cacheSavingsUsd = cacheReadTokens * 0.000003; // ~$3.00 per 1M tokens saved with caching
-
+          const cost = (value: number | null) =>
+            value === null ? tr("Unavailable", "Indisponible") : `$${value.toFixed(4)}`;
           return (
             <>
-              <div className="quota-metrics-grid" style={{ marginBottom: "1.5rem" }}>
-                <div className="quota-metric-card accent-cost">
-                  <div className="quota-metric-header">
-                    <span className="quota-metric-title">
-                      {tr("Total Estimated Cost", "Coût Total Estimé")}
-                    </span>
-                    <span className="quota-metric-badge">
-                      {days} {tr("Days", "Jours")}
-                    </span>
-                  </div>
-                  <div className="quota-metric-val">${totalCost.toFixed(4)}</div>
-                </div>
-
-                <div className="quota-metric-card accent-cache">
-                  <div className="quota-metric-header">
-                    <span className="quota-metric-title">
-                      {tr("Prompt Cache Savings", "Économies Cache Prompt")}
-                    </span>
-                    <span className="quota-metric-badge">-90% API</span>
-                  </div>
-                  <div className="quota-metric-val" style={{ color: "#22c55e" }}>
-                    ${cacheSavingsUsd.toFixed(4)}
-                  </div>
-                </div>
-
-                <div className="quota-metric-card accent-runs">
-                  <div className="quota-metric-header">
-                    <span className="quota-metric-title">
-                      {tr("Avg Cost / Run", "Coût Moyen / Exécution")}
-                    </span>
-                    <span className="quota-metric-badge">Run Avg</span>
-                  </div>
-                  <div className="quota-metric-val">
-                    ${totals.runs > 0 ? (totalCost / totals.runs).toFixed(4) : "0.0000"}
-                  </div>
-                </div>
-
-                <div className="quota-metric-card accent-billed">
-                  <div className="quota-metric-header">
-                    <span className="quota-metric-title">{tr("Active Plan", "Forfait Actif")}</span>
-                    <span className="quota-metric-badge">T3 Code</span>
-                  </div>
-                  <div className="quota-metric-val" style={{ fontSize: "1.1rem" }}>
-                    {tr("Unlimited Access", "Accès Illimité")}
-                  </div>
-                </div>
-              </div>
-
-              <h3>{tr("Cost Distribution by Model", "Répartition des coûts par Modèle")}</h3>
+              <p>
+                {tr("Total estimated API equivalent", "Total estimé en équivalent API")} :{" "}
+                <strong>{cost(totals.estimatedApiCostUsd)}</strong>
+              </p>
+              <p className="muted">
+                {tr(
+                  "Billed amount and active subscription: unavailable from this source.",
+                  "Montant facturé et abonnement actif : indisponibles dans cette source.",
+                )}
+              </p>
               <Table
                 head={[
                   tr("Model", "Modèle"),
                   tr("Runs", "Exécutions"),
-                  tr("Input Tokens", "Tokens Entrants"),
-                  tr("Output Tokens", "Tokens Sortants"),
-                  tr("Cache Hit Ratio", "Ratio Cache"),
-                  tr("Estimated Cost", "Coût Estimé"),
+                  tr("Input tokens", "Tokens entrants"),
+                  tr("Output tokens", "Tokens sortants"),
+                  tr("Estimated cost", "Coût estimé"),
+                  tr("Price source", "Source du tarif"),
                 ]}
               >
                 {models.map(({ key, totals: t }) => {
-                  const mIn = t.inputTokens ?? 0;
-                  const mCache = t.cacheReadTokens ?? 0;
-                  const cacheTotal = mIn + mCache;
-                  const cacheRatio =
-                    cacheTotal > 0 ? ((mCache / cacheTotal) * 100).toFixed(1) : "0.0";
-                  const modelCost = t.estimatedApiCostUsd ?? 0;
+                  const records = buckets.filter((bucket) => bucket.model === key);
+                  const family = records.some(
+                    (bucket) => bucket.costProvenance === "family_estimate",
+                  );
+                  const source =
+                    t.estimatedApiCostUsd === null
+                      ? tr("Unavailable", "Indisponible")
+                      : family
+                        ? tr("Model family estimate", "Estimation par famille")
+                        : tr("Local catalog estimate", "Estimation du catalogue local");
+                  const pricingModels = [
+                    ...new Set(records.map((bucket) => bucket.pricingModel).filter(Boolean)),
+                  ].join(", ");
                   return (
                     <tr key={key}>
                       <td>{renderModelBadge(key)}</td>
                       <td className="mono">{number(t.runs)}</td>
-                      <td className="mono">{number(mIn)}</td>
+                      <td className="mono">{number(t.inputTokens)}</td>
                       <td className="mono">{number(t.outputTokens)}</td>
-                      <td className="mono">{cacheRatio} %</td>
-                      <td className="mono" style={{ fontWeight: 600, color: "var(--nx-accent)" }}>
-                        ${modelCost.toFixed(4)}
+                      <td className="mono">{cost(t.estimatedApiCostUsd)}</td>
+                      <td>
+                        {source}
+                        {pricingModels ? ` (${pricingModels})` : ""}
                       </td>
                     </tr>
                   );
                 })}
               </Table>
-
-              <div className="usage-panel" style={{ marginTop: "1.5rem" }}>
-                <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem" }}>
-                  {tr(
-                    "T3 Code Engine Rate Card Reference",
-                    "Barème de Référence des Moteurs T3 Code",
-                  )}
-                </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: "1rem",
-                    marginTop: "0.75rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "6px",
-                      background: "var(--nx-surface-hover)",
-                      border: "1px solid var(--nx-line)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.7 / Opus 5</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Prompt: $15.00 / 1M
-                    </div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Output: $75.00 / 1M
-                    </div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
-                      Cache Read: $3.75 / 1M
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "6px",
-                      background: "var(--nx-surface-hover)",
-                      border: "1px solid var(--nx-line)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>Claude 3.5 Sonnet</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Prompt: $3.00 / 1M
-                    </div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Output: $15.00 / 1M
-                    </div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
-                      Cache Read: $0.30 / 1M
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "6px",
-                      background: "var(--nx-surface-hover)",
-                      border: "1px solid var(--nx-line)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>GPT-5 / Codex / Sol</div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Prompt: $2.50 / 1M
-                    </div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Output: $10.00 / 1M
-                    </div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
-                      Cache Read: $1.25 / 1M
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: "0.75rem",
-                      borderRadius: "6px",
-                      background: "var(--nx-surface-hover)",
-                      border: "1px solid var(--nx-line)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-                      Antigravity / Gemini 3.8
-                    </div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Prompt: $0.15 / 1M
-                    </div>
-                    <div className="mono muted" style={{ fontSize: "0.8rem" }}>
-                      Output: $0.60 / 1M
-                    </div>
-                    <div className="mono" style={{ fontSize: "0.8rem", color: "#10b981" }}>
-                      Cache Read: $0.04 / 1M
-                    </div>
-                  </div>
-                </div>
-              </div>
             </>
           );
         }}

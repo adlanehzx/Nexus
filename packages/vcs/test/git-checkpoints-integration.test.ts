@@ -66,11 +66,19 @@ describe("Git & Checkpoints Real Integration Tests", () => {
       const list = await wtManager.listWorktrees(testDir);
       expect(list.some((w) => w.branch === "feature-test-1")).toBe(true);
 
-      // Remove worktree
+      // A normal removal must preserve uncommitted/untracked work.
+      await expect(
+        wtManager.removeWorktree({ workspaceRoot: testDir, worktreePath: worktree.path }),
+      ).rejects.toThrow();
+      expect(await fs.readFile(path.join(worktree.path, "worktree-file.txt"), "utf8")).toContain(
+        "hello from worktree",
+      );
+      // Explicit destructive cleanup of this disposable fixture.
       await wtManager.removeWorktree({
         workspaceRoot: testDir,
         worktreePath: worktree.path,
         deleteBranch: true,
+        force: true,
       });
 
       // Verify removed
@@ -80,6 +88,20 @@ describe("Git & Checkpoints Real Integration Tests", () => {
   });
 
   describe("Checkpoints Persistence & Restart", () => {
+    it("does not overwrite corrupted metadata or announce a persisted checkpoint", async () => {
+      const store = path.join(testDir, ".git", "nexus-checkpoints");
+      await fs.mkdir(store);
+      const metadata = path.join(store, "corrupt-thread.json");
+      await fs.writeFile(metadata, "broken metadata");
+      const manager = new CheckpointManager();
+      await expect(
+        manager.captureCheckpoint({ threadId: "corrupt-thread", turnNumber: 1, cwd: testDir }),
+      ).rejects.toThrow();
+      expect(await manager.listCheckpoints("corrupt-thread")).toEqual([]);
+      expect(await fs.readFile(metadata, "utf8")).toBe("broken metadata");
+      await expect(manager.listCheckpoints("corrupt-thread", testDir)).rejects.toThrow();
+    });
+
     it("persists checkpoints across process restarts via .git/nexus-checkpoints", async () => {
       const manager1 = new CheckpointManager();
       const threadId = "persistent-thread-101";
@@ -116,8 +138,8 @@ describe("Git & Checkpoints Real Integration Tests", () => {
     });
   });
 
-  describe("Atomic Rollback, Safety Backup, and Untracked Files Cleaning", () => {
-    it("atomically restores files, removes untracked files, and creates safety backup", async () => {
+  describe("Rollback, Safety Backup, and Untracked Files Preservation", () => {
+    it("restores tracked files, preserves untracked files, and creates safety backup", async () => {
       const manager = new CheckpointManager();
       const threadId = "rollback-thread-202";
 
@@ -160,12 +182,12 @@ describe("Git & Checkpoints Real Integration Tests", () => {
       const contentAfter = await fs.readFile(path.join(testDir, "service.ts"), "utf-8");
       expect(contentAfter).toContain("export const service = 'v1';");
 
-      // 2. Verify untracked garbage was cleaned
+      // 2. Preserve untracked work that may belong to another actor
       const untrackedExists = await fs
         .access(path.join(testDir, "untracked-garbage.tmp"))
         .then(() => true)
         .catch(() => false);
-      expect(untrackedExists).toBe(false);
+      expect(untrackedExists).toBe(true);
 
       // 3. Verify safety backup ref was created in git
       const { stdout: backupRefs } = await execFileAsync(

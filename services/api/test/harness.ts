@@ -1,3 +1,4 @@
+import type { SubmissionAdapter } from "../src/services/career/submission-adapter.js";
 import { generateKeyPairSync, sign as signRaw, createPrivateKey } from "node:crypto";
 import { pino } from "pino";
 import { vi } from "vitest";
@@ -69,6 +70,7 @@ import type { ProviderAccountService } from "../src/services/provider-accounts.j
 
 export async function makeApi(
   options: {
+    careerAdapter?: SubmissionAdapter;
     confirmationThreshold?: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
     llmProvider?: LLMProvider;
     missionControl?: MissionControlPort;
@@ -86,6 +88,7 @@ export async function makeApi(
   const services = new ServiceContainer({
     tokenPrivateKeyPem: signingKeys.privateKeyPem,
     credentials,
+    ...(options.careerAdapter === undefined ? {} : { careerAdapter: options.careerAdapter }),
     ...(options.prisma === undefined
       ? {}
       : {

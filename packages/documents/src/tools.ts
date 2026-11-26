@@ -65,6 +65,7 @@ export const documentIngestOutputSchema = z.object({
  */
 export function createDocumentTools(options: {
   parser: DocumentParser;
+  authorizePath?: (userId: string, path: string) => Promise<string>;
   memoryBridge?: DocumentMemoryBridge | undefined;
 }): ToolDefinition<never, unknown>[] {
   const { parser, memoryBridge } = options;
@@ -85,8 +86,11 @@ export function createDocumentTools(options: {
       timeoutMs: 30_000,
       summarize: (input: z.infer<typeof documentParseInputSchema>) =>
         `Parse document ${input.filePath}`,
-      execute: async (input: z.infer<typeof documentParseInputSchema>, _context: ToolContext) => {
-        const parsed = await parser.parseDocument(input.filePath);
+      execute: async (input: z.infer<typeof documentParseInputSchema>, context: ToolContext) => {
+        const path = options.authorizePath
+          ? await options.authorizePath(context.userId, input.filePath)
+          : input.filePath;
+        const parsed = await parser.parseDocument(path);
         return {
           id: parsed.id,
           filename: parsed.filename,
@@ -115,9 +119,12 @@ export function createDocumentTools(options: {
         `Extract tables from ${input.filePath}`,
       execute: async (
         input: z.infer<typeof documentExtractTablesInputSchema>,
-        _context: ToolContext,
+        context: ToolContext,
       ) => {
-        const parsed = await parser.parseDocument(input.filePath);
+        const path = options.authorizePath
+          ? await options.authorizePath(context.userId, input.filePath)
+          : input.filePath;
+        const parsed = await parser.parseDocument(path);
         return { tables: parsed.tables };
       },
     },
@@ -141,7 +148,10 @@ export function createDocumentTools(options: {
           throw new Error("No memory bridge is configured for document ingestion");
         }
 
-        const parsed = await parser.parseDocument(input.filePath);
+        const path = options.authorizePath
+          ? await options.authorizePath(context.userId, input.filePath)
+          : input.filePath;
+        const parsed = await parser.parseDocument(path);
         const customChunker = input.maxChunkSizeChars
           ? new DocumentChunker({ maxChunkSizeChars: input.maxChunkSizeChars })
           : chunker;

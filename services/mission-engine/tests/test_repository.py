@@ -361,3 +361,32 @@ def test_invalid_quality_review_cannot_expand_task_graph(
     assert len(snapshot["tasks"]) == 3
     final = repository.acquire("worker")
     assert final is not None and final.task_key == "nexus_final_synthesis"
+
+
+def test_cancellation_fences_workers_and_is_idempotent(repository: MissionRepository) -> None:
+    mission_id, _ = repository.submit(spec(), "cancel-running")
+    lease = repository.acquire("worker-a")
+    assert lease is not None
+    repository.mark_running(lease)
+    cancelled = repository.cancel_mission(mission_id)
+    assert cancelled["state"] == "cancelled"
+    assert all(task["state"] == "cancelled" for task in cancelled["tasks"])
+    assert repository.cancel_mission(mission_id) == cancelled
+    assert repository.acquire("worker-b") is None
+    with pytest.raises(LeaseLostError):
+        repository.renew(lease)
+    with pytest.raises(LeaseLostError):
+        repository.succeed(lease, "late result")
+    with pytest.raises(LeaseLostError):
+        repository.fail(lease, "late failure")
+    assert repository.mission(mission_id)["state"] == "cancelled"
+
+
+def test_cancellation_preserves_completed_work(repository: MissionRepository) -> None:
+    mission_id, _ = repository.submit(spec(), "cancel-after-effect")
+    lease = repository.acquire("worker-a")
+    assert lease is not None
+    repository.succeed(lease, "completed effect")
+    cancelled = repository.cancel_mission(mission_id)
+    assert cancelled["tasks"][0]["state"] == "succeeded"
+    assert cancelled["tasks"][1]["state"] == "cancelled"

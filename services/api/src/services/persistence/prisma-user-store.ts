@@ -11,24 +11,27 @@ export class PrismaUserStore implements UserStore {
 
   async create(input: { email: string; displayName: string; passwordHash: string }): Promise<User> {
     const email = input.email.trim().toLowerCase();
-    const count = await this.count();
-    const role = count === 0 ? "ADMIN" : "USER";
 
     try {
-      const user = await this.#prisma.user.create({
-        data: {
-          id: uuidv7(),
-          email,
-          displayName: input.displayName,
-          role,
-          status: "ACTIVE",
-          authCredential: {
-            create: {
-              id: uuidv7(),
-              passwordHash: input.passwordHash,
+      const user = await this.#prisma.$transaction(async (tx) => {
+        // Serializes the empty-database decision across API replicas.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(730193421)`;
+        const role = (await tx.user.count()) === 0 ? "ADMIN" : "USER";
+        return tx.user.create({
+          data: {
+            id: uuidv7(),
+            email,
+            displayName: input.displayName,
+            role,
+            status: "ACTIVE",
+            authCredential: {
+              create: {
+                id: uuidv7(),
+                passwordHash: input.passwordHash,
+              },
             },
           },
-        },
+        });
       });
       return {
         id: user.id,

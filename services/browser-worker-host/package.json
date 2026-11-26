@@ -30,7 +30,7 @@
     "@nexus/tools": "workspace:*",
     "@nexus/worker-core": "workspace:*",
     "ws": "8.21.3",
-    "zod": "4.5.4"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@nexus/devices": "workspace:*",

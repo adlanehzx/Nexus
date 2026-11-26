@@ -1474,8 +1474,20 @@ export interface SatelliteCommandStatusResponse {
   result: SatelliteCommandResult | null;
 }
 
-export class ForbiddenError extends Error {
+export class DashboardHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "DashboardHttpError";
+  }
+}
+
+export class ForbiddenError extends DashboardHttpError {
   readonly code = "DASHBOARD_FORBIDDEN";
+  constructor(message: string) {
+    super(403, message);
+  }
 }
 
 export interface UsageBucketDto {
@@ -1488,6 +1500,8 @@ export interface UsageBucketDto {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
   estimatedApiCostUsd: number | null;
+  costProvenance?: "catalog_estimate" | "family_estimate" | "unavailable";
+  pricingModel?: string | null;
 }
 
 export interface UsageSummaryDto {
@@ -2102,6 +2116,36 @@ export class DashboardApi {
   }
 
   /** With `conversationId`, a reply this read observes is recorded in that conversation. */
+  listApprovals(): Promise<
+    {
+      id: string;
+      taskId: string;
+      capability: string;
+      action: string;
+      description: string;
+      riskLevel: string;
+      expiresAt: string;
+    }[]
+  > {
+    return this.#get("/api/v1/confirmations?status=pending");
+  }
+
+  respondToConfirmation(
+    id: string,
+    decision: "approved" | "rejected",
+  ): Promise<{ accepted: boolean }> {
+    return this.#request("POST", `/api/v1/confirmations/${encodeURIComponent(id)}/respond`, {
+      decision,
+    });
+  }
+
+  cancelNexusMission(missionId: string): Promise<OrchestratedMission> {
+    return this.#request(
+      "POST",
+      `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}/cancel`,
+    );
+  }
+
   nexusMission(missionId: string, conversationId?: string): Promise<OrchestratedMission> {
     const path = `/api/v1/orchestrator/missions/${encodeURIComponent(missionId)}`;
     return this.#get(
@@ -2555,6 +2599,23 @@ export class DashboardApi {
     });
   }
 
+  fileWorkspaces(): Promise<{
+    workspaces: { id: string; userId: string; root: string; label: string }[];
+  }> {
+    return this.#get("/api/v1/file-workspaces");
+  }
+
+  authorizeFileWorkspace(
+    root: string,
+    label: string,
+  ): Promise<{ id: string; root: string; label: string }> {
+    return this.#request("POST", "/api/v1/file-workspaces", { root, label });
+  }
+
+  revokeFileWorkspace(id: string): Promise<{ removed: boolean }> {
+    return this.#request("DELETE", `/api/v1/file-workspaces/${encodeURIComponent(id)}`);
+  }
+
   worktrees(workspaceRoot?: string): Promise<{ worktrees: WorktreeDto[] }> {
     const path = workspaceRoot
       ? `/api/v1/worktrees?workspaceRoot=${encodeURIComponent(workspaceRoot)}`
@@ -2596,26 +2657,61 @@ export class DashboardApi {
     return this.#request("DELETE", "/api/v1/worktrees", input);
   }
 
-  checkpoints(threadId: string): Promise<{ checkpoints: CheckpointDto[] }> {
-    return this.#get(`/api/v1/checkpoints/${encodeURIComponent(threadId)}`);
+  async checkpoints(threadId: string): Promise<{ checkpoints: CheckpointDto[] }> {
+    const response = await this.#get<{
+      checkpoints: {
+        id: string;
+        threadId: string;
+        turnNumber: number;
+        commitHash?: string;
+        description?: string;
+        createdAt: string;
+      }[];
+    }>(`/api/v1/checkpoints/${encodeURIComponent(threadId)}`);
+    return {
+      checkpoints: response.checkpoints.map((checkpoint) => ({
+        id: checkpoint.id,
+        threadId,
+        turnCount: checkpoint.turnNumber,
+        gitRef: checkpoint.commitHash
+          ? `refs/nexus-checkpoints/${checkpoint.threadId}/${checkpoint.turnNumber}`
+          : "",
+        snapshotSha: checkpoint.commitHash ?? "",
+        createdAt: checkpoint.createdAt,
+        ...(checkpoint.description === undefined ? {} : { description: checkpoint.description }),
+      })),
+    };
   }
 
   createCheckpoint(
     threadId: string,
     input: { turnCount: number; cwd: string; description?: string },
-  ): Promise<{ checkpoint: CheckpointDto }> {
-    return this.#request("POST", `/api/v1/checkpoints/${encodeURIComponent(threadId)}`, input);
+  ): Promise<{ checkpoint: { id: string; turnNumber: number; commitHash?: string } }> {
+    return this.#request("POST", "/api/v1/checkpoints", {
+      threadId,
+      turnNumber: input.turnCount,
+      cwd: input.cwd,
+      ...(input.description === undefined ? {} : { description: input.description }),
+    });
   }
 
-  restoreCheckpoint(
+  async restoreCheckpoint(
     threadId: string,
     input: { turnCount: number; cwd: string },
   ): Promise<{ success: boolean; restoredTurnCount: number; gitRef: string }> {
-    return this.#request(
-      "POST",
-      `/api/v1/checkpoints/${encodeURIComponent(threadId)}/restore`,
-      input,
-    );
+    const response = await this.#request<{
+      result: { success: boolean; restoredCommitHash?: string; error?: string };
+    }>("POST", "/api/v1/checkpoints/rollback", {
+      threadId,
+      turnNumber: input.turnCount,
+      cwd: input.cwd,
+    });
+    if (!response.result.success) throw new Error(response.result.error ?? "Restoration failed");
+    return {
+      success: true,
+      restoredTurnCount: input.turnCount,
+      gitRef: response.result.restoredCommitHash ?? "",
+    };
   }
 
   checkpointDiff(
@@ -3109,7 +3205,7 @@ export class DashboardApi {
     }
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(messageOf(response.body));
+      throw new DashboardHttpError(response.status, messageOf(response.body));
     }
 
     const responseBody = response.body as { data?: T } | T;

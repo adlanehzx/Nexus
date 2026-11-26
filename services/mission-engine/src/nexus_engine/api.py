@@ -626,6 +626,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.status_code = 200 if replayed else 201
         return {"mission_id": mission_id, "replayed": replayed}
 
+    @app.post("/v1/missions/{mission_id}/cancel")
+    def cancel_mission(mission_id: str) -> dict[str, Any]:
+        try:
+            return repository.cancel_mission(mission_id)
+        except NotFoundError as exc:
+            raise HTTPException(404, "mission not found") from exc
+
     @app.get("/v1/missions/{mission_id}")
     def get_mission(mission_id: str) -> dict[str, Any]:
         try:

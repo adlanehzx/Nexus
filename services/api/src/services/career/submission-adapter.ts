@@ -22,11 +22,11 @@ import type { DocumentVariantKind, OpportunityKind } from "@nexus/career";
  *
  * ## No real adapter exists, and that is the default
  *
- * `RecordingSubmissionAdapter` is what the container mounts. It writes nothing
+ * `RecordingSubmissionAdapter` is an explicit test/simulation adapter. It writes nothing
  * outside the process, opens no socket, and returns a receipt derived from the
  * payload. Nothing in this repository sends an email, fills a form, creates an
- * account or writes to a calendar, and `RefusingSubmissionAdapter` is what a
- * deployment gets if it names an adapter that has not been built: a refusal,
+ * account or writes to a calendar. The container defaults to
+ * `RefusingSubmissionAdapter` until a real adapter is configured: a refusal,
  * not a fallback to something that looks like it worked.
  */
 

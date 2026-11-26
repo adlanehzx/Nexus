@@ -1,13 +1,15 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initTheme } from "./lib/theme.js";
-import { initColorTheme } from "./lib/color-theme.js";
 import { App } from "./ui/App.js";
+import { detectInitialLocale } from "./ui/i18n/index.js";
 import "./ui/theme.css";
 
 // Before the first paint: an explicit theme choice must not flash the other one.
 initTheme();
-initColorTheme();
+// Same reason for the language: assistive technology reads `lang` at load, and the
+// static page cannot know which one the visitor will get.
+document.documentElement.lang = detectInitialLocale();
 
 const root = document.getElementById("root");
 if (root === null) throw new Error("root element not found");

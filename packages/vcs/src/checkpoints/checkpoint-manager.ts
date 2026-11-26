@@ -15,6 +15,8 @@ import { promisify } from "node:util";
 import * as NodePath from "node:path";
 import * as NodeFS from "node:fs";
 import { randomUUID } from "node:crypto";
+import { CheckpointSchema } from "@nexus/protocol";
+import { ValidationError } from "@nexus/shared";
 import type {
   CreateCheckpointOptions,
   RestoreCheckpointOptions,
@@ -99,29 +101,23 @@ export class CheckpointManager {
   }
 
   private async persistCheckpoint(gitDir: string, checkpoint: Checkpoint): Promise<void> {
+    const storeDir = NodePath.join(gitDir, "nexus-checkpoints");
+    await NodeFS.promises.mkdir(storeDir, { recursive: true });
+    const filePath = this.getPersistenceFilePath(gitDir, checkpoint.threadId);
+    const existing = await this.loadPersistedCheckpoints(gitDir, checkpoint.threadId);
+    const index = existing.findIndex((c) => c.turnNumber === checkpoint.turnNumber);
+    if (index >= 0) existing[index] = checkpoint;
+    else existing.push(checkpoint);
+    const temporary = `${filePath}.${randomUUID()}.tmp`;
     try {
-      const storeDir = NodePath.join(gitDir, "nexus-checkpoints");
-      await NodeFS.promises.mkdir(storeDir, { recursive: true });
-      const filePath = this.getPersistenceFilePath(gitDir, checkpoint.threadId);
-
-      let existing: Checkpoint[] = [];
-      try {
-        const raw = await NodeFS.promises.readFile(filePath, "utf-8");
-        existing = JSON.parse(raw) as Checkpoint[];
-      } catch {
-        existing = [];
-      }
-
-      const index = existing.findIndex((c) => c.turnNumber === checkpoint.turnNumber);
-      if (index >= 0) {
-        existing[index] = checkpoint;
-      } else {
-        existing.push(checkpoint);
-      }
-
-      await NodeFS.promises.writeFile(filePath, JSON.stringify(existing, null, 2), "utf-8");
-    } catch {
-      // Persistence fallback non-blocking
+      await NodeFS.promises.writeFile(temporary, JSON.stringify(existing, null, 2), {
+        encoding: "utf-8",
+        mode: 0o600,
+        flag: "wx",
+      });
+      await NodeFS.promises.rename(temporary, filePath);
+    } finally {
+      await NodeFS.promises.rm(temporary, { force: true });
     }
   }
 
@@ -129,9 +125,10 @@ export class CheckpointManager {
     try {
       const filePath = this.getPersistenceFilePath(gitDir, threadId);
       const raw = await NodeFS.promises.readFile(filePath, "utf-8");
-      return JSON.parse(raw) as Checkpoint[];
-    } catch {
-      return [];
+      return CheckpointSchema.array().parse(JSON.parse(raw));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
     }
   }
 
@@ -140,6 +137,11 @@ export class CheckpointManager {
 
     return this.acquireLock(threadId, async () => {
       const isGit = await this.isGitRepo(cwd);
+      if (!isGit)
+        throw new ValidationError({
+          message: "Checkpoints require a Git repository; no snapshot was created.",
+          userMessage: "Choose a Git repository to create a restorable checkpoint.",
+        });
       let commitHash: string | undefined = undefined;
       let diffBlob: string | undefined = undefined;
       let gitDir: string | undefined = undefined;
@@ -215,44 +217,25 @@ export class CheckpointManager {
         createdAt: new Date().toISOString(),
       };
 
-      this.inMemoryCheckpoints.set(`${threadId}:${turnNumber}`, checkpoint);
-
       if (gitDir) {
         await this.persistCheckpoint(gitDir, checkpoint);
       }
+      this.inMemoryCheckpoints.set(`${threadId}:${turnNumber}`, checkpoint);
 
       return checkpoint;
     });
   }
 
   async listCheckpoints(threadId: string, cwd?: string): Promise<Checkpoint[]> {
-    // Check in-memory first
-    const fromMemory = Array.from(this.inMemoryCheckpoints.values()).filter(
-      (c) => c.threadId === threadId,
-    );
-
-    if (fromMemory.length > 0) {
-      return fromMemory.sort((a, b) => a.turnNumber - b.turnNumber);
-    }
-
-    // Attempt to load from disk persistence if cwd is supplied or git is available
     if (cwd) {
-      try {
-        const isGit = await this.isGitRepo(cwd);
-        if (isGit) {
-          const gitDir = await this.getGitCommonDir(cwd);
-          const persisted = await this.loadPersistedCheckpoints(gitDir, threadId);
-          for (const c of persisted) {
-            this.inMemoryCheckpoints.set(`${threadId}:${c.turnNumber}`, c);
-          }
-          return persisted.sort((a, b) => a.turnNumber - b.turnNumber);
-        }
-      } catch {
-        // Fallback
-      }
+      if (!(await this.isGitRepo(cwd))) return [];
+      const gitDir = await this.getGitCommonDir(cwd);
+      const persisted = await this.loadPersistedCheckpoints(gitDir, threadId);
+      return persisted.sort((a, b) => a.turnNumber - b.turnNumber);
     }
-
-    return [];
+    return Array.from(this.inMemoryCheckpoints.values())
+      .filter((checkpoint) => checkpoint.threadId === threadId)
+      .sort((a, b) => a.turnNumber - b.turnNumber);
   }
 
   async restoreCheckpoint(options: RestoreCheckpointOptions): Promise<RollbackResult> {
@@ -303,23 +286,7 @@ export class CheckpointManager {
         rolledBackFiles = [];
       }
 
-      // Also detect untracked files created since checkpoint
-      try {
-        const { stdout: untracked } = await this.runGit(["status", "--porcelain"], cwd);
-        const untrackedFiles = untracked
-          .split("\n")
-          .filter((line) => line.startsWith("?? "))
-          .map((line) => line.slice(3).trim())
-          .filter((f) => f.length > 0);
-
-        for (const uf of untrackedFiles) {
-          if (!rolledBackFiles.includes(uf)) {
-            rolledBackFiles.push(uf);
-          }
-        }
-      } catch {
-        // Fallback
-      }
+      // Untracked files are preserved, so they must not be reported as restored.
 
       if (dryRun) {
         return {
@@ -363,20 +330,16 @@ export class CheckpointManager {
             /* ignore cleanup failure */
           });
         }
-      } catch {
-        // Safety backup attempt non-blocking
+      } catch (cause) {
+        throw new Error("Restoration aborted: safety backup could not be saved", { cause });
       }
 
-      // Perform atomic restore:
+      // Restore the working tree without replacing the user's staging index:
       // 1. Checkout files from checkpoint ref
-      await this.runGit(["checkout", refName, "--", "."], cwd);
+      await this.runGit(["restore", `--source=${refName}`, "--worktree", "--", "."], cwd);
 
-      // 2. Explicitly remove untracked files created after checkpoint
-      try {
-        await this.runGit(["clean", "-fd"], cwd);
-      } catch {
-        // Ignore clean errors
-      }
+      // Untracked files can belong to the user or another agent. Never clean them
+      // as a side effect of restoring this mission's checkpoint.
 
       return {
         success: true,

@@ -196,7 +196,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
               style={{
                 margin: 0,
                 fontSize: "1.2rem",
-                color: "var(--nx-signal)",
+                color: "var(--nx-accent)",
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
@@ -354,7 +354,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span className="muted">{tr("Vault Secret Ref:", "Réf secret coffre :")}</span>
-                    <code style={{ fontSize: "0.75rem", color: "var(--nx-signal)" }}>
+                    <code style={{ fontSize: "0.75rem", color: "var(--nx-accent)" }}>
                       {p.vaultRef}
                     </code>
                   </div>
@@ -420,7 +420,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                       flex: 1,
                       borderColor: "var(--nx-signal)",
                       background: "color-mix(in srgb, var(--nx-signal) 12%, transparent)",
-                      color: "var(--nx-signal)",
+                      color: "var(--nx-accent)",
                       fontWeight: 600,
                       display: "inline-flex",
                       alignItems: "center",
@@ -493,7 +493,7 @@ export function McpOAuthIntegrations({ api }: { api: DashboardApi }) {
                   {renderProviderIcon(selectedProvider.id, 18)}
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--nx-signal)" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", color: "var(--nx-accent)" }}>
                     {tr(`Connect ${selectedProvider.name}`, `Connecter ${selectedProvider.name}`)}
                   </h3>
                   <span className="muted" style={{ fontSize: "0.75rem" }}>

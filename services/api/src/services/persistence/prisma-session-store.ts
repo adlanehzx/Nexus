@@ -20,6 +20,18 @@ export class PrismaSessionStore implements SessionStore {
     });
   }
 
+  async rotate(id: string, at: Date, successor: UserSession): Promise<boolean> {
+    return this.#prisma.$transaction(async (tx) => {
+      const consumed = await tx.session.updateMany({
+        where: { id, userId: successor.userId, revokedAt: null, expiresAt: { gt: at } },
+        data: { revokedAt: at },
+      });
+      if (consumed.count !== 1) return false;
+      await tx.session.create({ data: successor });
+      return true;
+    });
+  }
+
   async get(id: string): Promise<UserSession | undefined> {
     const s = await this.#prisma.session.findUnique({ where: { id } });
     if (!s) return undefined;

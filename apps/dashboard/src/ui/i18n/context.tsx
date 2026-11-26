@@ -25,7 +25,8 @@ const DICTIONARIES: Record<Locale, Translations> = { en, fr };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-function detectInitialLocale(): Locale {
+/** The locale the interface starts in: an explicit choice, else the browser's language. */
+export function detectInitialLocale(): Locale {
   try {
     const saved = window.sessionStorage.getItem(STORAGE_KEY);
     if (saved === "fr" || saved === "en") return saved;

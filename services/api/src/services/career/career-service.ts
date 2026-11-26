@@ -1029,7 +1029,9 @@ export class CareerService {
         now: this.#now(),
       });
       await this.#transition(application, "drafting", "application.drafting", {
-        reason: "A submission attempt failed with an unknown outcome; approval must be renewed.",
+        reason: this.#adapter.performsExternalSideEffects
+          ? "A submission attempt failed with an unknown outcome; approval must be renewed."
+          : "No external submission occurred; the documents remain available for manual submission.",
         attemptId: failed.id,
       });
 

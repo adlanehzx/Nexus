@@ -75,6 +75,7 @@ const plannedMissionSchema = z.object({
  * rule were inverted, would be irrevocable.
  */
 export interface MissionGrantIssuer {
+  retire(missionExternalKey: string, status?: "COMPLETED" | "REVOKED"): Promise<number>;
   issue(input: { userId: string; service: string; missionExternalKey: string }): Promise<{
     token: string;
     expiresAt: Date;
@@ -434,6 +435,18 @@ export class AcpOrchestrator {
     if (!mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) return undefined;
     await this.syncMissionOutcomes([mission]);
     return presentMission(mission);
+  }
+
+  async cancel(userId: string, missionId: string): Promise<OrchestratedMission | undefined> {
+    const mission = await this.#missionControl.getMission(missionId);
+    if (!mission.external_key.startsWith(`${missionOwnerPrefix(userId)}-`)) return undefined;
+    if (!this.#missionControl.cancelMission)
+      throw new DependencyError({ message: "Mission cancellation is unavailable on this engine" });
+    // Revoke delegated access before fencing the engine; failures are safe and retryable.
+    await this.#grants?.retire(mission.external_key, "REVOKED");
+    const cancelled = await this.#missionControl.cancelMission(missionId);
+    await this.syncMissionOutcomes([cancelled]);
+    return presentMission(cancelled);
   }
 
   async syncMissionOutcomes(missions?: MissionSnapshot[], userId?: string): Promise<void> {

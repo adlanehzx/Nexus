@@ -144,16 +144,9 @@ describe("SEC-04: Cross-Tenant Worktree Boundary", () => {
         authorization: `Bearer ${account.accessToken}`,
       },
     });
-    expect([200, 400]).toContain(res.statusCode);
-    if (res.statusCode === 200) {
-      const data = res.json<{ worktrees?: { userId?: string }[] }>();
-      const items = data.worktrees ?? [];
-      for (const item of items) {
-        if (item.userId) {
-          expect(item.userId).toBe(account.userId);
-        }
-      }
-    }
+    // No operator has assigned this filesystem root to the caller.
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain('"worktrees"');
   });
 });
 

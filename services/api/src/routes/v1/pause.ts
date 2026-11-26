@@ -55,6 +55,8 @@ export const pauseRoutes: FastifyPluginCallback = (fastify, _options, done) => {
     },
     async (request) => {
       const { userId } = currentUser(request);
+      // Anyone may request a safety stop; only an administrator can lift it.
+      if (!request.body.paused) await app.requireAdmin(request);
       const state = await app.services.pause.set(request.body.paused, request.body.reason);
 
       app.services.securityLog.record({

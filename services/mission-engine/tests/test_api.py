@@ -204,3 +204,16 @@ def test_creates_acp_profile_from_safe_template_and_registers_it(tmp_path: Path)
     assert stored["claude-review"]["command"] == "/safe/claude-acp"
     persisted = json.loads(profile_file.read_text(encoding="utf-8"))
     assert persisted["claude-review"] == "claude-review"
+
+
+def test_cancel_mission_is_idempotent_and_survives_restart(tmp_path: Path) -> None:
+    with client(tmp_path) as api:
+        created = api.post("/v1/missions", json=payload(), headers={"Idempotency-Key": "cancel-api"})
+        mission_id = created.json()["mission_id"]
+        cancelled = api.post(f"/v1/missions/{mission_id}/cancel")
+        assert cancelled.status_code == 200
+        assert cancelled.json()["state"] == "cancelled"
+        assert api.post(f"/v1/missions/{mission_id}/cancel").json() == cancelled.json()
+        assert api.post("/v1/missions/nonexistent/cancel").status_code == 404
+    with client(tmp_path) as api:
+        assert api.get(f"/v1/missions/{mission_id}").json()["state"] == "cancelled"

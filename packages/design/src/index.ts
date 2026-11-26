@@ -27,3 +27,6 @@ export {
 } from "./tokens.js";
 export type { Palette, RiskLevel, StatusTone, ThemeName } from "./tokens.js";
 export { paletteStyleAttribute, paletteVariables, renderTokensCss, scaleVariables } from "./css.js";
+export { cadran, mix as mixColour } from "./cadran.js";
+export type { CadranPalette } from "./cadran.js";
+export { cadranScaleVariables, renderCadranCss } from "./cadran-css.js";

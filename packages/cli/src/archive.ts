@@ -70,6 +70,9 @@ export interface BuildInput {
 }
 
 export function buildArchive(input: BuildInput): Buffer {
+  if (input.includesSecrets && !input.passphrase?.trim()) {
+    throw new Error("Archives containing secrets require a non-empty encryption passphrase");
+  }
   const payload = Buffer.concat(input.entries.map((entry) => entry.content));
 
   const manifest: Manifest = {

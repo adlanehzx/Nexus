@@ -165,6 +165,23 @@ describe("authentication", () => {
     );
   });
 
+  it("allows exactly one concurrent refresh", async () => {
+    const results = await Promise.allSettled([
+      harness.services.auth.refresh(account.refreshToken),
+      harness.services.auth.refresh(account.refreshToken),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+    const winner = results.find((r) => r.status === "fulfilled");
+    if (winner?.status !== "fulfilled") throw new Error("No winner");
+    const active = await harness.app.inject({
+      method: "GET",
+      url: "/api/v1/users/me",
+      headers: { authorization: `Bearer ${winner.value.accessToken}` },
+    });
+    expect(active.statusCode).toBe(200);
+  });
+
   it("closes all sessions if refresh token is replayed", async () => {
     await harness.app.inject({
       method: "POST",
