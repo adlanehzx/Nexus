@@ -879,8 +879,8 @@ importers:
         specifier: 20.2.0
         version: 20.2.0(supports-color@8.1.1)(typescript@6.0.3)
       '@react-native-community/cli-platform-android':
-        specifier: 20.2.0
-        version: 20.2.0
+        specifier: 21.0.0
+        version: 21.0.0
       '@react-native/babel-preset':
         specifier: 0.88.1
         version: 0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1)
@@ -3129,6 +3129,9 @@ packages:
   '@react-native-community/cli-config-android@20.2.0':
     resolution: {integrity: sha512-lASofUNBVK0Pq3VEJ1JrCfAW94Rnk38DikauycRcoHl0hWjHIN3XhsN20dEq+CaIJoq37aCg5NSSSpmkET+ShA==}
 
+  '@react-native-community/cli-config-android@21.0.0':
+    resolution: {integrity: sha512-jho8//7s4YSCGv/jr22lLiIKf/M9y/S33OqzsnFhFYmA+U62tyfcLl0rc7s+Si+IyXz1k9EOI6nrkJ1EHGE//A==}
+
   '@react-native-community/cli-config-apple@20.2.0':
     resolution: {integrity: sha512-oohr6BV2riWJ5PYjayi1u52bG3H95MwKPkJCZo9pnOlYTjifZQVkMxZ8VTuk392efh0bijVTYfxH8iJPi97SIQ==}
 
@@ -3141,6 +3144,9 @@ packages:
   '@react-native-community/cli-platform-android@20.2.0':
     resolution: {integrity: sha512-fRglzcf/Yq5lnIkqdA8uf1GvlG18x3Dm48Yvo+l7KiWgh/SVtfVhfvalrtX5rmx+KeJkDA534bGoPvi5+ruWjw==}
 
+  '@react-native-community/cli-platform-android@21.0.0':
+    resolution: {integrity: sha512-qFJo/IjTiOWVilhdGz+A2Yxe0+8xQnLXe+8otpZE3UU2XMFhgcg51zQBDNH4mfE77fDNbZrNQaEo9iXdA76gLw==}
+
   '@react-native-community/cli-platform-apple@20.2.0':
     resolution: {integrity: sha512-jkEPLAd8C/ZRu39a3nhxwSXe0iisUiJC808GExnrnTcViLtg3sad2ciQ/HjjvbdsPCS9sT+Jr7xh3MzBsPojsQ==}
 
@@ -3152,6 +3158,9 @@ packages:
 
   '@react-native-community/cli-tools@20.2.0':
     resolution: {integrity: sha512-A5W2nqlTidPzGyXzS57jvHsMpQd8iOGSjePj4H318uMbhIdeIHQ5e59fNbdHahS62ISs+2p9s78sVHMbGVa1bg==}
+
+  '@react-native-community/cli-tools@21.0.0':
+    resolution: {integrity: sha512-kx+mkxacaOfcHJji8KrsxOz7oTL9G/H3m99kOSipwrnsIE6sx7Hnf4N57l7lj5PGicjomfLXPSK41tVS9dQmJw==}
 
   '@react-native-community/cli-types@20.2.0':
     resolution: {integrity: sha512-K60zY/ly8G9rGJQzZ+bFRyLEckAUzyF8Fu9a2Kw6JipCrOl7SiVRBVqjvOr/XnCRKuOpH8i9y7RVg07wkSGRBQ==}
@@ -9707,6 +9716,13 @@ snapshots:
       fast-xml-parser: 5.12.1
       picocolors: 1.1.1
 
+  '@react-native-community/cli-config-android@21.0.0':
+    dependencies:
+      '@react-native-community/cli-tools': 21.0.0
+      fast-glob: 3.3.3
+      fast-xml-parser: 5.12.0
+      picocolors: 1.1.1
+
   '@react-native-community/cli-config-apple@20.2.0':
     dependencies:
       '@react-native-community/cli-tools': 20.2.0
@@ -9753,6 +9769,14 @@ snapshots:
       logkitty: 0.7.1
       picocolors: 1.1.1
 
+  '@react-native-community/cli-platform-android@21.0.0':
+    dependencies:
+      '@react-native-community/cli-config-android': 21.0.0
+      '@react-native-community/cli-tools': 21.0.0
+      execa: 5.1.1
+      logkitty: 0.7.1
+      picocolors: 1.1.1
+
   '@react-native-community/cli-platform-apple@20.2.0':
     dependencies:
       '@react-native-community/cli-config-apple': 20.2.0
@@ -9789,6 +9813,19 @@ snapshots:
       execa: 5.1.1
       find-up: 5.0.0
       launch-editor: 2.14.2
+      mime: 2.6.0
+      ora: 5.4.1
+      picocolors: 1.1.1
+      prompts: 2.4.2
+      semver: 7.8.5
+
+  '@react-native-community/cli-tools@21.0.0':
+    dependencies:
+      '@vscode/sudo-prompt': 9.3.2
+      appdirsjs: 1.2.8
+      execa: 5.1.1
+      find-up: 5.0.0
+      launch-editor: 2.14.1
       mime: 2.6.0
       ora: 5.4.1
       picocolors: 1.1.1
