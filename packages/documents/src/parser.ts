@@ -55,8 +55,11 @@ export class DocumentParser {
    * Parses a document and returns its full hierarchical structure with sections and tables.
    */
   async parseDocument(filePath: string): Promise<ParsedDocument> {
-    const fileBuffer = await readFile(filePath);
     const fileStats = await stat(filePath);
+    if (!fileStats.isFile() || fileStats.size > 25 * 1024 * 1024) {
+      throw new Error("Document must be a regular file no larger than 25 MiB");
+    }
+    const fileBuffer = await readFile(filePath);
     const format = detectDocumentFormat(filePath, fileBuffer);
     const filename = basename(filePath);
     const sha256 = createHash("sha256").update(fileBuffer).digest("hex");

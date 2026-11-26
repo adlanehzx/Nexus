@@ -1,3 +1,4 @@
+import { DashboardHttpError } from "./api.js";
 import type {
   ConversationMessage,
   ConversationSummary,
@@ -30,6 +31,7 @@ export type ConversationHistoryApi = Pick<
   | "deleteConversation"
   | "sendToNexus"
   | "nexusMission"
+  | "cancelNexusMission"
 >;
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -68,6 +70,7 @@ export interface ConversationHistoryState {
   /** The mission in flight. One at a time, as the composer always allowed. */
   tracked: TrackedMission | null;
   sending: boolean;
+  cancelling: boolean;
   /** Last failure to send or follow a mission, shown in the chat. */
   error: string | null;
 }
@@ -120,6 +123,7 @@ export class ConversationHistory {
       loadingEarlier: false,
       tracked,
       sending: false,
+      cancelling: false,
       error: null,
     };
   }
@@ -323,16 +327,31 @@ export class ConversationHistory {
       });
     } catch (cause) {
       if (this.#state.tracked?.missionId !== tracked.missionId) return;
-      this.#set({ tracked: null, error: messageOf(cause) });
+      this.#set({ error: messageOf(cause) });
     } finally {
       this.#polling = false;
     }
   }
 
-  /** Halts tracking of the currently in-flight mission and releases the composer. */
-  stopTracked(): void {
-    if (this.#state.tracked !== null) {
-      this.#set({ tracked: null });
+  /** Keep tracking until the server confirms cancellation; a failed request is retryable. */
+  async stopTracked(): Promise<void> {
+    const tracked = this.#state.tracked;
+    if (tracked === null || this.#state.cancelling) return;
+    this.#set({ cancelling: true });
+    try {
+      const mission = await this.#api.cancelNexusMission(tracked.missionId);
+      if (this.#state.tracked?.missionId !== tracked.missionId) return;
+      this.#set({
+        error: null,
+        entries: this.#state.entries.map((entry) =>
+          entry.mission?.missionId === mission.missionId ? { ...entry, mission } : entry,
+        ),
+        ...(isSettled(mission) ? { tracked: null } : {}),
+      });
+    } catch (cause) {
+      this.#set({ error: messageOf(cause) });
+    } finally {
+      this.#set({ cancelling: false });
     }
   }
 
@@ -412,7 +431,9 @@ export class ConversationHistory {
       });
     } catch (cause) {
       if (view !== this.#view) return;
-      if (!restoring) {
+      const unavailable =
+        cause instanceof DashboardHttpError && [403, 404, 410].includes(cause.status);
+      if (!restoring || !unavailable) {
         this.#set({ transcriptStatus: "error", transcriptError: messageOf(cause) });
         return;
       }

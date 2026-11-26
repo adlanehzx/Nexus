@@ -66,6 +66,11 @@ export interface Palette {
   readonly line: string;
   /** Emphasised border: focused fields, selected cards, table headers. */
   readonly lineStrong: string;
+  /**
+   * Boundary of an input, checkbox, switch or secondary button, at least 3:1 on
+   * every surface (WCAG 1.4.11). Optional: only the Cadran identity defines it.
+   */
+  readonly lineControl?: string;
 
   /** Primary reading colour. */
   readonly text: string;
@@ -89,6 +94,8 @@ export interface Palette {
   readonly signal: string;
   /** Tinted liveness fill. */
   readonly signalMuted: string;
+  /** Focus ring, at least 3:1 on every surface. Optional: Cadran only. */
+  readonly focus?: string;
 
   /** Nominal, succeeded, healthy. */
   readonly ok: StatusTone;

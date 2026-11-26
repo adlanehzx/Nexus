@@ -1,3 +1,4 @@
+import { fileWorkspaceRoutes } from "./routes/v1/file-workspaces.js";
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -328,6 +329,7 @@ export async function buildApp(options: BuildAppOptions) {
       await v1.register(osintRoutes);
       await v1.register(satelliteRoutes);
       await v1.register(domotiqueRoutes);
+      await v1.register(fileWorkspaceRoutes);
       await v1.register(worktreeRoutes);
       await v1.register(checkpointRoutes);
       await v1.register(providerRoutes);

@@ -5,22 +5,12 @@ import { CheckpointManager, createCheckpointToolDefinitions } from "../src/index
 describe("Unified Checkpoints & Rollback Architecture", () => {
   const tmpDir = os.tmpdir();
 
-  it("captures checkpoint and stores it in thread index", async () => {
+  it("rejects capture outside Git instead of inventing a restorable snapshot", async () => {
     const manager = new CheckpointManager();
-    const checkpoint = await manager.captureCheckpoint({
-      threadId: "test-thread-99",
-      turnNumber: 1,
-      cwd: tmpDir,
-      description: "Initial state",
-    });
-
-    expect(checkpoint.id).toBeDefined();
-    expect(checkpoint.threadId).toBe("test-thread-99");
-    expect(checkpoint.turnNumber).toBe(1);
-
-    const list = await manager.listCheckpoints("test-thread-99");
-    expect(list.length).toBe(1);
-    expect(list[0]?.id).toBe(checkpoint.id);
+    await expect(
+      manager.captureCheckpoint({ threadId: "test-thread-99", turnNumber: 1, cwd: tmpDir }),
+    ).rejects.toThrow("Git repository");
+    expect(await manager.listCheckpoints("test-thread-99")).toEqual([]);
   });
 
   it("registers checkpoint tools and executes checkpoint creation tool", async () => {

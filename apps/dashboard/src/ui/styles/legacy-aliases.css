@@ -1,0 +1,33 @@
+/*
+ * Legacy token aliases.
+ *
+ * Names that older components still read. Each points at the Cadran token that
+ * replaces it, so those components follow the identity, the theme and the mode
+ * without being edited. Nothing new may use a name from this file: the cleanup
+ * package of the migration (docs/design/03-design-system.md §10) deletes it once
+ * the last reader is gone.
+ */
+:root {
+  --nx-text-primary: var(--nx-text);
+  --nx-text-subtle: var(--nx-text-faint);
+  --nx-muted: var(--nx-text-muted);
+  --nx-font-heading: var(--nx-font-display);
+  --nx-font-futuristic: var(--nx-font-sans);
+  --nx-success: var(--nx-ok);
+  --nx-accent-surface: var(--nx-accent-muted);
+  --color-muted: var(--nx-text-muted);
+  --color-success: var(--nx-ok);
+  --color-warning: var(--nx-warn);
+  --color-error: var(--nx-danger);
+  --color-danger: var(--nx-danger);
+  --color-accent: var(--nx-accent);
+  --color-brand-cyan: var(--nx-signal);
+  --color-bg-subtle: var(--nx-surface-hover);
+  --accent-color: var(--nx-accent);
+  --border-color: var(--nx-line);
+  --border-subtle: var(--nx-line);
+  --code-bg: var(--nx-canvas-sunken);
+  --success: var(--nx-ok);
+  --warn: var(--nx-warn);
+  --warning: var(--nx-warn);
+}

@@ -1,6 +1,6 @@
 # NEXUS web dashboard — Phase 2: UX architecture
 
-Scope: `apps/dashboard` only. This document specifies structure and behaviour; `03-design-system.md` specifies appearance and the migration. Nothing here changes business logic: every screen keeps the API calls it makes today, and where the design needs data the dashboard does not yet read, the endpoint is named and the wiring is listed in section 12.
+Scope: `apps/dashboard` only. This document specifies structure and behaviour; `03-design-system.md` specifies appearance and the migration. Screens keep the API calls they make today; where the design needs data the dashboard does not yet read, the endpoint is named in section 12. Two server additions were approved by the owner after the first version of this document — cancelling a mission, and a mission-scoped standing approval — and are specified in section 12.2. Nothing else changes business logic.
 
 Visual reference: [`directions/c-cadran.html`](directions/c-cadran.html).
 
@@ -14,6 +14,8 @@ Visual reference: [`directions/c-cadran.html`](directions/c-cadran.html).
 | 2 | **Spatial OS is removed.** One shell. Each Spatial-only screen is folded or dropped (section 3). |
 | 3 | **The seven accent themes are removed.** One identity, two themes (light, dark). |
 | 4 | **Orbitron and Rajdhani are removed everywhere**, logotype included. |
+| 5 | **"Stop" cancels the mission.** It no longer only stops the page from following it. Needs a server route (section 12.2). |
+| 6 | **Approvals offer "always allow for this mission".** Needs a server route (section 12.2). |
 
 ### Taken here, on the questions left open
 
@@ -28,6 +30,7 @@ Visual reference: [`directions/c-cadran.html`](directions/c-cadran.html).
 | Command palette | **`Ctrl K` / `Cmd K` opens a palette in the one shell.** | Today the shortcut switches shell. The palette is the keyboard-first entry point Codex and Claude Code users expect. |
 | i18n mechanism | **Unchanged.** `tr("en", "fr")` stays for screen copy; the dictionary is used for shell and component strings only. | 2,647 call sites; converting them is not a visual change and would collide with every work package. |
 | Emergency stop | **Always visible in the status bar; stopping is immediate, resuming asks for confirmation.** | Stopping is the fail-safe direction and must never wait for a dialog. Resuming re-enables autonomous actions and deserves one. |
+| Diffs in a conversation (left to me by the owner) | **Shown in the mission card when a checkpoint is recorded under the conversation's id; otherwise the card links to Activity → Repositories.** No server change. | A checkpoint's `threadId` is a free string chosen by whoever records it (the Worktrees screen defaults to `"default"`), so nothing ties it to a conversation today. Looking it up by the conversation id costs one request, shows the diff whenever the link exists, and degrades to a plain link when it does not — without inventing a relation the data does not have. |
 
 ---
 
@@ -191,14 +194,14 @@ NEXUS      3 of 6 MCP servers declare overly broad scopes. Fixing the configurat
 + APPROVAL REQUIRED ------------ HIGH RISK ---------------- expires in 04:32 +
 | codex is asking to push a branch to the remote repository.                 |
 | $ git push origin fix/mcp-scopes                                           |
-| [Approve  A]  [Decline  R]                               View the run      |
+| [Approve  A]  [Decline  R]      Always allow git.push for this mission     |
 +----------------------------------------------------------------------------+
 ```
 
 1. **Send.** The composer stays enabled while a mission runs. A message sent during a mission is queued and shown as queued; it is delivered when the mission reaches a terminal state. (Today the textarea is disabled.)
-2. **Mission card.** Appears as soon as the orchestrator returns a mission. Header: title, agent profiles, elapsed time, token count, a control to stop following. Body: the step list, one row per orchestrated task with its state. Footer: progress as a segmented bar plus the counter.
+2. **Mission card.** Appears as soon as the orchestrator returns a mission. Header: title, agent profiles, elapsed time, token count, and **Stop the mission**, which cancels it (section 4.5). Body: the step list, one row per orchestrated task with its state. Footer: progress as a segmented bar plus the counter.
 3. **Log and diff, in place.** Each step expands to the tool calls behind it (tool, action, risk level, status, duration, error). File changes appear as collapsible diffs under the card.
-4. **Approval card.** When a run is waiting for confirmation, a card appears in the thread at the point where the work stopped: the action, the exact command or description, the risk level, the tool, the expiry countdown. `A` approves and `R` declines when the card has focus; `Alt A` moves focus to the oldest pending approval from anywhere.
+4. **Approval card.** When a run is waiting for confirmation, a card appears in the thread at the point where the work stopped: the action, the exact command or description, the risk level, the tool, the expiry countdown. `A` approves and `R` declines when the card has focus; `Alt A` moves focus to the oldest pending approval from anywhere. A third, quieter action approves and remembers: **Always allow `<tool>` for this mission** (section 4.6).
 5. **Outcome.** The card collapses to one line (`APPROVED · 14:07`), the mission continues or ends, the final answer is rendered in the reading column with a copy control.
 
 The same approval is also listed in **Activity → Approvals** and counted in the sidebar badge and the status bar. Answering it in one place resolves it everywhere.
@@ -216,15 +219,17 @@ The same approval is also listed in **Activity → Approvals** and counted in th
 | Pending approvals | `GET /api/v1/confirmations` → `id`, `taskId` (the run id), `capability`, `action`, `description`, `riskLevel`, `expiresAt` | **No.** Route exists in `services/api/src/routes/v1/tasks.ts`; no `DashboardApi` method yet |
 | Answer an approval | `POST /api/v1/confirmations/:id/respond` `{ decision: "approved" \| "rejected" }` | **No.** `@nexus/client-core` already has `respondToConfirmation` |
 | Count waiting | `GET /api/v1/dashboard/overview` → `agentRuns.waitingForConfirmation` | Yes |
+| Cancel a mission | `POST /api/v1/orchestrator/missions/:id/cancel` | **Does not exist yet** — section 12.2 |
+| Approve and remember | `POST /api/v1/confirmations/:id/respond` with `scope: "mission"`; list and revoke under `/api/v1/orchestrator/missions/:id/approvals` | **Does not exist yet** — section 12.2 |
 
 ### 4.3 What the data does not support, and what the design does about it
 
 Stated plainly so the build does not paper over it:
 
 - **Per-step duration and per-step token counts** are not in the collaboration payload. The step row shows state, title and agent; a duration appears only when a run can be matched to the step. The mission header's totals come from the runs' `metrics` and are always available.
-- **Linking a diff to a conversation** depends on the checkpoint `threadId` matching the conversation; this has to be verified in the build. If it does not, diffs stay in Activity → Repositories and the mission card links to them instead of embedding them.
-- **"Always allow for this mission"** has no endpoint the dashboard can call. The approval card therefore offers Approve and Decline only. The earlier mock showed that third button; it has been removed from the reference page.
-- **Stopping a mission.** The control in the composer today is labelled "Arrêter l'orchestration" but calls `ConversationHistory.stopTracked()`, which only stops the page from following the mission; the agents keep working. Until a cancel call is wired, the control is labelled for what it does — "Ne plus suivre" / "Stop following" — and the mission stays visible as running in Activity. Wiring a real cancel (`POST /api/v1/agent-core/runs/:runId/cancel` exists server-side) is listed in section 12 as a decision for the owner, because it changes what the button does.
+- **Linking a diff to a conversation.** Nothing ties a checkpoint thread to a conversation: `threadId` is a free string. The mission card asks for checkpoints recorded under the conversation's id (`GET /api/v1/checkpoints/:conversationId`). If there are any, the diff of each turn is embedded under the card with `DiffView`; if there are none, the card shows the files from the mission's artifacts and a link to Activity → Repositories. No server change, and no diff is ever shown that does not belong to the conversation.
+- **"Always allow for this mission"** had no endpoint when this document was first written. The owner asked for it; the contract is in section 12.2 and the behaviour in section 4.6. Until package B has shipped it, the approval card shows Approve and Decline only.
+- **Stopping a mission.** The control in the composer today is labelled "Arrêter l'orchestration" but calls `ConversationHistory.stopTracked()`, which only stops the page from following the mission; the agents keep working. The owner decided that stop must cancel. A correction to the first version of this document: the cancel routes that exist today (`/agent-core/runs/:runId/cancel`, `/tasks/:taskId/cancel`) stop one agent run or one device task, **not an orchestrated mission** — the mission engine has no cancel at all. A new route is therefore needed (section 12.2); behaviour in section 4.5.
 - **Streaming.** Answers arrive whole when the mission ends. The design shows progress through the step list, not through streamed text, and makes no use of a typing effect.
 
 ### 4.4 Activity
@@ -242,6 +247,30 @@ The same information across all conversations. One page, tabs, each a table with
 | Audit | Security events. | `/dashboard/security` |
 | System | Service health table, error rates, latency per agent, recent activity. | `/dashboard/overview`, `/dashboard/observability` |
 | Repositories | Worktrees, checkpoints, linked pull requests. | `/worktrees`, `/checkpoints/:threadId`, source-control links |
+
+### 4.5 Stopping a mission
+
+- **One control, one meaning.** "Arrêter la mission" / "Stop the mission", in the mission card header and in the main header while a mission of the open conversation is running. "Stop following" disappears: with a composer that stays enabled there is nothing left for it to do.
+- **Immediate, no dialog.** Stopping is the safe direction, as for the emergency stop, and the reference tools stop on one action. The cost of a mistaken click is lost agent time, not an outside effect, and the message can be sent again.
+- **What the user sees.** The button shows progress and cannot be activated twice. The card goes to `ANNULATION…`, then `ANNULÉE · étape 3/5 · 02:14`. Steps that finished keep their result; the running step and the queued ones are marked cancelled, in the neutral tone. A pending approval of that mission collapses to `ANNULÉ`. What the agents had already written stays in the thread, labelled as partial.
+- **What it does not do.** It does not undo actions already performed, and says so in the cancelled card when at least one tool call with an outside effect had completed: "2 actions avaient déjà été exécutées." with a link to the run.
+- **No single-key shortcut.** `Esc` closes overlays; binding it to cancellation would lose work by accident. The action is in the palette ("Arrêter la mission").
+- **If the request fails,** the card stays in its running state and shows the error with Retry. It never shows a mission as cancelled that is still running.
+
+### 4.6 Standing approval for a mission
+
+The third action of an approval card: **"Toujours autoriser `git.push` pour cette mission"**. The label names exactly what is granted — the tool and action of the request in front of the user.
+
+| Rule | Reason |
+| --- | --- |
+| Scope is one mission, one tool, one action. It ends when the mission reaches a terminal state. | The narrowest grant that still removes the repeated prompt. Nothing outlives the work it was given for. |
+| Never offered for `CRITICAL`. The server refuses it as well. | The permission service already forces a confirmation for every critical action; a standing approval must not be a way round it. |
+| Covers requests at or below the risk level of the request it was granted on. | Approving a `MEDIUM` action must not pre-approve a `HIGH` one from the same tool. |
+| Only offered when the confirmation belongs to a mission. | A run outside a mission has nothing to scope the grant to. |
+| Visible while it is active: a chip on the mission card — `1 AUTORISATION · git.push` — with **Révoquer**; also listed in Activity → Approvals. | A permission the user cannot see is a permission they forget they gave. |
+| Each action approved under it is written to the audit trail with the grant's id, and shown in the step's tool log as "autorisé par règle". | The trace must say why no question was asked. |
+| The emergency stop and cancelling the mission both revoke every standing approval of that mission. | Stopping must leave nothing armed. |
+| It is the quietest of the three buttons (ghost, no shortcut key), placed apart from Approve and Decline. | The broad choice must not be the easy one. |
 
 ---
 
@@ -382,6 +411,8 @@ Mapping of today's call sites:
 | `sections/runs.tsx:20` | Replay a run (tools disabled) | 1, neutral tone — it has no outside effect |
 | `sections/domotique-home.tsx:411`, `:1012`, `:1306`, `:2163`, `:2552` | Unlink or delete Home Assistant items, rooms, scenes, routines | 1 |
 | `App.tsx` header | Emergency stop / resume | 3 / 1 |
+| Conversation | Stop the mission | 3 — immediate, safe direction |
+| Approval card | Always allow for this mission | Not a dialog: a deliberate third button, never offered for `CRITICAL` (section 4.6) |
 | `sections/trading-console.tsx` | Kill switch; enable production; credentials; submit order | 3; 2; 2; 2 when the mode is real, 0 when virtual |
 | `Settings.tsx` backup tab | Restore and apply | 2 |
 
@@ -405,7 +436,7 @@ Result groups, in this order:
 1. **Pending** — approvals waiting, as the first results when any exist.
 2. **Go to** — every route in section 1.5, including each settings page and each Lab tab.
 3. **Conversations** — by title (the list already loaded; server search stays in the sidebar field).
-4. **Actions** — New conversation, Emergency stop / Resume, Toggle theme, Switch language, Detect installed CLIs, Refresh, Sign out.
+4. **Actions** — New conversation, Stop the mission (when one is running in the open conversation), Emergency stop / Resume, Toggle theme, Switch language, Detect installed CLIs, Refresh, Sign out.
 
 Each result shows its shortcut when it has one. The palette is built from the route table and a registry of actions, so a new page appears in it without extra work.
 
@@ -482,21 +513,70 @@ Targets, to be verified in the build, not claims about it:
 
 ---
 
-## 12. What the build needs that is not in the dashboard client yet
+## 12. What the build needs
 
-Wiring only; no server change. Listed so it is planned, and so it is visible where the design depends on it.
+### 12.1 Dashboard wiring of routes that already exist
+
+No server change.
 
 | Need | Exists server-side | Work |
 | --- | --- | --- |
 | List pending confirmations | `GET /api/v1/confirmations` | Add `DashboardApi.confirmations()` |
-| Answer a confirmation | `POST /api/v1/confirmations/:id/respond` | Add `DashboardApi.respondToConfirmation()` (or call the `@nexus/client-core` method) |
+| Answer a confirmation | `POST /api/v1/confirmations/:id/respond` | Add `DashboardApi.respondToConfirmation()` |
 | Mission steps in the conversation | `…/missions/:id/collaboration`, `…/artifacts` | Call the existing methods from the conversation |
 | Tool log in the conversation | `/dashboard/runs` | Reuse the existing method with a filter |
+| Diff in the conversation | `/checkpoints/:threadId`, `/checkpoints/:threadId/diff` | Call the existing methods with the conversation id (section 4.3) |
 | One telemetry store | — | New `lib/telemetry.ts`, replacing the `setInterval` in `App.tsx` |
 | Route table with parameters and redirects | — | New `lib/routes.ts` |
 
-Decisions that are **not** design decisions and are left to the owner:
+### 12.2 Server additions approved by the owner
 
-1. **Should "stop" cancel the mission?** A cancel route exists (`POST /api/v1/agent-core/runs/:runId/cancel`, and task cancel). Wiring it changes behaviour. Until decided, the control is labelled "Stop following".
-2. **Should approvals offer "always allow for this mission"?** It needs a grant endpoint the dashboard can call. Not designed in until it exists.
-3. **Does a checkpoint thread correspond to a conversation?** Decides whether diffs are embedded in the mission card or linked.
+These are the only two changes of behaviour in the redesign. They are specified here as a contract so that the server work (package B in `03-design-system.md` §10) and the dashboard work can proceed in parallel. They were asked for in two words each; the rules below are my reading of what a safe version is, and should be reviewed before they are built.
+
+**A. Cancel an orchestrated mission**
+
+```
+POST /api/v1/orchestrator/missions/:missionId/cancel
+  auth      requireUser; the mission must belong to the caller (same check as the status read)
+  body      none
+  200       the mission view (same schema as GET …/missions/:missionId), state "cancelled",
+            or its unchanged terminal state if it had already ended (idempotent)
+  404       unknown mission, or not the caller's
+```
+
+What it has to do, across three layers that have no cancel today:
+
+| Layer | Today | Needed |
+| --- | --- | --- |
+| Mission engine (`services/mission-engine`, Python) | Missions and tasks have a `cancelled` state, reached only when a confirmation is cancelled. No cancel endpoint. | `POST /v1/missions/{mission_id}/cancel`: mission → `cancelled`; tasks in `blocked`, `ready`, `retry_wait`, `awaiting_confirmation` → `cancelled`; the running attempt is refused at its next lease renewal (`repository.renew`), which is the existing point where a worker checks in, and ends as `cancelled`. Emits `mission.cancelled`. |
+| `@nexus/mission-control-client` | `MissionControlPort` has no cancel. | `cancelMission(id)`. |
+| API (`services/api`) | `AcpOrchestrator` has `submit` and `status`. | `cancel(userId, missionId)`: calls the engine, cancels the mission's agent-core runs through the existing `agentCore.cancel(runId)`, rejects their pending confirmations, revokes the mission's standing approvals and grants. |
+
+Honest limit: a step that is in the middle of an external call cannot be interrupted before that call returns; cancellation takes effect at the next lease renewal (30 s lease today). The interface shows `ANNULATION…` until the server reports `cancelled`.
+
+**B. Standing approval for a mission**
+
+```
+POST /api/v1/confirmations/:confirmationId/respond
+  body      { decision: "approved" | "rejected", scope?: "once" | "mission" }     scope defaults to "once"
+  422       scope "mission" on a CRITICAL request, on a rejection, or on a request that belongs to no mission
+
+GET  /api/v1/orchestrator/missions/:missionId/approvals
+  200       { approvals: [{ id, tool, action, maxRisk, createdAt, usedCount }] }
+
+DELETE /api/v1/orchestrator/missions/:missionId/approvals/:approvalId
+  200       { revoked: true }
+```
+
+- A standing approval is the tuple (user, mission, tool, action, maximum risk). It is created by an approval with `scope: "mission"` and deleted when the mission ends, is cancelled, or the global pause is engaged.
+- The check belongs in the agent loop next to the existing `permissions.check` call (`packages/agent-core/src/loop.ts`), after the rules that deny and after the `CRITICAL` rule: a request that would return `confirm` returns `allow` when a standing approval matches. The mission is known there from the run state (`missionExternalKey`); the tool context does not carry it today.
+- Every use is written to the security audit log with the approval's id.
+- The existing `payloadHash` protection is untouched for one-off approvals. A standing approval is by nature not bound to one payload; that is the trade the user makes, which is why the scope is one tool and one action, never a whole mission.
+
+### 12.3 Decisions closed
+
+| Question | Answer |
+| --- | --- |
+| Should "stop" cancel the mission? | **Yes** (owner). Contract A above. |
+| Should approvals offer "always allow for this mission"? | **Yes, add the route** (owner). Contract B above, with the limits of section 4.6. |
+| Does a checkpoint thread correspond to a conversation? | **Left to the designer.** It does not, today. Diffs are embedded when a checkpoint exists under the conversation's id and linked otherwise (section 4.3). |

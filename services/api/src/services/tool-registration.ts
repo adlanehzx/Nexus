@@ -1,3 +1,6 @@
+import { createDocumentTools, DocumentParser, DocumentMemoryBridge } from "@nexus/documents";
+import type { MemoryService } from "@nexus/memory";
+import type { FileWorkspaces } from "./file-workspaces.js";
 import { createOsintTools } from "@nexus/osint";
 import { createHomeTools, type HomeToolsHost } from "@nexus/devices";
 import type { ToolDefinition, ToolRegistry } from "@nexus/tools";
@@ -22,6 +25,8 @@ import type { OsintService } from "./osint-service.js";
 /** What a domain may draw on to build its tools. */
 export interface ToolDomainContext {
   readonly osint: OsintService;
+  readonly memory?: MemoryService;
+  readonly fileWorkspaces?: FileWorkspaces;
   /** Lab 4 — house devices, scenes. Absent = domain contributes nothing. */
   readonly domotique?: HomeToolsHost | undefined;
 }
@@ -43,6 +48,17 @@ export interface ToolDomain {
  * against the container constructor.
  */
 export const TOOL_DOMAINS: readonly ToolDomain[] = [
+  {
+    name: "documents",
+    tools: (context) =>
+      context.fileWorkspaces
+        ? createDocumentTools({
+            parser: new DocumentParser({ enableOcr: false }),
+            ...(context.memory ? { memoryBridge: new DocumentMemoryBridge(context.memory) } : {}),
+            authorizePath: (userId, path) => context.fileWorkspaces!.authorize(userId, path),
+          })
+        : [],
+  },
   {
     name: "osint",
     tools: (context) => createOsintTools(context.osint),

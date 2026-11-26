@@ -1,5 +1,5 @@
 /*
- * NEXUS Signal — dashboard stylesheet.
+ * NEXUS Cadran — dashboard stylesheet (legacy rules, being migrated).
  *
  * Every value here comes from @nexus/design. If a raw colour, radius or
  * duration appears below, it is a bug: the token set is the only source.
@@ -17,52 +17,11 @@
  *                updates underneath you.
  */
 
-@import "@nexus/design/tokens.css";
-@import "./color-themes.css";
+@import "@nexus/design/cadran.css";
+@import "./styles/fonts.css";
+@import "./styles/legacy-aliases.css";
+@import "./styles/base.css";
 @import "./career-education.css";
-
-/* ───────────────────────────────────────────────────────────────────────────
-   Futuristic Sci-Fi Typography (Orbitron & Rajdhani Local WOFF2)
-   ─────────────────────────────────────────────────────────────────────────── */
-
-@font-face {
-  font-family: "Orbitron";
-  font-style: normal;
-  font-weight: 400 900;
-  font-display: swap;
-  src: url("../assets/fonts/Orbitron.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Rajdhani";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("../assets/fonts/Rajdhani-500.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Rajdhani";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("../assets/fonts/Rajdhani-600.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Rajdhani";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("../assets/fonts/Rajdhani-700.woff2") format("woff2");
-}
-
-:root {
-  --nx-font-display: "Orbitron", "Inter var", Inter, monospace;
-  --nx-font-futuristic: "Rajdhani", "Inter var", Inter, sans-serif;
-  --nx-success: #10b981;
-  --nx-danger: #ef4444;
-}
 
 /* ───────────────────────────────────────────────────────────────────────────
    Reset and document
@@ -82,10 +41,9 @@ body,
 body {
   background: var(--nx-canvas);
   color: var(--nx-text);
-  font-family: var(--nx-font-futuristic), var(--nx-font-sans);
+  font-family: var(--nx-font-sans);
   font-size: var(--nx-size-sm);
   line-height: var(--nx-leading-normal);
-  letter-spacing: 0.02em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
 }
@@ -97,7 +55,6 @@ h3,
 .eyebrow,
 .career-kicker {
   font-family: var(--nx-font-display);
-  letter-spacing: 0.04em;
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -112,23 +69,9 @@ h3,
 .cyber-cursor {
   display: inline-block;
   margin-left: 3px;
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-family: var(--nx-font-mono, monospace);
   font-weight: 700;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--nx-signal) 70%, transparent);
-  animation: cyberCursorPulse 0.85s steps(2, start) infinite;
-}
-
-@keyframes cyberCursorPulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.15;
-    transform: scale(0.92);
-  }
 }
 
 button,
@@ -149,7 +92,7 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--nx-accent);
+  outline: var(--nx-focus-ring);
   outline-offset: 2px;
   border-radius: var(--nx-radius-xs);
 }
@@ -226,7 +169,7 @@ samp {
 }
 
 .eyebrow {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -488,7 +431,6 @@ samp {
   border-color: var(--nx-accent-line);
   color: var(--nx-accent);
   transform: translateX(-2px);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--nx-accent) 20%, transparent);
 }
 
 .sidebar-mode-badge {
@@ -616,7 +558,6 @@ samp {
   padding: 3px 8px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
@@ -667,15 +608,9 @@ samp {
   border-radius: var(--nx-radius-pill);
   background: var(--nx-ok);
   box-shadow: 0 0 0 3px var(--nx-ok-bg);
-  animation: dot-breathe 2.4s var(--nx-ease) infinite;
 }
 .status-dot {
   margin-right: var(--nx-space-4);
-}
-@keyframes dot-breathe {
-  50% {
-    opacity: 0.45;
-  }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -780,13 +715,14 @@ samp {
   background: var(--nx-surface-active);
 }
 .button.primary {
-  border-color: transparent;
-  background: var(--nx-accent);
-  color: var(--nx-text-on-accent);
+  border-color: var(--nx-button-primary-bg);
+  background: var(--nx-button-primary-bg);
+  color: var(--nx-button-primary-fg);
   font-weight: var(--nx-weight-semibold);
 }
 .button.primary:hover:not(:disabled) {
-  background: var(--nx-accent-hover);
+  border-color: var(--nx-button-primary-bg-hover);
+  background: var(--nx-button-primary-bg-hover);
 }
 .button.secondary,
 .button.secondaire {
@@ -808,8 +744,12 @@ samp {
   padding: var(--nx-space-1) var(--nx-space-4);
   font-size: var(--nx-size-2xs);
 }
-.button:disabled {
-  opacity: 0.45;
+/* Disabled stays legible: a muted fill, never a faded label. */
+.button:disabled,
+.button.primary:disabled {
+  border-color: var(--nx-line);
+  background: var(--nx-surface-hover);
+  color: var(--nx-text-faint);
 }
 
 /*
@@ -1044,7 +984,7 @@ select.field {
 .status-badge.info {
   border-color: var(--nx-signal);
   background: var(--nx-signal-muted);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -1329,25 +1269,13 @@ details.card[open] > summary {
   display: block;
   height: 16px;
   border-radius: var(--nx-radius-xs);
-  background: linear-gradient(
-    90deg,
-    var(--nx-surface) 20%,
-    var(--nx-surface-hover) 45%,
-    var(--nx-surface) 70%
-  );
-  background-size: 250% 100%;
-  animation: shimmer 1.4s var(--nx-ease) infinite;
+  background: var(--nx-surface-active);
 }
 .loading-state span:nth-child(2) {
   width: 82%;
 }
 .loading-state span:nth-child(3) {
   width: 64%;
-}
-@keyframes shimmer {
-  to {
-    background-position: -250% 0;
-  }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -1361,10 +1289,7 @@ details.card[open] > summary {
   border: 1px solid color-mix(in srgb, var(--nx-signal) 25%, transparent);
   border-radius: var(--nx-radius-lg, 14px);
   background: var(--nx-surface);
-  backdrop-filter: blur(16px);
-  box-shadow:
-    0 10px 36px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 color-mix(in srgb, var(--nx-signal) 15%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--nx-signal) 15%, transparent);
   margin-top: var(--nx-space-5);
   margin-bottom: var(--nx-space-6);
 }
@@ -1393,13 +1318,12 @@ th {
   border-bottom: 2px solid color-mix(in srgb, var(--nx-signal) 40%, transparent);
   background: var(--nx-surface-raised);
   color: var(--nx-text-muted);
-  font-family: var(--nx-font-display, "Orbitron", monospace);
+  font-family: var(--nx-font-display);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* Subtle futuristic zebra striping */
@@ -2061,7 +1985,6 @@ tbody tr:last-child td {
   width: min(var(--chat-history-width), 86%);
   background: color-mix(in srgb, var(--nx-surface-raised) 94%, transparent);
   box-shadow: var(--nx-shadow-overlay);
-  backdrop-filter: blur(10px);
 }
 .chat-history-scrim {
   position: absolute;
@@ -2343,7 +2266,7 @@ tbody tr:last-child td {
   border-radius: var(--nx-radius-pill);
   background: var(--nx-signal);
   box-shadow: 0 0 0 3px var(--nx-signal-muted);
-  animation: dot-breathe 2.4s var(--nx-ease) infinite;
+  animation: nx-blink var(--nx-blink);
 }
 .chat-history-row-actions {
   display: flex;
@@ -2420,14 +2343,7 @@ tbody tr:last-child td {
 .chat-history-skeleton span {
   height: 26px;
   border-radius: var(--nx-radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--nx-surface) 20%,
-    var(--nx-surface-hover) 45%,
-    var(--nx-surface) 70%
-  );
-  background-size: 250% 100%;
-  animation: shimmer 1.4s var(--nx-ease) infinite;
+  background: var(--nx-surface-active);
 }
 .chat-history-sr {
   position: absolute;
@@ -2628,7 +2544,7 @@ tbody tr:last-child td {
 }
 
 .chat-link {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   text-decoration: underline;
   text-underline-offset: 3px;
   transition: opacity 0.15s ease;
@@ -2645,7 +2561,6 @@ tbody tr:last-child td {
   background: #090d16;
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .chat-code-header {
@@ -2708,7 +2623,6 @@ tbody tr:last-child td {
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(13, 17, 28, 0.7);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .chat-table {
@@ -2726,7 +2640,7 @@ tbody tr:last-child td {
 .chat-table th {
   padding: 0.6rem 0.9rem;
   font-weight: 600;
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2754,8 +2668,6 @@ tbody tr:last-child td {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--nx-radius-lg, 12px);
   padding: 1rem 1.25rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(8px);
 }
 
 .chat-header-bar {
@@ -2780,13 +2692,9 @@ tbody tr:last-child td {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--nx-signal) 20%, transparent),
-    color-mix(in srgb, var(--nx-accent) 20%, transparent)
-  );
+  background: var(--nx-signal-muted);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 40%, transparent);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -2893,7 +2801,6 @@ tbody tr:last-child td {
   border: 1px solid var(--nx-line-strong, rgba(255, 255, 255, 0.12));
   border-radius: var(--nx-radius-lg, 10px);
   background: var(--nx-surface-raised, rgba(15, 23, 42, 0.75));
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   transition:
     border-color var(--nx-fast) var(--nx-ease),
     box-shadow var(--nx-fast) var(--nx-ease);
@@ -2901,9 +2808,7 @@ tbody tr:last-child td {
 
 .chat-composer:focus-within {
   border-color: var(--nx-accent-line);
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.35),
-    0 0 0 1px color-mix(in srgb, var(--nx-accent) 30%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nx-accent) 30%, transparent);
 }
 
 .chat-composer textarea {
@@ -3073,15 +2978,12 @@ tbody tr:last-child td {
   background: var(--nx-surface-raised, #18181b);
   border: 1px solid var(--nx-line-strong, rgba(255, 255, 255, 0.15));
   border-radius: 8px;
-  box-shadow:
-    0 16px 36px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
   z-index: 1000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: t3PopoverIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: t3PopoverIn var(--nx-normal) var(--nx-ease);
 }
 
 @keyframes t3PopoverIn {
@@ -3270,7 +3172,6 @@ tbody tr:last-child td {
   background: var(--nx-accent-surface, color-mix(in srgb, var(--nx-accent) 15%, transparent));
   color: var(--nx-accent);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .composer-actions {
@@ -3307,8 +3208,8 @@ tbody tr:last-child td {
   padding: 0 0.8rem;
   border: 0;
   border-radius: 5px;
-  background: var(--nx-accent);
-  color: var(--nx-text-on-accent, #030712);
+  background: var(--nx-button-primary-bg);
+  color: var(--nx-button-primary-fg);
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
@@ -3319,11 +3220,12 @@ tbody tr:last-child td {
 }
 
 .composer-send-btn:hover:not(:disabled) {
-  background: var(--nx-accent-hover, #7dd3fc);
+  background: var(--nx-button-primary-bg-hover);
 }
 
 .composer-send-btn:disabled {
-  opacity: 0.35;
+  background: var(--nx-surface-hover);
+  color: var(--nx-text-faint);
   cursor: not-allowed;
 }
 
@@ -3351,7 +3253,6 @@ tbody tr:last-child td {
 .composer-stop-btn:hover {
   background: color-mix(in srgb, var(--nx-danger) 22%, transparent);
   border-color: var(--nx-danger);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--nx-danger) 30%, transparent);
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -3544,7 +3445,7 @@ tbody tr:last-child td {
   padding: 2px 6px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--nx-signal) 10%, transparent);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 25%, transparent);
   text-transform: uppercase;
 }
@@ -3574,7 +3475,7 @@ tbody tr:last-child td {
 }
 .agent-status-badge.active {
   background: color-mix(in srgb, var(--nx-signal) 15%, transparent);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 35%, transparent);
 }
 .agent-status-badge.attention,
@@ -3636,7 +3537,7 @@ tbody tr:last-child td {
   color: var(--nx-text-muted, #94a3b8);
 }
 .agent-live-text.active {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
 }
 .agent-live-text.warning {
   color: var(--nx-warn, #f59e0b);
@@ -3999,16 +3900,10 @@ tbody tr:last-child td {
   margin: 0 auto;
   padding: clamp(2rem, 4vw, 2.75rem) clamp(1.75rem, 4.5vw, 2.5rem);
   border-radius: var(--nx-radius-lg, 16px);
-  background: linear-gradient(145deg, rgba(13, 21, 39, 0.92) 0%, rgba(8, 14, 28, 0.96) 100%);
+  background: var(--nx-surface);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 28%, transparent);
-  box-shadow:
-    0 24px 64px -12px rgba(0, 0, 0, 0.65),
-    0 0 35px -5px color-mix(in srgb, var(--nx-signal) 12%, transparent),
-    inset 0 0 25px color-mix(in srgb, var(--nx-signal) 4%, transparent);
   position: relative;
   z-index: 5;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 .login-brand {
   display: flex;
@@ -4077,7 +3972,6 @@ tbody tr:last-child td {
   inset: 0;
   place-items: center;
   background: var(--nx-scrim);
-  backdrop-filter: blur(3px);
 }
 .career-modal-content,
 .career-drawer-content {
@@ -4122,7 +4016,6 @@ tbody tr:last-child td {
   inset: 0;
   place-items: center;
   background: var(--nx-scrim, rgba(0, 0, 0, 0.75));
-  backdrop-filter: blur(4px);
 }
 .nexus-modal-content {
   width: min(540px, 100%);
@@ -4132,7 +4025,7 @@ tbody tr:last-child td {
   border: 1px solid var(--nx-line-strong, rgba(255, 255, 255, 0.15));
   border-radius: var(--nx-radius-lg, 10px);
   background: var(--nx-surface-raised, #0e1726);
-  box-shadow: var(--nx-shadow-overlay, 0 16px 36px rgba(0, 0, 0, 0.5));
+  box-shadow: var(--nx-shadow-overlay);
 }
 .nexus-modal-header {
   display: flex;
@@ -4550,13 +4443,12 @@ tbody tr:last-child td {
 }
 
 .lang-button.active {
-  background: var(--nx-signal);
-  color: var(--nx-surface);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  background: var(--nx-accent);
+  color: var(--nx-text-on-accent);
 }
 
 .lang-separator {
-  color: var(--nx-line-strong);
+  color: var(--nx-text-faint);
   font-size: var(--nx-size-3xs);
   user-select: none;
 }
@@ -4564,8 +4456,6 @@ tbody tr:last-child td {
 /* Glassmorphism Header */
 .top-bar {
   background: color-mix(in srgb, var(--nx-canvas) 85%, transparent) !important;
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
   border-bottom: 1px solid var(--nx-line);
 }
 
@@ -4602,20 +4492,11 @@ tbody tr:last-child td {
   border-radius: 50%;
   background: var(--nx-ok);
   opacity: 0.7;
-  animation: live-pulse-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-@keyframes live-pulse-ping {
-  75%,
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
 }
 
 /* Smooth section entrance */
 .section-frame {
-  animation: sectionFadeIn var(--nx-normal) var(--nx-ease-out);
+  animation: sectionFadeIn var(--nx-normal) var(--nx-ease);
 }
 
 @keyframes sectionFadeIn {
@@ -4661,7 +4542,7 @@ tbody tr:last-child td {
 }
 
 .paper-trading-banner strong {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-size: var(--nx-size-xs);
   text-transform: uppercase;
   letter-spacing: var(--nx-tracking-caps);
@@ -4703,14 +4584,12 @@ td.pnl-cell {
   color: var(--nx-success, #10b981);
   background: color-mix(in srgb, var(--nx-success, #10b981) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--nx-success, #10b981) 32%, transparent);
-  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--nx-success, #10b981) 25%, transparent);
 }
 
 .pnl-badge.negative {
   color: var(--nx-danger, #ef4444);
   background: color-mix(in srgb, var(--nx-danger, #ef4444) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--nx-danger, #ef4444) 32%, transparent);
-  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--nx-danger, #ef4444) 25%, transparent);
 }
 
 .pnl-badge.neutral {
@@ -4963,8 +4842,7 @@ td.pnl-cell {
 
 .equity-filter-btn.active {
   color: var(--nx-text-on-accent, #fff);
-  background: var(--nx-signal);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--nx-signal) 40%, transparent);
+  background: var(--nx-accent);
 }
 
 .equity-chart-svg {
@@ -5028,7 +4906,6 @@ td.pnl-cell {
 
 .market-quote-card:hover {
   border-color: var(--card-color);
-  box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--card-color) 25%, transparent);
 }
 
 .market-quote-card.side-yes {
@@ -5111,7 +4988,7 @@ td.pnl-cell {
   left: 20px;
   right: 20px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--nx-signal), transparent);
+  background: var(--nx-line-strong);
 }
 
 .kelly-terminal-header {
@@ -5144,7 +5021,7 @@ td.pnl-cell {
   border-radius: var(--nx-radius-pill);
   background: color-mix(in srgb, var(--nx-signal) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 28%, transparent);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
 }
 
 .kelly-side-selector {
@@ -5182,14 +5059,12 @@ td.pnl-cell {
   border-color: var(--nx-success, #10b981);
   background: color-mix(in srgb, var(--nx-success, #10b981) 14%, transparent);
   color: var(--nx-success, #10b981);
-  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--nx-success, #10b981) 30%, transparent);
 }
 
 .kelly-side-btn.side-no.active {
   border-color: var(--nx-danger, #ef4444);
   background: color-mix(in srgb, var(--nx-danger, #ef4444) 14%, transparent);
   color: var(--nx-danger, #ef4444);
-  box-shadow: 0 0 16px -2px color-mix(in srgb, var(--nx-danger, #ef4444) 30%, transparent);
 }
 
 .kelly-inputs-grid {
@@ -5240,13 +5115,13 @@ td.pnl-cell {
 
 .kelly-preset-chip:hover {
   border-color: var(--nx-signal);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
 }
 
 .kelly-preset-chip.active {
   background: color-mix(in srgb, var(--nx-signal) 18%, transparent);
   border-color: var(--nx-signal);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-weight: var(--nx-weight-semibold);
 }
 
@@ -5293,25 +5168,19 @@ td.pnl-cell {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   border-radius: var(--nx-radius-sm);
-  border: 1px solid var(--nx-signal);
-  background: linear-gradient(
-    135deg,
-    var(--nx-signal) 0%,
-    color-mix(in srgb, var(--nx-signal) 80%, black) 100%
-  );
-  color: var(--nx-text-on-accent, #fff);
+  border: 1px solid var(--nx-button-primary-bg);
+  background: var(--nx-button-primary-bg);
+  color: var(--nx-button-primary-fg);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--nx-space-3);
-  box-shadow: 0 4px 16px -2px color-mix(in srgb, var(--nx-signal) 40%, transparent);
   transition: all var(--nx-fast) var(--nx-ease);
 }
 
 .kelly-submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px -2px color-mix(in srgb, var(--nx-signal) 60%, transparent);
 }
 
 .kelly-submit-btn:disabled {
@@ -5338,34 +5207,6 @@ td.pnl-cell {
    NEXUS Cyber-Futuristic Sci-Fi HUD & 3D Styling
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* Ambient cyber grid background on main viewport */
-.main {
-  background-image:
-    radial-gradient(
-      circle at 80% 10%,
-      color-mix(in srgb, var(--nx-signal) 4%, transparent) 0%,
-      transparent 40%
-    ),
-    linear-gradient(
-      to right,
-      color-mix(in srgb, var(--nx-line) 25%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--nx-line) 25%, transparent) 1px,
-      transparent 1px
-    );
-  background-size:
-    100% 100%,
-    48px 48px,
-    48px 48px;
-  background-position:
-    0 0,
-    0 0,
-    0 0;
-}
-
 /* 3D Interactive Card container */
 .cyber-3d-card {
   perspective: 1000px;
@@ -5388,7 +5229,6 @@ td.pnl-cell {
 
 .cyber-card:hover {
   border-color: var(--nx-signal);
-  box-shadow: 0 8px 30px -8px color-mix(in srgb, var(--nx-signal) 22%, transparent);
 }
 
 /* Corner bracket reticles */
@@ -5428,9 +5268,6 @@ td.pnl-cell {
   border: 1px solid var(--nx-line-strong);
   border-radius: var(--nx-radius-lg);
   background: color-mix(in srgb, var(--nx-surface-raised) 92%, var(--nx-signal) 8%);
-  box-shadow:
-    inset 0 0 40px -10px color-mix(in srgb, var(--nx-signal) 12%, transparent),
-    0 12px 36px -12px rgba(0, 0, 0, 0.4);
   margin-bottom: var(--nx-space-8);
 }
 
@@ -5452,11 +5289,7 @@ td.pnl-cell {
   justify-content: space-between;
   padding: var(--nx-space-6) var(--nx-space-8);
   pointer-events: none;
-  background: radial-gradient(
-    circle at center,
-    transparent 35%,
-    color-mix(in srgb, var(--nx-surface-raised) 80%, transparent) 85%
-  );
+  background: transparent;
 }
 
 .cyber-hud-column {
@@ -5472,9 +5305,6 @@ td.pnl-cell {
   background: color-mix(in srgb, var(--nx-surface) 85%, transparent);
   border-left: 3px solid var(--nx-signal);
   border-radius: var(--nx-radius-xs);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.3);
 }
 
 .cyber-hud-stat-label {
@@ -5508,7 +5338,6 @@ td.pnl-cell {
   width: 2.5px;
   background: var(--nx-signal);
   border-radius: 1px;
-  animation: hudBarBounce 1.2s ease-in-out infinite alternate;
 }
 
 .hud-audio-bar:nth-child(1) {
@@ -5532,17 +5361,6 @@ td.pnl-cell {
   animation-delay: 0.15s;
 }
 
-@keyframes hudBarBounce {
-  0% {
-    transform: scaleY(0.25);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
 /* Sci-fi Telemetry Badges in Header */
 .hud-telemetry-badge {
   display: inline-flex;
@@ -5556,19 +5374,16 @@ td.pnl-cell {
   background: color-mix(in srgb, var(--nx-surface-raised) 75%, transparent);
   border: 1px solid var(--nx-line);
   color: var(--nx-text-muted);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
 .hud-telemetry-badge strong {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-weight: var(--nx-weight-semibold);
 }
 
 /* Neon Glow on Metrics */
 .metric:hover {
   border-color: var(--nx-signal);
-  box-shadow: 0 0 16px -4px color-mix(in srgb, var(--nx-signal) 30%, transparent);
 }
 
 /* Pulse radar ring */
@@ -5587,18 +5402,6 @@ td.pnl-cell {
   inset: -4px;
   border-radius: 50%;
   border: 1.5px solid var(--nx-signal);
-  animation: radarPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-@keyframes radarPing {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(2.4);
-    opacity: 0;
-  }
 }
 
 /* Login Shell Sci-Fi Hologram upgrade */
@@ -5652,16 +5455,10 @@ td.pnl-cell {
   margin: 1.5rem auto;
   padding: clamp(2rem, 3.5vw, 3rem) clamp(1.75rem, 4vw, 3rem);
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(13, 21, 39, 0.94) 0%, rgba(8, 14, 28, 0.97) 100%);
+  background: var(--nx-surface);
   border: 1px solid color-mix(in srgb, var(--nx-signal) 30%, transparent);
-  box-shadow:
-    0 28px 72px -12px rgba(0, 0, 0, 0.7),
-    0 0 45px -5px color-mix(in srgb, var(--nx-signal) 15%, transparent),
-    inset 0 0 35px color-mix(in srgb, var(--nx-signal) 5%, transparent);
   position: relative;
   z-index: 5;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 .setup-wizard-shell::before {
@@ -5724,10 +5521,9 @@ td.pnl-cell {
 
 .setup-tab-btn[aria-selected="true"],
 .setup-tab-btn.active {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   background: color-mix(in srgb, var(--nx-signal) 14%, transparent);
   border-color: color-mix(in srgb, var(--nx-signal) 50%, transparent);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--nx-signal) 20%, transparent);
   font-weight: 700;
 }
 
@@ -5741,13 +5537,11 @@ td.pnl-cell {
   border: 1px solid color-mix(in srgb, var(--nx-signal) 20%, transparent);
   border-radius: 10px;
   background: rgba(13, 21, 39, 0.7);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transition: all 0.2s ease;
 }
 
 .setup-card:hover {
   border-color: color-mix(in srgb, var(--nx-signal) 35%, transparent);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--nx-signal) 8%, transparent);
 }
 
 .setup-card h3 {
@@ -5768,7 +5562,7 @@ td.pnl-cell {
   padding: 0.65rem 0.9rem;
   font-family: var(--nx-font-mono, monospace);
   font-size: 0.82rem;
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   display: block;
   overflow-x: auto;
   word-break: break-all;
@@ -5784,7 +5578,6 @@ td.pnl-cell {
   background: var(--nx-canvas-sunken, #080c14);
   border: 1px solid var(--nx-line, #1a2538);
   border-radius: var(--nx-radius-lg, 12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .settings-categories-strip {
@@ -5821,10 +5614,9 @@ td.pnl-cell {
 }
 
 .settings-category-btn.active {
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   background: color-mix(in srgb, var(--nx-signal) 9%, transparent);
   border-color: color-mix(in srgb, var(--nx-signal) 30%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--nx-signal) 12%, transparent);
 }
 
 .settings-subitems-strip {
@@ -5861,9 +5653,8 @@ td.pnl-cell {
 .settings-subitem-pill.active {
   background: color-mix(in srgb, var(--nx-signal) 14%, transparent);
   border-color: var(--nx-signal);
-  color: var(--nx-signal);
+  color: var(--nx-accent);
   font-weight: 600;
-  box-shadow: 0 0 10px color-mix(in srgb, var(--nx-signal) 22%, transparent);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -6112,7 +5903,6 @@ td.pnl-cell {
   background: var(--nx-surface, rgba(15, 23, 42, 0.6));
   border: 1px solid var(--nx-line, rgba(255, 255, 255, 0.08));
   border-radius: var(--nx-radius-md, 8px);
-  backdrop-filter: blur(8px);
 }
 .quota-intro-card p {
   margin: 0;
@@ -6308,23 +6098,14 @@ td.pnl-cell {
 .quota-chart-bar-fill {
   width: 100%;
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(
-    180deg,
-    var(--nx-accent) 0%,
-    color-mix(in srgb, var(--nx-accent) 35%, transparent) 100%
-  );
+  background: var(--nx-text-muted);
   transition:
     height 0.3s ease,
     background 0.2s ease,
     box-shadow 0.2s ease;
 }
 .quota-chart-col:hover .quota-chart-bar-fill {
-  background: linear-gradient(
-    180deg,
-    #67e8f9 0%,
-    color-mix(in srgb, var(--nx-accent) 60%, transparent) 100%
-  );
-  box-shadow: 0 0 12px color-mix(in srgb, var(--nx-accent) 40%, transparent);
+  background: var(--nx-signal);
 }
 .quota-chart-val {
   font-family: var(--nx-font-mono, monospace);
@@ -6446,15 +6227,15 @@ td.pnl-cell {
 }
 
 .usage-stacked-segment.in {
-  background: linear-gradient(90deg, #38bdf8, #60a5fa);
+  background: var(--nx-info);
 }
 
 .usage-stacked-segment.out {
-  background: linear-gradient(90deg, #c084fc, #a855f7);
+  background: var(--nx-signal);
 }
 
 .usage-stacked-segment.cache {
-  background: linear-gradient(90deg, #34d399, #10b981);
+  background: var(--nx-neutral);
 }
 
 .usage-legend-row {

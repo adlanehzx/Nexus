@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ToolRegistry } from "@nexus/tools";
 import { TOOL_DOMAINS, registerToolDomains } from "../src/services/tool-registration.js";
 import { OsintService } from "../src/services/osint-service.js";
+import { FileWorkspaces } from "../src/services/file-workspaces.js";
 import type { HomeToolsHost } from "@nexus/devices";
 
 /** Lab 4 — a host with no devices is enough to register the home tools. */
@@ -27,6 +28,7 @@ describe("tool domain registration", () => {
     const registered = registerToolDomains(registry, {
       osint: new OsintService({}),
       domotique: emptyHome,
+      fileWorkspaces: new FileWorkspaces(),
     });
 
     expect(registered).toEqual(TOOL_DOMAINS.map((domain) => domain.name));

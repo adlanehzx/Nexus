@@ -34,6 +34,10 @@ function archiveOf(options: { passphrase?: string } = {}) {
 }
 
 describe("manifest", () => {
+  it("refuses secret-bearing archives without encryption", () => {
+    expect(() => buildArchive({ entries: [], nexusVersion: "test", origin: "/test", createdAt: new Date(), includesSecrets: true, restore: [] })).toThrow(/passphrase/);
+  });
+
   it("remains readable without passphrase", () => {
     const { manifest } = readArchive(archiveOf({ passphrase: PASSPHRASE }));
 

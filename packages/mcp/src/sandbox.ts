@@ -12,7 +12,7 @@ import { McpSecurityError } from "./errors.js";
 export function validateBinary(command: string, allowedBinaries: string[]): boolean {
   const binaryName = basename(command);
   return allowedBinaries.some((allowed) => {
-    return binaryName === allowed || command === allowed || binaryName.startsWith(`${allowed}-`);
+    return allowed.includes("/") ? command === allowed : binaryName === allowed;
   });
 }
 
@@ -188,21 +188,29 @@ export class McpSandboxManager {
     if (sandbox.engine === "bwrap") {
       const caps = options?.capabilities ?? probeHostSandboxCapabilities();
       if (!caps.bwrap && options?.bwrapPath === undefined) {
-        return {
-          command: config.command,
-          args: config.args,
-          env,
-        };
+        throw new McpSecurityError(
+          config.name,
+          "Required Bubblewrap isolation is unavailable. Install bwrap and enable user namespaces, or explicitly configure a trusted unsandboxed server.",
+        );
       }
 
       const bwrapCmd = options?.bwrapPath ?? "bwrap";
       const bwrapArgs: string[] = [];
 
-      // Filesystem: read-only root
-      if (sandbox.readOnlyRoot) {
-        bwrapArgs.push("--ro-bind", "/", "/");
-      } else {
-        bwrapArgs.push("--bind", "/", "/");
+      // Start with an empty root. Never expose host HOME, /run, /var or /etc
+      // wholesale: read-only access still discloses credentials and sockets.
+      bwrapArgs.push("--die-with-parent", "--new-session", "--tmpfs", "/");
+      for (const path of ["/usr", "/bin", "/sbin", "/lib", "/lib64"]) {
+        bwrapArgs.push("--ro-bind-try", path, path);
+      }
+      for (const path of [
+        "/etc/ld.so.cache",
+        "/etc/ssl/certs",
+        "/etc/resolv.conf",
+        "/etc/hosts",
+        "/etc/nsswitch.conf",
+      ]) {
+        bwrapArgs.push("--ro-bind-try", path, path);
       }
 
       // Essential system pseudo-filesystems
@@ -238,14 +246,14 @@ export class McpSandboxManager {
       bwrapArgs.push("--clearenv");
       const pathValue = env.PATH ?? process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
       bwrapArgs.push("--setenv", "PATH", pathValue);
-      if (!env.HOME) {
-        bwrapArgs.push("--setenv", "HOME", "/tmp");
-      }
+      bwrapArgs.push("--dir", "/tmp/home", "--setenv", "HOME", "/tmp/home");
       for (const [k, v] of Object.entries(env)) {
-        if (k !== "PATH") {
+        if (k !== "PATH" && k !== "HOME") {
           bwrapArgs.push("--setenv", k, v);
         }
       }
+
+      if (sandbox.readOnlyRoot) bwrapArgs.push("--remount-ro", "/");
 
       // End of bwrap options delimiter
       bwrapArgs.push("--", config.command, ...config.args);

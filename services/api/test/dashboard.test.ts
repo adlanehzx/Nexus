@@ -599,6 +599,9 @@ describe("infrastructure sections", () => {
     const tools = response.json<{ data: { tools: { name: string; allowed: boolean }[] } }>().data
       .tools;
     expect(tools.map((tool) => tool.name)).toEqual([
+      "document.parse",
+      "document.extract_tables",
+      "document.ingest_to_memory",
       "osint.case.inspect",
       "osint.evidence.archive",
       "osint.entity.add",

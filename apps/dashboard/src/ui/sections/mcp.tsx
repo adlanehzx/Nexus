@@ -348,7 +348,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
               ? {
                   borderColor: "var(--nx-signal)",
                   background: "var(--nx-signal-muted)",
-                  color: "var(--nx-signal)",
+                  color: "var(--nx-accent)",
                 }
               : {}
           }
@@ -370,7 +370,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
               ? {
                   borderColor: "var(--nx-signal)",
                   background: "var(--nx-signal-muted)",
-                  color: "var(--nx-signal)",
+                  color: "var(--nx-accent)",
                 }
               : {}
           }
@@ -388,7 +388,7 @@ export function Mcp({ api }: { api: DashboardApi }) {
               ? {
                   borderColor: "var(--nx-signal)",
                   background: "var(--nx-signal-muted)",
-                  color: "var(--nx-signal)",
+                  color: "var(--nx-accent)",
                 }
               : {}
           }

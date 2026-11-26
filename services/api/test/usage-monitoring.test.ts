@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { PricingCatalog, UsageTracker } from "@nexus/agent-core";
 import { makeApi, createAccount, type ApiHarness, type Account } from "./harness.js";
 
@@ -146,6 +146,38 @@ describe("Usage, Quotas & Equivalent Pricing Architecture (LOT F)", () => {
       expect(res.json().data).toEqual({ source: "agent_run_records", days: 7, buckets: [] });
       const anonymous = await harness.app.inject({ method: "GET", url: "/api/v1/usage/summary" });
       expect(anonymous.statusCode).toBe(401);
+    });
+
+    it("keeps an unknown model price unavailable in the API response", async () => {
+      const aggregate = vi
+        .spyOn(harness.services.runStore, "summarizeForUser")
+        .mockResolvedValue([
+          {
+            day: "2026-11-11",
+            model: "unpriced-test-model",
+            runs: 1,
+            failedRuns: 0,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheReadTokens: null,
+            cacheWriteTokens: null,
+          },
+        ]);
+      try {
+        const res = await harness.app.inject({
+          method: "GET",
+          url: "/api/v1/usage/summary",
+          headers: account.authorization,
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().data.buckets[0]).toMatchObject({
+          estimatedApiCostUsd: null,
+          costProvenance: "unavailable",
+          pricingModel: null,
+        });
+      } finally {
+        aggregate.mockRestore();
+      }
     });
 
     it("GET /api/v1/usage/quotas is reserved to administrators", async () => {

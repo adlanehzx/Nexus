@@ -733,7 +733,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                   borderRadius: "8px",
                 }}
               >
-                <h3 style={{ color: "var(--nx-signal)", margin: "0 0 0.5rem" }}>
+                <h3 style={{ color: "var(--nx-accent)", margin: "0 0 0.5rem" }}>
                   {tr("Instance already initialized", "Instance déjà initialisée")}
                 </h3>
                 <p
@@ -1037,7 +1037,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                             fontSize: "12px",
                             fontWeight: "bold",
                             marginBottom: "6px",
-                            color: "var(--nx-signal)",
+                            color: "var(--nx-accent)",
                           }}
                         >
                           {tr("Official Sign-in Command", "Commande officielle de connexion")}
@@ -1065,7 +1065,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                               rel="noreferrer"
                               style={{
                                 fontSize: "12px",
-                                color: "var(--nx-signal)",
+                                color: "var(--nx-accent)",
                                 fontWeight: 600,
                               }}
                             >
@@ -1353,7 +1353,7 @@ export function SetupWizard({ session, api, onComplete, onSwitchToLogin }: Setup
                       alignItems: "center",
                     }}
                   >
-                    <strong style={{ color: "var(--nx-signal)" }}>
+                    <strong style={{ color: "var(--nx-accent)" }}>
                       {tr("Pairing Ticket Generated", "Ticket d'association généré")}
                     </strong>
                     <small className="muted">

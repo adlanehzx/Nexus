@@ -56,13 +56,13 @@ Same names as today's `--nx-*` variables; new values; two additions (`--nx-line-
 
 ### 2.2 Derived tokens
 
-Computed in CSS from the tokens above, so they cannot drift:
+Computed in `packages/design/src/cadran.ts` from the tokens above, so they cannot drift (as concrete values, because the mobile application will one day read the same module and cannot evaluate `color-mix`):
 
 | Variable | Definition | Use |
 | --- | --- | --- |
-| `--nx-accent-muted` | `color-mix(in srgb, var(--nx-accent) 14%, transparent)` | Selected row, running step |
-| `--nx-accent-line` | `color-mix(in srgb, var(--nx-accent) 40%, transparent)` | Border of an accent chip |
-| `--nx-signal-muted` | `color-mix(in srgb, var(--nx-signal) 14%, var(--nx-surface))` | Fill of the "running" badge |
+| `--nx-accent-muted` | accent at 14 % opacity | Selected row, running step |
+| `--nx-accent-line` | accent at 40 % opacity | Border of an accent chip |
+| `--nx-signal-muted` | signal 14 % mixed into `--nx-surface`, opaque | Fill of the "running" badge |
 | `--nx-{ok,warn,danger,info,neutral}-bg` | status colour 13 % mixed into `--nx-surface`, opaque | Badge and diff-line fill |
 | `--nx-{ok,warn,danger,info,neutral}-line` | status colour 32 % mixed into `--nx-surface`, opaque | Badge border |
 | `--nx-scrim` | dark `rgb(7 8 7 / 72%)`, light `rgb(20 21 19 / 40%)` | Behind a dialog |
@@ -435,10 +435,10 @@ Conventions: `tone = "neutral" | "accent" | "ok" | "warn" | "danger" | "info"`; 
 
 | Component | Props | Notes |
 | --- | --- | --- |
-| `MissionCard` | `title`, `agents: string[]`, `state`, `elapsedMs?`, `tokens?`, `steps`, `progress: {done, total}`, `children?` | Header with lamp, agents, elapsed time, tokens; `StepList`; segmented progress with the telegraphic status line; children are the diffs and artifacts. |
+| `MissionCard` | `title`, `agents: string[]`, `state`, `elapsedMs?`, `tokens?`, `steps`, `progress: {done, total}`, `onCancel?: () => Promise<void>`, `standingApprovals?: {id, tool, action}[]`, `onRevokeApproval?`, `children?` | Header with lamp, agents, elapsed time, tokens; `StepList`; segmented progress with the telegraphic status line; children are the diffs and artifacts. "Stop the mission" is a danger ghost button in the header: one activation, no dialog, shows progress, never activable twice; states `cancelling` and `cancelled` are rendered in the neutral tone. Active standing approvals appear as a chip with Revoke. |
 | `StepList` | `steps: {id, title, agent?, state, durationMs?, detail?}[]` | An ordered list. States: done (check), running (lamp, outlined row), queued (clock), failed (cross, danger), waiting (shield, warn). A step with `detail` expands to its tool calls. |
 | `ToolCallRow` | `tool`, `action`, `risk`, `status`, `durationMs`, `error?` | One line of the log inside a step. |
-| `ApprovalCard` | `title`, `risk`, `description`, `command?`, `facts`, `expiresAt`, `state: "pending" \| "approved" \| "rejected" \| "expired"`, `onDecide(decision)`, `runHref?` | Warn line and rail while pending. Approve is the primary button with `A`, Decline secondary with `R`; keys act only while the card has focus. Buttons disable while the request is in flight. Collapses to one line once resolved. The countdown is text and updates once per second without animation. |
+| `ApprovalCard` | `title`, `risk`, `description`, `command?`, `facts`, `expiresAt`, `state: "pending" \| "approved" \| "rejected" \| "expired" \| "cancelled"`, `onDecide(decision, scope: "once" \| "mission")`, `allowMissionScope?: boolean`, `tool`, `action`, `runHref?` | Warn line and rail while pending. Approve is the primary button with `A`, Decline secondary with `R`; keys act only while the card has focus. Buttons disable while the request is in flight. When `allowMissionScope` is true (the request belongs to a mission and is not `CRITICAL`), a third ghost button, set apart and without a shortcut key, reads "Always allow `<tool>` for this mission". Collapses to one line once resolved, saying when a standing approval was created. The countdown is text and updates once per second without animation. |
 | `Composer` | `value`, `onChange`, `onSubmit`, `agentPicker`, `queued?`, `disabledReason?` | Enabled during a mission; shows what a submitted message will do (send now, or queue). `Enter` sends, `Shift Enter` breaks the line. |
 | `Message` | `role: "user" \| "nexus"`, `time`, `children`, `actions?` | The read role, 72ch measure. NEXUS messages carry the static small-cut logo. |
 
@@ -535,7 +535,7 @@ One inline style form stays legal and is not counted: passing a dynamic value th
 2. **Each file has exactly one owner per wave.** The lists below are exhaustive for `apps/dashboard/src`; a file that is not listed is not to be touched.
 3. **Screen packages keep their entry points.** They do not rename or delete the files and exported components that `Sections.tsx` and the router import, and they do not change those components' props. Deleting dropped screens is the cleanup package's job.
 4. **No package edits `lib/api.ts`, the locale dictionaries or `packages/design`** except the one that owns them. Screens use `tr()` for copy.
-5. **No business logic.** A package may change what a component renders and how it is composed. It may not change what is fetched, sent or computed. The three behaviour questions in `02-ux-architecture.md` §12 are out of scope until the owner answers them.
+5. **No business logic, with two approved exceptions.** A package may change what a component renders and how it is composed. It may not change what is fetched, sent or computed. The exceptions are the two server additions the owner approved — cancelling a mission and the mission-scoped standing approval (`02-ux-architecture.md` §12.2) — and they are confined to package B on the server side and to D and C on the dashboard side.
 6. **Done means:** no inline style (except the custom-property form), no colour or size literal, no native dialog, every string through `tr()` or the dictionary, both themes checked, a keyboard pass on the package's screens, `typecheck`, `lint` and `vitest` green, ratchet lowered.
 
 ### 10.4 Waves
@@ -543,10 +543,11 @@ One inline style form stays legal and is not counted: passing a dynamic value th
 ```
 Wave 0   F   Foundation                                   1 agent, serial
 Wave 1   K1  Kit: actions and forms      ┐
-         K2  Kit: structure, data,       │                4 agents in parallel
-             overlays                    │
+         K2  Kit: structure, data,       │
+             overlays                    │                5 agents in parallel
          K3  Icons and logo              │
-         D   Data wiring                 ┘
+         D   Data wiring                 │
+         B   Server additions            ┘
 Wave 2   S   Shell                       ┐
          C   Conversation                │
          A   Activity                    │
@@ -561,7 +562,7 @@ Wave 2   S   Shell                       ┐
 Wave 3   Z   Cleanup and verification                     1 agent, serial
 ```
 
-A wave starts when the previous one is merged. Inside a wave, packages do not depend on each other: wave 2 packages build on the kit and the data layer from wave 1 and are mounted by the existing router until S replaces it, which works because rule 3 keeps their entry points stable.
+A wave starts when the previous one is merged. B is the only package outside `apps/dashboard` and `packages/design`; it shares no file with any other package and is tied to D only through the contract written in `02-ux-architecture.md` §12.2, so D can be built and tested against that contract while B is in progress. Inside a wave, packages do not depend on each other: wave 2 packages build on the kit and the data layer from wave 1 and are mounted by the existing router until S replaces it, which works because rule 3 keeps their entry points stable.
 
 ### 10.5 Packages
 
@@ -586,16 +587,18 @@ Changes the look of the whole application without touching a screen file.
 | **K1 · Kit: actions and forms** | `ui/kit/{Button,IconButton,Kbd,Link,Field,Input,Textarea,Select,Checkbox,Switch,SegmentedControl,FormSection}.{tsx,css}` · `ui/ThemeToggle.tsx` · `ui/i18n/LanguageSwitch.tsx` · `test/kit/forms.test.tsx` | §7.1, §7.2. Rebuilds the theme and language switches on `SegmentedControl`. | 0 |
 | **K2 · Kit: structure, data, overlays** | `ui/kit/{Panel,PageHeader,Tabs,SidebarItem,ConditionStrip,KeyValue,Stack,Table,Badge,Status,RiskBadge,Lamp,Meter,Stat,CodeBlock,DiffView,Section,EmptyState,Skeleton,Dialog,ConfirmDialog,PromptDialog,Toast,Tooltip,Menu}.{tsx,css}` · `ui/parts.tsx` · `test/kit/data.test.tsx`, `test/kit/overlays.test.tsx` | §7.3 – §7.5. `parts.tsx` becomes a thin re-export of the kit equivalents (`Metric` → `Stat`, `State` → `Status`, `Bar` → `Meter`, `Modal` → `Dialog`…), so the 28 files importing it keep compiling until their package migrates them. | 4 |
 | **K3 · Icons and logo** | `ui/icons.tsx` · `ui/kit/Icon.tsx` · `ui/NexusLogo.tsx` · `ui/kit/NexusLogo.css` · `test/kit/logo.test.tsx` | §6, §7.8. Redraws the icon set to one grid and stroke, keeping every exported name (35 files import it). Implements the eight logo states and both cuts. The favicon files themselves belong to F. | 6 |
-| **D · Data wiring** | `lib/api.ts` · `lib/telemetry.ts` (new) · `lib/routes.ts` (new) · `lib/keybindings.ts` (new; the store and helpers moved from `ui/spatial/`, which stays in place until S deletes it) · `lib/format.ts` · `test/telemetry.test.ts`, `test/routes.test.ts`, `test/format.test.ts` | The additive wrappers of `02-ux-architecture.md` §12 (`confirmations`, `respondToConfirmation`). The telemetry store with its cadences, staleness and visibility rules, and `nexusState()`. The route table with parameters and the redirect map from every old hash. No user interface. | 0 |
+| **D · Data wiring** | `lib/api.ts` · `lib/telemetry.ts` (new) · `lib/routes.ts` (new) · `lib/keybindings.ts` (new; the store and helpers moved from `ui/spatial/`, which stays in place until S deletes it) · `lib/format.ts` · `test/telemetry.test.ts`, `test/routes.test.ts`, `test/format.test.ts` | The additive wrappers of `02-ux-architecture.md` §12: `confirmations`, `respondToConfirmation(id, decision, scope)`, `cancelMission`, `missionApprovals`, `revokeMissionApproval`. The telemetry store with its cadences, staleness and visibility rules, and `nexusState()`. The route table with parameters and the redirect map from every old hash. No user interface. | 0 |
 
-K1 and K2 share nothing: no barrel file, one stylesheet per component.
+| **B · Server additions** | `services/mission-engine/src/nexus_engine/{api,repository,worker,domain}.py` · `services/mission-engine/tests/test_cancel.py` (new) · `packages/mission-control-client/src/{client,schemas}.ts` · `packages/mission-control-client/test/client.test.ts` · `services/api/src/services/{acp-orchestrator,container}.ts` · `services/api/src/services/standing-approvals.ts` (new) · `services/api/src/routes/v1/{orchestrator,tasks}.ts` · `packages/agent-core/src/loop.ts` · the matching tests | The two contracts of `02-ux-architecture.md` §12.2: mission cancel through engine, client and API; the standing approval (store, check in the agent loop after the deny and `CRITICAL` rules, list and revoke routes, audit entries, revocation on mission end, cancel and global pause). No dashboard file. This is server work with security consequences and should be reviewed as such, not as part of a visual migration. | — |
+
+K1 and K2 share nothing: no barrel file, one stylesheet per component. B touches no dashboard file.
 
 #### Wave 2
 
 | Package | Owns | Does | Inline today |
 | --- | --- | --- | ---: |
 | **S · Shell** | `ui/App.tsx` · `ui/shell/**` (new: `Shell`, `Sidebar`, `StatusBar`, `EmergencyStop`, `CommandPalette`, `Router`, `Login`, `SessionMenu`) · `ui/ConversationSidebar.tsx` · `ui/Sections.tsx` · `ui/PreferencesPanel.tsx` · `ui/KeybindingsPanel.tsx` · `ui/i18n/{context.tsx,index.ts,types.ts}` · `ui/i18n/locales/**` · **deletes** `ui/spatial/**` · `test/{spatial-os,keybindings,preferences,conversation-sidebar,session-persistence,agent-emergency-controls,i18n,dashboard-config}.test.ts` · `e2e/{responsive.e2e.ts,support.ts,seed.ts}` | The single shell of `02-ux-architecture.md` §1: sidebar, header, inspector slot, status bar, palette, shortcuts, responsive rules, focus management. Splits the 1,287-line `App.tsx`. Removes the Spatial shell, the shell-choice preference and the HUD header. Mounts every screen at its new route with the old hashes redirected. | 111 |
-| **C · Conversation** | `ui/NexusChat.tsx` · `ui/ChatMessageContent.tsx` · `ui/conversation/**` (new: `MissionCard`, `StepList`, `ToolCallRow`, `ApprovalCard`, `Composer`, `Message`) · `lib/conversations.ts` · `test/{conversation-history,chat-engine-selection}.test.ts` · `e2e/{chat-chain,real-agent-chain}.e2e.ts` | §4 of the architecture: mission card with steps from the collaboration endpoint, tool log from runs, diffs, inline approvals, a composer that stays enabled. Removes the HUD strip and the typewriter title. Labels the stop control for what it does. | 9 |
+| **C · Conversation** | `ui/NexusChat.tsx` · `ui/ChatMessageContent.tsx` · `ui/conversation/**` (new: `MissionCard`, `StepList`, `ToolCallRow`, `ApprovalCard`, `Composer`, `Message`) · `lib/conversations.ts` · `test/{conversation-history,chat-engine-selection}.test.ts` · `e2e/{chat-chain,real-agent-chain}.e2e.ts` | §4 of the architecture: mission card with steps from the collaboration endpoint, tool log from runs, diffs, inline approvals, a composer that stays enabled. Removes the HUD strip and the typewriter title. "Stop the mission" calls the new cancel route (`ConversationHistory.cancelTracked()` replaces `stopTracked()`); the approval card offers the mission scope. If B has not shipped when C is ready, both controls are hidden behind a capability check on the route, never shown inert. | 9 |
 | **A · Activity** | `ui/sections/{runs,tasks,logs,security,observability,overview,notifications,mission-engine,dag-debugger,run-comparison,vcs-worktrees}.tsx` · `ui/activity/**` (new) · `test/{phase2-supervision,task-executions,system-diagnostics}.test.ts` · `e2e/{missions,observability}.e2e.ts` | The Activity page and its nine tabs, built from the eleven existing screens. Comparison and the task graph become views inside it. The notification channel form is exported separately for P2's settings page. | 158 |
 | **U · Usage** | `ui/sections/quota-forecast.tsx` · `lib/usage.ts` · `test/usage.test.ts` · `e2e/usage.e2e.ts` | One page, four tabs, `Meter` for quotas, charts per §2.4. | 58 |
 | **P1 · Settings: intelligence** | `ui/Settings.tsx` · `ui/Agents.tsx` · `ui/Connections.tsx` · `ui/sections/providers.tsx` · `e2e/providers.e2e.ts` | Interface is S's; this is Providers (absorbing Connections), Agents, Models, Secrets, Backup. Four native dialogs replaced; backup restore becomes tier 2. | 106 |
@@ -624,9 +627,27 @@ Two notes on shared files in this wave:
 | After | The user sees |
 | --- | --- |
 | Wave 0 | Cadran colours and IBM Plex everywhere, the old layout, no glow, no accent themes. |
-| Wave 1 | Nothing new: the kit exists but nothing uses it yet, apart from the icons and the logo. |
+| Wave 1 | Nothing new: the kit exists but nothing uses it yet, apart from the icons and the logo. The two server routes exist but nothing calls them. |
 | Wave 2 | The single shell, the new conversation, and every screen on the kit — arriving package by package. |
 | Wave 3 | No visible change; the debt is gone. |
+
+### 10.7 Progress
+
+| Package | State | Notes |
+| --- | --- | --- |
+| **F · Foundation** | **Done** (working tree, uncommitted) | Cadran in `packages/design` beside Signal (`tokens.css` byte-identical); IBM Plex shipped, Orbitron and Rajdhani deleted; accent themes removed; glow, blur, decorative gradients and ambient animations removed from `theme.css`; fake telemetry hidden; `lang` set before first render; favicons; ratchet in place. |
+| **K3 · Icons and logo** | **Logo done, icons not started** | `NexusLogo` implements the eight states and both cuts; it replaces the old mark and the two letter-"N" stand-ins in the chat. The sidebar instance already follows two measured states (`paused`, `executing`). The icon set is untouched. |
+| Everything else | Not started | |
+
+Ratchet after F: 1,332 inline styles (was 1,346), 251 hex literals in components (259), 28 `rgb()` literals, 16 native dialogs, 180 hex and 250 `rgb()` literals in stylesheets, 5 effects left in `theme.css` (two gradients that draw the select arrow, three keyframes that are entry or loading feedback), no blurred shadow.
+
+Where the build departs from the plan above, and why:
+
+- **`lib/theme-rgb.ts` was kept.** The decorative canvas still imports it; both go together in the cleanup package.
+- **`--nx-sidebar` and `--nx-header` keep their old values (248 px, 64 px)** until the Shell package replaces the header they size; 240 px and 38 px would squash it today.
+- **The lamp colour was moved off text duty in legacy code**: 18 rules and 28 inline styles that used `--nx-signal` as a text colour now use `--nx-accent`, and two legacy fills behind text likewise. Without this the light theme failed AA wherever the old code wrote in the lamp colour.
+- **Legacy primary buttons were given the monochrome treatment and a legible disabled state** in `theme.css`, ahead of the `Button` component, because every screen shows one.
+- **Not fixed by F, by design:** the light-theme failures that come from colours hard-coded inside Career (hero and pills) and Trading (metric cards and badges). They belong to L1 and L2. Every other screen probed is clean in both themes.
 
 ---
 
@@ -641,6 +662,7 @@ Two notes on shared files in this wave:
 | **`theme.css` during wave 2** | 6,608 shared lines; a frozen file can still be depended on in surprising ways. | Nobody edits it in wave 2; screens move off its classes; Z purges by reference count, with review, not by hand. |
 | **Eleven parallel packages** | Merge order and shared types. | Exhaustive file ownership (§10.5), stable entry points (rule 3), no barrel files, `lib/api.ts` and locales single-owner. |
 | **Approvals depend on wiring not yet in the dashboard** | The confirmation endpoints exist server-side but the dashboard has never called them. | Package D lands first and is tested alone; C degrades to "open in Activity" if a confirmation cannot be matched to the open conversation. |
-| **The stop control** | Today's label promises a cancellation that does not happen. | Relabelled to what it does until the owner decides on wiring a real cancel. |
+| **Cancelling a mission is new server behaviour** | No layer can cancel an orchestrated mission today; the route crosses the Python engine, its client and the API. A step in the middle of an external call cannot be interrupted before its next lease renewal (30 s). | Contract fixed before work starts; idempotent route; the interface shows `ANNULATION…` until the server confirms and never claims a cancellation that has not happened. |
+| **The standing approval weakens a safety control by design** | It answers future confirmations without showing them, and it is not bound to a payload hash as one-off approvals are. | Scope limited to one mission, one tool, one action, capped at the approved risk level; never `CRITICAL`; visible and revocable; audited on every use; revoked by cancel, mission end and emergency stop. Needs a security review before it ships. |
 | **Three identities at once** | Web in Cadran, desktop and mobile in Signal until their phases. | Stated and accepted (§9). Token names are stable, so their switch is an import change. |
 | **Existing tests encode the old shell** | `spatial-os.test.ts`, `keybindings.test.ts`, `preferences.test.ts`, the responsive end-to-end test. | Owned by S, which deletes or rewrites them in the same change that removes what they test. |

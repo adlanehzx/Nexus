@@ -189,7 +189,7 @@ export function Settings({
                 ? {
                     borderColor: "var(--nx-signal)",
                     background: "var(--nx-signal-muted)",
-                    color: "var(--nx-signal)",
+                    color: "var(--nx-accent)",
                   }
                 : {}),
             }}
@@ -211,7 +211,7 @@ export function Settings({
                 ? {
                     borderColor: "var(--nx-signal)",
                     background: "var(--nx-signal-muted)",
-                    color: "var(--nx-signal)",
+                    color: "var(--nx-accent)",
                   }
                 : {}),
             }}
@@ -233,7 +233,7 @@ export function Settings({
                 ? {
                     borderColor: "var(--nx-signal)",
                     background: "var(--nx-signal-muted)",
-                    color: "var(--nx-signal)",
+                    color: "var(--nx-accent)",
                   }
                 : {}),
             }}
@@ -255,7 +255,7 @@ export function Settings({
                 ? {
                     borderColor: "var(--nx-signal)",
                     background: "var(--nx-signal-muted)",
-                    color: "var(--nx-signal)",
+                    color: "var(--nx-accent)",
                   }
                 : {}),
             }}
@@ -277,7 +277,7 @@ export function Settings({
                 ? {
                     borderColor: "var(--nx-signal)",
                     background: "var(--nx-signal-muted)",
-                    color: "var(--nx-signal)",
+                    color: "var(--nx-accent)",
                   }
                 : {}),
             }}

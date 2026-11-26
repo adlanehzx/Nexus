@@ -538,6 +538,19 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
 .nav-label.two span:last-child{color:var(--nx-text-faint)}
 .sb-new .sp{margin-left:auto;display:inline-flex;gap:3px}
 .tagx.warn{color:var(--nx-warn)}
+[data-mission="running"] .when-mcancelled,[data-mission="cancelled"] .when-mrunning{display:none!important}
+[data-mission="cancelled"] #approval>:not(.when-mcancelled){display:none}
+[data-mission="cancelled"] .approval{border-color:var(--nx-line-strong);box-shadow:inset var(--nx-rail) 0 0 var(--nx-neutral)}
+[data-mission="cancelled"] .task-prog .bar>i{background:repeating-linear-gradient(90deg,var(--nx-neutral) 0 5px,transparent 5px 7px)}
+[data-mission="cancelled"] .steps li.wait .ic{color:var(--nx-neutral)}
+[data-rule="off"] .when-rule{display:none!important}
+[data-approval="approved"] .sbar .when-pending,[data-approval="refused"] .sbar .when-pending{display:none!important}
+.insp td.task{max-width:124px}
+.resolved{flex-wrap:wrap}.resolved .mono{white-space:nowrap}
+.rule{display:flex;align-items:center;gap:8px;padding:6px var(--nx-card-padding);border-top:1px solid var(--nx-line);color:var(--nx-text-muted)}
+.rule code{color:var(--nx-text);font-size:var(--fs-mono)}
+.rule .ic{color:var(--nx-warn)}
+.steps li>span:first-child{display:inline-flex;justify-content:center}
 .st.run{color:var(--nx-accent)}
 .pause-strip{align-items:center;gap:10px;padding:8px 20px;border-bottom:1px solid var(--nx-danger-line);background:var(--nx-danger-bg);color:var(--nx-danger);font-size:var(--fs-small)}
 .pause-strip b{font:600 var(--fs-label)/1 var(--nx-font-mono);letter-spacing:.08em}
@@ -628,7 +641,7 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
   <section class="sec" id="app">
     <div class="sec-head"><span class="sec-no">01</span><h2>Application</h2><p>La coque unique&nbsp;: conversations, sections et Labs dans une seule barre latérale qui ne change jamais&nbsp;; la mission, son journal, son diff et la demande d'accord dans le fil&nbsp;; l'état réel du système dans la barre du bas.</p></div>
     
-<div class="shell" id="shell" data-approval="pending" data-nx-state="waiting">
+<div class="shell" id="shell" data-approval="pending" data-nx-state="waiting" data-mission="running" data-rule="off">
   <aside class="sb" aria-label="Navigation">
     <div class="sb-brand"><svg class="nx-logo follow" viewBox="0 0 32 32" aria-hidden="true"><rect class="bezel" x="2.75" y="2.75" width="26.5" height="26.5" rx="2.5"/><path class="n" d="M10.5 22.5v-12l10.5 12v-12"/><path class="n-gap" d="M10.5 22.5v-12L14.17 14.69M17.33 18.31 21 22.5v-12"/><path class="seg s1" d="M10.5 22.5v-12"/><path class="seg s2" d="M10.5 10.5 21 22.5"/><path class="seg s3" d="M21 22.5v-12"/><rect class="lamp" x="23.6" y="5.4" width="2.8" height="2.8"/><rect class="lamp-wide" x="20.8" y="5.4" width="5.6" height="2.8"/></svg><div class="id"><span class="wordmark">NEXUS</span><span class="sb-state" role="status"><span class="only-idle"><span class="fr">PRÊT</span><span class="en">READY</span></span><span class="only-planning"><span class="fr">PRÉPARATION</span><span class="en">PREPARING</span></span><span class="only-executing"><span class="fr">EN COURS · 2</span><span class="en">RUNNING · 2</span></span><span class="only-waiting"><span class="fr">ACCORD REQUIS · 1</span><span class="en">APPROVAL · 1</span></span><span class="only-error"><span class="fr">ÉCHEC</span><span class="en">FAILED</span></span><span class="only-offline"><span class="fr">HORS LIGNE</span><span class="en">OFFLINE</span></span><span class="only-paused"><span class="fr">ARRÊT ACTIF</span><span class="en">STOPPED</span></span><span class="only-success"><span class="fr">TERMINÉ</span><span class="en">DONE</span></span></span></div></div>
     <button type="button" class="sb-search"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4"/></svg><span><span class="fr">Rechercher ou lancer</span><span class="en">Search or run</span></span><span class="sp"><kbd>Ctrl</kbd><kbd>K</kbd></span></button>
@@ -654,7 +667,7 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
   <div class="main">
     <header class="main-head">
       <h3><span class="fr">Audit de sécurité des agents</span><span class="en">Agent security audit</span></h3>
-      <div class="sp"><span class="not-paused"><span class="st run"><span class="live"></span><span class="fr">En cours · 3/5</span><span class="en">Running · 3/5</span></span></span><button type="button" class="btn ghost sm"><span class="fr">Ne plus suivre</span><span class="en">Stop following</span></button></div>
+      <div class="sp"><span class="not-paused when-mrunning"><span class="st run"><span class="live"></span><span class="fr">En cours · 3/5</span><span class="en">Running · 3/5</span></span></span><span class="when-mcancelled"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Annulée</span><span class="en">Cancelled</span></span></span><button type="button" class="btn danger sm when-mrunning" id="mstop"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg><span class="fr">Arrêter la mission</span><span class="en">Stop the mission</span></button><button type="button" class="btn ghost sm when-mcancelled" id="mreset"><span class="fr">Rejouer la démo</span><span class="en">Replay demo</span></button></div>
     </header>
     <div class="pause-strip only-paused" role="alert"><b><span class="fr">ARRÊT D'URGENCE ACTIF</span><span class="en">EMERGENCY STOP ACTIVE</span></b><span><span class="fr">Toutes les actions de NEXUS sont suspendues depuis 14:07.</span><span class="en">All NEXUS actions have been suspended since 14:07.</span></span></div>
     <div class="feed">
@@ -667,7 +680,7 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
 
       <article class="card task" aria-labelledby="task-t">
         <header class="card-head task-head">
-          <span class="live" aria-hidden="true"></span>
+          <span class="live when-mrunning" aria-hidden="true"></span>
           <h4 id="task-t"><span class="fr">Audit des permissions MCP</span><span class="en">MCP permissions audit</span></h4>
           <span class="agent-chip"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h14v10H5zM12 9V5M9.5 13v2M14.5 13v2M3 13v3M21 13v3"/></svg>claude · opus</span>
           <div class="task-meta"><span>02:14</span><span><span class="fr">18,4 k tokens</span><span class="en">18.4k tokens</span></span></div>
@@ -675,14 +688,16 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
         <ol class="steps">
           <li class="done"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span><span class="fr">Lire la configuration des 6 serveurs MCP</span><span class="en">Read the configuration of the 6 MCP servers</span></span><span class="dur">0:21</span></li>
           <li class="done"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span><span class="fr">Comparer les portées déclarées et utilisées</span><span class="en">Compare declared and used scopes</span></span><span class="dur">0:48</span></li>
-          <li class="run"><span class="live" aria-hidden="true"></span><span><span class="fr">Corriger les portées excessives</span><span class="en">Fix excessive scopes</span></span><span class="dur">1:05</span></li>
-          <li class="wait"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg><span><span class="fr">Relancer les tests d'intégration</span><span class="en">Re-run the integration tests</span></span><span class="dur"></span></li>
-          <li class="wait"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg><span><span class="fr">Rédiger la synthèse</span><span class="en">Write the summary</span></span><span class="dur"></span></li>
+          <li class="run when-mrunning"><span class="live" aria-hidden="true"></span><span><span class="fr">Corriger les portées excessives</span><span class="en">Fix excessive scopes</span></span><span class="dur">1:05</span></li>
+          <li class="wait when-mcancelled"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span><span class="fr">Corriger les portées excessives · annulée</span><span class="en">Fix excessive scopes · cancelled</span></span><span class="dur">1:05</span></li>
+          <li class="wait"><span class="when-mrunning"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg></span><span class="when-mcancelled"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span><span class="fr">Relancer les tests d'intégration</span><span class="en">Re-run the integration tests</span></span><span class="dur"></span></li>
+          <li class="wait"><span class="when-mrunning"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg></span><span class="when-mcancelled"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span><span class="fr">Rédiger la synthèse</span><span class="en">Write the summary</span></span><span class="dur"></span></li>
         </ol>
         <div class="task-prog">
-          <div class="l"><span><span class="fr">EN COURS · 2 agents · étape 3/5</span><span class="en">RUNNING · 2 agents · step 3/5</span></span><span class="mono">40&nbsp;%</span></div>
+          <div class="l"><span class="when-mrunning"><span class="fr">EN COURS · 2 agents · étape 3/5</span><span class="en">RUNNING · 2 agents · step 3/5</span></span><span class="when-mcancelled"><span class="fr">ANNULÉE · étape 3/5 · 02:14</span><span class="en">CANCELLED · step 3/5 · 02:14</span></span><span class="mono">40&nbsp;%</span></div>
           <div class="bar" role="progressbar" aria-label="Progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40"><i class="w40"></i></div>
         </div>
+        <div class="rule when-rule"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/></svg><span class="label"><span class="fr">1 autorisation pour la mission</span><span class="en">1 standing approval</span></span><code>git.push</code><button type="button" class="btn ghost sm sp" id="revoke"><span class="fr">Révoquer</span><span class="en">Revoke</span></button></div>
         <details class="log" open>
           <summary><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 11h6M12 8v6M9 17h6"/></svg><span class="path">config/mcp/github.json</span><span class="stat"><span class="plus">+1</span> <span class="minus">−1</span></span></summary>
           <div class="diff" role="group" aria-label="Diff">
@@ -713,10 +728,11 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
           <footer class="approval-foot">
             <button type="button" class="btn primary" data-act="approved"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Approuver</span><span class="en">Approve</span><kbd>A</kbd></button>
             <button type="button" class="btn" data-act="refused"><span class="fr">Refuser</span><span class="en">Decline</span><kbd>R</kbd></button>
-            <button type="button" class="btn ghost sp"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 10l3 2.5L8 15M13 15h3"/></svg><span class="fr">Voir l'exécution</span><span class="en">View the run</span></button>
+            <button type="button" class="btn ghost sp" data-act="approved" data-rule="on"><span class="fr">Toujours autoriser git.push pour cette mission</span><span class="en">Always allow git.push for this mission</span></button>
           </footer>
         </div>
-        <div class="when-approved resolved"><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Approuvé</span><span class="en">Approved</span></span><span class="mono">14:07 · git push origin fix/mcp-scopes</span><button type="button" class="btn ghost sm sp" data-act="pending"><span class="fr">Rejouer la démo</span><span class="en">Replay demo</span></button></div>
+        <div class="when-approved resolved"><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Approuvé</span><span class="en">Approved</span></span><span class="mono">14:07 · git push origin fix/mcp-scopes</span><span class="when-rule muted"><span class="fr">· autorisation créée pour la mission</span><span class="en">· standing approval created</span></span><button type="button" class="btn ghost sm sp" data-act="pending"><span class="fr">Rejouer la démo</span><span class="en">Replay demo</span></button></div>
+        <div class="when-mcancelled resolved"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Annulé</span><span class="en">Cancelled</span></span><span class="muted"><span class="fr">La mission a été arrêtée ; codex n'a rien poussé.</span><span class="en">The mission was stopped; codex pushed nothing.</span></span></div>
         <div class="when-refused resolved"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Refusé</span><span class="en">Declined</span></span><span class="muted"><span class="fr">14:07 · codex n'a rien poussé.</span><span class="en">14:07 · codex pushed nothing.</span></span><button type="button" class="btn ghost sm sp" data-act="pending"><span class="fr">Rejouer la démo</span><span class="en">Replay demo</span></button></div>
       </section>
     </div>
@@ -734,13 +750,13 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
     <header class="insp-head"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><h3 id="insp-t"><span class="fr">Activité de la mission</span><span class="en">Mission activity</span></h3><span class="sp mono muted">5</span></header>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th scope="col"><span class="fr">Tâche</span><span class="en">Task</span></th><th scope="col">Agent</th><th scope="col"><span class="fr">État</span><span class="en">State</span></th><th scope="col" class="num"><span class="fr">Durée</span><span class="en">Time</span></th></tr></thead>
+        <thead><tr><th scope="col"><span class="fr">Tâche</span><span class="en">Task</span></th><th scope="col">Agent</th><th scope="col"><span class="fr">État</span><span class="en">State</span></th></tr></thead>
         <tbody>
-          <tr aria-current="true"><td class="task"><span class="fr">Audit des permissions</span><span class="en">Permissions audit</span></td><td class="mono">claude</td><td><span class="st run"><span class="live"></span><span class="fr">En cours</span><span class="en">Running</span></span></td><td class="num">02:14</td></tr>
-          <tr><td class="task">Push fix/mcp-scopes</td><td class="mono">codex</td><td><span class="when-pending"><span class="st warn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg><span class="fr">Accord requis</span><span class="en">Needs approval</span></span></span><span class="when-approved"><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Terminé</span><span class="en">Done</span></span></span><span class="when-refused"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Refusé</span><span class="en">Declined</span></span></span></td><td class="num"><span class="when-pending">—</span><span class="when-approved">00:03</span><span class="when-refused">—</span></td></tr>
-          <tr><td class="task"><span class="fr">Revue critique</span><span class="en">Critical review</span></td><td class="mono">antigravity</td><td><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg><span class="fr">En file</span><span class="en">Queued</span></span></td><td class="num">—</td></tr>
-          <tr><td class="task"><span class="fr">Inventaire des serveurs</span><span class="en">Server inventory</span></td><td class="mono">claude</td><td><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Terminé</span><span class="en">Done</span></span></td><td class="num">00:48</td></tr>
-          <tr><td class="task"><span class="fr">Tests d'intégration</span><span class="en">Integration tests</span></td><td class="mono">codex</td><td><span class="st danger"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Échec</span><span class="en">Failed</span></span></td><td class="num">01:20</td></tr>
+          <tr aria-current="true"><td class="task"><span class="fr">Audit des permissions</span><span class="en">Permissions audit</span></td><td class="mono">claude</td><td><span class="when-mrunning"><span class="st run"><span class="live"></span><span class="fr">En cours</span><span class="en">Running</span></span></span><span class="when-mcancelled"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Annulée</span><span class="en">Cancelled</span></span></span></td></tr>
+          <tr><td class="task">Push fix/mcp-scopes</td><td class="mono">codex</td><td><span class="when-mrunning"><span class="when-pending"><span class="st warn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg><span class="fr">Accord requis</span><span class="en">Needs approval</span></span></span><span class="when-approved"><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Terminé</span><span class="en">Done</span></span></span><span class="when-refused"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Refusé</span><span class="en">Declined</span></span></span></span><span class="when-mcancelled"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Annulée</span><span class="en">Cancelled</span></span></span></td></tr>
+          <tr><td class="task"><span class="fr">Revue critique</span><span class="en">Critical review</span></td><td class="mono">antigravity</td><td><span class="when-mrunning"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2"/></svg><span class="fr">En file</span><span class="en">Queued</span></span></span><span class="when-mcancelled"><span class="st neutral"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Annulée</span><span class="en">Cancelled</span></span></span></td></tr>
+          <tr><td class="task"><span class="fr">Inventaire des serveurs</span><span class="en">Server inventory</span></td><td class="mono">claude</td><td><span class="st ok"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span class="fr">Terminé</span><span class="en">Done</span></span></td></tr>
+          <tr><td class="task"><span class="fr">Tests d'intégration</span><span class="en">Integration tests</span></td><td class="mono">codex</td><td><span class="st danger"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="fr">Échec</span><span class="en">Failed</span></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -761,7 +777,8 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
     <span class="i not-offline"><i class="lampi ok"></i><span class="fr">En ligne</span><span class="en">Online</span></span>
     <span class="i danger only-offline"><i class="lampi hollow"></i><span class="fr">Hors ligne · dernière synchro 14:02</span><span class="en">Offline · last sync 14:02</span></span>
     <button type="button" class="i warn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3zM12 10v4.5M12 17v.5"/></svg><span class="fr">Services 5/6 · clients temps réel</span><span class="en">Services 5/6 · real-time clients</span></button>
-    <span class="i not-paused"><i class="lampi sig blink"></i><span class="fr">Agents 2 en cours</span><span class="en">Agents 2 running</span></span>
+    <span class="i not-paused when-mrunning"><i class="lampi sig blink"></i><span class="fr">Agents 2 en cours</span><span class="en">Agents 2 running</span></span>
+    <span class="i not-paused when-mcancelled"><i class="lampi hollow"></i><span class="fr">Agents au repos</span><span class="en">Agents idle</span></span>
     <span class="i only-paused"><i class="lampi hollow"></i><span class="fr">Agents suspendus</span><span class="en">Agents suspended</span></span>
     <button type="button" class="i warn when-pending" id="go-approval"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg><span class="fr">Accords 1</span><span class="en">Approvals 1</span></button>
     <button type="button" class="i warn"><span class="fr">Quota min 43 % · antigravity · réinit. 4 h 59</span><span class="en">Min quota 43% · antigravity · resets 4 h 59</span></button>
@@ -772,7 +789,7 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
   </footer>
 </div>
 <p class="sr-only" role="status" aria-live="polite" id="live"></p>
-<p class="note">Données d'illustration. Trois choses fonctionnent&nbsp;: «&nbsp;Approuver&nbsp;» et «&nbsp;Refuser&nbsp;» (touches A et R quand la carte a le focus), «&nbsp;Arrêt d'urgence&nbsp;» dans la barre d'état (immédiat, sans dialogue&nbsp;; «&nbsp;Reprendre&nbsp;» demanderait une confirmation dans l'application), et le sélecteur d'état du logo dans la section suivante, qui pilote aussi la barre latérale et la barre d'état. Chaque élément de la barre d'état correspond à une donnée réelle de l'API (voir <code>02-ux-architecture.md</code>, §7).</p>
+<p class="note">Données d'illustration. Quatre choses fonctionnent&nbsp;: «&nbsp;Approuver&nbsp;», «&nbsp;Refuser&nbsp;» (touches A et R quand la carte a le focus) et «&nbsp;Toujours autoriser…&nbsp;», qui crée une autorisation visible et révocable sur la carte de mission&nbsp;; «&nbsp;Arrêter la mission&nbsp;», qui l'annule sans dialogue&nbsp;; «&nbsp;Arrêt d'urgence&nbsp;» dans la barre d'état (immédiat, sans dialogue&nbsp;; «&nbsp;Reprendre&nbsp;» demanderait une confirmation dans l'application), et le sélecteur d'état du logo dans la section suivante, qui pilote aussi la barre latérale et la barre d'état. Chaque élément de la barre d'état correspond à une donnée réelle de l'API (voir <code>02-ux-architecture.md</code>, §7).</p>
 
   </section>
 
@@ -973,12 +990,21 @@ details.log summary .stat{margin-left:auto;font-family:var(--nx-font-mono)}
   document.querySelectorAll("[data-set-state]").forEach(function (b) { b.addEventListener("click", function () { setState(b.dataset.setState); }); });
   var says = { approved: ["Accord donné.", "Approved."], refused: ["Accord refusé.", "Declined."], pending: ["Démonstration réinitialisée.", "Demo reset."] };
   function say(pair) { live.textContent = pair[root.getAttribute("data-lang") === "fr" ? 0 : 1]; }
-  function decide(state) {
+  function decide(state, rule) {
+    shell.setAttribute("data-rule", rule === "on" ? "on" : "off");
     shell.setAttribute("data-approval", state);
     setState(state === "pending" ? "waiting" : "executing");
     say(says[state]); card.focus();
   }
-  shell.addEventListener("click", function (e) { var b = e.target.closest("[data-act]"); if (b) decide(b.dataset.act); });
+  shell.addEventListener("click", function (e) { var b = e.target.closest("[data-act]"); if (b) decide(b.dataset.act, b.dataset.rule); });
+  document.getElementById("revoke").addEventListener("click", function () { shell.setAttribute("data-rule", "off"); say(["Autorisation révoquée.", "Standing approval revoked."]); });
+  document.getElementById("mstop").addEventListener("click", function () {
+    shell.setAttribute("data-mission", "cancelled"); shell.setAttribute("data-rule", "off"); shell.setAttribute("data-approval", "refused");
+    setState("idle"); say(["Mission annulée.", "Mission cancelled."]); document.getElementById("mreset").focus();
+  });
+  document.getElementById("mreset").addEventListener("click", function () {
+    shell.setAttribute("data-mission", "running"); decide("pending"); document.getElementById("mstop").focus();
+  });
   card.addEventListener("keydown", function (e) {
     if (shell.getAttribute("data-approval") !== "pending" || e.ctrlKey || e.metaKey || e.altKey) return;
     var k = e.key.toLowerCase();

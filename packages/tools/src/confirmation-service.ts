@@ -106,6 +106,20 @@ export class ConfirmationService {
   readonly #criticalTtlMs: number;
   readonly #now: () => Date;
   readonly #newId: () => string;
+  readonly #operations = new Map<string, Promise<unknown>>();
+
+  // Serializes read/expire/decide within the supported single API process.
+  #serialize<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.#operations.get(id) ?? Promise.resolve();
+    const next = previous.then(operation, operation);
+    this.#operations.set(id, next);
+    void next
+      .finally(() => {
+        if (this.#operations.get(id) === next) this.#operations.delete(id);
+      })
+      .catch(() => undefined);
+    return next;
+  }
 
   constructor(options: ConfirmationServiceOptions = {}) {
     this.#store = options.store ?? new InMemoryConfirmationStore();
@@ -140,9 +154,11 @@ export class ConfirmationService {
   }
 
   async get(id: string): Promise<ConfirmationRequest | undefined> {
-    const request = await this.#store.get(id);
-    if (!request) return undefined;
-    return this.#expireIfDue(request);
+    return this.#serialize(id, async () => {
+      const request = await this.#store.get(id);
+      if (!request) return undefined;
+      return this.#expireIfDue(request);
+    });
   }
 
   /** Resolves confirmation request with human decision. */
@@ -156,34 +172,36 @@ export class ConfirmationService {
   }
 
   async resolve(id: string, decision: "approved" | "rejected"): Promise<ConfirmationRequest> {
-    const existing = await this.#store.get(id);
-    if (!existing) {
-      throw new NotFoundError({
-        message: `Unknown confirmation: ${id}`,
-        userMessage: "This confirmation request no longer exists.",
-        context: { confirmationId: id },
-      });
-    }
+    return this.#serialize(id, async () => {
+      const existing = await this.#store.get(id);
+      if (!existing) {
+        throw new NotFoundError({
+          message: `Unknown confirmation: ${id}`,
+          userMessage: "This confirmation request no longer exists.",
+          context: { confirmationId: id },
+        });
+      }
 
-    const current = await this.#expireIfDue(existing);
-    if (current.status !== "pending") {
-      throw new ConflictError({
-        message: `Confirmation already ${current.status}: ${id}`,
-        userMessage:
-          current.status === "expired"
-            ? "This confirmation request expired. Please rerun the action if you still want it."
-            : "This request has already been answered.",
-        context: { confirmationId: id, status: current.status },
-      });
-    }
+      const current = await this.#expireIfDue(existing);
+      if (current.status !== "pending") {
+        throw new ConflictError({
+          message: `Confirmation already ${current.status}: ${id}`,
+          userMessage:
+            current.status === "expired"
+              ? "This confirmation request expired. Please rerun the action if you still want it."
+              : "This request has already been answered.",
+          context: { confirmationId: id, status: current.status },
+        });
+      }
 
-    const resolved: ConfirmationRequest = {
-      ...current,
-      status: decision,
-      decidedAt: this.#now(),
-    };
-    await this.#store.save(resolved);
-    return resolved;
+      const resolved: ConfirmationRequest = {
+        ...current,
+        status: decision,
+        decidedAt: this.#now(),
+      };
+      await this.#store.save(resolved);
+      return resolved;
+    });
   }
 
   /** Verifies that approved confirmation matches the exact intended tool arguments. */

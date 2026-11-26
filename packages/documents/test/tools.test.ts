@@ -29,6 +29,24 @@ describe("NEXUS document tools", () => {
     onProgress: vi.fn(),
   });
 
+  it("checks the owner scope before reading any document", async () => {
+    const parser = new DocumentParser();
+    const read = vi.spyOn(parser, "parseDocument");
+    const authorizePath = vi.fn().mockRejectedValue(new Error("outside workspace"));
+    const tools = createDocumentTools({
+      parser,
+      memoryBridge: new DocumentMemoryBridge(vi.fn().mockResolvedValue(undefined)),
+      authorizePath,
+    });
+    for (const tool of tools) {
+      await expect(
+        tool.execute({ filePath: "/outside/secret.txt" } as never, createMockContext()),
+      ).rejects.toThrow("outside workspace");
+    }
+    expect(read).not.toHaveBeenCalled();
+    expect(authorizePath).toHaveBeenCalledWith("user-test", "/outside/secret.txt");
+  });
+
   it("registers tools with permissions and risk levels", () => {
     const parser = new DocumentParser();
     const tools = createDocumentTools({ parser });

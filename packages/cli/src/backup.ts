@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -47,14 +48,19 @@ export interface BackupOutcome {
 
 const RESTORE_STEPS = [
   "nexus restore <archive>  — restores PostgreSQL, SQLite, and configuration files",
-  "AUTH_SIGNING_KEY is NOT in the archive: copy it into .env from your",
-  "  secure storage, or generate a new key with `nexus setup`.",
+  "Restore AUTH_SIGNING_KEY into .env from the recovered secrets file or your",
+  "  secure storage; never replace the destination DATABASE_URL blindly.",
   "Vault credentials (OAuth tokens, provider keys) are not saved:",
   "  re-enter them via the dashboard.",
   "nexus doctor — verifies restored installation health",
 ];
 
 export async function createBackup(options: BackupOptions): Promise<BackupOutcome> {
+  if (options.includeSecrets && !options.passphrase?.trim()) {
+    throw new Error(
+      "Backups containing secrets require encryption: provide a non-empty passphrase.",
+    );
+  }
   const { paths } = options;
   const at = (options.now ?? (() => new Date()))();
   const env = readEnvFile(paths.envFile);
@@ -74,8 +80,14 @@ export async function createBackup(options: BackupOptions): Promise<BackupOutcom
     });
   }
 
-  // ── Engine SQLite ────────────────────────────────────────────────────────
-  if (!existsSync(paths.missionEngineDatabase)) {
+  // The engine may have a separate PostgreSQL database instead of SQLite.
+  if (env.NEXUS_ENGINE_DATABASE_URL) {
+    entries.push({
+      name: "mission-engine-postgres.dump",
+      description: "Mission Engine PostgreSQL: missions, tasks, attempts and outbox",
+      content: await dumpPostgres(env.NEXUS_ENGINE_DATABASE_URL),
+    });
+  } else if (!existsSync(paths.missionEngineDatabase)) {
     warnings.push("Mission Engine SQLite missing: no missions backed up");
   } else {
     entries.push({
@@ -110,9 +122,6 @@ export async function createBackup(options: BackupOptions): Promise<BackupOutcom
       });
     }
     warnings.push("archive contains .env: treat archive as confidential");
-    if (options.passphrase === undefined) {
-      warnings.push("secrets included WITHOUT encryption: provide --passphrase");
-    }
   }
 
   entries.push({
@@ -165,16 +174,20 @@ export async function verifyBackup(
 
   const workspace = mkdtempSync(join(tmpdir(), "nexus-verify-"));
   try {
-    const dump = entries.get("postgres.dump");
-    if (dump === undefined) {
-      checks.push({ name: "PostgreSQL", detail: "missing from archive", ok: false });
-    } else {
-      const dumpPath = join(workspace, "postgres.dump");
+    for (const name of ["postgres.dump", "mission-engine-postgres.dump"]) {
+      const dump = entries.get(name);
+      if (dump === undefined) {
+        if (name === "postgres.dump")
+          checks.push({ name: "PostgreSQL", detail: "missing from archive", ok: false });
+        continue;
+      }
+      const dumpPath = join(workspace, name);
       writeFileSync(dumpPath, dump);
-      const probe = `nexus_verify_${Date.now()}`;
+      const probe = `nexus_verify_${randomUUID().replaceAll("-", "")}`;
       await psql(options.databaseUrl, `CREATE DATABASE "${probe}"`);
       try {
         await run("pg_restore", [
+          "--exit-on-error",
           "--no-owner",
           "--dbname",
           replaceDatabase(options.databaseUrl, probe),
@@ -185,7 +198,7 @@ export async function verifyBackup(
           "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'",
         );
         checks.push({
-          name: "PostgreSQL restore",
+          name: `${name} restore`,
           detail: `${tables.trim()} tables restored into transient database`,
           ok: Number(tables.trim()) > 0,
         });
@@ -241,20 +254,42 @@ export async function restoreBackup(
   const skipped: string[] = [];
   const warnings: string[] = [];
 
+  if (entries.has("secrets/.env") && existsSync(`${paths.envFile}.restore`)) {
+    throw new Error(
+      "A .env.restore file already exists; move it to secure storage before restoring again.",
+    );
+  }
   const env = readEnvFile(paths.envFile);
-  const databaseUrl = env.DATABASE_URL;
-  const dump = entries.get("postgres.dump");
-
-  if (dump === undefined) {
-    skipped.push("PostgreSQL (missing from archive)");
-  } else if (databaseUrl === undefined) {
-    warnings.push("DATABASE_URL missing: PostgreSQL not restored");
-  } else {
+  const databases = [
+    ["postgres.dump", env.DATABASE_URL, "PostgreSQL"],
+    ["mission-engine-postgres.dump", env.NEXUS_ENGINE_DATABASE_URL, "Engine PostgreSQL"],
+  ] as const;
+  // Validate destinations before touching either database.
+  for (const [name, databaseUrl] of databases) {
+    if (entries.has(name) && !databaseUrl)
+      throw new Error(`Destination URL missing for ${name}; no database was restored.`);
+  }
+  if (
+    entries.has("mission-engine-postgres.dump") &&
+    env.DATABASE_URL &&
+    env.NEXUS_ENGINE_DATABASE_URL &&
+    libpqUrl(env.DATABASE_URL) === libpqUrl(env.NEXUS_ENGINE_DATABASE_URL)
+  ) {
+    throw new Error("API and engine restore destinations must be separate databases.");
+  }
+  for (const [name, databaseUrl, label] of databases) {
+    const dump = entries.get(name);
+    if (!dump || !databaseUrl) {
+      skipped.push(`${label} (missing from archive)`);
+      continue;
+    }
     const workspace = mkdtempSync(join(tmpdir(), "nexus-restore-"));
     try {
-      const dumpPath = join(workspace, "postgres.dump");
+      const dumpPath = join(workspace, name);
       writeFileSync(dumpPath, dump);
       await run("pg_restore", [
+        "--single-transaction",
+        "--exit-on-error",
         "--clean",
         "--if-exists",
         "--no-owner",
@@ -262,7 +297,7 @@ export async function restoreBackup(
         libpqUrl(databaseUrl),
         dumpPath,
       ]);
-      applied.push("PostgreSQL");
+      applied.push(label);
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }
@@ -291,6 +326,16 @@ export async function restoreBackup(
     mkdirSync(dirname(paths.publicKeyFile), { recursive: true, mode: 0o700 });
     writeFileSync(paths.publicKeyFile, publicKey, { mode: 0o644 });
     applied.push("API public key");
+  }
+
+  const recoveredEnv = entries.get("secrets/.env");
+  if (recoveredEnv !== undefined) {
+    const recoveryPath = `${paths.envFile}.restore`;
+    writeFileSync(recoveryPath, recoveredEnv, { mode: 0o600, flag: "wx" });
+    applied.push("Secrets recovered to .env.restore");
+    warnings.push(
+      "Merge .env.restore into .env manually, preserving destination DATABASE_URL; remove the recovery file afterward.",
+    );
   }
 
   if (!read.manifest.includesSecrets) {
@@ -516,7 +561,7 @@ Encryption: ${options.passphrase === undefined ? "none" : "AES-256-GCM, key deri
 
 ${
   options.includeSecrets
-    ? "All secrets are included."
+    ? "The .env file is included and recovered as .env.restore. Merge it manually while preserving the destination database URL. Vault credentials are not included; re-enter them via the dashboard."
     : `The signing key (\`AUTH_SIGNING_KEY\`) and vault credentials.
 
 Without the original signing key, active in-flight missions cannot be resumed

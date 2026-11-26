@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>NEXUS — approval required</title>
+  <style>
+    .ink { fill: none; stroke: #141513; stroke-linecap: square; stroke-linejoin: miter; }
+    .lamp { fill: #805200; }
+    @media (prefers-color-scheme: dark) {
+      .ink { stroke: #e8e9e3; }
+      .lamp { fill: #f2b544; }
+    }
+  </style>
+  <path class="ink" stroke-width="2" d="M19.5 3.5h-14a2 2 0 0 0-2 2v21a2 2 0 0 0 2 2h21a2 2 0 0 0 2-2V12.5"/>
+  <path class="ink" stroke-width="3" d="M10 23V11.5L20.5 23V14"/>
+  <rect class="lamp" x="22.5" y="3" width="6.5" height="6.5"/>
+</svg>

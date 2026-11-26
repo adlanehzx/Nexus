@@ -19,6 +19,7 @@ WORKDIR /repo
 FROM base AS deps
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY patches/ patches/
 COPY packages/shared/package.json      packages/shared/
 COPY packages/connections/package.json packages/connections/
 COPY packages/config/package.json      packages/config/
@@ -27,6 +28,7 @@ COPY packages/auth/package.json        packages/auth/
 COPY packages/database/package.json    packages/database/
 COPY packages/llm/package.json         packages/llm/
 COPY packages/memory/package.json      packages/memory/
+COPY packages/documents/package.json   packages/documents/
 COPY packages/tools/package.json       packages/tools/
 COPY packages/agent-core/package.json  packages/agent-core/
 COPY packages/vcs/package.json         packages/vcs/
@@ -43,6 +45,11 @@ COPY packages/worker-core/package.json packages/worker-core/
 COPY packages/design/package.json      packages/design/
 COPY packages/client-core/package.json packages/client-core/
 COPY packages/voice/package.json       packages/voice/
+COPY packages/activepieces/package.json packages/activepieces/
+COPY packages/cli/package.json         packages/cli/
+COPY packages/device-policy/package.json packages/device-policy/
+COPY packages/google-workspace/package.json packages/google-workspace/
+COPY apps/mobile/package.json          apps/mobile/
 COPY services/api/package.json         services/api/
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
@@ -79,7 +86,7 @@ ENV NODE_ENV=production \
 # silently never works. See ADR-018.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-      dumb-init git python3 python3-venv python3-pip \
+      dumb-init git bubblewrap poppler-utils python3 python3-venv python3-pip \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/nexus-python \
     && /opt/nexus-python/bin/pip install --no-cache-dir \

@@ -1,0 +1,39 @@
+.nx-dialog {
+  width: var(--nx-dialog-width, var(--nx-reading-max));
+  max-width: calc(100vw - var(--nx-space-8));
+  max-height: calc(100dvh - var(--nx-space-8));
+  margin: auto;
+  padding: 0;
+  border: calc(var(--nx-rail) / 2) solid var(--nx-line-control);
+  border-radius: var(--nx-radius-md);
+  background: var(--nx-surface-overlay);
+  color: var(--nx-text);
+  font: var(--nx-type-body);
+  overflow: auto;
+}
+.nx-dialog::backdrop {
+  background: var(--nx-scrim);
+}
+.nx-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nx-space-5);
+  padding: var(--nx-space-5);
+  border-bottom: calc(var(--nx-rail) / 2) solid var(--nx-line);
+}
+.nx-dialog__header h2 {
+  margin: 0;
+  font: var(--nx-type-heading);
+}
+.nx-dialog__body {
+  padding: var(--nx-space-6);
+}
+.nx-dialog__message {
+  margin: 0 0 var(--nx-space-6);
+  line-height: var(--nx-leading-normal);
+}
+.nx-dialog__input {
+  width: 100%;
+  margin-bottom: var(--nx-space-6);
+}

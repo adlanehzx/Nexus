@@ -1,0 +1,41 @@
+.nx-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nx-space-1);
+  padding: var(--nx-space-1);
+  border: calc(var(--nx-rail) / 2) solid var(--nx-line-control);
+  border-radius: var(--nx-radius-sm);
+}
+.nx-segmented__option {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+.nx-segmented__option input {
+  position: absolute;
+  opacity: 0;
+  width: var(--nx-space-1);
+  height: var(--nx-space-1);
+}
+.nx-segmented__option span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--nx-target-min);
+  min-width: var(--nx-target-min);
+  padding: var(--nx-space-1) var(--nx-space-4);
+  font: var(--nx-type-small);
+  color: var(--nx-text-muted);
+}
+.nx-segmented__option input:checked + span {
+  color: var(--nx-button-primary-fg);
+  background: var(--nx-button-primary-bg);
+}
+.nx-segmented__option input:focus-visible + span {
+  outline: var(--nx-focus-ring);
+  outline-offset: var(--nx-space-1);
+}
+.nx-segmented__option input:disabled + span {
+  color: var(--nx-text-faint);
+  cursor: not-allowed;
+}

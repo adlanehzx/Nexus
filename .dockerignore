@@ -19,6 +19,7 @@ docs
 apps/*
 !apps/dashboard
 !apps/dashboard/**
+!apps/mobile/package.json
 !services/windows-worker/**
 services/agent
 services/browser-worker

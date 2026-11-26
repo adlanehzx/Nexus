@@ -8,30 +8,9 @@
 
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import * as path from "node:path";
 import { WorktreeManager } from "@nexus/vcs";
 import { WorktreeSchema, type WorktreeStrategy, type WorktreeStatus } from "@nexus/protocol";
-import { AuthorizationError } from "@nexus/shared";
 import { currentUser } from "../../plugins/authentication.js";
-
-function isSystemPath(p: string): boolean {
-  const normalized = path.resolve(p);
-  return (
-    normalized === "/" ||
-    ["/etc", "/sys", "/proc", "/dev", "/boot", "/root", "/var/run"].some(
-      (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
-    )
-  );
-}
-
-function assertSafePath(pathToCheck: string): void {
-  if (isSystemPath(pathToCheck)) {
-    throw new AuthorizationError({
-      message: `Access to system path '${pathToCheck}' is strictly forbidden.`,
-      userMessage: "Access to system path is forbidden.",
-    });
-  }
-}
 
 export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
   const worktreeManager = new WorktreeManager();
@@ -56,7 +35,10 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
     },
     async (request, reply) => {
       const { workspaceRoot } = request.query;
-      assertSafePath(workspaceRoot);
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        workspaceRoot,
+      );
       try {
         const worktrees = await worktreeManager.listWorktrees(workspaceRoot);
         return reply.send({ worktrees });
@@ -118,9 +100,15 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
       },
     },
     async (request, reply) => {
-      assertSafePath(request.body.workspaceRoot);
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        request.body.workspaceRoot,
+      );
       if (request.body.targetPath) {
-        assertSafePath(request.body.targetPath);
+        await app.services.fileWorkspaces.authorizeRepository(
+          currentUser(request).userId,
+          request.body.targetPath,
+        );
       }
       const worktree = await worktreeManager.createWorktree(request.body);
       if (app.prisma?.worktree) {
@@ -179,8 +167,14 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
     },
     async (request, reply) => {
       const { worktreePath, workspaceRoot = worktreePath } = request.query;
-      assertSafePath(worktreePath);
-      assertSafePath(workspaceRoot);
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        worktreePath,
+      );
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        workspaceRoot,
+      );
       const status = await worktreeManager.getStatus(worktreePath, workspaceRoot);
       return reply.send({
         clean: status.clean,
@@ -216,7 +210,10 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
       },
     },
     async (request, reply) => {
-      assertSafePath(request.body.worktreePath);
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        request.body.worktreePath,
+      );
       const result = await worktreeManager.handoff({
         worktreePath: request.body.worktreePath,
         targetBranch: request.body.targetBranch,
@@ -252,8 +249,14 @@ export const worktreeRoutes: FastifyPluginCallbackZod = (app, _options, done) =>
       },
     },
     async (request, reply) => {
-      assertSafePath(request.body.workspaceRoot);
-      assertSafePath(request.body.worktreePath);
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        request.body.workspaceRoot,
+      );
+      await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        request.body.worktreePath,
+      );
       await worktreeManager.removeWorktree(request.body);
       if (app.prisma?.worktree) {
         try {

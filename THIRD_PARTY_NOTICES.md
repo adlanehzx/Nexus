@@ -22,6 +22,12 @@ The model-routing package includes FreeLLM `0.5.2`, maintained at
 as an optional free-tier router. Upstream providers—including NVIDIA NIM—retain their own terms,
 quotas, privacy policies, and development-versus-production restrictions.
 
+The web dashboard bundles the IBM Plex Sans and IBM Plex Mono typefaces (Latin subset, WOFF2) in
+`apps/dashboard/src/assets/fonts/`. IBM Plex is Copyright © 2017 IBM Corp. with Reserved Font Name
+"Plex", maintained at <https://github.com/IBM/plex>, and distributed under the SIL Open Font License,
+Version 1.1. The full license text ships beside the font files as `IBM-Plex-OFL.txt`. The fonts are
+used unmodified; NEXUS does not use the reserved name for any derived font.
+
 ### T3 Code Integration
 
 Portions of NEXUS (specifically contracts, provider adapters, VCS worktree orchestration, and

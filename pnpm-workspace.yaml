@@ -18,6 +18,21 @@ packages:
 #   shell-quote : command injection in `quote()` through a line terminator
 #                 (GHSA-pqg4-j6r4-53mv), reached by React Native tooling
 overrides:
+  "expo-router>query-string": "9.5.1"
+  "@prisma/config>deepmerge-ts": "8.0.0"
+  # Security fixes reported by the registry audit on 2026-11-11, within each major.
+  "fast-uri@>=3 <4": "3.1.7"
+  "fast-uri@>=4 <5": "4.1.4"
+  "node-forge@>=1 <2": "1.4.1"
+  "mysql2@>=3 <4": "3.22.0"
+  "source-map-js@>=1 <2": "1.2.2"
+  "compression@>=1 <2": "1.8.2"
+  "launch-editor@>=2 <3": "2.14.2"
+  "body-parser@>=1 <2": "1.20.9"
+  "body-parser@>=2 <3": "2.4.0"
+  "joi@>=17 <18": "17.13.9"
+  "brace-expansion@>=1 <2": "1.1.20"
+  "brace-expansion@>=5 <6": "5.0.11"
   proxy-addr: "^2.0.8"
   shell-quote: "^1.11.0"
 
@@ -53,3 +68,6 @@ minimumReleaseAgeExclude:
   - "@typescript-eslint/visitor-keys@8.69.0"
   - globals@17.12.0
   - typescript-eslint@8.69.0
+
+patchedDependencies:
+  expo-router@57.0.30: patches/expo-router@57.0.30.patch

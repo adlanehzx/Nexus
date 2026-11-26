@@ -1,0 +1,49 @@
+.nx-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--nx-target-min);
+  min-height: var(--nx-target-min);
+  width: var(--nx-control-height);
+  height: var(--nx-control-height);
+  padding: 0;
+  border: calc(var(--nx-rail) / 2) solid var(--nx-line-control);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  cursor: pointer;
+}
+.nx-icon-button--sm {
+  width: var(--nx-control-height-sm);
+  height: var(--nx-control-height-sm);
+}
+.nx-icon-button:hover:not(:disabled) {
+  background: var(--nx-surface-hover);
+}
+.nx-icon-button:active:not(:disabled) {
+  background: var(--nx-surface-active);
+}
+.nx-icon-button:focus-visible {
+  outline: var(--nx-focus-ring);
+  outline-offset: var(--nx-space-1);
+}
+.nx-icon-button--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.nx-icon-button--pressed {
+  background: var(--nx-surface-active);
+  border-color: var(--nx-accent);
+}
+.nx-icon-button:disabled {
+  cursor: not-allowed;
+  color: var(--nx-text-faint);
+  background: var(--nx-canvas);
+  border-color: var(--nx-line);
+}
+.nx-icon-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}

@@ -1,0 +1,62 @@
+.nx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nx-space-3);
+  min-height: var(--nx-control-height);
+  padding: var(--nx-space-1) var(--nx-space-5);
+  border: calc(var(--nx-rail) / 2) solid var(--nx-line-control);
+  border-radius: var(--nx-radius-sm);
+  background: var(--nx-surface);
+  color: var(--nx-text);
+  font: var(--nx-type-body);
+  cursor: pointer;
+}
+.nx-button--sm {
+  min-height: var(--nx-control-height-sm);
+}
+.nx-button:hover:not(:disabled) {
+  background: var(--nx-surface-hover);
+}
+.nx-button:active:not(:disabled) {
+  background: var(--nx-surface-active);
+}
+.nx-button:focus-visible {
+  outline: var(--nx-focus-ring);
+  outline-offset: var(--nx-space-1);
+}
+.nx-button--primary {
+  color: var(--nx-button-primary-fg);
+  background: var(--nx-button-primary-bg);
+  border-color: var(--nx-button-primary-bg);
+}
+.nx-button--primary:hover:not(:disabled) {
+  background: var(--nx-button-primary-bg-hover);
+}
+.nx-button--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.nx-button--danger {
+  color: var(--nx-danger);
+  border-color: var(--nx-danger);
+}
+.nx-button--danger-solid {
+  color: var(--nx-text-on-accent);
+  background: var(--nx-danger);
+  border-color: var(--nx-danger);
+}
+.nx-button--danger-solid:hover:not(:disabled) {
+  background: var(--nx-danger);
+}
+.nx-button:disabled {
+  cursor: not-allowed;
+  color: var(--nx-text-faint);
+  background: var(--nx-canvas);
+  border-color: var(--nx-line);
+}
+.nx-button__lamp {
+  width: var(--nx-lamp-size);
+  height: var(--nx-lamp-size);
+  background: currentColor;
+}

@@ -1,4 +1,7 @@
 import { execFile, spawnSync } from "node:child_process";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -59,13 +62,19 @@ describe("MCP Isolation and Security", () => {
 
     if (config.transport !== "stdio") throw new Error("Must be stdio");
 
-    const prepared = await McpSandboxManager.prepareStdio(config, {
-      SECRET_TOKEN: "shh-secret",
-    });
+    const prepared = await McpSandboxManager.prepareStdio(
+      config,
+      {
+        SECRET_TOKEN: "shh-secret",
+      },
+      { capabilities: { bwrap: true, systemdUserScope: false, docker: false } },
+    );
 
     expect(prepared.command).toBe("bwrap");
     expect(prepared.args).toContain("--ro-bind");
-    expect(prepared.args).toContain("/");
+    expect(prepared.args.join(" ")).not.toContain("--ro-bind / /");
+    expect(prepared.args.join(" ")).not.toContain("--bind / /");
+    expect(prepared.args).toContain("/tmp/home");
     expect(prepared.args).toContain("--dev");
     expect(prepared.args).toContain("/dev");
     expect(prepared.args).toContain("--proc");
@@ -184,6 +193,7 @@ describe("MCP Isolation and Security", () => {
           // default and is asserted by the argument-generation test above.
           allowNetwork: true,
           allowedBinaries: ["node"],
+          bindMounts: [{ hostPath: process.execPath }],
         },
       });
 
@@ -196,6 +206,61 @@ describe("MCP Isolation and Security", () => {
       expect(prepared.args).not.toContain("--unshare-net");
       const { stdout } = await execFileAsync(prepared.command, prepared.args);
       expect(stdout.trim()).toBe("NEXUS_SANDBOX_OK");
+    },
+  );
+
+  it("refuses requested isolation when Bubblewrap cannot run", async () => {
+    const config = parseMcpServerConfig({
+      name: "no-sandbox",
+      transport: "stdio",
+      command: "node",
+    });
+    if (config.transport !== "stdio") throw new Error("stdio required");
+    await expect(
+      McpSandboxManager.prepareStdio(
+        config,
+        {},
+        {
+          capabilities: { bwrap: false, systemdUserScope: false, docker: false },
+        },
+      ),
+    ).rejects.toThrow(McpSecurityError);
+    expect(validateBinary("node-malicious", ["node"])).toBe(false);
+    expect(validateBinary("/tmp/node", ["/usr/bin/node"])).toBe(false);
+  });
+
+  it.skipIf(!canCreateBubblewrapSandbox())(
+    "hides host secrets while exposing an explicitly allowed file",
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), "nexus-isolation-"));
+      try {
+        const secret = join(directory, "secret");
+        const allowed = join(directory, "allowed");
+        await writeFile(secret, "must-not-leak");
+        await writeFile(allowed, "allowed-data");
+        const config = parseMcpServerConfig({
+          name: "isolation-proof",
+          transport: "stdio",
+          command: process.execPath,
+          args: [
+            "-e",
+            `const fs=require('fs'); if(fs.existsSync(${JSON.stringify(secret)})) process.exit(41); console.log(fs.readFileSync('/input','utf8')); console.log(process.env.HOME);`,
+          ],
+          sandbox: {
+            allowNetwork: true,
+            bindMounts: [
+              { hostPath: allowed, containerPath: "/input" },
+              { hostPath: process.execPath },
+            ],
+          },
+        });
+        if (config.transport !== "stdio") throw new Error("stdio required");
+        const prepared = await McpSandboxManager.prepareStdio(config, { HOME: directory });
+        const { stdout } = await execFileAsync(prepared.command, prepared.args);
+        expect(stdout.trim()).toBe("allowed-data\n/tmp/home");
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
     },
   );
 
@@ -230,7 +295,10 @@ describe("MCP Isolation and Security", () => {
     const prepared = await McpSandboxManager.prepareStdio(
       config,
       { SECRET_VAR: "secret-val" },
-      { systemdRunPath: "systemd-run" },
+      {
+        systemdRunPath: "systemd-run",
+        capabilities: { bwrap: true, systemdUserScope: true, docker: false },
+      },
     );
 
     expect(prepared.command).toBe("systemd-run");

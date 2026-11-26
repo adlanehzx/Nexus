@@ -1,22 +1,21 @@
 # NEXUS
 
-A multi-device personal AI assistant — iPhone, PC, web — able to carry out real actions: send an
-email, run a project's tests, drive a browser, operate your own machines.
+A personal AI assistant with a web dashboard, a mission engine, document tools and optional device integrations.
 
-> **Status: working local alpha.** The core, the durable Mission Engine, the ACP agents,
-> authentication, the dashboard, permissions, vector memory and observability are integrated and
-> tested. Distributed clients, public packaging and some external integrations remain
-> experimental: see [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: development alpha.** Local tests cover parts of authentication, mission execution,
+> permissions and recovery. The complete beginner journey, real providers, device distributions
+> and production recovery are not yet qualified. See the current
+> [support matrix](docs/operations/product-support.md) and
+> [implementation evidence](docs/audits/SUIVI-IMPLEMENTATION-NEXUS.md).
 
-**The guiding principle** — the model can do nothing except emit text and _ask_ for a tool to run.
-Every real capability goes through the tool registry, is filtered by the permission service,
-executed by the executor, and traced. There is no alternative path between a model and the outside
-world.
+Tools execute with the permissions and approvals configured for the account. Enable only the
+capabilities needed for a task and choose an authorized working folder explicitly.
 
-**It runs on your machines.** No account, no hosted service, no paid API key: reasoning comes from
-ACP agents you already have, dictation and speech synthesis run locally through whisper.cpp and
-Piper, and web search goes through a local SearXNG. NEXUS talks to your machines and to nothing
-else.
+**The services can run on your machines.** Data sent to a remote model or connector leaves the
+machine and follows that provider's terms. ACP agents may use remote subscriptions; external
+providers may require an account, credentials and payment. Local speech engines and a local
+SearXNG instance are optional, separately configured capabilities. Running Nexus locally does
+not mean every enabled operation stays offline.
 
 ---
 

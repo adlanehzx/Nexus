@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MissionControlPort, SubmitMission } from "@nexus/mission-control-client";
+import type {
+  MissionControlPort,
+  SubmitMission,
+  MissionSnapshot,
+} from "@nexus/mission-control-client";
 import type { LLMProvider } from "@nexus/llm";
 import { createAccount, makeApi, type Account, type ApiHarness } from "./harness.js";
 
@@ -56,6 +60,10 @@ const engine = {
       ],
     }),
   ),
+  cancelMission: vi.fn(async (): Promise<MissionSnapshot> => ({
+    ...(await engine.getMission()),
+    state: "cancelled",
+  })),
   listMissions: vi.fn().mockResolvedValue([]),
   createSchedule: vi.fn(),
   getSchedule: vi.fn(),
@@ -118,6 +126,34 @@ beforeEach(async () => {
 afterEach(async () => harness.close());
 
 describe("NEXUS orchestrator facade", () => {
+  it("cancels only an owned mission", async () => {
+    await harness.app.inject({
+      method: "POST",
+      url: "/api/v1/orchestrator/messages",
+      headers: account.authorization,
+      payload: { message: "Prepare a file" },
+    });
+    const stranger = await createAccount(harness, "stranger-cancel@example.test");
+    expect(
+      (
+        await harness.app.inject({
+          method: "POST",
+          url: `/api/v1/orchestrator/missions/${missionId}/cancel`,
+          headers: stranger.authorization,
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(engine.cancelMission).not.toHaveBeenCalled();
+    const result = await harness.app.inject({
+      method: "POST",
+      url: `/api/v1/orchestrator/missions/${missionId}/cancel`,
+      headers: account.authorization,
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().data.state).toBe("cancelled");
+    expect(engine.cancelMission).toHaveBeenCalledWith(missionId);
+  });
+
   it("transforms a single message into an ACP DAG then exposes only the synthesis", async () => {
     const created = await harness.app.inject({
       method: "POST",

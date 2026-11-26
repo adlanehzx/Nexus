@@ -11,11 +11,17 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./tokens.css": "./tokens.css"
+    "./cadran": {
+      "types": "./dist/cadran.d.ts",
+      "default": "./dist/cadran.js"
+    },
+    "./tokens.css": "./tokens.css",
+    "./cadran.css": "./cadran.css"
   },
   "files": [
     "dist",
-    "tokens.css"
+    "tokens.css",
+    "cadran.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/generate-css.mjs",

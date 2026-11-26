@@ -1,3 +1,4 @@
+import { PendingApprovals } from "./PendingApprovals.js";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { DashboardApi, OrchestratedMission, SendToNexusOptions } from "../lib/api.js";
 import { ConversationHistory, readChatLocation, writeChatLocation } from "../lib/conversations.js";
@@ -23,6 +24,7 @@ import {
 } from "./icons.js";
 import { ChatMessageContent } from "./ChatMessageContent.js";
 import { ConversationSidebar } from "./ConversationSidebar.js";
+import { NexusLogo } from "./NexusLogo.js";
 
 /** Below this width the history floats over the chat instead of sitting beside it. */
 const HISTORY_OVERLAY_BELOW = 760;
@@ -532,7 +534,7 @@ export function NexusChat({ api, history: sharedHistory, showHistory = true }: N
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "var(--nx-signal)",
+              color: "var(--nx-accent)",
             }}
           >
             {tr(
@@ -606,7 +608,7 @@ export function NexusChat({ api, history: sharedHistory, showHistory = true }: N
         ) : null}
         {chat.entries.length === 0 && chat.transcriptStatus === "ready" ? (
           <div className="chat-welcome">
-            <div className="nexus-mark">N</div>
+            <NexusLogo size={48} />
             <h2>
               <CyberRetypeTitle
                 text={
@@ -672,6 +674,7 @@ export function NexusChat({ api, history: sharedHistory, showHistory = true }: N
             </div>
           </div>
         ) : null}
+        <PendingApprovals api={api} />
         {chat.entries.map((message) => (
           <article key={message.id} className={`chat-message ${message.role}`}>
             {message.role === "user" ? (
@@ -685,7 +688,7 @@ export function NexusChat({ api, history: sharedHistory, showHistory = true }: N
               <>
                 <div className="chat-header-bar">
                   <div className="chat-header-left">
-                    <span className="chat-avatar-badge">N</span>
+                    <NexusLogo size={18} />
                     <span className="chat-header-name">NEXUS</span>
                     {message.mission?.profiles && message.mission.profiles.length > 0 && (
                       <span className="chat-header-badge">
@@ -952,15 +955,20 @@ export function NexusChat({ api, history: sharedHistory, showHistory = true }: N
               <button
                 type="button"
                 className="composer-stop-btn"
-                onClick={() => history.stopTracked()}
-                aria-label={tr("Stop orchestration", "Arrêter l'orchestration")}
+                disabled={chat.cancelling}
+                onClick={() => void history.stopTracked()}
+                aria-label={tr("Stop mission", "Arrêter la mission")}
                 title={tr(
-                  "Interrupt in-flight mission tracking",
-                  "Interrompre le suivi de la mission",
+                  "Cancel the mission; an external call may finish before stopping",
+                  "Annuler la mission ; un appel externe peut se terminer avant l’arrêt",
                 )}
               >
                 <IconStop size={12} color="var(--nx-danger)" />
-                <span>{tr("Stop", "Arrêter")}</span>
+                <span>
+                  {chat.cancelling
+                    ? tr("Cancelling…", "Annulation…")
+                    : tr("Stop mission", "Arrêter la mission")}
+                </span>
               </button>
             ) : (
               <button

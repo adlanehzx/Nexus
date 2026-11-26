@@ -516,7 +516,7 @@ function EquityBalanceChart({
             fontFamily: "var(--nx-font-mono)",
           }}
         >
-          <span style={{ color: "var(--nx-signal)", fontWeight: 600 }}>{activeHover.label}</span>
+          <span style={{ color: "var(--nx-accent)", fontWeight: 600 }}>{activeHover.label}</span>
           <span style={{ color: "#00e5ff" }}>
             {tr("Total", "Total")} : <strong>{money(activeHover.total)}</strong>
           </span>
@@ -1321,7 +1321,7 @@ export function PaperTrading({
                   <span>
                     {tr("Estimated Model Probability (p)", "Probabilité Estimée du Modèle (p)")}
                   </span>
-                  <strong className="mono" style={{ color: "var(--nx-signal)" }}>
+                  <strong className="mono" style={{ color: "var(--nx-accent)" }}>
                     {(Number(probability) * 100).toFixed(1)}%
                   </strong>
                 </div>
@@ -1362,7 +1362,7 @@ export function PaperTrading({
               <div className="kelly-input-card">
                 <div className="kelly-input-label">
                   <span>{tr("Confidence Factor (c)", "Facteur de Confiance (c)")}</span>
-                  <strong className="mono" style={{ color: "var(--nx-signal)" }}>
+                  <strong className="mono" style={{ color: "var(--nx-accent)" }}>
                     {(Number(confidence) * 100).toFixed(0)}%
                   </strong>
                 </div>
@@ -1433,7 +1433,7 @@ export function PaperTrading({
 
               <div className="kelly-hud-item">
                 <span className="kelly-hud-label">{tr("Kelly Sizing", "Allocation Kelly")}</span>
-                <span className="kelly-hud-val" style={{ color: "var(--nx-signal)" }}>
+                <span className="kelly-hud-val" style={{ color: "var(--nx-accent)" }}>
                   {(kellyFraction * 100).toFixed(1)}%
                 </span>
               </div>

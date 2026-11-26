@@ -1,0 +1,55 @@
+diff --git a/android/src/main/java/expo/modules/router/ExpoRouterModule.kt b/android/src/main/java/expo/modules/router/ExpoRouterModule.kt
+deleted file mode 100644
+index 369cd65886415cb894b858e38604dc59b5c6ba95..0000000000000000000000000000000000000000
+diff --git a/build/fork/getPathFromState-forks.js b/build/fork/getPathFromState-forks.js
+index 63e3101859c323d758639b9263ddadb2f6df7589..3ffcaf54e922e738c149b7b2885a5d1f63bd28be 100644
+--- a/build/fork/getPathFromState-forks.js
++++ b/build/fork/getPathFromState-forks.js
+@@ -40,7 +40,7 @@ exports.appendQueryAndHash = appendQueryAndHash;
+ exports.appendBaseUrl = appendBaseUrl;
+ exports.getPathWithConventionsCollapsed = getPathWithConventionsCollapsed;
+ exports.isDynamicPart = isDynamicPart;
+-const queryString = __importStar(require("query-string"));
++const queryString = require("query-string").default;
+ const matchers_1 = require("../matchers");
+ const native_1 = require("../react-navigation/native");
+ function validatePathConfig({ preserveDynamicRoutes, preserveGroups, shouldEncodeURISegment, ...options }) {
+diff --git a/build/fork/getPathFromState.js b/build/fork/getPathFromState.js
+index 0503037e1ef7f23dd2322500f54468408f20238f..1f3583951a79328a15033ca84f7c344e851200c6 100644
+--- a/build/fork/getPathFromState.js
++++ b/build/fork/getPathFromState.js
+@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getPathFromState = getPathFromState;
+ exports.getPathDataFromState = getPathDataFromState;
+ exports.appendBaseUrl = appendBaseUrl;
+-const queryString = __importStar(require("query-string"));
++const queryString = require("query-string").default;
+ const expo = __importStar(require("./getPathFromState-forks"));
+ const navigationParams_1 = require("../navigationParams");
+ // END FORK
+diff --git a/build/react-navigation/core/getPathFromState.js b/build/react-navigation/core/getPathFromState.js
+index 43fb0dc87387d976b1d01d715882d273a5d10743..b27d629587c95260e50c8ea9d2c6a8ffd5939536 100644
+--- a/build/react-navigation/core/getPathFromState.js
++++ b/build/react-navigation/core/getPathFromState.js
+@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
+ })();
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getPathFromState = getPathFromState;
+-const queryString = __importStar(require("query-string"));
++const queryString = require("query-string").default;
+ const getPatternParts_1 = require("./getPatternParts");
+ const validatePathConfig_1 = require("./validatePathConfig");
+ const getActiveRoute = (state) => {
+diff --git a/build/react-navigation/core/getStateFromPath.js b/build/react-navigation/core/getStateFromPath.js
+index 2a1e1ffd76cfc9ac98284bcf19e0f3ef873becf8..2fb4d243d79959f7d4c61e5582416106a537706c 100644
+--- a/build/react-navigation/core/getStateFromPath.js
++++ b/build/react-navigation/core/getStateFromPath.js
+@@ -38,7 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getStateFromPath = getStateFromPath;
+ const escape_string_regexp_1 = __importDefault(require("escape-string-regexp"));
+-const queryString = __importStar(require("query-string"));
++const queryString = require("query-string").default;
+ const arrayStartsWith_1 = require("./arrayStartsWith");
+ const findFocusedRoute_1 = require("./findFocusedRoute");
+ const getPatternParts_1 = require("./getPatternParts");

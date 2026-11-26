@@ -178,6 +178,8 @@ export interface UserSession {
 
 export interface SessionStore {
   create(session: UserSession): Promise<void>;
+  /** Consume an active session and persist its successor atomically. */
+  rotate(id: string, at: Date, successor: UserSession): Promise<boolean>;
   get(id: string): Promise<UserSession | undefined>;
   findByRefreshHash(hash: string): Promise<UserSession | undefined>;
   revoke(id: string, at: Date): Promise<void>;
@@ -190,6 +192,21 @@ export class InMemorySessionStore implements SessionStore {
   create(session: UserSession): Promise<void> {
     this.#byId.set(session.id, { ...session });
     return Promise.resolve();
+  }
+
+  rotate(id: string, at: Date, successor: UserSession): Promise<boolean> {
+    const current = this.#byId.get(id);
+    if (
+      current?.revokedAt !== null ||
+      current.expiresAt <= at ||
+      current.userId !== successor.userId
+    ) {
+      return Promise.resolve(false);
+    }
+    if (this.#byId.has(successor.id)) throw new Error("Duplicate session id");
+    this.#byId.set(id, { ...current, revokedAt: at });
+    this.#byId.set(successor.id, { ...successor });
+    return Promise.resolve(true);
   }
 
   get(id: string): Promise<UserSession | undefined> {

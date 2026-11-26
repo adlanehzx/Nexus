@@ -1,3 +1,5 @@
+import { Dialog } from "./kit/Dialog.js";
+import { Button } from "./kit/Button.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "./i18n/index.js";
 
@@ -189,48 +191,8 @@ export function Modal(props: {
   children: React.ReactNode;
   width?: string;
 }) {
-  useEffect(() => {
-    if (!props.isOpen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") props.onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [props.isOpen, props.onClose]);
-
-  if (!props.isOpen) return null;
-
-  return (
-    <div className="nexus-modal-backdrop" role="dialog" aria-modal="true" onClick={props.onClose}>
-      <div
-        className="nexus-modal-content"
-        style={props.width ? { width: props.width } : undefined}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="nexus-modal-header">
-          <h3 className="nexus-modal-title">{props.title}</h3>
-          <button
-            type="button"
-            className="nexus-modal-close"
-            onClick={props.onClose}
-            aria-label="Close"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M3 3l10 10M13 3L3 13" />
-            </svg>
-          </button>
-        </div>
-        <div className="nexus-modal-body">{props.children}</div>
-      </div>
-    </div>
-  );
+  const { tr } = useI18n();
+  return <Dialog {...props} closeLabel={tr("Close", "Fermer")} />;
 }
 
 export function ConfirmModal(props: {
@@ -246,18 +208,19 @@ export function ConfirmModal(props: {
   const { tr } = useI18n();
   return (
     <Modal title={props.title} isOpen={props.isOpen} onClose={props.onCancel}>
-      <p style={{ margin: "0 0 1.25rem 0", lineHeight: 1.5 }}>{props.message}</p>
+      <p className="nx-dialog__message">{props.message}</p>
       <div className="nexus-modal-footer">
-        <button type="button" className="button secondary compact" onClick={props.onCancel}>
+        <Button type="button" variant="secondary" size="sm" onClick={props.onCancel}>
           {props.cancelLabel ?? tr("Cancel", "Annuler")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={`button compact ${props.danger ? "danger" : "primary"}`}
+          variant={props.danger ? "danger-solid" : "primary"}
+          size="sm"
           onClick={props.onConfirm}
         >
           {props.confirmLabel ?? tr("Confirm", "Confirmer")}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
@@ -283,10 +246,10 @@ export function PromptModal(props: {
 
   return (
     <Modal title={props.title} isOpen={props.isOpen} onClose={props.onCancel}>
-      <p style={{ margin: "0 0 0.75rem 0", lineHeight: 1.5 }}>{props.message}</p>
+      <p className="nx-dialog__message">{props.message}</p>
       <input
         type="text"
-        className="field"
+        className="field nx-dialog__input"
         autoFocus
         value={val}
         placeholder={props.placeholder}
@@ -296,20 +259,20 @@ export function PromptModal(props: {
             props.onSubmit(val.trim());
           }
         }}
-        style={{ width: "100%", marginBottom: "1.25rem" }}
       />
       <div className="nexus-modal-footer">
-        <button type="button" className="button secondary compact" onClick={props.onCancel}>
+        <Button type="button" variant="secondary" size="sm" onClick={props.onCancel}>
           {props.cancelLabel ?? tr("Cancel", "Annuler")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="button primary compact"
+          variant="primary"
+          size="sm"
           disabled={val.trim().length === 0}
           onClick={() => props.onSubmit(val.trim())}
         >
           {props.submitLabel ?? tr("Submit", "Valider")}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

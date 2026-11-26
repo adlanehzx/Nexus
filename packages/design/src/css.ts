@@ -65,6 +65,11 @@ export function paletteVariables(palette: Palette): Record<string, string> {
     [`${PREFIX}-shadow-popover`]: palette.shadowPopover,
   };
 
+  // Present in the Cadran identity only. Emitting them conditionally keeps the
+  // Signal stylesheet byte-identical to what mobile and desktop already ship.
+  if (palette.lineControl !== undefined) vars[`${PREFIX}-line-control`] = palette.lineControl;
+  if (palette.focus !== undefined) vars[`${PREFIX}-focus`] = palette.focus;
+
   for (const name of ["ok", "warn", "danger", "info", "neutral"] as const) {
     const tone = palette[name];
     vars[`${PREFIX}-${name}`] = tone.fg;

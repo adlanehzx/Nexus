@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DashboardApi,
+  DashboardHttpError,
   createSession,
   type ConversationMessage,
   type ConversationSummary,
@@ -94,6 +95,13 @@ class FakeNexus implements ConversationHistoryApi {
 
   exists(conversationId: string): boolean {
     return this.#conversations.has(conversationId);
+  }
+
+  async cancelNexusMission(missionId: string): Promise<OrchestratedMission> {
+    await this.#gate("cancel");
+    const mission = this.#mission(missionId);
+    mission.state = "cancelled";
+    return { ...mission };
   }
 
   async conversations(page: CursorRequest = {}): Promise<CursorPage<ConversationSummary>> {
@@ -231,7 +239,8 @@ class FakeNexus implements ConversationHistoryApi {
 
   #existing(conversationId: string): ConversationSummary {
     const conversation = this.#conversations.get(conversationId);
-    if (conversation === undefined) throw new Error("The requested resource does not exist.");
+    if (conversation === undefined)
+      throw new DashboardHttpError(404, "The requested resource does not exist.");
     return conversation;
   }
 
@@ -327,13 +336,26 @@ describe("sending from a new conversation", () => {
     expect(nexus.created).toBe(1);
   });
 
-  it("stops tracking the in-flight mission when requested", async () => {
+  it("stops tracking only after the server confirms cancellation", async () => {
     const nexus = new FakeNexus();
     const history = await started(nexus);
     await history.send("Long running mission");
     expect(history.getSnapshot().tracked).not.toBeNull();
 
-    history.stopTracked();
+    await history.stopTracked();
+    expect(history.getSnapshot().tracked).toBeNull();
+  });
+
+  it("keeps the mission tracked while cancellation is in flight", async () => {
+    const nexus = new FakeNexus();
+    const history = await started(nexus);
+    await history.send("Long task");
+    const held = nexus.hold("cancel");
+    const cancelling = history.stopTracked();
+    expect(history.getSnapshot().tracked).not.toBeNull();
+    expect(await history.send("Another task")).toBe(false);
+    held.release();
+    await cancelling;
     expect(history.getSnapshot().tracked).toBeNull();
   });
 
@@ -568,6 +590,31 @@ describe("restoring from a link", () => {
       tracked: null,
       error: "The requested resource does not exist.",
     });
+  });
+
+  it("preserves the linked mission after a transient restore error", async () => {
+    const nexus = new FakeNexus();
+    const conversation = nexus.seed("Recoverable");
+    const mission = await nexus.sendToNexus("Keep this mission", {
+      conversationId: conversation.id,
+    });
+    vi.spyOn(nexus, "conversation").mockRejectedValueOnce(
+      new DashboardHttpError(503, "Temporary outage"),
+    );
+    const history = new ConversationHistory(nexus, {
+      conversationId: conversation.id,
+      missionId: mission.missionId,
+    });
+    await history.start();
+    expect(history.getSnapshot()).toMatchObject({
+      activeId: conversation.id,
+      transcriptStatus: "error",
+      tracked: { missionId: mission.missionId },
+    });
+    await history.open(conversation.id);
+    expect(history.getSnapshot().transcriptStatus).toBe("ready");
+    expect(history.getSnapshot().tracked?.missionId).toBe(mission.missionId);
+    expect(nexus.sent).toHaveLength(1);
   });
 
   it("start() runs once, as React's development double mount calls it twice", async () => {

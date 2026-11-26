@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { execFileSync } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -152,7 +153,14 @@ describe("Unified Fusion Routes (/api/v1)", () => {
     it("captures checkpoint via POST /api/v1/checkpoints and retrieves it", async () => {
       const tmpTestDir = path.join(os.tmpdir(), `nexus-api-test-${Date.now()}`);
       await fs.mkdir(tmpTestDir, { recursive: true });
+      execFileSync("git", ["init"], { cwd: tmpTestDir, stdio: "ignore" });
 
+      await harness.app.inject({
+        method: "POST",
+        url: "/api/v1/file-workspaces",
+        headers: account.authorization,
+        payload: { root: tmpTestDir, label: "Test" },
+      });
       const postRes = await harness.app.inject({
         method: "POST",
         url: "/api/v1/checkpoints",

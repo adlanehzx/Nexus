@@ -19,7 +19,14 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
   const [activeTab, setActiveTab] = useState<VcsTab>("worktrees");
 
   // Worktrees state
-  const worktreesState = useSection(() => api.worktrees("."));
+  const folders = useSection(() => api.fileWorkspaces());
+  const [selectedRoot, setSelectedRoot] = useState("");
+  const [folderPath, setFolderPath] = useState("");
+  const workspaceRoot = selectedRoot || (folders.data?.workspaces[0]?.root ?? "");
+  const worktreesState = useSection(
+    () => (workspaceRoot ? api.worktrees(workspaceRoot) : Promise.resolve({ worktrees: [] })),
+    [workspaceRoot],
+  );
   const [newBranch, setNewBranch] = useState("");
   const [newStrategy, setNewStrategy] = useState<"isolated" | "branch" | "share">("isolated");
   const [inspectedStatus, setInspectedStatus] = useState<{
@@ -70,10 +77,10 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
 
   // Worktree actions
   const handleCreateWorktree = async () => {
-    if (!newBranch.trim()) return;
+    if (!newBranch.trim() || !workspaceRoot) return;
     try {
       await api.createWorktree({
-        workspaceRoot: ".",
+        workspaceRoot,
         branchName: newBranch.trim(),
         strategy: newStrategy,
       });
@@ -140,9 +147,9 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
           await api.removeWorktree({
-            workspaceRoot: ".",
+            workspaceRoot,
             worktreePath: wt.path,
-            force: true,
+            force: false,
           });
           notifySuccess(tr("Worktree pruned.", "Worktree supprimé."));
           if (inspectedStatus?.path === wt.path) setInspectedStatus(null);
@@ -167,7 +174,10 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
-          const res = await api.restoreCheckpoint(threadId, { turnCount: turn, cwd: "." });
+          const res = await api.restoreCheckpoint(threadId, {
+            turnCount: turn,
+            cwd: workspaceRoot,
+          });
           if (res.success) {
             notifySuccess(
               tr(
@@ -190,7 +200,7 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
 
   const handleInspectDiff = async (turn: number) => {
     try {
-      const res = await api.checkpointDiff(threadId, Math.max(0, turn - 1), turn, ".");
+      const res = await api.checkpointDiff(threadId, Math.max(0, turn - 1), turn, workspaceRoot);
       setActiveDiff(res.diff);
     } catch (e) {
       notifyError(e);
@@ -250,6 +260,78 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
       {bannerMessage && <p className="banner success">{bannerMessage}</p>}
       {bannerError && <p className="banner error">{bannerError}</p>}
 
+      <section className="card">
+        <label>
+          {tr("Authorized folder", "Dossier autorisé")}
+          <select value={workspaceRoot} onChange={(event) => setSelectedRoot(event.target.value)}>
+            <option value="">{tr("Choose a folder", "Choisir un dossier")}</option>
+            {folders.data?.workspaces.map((folder) => (
+              <option key={folder.id} value={folder.root}>
+                {folder.label} — {folder.root}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={!workspaceRoot}
+          onClick={() => {
+            const folder = folders.data?.workspaces.find((entry) => entry.root === workspaceRoot);
+            if (!folder) return;
+            setConfirmModal({
+              isOpen: true,
+              title: tr("Revoke folder access", "Révoquer l’accès au dossier"),
+              message: tr(
+                "Future file operations will be denied. Files are preserved.",
+                "Les prochaines opérations sur les fichiers seront refusées. Les fichiers sont conservés.",
+              ),
+              onConfirm: async () => {
+                setConfirmModal((previous) => ({ ...previous, isOpen: false }));
+                try {
+                  await api.revokeFileWorkspace(folder.id);
+                  setSelectedRoot("");
+                  setActiveDiff(null);
+                  setInspectedStatus(null);
+                  folders.reload();
+                  checkpointsState.reload();
+                  notifySuccess(tr("Folder access revoked.", "Accès au dossier révoqué."));
+                } catch (error) {
+                  notifyError(error);
+                }
+              },
+            });
+          }}
+        >
+          {tr("Revoke access (administrator)", "Révoquer l’accès (administrateur)")}
+        </button>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void api
+              .authorizeFileWorkspace(folderPath.trim(), folderPath.trim())
+              .then((folder) => {
+                setSelectedRoot(folder.root);
+                setFolderPath("");
+                folders.reload();
+              })
+              .catch(notifyError);
+          }}
+        >
+          <label>
+            {tr("Folder on this server (administrator)", "Dossier sur ce serveur (administrateur)")}
+            <input
+              value={folderPath}
+              onChange={(event) => setFolderPath(event.target.value)}
+              placeholder="/home/example/project"
+              required
+            />
+          </label>
+          <button type="submit" className="button secondary" disabled={!folderPath.trim()}>
+            {tr("Authorize this folder", "Autoriser ce dossier")}
+          </button>
+        </form>
+      </section>
       {/* Top tabs */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
         <button
@@ -538,8 +620,8 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
                 {checkpoints.length === 0 ? (
                   <Empty>
                     {tr(
-                      `No checkpoints recorded for thread "${threadId}". Checkpoints are captured automatically at each turn of execution.`,
-                      `Aucun checkpoint enregistré pour le thread "${threadId}". Les points de sauvegarde sont créés automatiquement à chaque tour d'exécution.`,
+                      `No checkpoints recorded for thread "${threadId}". A checkpoint appears only after a successful capture in an authorized Git repository.`,
+                      `Aucun checkpoint enregistré pour le thread "${threadId}". Un point de sauvegarde apparaît uniquement après une capture réussie dans un dépôt Git autorisé.`,
                     )}
                   </Empty>
                 ) : (
@@ -567,7 +649,7 @@ export function VcsWorktrees({ api }: { api: DashboardApi }) {
                         <td>
                           {cp.description ?? (
                             <span className="muted">
-                              {tr("Automatic turn checkpoint", "Checkpoint de tour automatique")}
+                              {tr("Turn checkpoint", "Point de sauvegarde du tour")}
                             </span>
                           )}
                         </td>

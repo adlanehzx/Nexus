@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 440" role="img" aria-label="NEXUS icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="NEXUS">
   <title>NEXUS</title>
-  <g transform="translate(-405 -320)">
-    <path fill="#F8FAFC" d="M452 391H554L735 571V438L800 372V687L569 454H515Z"/>
-    <path fill="#F8FAFC" d="M473 455L538 520V638L473 704Z"/>
-    <path fill="#02E9E9" d="M530 484H572L747 659H706Z"/>
-  </g>
+  <rect width="32" height="32" fill="#0c0d0c"/>
+  <rect x="2.75" y="2.75" width="26.5" height="26.5" rx="2.5" fill="none" stroke="#e8e9e3" stroke-width="1.5"/>
+  <path d="M10.5 22.5v-12l10.5 12v-12" fill="none" stroke="#e8e9e3" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter"/>
+  <rect x="23.6" y="5.4" width="2.8" height="2.8" fill="#c6ee4f"/>
 </svg>

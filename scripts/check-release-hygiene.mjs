@@ -22,7 +22,7 @@ const forbiddenTrackedRuntimeFiles = new Set([
   "services/mission-engine/config/runtime-settings.json",
 ]);
 const suspiciousHomePath =
-  /\/home\/(?!example(?:\/|\b)|someone(?:\/|\b)|alice(?:\/|\b)|nexus(?:\/|\b)|node(?:\/|\b))[^/\s"'`]+/;
+  /(?<![\w/#])\/home\/(?!:)(?!example(?:\/|\b)|someone(?:\/|\b)|alice(?:\/|\b)|nexus(?:\/|\b)|node(?:\/|\b))[^/\s"'`]+/;
 const privateTailnetName =
   /\b(?!nexus-core\.example-tailnet\.ts\.net)[a-z0-9-]+\.tail[a-z0-9]+\.ts\.net\b/i;
 const failures = [];

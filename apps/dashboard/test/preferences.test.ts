@@ -1,43 +1,42 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  COLOR_THEMES,
-  applyColorTheme,
-  initColorTheme,
-  readColorTheme,
-  type ColorThemeId,
-} from "../src/lib/color-theme.js";
+import { applyPreference, initTheme, readPreference, resolveTheme } from "../src/lib/theme.js";
 
-describe("NEXUS Preferences & Color Themes", () => {
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function sources(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return sources(path);
+    return /\.(tsx?|css)$/.test(name) ? [path] : [];
+  });
+}
+
+describe("theme preference", () => {
   const storage = new Map<string, string>();
   const attributes = new Map<string, string>();
-  const styleProperties = new Map<string, string>();
+  let prefersDark = false;
 
   beforeEach(() => {
     storage.clear();
     attributes.clear();
-    styleProperties.clear();
-
-    const mockDocumentElement = {
-      setAttribute: (k: string, v: string) => attributes.set(k, v),
-      getAttribute: (k: string) => attributes.get(k) ?? null,
-      removeAttribute: (k: string) => attributes.delete(k),
-      style: {
-        setProperty: (k: string, v: string) => styleProperties.set(k, v),
-        getPropertyValue: (k: string) => styleProperties.get(k) ?? "",
-      },
-    };
+    prefersDark = false;
 
     vi.stubGlobal("window", {
       sessionStorage: {
-        getItem: (k: string) => storage.get(k) ?? null,
-        setItem: (k: string, v: string) => storage.set(k, v),
-        removeItem: (k: string) => storage.delete(k),
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
       },
-      dispatchEvent: vi.fn(),
+      matchMedia: () => ({ matches: prefersDark }),
     });
-
     vi.stubGlobal("document", {
-      documentElement: mockDocumentElement,
+      documentElement: {
+        setAttribute: (key: string, value: string) => attributes.set(key, value),
+        removeAttribute: (key: string) => attributes.delete(key),
+      },
     });
   });
 
@@ -45,102 +44,69 @@ describe("NEXUS Preferences & Color Themes", () => {
     vi.unstubAllGlobals();
   });
 
-  it("provides 7 curated themes with bilingual labels and distinct signals", () => {
-    const themeIds: ColorThemeId[] = [
-      "emerald",
-      "cyan",
-      "violet",
-      "amber",
-      "crimson",
-      "blue",
-      "graphite",
-    ];
+  it("follows the system until the user chooses", () => {
+    expect(readPreference()).toBe("system");
+    expect(initTheme()).toBe("system");
+    expect(attributes.has("data-theme")).toBe(false);
+  });
 
-    expect(Object.keys(COLOR_THEMES).sort()).toEqual(themeIds.sort());
+  it("writes an explicit choice on the document and keeps it for the tab session", () => {
+    applyPreference("light");
+    expect(attributes.get("data-theme")).toBe("light");
+    expect(readPreference()).toBe("light");
 
-    for (const id of themeIds) {
-      const config = COLOR_THEMES[id];
-      expect(config.id).toBe(id);
-      expect(config.nameFr).toBeTruthy();
-      expect(config.nameEn).toBeTruthy();
-      expect(config.signal).toMatch(/^#[0-9a-fA-F]{6}$/);
-      expect(config.primary).toMatch(/^#[0-9a-fA-F]{6}$/);
+    applyPreference("dark");
+    expect(attributes.get("data-theme")).toBe("dark");
+    expect(readPreference()).toBe("dark");
+  });
+
+  it("returns to the system setting without leaving anything behind", () => {
+    applyPreference("dark");
+    applyPreference("system");
+    expect(attributes.has("data-theme")).toBe(false);
+    expect(storage.size).toBe(0);
+  });
+
+  it("ignores a stored value it does not know", () => {
+    storage.set("nexus.theme", "neon");
+    expect(readPreference()).toBe("system");
+  });
+
+  it("resolves the system preference to the theme in effect", () => {
+    expect(resolveTheme("system")).toBe("light");
+    prefersDark = true;
+    expect(resolveTheme("system")).toBe("dark");
+    expect(resolveTheme("light")).toBe("light");
+  });
+});
+
+/**
+ * One identity. The seven user-selectable accent themes were removed with the
+ * move to Cadran; nothing may reintroduce a per-user accent palette.
+ */
+describe("single identity", () => {
+  const files = sources(join(root, "src"));
+
+  it("has no accent-theme module or attribute left", () => {
+    for (const file of files) {
+      const code = readFileSync(file, "utf8");
+      // `theme-rgb.ts` still lists the attribute in a MutationObserver filter; it
+      // is deleted with the decorative canvas that uses it.
+      if (file.endsWith("theme-rgb.ts")) continue;
+      expect(code, file).not.toContain("data-color-theme");
+      expect(code, file).not.toContain("--nx-theme-");
+      expect(code, file).not.toContain("color-theme.js");
     }
   });
 
-  it("defaults to cyan when storage is empty", () => {
-    expect(readColorTheme()).toBe("cyan");
-  });
-
-  it("persists theme choice to sessionStorage without using localStorage", () => {
-    applyColorTheme("emerald");
-    expect(storage.get("nexus.colorTheme")).toBe("emerald");
-    expect(readColorTheme()).toBe("emerald");
-
-    applyColorTheme("violet");
-    expect(storage.get("nexus.colorTheme")).toBe("violet");
-    expect(readColorTheme()).toBe("violet");
-  });
-
-  it("applies CSS custom properties and attributes to documentElement", () => {
-    applyColorTheme("emerald");
-
-    expect(attributes.get("data-color-theme")).toBe("emerald");
-    // Per-mode palettes: color-themes.css maps them onto --nx-accent / --nx-signal.
-    expect(styleProperties.get("--nx-theme-signal-dark")).toBe(COLOR_THEMES.emerald.dark.signal);
-    expect(styleProperties.get("--nx-theme-signal-light")).toBe(COLOR_THEMES.emerald.light.signal);
-    expect(styleProperties.get("--nx-theme-accent-dark")).toBe(COLOR_THEMES.emerald.dark.accent);
-    expect(styleProperties.get("--nx-theme-accent-light")).toBe(COLOR_THEMES.emerald.light.accent);
-    // The Spatial OS variables keep the brand signal.
-    expect(styleProperties.get("--sp-accent")).toBe(COLOR_THEMES.emerald.signal);
-    expect(styleProperties.get("--sp-border-active")).toBe(COLOR_THEMES.emerald.signal);
-  });
-
-  it("initializes theme before paint", () => {
-    storage.set("nexus.colorTheme", "amber");
-    const active = initColorTheme();
-    expect(active).toBe("amber");
-    expect(attributes.get("data-color-theme")).toBe("amber");
-  });
-  it("keeps every theme palette at WCAG AA (4.5:1) on its mode's surface ramp", () => {
-    const luminance = (hex: string): number => {
-      const channel = (offset: number): number => {
-        const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
-        return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-    };
-    const contrast = (a: string, b: string): number => {
-      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-      return (hi + 0.05) / (lo + 0.05);
-    };
-    // Surfaces from @nexus/design tokens: canvas, surface, raised, active.
-    const surfaces = {
-      light: ["#f4f7fb", "#ffffff", "#e9eff7", "#e3ebf6"],
-      dark: ["#080b11", "#0e131c", "#141b26", "#212b3b"],
-    } as const;
-    const onAccent = { light: "#ffffff", dark: "#04070e" } as const;
-
-    for (const config of Object.values(COLOR_THEMES)) {
-      for (const mode of ["light", "dark"] as const) {
-        const palette = config[mode];
-        for (const surface of surfaces[mode]) {
-          for (const [name, color] of [
-            ["accent", palette.accent],
-            ["accentHover", palette.accentHover],
-            ["signal", palette.signal],
-          ] as const) {
-            expect(
-              contrast(color, surface),
-              `${config.id}/${mode} ${name} ${color} on ${surface}`,
-            ).toBeGreaterThanOrEqual(4.5);
-          }
-        }
-        expect(
-          contrast(onAccent[mode], palette.accent),
-          `${config.id}/${mode} text on accent fill`,
-        ).toBeGreaterThanOrEqual(4.5);
-      }
+  it("loads the Cadran tokens and no display face from the old identity", () => {
+    const css = files
+      .filter((file) => file.endsWith(".css"))
+      .map((file) => readFileSync(file, "utf8"));
+    expect(css.some((code) => code.includes("@nexus/design/cadran.css"))).toBe(true);
+    for (const code of css) {
+      expect(code).not.toContain("@nexus/design/tokens.css");
+      expect(code).not.toMatch(/@font-face[^}]*(Orbitron|Rajdhani)/);
     }
   });
 });

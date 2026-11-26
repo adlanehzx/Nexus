@@ -34,6 +34,8 @@ describe("E2E Fusion Lifecycle Pipeline", () => {
     account = await createAccount(harness);
 
     testRepoDir = await fs.mkdtemp(path.join(os.tmpdir(), "nexus-e2e-repo-"));
+    await harness.app.inject({ method: "POST", url: "/api/v1/file-workspaces", headers: account.authorization,
+      payload: { root: testRepoDir, label: "Test" } });
     await execFileAsync("git", ["init", "-b", "main"], { cwd: testRepoDir });
     await execFileAsync("git", ["config", "user.name", "NEXUS Test"], { cwd: testRepoDir });
     await execFileAsync("git", ["config", "user.email", "test@nexus.internal"], {

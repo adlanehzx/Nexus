@@ -172,7 +172,7 @@ export class WorktreeManager {
   }
 
   async removeWorktree(options: RemoveWorktreeOptions): Promise<void> {
-    const { workspaceRoot, worktreePath, deleteBranch = false } = options;
+    const { workspaceRoot, worktreePath, deleteBranch = false, force = false } = options;
 
     let branchToDelete: string | null = null;
     if (deleteBranch) {
@@ -184,12 +184,17 @@ export class WorktreeManager {
       }
     }
 
-    await this.runGit(["worktree", "remove", "--force", worktreePath], workspaceRoot);
+    await this.runGit(
+      ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath],
+      workspaceRoot,
+    );
 
     if (deleteBranch && branchToDelete) {
-      await this.runGit(["branch", "-D", branchToDelete], workspaceRoot).catch(() => {
-        /* ignore branch delete failure */
-      });
+      await this.runGit(["branch", force ? "-D" : "-d", branchToDelete], workspaceRoot).catch(
+        () => {
+          /* ignore branch delete failure */
+        },
+      );
     }
   }
 

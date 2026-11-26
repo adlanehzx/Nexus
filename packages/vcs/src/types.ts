@@ -21,6 +21,7 @@ export interface RemoveWorktreeOptions {
   workspaceRoot: string;
   worktreePath: string;
   deleteBranch?: boolean | undefined;
+  force?: boolean | undefined;
 }
 
 export interface WorktreeStatusResult {

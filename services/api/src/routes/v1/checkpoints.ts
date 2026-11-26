@@ -6,31 +6,15 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import * as NodePath from "node:path";
 import type { FastifyPluginCallbackZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { AuthorizationError } from "@nexus/shared";
 import { CheckpointManager } from "@nexus/vcs";
 import { CheckpointSchema, RollbackResultSchema, ThreadTurnDiffSchema } from "@nexus/protocol";
-
-const checkpointManager = new CheckpointManager();
-
-function assertSafePath(pathToCheck: string): void {
-  const normalized = NodePath.normalize(pathToCheck.trim());
-  if (
-    normalized === "/" ||
-    ["/etc", "/sys", "/proc", "/dev", "/boot", "/root", "/var/run"].some(
-      (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
-    )
-  ) {
-    throw new AuthorizationError({
-      message: `Access to system path '${pathToCheck}' is strictly forbidden.`,
-      userMessage: "Access to system path is forbidden.",
-    });
-  }
-}
+import { currentUser } from "../../plugins/authentication.js";
+import { checkpointThread } from "../../services/file-workspaces.js";
 
 export const checkpointRoutes: FastifyPluginCallbackZod = (app, _options, done) => {
+  const checkpointManager = new CheckpointManager();
   // GET /checkpoints/:threadId
   app.get(
     "/checkpoints/:threadId",
@@ -50,31 +34,40 @@ export const checkpointRoutes: FastifyPluginCallbackZod = (app, _options, done) 
       },
     },
     async (request, reply) => {
-      const { threadId } = request.params;
-      try {
-        const checkpoints = await checkpointManager.listCheckpoints(threadId);
-        return reply.send({ checkpoints });
-      } catch {
-        if (app.prisma?.checkpoint) {
-          const dbCheckpoints = await app.prisma.checkpoint.findMany({
-            where: { threadId },
-            orderBy: { turnNumber: "asc" },
-          });
-          const mapped = dbCheckpoints.map((c) => ({
-            id: c.id,
-            threadId: c.threadId,
-            turnNumber: c.turnNumber,
-            commitHash: c.commitHash ?? undefined,
-            diffBlob: c.diffBlob ?? undefined,
-            description: c.description ?? undefined,
-            snapshotRoot: c.snapshotRoot ?? undefined,
-            createdAt: c.createdAt.toISOString(),
-            createdBy: c.createdBy ?? undefined,
-          }));
-          return reply.send({ checkpoints: mapped });
-        }
-        return reply.send({ checkpoints: [] });
+      const { userId } = currentUser(request);
+      const threadId = checkpointThread(userId, request.params.threadId);
+      let checkpoints;
+      if (app.prisma?.checkpoint) {
+        const stored = await app.prisma.checkpoint.findMany({
+          where: { threadId },
+          orderBy: { turnNumber: "asc" },
+        });
+        checkpoints = stored.map((c) => ({
+          id: c.id,
+          threadId: c.threadId,
+          turnNumber: c.turnNumber,
+          commitHash: c.commitHash ?? undefined,
+          diffBlob: c.diffBlob ?? undefined,
+          description: c.description ?? undefined,
+          snapshotRoot: c.snapshotRoot ?? undefined,
+          createdAt: c.createdAt.toISOString(),
+          createdBy: c.createdBy ?? undefined,
+        }));
+      } else {
+        checkpoints = await checkpointManager.listCheckpoints(threadId);
       }
+      // Revoked folders must disappear from history as well as reject file actions.
+      const visible = [];
+      for (const checkpoint of checkpoints) {
+        if (!checkpoint.snapshotRoot) continue;
+        try {
+          await app.services.fileWorkspaces.authorizeRepository(userId, checkpoint.snapshotRoot);
+          visible.push(checkpoint);
+        } catch {
+          // Missing or revoked workspace: do not expose cached file contents.
+        }
+      }
+      return reply.send({ checkpoints: visible });
     },
   );
 
@@ -100,25 +93,28 @@ export const checkpointRoutes: FastifyPluginCallbackZod = (app, _options, done) 
       },
     },
     async (request, reply) => {
-      assertSafePath(request.body.cwd);
-      const checkpoint = await checkpointManager.captureCheckpoint(request.body);
+      const { userId } = currentUser(request);
+      const cwd = await app.services.fileWorkspaces.authorizeRepository(userId, request.body.cwd);
+      const checkpoint = await checkpointManager.captureCheckpoint({
+        ...request.body,
+        cwd,
+        threadId: checkpointThread(userId, request.body.threadId),
+        createdBy: userId,
+        snapshotRoot: cwd,
+      });
       if (app.prisma?.checkpoint) {
-        try {
-          await app.prisma.checkpoint.create({
-            data: {
-              id: checkpoint.id,
-              threadId: checkpoint.threadId,
-              turnNumber: checkpoint.turnNumber,
-              commitHash: checkpoint.commitHash ?? null,
-              diffBlob: checkpoint.diffBlob ?? null,
-              description: checkpoint.description ?? null,
-              snapshotRoot: checkpoint.snapshotRoot ?? null,
-              createdBy: checkpoint.createdBy ?? null,
-            },
-          });
-        } catch {
-          // Non-blocking fallback
-        }
+        await app.prisma.checkpoint.create({
+          data: {
+            id: checkpoint.id,
+            threadId: checkpoint.threadId,
+            turnNumber: checkpoint.turnNumber,
+            commitHash: checkpoint.commitHash ?? null,
+            diffBlob: checkpoint.diffBlob ?? null,
+            description: checkpoint.description ?? null,
+            snapshotRoot: checkpoint.snapshotRoot ?? null,
+            createdBy: checkpoint.createdBy ?? null,
+          },
+        });
       }
       return reply.status(201).send({ checkpoint });
     },
@@ -147,8 +143,13 @@ export const checkpointRoutes: FastifyPluginCallbackZod = (app, _options, done) 
       },
     },
     async (request, reply) => {
-      assertSafePath(request.body.cwd);
-      const result = await checkpointManager.restoreCheckpoint(request.body);
+      const { userId } = currentUser(request);
+      const cwd = await app.services.fileWorkspaces.authorizeRepository(userId, request.body.cwd);
+      const result = await checkpointManager.restoreCheckpoint({
+        ...request.body,
+        cwd,
+        threadId: checkpointThread(userId, request.body.threadId),
+      });
       return reply.send({ result });
     },
   );
@@ -177,9 +178,12 @@ export const checkpointRoutes: FastifyPluginCallbackZod = (app, _options, done) 
       },
     },
     async (request, reply) => {
-      const { threadId } = request.params;
-      const { fromTurn, toTurn, cwd } = request.query;
-      assertSafePath(cwd);
+      const threadId = checkpointThread(currentUser(request).userId, request.params.threadId);
+      const { fromTurn, toTurn } = request.query;
+      const cwd = await app.services.fileWorkspaces.authorizeRepository(
+        currentUser(request).userId,
+        request.query.cwd,
+      );
       const diff = await checkpointManager.getTurnDiff(threadId, fromTurn, toTurn, cwd);
       return reply.send({ diff });
     },

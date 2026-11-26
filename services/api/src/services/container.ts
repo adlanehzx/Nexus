@@ -1,3 +1,4 @@
+import { FileWorkspaces } from "./file-workspaces.js";
 import { resolve } from "node:path";
 import type { Redis } from "ioredis";
 import { InMemoryAgentRunClaimStore, type AgentRunClaimStore } from "./agent-run-claims.js";
@@ -96,7 +97,7 @@ import { TenantSecurityService } from "./tenant-security.js";
 import { TailscaleDiscoveryService } from "./tailscale-discovery.js";
 import { CareerService } from "./career/career-service.js";
 import { InMemoryCareerStore, type CareerStore } from "./career/store.js";
-import { RecordingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
+import { RefusingSubmissionAdapter, type SubmissionAdapter } from "./career/submission-adapter.js";
 import { PrismaCareerStore } from "./persistence/prisma-career-store.js";
 // Lab 1: career autonomy and LinkedIn content management.
 import { CareerAutonomyService } from "./career/autonomy-service.js";
@@ -419,6 +420,7 @@ export class ServiceContainer {
   /** External notification dispatcher. */
   readonly notificationDispatcher: NotificationDispatcher | undefined;
   readonly runtimeConfiguration: RuntimeConfigurationStore | undefined;
+  readonly fileWorkspaces: FileWorkspaces;
   readonly providerAccounts: ProviderAccountService | undefined;
   readonly agentRouter: AgentRouter;
   readonly sharedArtifacts: SharedArtifactStore;
@@ -784,6 +786,7 @@ export class ServiceContainer {
       this.setBrowser(options.browser);
     }
     this.runtimeConfiguration = options.runtimeConfiguration;
+    this.fileWorkspaces = new FileWorkspaces(options.runtimeConfiguration);
     this.providerAccounts =
       options.providerAccounts ??
       (options.runtimeConfiguration === undefined
@@ -875,6 +878,8 @@ export class ServiceContainer {
     this.domotique.attachVoice(this.satelliteVoice);
     registerToolDomains(this.toolRegistry, {
       osint: this.osint,
+      memory: this.memoryService,
+      fileWorkspaces: this.fileWorkspaces,
       domotique: this.domotique.toolsHost(),
     });
     this.missionControl = options.missionControl;
@@ -890,7 +895,12 @@ export class ServiceContainer {
       options.careerService ??
       new CareerService({
         store: this.careerStore,
-        adapter: options.careerAdapter ?? new RecordingSubmissionAdapter(),
+        adapter:
+          options.careerAdapter ??
+          new RefusingSubmissionAdapter(
+            "unavailable",
+            "No external submission adapter is configured.",
+          ),
         notifications: this.notifications,
         securityLog: this.securityLog,
         now,

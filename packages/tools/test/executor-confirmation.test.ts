@@ -297,3 +297,26 @@ describe("ConfirmationService", () => {
     expect(hashPayload({ a: 1 })).not.toBe(hashPayload({ a: 2 }));
   });
 });
+
+describe("concurrent confirmation decisions", () => {
+  it("records exactly one winner when approve and reject arrive together", async () => {
+    const service = new ConfirmationService();
+    const request = await service.request({
+      runId: "concurrent",
+      userId: "owner",
+      tool: "file.write",
+      toolCallId: "call",
+      action: "write",
+      description: "Write a file",
+      riskLevel: "HIGH",
+      payload: { path: "result.txt" },
+    });
+    const decisions = await Promise.allSettled([
+      service.resolve(request.id, "approved"),
+      service.resolve(request.id, "rejected"),
+    ]);
+    expect(decisions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(decisions.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await service.get(request.id))?.status).toBe("approved");
+  });
+});
