@@ -225,7 +225,7 @@ Environnement existant, sans réinstallation : Node `v26.8.1`, pnpm `11.25.0`, P
 | Reproduction MCP sans capacité                 | **Défaut confirmé**                                                   | Préparation seulement, aucun processus MCP externe lancé                                                                                 |
 | Refresh concurrent synthétique                 | **Défaut confirmé, 2/2 succès**                                       | Store mémoire uniquement, aucune session réelle                                                                                          |
 
-Journaux locaux de cette session : `/tmp/nexus-audit-20261111/{dashboard,api,core,companion,python,reproductions}.log`. Ils sont temporaires ; les résultats et limites essentiels sont conservés dans ce rapport. Le script de reproduction est `/tmp/nexus-audit-20261111/reproduce.ts` et n'affiche aucun jeton. Les contrôles de typage et traduction sont consignés dans l'addendum de validation final ci-dessous.
+Journaux locaux de cette session : `<session-temp-dir>/{dashboard,api,core,companion,python,reproductions}.log`. Ils sont temporaires ; les résultats et limites essentiels sont conservés dans ce rapport. Le script de reproduction est `<session-temp-dir>/reproduce.ts` et n'affiche aucun jeton. Les contrôles de typage et traduction sont consignés dans l'addendum de validation final ci-dessous.
 
 ### Navigateur
 
@@ -266,4 +266,4 @@ La couverture est structurelle et fonctionnelle : tout répertoire de premier ni
 - `services/api/test/release-readiness.test.ts:116` conditionne la restauration PostgreSQL réelle ; le test ignoré ne doit pas être compté comme restauration réussie. D'autres tests du même fichier manipulent des snapshots JSON simulés : distinction explicite avec le job CI utilisant un vrai PostgreSQL.
 - Les références explicites `fichier:ligne` ont été vérifiées automatiquement : fichiers présents, lignes existantes. Les deux liens entre rapports sont relatifs pour rester portables.
 - Comparaison de `git status` avant/après : **seuls les deux rapports sont ajoutés**. Comparaison des empreintes des fichiers suivis avant rédaction et après : **aucune modification supplémentaire**. Les modifications et suppressions Cadran préexistantes sont préservées.
-- Les journaux complémentaires sont `/tmp/nexus-audit-20261111/typecheck.log`, `translations.log` et `python-collection.log`. Aucun secret réel n'a été inséré dans les rapports.
+- Les journaux complémentaires sont `<session-temp-dir>/typecheck.log`, `translations.log` et `python-collection.log`. Aucun secret réel n'a été inséré dans les rapports.
