@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
  *
  * Nothing is mocked here: `NEXUS_E2E_DASHBOARD_URL` and `NEXUS_E2E_API_URL` must
  * point at a real dashboard and API backed by a disposable PostgreSQL and Redis.
- * See `docs/audits/full-product-integration.md` for the startup commands.
+ * See the `e2e-*` jobs in `.github/workflows/ci.yml` for the startup commands.
  */
 export default defineConfig({
   testDir: "./e2e",
